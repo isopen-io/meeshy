@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package messaging;
+
+// Service de traduction et gestion des messages
+service MessageTranslationService {
+  // Créer un nouveau message avec traduction
+  rpc CreateMessage(CreateMessageRequest) returns (CreateMessageResponse);
+  
+  // Obtenir un message par ID
+  rpc GetMessage(GetMessageRequest) returns (GetMessageResponse);
+  
+  // Mettre à jour un message
+  rpc UpdateMessage(UpdateMessageRequest) returns (UpdateMessageResponse);
+  
+  // Supprimer un message
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
+  
+  // Traduire un message existant
+  rpc TranslateMessage(TranslateMessageRequest) returns (TranslateMessageResponse);
+  
+  // Obtenir les messages d'une conversation
+  rpc GetConversationMessages(GetConversationMessagesRequest) returns (GetConversationMessagesResponse);
+  
+  // Marquer un message comme lu
+  rpc MarkMessageAsRead(MarkMessageAsReadRequest) returns (MarkMessageAsReadResponse);
+}
+
+// Messages Request/Response
+message CreateMessageRequest {
+  string conversation_id = 1;
+  string sender_id = 2;
+  string content = 3;
+  string original_language = 4;
+  string message_type = 5;
+}
+
+message CreateMessageResponse {
+  bool success = 1;
+  string message_id = 2;
+  string error = 3;
+  MessageData message = 4;
+}
+
+message GetMessageRequest {
+  string message_id = 1;
+  string user_id = 2; // Pour les permissions
+}
+
+message GetMessageResponse {
+  bool success = 1;
+  string error = 2;
+  MessageData message = 3;
+}
+
+message UpdateMessageRequest {
+  string message_id = 1;
+  string user_id = 2; // Pour les permissions
+  string content = 3;
+}
+
+message UpdateMessageResponse {
+  bool success = 1;
+  string error = 2;
+  MessageData message = 3;
+}
+
+message DeleteMessageRequest {
+  string message_id = 1;
+  string user_id = 2; // Pour les permissions
+}
+
+message DeleteMessageResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message TranslateMessageRequest {
+  string message_id = 1;
+  string target_language = 2;
+  string user_id = 3; // Pour les permissions
+}
+
+message TranslateMessageResponse {
+  bool success = 1;
+  string error = 2;
+  string translated_content = 3;
+  string translation_model = 4;
+}
+
+message GetConversationMessagesRequest {
+  string conversation_id = 1;
+  string user_id = 2; // Pour les permissions
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message GetConversationMessagesResponse {
+  bool success = 1;
+  string error = 2;
+  repeated MessageData messages = 3;
+  int32 total_count = 4;
+  bool has_more = 5;
+}
+
+message MarkMessageAsReadRequest {
+  string message_id = 1;
+  string user_id = 2;
+}
+
+message MarkMessageAsReadResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// Types de données
+message MessageData {
+  string id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  string content = 4;
+  string original_language = 5;
+  string message_type = 6;
+  bool is_edited = 7;
+  bool is_deleted = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  repeated TranslationData translations = 11;
+  repeated ReadStatusData read_status = 12;
+}
+
+message TranslationData {
+  string id = 1;
+  string source_language = 2;
+  string target_language = 3;
+  string translated_content = 4;
+  string translation_model = 5;
+  string created_at = 6;
+}
+
+message ReadStatusData {
+  string user_id = 1;
+  string read_at = 2;
+}

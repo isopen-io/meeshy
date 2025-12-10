@@ -1,0 +1,195 @@
+{
+  "components": {
+    "affiliate": {
+      "shareApp": "Partager l'application",
+      "createToken": "Créer un jeton",
+      "tokenName": "Nom du jeton",
+      "tokenNamePlaceholder": "Ex : Campagne Facebook, Invitation familiale...",
+      "selectToken": "Sélectionner un jeton d'affiliation",
+      "shareMessage": "Message de partage",
+      "shareMessagePlaceholder": "Votre message d'invitation...",
+      "affiliateLink": "Lien d'affiliation",
+      "copyLink": "Copier le lien",
+      "copyMessage": "Copier le message",
+      "share": "Partager",
+      "statistics": "Statistiques",
+      "uses": "utilisations",
+      "createdOn": "Créé le",
+      "expiresOn": "Expire le",
+      "validUntil": "Valide jusqu'au",
+      "unlimited": "Illimité",
+      "expired": "Expiré",
+      "status": {
+        "active": "Actif",
+        "expired": "Expiré",
+        "pending": "En attente"
+      },
+      "actions": {
+        "create": "Créer",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "copy": "Copier"
+      },
+      "messages": {
+        "tokenCreated": "Jeton créé avec succès",
+        "tokenDeleted": "Jeton supprimé avec succès",
+        "linkCopied": "Lien copié dans le presse-papiers",
+        "messageCopied": "Message copié dans le presse-papiers",
+        "enterTokenName": "Veuillez entrer un nom de jeton",
+        "defaultMessage": "Rejoignez-moi sur Meeshy ! Une plateforme de messagerie multilingue où vous pouvez discuter avec des gens du monde entier et apprendre des langues en vous amusant. Cliquez sur ce lien pour vous inscrire :",
+        "shareTitle": "Rejoignez-moi sur Meeshy",
+        "modalTitle": "Partager l'application",
+        "modalDescription": "Créez un lien d'affiliation pour inviter vos amis à rejoindre Meeshy"
+      }
+    },
+    "header": {
+      "shareLinkCopied": "Lien de partage copié dans le presse-papiers",
+      "clearSession": "Effacer la session",
+      "clearSessionConfirm": "Êtes-vous sûr de vouloir effacer votre session ?",
+      "clearSessionDescription": "Cette action supprimera toutes vos données de session et vous déconnectera.",
+      "share": "Partager",
+      "login": "Connexion",
+      "register": "Inscription",
+      "signIn": "Se connecter",
+      "signUp": "S'inscrire",
+      "profile": "Profil",
+      "settings": "Paramètres",
+      "logout": "Déconnexion",
+      "anonymousSession": "Session anonyme",
+      "cancel": "Annuler",
+      "clearSessionButton": "Effacer la session",
+      "loginTitle": "Connexion",
+      "loginDescription": "Connectez-vous à votre compte Meeshy",
+      "registerTitle": "Créer un compte",
+      "registerDescription": "Rejoignez Meeshy et communiquez sans barrières"
+    },
+    "language": {
+      "title": "Langues",
+      "description": "Préférences de traduction",
+      "selectLanguage": "Sélectionner la langue",
+      "interfaceLanguage": "Langue de l'interface",
+      "systemLanguage": "Langue système",
+      "regionalLanguage": "Langue régionale",
+      "customLanguage": "Langue personnalisée",
+      "autoTranslate": "Traduction automatique",
+      "translateToSystem": "Traduire vers la langue système",
+      "translateToRegional": "Traduire vers la langue régionale",
+      "useCustomDestination": "Utiliser une destination personnalisée"
+    },
+    "layout": {
+      "header": {
+        "searchPlaceholder": "Rechercher des conversations, communautés, contacts...",
+        "notifications": "Notifications",
+        "unreadCount": "{count} non lues",
+        "userMenu": "Menu utilisateur"
+      },
+      "navigation": {
+        "dashboard": "Tableau de bord",
+        "conversations": "Conversations",
+        "communities": "Communautés",
+        "contacts": "Contacts",
+        "links": "Liens",
+        "profile": "Profil",
+        "settings": "Paramètres",
+        "admin": "Administration",
+        "logout": "Déconnexion"
+      },
+      "sidebar": {
+        "conversations": "Conversations",
+        "communities": "Communautés"
+      }
+    },
+    "toasts": {
+      "success": {
+        "title": "Succès",
+        "messageSent": "Message envoyé avec succès",
+        "settingsSaved": "Paramètres enregistrés avec succès",
+        "profileUpdated": "Profil mis à jour avec succès",
+        "linkCreated": "Lien créé avec succès",
+        "linkCopied": "Lien copié dans le presse-papiers",
+        "messageCopied": "Message copié dans le presse-papiers",
+        "textCopied": "Texte copié dans le presse-papiers"
+      },
+      "error": {
+        "title": "Erreur",
+        "generic": "Une erreur s'est produite",
+        "network": "Erreur réseau",
+        "unauthorized": "Accès non autorisé",
+        "forbidden": "Accès interdit",
+        "notFound": "Ressource non trouvée",
+        "validationError": "Erreur de validation",
+        "messageSendFailed": "Échec de l'envoi du message",
+        "settingsSaveFailed": "Échec de l'enregistrement des paramètres",
+        "profileUpdateFailed": "Échec de la mise à jour du profil"
+      },
+      "warning": {
+        "title": "Avertissement",
+        "sessionExpiring": "Votre session est sur le point d'expirer",
+        "unsavedChanges": "Vous avez des modifications non enregistrées"
+      },
+      "info": {
+        "title": "Information",
+        "loading": "Chargement...",
+        "processing": "Traitement...",
+        "connecting": "Connexion...",
+        "initializing": "Initialisation..."
+      }
+    },
+    "bubbleStream": {
+      "title": "Flux de messages",
+      "loading": "Chargement des messages...",
+      "noMessages": "Aucun message",
+      "loadMore": "Charger plus de messages",
+      "typing": "En train d'écrire...",
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "lastSeen": "Vu pour la dernière fois {time}",
+      "messageActions": {
+        "copy": "Copier le message",
+        "translate": "Traduire",
+        "reply": "Répondre",
+        "edit": "Modifier",
+        "delete": "Supprimer"
+      },
+      "translation": {
+        "showOriginal": "Afficher l'original",
+        "showTranslation": "Afficher la traduction",
+        "translating": "Traduction en cours...",
+        "translationFailed": "Échec de la traduction",
+        "improveTranslationQuality": "Améliorer la qualité de la traduction"
+      },
+      "notifications": {
+        "types": {
+          "message": "Nouveau message",
+          "mention": "Vous avez été mentionné",
+          "reaction": "Quelqu'un a réagi à votre message",
+          "system": "Notification système",
+          "update": "Mise à jour disponible",
+          "translation": "Traduction disponible"
+        },
+        "examples": {
+          "message": {
+            "title": "Nouveau message",
+            "message": "Vous avez un nouveau message de {sender}"
+          },
+          "mention": {
+            "title": "Mention",
+            "message": "Vous avez été mentionné dans une conversation"
+          },
+          "reaction": {
+            "title": "Réaction",
+            "message": "Quelqu'un a réagi à votre message"
+          },
+          "system": {
+            "title": "Mise à jour système",
+            "message": "Une nouvelle version est disponible"
+          },
+          "translation": {
+            "title": "Traduction disponible",
+            "message": "🇺🇸 Bonjour le monde\n🇬🇧 Traduction disponible\n🌍 Message multilingue"
+          }
+        }
+      }
+    }
+  }
+}

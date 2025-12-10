@@ -1,0 +1,154 @@
+{
+  "notifications": {
+    "pageTitle": "Notifications",
+    "title": "Notifications",
+    "empty": {
+      "title": "Aucune notification",
+      "description": "Vous n'avez aucune notification pour le moment"
+    },
+    "emptyUnread": "Tout est lu ! Aucune notification non lue.",
+    "emptyMentions": "Aucune mention pour le moment",
+    "markAllRead": "Tout marquer comme lu",
+    "markAsRead": "Marquer comme lu",
+    "delete": "Supprimer",
+    "viewAll": "Voir toutes les notifications",
+    "loadMore": "Charger plus",
+    "loading": "Chargement des notifications...",
+    "reachedEnd": "Vous avez atteint la fin",
+    "search": "Rechercher dans les notifications...",
+    "noResults": "Aucune notification trouvée",
+    "systemStatus": "État du système",
+    "service": "Service",
+    "totalNotifications": "Nombre total",
+    "unread": "Non lues",
+    "quickActions": "Actions rapides",
+    "conversationContext": "dans {conversationTitle}",
+    "tabs": {
+      "all": "Toutes",
+      "unread": "Non lues",
+      "mentions": "Mentions"
+    },
+    "filters": {
+      "title": "Filtres",
+      "type": "Type",
+      "status": "Statut",
+      "clearAll": "Tout effacer",
+      "all": "Toutes",
+      "read": "Lues",
+      "unread": "Non lues",
+      "new_message": "Messages",
+      "friend_request": "Demandes d'amis",
+      "missed_call": "Appels manqués",
+      "system": "Système",
+      "conversation": "Conversations"
+    },
+    "types": {
+      "new_message": "Message",
+      "message": "Message",
+      "message_reply": "Réponse",
+      "user_mentioned": "Mention",
+      "message_reaction": "Réaction",
+      "contact_request": "Demande de contact",
+      "contact_accepted": "Contact accepté",
+      "new_conversation_direct": "Conversation",
+      "new_conversation": "Conversation",
+      "conversation": "Conversation",
+      "new_conversation_group": "Groupe",
+      "member_joined": "Membre rejoint",
+      "missed_call": "Appel manqué",
+      "friend_request": "Demande d'ami",
+      "system": "Système"
+    },
+    "priorities": {
+      "low": "Basse",
+      "normal": "Normale",
+      "high": "Important",
+      "urgent": "Urgent"
+    },
+    "titles": {
+      "newMessage": "Message de @{sender}",
+      "reply": "Réponse de @{sender}",
+      "mentioned": "@{sender} vous a mentionné",
+      "reaction": "@{sender} a réagi {emoji}",
+      "contactRequest": "@{sender} veut se connecter",
+      "contactAccepted": "@{sender} a accepté votre invitation",
+      "newConversationDirect": "Nouvelle conversation avec @{sender}",
+      "newConversationGroup": "Invitation à \"{title}\"",
+      "memberJoined": "Nouveau membre dans \"{title}\"",
+      "missedCall": "Appel {type} manqué",
+      "system": "Notification système",
+      "default": "Nouvelle notification"
+    },
+    "content": {
+      "memberJoinedMessage": "@{sender} a rejoint le groupe",
+      "contactAcceptedMessage": "@{sender} a accepté votre invitation. Vous pouvez maintenant discuter ensemble.",
+      "contactRequestMessage": "@{sender} vous a envoyé une invitation",
+      "notMemberHint": "Vous n'êtes pas membre de cette conversation. Cliquez pour rejoindre.",
+      "defaultConversation": "la conversation"
+    },
+    "actions": {
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "join": "Rejoindre",
+      "callBack": "Rappeler",
+      "view": "Voir",
+      "reply": "Répondre",
+      "cancel": "Annuler",
+      "delete": "Supprimer",
+      "markAsRead": "Marquer comme lu",
+      "markAsReadCount": "Marquer {count} comme lu(es)",
+      "deleteCount": "Supprimer {count}",
+      "select": "Sélectionner",
+      "selectAll": "Tout sélectionner",
+      "deselectAll": "Tout désélectionner"
+    },
+    "selection": {
+      "count": "{selected} sur {total} sélectionnée",
+      "countPlural": "{selected} sur {total} sélectionnées"
+    },
+    "sortOptions": {
+      "newest": "Plus récentes",
+      "oldest": "Plus anciennes",
+      "unreadFirst": "Non lues d'abord",
+      "byType": "Par type"
+    },
+    "timeAgo": {
+      "now": "à l'instant",
+      "minute": "il y a {count} min",
+      "hour": "il y a {count}h",
+      "day": "il y a {count}j"
+    },
+    "unreadCount": {
+      "single": "{count} non lue sur {total}",
+      "plural": "{count} non lues sur {total}",
+      "allRead": "Toutes vos {total} notification{plural} sont lues",
+      "empty": "Vous n'avez aucune notification"
+    },
+    "friendRequest": {
+      "accepted": "Demande d'ami acceptée",
+      "rejected": "Demande d'ami refusée",
+      "error": "Erreur lors du traitement de la demande",
+      "connectionError": "Erreur de connexion"
+    },
+    "timestamps": {
+      "justNow": "à l'instant",
+      "secondsAgo": "il y a {count} seconde",
+      "secondsAgo_plural": "il y a {count} secondes",
+      "minutesAgo": "il y a {count} minute",
+      "minutesAgo_plural": "il y a {count} minutes",
+      "hoursAgo": "il y a {count} heure",
+      "hoursAgo_plural": "il y a {count} heures",
+      "daysAgo": "il y a {count} jour",
+      "daysAgo_plural": "il y a {count} jours",
+      "in": "dans"
+    },
+    "attachments": {
+      "photo": "Photo",
+      "video": "Vidéo",
+      "audio": "Audio",
+      "pdf": "PDF",
+      "document": "Document",
+      "file": "Fichier"
+    }
+  }
+}

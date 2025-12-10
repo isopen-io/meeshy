@@ -1,0 +1,308 @@
+{
+  "audioEffects": {
+    "title": "Audio Effects",
+    "subtitle": "Transform your voice",
+    "noEffectsActive": "No effects active",
+    "selectEffect": "Select an effect",
+    "selectEffectPrompt": "Click on an effect to configure it",
+    "toggleEffect": "Toggle Effect",
+    "configure": "Configure",
+    "close": "Close",
+    "apply": "Apply",
+    "reset": "Reset",
+    "resetAll": "Reset All",
+    "disableAll": "Disable all effects",
+
+    "recorder": {
+      "initializing": "Initializing...",
+      "audioEffects": "Audio effects",
+      "maxDuration": "Max {duration}min",
+      "startRecording": "Start recording",
+      "stopRecording": "Stop recording",
+      "errors": {
+        "httpsRequired": "Audio recording requires HTTPS.",
+        "browserNotSupported": "Your browser does not support audio recording.",
+        "effectsNotAvailable": "Audio effects not available - using direct microphone",
+        "microphoneAccessDenied": "Microphone access denied.",
+        "noMicrophoneFound": "No microphone found.",
+        "microphoneError": "Microphone error.",
+        "cannotAccessMicrophone": "Cannot access microphone."
+      }
+    },
+
+    "voiceCoder": {
+      "title": "Perfect Voice",
+      "description": "Automatic pitch correction for perfect singing",
+      "quickConfig": {
+        "label": "Quick Config",
+        "tooltip": "Choose a preset suited to your needs, or customize your own settings"
+      },
+      "retuneSpeed": {
+        "label": "Speed",
+        "tooltip": "Pitch correction speed. Slow (0-30%) = very natural and smooth. Medium (30-70%) = balanced. Fast (70-100%) = robotic effect"
+      },
+      "strength": {
+        "label": "Strength",
+        "tooltip": "Auto-tune intensity. Higher = more perfect voice but less natural. Recommended: 30-50% for subtle effect"
+      },
+      "naturalVibrato": {
+        "label": "Expression",
+        "tooltip": "Preserves natural variations and vibrato in your voice. Higher = more expression and emotion preserved"
+      },
+      "pitch": {
+        "label": "Pitch",
+        "tooltip": "Transpose your voice up (+) or down (-). Example: +3 = 3 semitones higher"
+      },
+      "scale": {
+        "label": "Scale",
+        "chromatic": "All notes",
+        "major": "Major (happy)",
+        "minor": "Minor (sad)",
+        "pentatonic": "Pentatonic"
+      },
+      "key": {
+        "label": "Key"
+      },
+      "harmonization": {
+        "label": "Vocal Harmonies",
+        "tooltip": "Adds harmonic backing vocals to your main voice for a choir effect"
+      }
+    },
+
+    "babyVoice": {
+      "title": "Baby Voice",
+      "pitch": {
+        "label": "Voice Pitch",
+        "tooltip": "Higher = more high-pitched and childlike voice. Recommended: 8-12 for baby effect"
+      },
+      "formant": {
+        "label": "Timbre",
+        "tooltip": "Changes voice color and timbre to simulate shorter vocal cords"
+      },
+      "breathiness": {
+        "label": "Breathiness",
+        "tooltip": "Adds a soft, airy breath effect characteristic of a child's voice"
+      }
+    },
+
+    "demonVoice": {
+      "title": "Demon Voice",
+      "pitch": {
+        "label": "Voice Pitch",
+        "tooltip": "Lower = deeper and scarier voice. -10 to -12 for intense demonic effect"
+      },
+      "distortion": {
+        "label": "Distortion",
+        "tooltip": "Adds aggressive and rough texture to the voice"
+      },
+      "reverb": {
+        "label": "Echo",
+        "tooltip": "Reverberation effect like in a dark, deep cathedral"
+      }
+    },
+
+    "backSound": {
+      "title": "Background Ambiance",
+      "uploadLabel": "Load audio file",
+      "uploadDescription": "Preset sounds are not yet available. Upload your own MP3/WAV file",
+      "uploadButton": "Load audio",
+      "volume": {
+        "label": "Volume",
+        "tooltip": "Adjusts the volume of background music mixed with your voice"
+      },
+      "loopMode": {
+        "label": "Playback mode",
+        "tooltip": "Choose how to repeat the audio: a specific number of times or for a duration in minutes",
+        "nTimes": "Number of times",
+        "nMinutes": "Duration in minutes"
+      },
+      "loopValue": {
+        "labelTimes": "Repetitions",
+        "labelMinutes": "Minutes"
+      }
+    },
+
+    "effects": {
+      "voice-coder": {
+        "name": "Perfect Voice",
+        "shortName": "Perfect",
+        "description": "Automatic pitch correction (auto-tune)",
+        "icon": "🎵",
+        "params": {
+          "pitch": {
+            "label": "Pitch",
+            "unit": "semitones",
+            "description": "Transpose voice up or down"
+          },
+          "harmonization": {
+            "label": "Harmonization",
+            "description": "Add harmonies to your voice"
+          },
+          "strength": {
+            "label": "Strength",
+            "unit": "%",
+            "description": "Auto-tune correction strength"
+          },
+          "retuneSpeed": {
+            "label": "Correction Speed",
+            "unit": "%",
+            "description": "Correction speed (0=natural, 100=robotic)"
+          },
+          "scale": {
+            "label": "Musical Scale",
+            "description": "Allowed notes for correction",
+            "options": {
+              "chromatic": "Chromatic (all notes)",
+              "major": "Major",
+              "minor": "Minor",
+              "pentatonic": "Pentatonic"
+            }
+          },
+          "key": {
+            "label": "Key",
+            "description": "Reference key"
+          },
+          "naturalVibrato": {
+            "label": "Natural Vibrato",
+            "unit": "%",
+            "description": "Preserve natural vibrato"
+          }
+        },
+        "presets": {
+          "title": "Presets",
+          "voix-naturelle": {
+            "name": "Natural Voice",
+            "description": "Very subtle correction for natural sound"
+          },
+          "pop-star": {
+            "name": "Pop Star",
+            "description": "Modern effect for perfect pop voice"
+          },
+          "effet-robot": {
+            "name": "Robot Effect",
+            "description": "Instant correction T-Pain style"
+          },
+          "correction-subtile": {
+            "name": "Subtle Correction",
+            "description": "Discrete and pleasant enhancement"
+          },
+          "custom": "Custom"
+        }
+      },
+
+      "baby-voice": {
+        "name": "Baby Voice",
+        "shortName": "Baby",
+        "description": "Transform your voice into a child's voice",
+        "icon": "👶",
+        "params": {
+          "pitch": {
+            "label": "Pitch",
+            "unit": "semitones",
+            "description": "Child voice pitch"
+          },
+          "formant": {
+            "label": "Timbre",
+            "unit": "×",
+            "description": "Vocal timbre modification"
+          },
+          "breathiness": {
+            "label": "Breathiness",
+            "unit": "%",
+            "description": "Add breathiness to voice"
+          }
+        }
+      },
+
+      "demon-voice": {
+        "name": "Demon Voice",
+        "shortName": "Demon",
+        "description": "Deep and menacing voice with distortion",
+        "icon": "😈",
+        "params": {
+          "pitch": {
+            "label": "Pitch",
+            "unit": "semitones",
+            "description": "Voice pitch (negative = deeper)"
+          },
+          "distortion": {
+            "label": "Distortion",
+            "unit": "%",
+            "description": "Saturation and graininess"
+          },
+          "reverb": {
+            "label": "Reverb",
+            "unit": "%",
+            "description": "Cathedral echo"
+          }
+        }
+      },
+
+      "back-sound": {
+        "name": "Background Sound",
+        "shortName": "Background",
+        "description": "Add background music or ambiance",
+        "icon": "🎼",
+        "params": {
+          "soundFile": {
+            "label": "Audio file",
+            "description": "Choose an audio file",
+            "placeholder": "No file selected"
+          },
+          "volume": {
+            "label": "Volume",
+            "unit": "%",
+            "description": "Background sound volume"
+          },
+          "loopMode": {
+            "label": "Loop Mode",
+            "description": "How to repeat the sound",
+            "options": {
+              "N_TIMES": "Number of times",
+              "N_MINUTES": "Duration in minutes"
+            }
+          },
+          "loopValue": {
+            "label": "Value",
+            "description": "Number of repeats or duration"
+          }
+        }
+      }
+    },
+
+    "presets": {
+      "custom": "Custom",
+      "customDescription": "Your own settings"
+    },
+
+    "timeline": {
+      "title": "Effects Timeline",
+      "duration": "Duration",
+      "effectsUsed": "Effects Used",
+      "noTimeline": "No effects timeline available",
+      "activatedAt": "Activated at",
+      "deactivatedAt": "Deactivated at",
+      "updatedAt": "Updated at",
+      "viewDetails": "View Details",
+      "hide": "Hide",
+      "stats": {
+        "title": "Statistics",
+        "totalActiveTime": "Total time with effects",
+        "activations": "Activations",
+        "parameterChanges": "Changes"
+      }
+    },
+
+    "badge": {
+      "hasEffects": "Audio effects",
+      "clickToView": "Click to view timeline"
+    },
+
+    "status": {
+      "on": "On",
+      "off": "Off",
+      "active": "Active",
+      "inactive": "Inactive"
+    }
+  }
+}

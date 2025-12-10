@@ -1,0 +1,44 @@
+{
+  "name": "@meeshy/tests",
+  "version": "1.0.0",
+  "description": "Test suite for Meeshy - Status system, translations, and E2E tests",
+  "private": true,
+  "scripts": {
+    "test": "./run-status-tests.sh all",
+    "test:unit": "./run-status-tests.sh unit",
+    "test:integration": "./run-status-tests.sh integration",
+    "test:performance": "./run-status-tests.sh performance",
+    "test:resilience": "./run-status-tests.sh resilience",
+    "test:e2e": "./run-status-tests.sh e2e",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "./run-status-tests.sh e2e --debug",
+    "test:e2e:headed": "./run-status-tests.sh e2e --headed",
+    "test:manual": "./run-status-tests.sh manual",
+    "test:coverage": "cd ../gateway && pnpm test:coverage",
+    "playwright:install": "playwright install --with-deps",
+    "playwright:report": "playwright show-report",
+    "ci": "playwright test --project=chromium-desktop",
+    "test:translation": "ts-node e2e-translation-test.ts",
+    "test:translation:meeshy": "ts-node e2e-translation-test.ts meeshy",
+    "test:quick": "ts-node quick-translation-test.ts",
+    "test:no-duplicates": "ts-node no-duplicate-translations-test.ts meeshy admin admin123",
+    "test:no-duplicates:custom": "ts-node no-duplicate-translations-test.ts",
+    "test:authenticated": "ts-node authenticated-translation-test.ts admin admin123 meeshy",
+    "diagnostic:analyze": "ts-node diagnostic-helper.ts analyze",
+    "diagnostic:stats": "ts-node diagnostic-helper.ts stats"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.13.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.18.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

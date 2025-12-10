@@ -1,0 +1,62 @@
+{
+  "reactions": {
+    "add": "Agregar una reacción",
+    "addEmoji": "Agregar un emoji",
+    "remove": "Quitar su reacción",
+    "removeEmoji": "Quitar el emoji",
+    "clickToReact": "Haga clic para reaccionar",
+    "clickToRemove": "Haga clic para quitar",
+    "you": "Usted",
+    "youAndOthers": "Usted y {count} otro",
+    "youAndOthers_plural": "Usted y {count} otros",
+    "peopleReacted": "{count} persona reaccionó",
+    "peopleReacted_plural": "{count} personas reaccionaron",
+    "noReactions": "Ninguna reacción",
+    "loading": "Cargando reacciones...",
+    "error": "Error al cargar",
+    "errorAdding": "Error al agregar",
+    "errorRemoving": "Error al eliminar",
+    "maxReactionsReached": "Solo puede agregar {max} reacciones diferentes por mensaje",
+    "chooseReaction": "Elegir una reacción",
+    "close": "Cerrar",
+    "searchEmoji": "Buscar un emoji...",
+    "noEmojisFound": "No se encontró ningún emoji",
+    "tryDifferentSearch": "Intente otra búsqueda",
+    "clearSearch": "Limpiar la búsqueda",
+    "mostUsed": "Más utilizados",
+    "mostUsedReactions": "Reacciones más utilizadas",
+    "addReaction": "Agregar",
+    "removeReaction": "Quitar",
+    "category_recent": "Recientes",
+    "category_smileys": "Smileys y Emociones",
+    "category_people": "Personas y Gestos",
+    "category_nature": "Animales y Naturaleza",
+    "category_food": "Comida y Bebidas",
+    "category_activities": "Actividades y Deportes",
+    "category_objects": "Objetos",
+    "category_symbols": "Símbolos y Corazones",
+    "category_flags": "Banderas",
+    "picker": {
+      "title": "Elegir un emoji",
+      "search": "Buscar un emoji...",
+      "noResults": "No se encontró ningún emoji para \"{query}\"",
+      "categories": {
+        "frequent": "Frecuentes",
+        "smileys": "Smileys",
+        "gestures": "Gestos",
+        "emotions": "Emociones",
+        "celebration": "Celebraciones",
+        "nature": "Naturaleza",
+        "objects": "Objetos",
+        "symbols": "Símbolos"
+      }
+    },
+    "tooltip": {
+      "addReaction": "Agregar una reacción",
+      "reactWith": "Reaccionar con {emoji}",
+      "removeReaction": "Quitar {emoji}",
+      "peopleReacted": "{count} persona",
+      "peopleReacted_plural": "{count} personas"
+    }
+  }
+}

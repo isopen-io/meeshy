@@ -1,0 +1,35 @@
+# Translator specific .dockerignore
+# Allow models to be copied for this service
+models/
+./**/*/models
+./*/**/models/
+./.models
+node_modules/
+**/*/node_modules/
+.venv/
+./**/*/.venv/
+./**/*/venv/
+venv/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+.DS_Store
+.git/
+.github/
+.vscode/
+*.md
+!README.md
+
+# Environment files (use Docker env vars instead)
+.env.local
+.env.development
+.env.test
+Not sure if this was the same problem but just made my build go from 5 minutes to 5 seconds, by adding the following .dockerignore file to the same directory as my docker-compose.yml file.
+
+**/bin
+**/obj
+**/node_modules

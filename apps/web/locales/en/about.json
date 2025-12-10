@@ -1,0 +1,37 @@
+{
+  "about": {
+    "title": "About Meeshy",
+    "subtitle": "We believe that language barriers should never stand in the way of meaningful connections.",
+    "backHome": "Back to home",
+    "mission": {
+      "title": "Our Mission",
+      "description": "Connect the world, one translation at a time. Our platform empowers people from all corners of the globe to communicate freely, breaking down the walls that separate us and building bridges of understanding."
+    },
+    "values": {
+      "globalAccess": {
+        "title": "Global Accessibility",
+        "description": "Making multilingual communication accessible to everyone, everywhere in the world."
+      },
+      "innovation": {
+        "title": "Innovation",
+        "description": "Using the latest AI technologies for accurate and fast translations."
+      },
+      "privacy": {
+        "title": "Privacy Respect",
+        "description": "Your conversations remain private and secure with server-side translation powered by advanced AI models."
+      }
+    },
+    "team": {
+      "title": "Our Team",
+      "description": "Made with ❤️ by developers who believe communication should have no boundaries.",
+      "details": "Meeshy is developed by a passionate team of developers, linguists and designers who share a common vision: a world where language is no longer an obstacle to human communication."
+    },
+    "cta": {
+      "title": "Want to know more?",
+      "contact": "Contact us",
+      "joinUs": "Join us",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    }
+  }
+}

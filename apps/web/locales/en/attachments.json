@@ -1,0 +1,44 @@
+{
+  "upload": {
+    "dragDrop": "Drag and drop files here",
+    "orClick": "or click the icon to select",
+    "maxSize": "Max size: {size}",
+    "uploading": "Uploading...",
+    "complete": "Upload complete",
+    "error": "Upload error",
+    "filesAttached": "{count} file(s) attached"
+  },
+  "types": {
+    "image": "Image",
+    "document": "Document",
+    "audio": "Audio",
+    "video": "Video",
+    "text": "Text"
+  },
+  "gallery": {
+    "title": "Image Gallery",
+    "titleWithCounter": "Image Gallery - {current} of {total}",
+    "goToMessage": "Go to message",
+    "download": "Download",
+    "fullscreen": "Open fullscreen",
+    "previous": "Previous image",
+    "next": "Next image",
+    "close": "Close",
+    "loading": "Loading...",
+    "noImage": "No image",
+    "by": "by",
+    "of": "of"
+  },
+  "textDetection": {
+    "title": "Long text detected",
+    "message": "Would you like to create an attachment for this {length} character text?",
+    "create": "Create attachment",
+    "keepInline": "No thanks"
+  },
+  "errors": {
+    "fileTooBig": "File too large (max {size})",
+    "invalidType": "Invalid file type",
+    "uploadFailed": "Upload failed"
+  }
+}
+

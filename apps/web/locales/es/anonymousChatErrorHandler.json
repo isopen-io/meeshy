@@ -1,0 +1,52 @@
+{
+  "anonymousChatErrorHandler": {
+    "forbidden": {
+      "title": "Acceso Prohibido",
+      "description": "No tiene permiso para acceder a esta conversación.",
+      "actions": {
+        "backHome": "Volver al inicio"
+      }
+    },
+    "notFound": {
+      "title": "Conversación No Encontrada",
+      "description": "Esta conversación no existe o ha sido eliminada.",
+      "actions": {
+        "backHome": "Volver al inicio"
+      }
+    },
+    "unauthorized": {
+      "title": "No Autorizado",
+      "description": "Debe iniciar sesión para acceder a esta conversación.",
+      "actions": {
+        "login": "Iniciar sesión",
+        "backHome": "Volver al inicio",
+        "rejoin": "Unirse nuevamente"
+      }
+    },
+    "invalidIdentifier": {
+      "title": "Identificador No Válido",
+      "description": "El enlace de invitación no es válido o ha expirado.",
+      "actions": {
+        "backHome": "Volver al inicio"
+      }
+    },
+    "generic": {
+      "title": "Se Produjo un Error",
+      "description": "No se puede cargar la conversación. Por favor intente nuevamente.",
+      "actions": {
+        "retry": "Intentar nuevamente",
+        "backHome": "Volver al inicio"
+      }
+    },
+    "maxRetriesReached": "Número máximo de intentos alcanzado",
+    "retryFailed": "El intento falló",
+    "debug": {
+      "title": "Información de depuración",
+      "type": "Tipo",
+      "identifier": "Identificador",
+      "attempts": "Intentos",
+      "authenticated": "Autenticado",
+      "anonymous": "Anónimo"
+    }
+  }
+}

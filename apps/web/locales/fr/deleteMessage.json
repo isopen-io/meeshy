@@ -1,0 +1,27 @@
+{
+  "deleteMessage": {
+    "deleteMessage": "Supprimer le message",
+    "close": "Fermer",
+    "confirmDelete": "Confirmer la suppression",
+    "cancel": "Annuler",
+    "deleting": "Suppression...",
+    "deleteWarning": "Êtes-vous sûr de vouloir supprimer ce message ?",
+    "actionIrreversible": "Cette action est irréversible",
+    "willAlsoDelete": "Seront également supprimés :",
+    "reactions": "réaction(s)",
+    "translations": "traduction(s)",
+    "attachments": "pièce(s) jointe(s)",
+    "messagePreview": "Aperçu du message",
+    "shiftEnterToConfirm": "⇧↵ Confirmer",
+    "escToCancel": "Esc pour annuler",
+    "messageAndContent": "Message et contenu",
+    "allTranslations": "Toutes les traductions",
+    "allAttachments": "Toutes les pièces jointes",
+    "allReactions": "Toutes les réactions",
+    "deleteForever": "Supprimer définitivement",
+    "irreversibleAction": "Action irréversible",
+    "deleteMessageWarning": "Attention : suppression définitive du message",
+    "itemsToDelete": "Éléments à supprimer",
+    "shortcutConfirm": "Maj+Entrée"
+  }
+}

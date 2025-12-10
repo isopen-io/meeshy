@@ -1,0 +1,77 @@
+{
+  "title": "Contacts",
+  "subtitle": "Gérez vos contacts, connectez-vous avec des amis et développez votre réseau professionnel",
+  "searchPlaceholder": "Rechercher des contacts...",
+  "inviteContact": "Inviter un contact",
+  "contactsFound": "{count} contact trouvé",
+  "contactsFound_plural": "{count} contacts trouvés",
+  "stats": {
+    "totalContacts": "Total contacts",
+    "online": "En ligne",
+    "connected": "Connectés",
+    "pending": "En attente",
+    "affiliates": "Affiliés"
+  },
+  "tabs": {
+    "all": "Tous",
+    "connected": "Connectés",
+    "pending": "En attente",
+    "refused": "Refusés",
+    "affiliates": "Affiliés"
+  },
+  "status": {
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "pending": "En attente",
+    "rejected": "Refusé"
+  },
+  "actions": {
+    "message": "Message",
+    "sendMessage": "Envoyer un message",
+    "call": "Appeler",
+    "viewProfile": "Voir le profil",
+    "accept": "Accepter",
+    "reject": "Refuser",
+    "remove": "Retirer",
+    "resend": "Renvoyer",
+    "connection": "Connexion"
+  },
+  "messages": {
+    "noContacts": "Aucun contact",
+    "noContactsDescription": "Commencez par ajouter des contacts à votre liste",
+    "noConnectedContacts": "Aucun contact connecté",
+    "noConnectedContactsDescription": "Acceptez des demandes d'amis pour vous connecter avec des personnes",
+    "noPendingRequests": "Aucune demande en attente",
+    "noPendingRequestsDescription": "Toutes les demandes d'amis ont été traitées",
+    "noRefusedRequests": "Aucune demande refusée",
+    "noRefusedRequestsDescription": "Vous n'avez refusé aucune demande d'ami",
+    "noAffiliateContacts": "Aucun contact affilié",
+    "noAffiliateContactsDescription": "Invitez des personnes en utilisant votre lien d'affiliation",
+    "noContactsFound": "Aucun contact trouvé",
+    "noContactsFoundDescription": "Essayez une recherche différente",
+    "searchUsers": "Rechercher des utilisateurs...",
+    "emailAddress": "Adresse email",
+    "registeredAt": "Inscrit le",
+    "joinedOn": "Rejoint le",
+    "linkUsed": "Lien utilisé",
+    "requestSent": "Demande envoyée le {date}",
+    "requestReceived": "Demande reçue le {date}",
+    "requestRejected": "Demande refusée le {date}",
+    "invalidUser": "Utilisateur invalide"
+  },
+  "success": {
+    "friendRequestSent": "Demande d'ami envoyée",
+    "friendRequestAccepted": "Demande d'ami acceptée",
+    "friendRequestRejected": "Demande d'ami refusée",
+    "conversationCreated": "Conversation créée"
+  },
+  "errors": {
+    "loadContactsError": "Erreur lors du chargement des contacts",
+    "searchError": "Erreur lors de la recherche",
+    "sendError": "Erreur lors de l'envoi de la demande",
+    "updateError": "Erreur lors de la mise à jour du contact",
+    "connectionError": "Erreur de connexion",
+    "conversationCreationError": "Erreur lors de la création de la conversation",
+    "sessionExpired": "Session expirée"
+  }
+}

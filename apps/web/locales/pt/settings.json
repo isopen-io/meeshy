@@ -1,0 +1,244 @@
+{
+  "settings": {
+    "title": "Configurações",
+    "pageTitle": "Configurações para {username}",
+    "subtitle": "Gerencie suas preferências de conta, idioma e privacidade",
+    "loadingSettings": "Carregando configurações...",
+    "settingsError": "Erro ao carregar configurações",
+    "settingsSaved": "Configurações salvas com sucesso",
+    "settingsSaveError": "Erro ao salvar configurações",
+    "errors": {
+      "loadProfile": "Erro ao carregar perfil",
+      "loadSettings": "Erro ao carregar configurações",
+      "updateSettings": "Erro ao atualizar"
+    },
+    "success": {
+      "settingsUpdated": "Configurações atualizadas com sucesso"
+    },
+    "tabs": {
+      "profile": "Perfil",
+      "translation": "Tradução",
+      "security": "Segurança",
+      "theme": "Tema",
+      "fonts": "Fontes",
+      "stats": "Estatísticas"
+    },
+    "profile": {
+      "title": "Perfil",
+      "description": "Informações pessoais",
+      "settingsTitle": "Configurações do perfil",
+      "settingsDescription": "Configurações para {username}",
+      "photo": {
+        "title": "Foto de perfil",
+        "description": "Personalize sua foto de perfil visível por outros usuários",
+        "uploadImage": "Enviar uma imagem",
+        "takePhoto": "Tirar uma foto",
+        "removePhoto": "Remover foto",
+        "photoUpdated": "Foto de perfil atualizada",
+        "previewTitle": "Visualizar foto"
+      },
+      "cropAvatar": {
+        "cropAvatarTitle": "Recortar sua foto de perfil",
+        "zoom": "Zoom",
+        "rotation": "Rotação",
+        "reset": "Redefinir",
+        "cancel": "Cancelar",
+        "saveAvatar": "Salvar",
+        "uploading": "Enviando...",
+        "processing": "Processando...",
+        "cropInstructions": "Use o mouse para mover a imagem, os controles deslizantes para dar zoom e girar. A imagem será cortada em quadrado."
+      },
+      "personalInfo": {
+        "title": "Informações pessoais",
+        "description": "Edite suas informações de perfil",
+        "firstName": "Nome",
+        "lastName": "Sobrenome",
+        "displayName": "Nome de exibição",
+        "displayNamePlaceholder": "Como você deseja aparecer nas conversas",
+        "email": "E-mail",
+        "emailPlaceholder": "seu.email@exemplo.com",
+        "phoneNumber": "Número de telefone",
+        "phoneNumberPlaceholder": "+55 11 98765-4321",
+        "username": "Nome de usuário",
+        "usernameCannotChange": "O nome de usuário não pode ser alterado",
+        "bio": "Biografia",
+        "bioPlaceholder": "Conte-nos sobre você..."
+      },
+      "actions": {
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "saving": "Salvando...",
+        "profileUpdated": "Perfil atualizado com sucesso",
+        "updateError": "Erro ao atualizar perfil",
+        "confirm": "Confirmar",
+        "uploading": "Enviando..."
+      }
+    },
+    "translation": {
+      "title": "Configuração de idioma e tradução",
+      "description": "Defina seus idiomas e configurações de tradução",
+      "mainLanguages": {
+        "title": "Idiomas principais",
+        "description": "Configure seus idiomas preferidos para comunicação",
+        "systemLanguage": "Idioma do sistema",
+        "systemLanguageDescription": "Idioma principal da sua interface e mensagens",
+        "regionalLanguage": "Idioma regional",
+        "regionalLanguageDescription": "Idioma da sua região ou idioma secundário preferido",
+        "customDestinationLanguage": "Idioma de destino personalizado",
+        "customDestinationLanguageDescription": "Idioma específico para tradução automática (opcional)",
+        "selectLanguage": "Selecionar um idioma",
+        "none": "Nenhum"
+      },
+      "autoTranslation": {
+        "title": "Opções de tradução automática",
+        "description": "Configure como as mensagens são traduzidas automaticamente",
+        "enabled": "Tradução automática",
+        "enabledDescription": "Ativa a tradução automática de mensagens recebidas",
+        "exclusiveMode": "Modo exclusivo: Ative apenas uma opção de tradução por vez.",
+        "translateToSystem": "Traduzir apenas para o idioma do sistema",
+        "translateToSystemDescription": "Traduz mensagens apenas para {flag} {language}",
+        "translateToRegional": "Traduzir apenas para o idioma regional",
+        "translateToRegionalDescription": "Traduz mensagens apenas para {flag} {language}",
+        "translateToCustom": "Traduzir apenas para o idioma personalizado",
+        "translateToCustomDescription": "Traduz mensagens apenas para {flag} {language}",
+        "noCustomLanguage": "Nenhum idioma personalizado definido - defina um acima",
+        "tip": "Dica:",
+        "tipDescription": "Se nenhuma opção for selecionada, as mensagens serão traduzidas em todos os seus idiomas configurados (sistema + regional + personalizado)."
+      },
+      "preview": {
+        "title": "Visualização da configuração",
+        "systemLanguage": "Idioma do sistema",
+        "regionalLanguage": "Idioma regional",
+        "customLanguage": "Idioma personalizado",
+        "autoTranslation": "Tradução automática",
+        "enabled": "Ativada",
+        "disabled": "Desativada"
+      },
+      "actions": {
+        "save": "Salvar",
+        "saving": "Salvando...",
+        "cancel": "Cancelar",
+        "settingsUpdated": "Configurações de idioma atualizadas",
+        "updateError": "Erro ao atualizar configurações de idioma"
+      },
+      "systemLanguage": "Idioma do sistema",
+      "regionalLanguage": "Idioma regional",
+      "customDestinationLanguage": "Idioma de destino personalizado",
+      "autoTranslateEnabled": "Tradução automática ativada",
+      "translateToSystemLanguage": "Traduzir para o idioma do sistema",
+      "translateToRegionalLanguage": "Traduzir para o idioma regional",
+      "useCustomDestination": "Usar destino personalizado",
+      "customDestinationPlaceholder": "Selecionar um idioma"
+    },
+    "security": {
+      "title": "Configurações de segurança",
+      "description": "Gerencie a segurança da sua conta e sua senha",
+      "password": {
+        "title": "Alterar senha",
+        "description": "Atualize sua senha para proteger sua conta",
+        "currentPassword": "Senha atual",
+        "currentPasswordPlaceholder": "Digite sua senha atual",
+        "newPassword": "Nova senha",
+        "newPasswordPlaceholder": "Digite sua nova senha",
+        "confirmPassword": "Confirmar nova senha",
+        "confirmPasswordPlaceholder": "Digite novamente sua nova senha",
+        "requirements": "A senha deve ter pelo menos 6 caracteres",
+        "update": "Atualizar senha",
+        "updating": "Atualizando...",
+        "cancel": "Cancelar",
+        "updateSuccess": "Senha atualizada com sucesso",
+        "errors": {
+          "currentRequired": "A senha atual é obrigatória",
+          "newRequired": "A nova senha é obrigatória",
+          "tooShort": "A senha deve ter pelo menos 6 caracteres",
+          "mismatch": "As senhas não correspondem",
+          "samePassword": "A nova senha deve ser diferente da atual",
+          "updateFailed": "Falha ao atualizar senha"
+        }
+      }
+    },
+    "theme": {
+      "title": "Tema e interface",
+      "description": "Personalize a aparência, o idioma e as fontes do aplicativo",
+      "settingsUpdated": "Configurações atualizadas com sucesso",
+      "interfaceLanguageUpdated": "Idioma da interface atualizado",
+      "displayMode": {
+        "title": "Modo de exibição",
+        "light": "Claro",
+        "dark": "Escuro",
+        "system": "Sistema"
+      },
+      "accentColor": {
+        "title": "Cor de destaque",
+        "blue": "Azul",
+        "green": "Verde",
+        "purple": "Roxo",
+        "red": "Vermelho",
+        "orange": "Laranja",
+        "pink": "Rosa"
+      },
+      "interfaceLanguage": {
+        "title": "Idioma da interface",
+        "description": "Define o idioma da interface do usuário"
+      },
+      "ui": {
+        "title": "Interface do usuário",
+        "description": "Opções de exibição e comportamento",
+        "fontSize": {
+          "title": "Tamanho da fonte",
+          "small": "Pequena",
+          "medium": "Média",
+          "large": "Grande"
+        },
+        "fontFamily": {
+          "title": "Família de fontes",
+          "description": "Escolha o estilo da fonte para a interface"
+        },
+        "lineHeight": {
+          "title": "Altura da linha",
+          "description": "Ajuste o espaçamento entre linhas de texto",
+          "tight": "Compacto",
+          "normal": "Normal",
+          "relaxed": "Relaxado",
+          "loose": "Amplo"
+        },
+        "interfaceLanguage": {
+          "title": "Idioma da interface",
+          "description": "Idioma para menus e botões"
+        },
+        "compactMode": {
+          "title": "Modo compacto",
+          "description": "Reduz o espaçamento para exibir mais conteúdo"
+        },
+        "animations": {
+          "title": "Animações",
+          "description": "Ativa transições e animações da interface"
+        }
+      },
+      "preview": {
+        "title": "Visualização",
+        "description": "Veja como ficam suas configurações",
+        "exampleMessage": "Esta é uma mensagem de exemplo",
+        "exampleText": "Este é um texto de exemplo com suas configurações de fonte e altura de linha selecionadas"
+      }
+    },
+    "language": {
+      "title": "Configurações de idioma",
+      "description": "Configure suas preferências de idioma"
+    },
+    "notifications": {
+      "title": "Configurações de notificação",
+      "description": "Gerencie suas preferências de notificação"
+    },
+    "privacy": {
+      "title": "Configurações de privacidade",
+      "description": "Controle suas configurações de privacidade e dados"
+    },
+    "languageSelector": {
+      "placeholder": "Selecionar um idioma...",
+      "searchPlaceholder": "Pesquisar um idioma...",
+      "noLanguageFound": "Nenhum idioma encontrado."
+    },
+    "noUserConnected": "Nenhum usuário conectado"
+  }
+}

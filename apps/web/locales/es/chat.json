@@ -1,0 +1,30 @@
+{
+  "chat": {
+    "title": "Conversación",
+    "anonymousChat": "Conversación anónima",
+    "loading": "Cargando la conversación...",
+    "connecting": "Conectando...",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "reconnecting": "Reconectando...",
+    "sendMessage": "Enviar el mensaje",
+    "messagePlaceholder": "Escriba su mensaje...",
+    "noMessages": "No hay mensajes por el momento",
+    "noMessagesDescription": "Comience la conversación enviando un mensaje",
+    "conversationNotFound": {
+      "title": "Conversación no encontrada",
+      "description": "Esta conversación no existe o el enlace no es válido",
+      "backHome": "Volver al inicio",
+      "createNew": "Crear una nueva conversación"
+    },
+    "errors": {
+      "loadError": "No se puede cargar la conversación. Por favor verifique el enlace e intente nuevamente.",
+      "sendError": "Error al enviar el mensaje",
+      "connectionError": "Error de conexión",
+      "invalidLink": "Enlace de conversación no válido. Por favor verifique la URL e intente nuevamente.",
+      "unableToLoadConversation": "No se pueden cargar los datos de la conversación. Por favor verifique sus permisos o intente iniciar sesión.",
+      "linkNoLongerActive": "Este enlace ya no está activo. Por favor solicite un nuevo enlace al propietario de la conversación.",
+      "linkExpired": "Este enlace ha expirado. Por favor solicite un nuevo enlace al propietario de la conversación."
+    }
+  }
+}

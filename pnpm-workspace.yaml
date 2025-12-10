@@ -1,0 +1,37 @@
+# Meeshy Monorepo - PNPM Workspace Configuration
+# Structure:
+#   apps/     - User-facing applications (web, ios, android, docs)
+#   services/ - Backend microservices (gateway, translator)
+#   packages/ - Shared libraries and utilities
+
+packages:
+  # Applications
+  - 'apps/*'
+
+  # Backend services
+  - 'services/*'
+
+  # Shared packages
+  - 'packages/*'
+
+# Ignore test fixtures and examples
+ignore:
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/__tests__/**'
+  - '**/fixtures/**'
+
+# Build dependencies configuration
+ignoredBuiltDependencies:
+  - '@tensorflow/tfjs-node'
+  - core-js
+  - onnxruntime-node
+  - protobufjs
+  - sharp
+  - unrs-resolver
+
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma

@@ -1,0 +1,16 @@
+{
+  "typingIndicator": {
+    "typing": "En train d'écrire...",
+    "isTyping": "est en train d'écrire",
+    "areTyping": "sont en train d'écrire",
+    "single": "{name} est en train d'écrire...",
+    "double": "{name1} et {name2} sont en train d'écrire...",
+    "multiple": "{name} et {count} autres personnes sont en train d'écrire...",
+    "typingIndicator": {
+      "typing": "En train d'écrire...",
+      "isTyping": "est en train d'écrire",
+      "areTyping": "sont en train d'écrire",
+      "multipleTyping": "personnes sont en train d'écrire"
+    }
+  }
+}

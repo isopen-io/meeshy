@@ -1,0 +1,74 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradientAffiliate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="35%" style="stop-color:#0891b2;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradientAffiliate)"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="120" cy="100" r="160" fill="white" opacity="0.08"/>
+  <circle cx="1080" cy="530" r="200" fill="white" opacity="0.08"/>
+  
+  <!-- Connection/Network icon -->
+  <g transform="translate(450, 140)">
+    <!-- Central user -->
+    <circle cx="150" cy="80" r="45" fill="white" opacity="0.95"/>
+    <circle cx="150" cy="70" r="15" fill="#2563eb"/>
+    <path d="M 130 95 Q 130 85 140 82 L 160 82 Q 170 85 170 95 L 170 100 L 130 100 Z" fill="#2563eb"/>
+    
+    <!-- Connected users (smaller) -->
+    <circle cx="80" cy="60" r="30" fill="white" opacity="0.95"/>
+    <circle cx="80" cy="53" r="10" fill="#10b981"/>
+    <path d="M 67 70 Q 67 63 73 61 L 87 61 Q 93 63 93 70 L 93 73 L 67 73 Z" fill="#10b981"/>
+    
+    <circle cx="220" cy="60" r="30" fill="white" opacity="0.95"/>
+    <circle cx="220" cy="53" r="10" fill="#10b981"/>
+    <path d="M 207 70 Q 207 63 213 61 L 227 61 Q 233 63 233 70 L 233 73 L 207 73 Z" fill="#10b981"/>
+    
+    <circle cx="100" cy="140" r="30" fill="white" opacity="0.95"/>
+    <circle cx="100" cy="133" r="10" fill="#10b981"/>
+    <path d="M 87 150 Q 87 143 93 141 L 107 141 Q 113 143 113 150 L 113 153 L 87 153 Z" fill="#10b981"/>
+    
+    <circle cx="200" cy="140" r="30" fill="white" opacity="0.95"/>
+    <circle cx="200" cy="133" r="10" fill="#10b981"/>
+    <path d="M 187 150 Q 187 143 193 141 L 207 141 Q 213 143 213 150 L 213 153 L 187 153 Z" fill="#10b981"/>
+    
+    <!-- Connection lines -->
+    <line x1="110" y1="70" x2="120" y2="75" stroke="white" stroke-width="3" opacity="0.6"/>
+    <line x1="190" y1="70" x2="180" y2="75" stroke="white" stroke-width="3" opacity="0.6"/>
+    <line x1="130" y1="110" x2="140" y2="100" stroke="white" stroke-width="3" opacity="0.6"/>
+    <line x1="170" y1="110" x2="160" y2="100" stroke="white" stroke-width="3" opacity="0.6"/>
+  </g>
+  
+  <!-- Title -->
+  <text x="600" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="64" font-weight="700" fill="white" text-anchor="middle">
+    Invitation Spéciale 🎁
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="400" fill="white" text-anchor="middle" opacity="0.95">
+    Rejoignez Meeshy via ce lien d'affiliation
+  </text>
+  
+  <!-- Benefits -->
+  <g opacity="0.9">
+    <text x="600" y="500" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="300" fill="white" text-anchor="middle">
+      Connectez-vous avec votre parrain et des milliers d'utilisateurs
+    </text>
+  </g>
+  
+  <!-- Bottom CTA -->
+  <g opacity="0.85">
+    <rect x="450" y="530" width="300" height="50" rx="25" fill="white" opacity="0.2"/>
+    <text x="600" y="562" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="600" fill="white" text-anchor="middle">
+      Créer mon compte →
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,175 @@
+{
+  "common": {
+    "languageNames": {
+      "en": "Inglés",
+      "fr": "Francés",
+      "pt": "Portugués",
+      "es": "Español",
+      "de": "Alemán",
+      "it": "Italiano",
+      "zh": "Chino",
+      "ja": "Japonés",
+      "ar": "Árabe",
+      "ru": "Ruso",
+      "ko": "Coreano",
+      "hi": "Hindi",
+      "tr": "Turco"
+    },
+    "loading": "Cargando...",
+    "error": "Error",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "submit": "Enviar",
+    "confirm": "Confirmar",
+    "understood": "Entendido",
+    "yes": "Sí",
+    "no": "No",
+    "new": "Nuevo",
+    "notSelected": "No seleccionado",
+    "showMore": "Ver más",
+    "showLess": "Ver menos",
+    "comingSoon": "Próximamente",
+    "uploading": "Subiendo...",
+    "uploadingMultiple": "Subiendo {count} archivos...",
+    "days": "días",
+    "step": "Paso {step}",
+    "insufficientRights": "No tiene los derechos necesarios para realizar esta operación",
+    "navigation": {
+      "home": "Inicio",
+      "dashboard": "Panel de control",
+      "settings": "Configuración",
+      "profile": "Perfil",
+      "logout": "Cerrar sesión",
+      "conversations": "Conversaciones",
+      "contacts": "Contactos",
+      "groups": "Grupos",
+      "links": "Enlaces",
+      "communities": "Comunidades",
+      "admin": "Admin",
+      "about": "Acerca de",
+      "help": "Ayuda"
+    },
+    "header": {
+      "searchPlaceholder": "Buscar..."
+    },
+    "auth": {
+      "checking": "Verificando...",
+      "logoutSuccess": "Cierre de sesión exitoso",
+      "logoutError": "Error al cerrar sesión"
+    },
+    "validation": {
+      "required": "Este campo es obligatorio",
+      "invalidEmail": "Dirección de email inválida",
+      "invalidPhone": "Número de teléfono inválido",
+      "minLength": "Mínimo {min} caracteres requeridos",
+      "maxLength": "Máximo {max} caracteres permitidos",
+      "passwordMismatch": "Las contraseñas no coinciden"
+    },
+    "errors": {
+      "generic": "Se produjo un error",
+      "network": "Error de red",
+      "unauthorized": "Acceso no autorizado",
+      "forbidden": "Acceso prohibido",
+      "notFound": "Recurso no encontrado",
+      "invalidCredentials": "Credenciales inválidas",
+      "sessionExpired": "Sesión expirada",
+      "validationError": "Error de validación"
+    },
+    "success": {
+      "saved": "Guardado con éxito",
+      "deleted": "Eliminado con éxito",
+      "updated": "Actualizado con éxito",
+      "created": "Creado con éxito",
+      "welcome": "Bienvenido"
+    },
+    "sidebar": {
+      "activeUsers": "Usuarios Activos",
+      "trends": "Tendencias",
+      "globalCommunication": "Comunicación Global",
+      "messagesIn": "mensajes en",
+      "activeLanguages": "idiomas activos"
+    },
+    "languageSelector": {
+      "selectLanguage": "Seleccionar un idioma...",
+      "noLanguageFound": "No se encontraron idiomas.",
+      "searchLanguage": "Buscar idioma..."
+    },
+    "toasts": {
+      "error": "Se produjo un error",
+      "success": "Operación exitosa",
+      "warning": "Advertencia",
+      "info": "Información",
+      "connectionError": "Error de conexión",
+      "sessionExpired": "Sesión expirada, por favor vuelva a conectarse",
+      "unauthorized": "No está autorizado para realizar esta acción",
+      "saveFailed": "Error al guardar",
+      "saveSuccess": "Guardado con éxito",
+      "deleteFailed": "Error al eliminar",
+      "deleteSuccess": "Eliminado con éxito",
+      "updateFailed": "Error al actualizar",
+      "updateSuccess": "Actualizado con éxito"
+    },
+    "layout": {
+      "header": {
+        "title": "Meeshy",
+        "subtitle": "Mensajería multilingüe en tiempo real"
+      },
+      "sidebar": {
+        "menu": "Menú",
+        "collapse": "Contraer la barra lateral",
+        "expand": "Expandir la barra lateral"
+      },
+      "footer": {
+        "copyright": "© {year} Meeshy. Todos los derechos reservados.",
+        "version": "Versión {version}",
+        "about": "Acerca de",
+        "privacy": "Privacidad",
+        "terms": "Términos",
+        "contact": "Contacto"
+      }
+    },
+    "accessDenied": {
+      "title": "Acceso denegado",
+      "description": "No tiene los permisos necesarios para acceder a esta página.",
+      "back": "Volver",
+      "home": "Inicio",
+      "tip": {
+        "title": "Consejo:",
+        "message": "Si cree que debería tener acceso a este recurso, intente iniciar sesión o contacte al administrador."
+      }
+    },
+    "messages": {
+      "messageSent": "¡Mensaje enviado!",
+      "sendError": "Error al enviar el mensaje",
+      "connectionInProgress": "Conexión en curso - Por favor espere...",
+      "messageModified": "Mensaje modificado con éxito",
+      "messageEdited": "Mensaje modificado con éxito",
+      "messageEditedByOther": "Un mensaje ha sido modificado",
+      "messageDeleted": "Mensaje eliminado con éxito",
+      "messageDeletedByOther": "Un mensaje ha sido eliminado",
+      "modifyError": "Error al modificar el mensaje",
+      "editError": "Error al modificar el mensaje",
+      "deleteError": "Error al eliminar el mensaje",
+      "replyTo": "Responder a este mensaje",
+      "messageFound": "¡Mensaje encontrado!",
+      "messageNotVisible": "Mensaje no visible. Cargando...",
+      "loadingMessage": "Cargando mensaje...",
+      "messageNotFound": "Mensaje no encontrado",
+      "allMessagesLoaded": "Todos los mensajes han sido cargados",
+      "loadingOlderMessages": "Cargando mensajes antiguos...",
+      "requestTranslationError": "Error al solicitar la traducción",
+      "reportMessage": "Reportar este mensaje",
+      "messageCopied": "Mensaje copiado al portapapeles",
+      "copyMessage": "Copiar el mensaje",
+      "addReaction": "Agregar una reacción",
+      "reportSuccess": "Reporte enviado con éxito",
+      "reportError": "Error al reportar"
+    }
+  }
+}

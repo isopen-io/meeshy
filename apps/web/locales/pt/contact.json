@@ -1,0 +1,64 @@
+{
+  "contact": {
+    "title": "Entre em Contato",
+    "subtitle": "Estamos aqui para ajudar. Não hesite em entrar em contato para qualquer pergunta ou sugestão.",
+    "backHome": "Voltar ao início",
+    "address": {
+      "title": "Nosso Endereço",
+      "company": "Meeshy Inc.",
+      "street": "12 Rue de la Paix",
+      "building": "Prédio A, 3º andar",
+      "city": "75002 Paris, França"
+    },
+    "email": {
+      "label": "Email",
+      "value": "contact@meeshy.me"
+    },
+    "availability": {
+      "title": "Disponibilidade",
+      "description": "Segunda a sexta, 9h00 - 18h00 (horário de Paris)"
+    },
+    "directions": {
+      "title": "Como nos encontrar",
+      "metro": {
+        "title": "Metrô",
+        "line1": "Linha 3 - Estação Bourse",
+        "duration": "5 min a pé"
+      },
+      "train": {
+        "title": "Trem",
+        "rera": "RER A - Auber",
+        "transilien": "Transilien J/L - Haussmann Saint-Lazare",
+        "duration": "10 min a pé"
+      },
+      "bus": {
+        "title": "Ônibus",
+        "lines": "Linhas 20, 29, 39, 48",
+        "stop": "Parada Bourse"
+      },
+      "car": {
+        "title": "Carro",
+        "parking": "Estacionamento Bourse (pago)",
+        "highway": "A1, saída Porte de la Chapelle",
+        "rates": "Tarifa: 4€/hora"
+      },
+      "express": {
+        "title": "Ônibus Expresso",
+        "service": "Serviço direto desde CDG",
+        "bus": "Ônibus direto Roissybus"
+      },
+      "lineU": {
+        "title": "Linha U",
+        "transilien": "Transilien U - La Défense",
+        "duration": "15 min a pé"
+      }
+    },
+    "cta": {
+      "title": "Links Úteis",
+      "about": "Sobre",
+      "partners": "Parceiros",
+      "collaborate": "Colaborar",
+      "learnMore": "Saiba mais"
+    }
+  }
+}

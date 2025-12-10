@@ -1,0 +1,59 @@
+{
+  "terms": {
+    "title": "Términos de Uso",
+    "lastUpdated": "Última actualización: 25 de octubre de 2025",
+    "backHome": "Volver al inicio",
+    "print": "Imprimir",
+    "intro": "Bienvenido a Meeshy. Al usar nuestro servicio, acepta los siguientes términos:",
+    "acceptance": {
+      "title": "Aceptación de los Términos",
+      "content": "Al usar Meeshy, acepta estar sujeto a estos términos de uso. Si no acepta estos términos, por favor no use nuestro servicio."
+    },
+    "service": {
+      "title": "Descripción del Servicio",
+      "content": "Meeshy es una plataforma de mensajería con traducción en tiempo real que permite a los usuarios comunicarse en diferentes idiomas."
+    },
+    "account": {
+      "title": "Cuenta de Usuario",
+      "intro": "Para usar ciertas funcionalidades, debe crear una cuenta:",
+      "responsibilities": ["Mantener la confidencialidad de su contraseña", "Ser responsable de todas las actividades bajo su cuenta", "Notificar inmediatamente cualquier acceso no autorizado", "Proporcionar información exacta y actualizada"],
+      "anonymousEncryption": "Nota: Los usuarios anónimos no tienen una clave de cifrado personal. Por lo tanto, sus datos no pueden ser cifrados en reposo. Para una seguridad máxima, cree una cuenta de usuario."
+    },
+    "usage": {
+      "title": "Uso Aceptable",
+      "intro": "Acepta no usar Meeshy para:",
+      "prohibited": ["Publicar contenido ilegal, ofensivo o dañino", "Violar los derechos de propiedad intelectual", "Acosar, amenazar o intimidar a otros usuarios", "Difundir spam o contenido comercial no solicitado", "Intentar acceder sin autorización a los sistemas"]
+    },
+    "content": {
+      "title": "Contenido del Usuario",
+      "ownership": "Conserva la propiedad de su contenido",
+      "license": "Otorga a Meeshy una licencia para usar su contenido con el fin de proporcionar el servicio",
+      "responsibility": "Es responsable del contenido que publica"
+    },
+    "termination": {
+      "title": "Terminación",
+      "content": "Nos reservamos el derecho de suspender o terminar su cuenta en cualquier momento, con o sin previo aviso, por violación de estos términos."
+    },
+    "limitation": {
+      "title": "Limitación de Responsabilidad",
+      "content": "Meeshy se proporciona \"tal cual\" sin garantías de ningún tipo. No somos responsables de daños resultantes del uso o la imposibilidad de usar el servicio."
+    },
+    "changes": {
+      "title": "Modificaciones de los Términos",
+      "content": "Podemos modificar estos términos en cualquier momento. Los cambios importantes serán notificados por email o mediante una notificación en la plataforma."
+    },
+    "governing": {
+      "title": "Ley Aplicable",
+      "content": "Estos términos se rigen por las leyes francesas. Cualquier disputa se someterá a la jurisdicción exclusiva de los tribunales de París."
+    },
+    "email": "Email: legal@meeshy.me",
+    "address": "Dirección: 12 Rue de la Paix, 75002 París, Francia",
+    "footer": {
+      "title": "Enlaces Útiles",
+      "about": "Acerca de",
+      "contact": "Contacto",
+      "partners": "Socios",
+      "privacy": "Política de privacidad"
+    }
+  }
+}

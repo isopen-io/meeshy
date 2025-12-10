@@ -1,0 +1,358 @@
+{
+  "links": {
+    "title": "Links de compartilhamento",
+    "subtitle": "Crie e gerencie seus links de compartilhamento para convidar facilmente participantes para suas conversas",
+    "createLink": "Criar link",
+    "unnamedLink": "Link sem nome",
+    "conversation": "Conversa",
+    "linksFound": "{count} link encontrado",
+    "linksFound_plural": "{count} links encontrados",
+    "loadingLinks": "Carregando seus links...",
+    "loadingTrackingLinks": "Carregando seus links de rastreamento...",
+    "noLinksFound": "Nenhum link encontrado",
+    "noLinksFoundTryAnother": "Tente modificar sua pesquisa ou crie um novo link",
+    "noLinksFoundCreateFirst": "Crie seu primeiro link para começar a convidar participantes para suas conversas",
+    "activationNotImplemented": "Ativação ainda não implementada",
+    "linkNameTemplate": {
+      "default": "{participantLimit} link para a conversa '{conversationTitle}' válido por {duration}",
+      "openToAll": "aberto a todos",
+      "limitedToParticipants": "limitado a {count} participante(s)",
+      "limitedToUses": "limitado a {count} uso(s)",
+      "days": "{count} dia(s)",
+      "indefinitely": "indefinidamente"
+    },
+    "searchPlaceholder": "Pesquisar links...",
+    "filters": {
+      "status": "Status",
+      "all": "Todos",
+      "active": "Ativos",
+      "inactive": "Inativos",
+      "expired": "Expirados"
+    },
+    "tabs": {
+      "shareLinks": "Links de compartilhamento",
+      "trackingLinks": "Links rastreados",
+      "active": "Ativos",
+      "disabled": "Desativados",
+      "expired": "Expirados"
+    },
+    "status": {
+      "active": "Ativo",
+      "inactive": "Inativo",
+      "expired": "Expirado",
+      "expires": "Expira",
+      "never": "Nunca",
+      "daysRemaining": "{days} dia(s) restante(s)",
+      "hoursRemaining": "{hours} hora(s) restante(s)"
+    },
+    "stats": {
+      "created": "Criado",
+      "expires": "Expira",
+      "uses": "Usos",
+      "active": "Ativo",
+      "totalLinks": "Total de links",
+      "totalClicks": "Cliques totais",
+      "uniqueClicks": "Cliques únicos",
+      "lastClicked": "Último clique",
+      "never": "Nunca",
+      "avgTotal": "Média de cliques totais",
+      "avgUnique": "Média de cliques únicos"
+    },
+    "actions": {
+      "menu": "Menu",
+      "view": "Ver",
+      "viewDetails": "Ver detalhes",
+      "copy": "Copiar link",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "enable": "Ativar",
+      "disable": "Desativar",
+      "extend7Days": "Prolongar por 7 dias",
+      "cancel": "Cancelar",
+      "save": "Salvar",
+      "saving": "Salvando..."
+    },
+    "details": {
+      "title": "Detalhes do link",
+      "linkName": "Nome do link",
+      "linkUrl": "URL do link",
+      "description": "Descrição",
+      "invitationMessage": "Mensagem de convite",
+      "conversation": "Conversa",
+      "creator": "Criado por",
+      "created": "Criado",
+      "createdAt": "Criado em",
+      "expiresAt": "Expira em",
+      "lastUpdated": "Última atualização",
+      "expires": "Expira",
+      "dates": "Datas",
+      "usage": "Uso",
+      "totalUses": "Usos totais",
+      "totalParticipants": "Participantes totais",
+      "activeUsers": "Usuários ativos",
+      "permissions": "Permissões",
+      "languages": "Idiomas permitidos",
+      "viewMore": "Ver mais detalhes",
+      "requirements": "Requisitos"
+    },
+    "edit": {
+      "title": "Editar link",
+      "linkName": "Nome do link",
+      "linkNamePlaceholder": "Digite o nome do link",
+      "description": "Descrição",
+      "descriptionPlaceholder": "Digite uma descrição",
+      "expiresAt": "Data de expiração",
+      "expiresAtDescription": "Quando este link expirará",
+      "selectDate": "Selecionar data",
+      "maxUses": "Usos máximos",
+      "maxUsesDescription": "Número máximo de vezes que este link pode ser usado",
+      "permissions": "Permissões",
+      "requirements": "Requisitos"
+    },
+    "permissions": {
+      "allowed": "Permitido",
+      "denied": "Negado",
+      "messages": "Mensagens",
+      "messagesDescription": "Permitir envio de mensagens",
+      "images": "Imagens",
+      "imagesDescription": "Permitir compartilhamento de imagens",
+      "files": "Arquivos",
+      "filesDescription": "Permitir compartilhamento de arquivos",
+      "viewHistory": "Ver histórico",
+      "viewHistoryDescription": "Permitir consultar histórico de conversas"
+    },
+    "requirements": {
+      "account": "Conta obrigatória",
+      "accountDescription": "Visitantes devem fazer login com uma conta verificada. Ativa automaticamente todas as permissões e requisitos.",
+      "noAnonymous": "Sem anônimos",
+      "nickname": "Apelido",
+      "nicknameDescription": "Exigir apelido para entrar",
+      "name": "Nome obrigatório",
+      "email": "E-mail",
+      "emailDescription": "Exigir e-mail para entrar",
+      "birthday": "Data de nascimento",
+      "birthdayDescription": "Exigir data de nascimento para entrar"
+    },
+    "confirm": {
+      "delete": "Tem certeza de que deseja excluir este link?"
+    },
+    "success": {
+      "linkCreated": "Link criado com sucesso",
+      "linkCopied": "Link copiado para área de transferência",
+      "linkDeleted": "Link excluído com sucesso",
+      "linkEnabled": "Link ativado com sucesso",
+      "linkDisabled": "Link desativado com sucesso",
+      "linkUpdated": "Link atualizado com sucesso"
+    },
+    "errors": {
+      "loadFailed": "Erro ao carregar links",
+      "deleteFailed": "Erro ao excluir link",
+      "toggleFailed": "Erro ao atualizar status do link",
+      "extendFailed": "Erro ao prolongar link",
+      "updateFailed": "Erro ao atualizar link"
+    },
+    "durationOptions": {
+      "1": {
+        "label": "1 dia",
+        "description": "Link expira em 1 dia"
+      },
+      "3": {
+        "label": "3 dias",
+        "description": "Link expira em 3 dias"
+      },
+      "7": {
+        "label": "7 dias",
+        "description": "Link expira em 1 semana"
+      },
+      "14": {
+        "label": "14 dias",
+        "description": "Link expira em 2 semanas"
+      },
+      "30": {
+        "label": "30 dias",
+        "description": "Link expira em 1 mês"
+      },
+      "60": {
+        "label": "60 dias",
+        "description": "Link expira em 2 meses"
+      },
+      "90": {
+        "label": "90 dias",
+        "description": "Link expira em 3 meses"
+      },
+      "180": {
+        "label": "180 dias",
+        "description": "Link expira em 6 meses"
+      },
+      "365": {
+        "label": "365 dias",
+        "description": "Link expira em 1 ano"
+      },
+      "730": {
+        "label": "730 dias",
+        "description": "Link expira em 2 anos"
+      }
+    },
+    "limitOptions": {
+      "unlimited": {
+        "label": "Ilimitado",
+        "description": "Sem limite de usos"
+      },
+      "5": {
+        "label": "5 usos",
+        "description": "Link pode ser usado 5 vezes"
+      },
+      "10": {
+        "label": "10 usos",
+        "description": "Link pode ser usado 10 vezes"
+      },
+      "25": {
+        "label": "25 usos",
+        "description": "Link pode ser usado 25 vezes"
+      },
+      "50": {
+        "label": "50 usos",
+        "description": "Link pode ser usado 50 vezes"
+      },
+      "100": {
+        "label": "100 usos",
+        "description": "Link pode ser usado 100 vezes"
+      },
+      "250": {
+        "label": "250 usos",
+        "description": "Link pode ser usado 250 vezes"
+      },
+      "500": {
+        "label": "500 usos",
+        "description": "Link pode ser usado 500 vezes"
+      },
+      "1000": {
+        "label": "1000 usos",
+        "description": "Link pode ser usado 1000 vezes"
+      },
+      "5000": {
+        "label": "5000 usos",
+        "description": "Link pode ser usado 5000 vezes"
+      }
+    },
+    "tracking": {
+      "title": "Links rastreados",
+      "createLink": "Criar link rastreado",
+      "createLinkDescription": "Crie um link curto de rastreamento para monitorar cliques e engajamento",
+      "originalUrl": "URL original",
+      "shortUrl": "URL curta",
+      "trackingUrl": "URL de rastreamento",
+      "noLinks": "Nenhum link rastreado",
+      "noLinksDescription": "Crie seu primeiro link rastreado para monitorar cliques e engajamento",
+      "shareThisLink": "Compartilhe este link curto para rastrear cliques",
+      "enterUrlToShorten": "Digite a URL que você deseja encurtar e rastrear",
+      "urlLabel": "URL para rastrear",
+      "advancedOptions": "Opções avançadas",
+      "optionalSettings": "Configurações opcionais para seu link de rastreamento",
+      "expirationLabel": "Expiração do link",
+      "associateConversation": "Associar a conversa",
+      "associateConversationDescription": "Associe este link a uma conversa para melhor rastreamento",
+      "creating": "Criando...",
+      "createButton": "Criar link de rastreamento",
+      "expirationOptions": {
+        "never": "Nunca expira",
+        "1day": "1 dia",
+        "7days": "7 dias",
+        "30days": "30 dias",
+        "90days": "90 dias",
+        "1year": "1 ano"
+      },
+      "stats": {
+        "stats": "Estatísticas",
+        "totalLinks": "Total de links",
+        "totalClicks": "Cliques totais",
+        "uniqueClicks": "Visitantes únicos",
+        "activeLinks": "Links ativos",
+        "conversionRate": "Taxa de conversão",
+        "lastClick": "Último clique",
+        "never": "Nunca"
+      },
+      "details": {
+        "title": "Estatísticas do link de rastreamento",
+        "linkNotFound": "Link não encontrado",
+        "linkNotFoundDescription": "Este link de rastreamento não existe ou foi excluído",
+        "backToLinks": "Voltar aos links",
+        "linkInformation": "Informações do link",
+        "token": "Token",
+        "createdOn": "Criado em",
+        "shortUrl": "URL curta",
+        "originalUrl": "URL original",
+        "evolutionOverTime": "Evolução ao longo do tempo",
+        "overview": "Visão geral",
+        "performance": "Desempenho",
+        "geography": "Geografia",
+        "devices": "Dispositivos",
+        "browsers": "Navegadores",
+        "timeline": "Linha do tempo",
+        "clicksByCountry": "Cliques por país",
+        "clicksByDevice": "Cliques por dispositivo",
+        "clicksByBrowser": "Cliques por navegador",
+        "clicksByDate": "Cliques ao longo do tempo",
+        "topReferrers": "Principais referenciadores",
+        "referrer": "Referenciador",
+        "clicks": "Cliques",
+        "clicksCount": "{count} cliques",
+        "uniqueCount": "{count} únicos",
+        "unknown": "Desconhecido",
+        "direct": "Direto",
+        "copy": "Copiar"
+      },
+      "actions": {
+        "viewStats": "Ver estatísticas",
+        "copyShortUrl": "Copiar URL curta",
+        "deactivate": "Desativar",
+        "activate": "Ativar",
+        "edit": "Editar"
+      },
+      "edit": {
+        "title": "Editar link de rastreamento",
+        "description": "Modifique a URL de redirecionamento, token ou configurações do link",
+        "originalUrl": "URL de redirecionamento",
+        "originalUrlDescription": "A URL para a qual os visitantes serão redirecionados",
+        "token": "Token do link curto",
+        "tokenDescription": "6 caracteres alfanuméricos. Deixe inalterado para manter o token atual.",
+        "tokenTaken": "Este token já existe",
+        "tokenAvailable": "Este token está disponível",
+        "expiresAt": "Data de expiração (opcional)",
+        "expiresAtDescription": "Deixe vazio para um link sem expiração",
+        "isActive": "Link ativo",
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "saving": "Salvando...",
+        "errors": {
+          "urlRequired": "A URL de redirecionamento é obrigatória",
+          "invalidUrl": "A URL deve começar com http:// ou https://",
+          "invalidToken": "O token deve conter exatamente 6 caracteres alfanuméricos",
+          "updateFailed": "Erro ao atualizar o link"
+        },
+        "success": {
+          "updated": "Link de rastreamento atualizado com sucesso"
+        }
+      },
+      "success": {
+        "created": "Link de rastreamento criado com sucesso e copiado para área de transferência",
+        "createdNoCopy": "Link de rastreamento criado com sucesso",
+        "linkCreated": "Link criado com sucesso!",
+        "linkCreatedDescription": "Seu link de rastreamento está pronto para uso",
+        "copied": "Link copiado para área de transferência",
+        "deactivated": "Link desativado com sucesso",
+        "activated": "Link ativado com sucesso",
+        "deleted": "Link excluído com sucesso"
+      },
+      "errors": {
+        "loadFailed": "Erro ao carregar links de rastreamento",
+        "createFailed": "Erro ao criar link de rastreamento",
+        "statsFailed": "Erro ao carregar estatísticas",
+        "deactivateFailed": "Erro ao desativar link",
+        "deleteFailed": "Erro ao excluir link",
+        "urlRequired": "Digite uma URL",
+        "invalidUrl": "Digite uma URL válida"
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "terms": {
+    "title": "Terms of Service",
+    "lastUpdated": "Last updated: January 1, 2026",
+    "intro": "By accessing and using Meeshy, you agree to be bound by these terms of service.",
+    "backHome": "Back to home",
+    "print": "Print",
+    "address": "Meeshy SAS, 9-11 Avenue de l'Arche, 92400 Courbevoie, France",
+    "email": "legal@meeshy.me",
+    "acceptance": {
+      "title": "1. Acceptance of Terms",
+      "content": "By accessing and using Meeshy, you agree to be bound by these terms of use. If you do not agree to these terms, please do not use our service."
+    },
+    "service": {
+      "title": "2. Service Description",
+      "content": "Meeshy is a multilingual messaging platform that uses artificial intelligence to automatically translate messages in real-time. Our service enables communication without language barriers."
+    },
+    "account": {
+      "title": "3. User Accounts",
+      "intro": "When you create an account with us, you are responsible for:",
+      "responsibilities": [
+        "Maintaining the security of your account and password",
+        "All activities that occur under your account",
+        "Providing accurate and complete information",
+        "Updating your information when necessary",
+        "Notifying us immediately of any unauthorized access"
+      ],
+      "anonymousEncryption": "Note: Anonymous users do not have a personal encryption key. Their data cannot be encrypted at rest. For maximum security, please create a user account."
+    },
+    "usage": {
+      "title": "4. Acceptable Use",
+      "intro": "You agree not to use our service for any of the following prohibited activities:",
+      "prohibited": [
+        "Violating any applicable laws or regulations",
+        "Infringing on intellectual property rights",
+        "Transmitting harmful, offensive, or inappropriate content",
+        "Harassing, threatening, or intimidating other users",
+        "Attempting to gain unauthorized access to our systems",
+        "Interfering with the proper functioning of the service",
+        "Using automated systems to access the service without permission",
+        "Distributing spam, viruses, or malicious code"
+      ]
+    },
+    "content": {
+      "title": "5. User Content",
+      "ownership": "You retain all rights to the content you create and share through Meeshy. By using our service, you grant us a limited license to process, store, and transmit your content as necessary to provide the service.",
+      "responsibility": "You are solely responsible for the content you share. We do not endorse, support, or guarantee the accuracy of user-generated content.",
+      "license": "By submitting content, you grant Meeshy a worldwide, non-exclusive, royalty-free license to use, reproduce, and process your content solely for the purpose of providing and improving our services."
+    },
+    "limitation": {
+      "title": "6. Limitation of Liability",
+      "content": "Meeshy is provided \"as is\" without warranties of any kind, either express or implied. We are not liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the service."
+    },
+    "termination": {
+      "title": "7. Termination",
+      "content": "We reserve the right to terminate or suspend your access to our service at any time, with or without notice, for conduct that we believe violates these terms or is harmful to other users or our service."
+    },
+    "changes": {
+      "title": "8. Changes to Terms",
+      "content": "We reserve the right to modify these terms at any time. We will notify you of any changes by posting the new terms on this page. Your continued use of the service after changes are posted constitutes your acceptance of the modified terms."
+    },
+    "governing": {
+      "title": "9. Governing Law",
+      "content": "These terms shall be governed by and construed in accordance with the laws of France, without regard to its conflict of law provisions."
+    },
+    "footer": {
+      "title": "Questions?",
+      "about": "About Meeshy",
+      "privacy": "Privacy Policy",
+      "contact": "Contact Us",
+      "partners": "Partners"
+    }
+  }
+}

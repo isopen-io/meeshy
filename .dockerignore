@@ -1,0 +1,102 @@
+# Monorepo .dockerignore for Gateway build
+# Prevents copying unnecessary files during Docker build
+
+# === Development dependencies ===
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/package-lock.json
+
+# === Build outputs (will be generated) ===
+**/dist/
+**/build/
+**/coverage/
+**/.next/
+gateway/generated/
+
+# === Development files ===
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+.env
+.env.backup*
+
+# === Testing ===
+**/__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+**/.nyc_output/
+
+# === IDE ===
+.vscode/
+.idea/
+**/*.swp
+**/*.swo
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# === Logs ===
+**/*.log
+**/logs/
+gateway/gateway.log
+
+# === Temporary files ===
+**/*.tmp
+**/*.temp
+
+# === Git ===
+.git/
+.gitignore
+.github/
+
+# === Docker ===
+**/Dockerfile*
+**/.dockerignore
+docker-compose*.yml
+
+# === Documentation ===
+**/README.md
+**/docs/
+**/CHANGELOG.md
+
+# === Scripts (except entrypoint) ===
+**/scripts/
+**/*.sh
+!gateway/docker-entrypoint.sh
+
+# === Exclude frontend and translator (only gateway needed) ===
+frontend/
+translator/
+tests/
+
+# === Uploads (will be volume-mounted) ===
+gateway/uploads/
+
+# === Exclude other services' files ===
+gateway/check-*.js
+gateway/cleanup-*.js
+gateway/debug-*.js
+gateway/fix-*.js
+gateway/fix-*.sh
+gateway/test-*.js
+gateway/test-*.ts
+gateway/migrate-*.ts
+gateway/validate-*.sh
+gateway/verify-*.js
+gateway/build-*.sh
+
+# === Config files not needed ===
+gateway/jest.config.json
+gateway/jest.setup.js
+Makefile
+*.md
+LICENSE

@@ -1,0 +1,81 @@
+{
+  "privacy": {
+    "title": "Política de Privacidade",
+    "lastUpdated": "Última atualização: 25 de outubro de 2025",
+    "backHome": "Voltar ao início",
+    "print": "Imprimir",
+    "introduction": {
+      "title": "Introdução",
+      "content": "No Meeshy, levamos sua privacidade a sério. Esta política de privacidade explica como coletamos, usamos e protegemos suas informações pessoais."
+    },
+    "dataCollection": {
+      "title": "Coleta de Dados",
+      "personal": {
+        "title": "Informações Pessoais",
+        "items": ["Nome e sobrenome", "Endereço de email", "Preferências de idioma", "Foto de perfil (opcional)"]
+      },
+      "technical": {
+        "title": "Informações Técnicas",
+        "items": ["Endereço IP", "Tipo de navegador", "Sistema operacional", "Cookies e dados de sessão"]
+      },
+      "translation": {
+        "title": "Dados de Tradução",
+        "items": ["Mensagens originais", "Traduções geradas", "Preferências linguísticas", "Histórico de conversa"]
+      }
+    },
+    "usage": {
+      "title": "Uso de Dados",
+      "items": ["Fornecer e melhorar nossos serviços de tradução", "Personalizar sua experiência", "Analisar e melhorar o desempenho", "Garantir a segurança da plataforma"]
+    },
+    "protection": {
+      "title": "Proteção de Dados",
+      "encryption": {
+        "title": "Criptografia",
+        "content": "Todas as comunicações são criptografadas em trânsito e em repouso usando padrões da indústria."
+      },
+      "anonymous": {
+        "title": "Usuários Anônimos e Criptografia",
+        "content": "Usuários anônimos não possuem uma chave de criptografia pessoal. Portanto, seus dados não podem ser criptografados em repouso. Se você deseja se beneficiar de proteção completa de seus dados, por favor crie uma conta de usuário."
+      },
+      "storage": {
+        "title": "Armazenamento",
+        "content": "Seus dados são armazenados em servidores seguros com backups regulares."
+      },
+      "local": {
+        "title": "Processamento Local",
+        "content": "As traduções são realizadas no servidor para garantir a confidencialidade e qualidade."
+      }
+    },
+    "sharing": {
+      "title": "Compartilhamento de Dados",
+      "intro": "Nunca vendemos seus dados pessoais. Compartilhamos apenas:",
+      "cases": ["Com seu consentimento explícito", "Para cumprir obrigações legais", "Com provedores de serviços confiáveis (hospedagem, analytics)"]
+    },
+    "rights": {
+      "title": "Seus Direitos",
+      "intro": "Você tem o direito de:",
+      "list": ["Acessar seus dados pessoais", "Corrigir informações incorretas", "Excluir sua conta e seus dados", "Exportar seus dados", "Opor-se ao processamento de seus dados"],
+      "contact": "Para exercer esses direitos, entre em contato conosco em privacy@meeshy.me"
+    },
+    "footer": {
+      "title": "Links Úteis",
+      "home": "Início",
+      "about": "Sobre",
+      "contact": "Contato",
+      "partners": "Parceiros"
+    },
+    "contact": {
+      "title": "Entre em Contato",
+      "email": "Email: privacy@meeshy.me",
+      "address": "Endereço: 12 Rue de la Paix, 75002 Paris, França"
+    },
+    "cookies": {
+      "title": "Cookies e Tecnologias Similares",
+      "content": "Usamos cookies para melhorar sua experiência, lembrar suas preferências e analisar o uso do site."
+    },
+    "updates": {
+      "title": "Atualizações da Política",
+      "content": "Podemos atualizar esta política periodicamente. Informaremos sobre mudanças importantes por email ou via notificação na plataforma."
+    }
+  }
+}

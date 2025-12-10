@@ -1,0 +1,164 @@
+{
+  "common": {
+    "languageNames": {
+      "en": "Anglais",
+      "fr": "Français", 
+      "pt": "Portugais",
+      "es": "Espagnol",
+      "de": "Allemand",
+      "it": "Italien",
+      "zh": "Chinois",
+      "ja": "Japonais",
+      "ar": "Arabe",
+      "ru": "Russe",
+      "ko": "Coréen",
+      "hi": "Hindi",
+      "tr": "Turc"
+    },
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Soumettre",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "new": "Nouveau",
+    "notSelected": "Non sélectionné",
+    "showMore": "Voir plus",
+    "showLess": "Voir moins",
+    "uploading": "Upload en cours...",
+    "uploadingMultiple": "Upload {count} fichiers...",
+    "days": "jours",
+    "step": "Étape {step}",
+    "insufficientRights": "Vous ne disposez pas des droits nécessaires pour effectuer cette opération",
+    "navigation": {
+      "home": "Accueil",
+      "dashboard": "Tableau de bord",
+      "settings": "Paramètres",
+      "profile": "Profil",
+      "logout": "Se déconnecter",
+      "conversations": "Conversations",
+      "contacts": "Contacts",
+      "groups": "Groupes",
+      "links": "Liens",
+      "communities": "Communautés",
+      "admin": "Admin",
+      "about": "À propos",
+      "help": "Aide"
+    },
+    "header": {
+      "searchPlaceholder": "Rechercher..."
+    },
+    "auth": {
+      "checking": "Vérification...",
+      "logoutSuccess": "Déconnexion réussie",
+      "logoutError": "Erreur lors de la déconnexion"
+    },
+    "validation": {
+      "required": "Ce champ est requis",
+      "invalidEmail": "Adresse email invalide",
+      "invalidPhone": "Numéro de téléphone invalide",
+      "minLength": "Minimum {min} caractères requis",
+      "maxLength": "Maximum {max} caractères autorisés",
+      "passwordMismatch": "Les mots de passe ne correspondent pas"
+    },
+    "errors": {
+      "generic": "Une erreur s'est produite",
+      "network": "Erreur réseau",
+      "unauthorized": "Accès non autorisé",
+      "forbidden": "Accès interdit",
+      "notFound": "Ressource non trouvée",
+      "invalidCredentials": "Identifiants invalides",
+      "sessionExpired": "Session expirée",
+      "validationError": "Erreur de validation"
+    },
+    "success": {
+      "saved": "Enregistré avec succès",
+      "deleted": "Supprimé avec succès",
+      "updated": "Mis à jour avec succès",
+      "created": "Créé avec succès",
+      "welcome": "Bienvenue"
+    },
+    "sidebar": {
+      "activeUsers": "Utilisateurs Actifs",
+      "trends": "Tendances",
+      "globalCommunication": "Communication Globale",
+      "messagesIn": "messages en",
+      "activeLanguages": "langues actives"
+    },
+    "languageSelector": {
+      "selectLanguage": "Sélectionner une langue...",
+      "noLanguageFound": "Aucune langue trouvée."
+    },
+    "toasts": {
+      "error": "Une erreur s'est produite",
+      "success": "Opération réussie",
+      "warning": "Avertissement",
+      "info": "Information",
+      "connectionError": "Erreur de connexion",
+      "sessionExpired": "Session expirée, veuillez vous reconnecter",
+      "unauthorized": "Vous n'êtes pas autorisé à effectuer cette action",
+      "saveFailed": "Échec de l'enregistrement",
+      "saveSuccess": "Enregistré avec succès",
+      "deleteFailed": "Échec de la suppression",
+      "deleteSuccess": "Supprimé avec succès",
+      "updateFailed": "Échec de la mise à jour",
+      "updateSuccess": "Mis à jour avec succès"
+    },
+    "layout": {
+      "header": {
+        "title": "Meeshy",
+        "subtitle": "Messagerie multilingue en temps réel"
+      },
+      "sidebar": {
+        "menu": "Menu",
+        "collapse": "Réduire la barre latérale",
+        "expand": "Agrandir la barre latérale"
+      },
+      "footer": {
+        "copyright": "© {year} Meeshy. Tous droits réservés.",
+        "version": "Version {version}",
+        "about": "À propos",
+        "privacy": "Confidentialité",
+        "terms": "Conditions",
+        "contact": "Contact"
+      }
+    },
+    "accessDenied": {
+      "title": "Accès refusé",
+      "description": "Vous n'avez pas les permissions nécessaires pour accéder à cette page.",
+      "back": "Retour",
+      "home": "Accueil",
+      "tip": {
+        "title": "Astuce :",
+        "message": "Si vous pensez devoir avoir accès à cette ressource, essayez de vous connecter ou contactez l'administrateur."
+      }
+    },
+    "messages": {
+      "messageSent": "Message envoyé !",
+      "sendError": "Erreur lors de l'envoi du message",
+      "connectionInProgress": "Connexion en cours - Veuillez patienter...",
+      "messageModified": "Message modifié avec succès",
+      "messageEdited": "Message modifié avec succès",
+      "messageEditedByOther": "Un message a été modifié",
+      "messageDeleted": "Message supprimé avec succès",
+      "messageDeletedByOther": "Un message a été supprimé",
+      "modifyError": "Erreur lors de la modification du message",
+      "editError": "Erreur lors de la modification du message",
+      "deleteError": "Erreur lors de la suppression du message",
+      "replyTo": "Répondre à ce message",
+      "messageFound": "Message trouvé !",
+      "messageNotVisible": "Message non visible. Chargement...",
+      "allMessagesLoaded": "Tous les messages ont été chargés",
+      "requestTranslationError": "Erreur lors de la demande de traduction"
+    }
+  }
+}
+

@@ -1,0 +1,948 @@
+/**
+ * Service de traduction haute performance pour Meeshy
+ * Utilise l'architecture ZMQ PUB/SUB + REQ/REP avec pool de connexions
+ */
+
+import { EventEmitter } from 'events';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './zmq-translation-client';
+import { ZMQSingleton } from './zmq-singleton';
+
+export interface MessageData {
+  id?: string;
+  conversationId: string;
+  senderId?: string;
+  anonymousSenderId?: string;
+  content: string;
+  originalLanguage: string;
+  messageType?: string;
+  replyToId?: string;
+  targetLanguage?: string; // Langue cible spécifique pour la traduction
+}
+
+export interface TranslationServiceStats {
+  messages_saved: number;
+  translation_requests_sent: number;
+  translations_received: number;
+  errors: number;
+  pool_full_rejections: number;
+  avg_processing_time: number;
+  uptime_seconds: number;
+  memory_usage_mb: number;
+}
+
+export class TranslationService extends EventEmitter {
+  private prisma: PrismaClient;
+  private zmqClient: ZMQTranslationClient | null = null;
+  private startTime: number = Date.now();
+  private isInitialized: boolean = false; // Flag pour éviter la double initialisation
+  
+  // Cache mémoire pour les résultats récents
+  private memoryCache: Map<string, TranslationResult> = new Map();
+  private readonly CACHE_SIZE = 1000;
+  
+  // OPTIMISATION: Cache des langues par conversation (TTL 5 minutes)
+  private conversationLanguagesCache: Map<string, { languages: string[], timestamp: number }> = new Map();
+  private readonly LANGUAGES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  
+  // Statistiques
+  private stats: TranslationServiceStats = {
+    messages_saved: 0,
+    translation_requests_sent: 0,
+    translations_received: 0,
+    errors: 0,
+    pool_full_rejections: 0,
+    avg_processing_time: 0,
+    uptime_seconds: 0,
+    memory_usage_mb: 0
+  };
+
+  private processedMessages = new Set<string>();
+  private processedTasks = new Set<string>();
+
+  constructor(prisma: PrismaClient) {
+    super(); // Appel au constructeur EventEmitter
+    this.prisma = prisma;
+  }
+
+  /**
+   * Génère un identifiant unique pour une conversation
+   * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
+   */
+  private generateConversationIdentifier(title?: string): string {
+    const now = new Date();
+    const timestamp = now.getFullYear().toString() +
+      (now.getMonth() + 1).toString().padStart(2, '0') +
+      now.getDate().toString().padStart(2, '0') +
+      now.getHours().toString().padStart(2, '0') +
+      now.getMinutes().toString().padStart(2, '0') +
+      now.getSeconds().toString().padStart(2, '0');
+    
+    if (title) {
+      // Sanitiser le titre : enlever les caractères spéciaux, remplacer les espaces par des tirets
+      const sanitizedTitle = title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Garder seulement lettres, chiffres, espaces et tirets
+        .replace(/\s+/g, '-') // Remplacer les espaces par des tirets
+        .replace(/-+/g, '-') // Remplacer les tirets multiples par un seul
+        .replace(/^-|-$/g, ''); // Enlever les tirets en début/fin
+      
+      if (sanitizedTitle.length > 0) {
+        return `mshy_${sanitizedTitle}-${timestamp}`;
+      }
+    }
+    
+    // Si pas de titre ou titre vide après sanitisation, utiliser un ID unique
+    const uniqueId = Math.random().toString(36).slice(2, 10);
+    return `mshy_${uniqueId}-${timestamp}`;
+  }
+
+  async initialize(): Promise<void> {
+    try {
+      // ⚠️ IMPORTANT: Éviter la double initialisation qui créerait des listeners multiples
+      if (this.isInitialized) {
+        return;
+      }
+      
+      
+      // Utiliser le singleton ZMQ
+      this.zmqClient = await ZMQSingleton.getInstance();
+      
+      // ⚠️ CORRECTION DOUBLONS: Retirer les anciens listeners AVANT d'en ajouter de nouveaux
+      this.zmqClient.removeAllListeners('translationCompleted');
+      this.zmqClient.removeAllListeners('translationError');
+      
+      // Écouter les événements de traduction terminée
+      this.zmqClient.on('translationCompleted', this._handleTranslationCompleted.bind(this));
+      this.zmqClient.on('translationError', this._handleTranslationError.bind(this));
+      
+      
+      // Test de réception après initialisation
+      setTimeout(async () => {
+        try {
+          await this.zmqClient.testReception();
+        } catch (error) {
+          console.error('[GATEWAY] ❌ Erreur test réception:', error);
+        }
+      }, 3000);
+      
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('[GATEWAY] ❌ Erreur initialisation TranslationService:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Traite un nouveau message selon l'architecture spécifiée :
+   * 1. Sauvegarde le message avec Prisma
+   * 2. Libère le client immédiatement
+   * 3. Traite les traductions en asynchrone
+   */
+  async handleNewMessage(messageData: MessageData): Promise<{ messageId: string; status: string }> {
+    try {
+      const startTime = Date.now();
+      
+      let messageId: string;
+      let isRetranslation = false;
+      
+      // Vérifier si c'est une retraduction (message avec ID existant)
+      if (messageData.id) {
+        messageId = messageData.id;
+        isRetranslation = true;
+        
+        // Vérifier que le message existe en base
+        const existingMessage = await this.prisma.message.findFirst({
+          where: { id: messageData.id }
+        });
+        
+        if (!existingMessage) {
+          throw new Error(`Message ${messageData.id} non trouvé en base de données`);
+        }
+        
+      } else {
+        // Nouveau message - sauvegarder en base
+        const savedMessage = await this._saveMessageToDatabase(messageData);
+        messageId = savedMessage.id;
+        this.stats.messages_saved++;
+      }
+      
+      // 2. LIBÉRER LE CLIENT IMMÉDIATEMENT
+      const processingTime = Date.now() - startTime;
+      
+      const response = {
+        messageId: messageId,
+        status: isRetranslation ? 'retranslation_queued' : 'message_saved',
+        translation_queued: true
+      };
+      
+      // 3. TRAITER LES TRADUCTIONS EN ASYNCHRONE (non-bloquant)
+      setImmediate(async () => {
+        try {
+          if (isRetranslation) {
+            // Pour une retraduction, on utilise les données du message existant
+            await this._processRetranslationAsync(messageId, messageData);
+          } else {
+            // Pour un nouveau message, on récupère les données complètes
+            const savedMessage = await this.prisma.message.findFirst({
+              where: { id: messageId }
+            });
+            if (savedMessage) {
+              // Passer la langue cible ET le modelType spécifiés par le client
+              const requestedModelType = (messageData as any).modelType;
+              await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, requestedModelType);
+            } else {
+              console.error(`❌ [TranslationService] Message ${messageId} non trouvé en base`);
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Erreur traitement asynchrone des traductions: ${error}`);
+          this.stats.errors++;
+        }
+      });
+      
+      return response;
+      
+    } catch (error) {
+      console.error(`❌ Erreur traitement message: ${error}`);
+      this.stats.errors++;
+      throw error;
+    }
+  }
+
+  private async _saveMessageToDatabase(messageData: MessageData) {
+    try {
+      // Vérifier si la conversation existe, sinon la créer
+      const existingConversation = await this.prisma.conversation.findFirst({
+        where: { id: messageData.conversationId }
+      });
+      
+      if (!existingConversation) {
+        
+        // Générer un identifiant unique pour la conversation
+        const conversationIdentifier = this.generateConversationIdentifier(`Conversation ${messageData.conversationId}`);
+        
+        await this.prisma.conversation.create({
+          data: {
+            id: messageData.conversationId,
+            identifier: conversationIdentifier,
+            title: `Conversation ${messageData.conversationId}`,
+            type: 'group',
+            createdAt: new Date(),
+            lastMessageAt: new Date()
+          }
+        });
+      }
+      
+      const message = await this.prisma.message.create({
+        data: {
+          conversationId: messageData.conversationId,
+          senderId: messageData.senderId || null,
+          anonymousSenderId: messageData.anonymousSenderId || null,
+          content: messageData.content,
+          originalLanguage: messageData.originalLanguage,
+          messageType: messageData.messageType || 'text',
+          replyToId: messageData.replyToId || null
+        }
+      });
+      
+      // Mettre à jour lastMessageAt de la conversation
+      await this.prisma.conversation.update({
+        where: { id: messageData.conversationId },
+        data: { lastMessageAt: new Date() }
+      });
+      
+      return message;
+      
+    } catch (error) {
+      console.error(`❌ Erreur sauvegarde message: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Traite les traductions d'un nouveau message de manière asynchrone
+   * OPTIMISATION: Filtre automatiquement les langues cibles identiques à la langue source
+   * pour éviter les traductions inutiles (ex: fr → fr)
+   */
+  private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
+    try {
+      const startTime = Date.now();
+      
+      if (!this.zmqClient) {
+        console.error('[GATEWAY] ❌ ZMQ Client non disponible pour les traductions');
+        return;
+      }
+      
+      // 1. DÉTERMINER LES LANGUES CIBLES
+      let targetLanguages: string[];
+      
+      if (targetLanguage) {
+        // Utiliser la langue cible spécifiée par le client
+        targetLanguages = [targetLanguage];
+      } else {
+        // Extraire les langues de la conversation (comportement par défaut)
+        targetLanguages = await this._extractConversationLanguages(message.conversationId);
+        
+        if (targetLanguages.length === 0) {
+        }
+      }
+      
+      // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
+      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
+        const sourceLang = message.originalLanguage;
+        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
+          return false;
+        }
+        return true;
+      });
+
+
+      // Si aucune langue cible après filtrage, ne pas envoyer de requête
+      if (filteredTargetLanguages.length === 0) {
+        return;
+      }
+      
+      // 2. DÉTERMINER LE MODEL TYPE
+      // Priorité: 1) modelType passé en paramètre, 2) modelType du message, 3) auto-détection
+      const finalModelType = modelType || (message as any).modelType || ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
+      
+      
+      // 3. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ
+      const request: TranslationRequest = {
+        messageId: message.id,
+        text: message.content,
+        sourceLanguage: message.originalLanguage,
+        targetLanguages: filteredTargetLanguages,
+        conversationId: message.conversationId,
+        modelType: finalModelType
+      };
+      
+      const taskId = await this.zmqClient.sendTranslationRequest(request);
+      this.stats.translation_requests_sent++;
+      
+      const processingTime = Date.now() - startTime;
+      
+    } catch (error) {
+      console.error(`❌ Erreur traitement asynchrone: ${error}`);
+      this.stats.errors++;
+    }
+  }
+
+
+  /**
+   * Traite une retraduction d'un message existant
+   * OPTIMISATION: Filtre automatiquement les langues cibles identiques à la langue source
+   * pour éviter les traductions inutiles (ex: fr → fr)
+   */
+  private async _processRetranslationAsync(messageId: string, messageData: MessageData) {
+    try {
+      
+      // Récupérer le message existant depuis la base
+      const existingMessage = await this.prisma.message.findFirst({
+        where: { id: messageId }
+      });
+      
+      if (!existingMessage) {
+        throw new Error(`Message ${messageId} non trouvé pour retraduction`);
+      }
+      
+      // 1. DÉTERMINER LES LANGUES CIBLES
+      let targetLanguages: string[];
+      
+      if (messageData.targetLanguage) {
+        // Utiliser la langue cible spécifiée par le client
+        targetLanguages = [messageData.targetLanguage];
+      } else {
+        // Extraire les langues de la conversation (comportement par défaut)
+        targetLanguages = await this._extractConversationLanguages(existingMessage.conversationId);
+        
+        if (targetLanguages.length === 0) {
+        }
+      }
+      
+      // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
+      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
+        const sourceLang = existingMessage.originalLanguage;
+        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
+          return false;
+        }
+        return true;
+      });
+      
+      
+      // Si aucune langue cible après filtrage, ne pas envoyer de requête
+      if (filteredTargetLanguages.length === 0) {
+        return;
+      }
+      
+      // 2. DÉTERMINER LE MODEL TYPE
+      // Priorité: 1) modelType du messageData (demandé par l'utilisateur), 2) auto-détection
+      const requestedModelType = (messageData as any).modelType;
+      const autoModelType = (existingMessage.content?.length ?? 0) < 80 ? 'medium' : 'premium';
+      const finalModelType = requestedModelType || autoModelType;
+      
+      
+      // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
+      // Cela permet de remplacer les traductions existantes par les nouvelles
+      if (filteredTargetLanguages.length > 0) {
+        const deleteResult = await this.prisma.messageTranslation.deleteMany({
+          where: {
+            messageId: messageId,
+            targetLanguage: {
+              in: filteredTargetLanguages
+            }
+          }
+        });
+      }
+      
+      // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
+      const request: TranslationRequest = {
+        messageId: messageId,
+        text: existingMessage.content,
+        sourceLanguage: existingMessage.originalLanguage,
+        targetLanguages: filteredTargetLanguages,
+        conversationId: existingMessage.conversationId,
+        modelType: finalModelType
+      };
+      
+      const taskId = await this.zmqClient.sendTranslationRequest(request);
+      this.stats.translation_requests_sent++;
+      
+      
+    } catch (error) {
+      console.error(`❌ Erreur retraduction: ${error}`);
+      this.stats.errors++;
+    }
+  }
+
+  /**
+   * Extrait les langues cibles des participants d'une conversation
+   * Inclut les langues des utilisateurs authentifiés ET des participants anonymes
+   * NOTE: Cette méthode retourne TOUTES les langues parlées dans la conversation,
+   * indépendamment des préférences de traduction automatique des utilisateurs.
+   * Le filtrage des langues identiques à la source se fait dans les méthodes de traitement.
+   * 
+   * OPTIMISATION: Les résultats sont mis en cache pendant 5 minutes pour éviter les requêtes répétées
+   */
+  private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
+    try {
+      // OPTIMISATION: Vérifier le cache d'abord
+      const now = Date.now();
+      const cached = this.conversationLanguagesCache.get(conversationId);
+      
+      if (cached && (now - cached.timestamp) < this.LANGUAGES_CACHE_TTL) {
+        return cached.languages;
+      }
+      
+      const startTime = Date.now();
+      const languages = new Set<string>();
+      
+      // OPTIMISATION: Faire les 2 requêtes en parallèle au lieu de séquentiellement
+      const [members, anonymousParticipants] = await Promise.all([
+        this.prisma.conversationMember.findMany({
+          where: { 
+            conversationId: conversationId,
+            isActive: true 
+          },
+          include: {
+            user: {
+              select: {
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true,
+                autoTranslateEnabled: true,
+                translateToSystemLanguage: true,
+                translateToRegionalLanguage: true,
+                useCustomDestination: true
+              }
+            }
+          }
+        }),
+        this.prisma.anonymousParticipant.findMany({
+          where: { 
+            conversationId: conversationId,
+            isActive: true 
+          },
+          select: {
+            language: true
+          }
+        })
+      ]);
+      
+      // Extraire TOUTES les langues des utilisateurs authentifiés
+      // On extrait toujours systemLanguage, et les autres langues selon les préférences
+      for (const member of members) {
+        // Toujours ajouter la langue système du participant
+        if (member.user.systemLanguage) {
+          languages.add(member.user.systemLanguage);
+        }
+        
+        // Ajouter les langues additionnelles si l'utilisateur a activé la traduction automatique
+        if (member.user.autoTranslateEnabled) {
+          // Langue régionale si activée
+          if (member.user.translateToRegionalLanguage && member.user.regionalLanguage) {
+            languages.add(member.user.regionalLanguage); 
+          }
+          // Langue personnalisée si activée
+          if (member.user.useCustomDestination && member.user.customDestinationLanguage) {
+            languages.add(member.user.customDestinationLanguage); 
+          }
+        }
+      }
+      
+      // Extraire les langues des participants anonymes
+      for (const anonymousParticipant of anonymousParticipants) {
+        if (anonymousParticipant.language) {
+          languages.add(anonymousParticipant.language); 
+        }
+      }
+      
+      // Retourner toutes les langues (le filtrage se fera dans les méthodes de traitement)
+      const allLanguages = Array.from(languages);
+      
+      // OPTIMISATION: Mettre en cache le résultat
+      this.conversationLanguagesCache.set(conversationId, {
+        languages: allLanguages,
+        timestamp: now
+      });
+      
+      // Nettoyer le cache si trop grand (garder max 100 conversations)
+      if (this.conversationLanguagesCache.size > 100) {
+        const firstKey = this.conversationLanguagesCache.keys().next().value;
+        this.conversationLanguagesCache.delete(firstKey);
+      }
+      
+      const queryTime = Date.now() - startTime;
+      
+      return allLanguages;
+      
+    } catch (error) {
+      console.error(`❌ [TranslationService] Erreur extraction langues: ${error}`);
+      return ['en', 'fr']; // Fallback
+    }
+  }
+
+  private async _getMessageSourceLanguage(conversationId: string): Promise<string> {
+    try {
+      const lastMessage = await this.prisma.message.findFirst({
+        where: { conversationId: conversationId },
+        orderBy: { createdAt: 'desc' },
+        select: { originalLanguage: true }
+      });
+      
+      return lastMessage?.originalLanguage || 'fr';
+    } catch (error) {
+      console.error(`❌ Erreur récupération langue source: ${error}`);
+      return 'fr';
+    }
+  }
+
+  private async _handleTranslationCompleted(data: { 
+    taskId: string; 
+    result: TranslationResult; 
+    targetLanguage: string;
+    metadata?: any;
+  }) {
+    try {
+      const startTime = Date.now();
+      
+      // Utiliser taskId pour la déduplication (permet la retraduction avec un nouveau taskId)
+      const taskKey = `${data.taskId}_${data.targetLanguage}`;
+      
+      // Vérifier si ce taskId a déjà été traité (évite les doublons accidentels)
+      if (this.processedTasks.has(taskKey)) {
+        return;
+      }
+      
+      // Marquer ce task comme traité
+      this.processedTasks.add(taskKey);
+      
+      // Nettoyer les anciens tasks traités (garder seulement les 1000 derniers)
+      if (this.processedTasks.size > 1000) {
+        const firstKey = this.processedTasks.values().next().value;
+        this.processedTasks.delete(firstKey);
+      }
+      
+      
+      this.stats.translations_received++;
+      
+      // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
+      let translationId: string | null = null;
+      try {
+        translationId = await this._saveTranslationToDatabase(data.result, data.metadata);
+      } catch (error) {
+        console.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error}`);
+        // Continuer même si la sauvegarde échoue
+      }
+      
+      // Mettre en cache avec métadonnées (écrase l'ancienne traduction)
+      const cacheKey = `${data.result.messageId}_${data.result.sourceLanguage}_${data.targetLanguage}`;
+      this._addToCache(cacheKey, data.result);
+      
+      // Incrémenter le compteur de traductions pour l'utilisateur
+      await this._incrementUserTranslationStats(data.result.messageId);
+      
+      // Émettre événement avec métadonnées et ID de traduction
+      this.emit('translationReady', {
+        taskId: data.taskId,
+        result: data.result,
+        targetLanguage: data.targetLanguage,
+        translationId: translationId, // Ajouter l'ID de la traduction
+        metadata: data.metadata || {}
+      });
+      
+      const processingTime = Date.now() - startTime;
+      
+    } catch (error) {
+      console.error(`❌ [TranslationService] Erreur traitement: ${error}`);
+      console.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
+      this.stats.errors++;
+    }
+  }
+
+  private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
+    console.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
+    
+    if (data.error === 'translation pool full') {
+      this.stats.pool_full_rejections++;
+    }
+    
+    this.stats.errors++;
+  }
+
+  private _addToCache(key: string, result: TranslationResult) {
+    // Gestion du cache LRU simple
+    if (this.memoryCache.size >= this.CACHE_SIZE) {
+      const firstKey = this.memoryCache.keys().next().value;
+      this.memoryCache.delete(firstKey);
+    }
+    
+    this.memoryCache.set(key, result);
+  }
+
+
+  /**
+   * Incrémente le compteur de traductions pour l'utilisateur qui a envoyé le message
+   */
+  private async _incrementUserTranslationStats(messageId: string) {
+    try {
+      // Récupérer le message pour obtenir l'ID de l'utilisateur
+      const message = await this.prisma.message.findFirst({
+        where: { id: messageId },
+        select: { senderId: true }
+      });
+      
+      if (message && message.senderId) {
+        // Incrémenter le compteur de traductions utilisées
+        await this.prisma.userStats.upsert({
+          where: { userId: message.senderId },
+          update: {
+            translationsUsed: {
+              increment: 1
+            }
+          },
+          create: {
+            userId: message.senderId,
+            translationsUsed: 1
+          }
+        });
+        
+      }
+    } catch (error) {
+      console.error(`❌ [TranslationService] Erreur lors de l'incrémentation des stats: ${error}`);
+    }
+  }
+
+  /**
+   * Extrait les informations techniques du champ translationModel
+   * Format: "modelType|workerId|poolType|translationTime|queueTime|memoryUsage|cpuUsage"
+   */
+
+
+  /**
+   * OPTIMISATION: Sauvegarde une traduction avec upsert simple
+   * Au lieu de findMany + deleteMany + update/create (3-5 requêtes),
+   * on utilise directement upsert (1 requête)
+   */
+  private async _saveTranslationToDatabase(result: TranslationResult, metadata?: any): Promise<string> {
+    try {
+      const startTime = Date.now();
+      
+      // Créer la clé de cache unique
+      const cacheKey = `${result.messageId}_${result.sourceLanguage}_${result.targetLanguage}`;
+      
+      // Extraire les informations techniques du modèle
+      const modelInfo = result.translatorModel || result.modelType || 'basic';
+      const confidenceScore = result.confidenceScore || 0.9;
+
+      // OPTIMISATION: Nettoyer les doublons existants d'abord (si présents)
+      // Ceci évite les conflits de contrainte unique
+      const duplicates = await this.prisma.messageTranslation.findMany({
+        where: {
+          messageId: result.messageId,
+          targetLanguage: result.targetLanguage
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true }
+      });
+
+      // S'il y a plusieurs traductions, supprimer toutes sauf la plus récente
+      if (duplicates.length > 1) {
+        const idsToDelete = duplicates.slice(1).map(d => d.id);
+        await this.prisma.messageTranslation.deleteMany({
+          where: {
+            id: { in: idsToDelete }
+          }
+        });
+      }
+
+      // OPTIMISATION: Utiliser upsert avec une clé unique composée
+      // Note: Ceci requiert une contrainte unique sur (messageId, targetLanguage) dans le schema
+      const translation = await this.prisma.messageTranslation.upsert({
+        where: {
+          // Utiliser la contrainte unique composée si disponible
+          messageId_targetLanguage: {
+            messageId: result.messageId,
+            targetLanguage: result.targetLanguage
+          }
+        },
+        update: {
+          sourceLanguage: result.sourceLanguage,
+          translatedContent: result.translatedText,
+          translationModel: modelInfo,
+          confidenceScore: confidenceScore,
+          cacheKey: cacheKey
+        },
+        create: {
+          messageId: result.messageId,
+          sourceLanguage: result.sourceLanguage,
+          targetLanguage: result.targetLanguage,
+          translatedContent: result.translatedText,
+          translationModel: modelInfo,
+          confidenceScore: confidenceScore,
+          cacheKey: cacheKey
+        }
+      });
+      
+      const queryTime = Date.now() - startTime;
+      
+      return translation.id;
+
+    } catch (error: any) {
+      console.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error.message}`);
+      
+      // Fallback: Si l'erreur est due à une contrainte manquante, utiliser l'ancienne méthode
+      if (error.code === 'P2025' || error.message?.includes('messageId_targetLanguage')) {
+        console.warn(`⚠️ [TranslationService] Contrainte unique manquante, fallback vers méthode legacy`);
+        return await this._saveTranslationToDatabase_Legacy(result, metadata);
+      }
+      
+      throw error; // Remonter l'erreur pour la gestion dans _handleTranslationCompleted
+    }
+  }
+
+  /**
+   * Méthode legacy de sauvegarde (fallback si upsert échoue)
+   */
+  private async _saveTranslationToDatabase_Legacy(result: TranslationResult, metadata?: any): Promise<string> {
+    try {
+      const cacheKey = `${result.messageId}_${result.sourceLanguage}_${result.targetLanguage}`;
+      const modelInfo = result.translatorModel || result.modelType || 'basic';
+      const confidenceScore = result.confidenceScore || 0.9;
+
+      // Chercher une traduction existante
+      const existing = await this.prisma.messageTranslation.findFirst({
+        where: {
+          messageId: result.messageId,
+          targetLanguage: result.targetLanguage
+        }
+      });
+
+      if (existing) {
+        // Mettre à jour
+        const updated = await this.prisma.messageTranslation.update({
+          where: { id: existing.id },
+          data: {
+            sourceLanguage: result.sourceLanguage,
+            translatedContent: result.translatedText,
+            translationModel: modelInfo,
+            confidenceScore: confidenceScore,
+            cacheKey: cacheKey
+          }
+        });
+        return updated.id;
+      } else {
+        // Créer
+        const created = await this.prisma.messageTranslation.create({
+          data: {
+            messageId: result.messageId,
+            sourceLanguage: result.sourceLanguage,
+            targetLanguage: result.targetLanguage,
+            translatedContent: result.translatedText,
+            translationModel: modelInfo,
+            confidenceScore: confidenceScore,
+            cacheKey: cacheKey
+          }
+        });
+        return created.id;
+      }
+    } catch (error) {
+      console.error(`❌ [TranslationService] Erreur legacy: ${error}`);
+      throw error;
+    }
+  }
+
+
+  async getTranslation(messageId: string, targetLanguage: string, sourceLanguage?: string): Promise<TranslationResult | null> {
+    try {
+      // Vérifier d'abord le cache mémoire
+      const cacheKey = sourceLanguage 
+        ? `${messageId}_${sourceLanguage}_${targetLanguage}`
+        : `${messageId}_${targetLanguage}`;
+      const cachedResult = this.memoryCache.get(cacheKey);
+      
+      if (cachedResult) {
+        return cachedResult;
+      }
+      
+      // Si pas en cache, chercher dans la base de données
+      
+      const dbTranslation = await this.prisma.messageTranslation.findFirst({
+        where: {
+          messageId: messageId,
+          targetLanguage: targetLanguage
+        }
+      });
+      
+      if (dbTranslation) {
+        // Convertir la traduction de la base en format TranslationResult
+        const result: TranslationResult = {
+          messageId: dbTranslation.messageId,
+          sourceLanguage: dbTranslation.sourceLanguage,
+          targetLanguage: dbTranslation.targetLanguage,
+          translatedText: dbTranslation.translatedContent,
+          translatorModel: dbTranslation.translationModel,
+          confidenceScore: dbTranslation.confidenceScore || 0.9,
+          processingTime: 0, // Pas disponible depuis la base
+          modelType: dbTranslation.translationModel || 'basic'
+        };
+        
+        // Mettre en cache pour les prochaines requêtes
+        this._addToCache(cacheKey, result);
+        
+        return result;
+      }
+      
+      return null;
+      
+    } catch (error) {
+      console.error(`❌ Erreur récupération traduction: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Méthode pour les requêtes REST de traduction directe
+   */
+  async translateTextDirectly(
+    text: string, 
+    sourceLanguage: string, 
+    targetLanguage: string, 
+    modelType: string = 'basic'
+  ): Promise<TranslationResult> {
+    try {
+      
+      // Créer une requête de traduction
+      const request: TranslationRequest = {
+        messageId: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        text: text,
+        sourceLanguage: sourceLanguage,
+        targetLanguages: [targetLanguage],
+        conversationId: 'rest-request',
+        modelType: modelType
+      };
+      
+      // Envoyer la requête et attendre la réponse
+      const taskId = await this.zmqClient.sendTranslationRequest(request);
+      this.stats.translation_requests_sent++;
+      
+      
+      // Attendre la réponse via un événement
+      const response = await new Promise<TranslationResult>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Timeout waiting for translation response'));
+        }, 10000); // 10 secondes de timeout
+
+        const handleResponse = (data: any) => {
+          if (data.taskId === taskId) {
+            clearTimeout(timeout);
+            this.zmqClient.removeListener('translationCompleted', handleResponse);
+            this.zmqClient.removeListener('translationError', handleError);
+            
+            
+            resolve(data.result);
+          }
+        };
+
+        const handleError = (data: any) => {
+          if (data.taskId === taskId) {
+            clearTimeout(timeout);
+            this.zmqClient.removeListener('translationCompleted', handleResponse);
+            this.zmqClient.removeListener('translationError', handleError);
+            reject(new Error(`Translation error: ${data.error}`));
+          }
+        };
+
+        this.zmqClient.on('translationCompleted', handleResponse);
+        this.zmqClient.on('translationError', handleError);
+      });
+
+      return response;
+      
+    } catch (error) {
+      console.error(`❌ [REST] Erreur traduction directe: ${error}`);
+      this.stats.errors++;
+      
+      // Fallback en cas d'erreur
+      return {
+        messageId: `fallback_${Date.now()}`,
+        translatedText: `[${targetLanguage.toUpperCase()}] ${text}`,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+        confidenceScore: 0.1,
+        processingTime: 0.001,
+        modelType: 'fallback'
+      };
+    }
+  }
+
+  getStats(): TranslationServiceStats {
+    const uptime = (Date.now() - this.startTime) / 1000;
+    
+    return {
+      ...this.stats,
+      uptime_seconds: uptime,
+      memory_usage_mb: process.memoryUsage().heapUsed / 1024 / 1024
+    };
+  }
+
+  async healthCheck(): Promise<boolean> {
+    try {
+      const zmqHealth = await this.zmqClient.healthCheck();
+      return zmqHealth;
+    } catch (error) {
+      console.error(`❌ Health check échoué: ${error}`);
+      return false;
+    }
+  }
+
+  async close(): Promise<void> {
+    try {
+      await this.zmqClient.close();
+    } catch (error) {
+      console.error(`❌ Erreur fermeture TranslationService: ${error}`);
+    }
+  }
+}
+

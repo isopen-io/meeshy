@@ -1,0 +1,584 @@
+{
+  "modals": {
+    "title": "Modal",
+    "description": "Diálogo modal",
+    "advancedSettings": "Configuración avanzada",
+    "advancedSettingsInfo": "Configure las opciones avanzadas de su enlace",
+    "createdAt": "Creado el",
+    "expiresAt": "Expira el",
+    "email": "Email",
+    "images": "Imágenes",
+    "history": "Historial",
+    "conversationForm": {
+      "title": "Título de la conversación *",
+      "titleInfo": "Nombre que identificará esta conversación",
+      "titlePlaceholder": "Ej: Discusión de equipo, Brainstorming de proyecto...",
+      "description": "Descripción (opcional)",
+      "descriptionInfo": "Descripción que aparecerá en la lista de conversaciones",
+      "descriptionPlaceholder": "Describa el objetivo de esta conversación...",
+      "baseMembers": "Miembros base",
+      "memberCount": "{count} miembro(s)",
+      "searchUsers": "Buscar usuarios...",
+      "noUsersFound": "No se encontraron usuarios"
+    },
+    "linkConfiguration": {
+      "validityDuration": "Duración de validez",
+      "validityDurationInfo": "Duración durante la cual el enlace para compartir permanecerá activo",
+      "usageLimit": "Límite de usos",
+      "usageLimitInfo": "Número máximo de veces que se puede usar el enlace"
+    },
+    "permissions": {
+      "title": "Permisos",
+      "description": "Configure lo que los participantes pueden hacer",
+      "sendMessages": {
+        "label": "Enviar mensajes",
+        "description": "Permitir a los participantes enviar mensajes de texto"
+      },
+      "shareImages": {
+        "label": "Compartir imágenes",
+        "description": "Permitir a los participantes compartir imágenes"
+      },
+      "shareFiles": {
+        "label": "Compartir archivos",
+        "description": "Permitir a los participantes compartir archivos"
+      },
+      "viewHistory": {
+        "label": "Ver el historial",
+        "description": "Permitir a los participantes consultar el historial de conversaciones"
+      },
+      "requireNickname": {
+        "label": "Requerir un seudónimo",
+        "description": "Los participantes deben proporcionar un seudónimo para unirse"
+      },
+      "requireEmail": {
+        "label": "Requerir un email",
+        "description": "Los participantes deben proporcionar un email para unirse"
+      }
+    },
+    "allowedLanguages": {
+      "title": "Idiomas permitidos",
+      "description": "Seleccione los idiomas que se pueden usar en esta conversación",
+      "allowAllLanguages": "Permitir todos los idiomas"
+    },
+    "linkDetails": {
+      "title": "Detalles del enlace",
+      "description": "Configure la información del enlace para compartir",
+      "linkName": "Nombre del enlace",
+      "linkNameInfo": "Un nombre amigable para identificar este enlace",
+      "linkNamePlaceholder": "Ej: Invitación de equipo, Acceso de socio...",
+      "linkIdentifier": "Identificador del enlace",
+      "linkIdentifierInfo": "Identificador único para este enlace",
+      "regenerateIdentifier": "Regenerar el identificador",
+      "welcomeMessage": "Mensaje de bienvenida",
+      "welcomeMessageInfo": "Mensaje mostrado al conectarse a través de este enlace",
+      "welcomeMessagePlaceholder": "¡Bienvenido a la conversación!"
+    },
+    "name": "Nombre",
+    "nickname": "Seudónimo",
+    "textarea": "Área de texto",
+    "summary": {
+      "title": "Resumen",
+      "description": "Verifique la configuración de su enlace antes de crearlo",
+      "basicInfo": "Información básica",
+      "conversation": "Conversación",
+      "conversationDescription": "Descripción",
+      "permissionsGranted": "Permisos otorgados",
+      "permissions": "Permisos",
+      "allowedLanguages": "Idiomas permitidos",
+      "selectedLanguages": "Idiomas seleccionados",
+      "messages": "Mensajes",
+      "images": "Imágenes",
+      "files": "Archivos",
+      "history": "Historial",
+      "emailRequired": "Email requerido",
+      "nicknameRequired": "Seudónimo requerido",
+      "accountRequired": "Cuenta requerida",
+      "birthdayRequired": "Fecha de nacimiento requerida",
+      "allowed": "Permitido",
+      "forbidden": "Prohibido",
+      "hidden": "Oculto",
+      "visible": "Visible",
+      "no": "No",
+      "yes": "Sí",
+      "noCustomMessage": "Sin mensaje personalizado",
+      "welcomeMessage": "Mensaje de bienvenida",
+      "welcomeMessageDescription": "Mensaje personalizado mostrado a los invitados",
+      "validityDuration": "Duración de validez",
+      "usageLimit": "Límite de usos",
+      "usageCount": "{count} uso(s)",
+      "expiresOn": "Expira el {date}",
+      "unlimited": "Ilimitado",
+      "linkDisabledAfter": "El enlace se desactivará automáticamente después de {count} usos",
+      "guestsCanSendMessages": "Los invitados pueden enviar mensajes",
+      "guestsCannotSendMessages": "Los invitados no pueden enviar mensajes",
+      "guestsCanShareImages": "Los invitados pueden compartir imágenes",
+      "guestsCannotShareImages": "Los invitados no pueden compartir imágenes",
+      "guestsCanShareFiles": "Los invitados pueden compartir archivos",
+      "guestsCannotShareFiles": "Los invitados no pueden compartir archivos",
+      "guestsCanViewHistory": "Los invitados pueden ver el historial",
+      "guestsCannotViewHistory": "Los invitados no pueden ver el historial",
+      "guestsCanStayAnonymous": "Los invitados pueden permanecer anónimos",
+      "guestsMustEnterNickname": "Los invitados deben ingresar un seudónimo",
+      "guestsMustEnterEmail": "Los invitados deben ingresar un email",
+      "guestsMustHaveAccount": "Los invitados deben tener una cuenta",
+      "guestsCanJoinWithoutAccount": "Los invitados pueden unirse sin cuenta",
+      "guestsMustProvideBirthday": "Los invitados deben proporcionar su fecha de nacimiento",
+      "guestsCanOmitBirthday": "Los invitados pueden omitir su fecha de nacimiento"
+    },
+    "createConversationModal": {
+      "title": "Crear una nueva conversación",
+      "description": "Crear una conversación directa o de grupo",
+      "steps": {
+        "members": "Miembros",
+        "details": "Detalles"
+      },
+      "community": {
+        "title": "Comunidad",
+        "addToCommunity": "Agregar a una comunidad",
+        "searchPlaceholder": "Buscar comunidades...",
+        "loading": "Cargando comunidades...",
+        "membersCount": "{count} miembros • {conversations} conversaciones",
+        "noCommunitiesFound": "No se encontraron comunidades"
+      },
+      "members": {
+        "title": "Miembros",
+        "searchPlaceholder": "Buscar usuarios...",
+        "loading": "Cargando usuarios...",
+        "noUsersFound": "No se encontraron usuarios",
+        "selectedMembers": "{count} miembros seleccionados"
+      },
+      "conversationDetails": {
+        "title": "Detalles de la conversación",
+        "conversationType": "Tipo de conversación",
+        "typeDirect": "Directo",
+        "typeGroup": "Grupo",
+        "typePublic": "Público",
+        "conversationTitle": "Título de la conversación",
+        "titlePlaceholder": "Ej: Discusión de equipo...",
+        "titleInfoDirect": "Opcional: nombre para esta conversación directa",
+        "titleInfoGroup": "Nombre que identificará esta conversación de grupo",
+        "identifier": "Identificador único",
+        "identifierRequired": "*",
+        "identifierPrefix": "@",
+        "identifierPlaceholder": "discusion-equipo",
+        "identifierInfo": "Usado para mencionar esta conversación con @identificador",
+        "identifierError": "El identificador debe contener solo letras, números, guiones y guiones bajos",
+        "identifierAvailable": "Este identificador está disponible",
+        "identifierTaken": "Este identificador ya está en uso",
+        "checkingIdentifier": "Verificando disponibilidad..."
+      },
+      "conversationTypes": {
+        "direct": "Directo",
+        "group": "Grupo",
+        "public": "Público"
+      },
+      "autoGeneratedTitles": {
+        "directWithUser": "Conversación con {username}",
+        "betweenTwoUsers": "{user1} y {user2}",
+        "groupWithTwo": "{user1} y {user2}",
+        "groupWithMultiple": "{user1}, {user2} y {count} otros"
+      },
+      "actions": {
+        "cancel": "Cancelar",
+        "creating": "Creando...",
+        "createDirectConversation": "Crear una conversación directa",
+        "createGroupConversation": "Crear una conversación de grupo",
+        "createPublicConversation": "Crear una conversación pública"
+      },
+      "preview": {
+        "title": "Vista previa de la conversación",
+        "members": "Miembros ({count})",
+        "you": "Usted",
+        "autoTranslation": "Traducción automática activada",
+        "encryptedMessages": "Mensajes cifrados de extremo a extremo",
+        "historyEnabled": "Historial guardado",
+        "defaultTitles": {
+          "direct": "Conversación con {username}",
+          "group": "Conversación con {users}",
+          "public": "Conversación pública"
+        }
+      },
+      "errors": {
+        "searchError": "Error al buscar",
+        "selectAtLeastOneUser": "Por favor seleccione al menos un usuario",
+        "identifierRequired": "El identificador es requerido",
+        "invalidIdentifier": "Formato de identificador inválido",
+        "creationError": "Error al crear la conversación"
+      },
+      "success": {
+        "conversationCreated": "Conversación creada con éxito"
+      }
+    },
+    "createLinkButton": {
+      "advancedSettings": "Configuración avanzada",
+      "advancedSettingsInfo": "Configure las opciones avanzadas de su enlace",
+      "copied": "¡Enlace copiado!",
+      "copy": "Copiar el enlace",
+      "copyManually": "Copiar manualmente",
+      "createdAt": "Creado el",
+      "disabled": "Desactivado",
+      "email": "Email",
+      "enabled": "Activado",
+      "expiresAt": "Expira el",
+      "files": "Archivos",
+      "generatedLink": "Enlace generado",
+      "images": "Imágenes",
+      "languages": "Idiomas",
+      "maxFileSize": "Tamaño máx de archivo",
+      "maxUses": "Usos máx",
+      "linkCreated": "Enlace creado con éxito",
+      "messages": "Mensajes",
+      "noExpiration": "Sin expiración",
+      "participants": "Participantes",
+      "unlimited": "Ilimitado",
+      "uses": "usos",
+      "permissions": "Permisos",
+      "photos": "Fotos",
+      "shareEmail": "Compartir por email",
+      "status": "Estado",
+      "usageCount": "Usos",
+      "usesRemaining": "usos restantes",
+      "videos": "Videos",
+      "viewDetails": "Ver los detalles"
+    },
+    "createLinkModal": {
+      "title": "Crear un enlace para compartir",
+      "description": "Crear un enlace para permitir que otros se unan a una conversación",
+      "search": {
+        "conversations": "Buscar conversaciones...",
+        "noConversationsFound": "No se encontraron conversaciones"
+      },
+      "steps": {
+        "selectConversation": "Seleccionar una conversación",
+        "configureLink": "Configurar el enlace",
+        "linkOptions": "Opciones del enlace",
+        "summaryAndGeneration": "Resumen y generación"
+      },
+      "stepDescriptions": {
+        "selectConversation": "Elija una conversación existente o cree una nueva",
+        "configureLink": "Configure los ajustes básicos del enlace",
+        "configureNewConversation": "Defina los detalles de su nueva conversación",
+        "linkOptions": "Personalice los permisos y restricciones",
+        "summaryAndGeneration": "Verifique sus ajustes y genere el enlace"
+      },
+      "createNewConversation": {
+        "title": "Crear una nueva conversación",
+        "description": "Crear una conversación dedicada para este enlace para compartir",
+        "orSelectExisting": "O seleccione una conversación existente"
+      },
+      "conversationForm": {
+        "title": "Título de la conversación *",
+        "titleInfo": "Nombre que identificará esta conversación y se usará para generar el nombre del enlace para compartir",
+        "titlePlaceholder": "Ej: Discusión de equipo, Brainstorming de proyecto...",
+        "description": "Descripción (opcional)",
+        "descriptionInfo": "Descripción que aparecerá en la lista de conversaciones y ayudará a los miembros a comprender el objetivo",
+        "descriptionPlaceholder": "Describa el objetivo de esta conversación...",
+        "baseMembers": "Miembros base",
+        "memberCount": "{count} miembro(s)",
+        "searchUsers": "Buscar usuarios... (escriba para buscar)",
+        "noUsersFound": "No se encontraron usuarios"
+      },
+      "linkConfiguration": {
+        "validityDuration": "Duración de validez",
+        "validityDurationInfo": "Duración durante la cual el enlace para compartir permanecerá activo. Después de expirar, el enlace ya no funcionará",
+        "usageLimit": "Límite de usos",
+        "usageLimitInfo": "Número máximo de veces que se puede usar el enlace. Una vez alcanzado el límite, el enlace se desactivará"
+      },
+      "durationOptions": {
+        "1": {
+          "label": "1 día",
+          "description": "Enlace temporal"
+        },
+        "3": {
+          "label": "3 días",
+          "description": "Corto plazo"
+        },
+        "7": {
+          "label": "1 semana",
+          "description": "Corto plazo"
+        },
+        "14": {
+          "label": "2 semanas",
+          "description": "Corto plazo"
+        },
+        "30": {
+          "label": "1 mes",
+          "description": "Mediano plazo"
+        },
+        "60": {
+          "label": "2 meses",
+          "description": "Mediano plazo"
+        },
+        "90": {
+          "label": "3 meses",
+          "description": "Largo plazo"
+        },
+        "180": {
+          "label": "6 meses",
+          "description": "Largo plazo"
+        },
+        "365": {
+          "label": "1 año",
+          "description": "Permanente"
+        },
+        "730": {
+          "label": "2 años",
+          "description": "Permanente"
+        }
+      },
+      "limitOptions": {
+        "5": {
+          "label": "5 usos",
+          "description": "Grupo muy pequeño"
+        },
+        "10": {
+          "label": "10 usos",
+          "description": "Grupo pequeño"
+        },
+        "25": {
+          "label": "25 usos",
+          "description": "Grupo pequeño"
+        },
+        "50": {
+          "label": "50 usos",
+          "description": "Grupo mediano"
+        },
+        "100": {
+          "label": "100 usos",
+          "description": "Grupo grande"
+        },
+        "250": {
+          "label": "250 usos",
+          "description": "Grupo grande"
+        },
+        "500": {
+          "label": "500 usos",
+          "description": "Grupo muy grande"
+        },
+        "1000": {
+          "label": "1000 usos",
+          "description": "Grupo muy grande"
+        },
+        "5000": {
+          "label": "5000 usos",
+          "description": "Escala empresarial"
+        },
+        "unlimited": {
+          "label": "Ilimitado",
+          "description": "Sin límite de usos"
+        }
+      },
+      "permissions": {
+        "title": "Permisos",
+        "description": "Configure lo que los participantes pueden hacer",
+        "sendMessages": {
+          "label": "Enviar mensajes",
+          "description": "Permitir a los participantes enviar mensajes de texto"
+        },
+        "shareImages": {
+          "label": "Compartir imágenes",
+          "description": "Permitir a los participantes compartir imágenes"
+        },
+        "shareFiles": {
+          "label": "Compartir archivos",
+          "description": "Permitir a los participantes compartir archivos"
+        },
+        "viewHistory": {
+          "label": "Ver el historial",
+          "description": "Permitir a los participantes consultar el historial de conversaciones"
+        },
+        "requireNickname": {
+          "label": "Requerir un seudónimo",
+          "description": "Los participantes deben proporcionar un seudónimo para unirse"
+        },
+        "requireEmail": {
+          "label": "Requerir un email",
+          "description": "Los participantes deben proporcionar un email para unirse"
+        },
+        "requireBirthday": {
+          "label": "Fecha de nacimiento requerida",
+          "description": "Los invitados deben proporcionar su fecha de nacimiento para unirse"
+        },
+        "requireAccount": {
+          "label": "Cuenta requerida",
+          "description": "Solo los usuarios con una cuenta pueden unirse a esta conversación"
+        }
+      },
+      "allowedLanguages": {
+        "title": "Idiomas permitidos",
+        "description": "Seleccione los idiomas que se pueden usar en esta conversación",
+        "searchPlaceholder": "Buscar un idioma...",
+        "allowLanguage": "Permitir {language}",
+        "allowAllLanguages": "Permitir todos los idiomas",
+        "allowAllLanguagesHint": "No seleccione ningún idioma para permitir todos los idiomas"
+      },
+      "linkDetails": {
+        "title": "Detalles del enlace",
+        "description": "Configure la información del enlace para compartir",
+        "requireAccount": {
+          "label": "Cuenta obligatoria",
+          "description": "Solo los usuarios con una cuenta pueden unirse a esta conversación. Desactiva el acceso anónimo.",
+          "info": "Cuando esta opción está activada, solo los usuarios autenticados con una cuenta pueden unirse. Esto desactiva completamente el acceso anónimo y fuerza automáticamente todos los demás requisitos (email, fecha de nacimiento)."
+        },
+        "linkName": "Nombre del enlace",
+        "linkNameInfo": "Un nombre amigable para identificar este enlace",
+        "linkNamePlaceholder": "Ej: Invitación de equipo, Acceso de socio...",
+        "linkNameDefaultPrefix": "Unirse a la conversación:",
+        "linkIdentifier": "Identificador del enlace",
+        "linkIdentifierInfo": "Identificador único para este enlace (usado en la URL)",
+        "regenerateIdentifier": "Regenerar el identificador",
+        "welcomeMessage": "Mensaje de bienvenida",
+        "welcomeMessageInfo": "Mensaje que se mostrará a los invitados cuando se unan a través de este enlace",
+        "welcomeMessagePlaceholder": "¡Bienvenido a nuestra conversación! No dude en presentarse..."
+      },
+      "successMessages": {
+        "linkGeneratedAndCopied": "¡Enlace generado y copiado!",
+        "linkGenerated": "Enlace generado con éxito",
+        "linkCopied": "Enlace copiado al portapapeles",
+        "tokenCopied": "Token copiado al portapapeles"
+      },
+      "errors": {
+        "selectConversation": "Por favor seleccione una conversación",
+        "enterTitle": "Por favor ingrese un título",
+        "titleRequired": "El título es requerido",
+        "creationFailed": "Error al crear el enlace",
+        "copyFailed": "Error al copiar el enlace"
+      },
+      "actions": {
+        "previous": "Anterior",
+        "next": "Siguiente",
+        "cancel": "Cancelar",
+        "createLink": "Crear el enlace",
+        "generating": "Generando...",
+        "copyLink": "Copiar el enlace",
+        "shareLink": "Compartir el enlace",
+        "close": "Cerrar"
+      },
+      "navigation": {
+        "previous": "Anterior",
+        "next": "Siguiente",
+        "cancel": "Cancelar",
+        "createLink": "Crear el enlace",
+        "generating": "Generando...",
+        "copyLink": "Copiar el enlace",
+        "shareLink": "Compartir el enlace",
+        "close": "Cerrar"
+      },
+      "success": {
+        "linkCreated": "¡Enlace creado con éxito!",
+        "linkCopied": "Enlace copiado al portapapeles"
+      }
+    },
+    "linkSummaryModal": {
+      "title": "Resumen del enlace",
+      "description": "Verifique la configuración de su enlace",
+      "copy": "Copiar",
+      "copied": "¡Copiado!",
+      "shareLink": "Compartir el enlace",
+      "usage": "Uso",
+      "usages": "usos",
+      "unlimitedUsage": "Uso ilimitado",
+      "expires": "Expira",
+      "limitedTo": "Limitado a",
+      "messages": "Mensajes",
+      "images": "Imágenes",
+      "videos": "Videos",
+      "audio": "Audio",
+      "files": "Archivos",
+      "documents": "Documentos",
+      "links": "Enlaces",
+      "location": "Ubicación",
+      "contacts": "Contactos",
+      "languages": "Idiomas",
+      "sendPermissions": "Permisos de envío",
+      "authRequirements": "Requisitos de autenticación",
+      "accountRequired": "Cuenta obligatoria",
+      "email": "Email",
+      "nickname": "Seudónimo",
+      "birthday": "Fecha de nacimiento",
+      "userLimits": "Límites de usuario",
+      "maxSessions": "Sesiones máx",
+      "maxConcurrent": "Concurrente máx",
+      "conversation": {
+        "title": "Conversación",
+        "name": "Nombre",
+        "description": "Descripción",
+        "members": "Miembros"
+      },
+      "linkDetails": {
+        "title": "Detalles del enlace",
+        "duration": "Duración",
+        "usageLimit": "Límite de usos",
+        "createdOn": "Creado el",
+        "expiresOn": "Expira el"
+      },
+      "actions": {
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "copy": "Copiar el enlace",
+        "share": "Compartir",
+        "close": "Cerrar"
+      }
+    },
+    "anonymousChat": {
+      "title": "Chat anónimo",
+      "description": "Comience a chatear sin crear una cuenta",
+      "features": {
+        "noRegistration": "No se requiere registro",
+        "instantTranslation": "Traducción instantánea",
+        "privateConversations": "Conversaciones privadas"
+      },
+      "actions": {
+        "startChat": "Comenzar a chatear",
+        "createAccount": "Crear una cuenta",
+        "login": "Iniciar sesión"
+      },
+      "conversationNotFound": {
+        "title": "Conversación no encontrada",
+        "description": "Esta conversación no existe o el enlace es inválido.",
+        "actions": {
+          "backHome": "Volver al inicio",
+          "createNew": "Crear una nueva conversación"
+        }
+      }
+    },
+    "quickLinkModal": {
+      "title": "Crear un enlace para compartir rápido",
+      "description": "Configure su enlace para compartir seguro con ajustes óptimos predeterminados",
+      "steps": {
+        "config": "Configuración",
+        "summary": "Resumen"
+      },
+      "secureConfig": {
+        "title": "Configuración segura",
+        "description": "Este enlace utiliza ajustes de seguridad óptimos para proteger su conversación",
+        "tooltip": "El enlace creado requerirá una cuenta autenticada con email y fecha de nacimiento. Todos los permisos de compartir estarán activados para los miembros autenticados. El enlace expirará en 7 días.",
+        "accountRequired": "Cuenta requerida",
+        "emailRequired": "Email requerido",
+        "birthdayRequired": "Fecha de nacimiento requerida",
+        "allPermissions": "Todos los permisos"
+      },
+      "linkTitle": {
+        "label": "Título del enlace",
+        "placeholder": "Ej: Invitación de equipo, Acceso de socio...",
+        "hint": "Este título aparecerá en la lista de sus enlaces para compartir"
+      },
+      "linkIdentifier": {
+        "placeholder": "Identificador del enlace..."
+      },
+      "welcomeMessage": {
+        "label": "Mensaje de bienvenida",
+        "placeholder": "¡Bienvenido! No dude en presentarse...",
+        "hint": "Este mensaje se mostrará a los invitados cuando se unan a través de este enlace"
+      },
+      "expirationNote": "El enlace expirará automáticamente en 7 días",
+      "actions": {
+        "cancel": "Cancelar",
+        "next": "Siguiente",
+        "back": "Volver",
+        "create": "Crear el enlace",
+        "creating": "Creando..."
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "anonymousChat": {
+    "title": "Anonymous Chat",
+    "user": "User",
+    "anonymous": "Anonymous",
+    "unknownUser": "Unknown",
+    "sessionNotActive": "Your session is not active",
+    "reloadPage": "Reload page",
+    "connectedAs": "Connected as {username}",
+    "loadingMessages": "Loading messages...",
+    "loading": "Loading...",
+    "loadMore": "Load more",
+    "messagePlaceholder": "Type your message...",
+    "sendMessage": "Send message",
+    "error": {
+      "sessionExpired": "Session expired",
+      "connectionFailed": "Connection failed",
+      "messageNotSent": "Message could not be sent"
+    },
+    "status": {
+      "connecting": "Connecting...",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "reconnecting": "Reconnecting..."
+    }
+  }
+}

@@ -1,0 +1,358 @@
+{
+  "links": {
+    "title": "Enlaces para compartir",
+    "subtitle": "Cree y administre sus enlaces para compartir e invite fácilmente participantes a sus conversaciones",
+    "createLink": "Crear un enlace",
+    "unnamedLink": "Enlace sin nombre",
+    "conversation": "Conversación",
+    "linksFound": "{count} enlace encontrado",
+    "linksFound_plural": "{count} enlaces encontrados",
+    "loadingLinks": "Cargando sus enlaces...",
+    "loadingTrackingLinks": "Cargando sus enlaces de seguimiento...",
+    "noLinksFound": "No se encontraron enlaces",
+    "noLinksFoundTryAnother": "Intente modificar su búsqueda o cree un nuevo enlace",
+    "noLinksFoundCreateFirst": "Cree su primer enlace para comenzar a invitar participantes a sus conversaciones",
+    "activationNotImplemented": "Activación aún no implementada",
+    "linkNameTemplate": {
+      "default": "{participantLimit} enlace para la conversación '{conversationTitle}' válido {duration}",
+      "openToAll": "abierto a todos",
+      "limitedToParticipants": "limitado a {count} participante(s)",
+      "limitedToUses": "limitado a {count} uso(s)",
+      "days": "{count} día(s)",
+      "indefinitely": "indefinidamente"
+    },
+    "searchPlaceholder": "Buscar enlaces...",
+    "filters": {
+      "status": "Estado",
+      "all": "Todos",
+      "active": "Activos",
+      "inactive": "Inactivos",
+      "expired": "Expirados"
+    },
+    "tabs": {
+      "shareLinks": "Enlaces para compartir",
+      "trackingLinks": "Enlaces seguidos",
+      "active": "Activos",
+      "disabled": "Desactivados",
+      "expired": "Expirados"
+    },
+    "status": {
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "expired": "Expirado",
+      "expires": "Expira",
+      "never": "Nunca",
+      "daysRemaining": "{days} día(s) restante(s)",
+      "hoursRemaining": "{hours} hora(s) restante(s)"
+    },
+    "stats": {
+      "created": "Creado",
+      "expires": "Expira",
+      "uses": "Usos",
+      "active": "Activo",
+      "totalLinks": "Total de enlaces",
+      "totalClicks": "Clics totales",
+      "uniqueClicks": "Clics únicos",
+      "lastClicked": "Último clic",
+      "never": "Nunca",
+      "avgTotal": "Promedio clics totales",
+      "avgUnique": "Promedio clics únicos"
+    },
+    "actions": {
+      "menu": "Menú",
+      "view": "Ver",
+      "viewDetails": "Ver los detalles",
+      "copy": "Copiar el enlace",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "enable": "Activar",
+      "disable": "Desactivar",
+      "extend7Days": "Extender 7 días",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "details": {
+      "title": "Detalles del enlace",
+      "linkName": "Nombre del enlace",
+      "linkUrl": "URL del enlace",
+      "description": "Descripción",
+      "invitationMessage": "Mensaje de invitación",
+      "conversation": "Conversación",
+      "creator": "Creado por",
+      "created": "Creado",
+      "createdAt": "Creado el",
+      "expiresAt": "Expira el",
+      "lastUpdated": "Última actualización",
+      "expires": "Expira",
+      "dates": "Fechas",
+      "usage": "Uso",
+      "totalUses": "Usos totales",
+      "totalParticipants": "Participantes totales",
+      "activeUsers": "Usuarios activos",
+      "permissions": "Permisos",
+      "languages": "Idiomas permitidos",
+      "viewMore": "Ver más detalles",
+      "requirements": "Requisitos"
+    },
+    "edit": {
+      "title": "Editar el enlace",
+      "linkName": "Nombre del enlace",
+      "linkNamePlaceholder": "Ingrese el nombre del enlace",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Ingrese una descripción",
+      "expiresAt": "Fecha de expiración",
+      "expiresAtDescription": "Cuándo expirará este enlace",
+      "selectDate": "Seleccionar una fecha",
+      "maxUses": "Usos máximos",
+      "maxUsesDescription": "Número máximo de veces que se puede usar este enlace",
+      "permissions": "Permisos",
+      "requirements": "Requisitos"
+    },
+    "permissions": {
+      "allowed": "Permitido",
+      "denied": "Denegado",
+      "messages": "Mensajes",
+      "messagesDescription": "Permitir el envío de mensajes",
+      "images": "Imágenes",
+      "imagesDescription": "Permitir el compartir imágenes",
+      "files": "Archivos",
+      "filesDescription": "Permitir el compartir archivos",
+      "viewHistory": "Ver el historial",
+      "viewHistoryDescription": "Permitir la consulta del historial de conversaciones"
+    },
+    "requirements": {
+      "account": "Cuenta obligatoria",
+      "accountDescription": "Los visitantes deben iniciar sesión con una cuenta verificada. Activa automáticamente todos los permisos y requisitos.",
+      "noAnonymous": "Sin anónimos",
+      "nickname": "Seudónimo",
+      "nicknameDescription": "Requerir un seudónimo para unirse",
+      "name": "Nombre requerido",
+      "email": "Email",
+      "emailDescription": "Requerir un email para unirse",
+      "birthday": "Fecha de nacimiento",
+      "birthdayDescription": "Requerir una fecha de nacimiento para unirse"
+    },
+    "confirm": {
+      "delete": "¿Está seguro de que desea eliminar este enlace?"
+    },
+    "success": {
+      "linkCreated": "Enlace creado con éxito",
+      "linkCopied": "Enlace copiado al portapapeles",
+      "linkDeleted": "Enlace eliminado con éxito",
+      "linkEnabled": "Enlace activado con éxito",
+      "linkDisabled": "Enlace desactivado con éxito",
+      "linkUpdated": "Enlace actualizado con éxito"
+    },
+    "errors": {
+      "loadFailed": "Error al cargar los enlaces",
+      "deleteFailed": "Error al eliminar el enlace",
+      "toggleFailed": "Error al actualizar el estado del enlace",
+      "extendFailed": "Error al extender el enlace",
+      "updateFailed": "Error al actualizar el enlace"
+    },
+    "durationOptions": {
+      "1": {
+        "label": "1 día",
+        "description": "El enlace expira en 1 día"
+      },
+      "3": {
+        "label": "3 días",
+        "description": "El enlace expira en 3 días"
+      },
+      "7": {
+        "label": "7 días",
+        "description": "El enlace expira en 1 semana"
+      },
+      "14": {
+        "label": "14 días",
+        "description": "El enlace expira en 2 semanas"
+      },
+      "30": {
+        "label": "30 días",
+        "description": "El enlace expira en 1 mes"
+      },
+      "60": {
+        "label": "60 días",
+        "description": "El enlace expira en 2 meses"
+      },
+      "90": {
+        "label": "90 días",
+        "description": "El enlace expira en 3 meses"
+      },
+      "180": {
+        "label": "180 días",
+        "description": "El enlace expira en 6 meses"
+      },
+      "365": {
+        "label": "365 días",
+        "description": "El enlace expira en 1 año"
+      },
+      "730": {
+        "label": "730 días",
+        "description": "El enlace expira en 2 años"
+      }
+    },
+    "limitOptions": {
+      "unlimited": {
+        "label": "Ilimitado",
+        "description": "Sin límite en el número de usos"
+      },
+      "5": {
+        "label": "5 usos",
+        "description": "El enlace puede usarse 5 veces"
+      },
+      "10": {
+        "label": "10 usos",
+        "description": "El enlace puede usarse 10 veces"
+      },
+      "25": {
+        "label": "25 usos",
+        "description": "El enlace puede usarse 25 veces"
+      },
+      "50": {
+        "label": "50 usos",
+        "description": "El enlace puede usarse 50 veces"
+      },
+      "100": {
+        "label": "100 usos",
+        "description": "El enlace puede usarse 100 veces"
+      },
+      "250": {
+        "label": "250 usos",
+        "description": "El enlace puede usarse 250 veces"
+      },
+      "500": {
+        "label": "500 usos",
+        "description": "El enlace puede usarse 500 veces"
+      },
+      "1000": {
+        "label": "1000 usos",
+        "description": "El enlace puede usarse 1000 veces"
+      },
+      "5000": {
+        "label": "5000 usos",
+        "description": "El enlace puede usarse 5000 veces"
+      }
+    },
+    "tracking": {
+      "title": "Enlaces seguidos",
+      "createLink": "Crear un enlace de seguimiento",
+      "createLinkDescription": "Crear un enlace corto de seguimiento para monitorear clics y participación",
+      "originalUrl": "URL original",
+      "shortUrl": "URL corta",
+      "trackingUrl": "URL de seguimiento",
+      "noLinks": "No hay enlaces de seguimiento",
+      "noLinksDescription": "Cree su primer enlace de seguimiento para monitorear clics y participación",
+      "shareThisLink": "Comparta este enlace corto para rastrear los clics",
+      "enterUrlToShorten": "Ingrese la URL que desea acortar y rastrear",
+      "urlLabel": "URL a rastrear",
+      "advancedOptions": "Opciones avanzadas",
+      "optionalSettings": "Configuraciones opcionales para su enlace de seguimiento",
+      "expirationLabel": "Expiración del enlace",
+      "associateConversation": "Asociar con una conversación",
+      "associateConversationDescription": "Asocie este enlace con una conversación para un mejor seguimiento",
+      "creating": "Creando...",
+      "createButton": "Crear el enlace de seguimiento",
+      "expirationOptions": {
+        "never": "Nunca expira",
+        "1day": "1 día",
+        "7days": "7 días",
+        "30days": "30 días",
+        "90days": "90 días",
+        "1year": "1 año"
+      },
+      "stats": {
+        "stats": "Estadísticas",
+        "totalLinks": "Enlaces totales",
+        "totalClicks": "Clics totales",
+        "uniqueClicks": "Visitantes únicos",
+        "activeLinks": "Enlaces activos",
+        "conversionRate": "Tasa de conversión",
+        "lastClick": "Último clic",
+        "never": "Nunca"
+      },
+      "details": {
+        "title": "Estadísticas del enlace de seguimiento",
+        "linkNotFound": "Enlace no encontrado",
+        "linkNotFoundDescription": "Este enlace de seguimiento no existe o ha sido eliminado",
+        "backToLinks": "Volver a los enlaces",
+        "linkInformation": "Información del enlace",
+        "token": "Token",
+        "createdOn": "Creado el",
+        "shortUrl": "URL corta",
+        "originalUrl": "URL original",
+        "evolutionOverTime": "Evolución en el tiempo",
+        "overview": "Resumen",
+        "performance": "Rendimiento",
+        "geography": "Geografía",
+        "devices": "Dispositivos",
+        "browsers": "Navegadores",
+        "timeline": "Cronología",
+        "clicksByCountry": "Clics por país",
+        "clicksByDevice": "Clics por dispositivo",
+        "clicksByBrowser": "Clics por navegador",
+        "clicksByDate": "Clics en el tiempo",
+        "topReferrers": "Principales referentes",
+        "referrer": "Referente",
+        "clicks": "Clics",
+        "clicksCount": "{count} clics",
+        "uniqueCount": "{count} únicos",
+        "unknown": "Desconocido",
+        "direct": "Directo",
+        "copy": "Copiar"
+      },
+      "actions": {
+        "viewStats": "Ver las estadísticas",
+        "copyShortUrl": "Copiar la URL corta",
+        "deactivate": "Desactivar",
+        "activate": "Activar",
+        "edit": "Editar"
+      },
+      "edit": {
+        "title": "Editar enlace de seguimiento",
+        "description": "Modifique la URL de redireccionamiento, token o configuración del enlace",
+        "originalUrl": "URL de redireccionamiento",
+        "originalUrlDescription": "La URL a la que se redirigirá a los visitantes",
+        "token": "Token del enlace corto",
+        "tokenDescription": "6 caracteres alfanuméricos. Déjelo sin cambios para mantener el token actual.",
+        "tokenTaken": "Este token ya existe",
+        "tokenAvailable": "Este token está disponible",
+        "expiresAt": "Fecha de expiración (opcional)",
+        "expiresAtDescription": "Déjelo en blanco para un enlace sin expiración",
+        "isActive": "Enlace activo",
+        "cancel": "Cancelar",
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "errors": {
+          "urlRequired": "Se requiere la URL de redireccionamiento",
+          "invalidUrl": "La URL debe comenzar con http:// o https://",
+          "invalidToken": "El token debe contener exactamente 6 caracteres alfanuméricos",
+          "updateFailed": "Error al actualizar el enlace"
+        },
+        "success": {
+          "updated": "Enlace de seguimiento actualizado con éxito"
+        }
+      },
+      "success": {
+        "created": "Enlace de seguimiento creado con éxito y copiado al portapapeles",
+        "createdNoCopy": "Enlace de seguimiento creado con éxito",
+        "linkCreated": "¡Enlace creado con éxito!",
+        "linkCreatedDescription": "Su enlace de seguimiento está listo para usarse",
+        "copied": "Enlace copiado al portapapeles",
+        "deactivated": "Enlace desactivado con éxito",
+        "activated": "Enlace activado con éxito",
+        "deleted": "Enlace eliminado con éxito"
+      },
+      "errors": {
+        "loadFailed": "Error al cargar los enlaces de seguimiento",
+        "createFailed": "Error al crear el enlace de seguimiento",
+        "statsFailed": "Error al cargar las estadísticas",
+        "deactivateFailed": "Error al desactivar el enlace",
+        "deleteFailed": "Error al eliminar el enlace",
+        "urlRequired": "Por favor ingrese una URL",
+        "invalidUrl": "Por favor ingrese una URL válida"
+      }
+    }
+  }
+}

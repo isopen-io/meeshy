@@ -1,0 +1,96 @@
+{
+  "notifications": {
+    "title": "Notificações",
+    "empty": "Sem notificações",
+    "emptyUnread": "Tudo em dia! Sem notificações não lidas.",
+    "emptyMentions": "Sem menções ainda",
+    "markAllAsRead": "Marcar todas como lidas",
+    "markAsRead": "Marcar como lida",
+    "delete": "Excluir",
+    "viewAll": "Ver todas as notificações",
+    "loadMore": "Carregar mais",
+    "loading": "Carregando notificações...",
+    "reachedEnd": "Você chegou ao fim",
+    "tabs": {
+      "all": "Todas",
+      "unread": "Não lidas",
+      "mentions": "Menções"
+    },
+    "filters": {
+      "title": "Filtros",
+      "type": "Tipo",
+      "status": "Estado",
+      "clearAll": "Limpar tudo",
+      "all": "Todas",
+      "read": "Lidas",
+      "unread": "Não lidas"
+    },
+    "types": {
+      "new_message": "Nova mensagem",
+      "message_reply": "Resposta",
+      "user_mentioned": "Menção",
+      "message_reaction": "Reação",
+      "contact_request": "Pedido de contato",
+      "contact_accepted": "Contato aceito",
+      "new_conversation_direct": "Nova conversa",
+      "new_conversation_group": "Convite de grupo",
+      "member_joined": "Membro entrou",
+      "missed_call": "Chamada perdida",
+      "system": "Notificação do sistema"
+    },
+    "priorities": {
+      "low": "Baixa",
+      "normal": "Normal",
+      "high": "Importante",
+      "urgent": "Urgente"
+    },
+    "titles": {
+      "newMessage": "Mensagem de @{sender}",
+      "reply": "Resposta de @{sender}",
+      "mentioned": "@{sender} mencionou você",
+      "reaction": "@{sender} reagiu {emoji}",
+      "contactRequest": "@{sender} quer se conectar",
+      "contactAccepted": "@{sender} aceitou seu convite",
+      "newConversationDirect": "Nova conversa com @{sender}",
+      "newConversationGroup": "Convite para \"{title}\"",
+      "memberJoined": "Novo membro em \"{title}\"",
+      "missedCall": "Chamada {type} perdida",
+      "system": "Notificação do sistema",
+      "default": "Nova notificação"
+    },
+    "content": {
+      "memberJoinedMessage": "{sender} entrou no grupo",
+      "contactAcceptedMessage": "{sender} aceitou seu convite. Vocês podem conversar agora.",
+      "contactRequestMessage": "{sender} enviou um convite",
+      "notMemberHint": "Você não é membro desta conversa. Clique para entrar."
+    },
+    "actions": {
+      "accept": "Aceitar",
+      "decline": "Recusar",
+      "join": "Entrar",
+      "callBack": "Retornar chamada",
+      "view": "Ver",
+      "reply": "Responder"
+    },
+    "timestamps": {
+      "justNow": "agora mesmo",
+      "secondsAgo": "há {count} segundo",
+      "secondsAgo_plural": "há {count} segundos",
+      "minutesAgo": "há {count} minuto",
+      "minutesAgo_plural": "há {count} minutos",
+      "hoursAgo": "há {count} hora",
+      "hoursAgo_plural": "há {count} horas",
+      "daysAgo": "há {count} dia",
+      "daysAgo_plural": "há {count} dias",
+      "in": "em"
+    },
+    "attachments": {
+      "photo": "Foto",
+      "video": "Vídeo",
+      "audio": "Áudio",
+      "pdf": "PDF",
+      "document": "Documento",
+      "file": "Arquivo"
+    }
+  }
+}

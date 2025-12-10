@@ -1,0 +1,18 @@
+{
+  "selectLanguage": "Seleccionar el idioma",
+  "close": "Cerrar",
+  "searchLanguage": "Buscar un idioma...",
+  "available": "Disponibles",
+  "generate": "Generar",
+  "original": "Original",
+  "modelUsed": "Modelo utilizado",
+  "confidence": "Confianza",
+  "noLanguagesFound": "No se encontró ningún idioma",
+  "clickToTranslate": "Haga clic para traducir",
+  "allLanguagesTranslated": "Todos los idiomas están traducidos",
+  "showOriginal": "Mostrar el texto original",
+  "showInUserLanguage": "Mostrar en su idioma",
+  "translate": "Traducir",
+  "selectModelToTranslate": "Seleccionar un modelo para traducir",
+  "translateWith": "Traducir con"
+}

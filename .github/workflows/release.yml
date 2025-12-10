@@ -1,0 +1,209 @@
+# =============================================================================
+# MEESHY - Release Pipeline
+# =============================================================================
+# Automated release with semantic versioning
+# Creates GitHub releases and triggers Docker builds
+# =============================================================================
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Pre-release tag (leave empty for stable)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOCKER_NAMESPACE: isopen
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  # ===========================================================================
+  # VERSION BUMP
+  # ===========================================================================
+  version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        run: |
+          bump_version() {
+            local current=$1
+            local type=$2
+            local prerelease=$3
+
+            local base=$(echo "$current" | sed 's/-.*$//')
+            IFS='.' read -r major minor patch <<< "$base"
+
+            case $type in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+
+            if [[ -n "$prerelease" ]]; then
+              echo "${major}.${minor}.${patch}-${prerelease}"
+            else
+              echo "${major}.${minor}.${patch}"
+            fi
+          }
+
+          # Get current version from root package.json
+          CURRENT=$(jq -r '.version' package.json)
+          NEW=$(bump_version "$CURRENT" "${{ github.event.inputs.version_type }}" "${{ github.event.inputs.prerelease }}")
+
+          # Update all package versions
+          for pkg in package.json apps/*/package.json services/*/package.json packages/*/package.json; do
+            if [[ -f "$pkg" ]]; then
+              jq --arg v "$NEW" '.version = $v' "$pkg" > tmp.json && mv tmp.json "$pkg"
+            fi
+          done
+
+          # Update VERSION files
+          for dir in apps/web services/gateway services/translator; do
+            if [[ -d "$dir" ]]; then
+              echo "$NEW" > "$dir/VERSION"
+            fi
+          done
+
+          echo "version=$NEW" >> $GITHUB_OUTPUT
+          echo "tag=v$NEW" >> $GITHUB_OUTPUT
+
+      - name: Commit changes
+        run: |
+          git add -A
+          git commit -m "chore(release): v${{ steps.bump.outputs.version }} [skip ci]" || echo "No changes"
+          git push origin ${{ github.ref_name }}
+
+      - name: Create tag
+        run: |
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "Release ${{ steps.bump.outputs.tag }}"
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+  # ===========================================================================
+  # BUILD ALL SERVICES
+  # ===========================================================================
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            context: ./apps/web
+            dockerfile: ./apps/web/Dockerfile
+            image: meeshy-frontend
+          - service: gateway
+            context: ./services/gateway
+            dockerfile: ./services/gateway/Dockerfile
+            image: meeshy-gateway
+          - service: translator
+            context: ./services/translator
+            dockerfile: ./services/translator/Dockerfile
+            image: meeshy-translator
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Prepare shared
+        run: |
+          mkdir -p ${{ matrix.context }}/shared
+          cp -r packages/shared/* ${{ matrix.context }}/shared/ 2>/dev/null || true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: |
+            ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:${{ needs.version.outputs.tag }}
+            ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          provenance: true
+          sbom: true
+
+  # ===========================================================================
+  # CREATE GITHUB RELEASE
+  # ===========================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Release ${{ needs.version.outputs.tag }}
+          body: |
+            ## Release ${{ needs.version.outputs.tag }}
+
+            ### Docker Images
+
+            ```bash
+            docker pull isopen/meeshy-frontend:${{ needs.version.outputs.tag }}
+            docker pull isopen/meeshy-gateway:${{ needs.version.outputs.tag }}
+            docker pull isopen/meeshy-translator:${{ needs.version.outputs.tag }}
+            ```
+
+            ### Platforms
+            - `linux/amd64`
+            - `linux/arm64`
+
+          draft: false
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
+          generate_release_notes: true

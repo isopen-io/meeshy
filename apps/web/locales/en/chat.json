@@ -1,0 +1,31 @@
+{
+  "chat": {
+    "title": "Chat",
+    "anonymousChat": "Anonymous chat",
+    "loading": "Loading chat...",
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "reconnecting": "Reconnecting...",
+    "sendMessage": "Send message",
+    "messagePlaceholder": "Type your message...",
+    "noMessages": "No messages yet",
+    "noMessagesDescription": "Start the conversation by sending a message",
+    "conversationNotFound": {
+      "title": "Conversation not found",
+      "description": "This conversation doesn't exist or the link is invalid",
+      "backHome": "Back to home",
+      "createNew": "Create new conversation"
+    },
+    "errors": {
+      "loadError": "Unable to load conversation. Please verify the link and try again.",
+      "sendError": "Error sending message",
+      "connectionError": "Connection error",
+      "invalidLink": "Invalid conversation link. Please check the URL and try again.",
+      "unableToLoadConversation": "Unable to load conversation data. Please check your permissions or try logging in.",
+      "linkNoLongerActive": "This link is no longer active. Please request a new link from the conversation owner.",
+      "linkExpired": "This link has expired. Please request a new link from the conversation owner."
+    }
+  }
+}
+

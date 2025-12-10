@@ -1,0 +1,99 @@
+{
+  "title": "Contactos",
+  "subtitle": "Administre sus contactos, conéctese con amigos y desarrolle su red profesional",
+  "searchPlaceholder": "Buscar contactos...",
+  "inviteContact": "Invitar un contacto",
+  "contactsFound": "{count} contacto encontrado",
+  "contactsFound_plural": "{count} contactos encontrados",
+  "loading": "Cargando contactos...",
+  "stats": {
+    "totalContacts": "Total de contactos",
+    "online": "En línea",
+    "offline": "Fuera de línea",
+    "connected": "Conectados",
+    "connections": "Conexiones",
+    "pending": "Pendientes",
+    "refused": "Rechazados",
+    "affiliates": "Afiliados"
+  },
+  "tabs": {
+    "all": "Todos",
+    "connected": "Conectados",
+    "pending": "Pendientes",
+    "refused": "Rechazados",
+    "affiliates": "Afiliados"
+  },
+  "status": {
+    "online": "En línea",
+    "offline": "Fuera de línea",
+    "pending": "Pendiente",
+    "rejected": "Rechazado",
+    "neverSeen": "Nunca visto",
+    "justNow": "Ahora mismo",
+    "minutesAgo": "hace {count} min",
+    "hoursAgo": "hace {count}h",
+    "daysAgo": "hace {count}d",
+    "lastSeenDate": "Visto el {date}"
+  },
+  "actions": {
+    "menu": "Menú de acciones",
+    "message": "Mensaje",
+    "sendMessage": "Enviar un mensaje",
+    "call": "Llamar",
+    "viewProfile": "Ver el perfil",
+    "accept": "Aceptar",
+    "reject": "Rechazar",
+    "remove": "Eliminar",
+    "resend": "Reenviar",
+    "connection": "Conexión",
+    "add": "Agregar",
+    "cancel": "Cancelar",
+    "continueConversation": "Continuar",
+    "newConversation": "Nueva conversación",
+    "newConversationDescription": "Iniciar una nueva discusión"
+  },
+  "conversations": {
+    "existing": "Conversaciones existentes",
+    "untitled": "Sin título",
+    "latest": "Última"
+  },
+  "messages": {
+    "noContacts": "No hay contactos",
+    "noContactsDescription": "Comience agregando contactos a su lista",
+    "noConnectedContacts": "No hay contactos conectados",
+    "noConnectedContactsDescription": "Acepte solicitudes de amistad para conectarse con personas",
+    "noPendingRequests": "No hay solicitudes pendientes",
+    "noPendingRequestsDescription": "Todas las solicitudes de amistad han sido procesadas",
+    "noRefusedRequests": "No hay solicitudes rechazadas",
+    "noRefusedRequestsDescription": "No ha rechazado ninguna solicitud de amistad",
+    "noAffiliateContacts": "No hay contactos afiliados",
+    "noAffiliateContactsDescription": "Invite personas usando su enlace de afiliado",
+    "noContactsFound": "No se encontraron contactos",
+    "noContactsFoundDescription": "Intente una búsqueda diferente",
+    "searchUsers": "Buscar usuarios...",
+    "emailAddress": "Dirección de email",
+    "registeredAt": "Registrado el",
+    "joinedOn": "Unido el",
+    "linkUsed": "Enlace usado",
+    "requestSent": "Solicitud enviada el {date}",
+    "requestReceived": "Solicitud recibida el {date}",
+    "requestRejected": "Solicitud rechazada el {date}",
+    "invalidUser": "Usuario inválido"
+  },
+  "success": {
+    "friendRequestSent": "Solicitud de amistad enviada",
+    "friendRequestAccepted": "Solicitud de amistad aceptada",
+    "friendRequestRejected": "Solicitud de amistad rechazada",
+    "friendRequestCancelled": "Solicitud de amistad cancelada",
+    "conversationCreated": "Conversación creada"
+  },
+  "errors": {
+    "loadContactsError": "Error al cargar los contactos",
+    "searchError": "Error al buscar",
+    "sendError": "Error al enviar la solicitud",
+    "updateError": "Error al actualizar el contacto",
+    "connectionError": "Error de conexión",
+    "conversationCreationError": "Error al crear la conversación",
+    "sessionExpired": "Sesión expirada"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "websocket": {
+    "disconnectedByServer": "Desconectado por el servidor",
+    "serverDisconnectedReconnecting": "Servidor desconectado, reconectando...",
+    "connectionLostReconnecting": "Conexión perdida, reconectando...",
+    "connected": "Conectado al servidor",
+    "authenticationFailed": "Autenticación fallida",
+    "connectionError": "Error de conexión",
+    "reconnecting": "Reconectando...",
+    "reconnected": "Reconectado exitosamente",
+    "sessionExpired": "Su sesión ha expirado, por favor vuelva a iniciar sesión"
+  }
+}

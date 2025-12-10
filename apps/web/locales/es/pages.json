@@ -1,0 +1,131 @@
+{
+  "pages": {
+    "about": {
+      "title": "Acerca de Meeshy",
+      "subtitle": "Creemos que las barreras lingüísticas nunca deberían ser un obstáculo para las conexiones significativas.",
+      "backHome": "Volver al inicio",
+      "mission": {
+        "title": "Nuestra Misión",
+        "description": "Conectar el mundo, una traducción a la vez. Nuestra plataforma permite que personas de todas partes del mundo se comuniquen libremente."
+      },
+      "values": {
+        "globalAccess": {
+          "title": "Accesibilidad Mundial",
+          "description": "Hacer que la comunicación multilingüe sea accesible para todos, en cualquier parte del mundo."
+        },
+        "innovation": {
+          "title": "Innovación",
+          "description": "Utilizar las últimas tecnologías de IA para traducciones precisas y rápidas."
+        },
+        "privacy": {
+          "title": "Respeto por la Privacidad",
+          "description": "Sus conversaciones permanecen privadas y seguras."
+        }
+      },
+      "team": {
+        "title": "Nuestro Equipo",
+        "description": "Hecho con ❤️ por desarrolladores que creen que la comunicación no debería tener límites.",
+        "details": "Meeshy es desarrollado por un equipo apasionado de desarrolladores, lingüistas y diseñadores."
+      },
+      "cta": {
+        "title": "¿Quiere saber más?",
+        "contact": "Contáctenos"
+      }
+    },
+    "contact": {
+      "title": "Contáctenos",
+      "subtitle": "Estamos aquí para ayudarlo. No dude en contactarnos.",
+      "address": {
+        "title": "Nuestra Dirección",
+        "company": "Meeshy Inc.",
+        "street": "12 Rue de la Paix",
+        "building": "Edificio A, 3er piso",
+        "country": "Francia"
+      },
+      "info": {
+        "title": "Información de Contacto",
+        "email": {
+          "label": "Email",
+          "value": "contact@meeshy.me"
+        }
+      },
+      "availability": {
+        "title": "Disponibilidad",
+        "description": "De lunes a viernes, 9:00 - 18:00"
+      },
+      "transport": {
+        "title": "Cómo llegar a nosotros",
+        "metro": {
+          "title": "Metro",
+          "line1": "Línea 3 - Estación Bourse",
+          "time": "5 min a pie"
+        },
+        "train": {
+          "title": "Tren",
+          "rer": "RER A - Auber",
+          "transilien": "Transilien J/L",
+          "time": "10 min a pie"
+        },
+        "bus": {
+          "title": "Autobús",
+          "lines": "Líneas 20, 29, 39, 48",
+          "stop": "Parada Bourse"
+        },
+        "car": {
+          "title": "Automóvil",
+          "parking": "Estacionamiento Bourse",
+          "highway": "A1, salida Porte de la Chapelle",
+          "rates": "4€/hora"
+        }
+      },
+      "cta": {
+        "collaborate": "Colaborar",
+        "learnMore": "Saber más"
+      }
+    },
+    "partners": {
+      "title": "Nuestros Socios",
+      "subtitle": "Únase a nuestro ecosistema",
+      "backHome": "Volver al inicio",
+      "become": {
+        "title": "Convertirse en Socio",
+        "description": "Únase a nuestro programa de socios y desarrolle su actividad",
+        "contact": "Contáctenos"
+      },
+      "education": {
+        "title": "Soluciones de Educación",
+        "description": "Facilite el aprendizaje multilingüe y la colaboración internacional",
+        "pricing": "Tarifas preferenciales para educación",
+        "features": {
+          "classrooms": "Aulas virtuales multilingües",
+          "admin": "Gestión centralizada de cuentas",
+          "learning": "Herramientas de aprendizaje integradas",
+          "exchange": "Soporte para programas de intercambio",
+          "curriculum": "Integración con plataformas LMS"
+        }
+      },
+      "enterprise": {
+        "title": "Empresa",
+        "description": "Soluciones a medida para grandes organizaciones",
+        "features": {
+          "sso": "Autenticación SSO",
+          "customization": "Personalización completa",
+          "deployment": "Implementación en sitio",
+          "support": "Soporte prioritario 24/7",
+          "analytics": "Analíticas avanzadas"
+        },
+        "pricing": "Precios personalizados"
+      }
+    },
+    "notFound": {
+      "title": "Página no encontrada",
+      "description": "La página que busca no existe o ha sido movida.",
+      "backToDashboard": "Volver al panel de control",
+      "actions": {
+        "backHome": "Volver al inicio",
+        "backDashboard": "Panel de control",
+        "viewCommunities": "Ver las comunidades"
+      }
+    }
+  }
+}

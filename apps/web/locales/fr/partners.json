@@ -1,0 +1,113 @@
+{
+  "partners": {
+    "title": "Devenez Partenaire",
+    "subtitle": "Rejoignez notre écosystème et développez votre activité avec Meeshy",
+    "backHome": "Retour à l'accueil",
+    "enterprise": {
+      "title": "Solutions Entreprise",
+      "description": "Des solutions sur mesure pour les grandes organisations avec des besoins spécifiques",
+      "pricing": "Tarification personnalisée",
+      "features": {
+        "sso": "Authentification SSO (SAML, OAuth)",
+        "customization": "Personnalisation complète de l'interface",
+        "deployment": "Déploiement sur site ou cloud privé",
+        "support": "Support prioritaire 24/7",
+        "analytics": "Analytics et rapports avancés"
+      }
+    },
+    "education": {
+      "title": "Solutions Éducation",
+      "description": "Facilitez l'apprentissage multilingue et la collaboration internationale",
+      "pricing": "Tarifs préférentiels pour l'éducation",
+      "features": {
+        "classrooms": "Salles de classe virtuelles multilingues",
+        "admin": "Gestion centralisée des comptes",
+        "learning": "Outils d'apprentissage intégrés",
+        "exchange": "Support pour les programmes d'échange",
+        "curriculum": "Intégration avec les plateformes LMS"
+      }
+    },
+    "deployment": {
+      "title": "Options de Déploiement",
+      "cloud": {
+        "title": "Cloud",
+        "description": "Déploiement rapide et évolutif sur notre infrastructure sécurisée",
+        "features": {
+          "quick": "Mise en place en quelques minutes",
+          "scalable": "Évolutivité automatique",
+          "maintenance": "Maintenance incluse",
+          "updates": "Mises à jour automatiques"
+        }
+      },
+      "onPremise": {
+        "title": "Sur Site",
+        "description": "Contrôle total avec un déploiement sur votre infrastructure",
+        "features": {
+          "security": "Sécurité maximale",
+          "compliance": "Conformité réglementaire",
+          "customization": "Personnalisation complète",
+          "performance": "Performance optimisée"
+        }
+      }
+    },
+    "useCases": {
+      "title": "Cas d'Usage",
+      "business": {
+        "title": "Entreprises",
+        "items": {
+          "collaboration": "Collaboration d'équipes internationales",
+          "support": "Support client multilingue",
+          "meetings": "Réunions multilingues",
+          "training": "Formation globale"
+        }
+      },
+      "education": {
+        "title": "Éducation",
+        "items": {
+          "international": "Programmes internationaux",
+          "language": "Apprentissage des langues",
+          "research": "Recherche collaborative",
+          "cultural": "Échanges culturels"
+        }
+      },
+      "community": {
+        "title": "Communautés",
+        "items": {
+          "nonprofits": "Organisations à but non lucratif",
+          "events": "Événements internationaux",
+          "volunteer": "Programmes de bénévolat",
+          "healthcare": "Services de santé multilingues"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Avantages Partenaires",
+      "support": {
+        "title": "Support Prioritaire",
+        "description": "Accès à notre équipe de support dédiée 24/7"
+      },
+      "visibility": {
+        "title": "Visibilité",
+        "description": "Mise en avant sur notre site et dans nos communications"
+      },
+      "priority": {
+        "title": "Accès Prioritaire",
+        "description": "Accès anticipé aux nouvelles fonctionnalités"
+      }
+    },
+    "types": {
+      "tech": {
+        "title": "Partenaires Technologiques",
+        "description": "Intégrez Meeshy dans vos solutions",
+        "features": "API complète, SDK, webhooks, documentation détaillée"
+      }
+    },
+    "become": {
+      "title": "Devenir Partenaire",
+      "description": "Rejoignez notre programme de partenariat et développez votre activité",
+      "contact": "Contactez-nous",
+      "api": "Documentation API",
+      "about": "En savoir plus"
+    }
+  }
+}

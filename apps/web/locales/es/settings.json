@@ -1,0 +1,244 @@
+{
+  "settings": {
+    "title": "Configuración",
+    "pageTitle": "Configuración para {username}",
+    "subtitle": "Administre sus preferencias de cuenta, idioma y privacidad",
+    "loadingSettings": "Cargando configuración...",
+    "settingsError": "Error al cargar la configuración",
+    "settingsSaved": "Configuración guardada con éxito",
+    "settingsSaveError": "Error al guardar la configuración",
+    "errors": {
+      "loadProfile": "Error al cargar el perfil",
+      "loadSettings": "Error al cargar la configuración",
+      "updateSettings": "Error al actualizar"
+    },
+    "success": {
+      "settingsUpdated": "Configuración actualizada con éxito"
+    },
+    "tabs": {
+      "profile": "Perfil",
+      "translation": "Traducción",
+      "security": "Seguridad",
+      "theme": "Tema",
+      "fonts": "Fuentes",
+      "stats": "Estadísticas"
+    },
+    "profile": {
+      "title": "Perfil",
+      "description": "Información personal",
+      "settingsTitle": "Configuración del perfil",
+      "settingsDescription": "Configuración para {username}",
+      "photo": {
+        "title": "Foto de perfil",
+        "description": "Personalice su foto de perfil visible para otros usuarios",
+        "uploadImage": "Cargar una imagen",
+        "takePhoto": "Tomar una foto",
+        "removePhoto": "Eliminar la foto",
+        "photoUpdated": "Foto de perfil actualizada",
+        "previewTitle": "Vista previa de la foto"
+      },
+      "cropAvatar": {
+        "cropAvatarTitle": "Recortar su foto de perfil",
+        "zoom": "Zoom",
+        "rotation": "Rotación",
+        "reset": "Restablecer",
+        "cancel": "Cancelar",
+        "saveAvatar": "Guardar",
+        "uploading": "Subiendo...",
+        "processing": "Procesando...",
+        "cropInstructions": "Use el ratón para mover la imagen, los controles deslizantes para hacer zoom y rotar. La imagen se recortará en cuadrado."
+      },
+      "personalInfo": {
+        "title": "Información personal",
+        "description": "Modifique su información de perfil",
+        "firstName": "Nombre",
+        "lastName": "Apellido",
+        "displayName": "Nombre para mostrar",
+        "displayNamePlaceholder": "Cómo desea aparecer en las conversaciones",
+        "email": "Email",
+        "emailPlaceholder": "su.email@ejemplo.com",
+        "phoneNumber": "Número de teléfono",
+        "phoneNumberPlaceholder": "+34 612 34 56 78",
+        "username": "Nombre de usuario",
+        "usernameCannotChange": "El nombre de usuario no se puede modificar",
+        "bio": "Biografía",
+        "bioPlaceholder": "Cuéntenos sobre usted..."
+      },
+      "actions": {
+        "cancel": "Cancelar",
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "profileUpdated": "Perfil actualizado con éxito",
+        "updateError": "Error al actualizar el perfil",
+        "confirm": "Confirmar",
+        "uploading": "Subiendo..."
+      }
+    },
+    "translation": {
+      "title": "Configuración de idioma y traducción",
+      "description": "Defina sus idiomas y configuración de traducción",
+      "mainLanguages": {
+        "title": "Idiomas principales",
+        "description": "Configure sus idiomas preferidos para la comunicación",
+        "systemLanguage": "Idioma del sistema",
+        "systemLanguageDescription": "Idioma principal de su interfaz y sus mensajes",
+        "regionalLanguage": "Idioma regional",
+        "regionalLanguageDescription": "Idioma de su región o idioma secundario preferido",
+        "customDestinationLanguage": "Idioma de destino personalizado",
+        "customDestinationLanguageDescription": "Idioma específico para la traducción automática (opcional)",
+        "selectLanguage": "Seleccionar un idioma",
+        "none": "Ninguno"
+      },
+      "autoTranslation": {
+        "title": "Opciones de traducción automática",
+        "description": "Configure cómo se traducen automáticamente los mensajes",
+        "enabled": "Traducción automática",
+        "enabledDescription": "Activa la traducción automática de mensajes entrantes",
+        "exclusiveMode": "Modo exclusivo: Active solo una opción de traducción a la vez.",
+        "translateToSystem": "Traducir solo al idioma del sistema",
+        "translateToSystemDescription": "Traduce los mensajes a {flag} {language} únicamente",
+        "translateToRegional": "Traducir solo al idioma regional",
+        "translateToRegionalDescription": "Traduce los mensajes a {flag} {language} únicamente",
+        "translateToCustom": "Traducir solo al idioma personalizado",
+        "translateToCustomDescription": "Traduce los mensajes a {flag} {language} únicamente",
+        "noCustomLanguage": "Ningún idioma personalizado definido - defina uno arriba",
+        "tip": "Consejo:",
+        "tipDescription": "Si no se selecciona ninguna opción, los mensajes se traducirán a todos sus idiomas configurados (sistema + regional + personalizado)."
+      },
+      "preview": {
+        "title": "Vista previa de la configuración",
+        "systemLanguage": "Idioma del sistema",
+        "regionalLanguage": "Idioma regional",
+        "customLanguage": "Idioma personalizado",
+        "autoTranslation": "Traducción automática",
+        "enabled": "Activada",
+        "disabled": "Desactivada"
+      },
+      "actions": {
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "cancel": "Cancelar",
+        "settingsUpdated": "Configuración de idioma actualizada",
+        "updateError": "Error al actualizar la configuración de idioma"
+      },
+      "systemLanguage": "Idioma del sistema",
+      "regionalLanguage": "Idioma regional",
+      "customDestinationLanguage": "Idioma de destino personalizado",
+      "autoTranslateEnabled": "Traducción automática activada",
+      "translateToSystemLanguage": "Traducir al idioma del sistema",
+      "translateToRegionalLanguage": "Traducir al idioma regional",
+      "useCustomDestination": "Usar destino personalizado",
+      "customDestinationPlaceholder": "Seleccionar un idioma"
+    },
+    "security": {
+      "title": "Configuración de seguridad",
+      "description": "Administre la seguridad de su cuenta y su contraseña",
+      "password": {
+        "title": "Cambiar la contraseña",
+        "description": "Actualice su contraseña para asegurar su cuenta",
+        "currentPassword": "Contraseña actual",
+        "currentPasswordPlaceholder": "Ingrese su contraseña actual",
+        "newPassword": "Nueva contraseña",
+        "newPasswordPlaceholder": "Ingrese su nueva contraseña",
+        "confirmPassword": "Confirmar la nueva contraseña",
+        "confirmPasswordPlaceholder": "Ingrese nuevamente su nueva contraseña",
+        "requirements": "La contraseña debe contener al menos 6 caracteres",
+        "update": "Actualizar la contraseña",
+        "updating": "Actualizando...",
+        "cancel": "Cancelar",
+        "updateSuccess": "Contraseña actualizada con éxito",
+        "errors": {
+          "currentRequired": "Se requiere la contraseña actual",
+          "newRequired": "Se requiere la nueva contraseña",
+          "tooShort": "La contraseña debe contener al menos 6 caracteres",
+          "mismatch": "Las contraseñas no coinciden",
+          "samePassword": "La nueva contraseña debe ser diferente de la actual",
+          "updateFailed": "Error al actualizar la contraseña"
+        }
+      }
+    },
+    "theme": {
+      "title": "Tema e interfaz",
+      "description": "Personalice la apariencia, el idioma y las fuentes de la aplicación",
+      "settingsUpdated": "Configuración actualizada con éxito",
+      "interfaceLanguageUpdated": "Idioma de la interfaz actualizado",
+      "displayMode": {
+        "title": "Modo de visualización",
+        "light": "Claro",
+        "dark": "Oscuro",
+        "system": "Sistema"
+      },
+      "accentColor": {
+        "title": "Color de acento",
+        "blue": "Azul",
+        "green": "Verde",
+        "purple": "Púrpura",
+        "red": "Rojo",
+        "orange": "Naranja",
+        "pink": "Rosa"
+      },
+      "interfaceLanguage": {
+        "title": "Idioma de la interfaz",
+        "description": "Define el idioma de la interfaz de usuario"
+      },
+      "ui": {
+        "title": "Interfaz de usuario",
+        "description": "Opciones de visualización y comportamiento",
+        "fontSize": {
+          "title": "Tamaño de fuente",
+          "small": "Pequeña",
+          "medium": "Mediana",
+          "large": "Grande"
+        },
+        "fontFamily": {
+          "title": "Familia de fuentes",
+          "description": "Elija el estilo de fuente para la interfaz"
+        },
+        "lineHeight": {
+          "title": "Altura de línea",
+          "description": "Ajuste el espaciado entre líneas de texto",
+          "tight": "Ajustado",
+          "normal": "Normal",
+          "relaxed": "Relajado",
+          "loose": "Amplio"
+        },
+        "interfaceLanguage": {
+          "title": "Idioma de la interfaz",
+          "description": "Idioma para los menús y botones"
+        },
+        "compactMode": {
+          "title": "Modo compacto",
+          "description": "Reduce el espaciado para mostrar más contenido"
+        },
+        "animations": {
+          "title": "Animaciones",
+          "description": "Activa las transiciones y animaciones de la interfaz"
+        }
+      },
+      "preview": {
+        "title": "Vista previa",
+        "description": "Vea cómo se ven sus configuraciones",
+        "exampleMessage": "Este es un mensaje de ejemplo",
+        "exampleText": "Este es un texto de ejemplo con sus configuraciones de fuente y altura de línea seleccionadas"
+      }
+    },
+    "language": {
+      "title": "Configuración de idioma",
+      "description": "Configure sus preferencias de idioma"
+    },
+    "notifications": {
+      "title": "Configuración de notificaciones",
+      "description": "Administre sus preferencias de notificación"
+    },
+    "privacy": {
+      "title": "Configuración de privacidad",
+      "description": "Controle su configuración de privacidad y datos"
+    },
+    "languageSelector": {
+      "placeholder": "Seleccionar un idioma...",
+      "searchPlaceholder": "Buscar un idioma...",
+      "noLanguageFound": "No se encontró ningún idioma."
+    },
+    "noUserConnected": "Ningún usuario conectado"
+  }
+}

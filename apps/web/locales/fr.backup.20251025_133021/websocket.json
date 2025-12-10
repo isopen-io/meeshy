@@ -1,0 +1,13 @@
+{
+  "websocket": {
+    "disconnectedByServer": "Déconnecté par le serveur",
+    "serverDisconnectedReconnecting": "Serveur déconnecté, reconnexion...",
+    "connectionLostReconnecting": "Connexion perdue, reconnexion...",
+    "connected": "Connecté au serveur",
+    "authenticationFailed": "Authentification échouée",
+    "connectionError": "Erreur de connexion",
+    "reconnecting": "Reconnexion...",
+    "reconnected": "Reconnecté avec succès"
+  }
+}
+
