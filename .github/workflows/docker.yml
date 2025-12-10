@@ -4,6 +4,7 @@
 # Multi-architecture builds for all services
 # Supports: linux/amd64, linux/arm64
 # Registry: Docker Hub (isopen/meeshy-*)
+# Package managers: bun (default) or pnpm
 # =============================================================================
 
 name: Docker
@@ -22,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: 'Services to build'
+        description: 'Services to build (comma-separated or preset)'
         required: true
         default: 'all'
         type: choice
@@ -31,13 +32,44 @@ on:
           - web
           - gateway
           - translator
+          - web,gateway
+          - web,translator
+          - gateway,translator
+      custom_services:
+        description: 'Custom services (overrides above if set, e.g., "web,gateway")'
+        required: false
+        type: string
+      push_to_registry:
+        description: 'Push images to registry'
+        required: false
+        type: boolean
+        default: true
+      platforms:
+        description: 'Target platforms'
+        required: false
+        type: choice
+        default: 'linux/amd64,linux/arm64'
+        options:
+          - linux/amd64,linux/arm64
+          - linux/amd64
+          - linux/arm64
+      package_manager:
+        description: 'Package manager for builds'
+        required: false
+        type: choice
+        default: 'bun'
+        options:
+          - bun
+          - pnpm
 
 env:
   DOCKER_REGISTRY: docker.io
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64,linux/arm64
   NODE_VERSION: '22'
+  BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
+  PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -63,7 +95,12 @@ jobs:
         id: changes
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            SERVICES="${{ github.event.inputs.services }}"
+            # Use custom_services if provided, otherwise use services dropdown
+            SERVICES="${{ github.event.inputs.custom_services }}"
+            if [[ -z "$SERVICES" ]]; then
+              SERVICES="${{ github.event.inputs.services }}"
+            fi
+
             if [[ "$SERVICES" == "all" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
@@ -140,7 +177,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -189,8 +233,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ env.PLATFORMS }}
-          push: ${{ github.event_name != 'pull_request' }}
+          platforms: ${{ github.event.inputs.platforms || env.PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
@@ -201,6 +245,7 @@ jobs:
             BUILD_DATE=${{ github.event.repository.updated_at }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
+            PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
 
       - name: Security scan
         uses: aquasecurity/trivy-action@master
@@ -241,6 +286,8 @@ jobs:
       - name: Build Summary
         run: |
           echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.build.result }}" == "success" ]]; then
             echo "All images built and pushed successfully." >> $GITHUB_STEP_SUMMARY
