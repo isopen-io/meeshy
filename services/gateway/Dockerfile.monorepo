@@ -14,7 +14,7 @@ ARG PNPM_VERSION=9.15.0
 
 ENV NODE_ENV=production \
     PNPM_HOME="/pnpm" \
-    PATH="$PNPM_HOME:$PATH"
+    PATH="/pnpm:$PATH"
 
 # System setup
 RUN apk add --no-cache \
@@ -93,9 +93,9 @@ COPY --from=builder --chown=gateway:nodejs /app/packages/shared/dist ./node_modu
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared/prisma ./node_modules/@meeshy/shared/prisma
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared/package.json ./node_modules/@meeshy/shared/
 
-# Copy entrypoint if exists
-COPY --from=builder /app/services/gateway/docker-entrypoint.sh ./docker-entrypoint.sh 2>/dev/null || true
-RUN chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
+# Copy entrypoint (expects docker-entrypoint.sh to exist)
+COPY --from=builder /app/services/gateway/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh || true
 
 USER gateway
 

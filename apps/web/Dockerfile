@@ -27,8 +27,9 @@ WORKDIR /app
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
-# Copy shared package if present
-COPY shared/package.json ./shared/ 2>/dev/null || true
+# Note: shared/ directory is copied by CI before Docker build
+RUN mkdir -p ./shared
+COPY shared/package.json ./shared/
 
 # Create workspace config
 RUN echo 'packages:\n  - "."\n  - "shared"' > pnpm-workspace.yaml

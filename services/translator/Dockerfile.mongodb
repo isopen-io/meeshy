@@ -77,7 +77,9 @@ RUN pip install --upgrade pip --no-cache-dir \
 
 # Copy source code
 COPY --chown=translator:translator . ./
-COPY --chown=translator:translator shared/ ./shared/ 2>/dev/null || true
+# Note: shared/ directory is copied by CI before Docker build
+RUN mkdir -p ./shared
+COPY --chown=translator:translator shared/ ./shared/
 
 # Generate Prisma client
 RUN if [ -f "/workspace/shared/prisma/schema.prisma" ]; then \
