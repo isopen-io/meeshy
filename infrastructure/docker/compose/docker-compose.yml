@@ -1,11 +1,12 @@
 # =============================================================================
-# MEESHY - Docker Compose (Monorepo Build)
+# MEESHY - Docker Compose (Development)
 # =============================================================================
-# Build and run all services from monorepo structure
+# Local development environment with all services
 #
 # Usage:
-#   docker-compose -f docker-compose.monorepo.yml build
-#   docker-compose -f docker-compose.monorepo.yml up -d
+#   pnpm docker:up    - Start all services
+#   pnpm docker:down  - Stop all services
+#   pnpm docker:logs  - View logs
 #
 # URLs:
 #   - Frontend: http://localhost:3100
@@ -62,8 +63,8 @@ services:
     container_name: meeshy-translator
     restart: unless-stopped
     build:
-      context: ./services/translator
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: infrastructure/docker/images/translator/Dockerfile
     environment:
       - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
       - PYTHONPATH=/workspace
@@ -88,14 +89,14 @@ services:
       retries: 5
       start_period: 60s
 
-  # Gateway Service (API) - Monorepo Build
+  # Gateway Service (API)
   gateway:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
     container_name: meeshy-gateway
     restart: unless-stopped
     build:
-      context: .
-      dockerfile: services/gateway/Dockerfile.monorepo
+      context: ../../..
+      dockerfile: infrastructure/docker/images/gateway/Dockerfile
     environment:
       - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
       - REDIS_URL=redis://redis:6379
@@ -124,18 +125,14 @@ services:
       retries: 3
       start_period: 30s
 
-  # Frontend Service (Next.js) - Monorepo Build
+  # Frontend Service (Next.js)
   frontend:
     image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
     container_name: meeshy-frontend
     restart: unless-stopped
     build:
-      context: .
-      dockerfile: apps/web/Dockerfile.monorepo
-      args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
-        - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:3000}
-        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://gateway:3000}
+      context: ../../..
+      dockerfile: infrastructure/docker/images/web/Dockerfile
     environment:
       - NEXT_PUBLIC_WS_URL=ws://localhost:3000
       - NEXT_PUBLIC_API_URL=http://localhost:3000

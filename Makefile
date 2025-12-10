@@ -1,141 +1,206 @@
-# Makefile pour Meeshy - Développement Local avec Docker
-# Utilise les dernières images Docker pour un déploiement local complet
+# =============================================================================
+# Meeshy Monorepo - Makefile
+# =============================================================================
+# Native-first development with optional Docker support
+#
+# Quick Start:
+#   make install    - Install all dependencies
+#   make dev        - Start native development (recommended)
+#   make dev-docker - Start with Docker containers (MongoDB/Redis)
+#   make dev-memory - Start in memory mode (no external DB)
+# =============================================================================
 
-.PHONY: help start stop restart logs status pull clean reset health test
+.PHONY: help dev dev-docker dev-memory dev-secure install build test clean \
+        docker-up docker-down docker-logs docker-build prod-up prod-down \
+        status stop ps up down
 
-# Couleurs
+# Colors
 BLUE := \033[0;34m
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
 RED := \033[0;31m
-NC := \033[0m # No Color
+CYAN := \033[0;36m
+NC := \033[0m
 
-# Variables
-COMPOSE_FILE := docker-compose.dev.yml
-ENV_FILE := .env.dev
-HEALTH_SCRIPT := ./health-check.sh
+# Paths
+COMPOSE_DIR := infrastructure/docker/compose
+SCRIPTS_DIR := scripts
 
-help: ## Afficher cette aide
+# =============================================================================
+# Help
+# =============================================================================
+
+help: ## Show this help message
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(BLUE)║        MEESHY - Commandes de Développement             ║$(NC)"
+	@echo "$(BLUE)║              MEESHY MONOREPO - COMMANDS                 ║$(NC)"
 	@echo "$(BLUE)╚══════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo "$(CYAN)Development (Native):$(NC)"
+	@grep -E '^dev.*:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
-	@echo "$(BLUE)Services disponibles pour les logs:$(NC)"
-	@echo "  - database, redis, translator, gateway, frontend"
-	@echo "  - nosqlclient, p3x-redis-ui"
+	@echo "$(CYAN)Project Management:$(NC)"
+	@grep -E '^(install|build|test|clean):.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
-	@echo "$(GREEN)Exemple: make logs SERVICE=gateway$(NC)"
+	@echo "$(CYAN)Docker:$(NC)"
+	@grep -E '^docker-.*:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(CYAN)Production:$(NC)"
+	@grep -E '^prod-.*:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)Examples:$(NC)"
+	@echo "  make dev               # Native development (HTTP)"
+	@echo "  make dev-docker        # With MongoDB/Redis containers"
+	@echo "  make dev-memory        # No external database"
+	@echo "  make docker-logs       # View all container logs"
 	@echo ""
 
-start: ## Démarrer tous les services
-	@echo "$(BLUE)🚀 Démarrage de tous les services Meeshy...$(NC)"
-	@docker-compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
-	@echo ""
-	@echo "$(GREEN)✨ Services démarrés avec succès!$(NC)"
-	@echo ""
-	@$(MAKE) urls
+# =============================================================================
+# Native Development
+# =============================================================================
 
-stop: ## Arrêter tous les services
-	@echo "$(YELLOW)⏹️  Arrêt des services...$(NC)"
-	@docker-compose -f $(COMPOSE_FILE) down
-	@echo "$(GREEN)✓ Services arrêtés$(NC)"
+dev: ## Start native development (HTTP, uses existing DB/Redis)
+	@echo "$(GREEN)🚀 Starting native development...$(NC)"
+	@./$(SCRIPTS_DIR)/dev.sh
 
-restart: ## Redémarrer tous les services
-	@echo "$(YELLOW)🔄 Redémarrage des services...$(NC)"
-	@docker-compose -f $(COMPOSE_FILE) restart
-	@echo "$(GREEN)✓ Services redémarrés$(NC)"
+dev-docker: ## Start with Docker containers (MongoDB + Redis)
+	@echo "$(GREEN)🚀 Starting development with containers...$(NC)"
+	@./$(SCRIPTS_DIR)/dev.sh --with-containers
 
-logs: ## Afficher les logs (optionnel: SERVICE=nom_service)
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "$(BLUE)📋 Logs de tous les services (Ctrl+C pour quitter)...$(NC)"; \
-		docker-compose -f $(COMPOSE_FILE) logs -f; \
+dev-memory: ## Start in memory mode (no external DB)
+	@echo "$(GREEN)🚀 Starting development in memory mode...$(NC)"
+	@./$(SCRIPTS_DIR)/dev.sh --memory
+
+dev-secure: ## Start with HTTPS (mkcert)
+	@echo "$(GREEN)🚀 Starting secure development (HTTPS)...$(NC)"
+	@./$(SCRIPTS_DIR)/dev.sh --secure
+
+stop: ## Stop all development services
+	@echo "$(YELLOW)⏹️  Stopping all services...$(NC)"
+	@./$(SCRIPTS_DIR)/dev.sh stop
+
+status: ## Show service status
+	@./$(SCRIPTS_DIR)/dev.sh status
+
+# =============================================================================
+# Project Management
+# =============================================================================
+
+install: ## Install all dependencies
+	@echo "$(BLUE)📦 Installing dependencies...$(NC)"
+	@if command -v pnpm &> /dev/null; then \
+		pnpm install; \
+	elif command -v bun &> /dev/null; then \
+		bun install; \
 	else \
-		echo "$(BLUE)📋 Logs de $(SERVICE) (Ctrl+C pour quitter)...$(NC)"; \
-		docker-compose -f $(COMPOSE_FILE) logs -f $(SERVICE); \
+		npm install; \
+	fi
+	@echo "$(BLUE)📦 Installing Python dependencies for translator...$(NC)"
+	@cd services/translator && \
+		python3 -m venv .venv && \
+		.venv/bin/pip install -r requirements.txt
+	@echo "$(GREEN)✓ All dependencies installed$(NC)"
+
+build: ## Build all packages
+	@echo "$(BLUE)🔨 Building all packages...$(NC)"
+	@if command -v pnpm &> /dev/null; then \
+		pnpm run build; \
+	elif command -v bun &> /dev/null; then \
+		bun run build; \
+	else \
+		npm run build; \
+	fi
+	@echo "$(GREEN)✓ Build complete$(NC)"
+
+test: ## Run all tests
+	@echo "$(BLUE)🧪 Running tests...$(NC)"
+	@if command -v pnpm &> /dev/null; then \
+		pnpm run test; \
+	elif command -v bun &> /dev/null; then \
+		bun run test; \
+	else \
+		npm run test; \
 	fi
 
-status: ## Afficher le statut des services
-	@echo "$(BLUE)📊 Statut des services Meeshy:$(NC)"
+clean: ## Clean build artifacts and dependencies
+	@echo "$(YELLOW)🧹 Cleaning...$(NC)"
+	@if command -v pnpm &> /dev/null; then \
+		pnpm run clean || true; \
+	elif command -v bun &> /dev/null; then \
+		bun run clean || true; \
+	else \
+		npm run clean || true; \
+	fi
+	@rm -rf node_modules .turbo
+	@find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
+	@echo "$(GREEN)✓ Cleanup complete$(NC)"
+
+# =============================================================================
+# Docker Development
+# =============================================================================
+
+docker-up: ## Start Docker development environment
+	@echo "$(BLUE)🐳 Starting Docker development environment...$(NC)"
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml \
+	                -f $(COMPOSE_DIR)/docker-compose.dev.yml up -d
+	@echo "$(GREEN)✓ Docker environment started$(NC)"
+	@$(MAKE) docker-urls
+
+docker-down: ## Stop Docker environment
+	@echo "$(YELLOW)⏹️  Stopping Docker environment...$(NC)"
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml down
+	@echo "$(GREEN)✓ Docker environment stopped$(NC)"
+
+docker-logs: ## Show Docker logs (SERVICE=name for specific service)
+	@if [ -z "$(SERVICE)" ]; then \
+		docker compose -f $(COMPOSE_DIR)/docker-compose.yml logs -f; \
+	else \
+		docker compose -f $(COMPOSE_DIR)/docker-compose.yml logs -f $(SERVICE); \
+	fi
+
+docker-build: ## Build Docker images locally
+	@echo "$(BLUE)🔨 Building Docker images...$(NC)"
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml \
+	                -f $(COMPOSE_DIR)/docker-compose.dev.yml build
+	@echo "$(GREEN)✓ Docker images built$(NC)"
+
+docker-clean: ## Remove Docker containers and volumes
+	@echo "$(RED)⚠️  WARNING: This will remove all containers and volumes!$(NC)"
+	@read -p "Are you sure? (yes/no): " confirm && [ "$$confirm" = "yes" ] || (echo "Cancelled" && exit 1)
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml down -v
+	@echo "$(GREEN)✓ Docker cleanup complete$(NC)"
+
+docker-urls: ## Show Docker service URLs
 	@echo ""
-	@docker-compose -f $(COMPOSE_FILE) ps
+	@echo "$(CYAN)📍 Service URLs:$(NC)"
+	@echo "   Frontend:    $(GREEN)http://localhost:3100$(NC)"
+	@echo "   Gateway:     $(GREEN)http://localhost:3000$(NC)"
+	@echo "   Translator:  $(GREEN)http://localhost:8000$(NC)"
+	@echo "   MongoDB:     $(GREEN)mongodb://localhost:27017$(NC)"
+	@echo "   Redis:       $(GREEN)redis://localhost:6379$(NC)"
 	@echo ""
 
-pull: ## Télécharger les dernières images Docker
-	@echo "$(BLUE)📥 Téléchargement des dernières images...$(NC)"
-	@docker-compose -f $(COMPOSE_FILE) pull
-	@echo "$(GREEN)✓ Images mises à jour$(NC)"
+# =============================================================================
+# Production
+# =============================================================================
 
-clean: ## Supprimer tous les conteneurs et volumes
-	@echo "$(RED)⚠️  ATTENTION: Cette action va supprimer tous les conteneurs et volumes!$(NC)"
-	@read -p "Êtes-vous sûr ? (oui/non): " confirm && [ "$$confirm" = "oui" ] || (echo "Annulé" && exit 1)
-	@echo "$(YELLOW)🧹 Nettoyage en cours...$(NC)"
-	@docker-compose -f $(COMPOSE_FILE) down -v
-	@echo "$(GREEN)✓ Nettoyage terminé$(NC)"
+prod-up: ## Start production environment with Traefik
+	@echo "$(BLUE)🚀 Starting production environment...$(NC)"
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml \
+	                -f $(COMPOSE_DIR)/docker-compose.prod.yml up -d
+	@echo "$(GREEN)✓ Production environment started$(NC)"
 
-reset: ## Réinitialiser la base de données
-	@echo "$(YELLOW)⚠️  Réinitialisation de la base de données...$(NC)"
-	@read -p "Êtes-vous sûr ? (oui/non): " confirm && [ "$$confirm" = "oui" ] || (echo "Annulé" && exit 1)
-	@FORCE_DB_RESET=true docker-compose -f $(COMPOSE_FILE) restart gateway
-	@echo "$(GREEN)✓ Base de données réinitialisée$(NC)"
+prod-down: ## Stop production environment
+	@echo "$(YELLOW)⏹️  Stopping production environment...$(NC)"
+	@docker compose -f $(COMPOSE_DIR)/docker-compose.yml \
+	                -f $(COMPOSE_DIR)/docker-compose.prod.yml down
+	@echo "$(GREEN)✓ Production environment stopped$(NC)"
 
-init-replica: ## Initialiser le replica set MongoDB
-	@echo "$(BLUE)🔧 Initialisation du replica set MongoDB...$(NC)"
-	@./check-replica-set.sh
-	@echo "$(GREEN)✓ Replica set vérifié$(NC)"
-	@echo "$(GREEN)✓ Base de données réinitialisée$(NC)"
+# =============================================================================
+# Aliases
+# =============================================================================
 
-health: ## Vérifier la santé de tous les services
-	@echo "$(BLUE)🏥 Vérification de la santé des services...$(NC)"
-	@$(HEALTH_SCRIPT)
-
-test: health ## Alias pour health
-
-urls: ## Afficher les URLs d'accès
-	@echo "$(BLUE)📍 URLs d'accès:$(NC)"
-	@echo "   - Frontend:        $(GREEN)http://localhost:3100$(NC)"
-	@echo "   - Gateway API:     $(GREEN)http://localhost:3000$(NC)"
-	@echo "   - Translator API:  $(GREEN)http://localhost:8000$(NC)"
-	@echo "   - MongoDB UI:      $(GREEN)http://localhost:3001$(NC)"
-	@echo "   - Redis UI:        $(GREEN)http://localhost:7843$(NC)"
-	@echo ""
-	@echo "$(BLUE)🔐 Utilisateurs par défaut:$(NC)"
-	@echo "   - Admin:    admin@meeshy.local / admin123"
-	@echo "   - Meeshy:   meeshy@meeshy.local / meeshy123"
-	@echo "   - Atabeth:  atabeth@meeshy.local / atabeth123"
-	@echo ""
-
-dev: start health urls ## Démarrer et vérifier tous les services
-
-quick: ## Démarrage rapide (pull + start + health)
-	@$(MAKE) pull
-	@$(MAKE) start
-	@sleep 5
-	@$(MAKE) health
-
-build-gateway: ## Builder l'image Gateway localement
-	@echo "$(BLUE)🔨 Build de l'image Gateway...$(NC)"
-	@cd gateway && docker build -t isopen/meeshy-gateway:latest .
-	@echo "$(GREEN)✓ Image Gateway buildée$(NC)"
-
-build-translator: ## Builder l'image Translator localement
-	@echo "$(BLUE)🔨 Build de l'image Translator...$(NC)"
-	@cd translator && docker build -t isopen/meeshy-translator:latest .
-	@echo "$(GREEN)✓ Image Translator buildée$(NC)"
-
-build-frontend: ## Builder l'image Frontend localement
-	@echo "$(BLUE)🔨 Build de l'image Frontend...$(NC)"
-	@cd frontend && docker build -t isopen/meeshy-frontend:latest .
-	@echo "$(GREEN)✓ Image Frontend buildée$(NC)"
-
-build-all: build-gateway build-translator build-frontend ## Builder toutes les images localement
-	@echo "$(GREEN)✨ Toutes les images ont été buildées avec succès!$(NC)"
-
-ps: status ## Alias pour status
-
-up: start ## Alias pour start
-
-down: stop ## Alias pour stop
+ps: status ## Alias for status
+up: docker-up ## Alias for docker-up
+down: docker-down ## Alias for docker-down
 
 .DEFAULT_GOAL := help

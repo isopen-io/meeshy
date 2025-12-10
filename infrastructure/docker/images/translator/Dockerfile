@@ -1,6 +1,7 @@
 # =============================================================================
 # MEESHY TRANSLATOR - FastAPI ML Service
-# Build context: services/translator/ directory (shared/ copied during CI)
+# Build context: monorepo root
+# Dockerfile: infrastructure/docker/images/translator/Dockerfile
 # =============================================================================
 FROM python:3.12-slim
 
@@ -64,8 +65,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# Copy requirements
-COPY --chown=translator:translator requirements.txt ./
+# Copy requirements from monorepo
+COPY --chown=translator:translator services/translator/requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --upgrade pip --no-cache-dir \
@@ -75,9 +76,11 @@ RUN pip install --upgrade pip --no-cache-dir \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
 
-# Copy source code
-COPY --chown=translator:translator . ./
-COPY --chown=translator:translator shared/ ./shared/ 2>/dev/null || true
+# Copy translator source code
+COPY --chown=translator:translator services/translator/ ./
+
+# Copy shared package for Prisma schema
+COPY --chown=translator:translator packages/shared/prisma ./shared/prisma/
 
 # Generate Prisma client
 RUN if [ -f "/workspace/shared/prisma/schema.prisma" ]; then \
