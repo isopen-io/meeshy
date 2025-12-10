@@ -1,121 +1,172 @@
-# ===========================================
-# Meeshy Monorepo - .gitignore
-# ===========================================
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
-node_modules/
-.pnp
+# dependencies
+secrets
+**/*/secrets
+/node_modules
+/.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+backend/node_modules/
+# testing
+/coverage
 
-# Build outputs
-dist/
-build/
-out/
-.next/
-.turbo/
-*.tsbuildinfo
-
-# Generated files
-*.d.ts
-!src/**/*.d.ts
-*.js.map
-*.d.ts.map
-
-# Prisma
-**/prisma/migrations/**/migration_lock.toml
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-.venv/
-ENV/
-env/
-.pytest_cache/
-.coverage
-htmlcov/
-*.egg-info/
-
-# Secrets & Environment
-.env
-.env.*
-!.env.example
-secrets/
-*.pem
-*.key
-credentials.json
-
-# IDE & Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*.sublime-*
-.project
-.settings/
-
-# OS Files
+# next.js
+**/*/.next/
+/out/
+**/*/libs/
+**/*/dist/
+**/*/build/
+**/*/libs/* 
+**/*/prisma/prisma/*
+# production
+/build
+**/*/*.d.*
+**/*/build/
+**/*/dist/
+**/*/*.*.map
+**/*/coverage/
+**/*/logs/
+**/*/cache/
+**/*/.cache/
+**/*/.eslintcache
+**/*/.next/
+**/*/out/
+**/*/.vercel/ 
+# misc
 .DS_Store
-Thumbs.db
-*.bak
+*.pem
+*/**/.DS_Store
 
-# Logs
-logs/
-*.log
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # Cache
 .cache/
 .eslintcache
-.stylelintcache
-.parcel-cache/
 
-# Testing
-coverage/
-.nyc_output/
-
-# Vercel
-.vercel/
+# TensorFlow.js models (will be downloaded)
+*/**/models/
+*/**/venv 
+*/**/__pycache__
+*/**/test_venv
+*/**/test_env
+# Python cache
+**/*/*.pyc
+**/*/*.pyo
+**/*/*.pyd
+**/*/__pycache__/
+*.pyc
+*/**/node_modules
+*/**/dist
+*/**/build
+*/**/coverage
+*/**/logs
+*/**/cache
+# Logs
+*.log
+logs/
+venv/
+test_venv/
+test_env/
 
 # Temporary files
 *.tmp
 *.temp
-tmp/
-temp/
-
-# User uploads (should be in external storage)
-**/public/i/p/
-**/uploads/
-
-# Binary artifacts
-*.zip
-*.tar.gz
-*.rar
-*.7z
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Model files (large, downloaded at runtime)
-**/models/
-
-# Lock files (keep pnpm-lock.yaml at root only)
-apps/**/pnpm-lock.yaml
-services/**/pnpm-lock.yaml
-packages/**/pnpm-lock.yaml
-
+.pytest_cache/
+.coverage
+htmlcov/
+./gateway/node_modules
+./gateway/libs
+./gateway/dist
+./gateway/build
+./gateway/coverage
+./gateway/logs
+./gateway/cache
+./gateway/.cache
+./gateway/.eslintcache
+./gateway/libs
+./frontend/node_modules
+./frontend/libs
+./frontend/dist
+./frontend/build
+./frontend/coverage
+./frontend/logs
+./frontend/cache
+./frontend/.cache
+./frontend/.eslintcache
+./frontend/.next
+./frontend/out
+./frontend/.vercel
+./frontend/.vscode
+./frontend/.idea
+./frontend/.DS_Store
+./frontend/*.pem
+./frontend/npm-debug.log*
+./backend/node_modules
+./backend/libs
+./backend/dist
+./backend/build
+./backend/coverage
+./backend/logs
+./backend/cachegateway/libs/dev.db
+./shared/dist
+./shared/build
+./shared/.cache
+./shared/.eslintcache
+./shared/.next
+./shared/out
+./shared/prisma
+./shared/prisma/**/*
+./**/*/shared/prisma
+./**/*/shared/prisma/*
+./shared/*d.ts
+./shared/**/*.d.ts
+ */translator/.venv/
+ **/*/shared
+ **/*/shared/*
+ ./**/*/shared
+translator/.venv/
+logs/
+translator/scripts/jinu_the_wisdom_one_year_young_lion.zip
+translator/scripts/images
 # Version files (auto-generated)
-**/version.txt
+**/shared/version.txt
+frontend/shared/version.txt
+gateway/shared/version.txt
+translator/shared/version.txt
+post-*
+
+# Development runtime (dev.sh)
+.pids/
+.logs/
+
+# Local SSL certificates (mkcert)
+infrastructure/docker/compose/certs/
+
+# Python virtual environments
+.venv/
+services/translator/.venv/
