@@ -159,3 +159,14 @@ frontend/shared/version.txt
 gateway/shared/version.txt
 translator/shared/version.txt
 post-*
+
+# Development runtime (dev.sh)
+.pids/
+.logs/
+
+# Local SSL certificates (mkcert)
+infrastructure/docker/compose/certs/
+
+# Python virtual environments
+.venv/
+services/translator/.venv/
