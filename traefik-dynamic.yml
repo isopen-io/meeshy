@@ -1,0 +1,48 @@
+# =============================================================================
+# Traefik Dynamic Configuration for Local HTTPS (mkcert)
+# =============================================================================
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/cert.pem
+      keyFile: /etc/traefik/certs/key.pem
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/cert.pem
+        keyFile: /etc/traefik/certs/key.pem
+
+http:
+  middlewares:
+    # Security headers
+    secure-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+
+    # CORS for development
+    cors-dev:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+          - "PATCH"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlAllowOriginList:
+          - "https://localhost"
+          - "https://meeshy.local"
+          - "https://127.0.0.1"
+        accessControlMaxAge: 100
+        addVaryHeader: true
