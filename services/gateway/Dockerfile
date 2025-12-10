@@ -14,7 +14,7 @@ ARG PNPM_VERSION=9.15.0
 
 ENV NODE_ENV=${NODE_ENV} \
     PNPM_HOME="/pnpm" \
-    PATH="$PNPM_HOME:$PATH"
+    PATH="/pnpm:$PATH"
 
 # Runtime configuration
 ARG FASTIFY_PORT=3000
@@ -48,7 +48,9 @@ RUN echo 'packages:\n  - "."\n  - "shared"' > pnpm-workspace.yaml
 
 # Copy package files
 COPY --chown=gateway:nodejs package.json pnpm-lock.yaml* ./
-COPY --chown=gateway:nodejs shared/package.json ./shared/ 2>/dev/null || true
+# Note: shared/ directory is copied by CI before Docker build
+RUN mkdir -p ./shared
+COPY --chown=gateway:nodejs shared/package.json ./shared/
 
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile --prod=false \
