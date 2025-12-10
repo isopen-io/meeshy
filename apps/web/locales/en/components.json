@@ -1,0 +1,195 @@
+{
+  "components": {
+    "affiliate": {
+      "shareApp": "Share the app",
+      "createToken": "Create token",
+      "tokenName": "Token name",
+      "tokenNamePlaceholder": "Ex: Facebook campaign, Family invitation...",
+      "selectToken": "Select an affiliate token",
+      "shareMessage": "Share message",
+      "shareMessagePlaceholder": "Your invitation message...",
+      "affiliateLink": "Affiliate link",
+      "copyLink": "Copy link",
+      "copyMessage": "Copy message",
+      "share": "Share",
+      "statistics": "Statistics",
+      "uses": "uses",
+      "createdOn": "Created on",
+      "expiresOn": "Expires on",
+      "validUntil": "Valid until",
+      "unlimited": "Unlimited",
+      "expired": "Expired",
+      "status": {
+        "active": "Active",
+        "expired": "Expired",
+        "pending": "Pending"
+      },
+      "actions": {
+        "create": "Create",
+        "edit": "Edit",
+        "delete": "Delete",
+        "copy": "Copy"
+      },
+      "messages": {
+        "tokenCreated": "Token created successfully",
+        "tokenDeleted": "Token deleted successfully",
+        "linkCopied": "Link copied to clipboard",
+        "messageCopied": "Message copied to clipboard",
+        "enterTokenName": "Please enter a token name",
+        "defaultMessage": "Join me on Meeshy! A multilingual messaging platform where you can chat with people from around the world and learn languages while having fun. Click this link to sign up:",
+        "shareTitle": "Join me on Meeshy",
+        "modalTitle": "Share the app",
+        "modalDescription": "Create an affiliate link to invite your friends to join Meeshy"
+      }
+    },
+    "header": {
+      "shareLinkCopied": "Share link copied to clipboard",
+      "clearSession": "Clear session",
+      "clearSessionConfirm": "Are you sure you want to clear your session?",
+      "clearSessionDescription": "This action will remove all your session data and log you out.",
+      "share": "Share",
+      "login": "Login",
+      "register": "Register",
+      "signIn": "Sign in",
+      "signUp": "Sign up",
+      "profile": "Profile",
+      "settings": "Settings",
+      "logout": "Logout",
+      "anonymousSession": "Anonymous session",
+      "cancel": "Cancel",
+      "clearSessionButton": "Clear session",
+      "loginTitle": "Login",
+      "loginDescription": "Sign in to your Meeshy account",
+      "registerTitle": "Create account",
+      "registerDescription": "Join Meeshy and communicate without barriers"
+    },
+    "language": {
+      "title": "Languages",
+      "description": "Translation preferences",
+      "selectLanguage": "Select language",
+      "interfaceLanguage": "Interface language",
+      "systemLanguage": "System language",
+      "regionalLanguage": "Regional language",
+      "customLanguage": "Custom language",
+      "autoTranslate": "Auto translate",
+      "translateToSystem": "Translate to system language",
+      "translateToRegional": "Translate to regional language",
+      "useCustomDestination": "Use custom destination"
+    },
+    "layout": {
+      "header": {
+        "searchPlaceholder": "Search conversations, communities, contacts...",
+        "notifications": "Notifications",
+        "unreadCount": "{count} unread",
+        "userMenu": "User menu"
+      },
+      "navigation": {
+        "dashboard": "Dashboard",
+        "conversations": "Conversations",
+        "communities": "Communities",
+        "contacts": "Contacts",
+        "links": "Links",
+        "profile": "Profile",
+        "settings": "Settings",
+        "admin": "Administration",
+        "logout": "Logout"
+      },
+      "sidebar": {
+        "conversations": "Conversations",
+        "communities": "Communities"
+      }
+    },
+    "toasts": {
+      "success": {
+        "title": "Success",
+        "messageSent": "Message sent successfully",
+        "settingsSaved": "Settings saved successfully",
+        "profileUpdated": "Profile updated successfully",
+        "linkCreated": "Link created successfully",
+        "linkCopied": "Link copied to clipboard",
+        "messageCopied": "Message copied to clipboard",
+        "textCopied": "Text copied to clipboard"
+      },
+      "error": {
+        "title": "Error",
+        "generic": "An error occurred",
+        "network": "Network error",
+        "unauthorized": "Unauthorized access",
+        "forbidden": "Access forbidden",
+        "notFound": "Resource not found",
+        "validationError": "Validation error",
+        "messageSendFailed": "Failed to send message",
+        "settingsSaveFailed": "Failed to save settings",
+        "profileUpdateFailed": "Failed to update profile"
+      },
+      "warning": {
+        "title": "Warning",
+        "sessionExpiring": "Your session is about to expire",
+        "unsavedChanges": "You have unsaved changes"
+      },
+      "info": {
+        "title": "Information",
+        "loading": "Loading...",
+        "processing": "Processing...",
+        "connecting": "Connecting...",
+        "initializing": "Initializing..."
+      }
+    },
+    "bubbleStream": {
+      "title": "Message Stream",
+      "loading": "Loading messages...",
+      "noMessages": "No messages",
+      "loadMore": "Load more messages",
+      "typing": "Typing...",
+      "online": "Online",
+      "offline": "Offline",
+      "lastSeen": "Last seen {time}",
+      "messageActions": {
+        "copy": "Copy message",
+        "translate": "Translate",
+        "reply": "Reply",
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "translation": {
+        "showOriginal": "Show original",
+        "showTranslation": "Show translation",
+        "translating": "Translating...",
+        "translationFailed": "Translation failed",
+        "improveTranslationQuality": "Improve translation quality"
+      },
+      "notifications": {
+        "types": {
+          "message": "New message",
+          "mention": "You were mentioned",
+          "reaction": "Someone reacted to your message",
+          "system": "System notification",
+          "update": "Update available",
+          "translation": "Translation available"
+        },
+        "examples": {
+          "message": {
+            "title": "New message",
+            "message": "You have a new message from {sender}"
+          },
+          "mention": {
+            "title": "Mention",
+            "message": "You were mentioned in a conversation"
+          },
+          "reaction": {
+            "title": "Reaction",
+            "message": "Someone reacted to your message"
+          },
+          "system": {
+            "title": "System update",
+            "message": "A new version is available"
+          },
+          "translation": {
+            "title": "Translation available",
+            "message": "🇺🇸 Hello world\n🇬🇧 Translation available\n🌍 Multilingual message"
+          }
+        }
+      }
+    }
+  }
+}

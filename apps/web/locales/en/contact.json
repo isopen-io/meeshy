@@ -1,0 +1,64 @@
+{
+  "contact": {
+    "backHome": "Back to home",
+    "title": "Contact us",
+    "subtitle": "We are located in the heart of La Défense, Paris",
+    "address": {
+      "title": "Our Address",
+      "company": "Meeshy SAS",
+      "building": "9 - 11 Avenue de l'Arche",
+      "street": "Courbevoie 92400",
+      "city": "France"
+    },
+    "email": {
+      "label": "Email",
+      "value": "contact@meeshy.me"
+    },
+    "availability": {
+      "title": "Availability",
+      "description": "We are available 24/7 to support you"
+    },
+    "directions": {
+      "title": "How to reach us",
+      "train": {
+        "title": "By Train",
+        "rera": "RER A: \"La Défense - Grande Arche\" station",
+        "transilien": "Transilien L: \"La Défense\" station",
+        "duration": "From Paris: 10-15 minutes from Châtelet-Les Halles"
+      },
+      "metro": {
+        "title": "By Metro",
+        "line1": "Line 1: \"La Défense - Grande Arche\" station",
+        "duration": "From central Paris: 20-25 minutes"
+      },
+      "bus": {
+        "title": "By Bus",
+        "stop": "\"La Défense - Grande Arche\" stop",
+        "lines": "Lines 73, 141, 144, 161, 174, 178, 258, 262, 272, 275, 276, 278"
+      },
+      "lineU": {
+        "title": "By Transilien U",
+        "transilien": "Transilien U: \"La Défense\" station",
+        "duration": "From Paris: Direct connection"
+      },
+      "express": {
+        "title": "Express Bus",
+        "bus": "Express bus lines available",
+        "service": "Limited stop service during peak hours"
+      },
+      "car": {
+        "title": "By Car",
+        "highway": "Highway A14: \"La Défense\" exit",
+        "parking": "Parking: Several parking lots available in the area",
+        "rates": "Rates: €2-4/hour depending on parking"
+      }
+    },
+    "cta": {
+      "title": "Learn more about Meeshy",
+      "about": "About Us",
+      "partners": "Our Partners",
+      "learnMore": "Learn more",
+      "collaborate": "Collaborate with us"
+    }
+  }
+}

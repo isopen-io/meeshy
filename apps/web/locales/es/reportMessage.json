@@ -1,0 +1,54 @@
+{
+  "reportMessage": {
+    "reportMessage": "Reportar el mensaje",
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "report": "Reportar",
+    "reporting": "Enviando...",
+    "reportType": "Tipo de reporte",
+    "reportTypePlaceholder": "Seleccione un tipo de reporte...",
+    "reason": "Razón detallada",
+    "reasonPlaceholder": "Describa por qué está reportando este mensaje...",
+    "reasonMinLength": "(mínimo 10 caracteres)",
+    "characterCount": "caracteres",
+    "charactersRemaining": "Aún faltan {count} caracteres mínimos",
+    "requiredFields": "* Campos obligatorios",
+    "messagePreview": "Mensaje reportado:",
+    "confidentialNotice": "Reporte confidencial",
+    "confidentialDescription": "Su reporte será examinado por un moderador. El autor del mensaje no será informado de su identidad.",
+    "reportTypes": {
+      "spam": {
+        "label": "Spam",
+        "description": "Mensaje no solicitado o repetitivo"
+      },
+      "inappropriate": {
+        "label": "Contenido inapropiado",
+        "description": "Contenido ofensivo o fuera de lugar"
+      },
+      "harassment": {
+        "label": "Acoso",
+        "description": "Comportamiento acosador o intimidante"
+      },
+      "violence": {
+        "label": "Violencia",
+        "description": "Contenido violento o amenazante"
+      },
+      "hate_speech": {
+        "label": "Discurso de odio",
+        "description": "Lenguaje discriminatorio u odioso"
+      },
+      "fake_profile": {
+        "label": "Perfil falso",
+        "description": "Suplantación o identidad falsa"
+      },
+      "impersonation": {
+        "label": "Suplantación de identidad",
+        "description": "Pretender ser otra persona"
+      },
+      "other": {
+        "label": "Otro",
+        "description": "Otra razón"
+      }
+    }
+  }
+}

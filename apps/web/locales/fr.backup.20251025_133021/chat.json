@@ -1,0 +1,30 @@
+{
+  "chat": {
+    "title": "Discussion",
+    "anonymousChat": "Discussion anonyme",
+    "loading": "Chargement de la discussion...",
+    "connecting": "Connexion en cours...",
+    "connected": "Connecté",
+    "disconnected": "Déconnecté",
+    "reconnecting": "Reconnexion en cours...",
+    "sendMessage": "Envoyer le message",
+    "messagePlaceholder": "Tapez votre message...",
+    "noMessages": "Aucun message pour le moment",
+    "noMessagesDescription": "Commencez la conversation en envoyant un message",
+    "conversationNotFound": {
+      "title": "Conversation introuvable",
+      "description": "Cette conversation n'existe pas ou le lien n'est pas valide",
+      "backHome": "Retour à l'accueil",
+      "createNew": "Créer une nouvelle conversation"
+    },
+    "errors": {
+      "loadError": "Impossible de charger la conversation. Veuillez vérifier le lien et réessayer.",
+      "sendError": "Erreur lors de l'envoi du message",
+      "connectionError": "Erreur de connexion",
+      "invalidLink": "Lien de conversation invalide. Veuillez vérifier l'URL et réessayer.",
+      "unableToLoadConversation": "Impossible de charger les données de la conversation. Veuillez vérifier vos permissions ou essayer de vous connecter.",
+      "linkNoLongerActive": "Ce lien n'est plus actif. Veuillez demander un nouveau lien au propriétaire de la conversation.",
+      "linkExpired": "Ce lien a expiré. Veuillez demander un nouveau lien au propriétaire de la conversation."
+    }
+  }
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ringtone Generator</title>
+</head>
+<body>
+  <h1>Ringtone Generator</h1>
+  <p>This page generates a ringtone MP3 file using Web Audio API.</p>
+  <button id="generate">Generate Ringtone</button>
+  <button id="play">Play Ringtone</button>
+  <audio id="audio" controls></audio>
+
+  <script>
+    // Generate a pleasant ringtone sound
+    async function generateRingtone() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const sampleRate = audioContext.sampleRate;
+      const duration = 2; // 2 seconds
+      const channels = 1;
+      const frameCount = sampleRate * duration;
+
+      const audioBuffer = audioContext.createBuffer(channels, frameCount, sampleRate);
+      const channelData = audioBuffer.getChannelData(0);
+
+      // Generate a pleasant two-tone ringtone (like classic phone ring)
+      const freq1 = 523.25; // C5
+      const freq2 = 659.25; // E5
+
+      for (let i = 0; i < frameCount; i++) {
+        const t = i / sampleRate;
+        const cycleTime = t % 1.0;
+
+        // Alternate between two tones every 0.4 seconds
+        const freq = (cycleTime < 0.4) ? freq1 : freq2;
+
+        // Generate tone with envelope
+        let value = Math.sin(2 * Math.PI * freq * t);
+
+        // Apply envelope (fade in/out)
+        const envelope = Math.min(t * 4, (duration - t) * 4, 1.0);
+        value *= envelope * 0.3; // Volume at 30%
+
+        channelData[i] = value;
+      }
+
+      return audioBuffer;
+    }
+
+    // Convert AudioBuffer to WAV blob
+    function audioBufferToWav(buffer) {
+      const length = buffer.length * buffer.numberOfChannels * 2;
+      const arrayBuffer = new ArrayBuffer(44 + length);
+      const view = new DataView(arrayBuffer);
+      const channels = buffer.numberOfChannels;
+      const sampleRate = buffer.sampleRate;
+
+      // Write WAV header
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + length, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, channels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * channels * 2, true);
+      view.setUint16(32, channels * 2, true);
+      view.setUint16(34, 16, true);
+      writeString(view, 36, 'data');
+      view.setUint32(40, length, true);
+
+      // Write audio data
+      const offset = 44;
+      const channelData = buffer.getChannelData(0);
+      for (let i = 0; i < channelData.length; i++) {
+        const sample = Math.max(-1, Math.min(1, channelData[i]));
+        view.setInt16(offset + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      }
+
+      return new Blob([arrayBuffer], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    }
+
+    document.getElementById('generate').addEventListener('click', async () => {
+      const buffer = await generateRingtone();
+      const blob = audioBufferToWav(buffer);
+      const url = URL.createObjectURL(blob);
+
+      // Create download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ringtone.wav';
+      a.click();
+
+      // Set audio source for preview
+      document.getElementById('audio').src = url;
+
+      alert('Ringtone generated! File saved as ringtone.wav');
+    });
+
+    document.getElementById('play').addEventListener('click', async () => {
+      const buffer = await generateRingtone();
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.loop = true;
+      source.start();
+
+      setTimeout(() => source.stop(), 4000); // Play for 4 seconds
+    });
+  </script>
+</body>
+</html>

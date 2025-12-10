@@ -1,0 +1,131 @@
+{
+  "pages": {
+    "about": {
+      "title": "À propos de Meeshy",
+      "subtitle": "Nous croyons que les barrières linguistiques ne devraient jamais faire obstacle aux connexions significatives.",
+      "backHome": "Retour à l'accueil",
+      "mission": {
+        "title": "Notre Mission",
+        "description": "Connecter le monde, une traduction à la fois. Notre plateforme permet aux gens des quatre coins du monde de communiquer librement."
+      },
+      "values": {
+        "globalAccess": {
+          "title": "Accessibilité Mondiale",
+          "description": "Rendre la communication multilingue accessible à tous, partout dans le monde."
+        },
+        "innovation": {
+          "title": "Innovation",
+          "description": "Utiliser les dernières technologies d'IA pour des traductions précises et rapides."
+        },
+        "privacy": {
+          "title": "Respect de la Vie Privée",
+          "description": "Vos conversations restent privées et sécurisées."
+        }
+      },
+      "team": {
+        "title": "Notre Équipe",
+        "description": "Fait avec ❤️ par des développeurs qui croient que la communication ne devrait avoir aucune limite.",
+        "details": "Meeshy est développé par une équipe passionnée de développeurs, linguistes et designers."
+      },
+      "cta": {
+        "title": "Vous voulez en savoir plus ?",
+        "contact": "Contactez-nous"
+      }
+    },
+    "contact": {
+      "title": "Contactez-nous",
+      "subtitle": "Nous sommes là pour vous aider. N'hésitez pas à nous contacter.",
+      "address": {
+        "title": "Notre Adresse",
+        "company": "Meeshy Inc.",
+        "street": "12 Rue de la Paix",
+        "building": "Bâtiment A, 3ème étage",
+        "country": "France"
+      },
+      "info": {
+        "title": "Informations de Contact",
+        "email": {
+          "label": "Email",
+          "value": "contact@meeshy.me"
+        }
+      },
+      "availability": {
+        "title": "Disponibilité",
+        "description": "Du lundi au vendredi, 9h00 - 18h00"
+      },
+      "transport": {
+        "title": "Comment nous rejoindre",
+        "metro": {
+          "title": "Métro",
+          "line1": "Ligne 3 - Station Bourse",
+          "time": "5 min à pied"
+        },
+        "train": {
+          "title": "Train",
+          "rer": "RER A - Auber",
+          "transilien": "Transilien J/L",
+          "time": "10 min à pied"
+        },
+        "bus": {
+          "title": "Bus",
+          "lines": "Lignes 20, 29, 39, 48",
+          "stop": "Arrêt Bourse"
+        },
+        "car": {
+          "title": "Voiture",
+          "parking": "Parking Bourse",
+          "highway": "A1, sortie Porte de la Chapelle",
+          "rates": "4€/heure"
+        }
+      },
+      "cta": {
+        "collaborate": "Collaborer",
+        "learnMore": "En savoir plus"
+      }
+    },
+    "partners": {
+      "title": "Nos Partenaires",
+      "subtitle": "Rejoignez notre écosystème",
+      "backHome": "Retour à l'accueil",
+      "become": {
+        "title": "Devenir Partenaire",
+        "description": "Rejoignez notre programme de partenariat et développez votre activité",
+        "contact": "Contactez-nous"
+      },
+      "education": {
+        "title": "Solutions Éducation",
+        "description": "Facilitez l'apprentissage multilingue et la collaboration internationale",
+        "pricing": "Tarifs préférentiels pour l'éducation",
+        "features": {
+          "classrooms": "Salles de classe virtuelles multilingues",
+          "admin": "Gestion centralisée des comptes",
+          "learning": "Outils d'apprentissage intégrés",
+          "exchange": "Support pour les programmes d'échange",
+          "curriculum": "Intégration avec les plateformes LMS"
+        }
+      },
+      "enterprise": {
+        "title": "Entreprise",
+        "description": "Solutions sur mesure pour les grandes organisations",
+        "features": {
+          "sso": "Authentification SSO",
+          "customization": "Personnalisation complète",
+          "deployment": "Déploiement sur site",
+          "support": "Support prioritaire 24/7",
+          "analytics": "Analytics avancées"
+        },
+        "pricing": "Tarification personnalisée"
+      }
+    },
+    "notFound": {
+      "title": "Page non trouvée",
+      "description": "La page que vous recherchez n'existe pas ou a été déplacée.",
+      "backToDashboard": "Retour au tableau de bord",
+      "actions": {
+        "backHome": "Retour à l'accueil",
+        "backDashboard": "Tableau de bord",
+        "viewCommunities": "Voir les communautés"
+      }
+    }
+  }
+}

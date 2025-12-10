@@ -1,0 +1,47 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradientSignin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradientSignin)"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="150" cy="120" r="180" fill="white" opacity="0.08"/>
+  <circle cx="1050" cy="510" r="220" fill="white" opacity="0.08"/>
+  
+  <!-- User icon -->
+  <g transform="translate(480, 150)">
+    <!-- Circle background -->
+    <circle cx="120" cy="90" r="90" fill="white" opacity="0.95"/>
+    <!-- User silhouette -->
+    <circle cx="120" cy="75" r="25" fill="#2563eb"/>
+    <path d="M 80 120 Q 80 100 100 95 L 140 95 Q 160 100 160 120 L 160 130 L 80 130 Z" fill="#2563eb"/>
+    <!-- Plus sign for "new user" -->
+    <circle cx="180" cy="60" r="30" fill="#10b981"/>
+    <rect x="173" y="45" width="14" height="30" rx="2" fill="white"/>
+    <rect x="165" y="53" width="30" height="14" rx="2" fill="white"/>
+  </g>
+  
+  <!-- Title -->
+  <text x="600" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="68" font-weight="700" fill="white" text-anchor="middle">
+    Rejoignez Meeshy
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="400" fill="white" text-anchor="middle" opacity="0.9">
+    Créez votre compte gratuitement
+  </text>
+  
+  <!-- Features -->
+  <g opacity="0.85">
+    <text x="600" y="500" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="300" fill="white" text-anchor="middle">
+      ✓ Traduction automatique  •  ✓ 100+ langues  •  ✓ Temps réel
+    </text>
+  </g>
+</svg>

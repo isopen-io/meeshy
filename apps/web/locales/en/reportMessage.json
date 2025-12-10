@@ -1,0 +1,56 @@
+{
+  "reportMessage": {
+    "reportMessage": "Report this message",
+    "close": "Close",
+    "cancel": "Cancel",
+    "report": "Report",
+    "reporting": "Reporting...",
+    "reportType": "Report type",
+    "reportTypePlaceholder": "Select a report type...",
+    "reason": "Detailed reason",
+    "reasonPlaceholder": "Describe why you are reporting this message...",
+    "reasonMinLength": "(minimum 10 characters)",
+    "characterCount": "characters",
+    "charactersRemaining": "{count} more characters minimum",
+    "requiredFields": "* Required fields",
+    "messagePreview": "Reported message:",
+    "confidentialNotice": "Confidential report",
+    "confidentialDescription": "Your report will be reviewed by a moderator. The message author will not be informed of your identity.",
+    "reportTypes": {
+      "spam": {
+        "label": "Spam",
+        "description": "Unsolicited or repetitive message"
+      },
+      "inappropriate": {
+        "label": "Inappropriate content",
+        "description": "Offensive or inappropriate content"
+      },
+      "harassment": {
+        "label": "Harassment",
+        "description": "Harassing or intimidating behavior"
+      },
+      "violence": {
+        "label": "Violence or threat",
+        "description": "Violent or threatening content"
+      },
+      "hate_speech": {
+        "label": "Hate speech",
+        "description": "Discriminatory or hateful remarks"
+      },
+      "fake_profile": {
+        "label": "Fake profile",
+        "description": "Identity theft"
+      },
+      "impersonation": {
+        "label": "Impersonation",
+        "description": "Pretending to be someone else"
+      },
+      "other": {
+        "label": "Other",
+        "description": "Other reason"
+      }
+    },
+    "success": "Report sent successfully",
+    "error": "Error sending report"
+  }
+}

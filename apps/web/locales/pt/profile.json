@@ -1,0 +1,48 @@
+{
+  "profile": {
+    "title": "Perfil",
+    "userProfile": "Perfil do usuário",
+    "userStats": "Estatísticas",
+    "messagesSent": "Mensagens enviadas",
+    "messagesReceived": "Mensagens recebidas",
+    "conversations": "Minhas conversas",
+    "groups": "Meus grupos",
+    "memberSince": "Membro desde",
+    "sendMessage": "Enviar mensagem",
+    "addFriend": "Adicionar",
+    "cancelFriendRequest": "Cancelar solicitação",
+    "userNotFound": "Usuário não encontrado",
+    "userNotFoundDescription": "Este usuário não existe ou não está mais disponível",
+    "loading": "Carregando perfil...",
+    "online": "Online",
+    "offline": "Offline",
+    "edit": "Editar",
+    "editProfile": "Editar perfil",
+    "personalInfo": "Informações pessoais",
+    "languages": "Idiomas",
+    "quickActions": "Ações rápidas",
+    "systemLanguage": "Idioma do sistema",
+    "regionalLanguage": "Idioma regional",
+    "customDestinationLanguage": "Idioma de destino personalizado",
+    "autoTranslateEnabled": "Tradução automática ativada",
+    "autoTranslateDisabled": "Tradução automática desativada",
+    "dateUnavailable": "Data não disponível",
+    "phone": "Telefone",
+    "email": "E-mail",
+    "errors": {
+      "cannotMessageYourself": "Você não pode criar uma conversa com você mesmo",
+      "invalidUser": "Não foi possível criar a conversa: usuário inválido",
+      "conversationCreationFailed": "Não foi possível criar a conversa",
+      "sessionExpired": "Sessão expirada",
+      "sendFriendRequestFailed": "Erro ao enviar solicitação",
+      "cancelFriendRequestFailed": "Erro ao cancelar solicitação",
+      "notAuthenticated": "Não autenticado",
+      "loadProfileError": "Erro ao carregar perfil"
+    },
+    "success": {
+      "conversationCreated": "Conversa criada",
+      "friendRequestSent": "Solicitação de amizade enviada",
+      "friendRequestCancelled": "Solicitação de amizade cancelada"
+    }
+  }
+}

@@ -1,0 +1,192 @@
+/**
+ * Z-INDEX FIX - Solution définitive pour les problèmes de superposition
+ * Ce fichier garantit que tous les overlays (popovers, modals, dropdowns, tooltips) 
+ * s'affichent correctement par-dessus tout le contenu
+ */
+
+/* ============================================================
+   RADIX UI - Portails et Overlays
+   ============================================================ */
+
+/* Force tous les portails Radix au niveau maximum */
+[data-radix-portal] {
+  z-index: 9999 !important;
+}
+
+/* Popovers */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+  position: fixed !important;
+}
+
+[data-radix-popover-content] {
+  z-index: 9999 !important;
+  position: fixed !important;
+}
+
+/* Popovers de traduction - Z-index encore plus élevé */
+.translation-popover,
+.bubble-message [data-radix-popover-content] {
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+/* Dropdown Menus */
+[data-radix-dropdown-menu-content] {
+  z-index: 9998 !important;
+  position: fixed !important;
+}
+
+/* Tooltips */
+[data-radix-tooltip-content] {
+  z-index: 9997 !important;
+  position: fixed !important;
+}
+
+/* Modals */
+[data-radix-dialog-overlay] {
+  z-index: 9996 !important;
+  position: fixed !important;
+}
+
+[data-radix-dialog-content] {
+  z-index: 9997 !important;
+  position: fixed !important;
+}
+
+/* ============================================================
+   CORRECTIONS POUR OVERFLOW ET STACKING CONTEXT
+   ============================================================ */
+
+/* Les containers de messages doivent permettre l'overflow des popovers */
+.messages-container {
+  /* Ne PAS changer overflow-y-auto car nécessaire pour le scroll */
+  /* Les popovers utilisent des portails donc ne sont pas affectés */
+  isolation: auto !important;
+}
+
+/* S'assurer que les cards de messages n'interfèrent pas */
+.bubble-message {
+  position: relative;
+  z-index: 1;
+}
+
+.bubble-message:hover {
+  z-index: 2;
+}
+
+/* Quand un popover est ouvert, élever le message parent */
+.bubble-message:has([data-state="open"]) {
+  z-index: 10 !important;
+}
+
+/* ============================================================
+   HEADERS ET NAVIGATION
+   ============================================================ */
+
+/* Header fixe */
+header[class*="fixed"] {
+  z-index: 50 !important;
+}
+
+/* Sidebar navigation */
+nav[class*="fixed"],
+aside[class*="fixed"] {
+  z-index: 45 !important;
+}
+
+/* ============================================================
+   TOASTS ET NOTIFICATIONS
+   ============================================================ */
+
+/* Sonner Toasts */
+[data-sonner-toaster] {
+  z-index: 100 !important;
+}
+
+[data-sonner-toast] {
+  z-index: 101 !important;
+}
+
+/* ============================================================
+   ANIMATIONS ET TRANSITIONS
+   ============================================================ */
+
+/* S'assurer que les animations ne cassent pas le z-index */
+[data-radix-popover-content][data-state="open"] {
+  animation: fadeIn 0.2s ease-out;
+}
+
+[data-radix-popover-content][data-state="closed"] {
+  animation: fadeOut 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* ============================================================
+   DEBUG - Activer temporairement pour diagnostiquer
+   ============================================================ */
+
+/* Décommenter pour voir les frontières des overlays 
+[data-radix-popover-content] {
+  outline: 3px solid red !important;
+}
+
+[data-radix-popper-content-wrapper] {
+  outline: 3px solid blue !important;
+}
+
+.bubble-message {
+  outline: 1px solid green !important;
+}
+*/
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+@media (max-width: 768px) {
+  /* Sur mobile, les popovers doivent être absolument au-dessus */
+  [data-radix-popover-content] {
+    max-width: calc(100vw - 2rem) !important;
+  }
+  
+  /* Agrandir le popover de traduction sur mobile */
+  .translation-popover {
+    max-width: calc(100vw - 1rem) !important;
+  }
+}
+
+/* ============================================================
+   SPECIFICITY BOOST - Dernier recours
+   ============================================================ */
+
+/* Triple spécificité pour garantir que nos styles l'emportent */
+body [data-radix-popover-content][data-radix-popover-content][data-radix-popover-content] {
+  z-index: 99999 !important;
+}
+
+body [data-radix-popper-content-wrapper][data-radix-popper-content-wrapper][data-radix-popper-content-wrapper] {
+  z-index: 99999 !important;
+}
+

@@ -1,0 +1,50 @@
+/* Configuration Modal - Scroll Fix */
+.configModalContent {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  height: 100% !important;
+}
+
+.configModalMain {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+}
+
+.configModalContentArea {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: 100% !important;
+}
+
+.configModalSidebar {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: 100% !important;
+}
+
+/* Force scroll behavior */
+.configModalContentArea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.configModalContentArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.configModalContentArea::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+.configModalContentArea::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Ensure proper layout */
+.configModalHeader {
+  flex-shrink: 0 !important;
+}

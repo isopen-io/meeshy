@@ -1,0 +1,27 @@
+{
+  "anonymousChat": {
+    "title": "Chat Anonyme",
+    "anonymous": "Anonyme",
+    "user": "Utilisateur",
+    "unknownUser": "Utilisateur inconnu",
+    "connectedAs": "Connecté en tant que",
+    "messagePlaceholder": "Écrivez votre message...",
+    "sendMessage": "Envoyer",
+    "loading": "Chargement...",
+    "loadingMessages": "Chargement des messages...",
+    "loadMore": "Charger plus",
+    "sessionNotActive": "La session n'est pas active",
+    "reloadPage": "Recharger la page",
+    "status": {
+      "connected": "Connecté",
+      "connecting": "Connexion...",
+      "disconnected": "Déconnecté",
+      "reconnecting": "Reconnexion..."
+    },
+    "error": {
+      "connectionFailed": "Échec de la connexion",
+      "sessionExpired": "Session expirée",
+      "messageNotSent": "Message non envoyé"
+    }
+  }
+}

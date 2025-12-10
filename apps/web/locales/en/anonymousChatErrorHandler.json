@@ -1,0 +1,52 @@
+{
+  "anonymousChatErrorHandler": {
+    "forbidden": {
+      "title": "Access Forbidden",
+      "description": "You don't have permission to access this conversation.",
+      "actions": {
+        "backHome": "Back to home"
+      }
+    },
+    "unauthorized": {
+      "title": "Unauthorized Access",
+      "description": "You need to be authorized to access this conversation.",
+      "actions": {
+        "rejoin": "Rejoin conversation",
+        "login": "Login",
+        "backHome": "Back to home"
+      }
+    },
+    "notFound": {
+      "title": "Conversation Not Found",
+      "description": "This conversation doesn't exist or has been deleted.",
+      "actions": {
+        "backHome": "Back to home"
+      }
+    },
+    "invalidIdentifier": {
+      "title": "Invalid Link",
+      "description": "The conversation link is invalid or has expired.",
+      "actions": {
+        "backHome": "Back to home"
+      }
+    },
+    "generic": {
+      "title": "An Error Occurred",
+      "description": "Something went wrong. Please try again.",
+      "actions": {
+        "retry": "Retry",
+        "backHome": "Back to home"
+      }
+    },
+    "maxRetriesReached": "Maximum retry attempts reached",
+    "retryFailed": "Retry failed",
+    "debug": {
+      "title": "Debug info:",
+      "type": "Type",
+      "identifier": "Identifier",
+      "authenticated": "Authenticated",
+      "anonymous": "Anonymous",
+      "attempts": "Attempts"
+    }
+  }
+}

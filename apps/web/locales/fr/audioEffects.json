@@ -1,0 +1,308 @@
+{
+  "audioEffects": {
+    "title": "Effets Audio",
+    "subtitle": "Transformez votre voix",
+    "noEffectsActive": "Aucun effet actif",
+    "selectEffect": "Sélectionner un effet",
+    "selectEffectPrompt": "Cliquez sur un effet pour le configurer",
+    "toggleEffect": "Activer/Désactiver",
+    "configure": "Configurer",
+    "close": "Fermer",
+    "apply": "Appliquer",
+    "reset": "Réinitialiser",
+    "resetAll": "Tout Réinitialiser",
+    "disableAll": "Désactiver tous les effets",
+
+    "recorder": {
+      "initializing": "Initialisation...",
+      "audioEffects": "Effets audio",
+      "maxDuration": "Max {duration}min",
+      "startRecording": "Démarrer l'enregistrement",
+      "stopRecording": "Arrêter l'enregistrement",
+      "errors": {
+        "httpsRequired": "L'enregistrement audio nécessite HTTPS.",
+        "browserNotSupported": "Votre navigateur ne supporte pas l'enregistrement audio.",
+        "effectsNotAvailable": "Effets audio non disponibles - utilisation du micro direct",
+        "microphoneAccessDenied": "Accès au microphone refusé.",
+        "noMicrophoneFound": "Aucun microphone détecté.",
+        "microphoneError": "Erreur microphone.",
+        "cannotAccessMicrophone": "Impossible d'accéder au microphone."
+      }
+    },
+
+    "voiceCoder": {
+      "title": "Perfect Voice",
+      "description": "Correction automatique de la justesse de votre voix pour chanter juste",
+      "quickConfig": {
+        "label": "Configuration rapide",
+        "tooltip": "Choisissez un style prédéfini adapté à votre usage, ou personnalisez vos propres réglages"
+      },
+      "retuneSpeed": {
+        "label": "Rapidité",
+        "tooltip": "Vitesse de correction de la justesse. Lent (0-30%) = très naturel et doux. Moyen (30-70%) = équilibré. Rapide (70-100%) = effet robotique"
+      },
+      "strength": {
+        "label": "Force",
+        "tooltip": "Intensité de l'auto-tune. Plus élevé = voix plus parfaite mais moins naturelle. Recommandé : 30-50% pour un effet subtil"
+      },
+      "naturalVibrato": {
+        "label": "Expression",
+        "tooltip": "Préserve les variations et le vibrato naturel de votre voix. Plus élevé = plus d'expression et d'émotion conservées"
+      },
+      "pitch": {
+        "label": "Hauteur",
+        "tooltip": "Transpose votre voix vers l'aigu (+) ou le grave (-). Exemple : +3 = 3 demi-tons plus aigu"
+      },
+      "scale": {
+        "label": "Gamme",
+        "chromatic": "Toutes les notes",
+        "major": "Majeure (joyeux)",
+        "minor": "Mineure (triste)",
+        "pentatonic": "Pentatonique"
+      },
+      "key": {
+        "label": "Tonalité"
+      },
+      "harmonization": {
+        "label": "Harmonies vocales",
+        "tooltip": "Ajoute des voix d'accompagnement harmoniques à votre voix principale pour un effet chorale"
+      }
+    },
+
+    "babyVoice": {
+      "title": "Voix d'Enfant",
+      "pitch": {
+        "label": "Hauteur de voix",
+        "tooltip": "Plus élevé = voix plus aiguë et enfantine. Recommandé : 8-12 pour un effet bébé"
+      },
+      "formant": {
+        "label": "Timbre",
+        "tooltip": "Change la couleur et le timbre de la voix pour simuler des cordes vocales plus courtes"
+      },
+      "breathiness": {
+        "label": "Souffle",
+        "tooltip": "Ajoute un effet de souffle doux et aérien caractéristique d'une voix d'enfant"
+      }
+    },
+
+    "demonVoice": {
+      "title": "Voix de Démon",
+      "pitch": {
+        "label": "Hauteur de voix",
+        "tooltip": "Plus bas = voix plus grave et effrayante. -10 à -12 pour un effet démoniaque intense"
+      },
+      "distortion": {
+        "label": "Distorsion",
+        "tooltip": "Ajoute une texture agressive et rugueuse à la voix"
+      },
+      "reverb": {
+        "label": "Écho",
+        "tooltip": "Effet de réverbération comme dans une cathédrale sombre et profonde"
+      }
+    },
+
+    "backSound": {
+      "title": "Ambiance de Fond",
+      "uploadLabel": "Charger un fichier audio",
+      "uploadDescription": "Les sons prédéfinis ne sont pas encore disponibles. Chargez votre propre fichier MP3/WAV",
+      "uploadButton": "Charger un audio",
+      "volume": {
+        "label": "Volume",
+        "tooltip": "Ajuste le volume de la musique de fond mixée avec votre voix"
+      },
+      "loopMode": {
+        "label": "Mode de lecture",
+        "tooltip": "Choisissez comment répéter l'audio : un nombre de fois spécifique ou pendant une durée en minutes",
+        "nTimes": "Nombre de fois",
+        "nMinutes": "Durée en minutes"
+      },
+      "loopValue": {
+        "labelTimes": "Répétitions",
+        "labelMinutes": "Minutes"
+      }
+    },
+
+    "effects": {
+      "voice-coder": {
+        "name": "Voix Parfaite",
+        "shortName": "Parfaite",
+        "description": "Correction automatique de la justesse (auto-tune)",
+        "icon": "🎵",
+        "params": {
+          "pitch": {
+            "label": "Hauteur",
+            "unit": "demi-tons",
+            "description": "Transpose la voix vers le haut ou le bas"
+          },
+          "harmonization": {
+            "label": "Harmonisation",
+            "description": "Ajoute des harmonies à votre voix"
+          },
+          "strength": {
+            "label": "Intensité",
+            "unit": "%",
+            "description": "Force de la correction automatique"
+          },
+          "retuneSpeed": {
+            "label": "Vitesse de correction",
+            "unit": "%",
+            "description": "Rapidité de la correction (0=naturel, 100=robotique)"
+          },
+          "scale": {
+            "label": "Gamme musicale",
+            "description": "Notes autorisées pour la correction",
+            "options": {
+              "chromatic": "Chromatique (toutes les notes)",
+              "major": "Majeure",
+              "minor": "Mineure",
+              "pentatonic": "Pentatonique"
+            }
+          },
+          "key": {
+            "label": "Tonalité",
+            "description": "Tonalité de référence"
+          },
+          "naturalVibrato": {
+            "label": "Vibrato naturel",
+            "unit": "%",
+            "description": "Préservation du vibrato naturel"
+          }
+        },
+        "presets": {
+          "title": "Préréglages",
+          "voix-naturelle": {
+            "name": "Voix Naturelle",
+            "description": "Correction très subtile pour un son naturel"
+          },
+          "pop-star": {
+            "name": "Pop Star",
+            "description": "Effet moderne pour voix pop parfaite"
+          },
+          "effet-robot": {
+            "name": "Effet Robot",
+            "description": "Correction instantanée style T-Pain"
+          },
+          "correction-subtile": {
+            "name": "Correction Subtile",
+            "description": "Amélioration discrète et agréable"
+          },
+          "custom": "Personnalisé"
+        }
+      },
+
+      "baby-voice": {
+        "name": "Voix Enfantine",
+        "shortName": "Enfantine",
+        "description": "Transforme votre voix en voix d'enfant",
+        "icon": "👶",
+        "params": {
+          "pitch": {
+            "label": "Hauteur",
+            "unit": "demi-tons",
+            "description": "Hauteur de la voix enfantine"
+          },
+          "formant": {
+            "label": "Timbre",
+            "unit": "×",
+            "description": "Modification du timbre vocal"
+          },
+          "breathiness": {
+            "label": "Souffle",
+            "unit": "%",
+            "description": "Ajout de souffle à la voix"
+          }
+        }
+      },
+
+      "demon-voice": {
+        "name": "Voix Démoniaque",
+        "shortName": "Démoniaque",
+        "description": "Voix grave et menaçante avec distorsion",
+        "icon": "😈",
+        "params": {
+          "pitch": {
+            "label": "Hauteur",
+            "unit": "demi-tons",
+            "description": "Hauteur de la voix (négatif = plus grave)"
+          },
+          "distortion": {
+            "label": "Distorsion",
+            "unit": "%",
+            "description": "Saturation et grain de la voix"
+          },
+          "reverb": {
+            "label": "Réverbération",
+            "unit": "%",
+            "description": "Écho de cathédrale"
+          }
+        }
+      },
+
+      "back-sound": {
+        "name": "Fond Sonore",
+        "shortName": "Fond",
+        "description": "Ajoute une musique ou ambiance de fond",
+        "icon": "🎼",
+        "params": {
+          "soundFile": {
+            "label": "Fichier audio",
+            "description": "Choisissez un fichier audio",
+            "placeholder": "Aucun fichier sélectionné"
+          },
+          "volume": {
+            "label": "Volume",
+            "unit": "%",
+            "description": "Volume du fond sonore"
+          },
+          "loopMode": {
+            "label": "Mode de boucle",
+            "description": "Comment répéter le son",
+            "options": {
+              "N_TIMES": "Nombre de fois",
+              "N_MINUTES": "Durée en minutes"
+            }
+          },
+          "loopValue": {
+            "label": "Valeur",
+            "description": "Nombre de répétitions ou durée"
+          }
+        }
+      }
+    },
+
+    "presets": {
+      "custom": "Personnalisé",
+      "customDescription": "Vos propres réglages"
+    },
+
+    "timeline": {
+      "title": "Timeline des Effets",
+      "duration": "Durée",
+      "effectsUsed": "Effets utilisés",
+      "noTimeline": "Aucune timeline d'effets disponible",
+      "activatedAt": "Activé à",
+      "deactivatedAt": "Désactivé à",
+      "updatedAt": "Modifié à",
+      "viewDetails": "Voir les détails",
+      "hide": "Masquer",
+      "stats": {
+        "title": "Statistiques",
+        "totalActiveTime": "Temps total avec effets",
+        "activations": "Activations",
+        "parameterChanges": "Modifications"
+      }
+    },
+
+    "badge": {
+      "hasEffects": "Effets audio",
+      "clickToView": "Cliquer pour voir la timeline"
+    },
+
+    "status": {
+      "on": "Activé",
+      "off": "Désactivé",
+      "active": "Actif",
+      "inactive": "Inactif"
+    }
+  }
+}

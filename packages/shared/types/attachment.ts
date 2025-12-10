@@ -1,0 +1,566 @@
+/**
+ * Types pour le système d'attachements de messages
+ * Partagés entre frontend et backend
+ */
+
+/**
+ * Types d'attachements supportés
+ */
+export type AttachmentType = 'image' | 'document' | 'audio' | 'video' | 'text' | 'code';
+
+/**
+ * Statuts de progression d'upload
+ */
+export type UploadStatus = 'pending' | 'uploading' | 'complete' | 'error';
+
+/**
+ * Types MIME pour les images
+ */
+export type ImageMimeType = 'image/jpeg' | 'image/jpg' | 'image/png' | 'image/gif' | 'image/webp';
+
+/**
+ * Types MIME pour les documents
+ */
+export type DocumentMimeType = 
+  | 'application/pdf'
+  | 'text/plain'
+  | 'application/msword'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  | 'application/vnd.ms-powerpoint'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  | 'application/zip'
+  | 'application/x-zip-compressed';
+
+/**
+ * Types MIME pour les fichiers audio
+ */
+export type AudioMimeType = 'audio/mpeg' | 'audio/mp3' | 'audio/wav' | 'audio/ogg' | 'audio/webm' | 'audio/mp4' | 'audio/m4a' | 'audio/x-m4a' | 'audio/aac';
+
+/**
+ * Types MIME pour les vidéos
+ */
+export type VideoMimeType = 'video/mp4' | 'video/webm' | 'video/ogg' | 'video/quicktime';
+
+/**
+ * Types MIME pour les fichiers texte
+ */
+export type TextMimeType = 'text/plain';
+
+/**
+ * Types MIME pour les fichiers de code
+ * Liste exhaustive pour supporter tous les langages et variations de MIME types
+ */
+export type CodeMimeType =
+  | 'text/markdown'
+  | 'text/x-markdown'
+  // Shell scripts
+  | 'application/x-sh'
+  | 'application/x-shellscript'
+  | 'text/x-sh'
+  | 'text/x-shellscript'
+  | 'text/x-script.sh'
+  // JavaScript/TypeScript
+  | 'text/javascript'
+  | 'application/javascript'
+  | 'application/x-javascript'
+  | 'text/typescript'
+  | 'application/typescript'
+  | 'text/x-typescript'
+  // Python
+  | 'text/x-python'
+  | 'text/x-python-script'
+  | 'application/x-python-code'
+  | 'text/x-script.python'
+  // HTML/CSS/XML
+  | 'text/html'
+  | 'application/xhtml+xml'
+  | 'text/css'
+  | 'text/xml'
+  | 'application/xml'
+  // C/C++
+  | 'text/x-c'
+  | 'text/x-c++'
+  | 'text/x-csrc'
+  | 'text/x-chdr'
+  // Java
+  | 'text/x-java'
+  | 'text/x-java-source'
+  // PHP
+  | 'text/x-php'
+  | 'application/x-php'
+  // Ruby
+  | 'text/x-ruby'
+  | 'application/x-ruby'
+  // Go
+  | 'text/x-go'
+  // Rust
+  | 'text/x-rust'
+  // SQL
+  | 'text/x-sql'
+  | 'application/sql'
+  // JSON/YAML
+  | 'application/json'
+  | 'text/x-json'
+  | 'application/x-yaml'
+  | 'text/yaml'
+  | 'text/x-yaml';
+
+/**
+ * Union de tous les types MIME acceptés
+ */
+export type AcceptedMimeType = ImageMimeType | DocumentMimeType | AudioMimeType | VideoMimeType | TextMimeType | CodeMimeType;
+
+/**
+ * Attachement de message
+ */
+export interface Attachment {
+  readonly id: string;
+  readonly messageId: string;
+  readonly fileName: string;
+  readonly originalName: string;
+  readonly mimeType: string;
+  readonly fileSize: number;
+  readonly fileUrl: string;
+  readonly thumbnailUrl?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly duration?: number;
+  readonly bitrate?: number;
+  readonly sampleRate?: number;
+  readonly codec?: string;
+  readonly channels?: number;
+  readonly fps?: number;
+  readonly videoCodec?: string;
+  readonly pageCount?: number;
+  readonly lineCount?: number;
+  readonly uploadedBy: string;
+  readonly isAnonymous: boolean;
+  readonly createdAt: string;
+  /**
+   * Metadata JSON contenant des données additionnelles (audioEffectsTimeline, etc.)
+   */
+  readonly metadata?: {
+    audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+    [key: string]: any;
+  };
+  /**
+   * Timeline des effets audio appliqués pendant l'enregistrement
+   * Uniquement pour les fichiers audio enregistrés avec des effets
+   * DEPRECATED: Utiliser metadata.audioEffectsTimeline à la place
+   */
+  readonly audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+}
+
+/**
+ * Progression d'upload
+ */
+export interface UploadProgress {
+  readonly attachmentId: string;
+  readonly progress: number; // 0-100
+  readonly status: UploadStatus;
+  readonly error?: string;
+}
+
+/**
+ * Métadonnées d'un attachement (mutable pour construction)
+ */
+export interface AttachmentMetadata {
+  width?: number;
+  height?: number;
+  duration?: number;
+  bitrate?: number;
+  sampleRate?: number;
+  codec?: string;
+  channels?: number;
+  fps?: number;
+  videoCodec?: string;
+  pageCount?: number;
+  lineCount?: number;
+  thumbnailGenerated?: boolean;
+  /**
+   * Timeline des effets audio appliqués pendant l'enregistrement
+   * Uniquement pour les fichiers audio enregistrés avec des effets
+   */
+  audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+}
+
+/**
+ * Réponse d'upload d'un attachement
+ */
+export interface UploadedAttachmentResponse {
+  readonly id: string;
+  readonly messageId: string;
+  readonly fileName: string;
+  readonly originalName: string;
+  readonly mimeType: string;
+  readonly fileSize: number;
+  readonly fileUrl: string;
+  readonly thumbnailUrl?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly duration?: number;
+  readonly bitrate?: number;
+  readonly sampleRate?: number;
+  readonly codec?: string;
+  readonly channels?: number;
+  readonly uploadedBy: string;
+  readonly isAnonymous: boolean;
+  readonly createdAt: string;
+  /**
+   * Metadata JSON contenant des données additionnelles (audioEffectsTimeline, etc.)
+   */
+  readonly metadata?: {
+    audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+    [key: string]: any;
+  };
+  /**
+   * Timeline des effets audio appliqués pendant l'enregistrement
+   * Uniquement pour les fichiers audio enregistrés avec des effets
+   * DEPRECATED: Utiliser metadata.audioEffectsTimeline à la place
+   */
+  readonly audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+}
+
+/**
+ * Erreur d'upload pour un fichier spécifique
+ */
+export interface UploadError {
+  readonly filename: string;
+  readonly error: string;
+}
+
+/**
+ * Réponse d'upload de plusieurs attachements
+ */
+export interface UploadMultipleResponse {
+  readonly success: boolean;
+  readonly attachments: readonly UploadedAttachmentResponse[];
+  readonly errors?: readonly UploadError[];
+}
+
+/**
+ * Limites de taille d'upload par type de fichier (en octets)
+ */
+export const UPLOAD_LIMITS = {
+  IMAGE: 2147483648, // 2GB
+  DOCUMENT: 2147483648, // 2GB
+  AUDIO: 2147483648, // 2GB
+  VIDEO: 2147483648, // 2GB
+  TEXT: 2147483648, // 2GB
+  CODE: 2147483648, // 2GB
+} as const;
+
+/**
+ * Type des limites d'upload
+ */
+export type UploadLimits = typeof UPLOAD_LIMITS;
+
+/**
+ * Types MIME acceptés par catégorie
+ */
+export const ACCEPTED_MIME_TYPES = {
+  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const,
+  DOCUMENT: [
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip',
+    'application/x-zip-compressed',
+  ] as const,
+  AUDIO: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac'] as const,
+  VIDEO: ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'] as const,
+  TEXT: ['text/plain'] as const,
+  CODE: [
+    'text/markdown',
+    'text/x-markdown',
+    // Shell scripts
+    'application/x-sh',
+    'application/x-shellscript',
+    'text/x-sh',
+    'text/x-shellscript',
+    'text/x-script.sh',
+    // JavaScript/TypeScript
+    'text/javascript',
+    'application/javascript',
+    'application/x-javascript',
+    'text/typescript',
+    'application/typescript',
+    'text/x-typescript',
+    // Python
+    'text/x-python',
+    'text/x-python-script',
+    'application/x-python-code',
+    'text/x-script.python',
+    // HTML/CSS/XML
+    'text/html',
+    'application/xhtml+xml',
+    'text/css',
+    'text/xml',
+    'application/xml',
+    // C/C++
+    'text/x-c',
+    'text/x-c++',
+    'text/x-csrc',
+    'text/x-chdr',
+    // Java
+    'text/x-java',
+    'text/x-java-source',
+    // PHP
+    'text/x-php',
+    'application/x-php',
+    // Ruby
+    'text/x-ruby',
+    'application/x-ruby',
+    // Go
+    'text/x-go',
+    // Rust
+    'text/x-rust',
+    // SQL
+    'text/x-sql',
+    'application/sql',
+    // JSON/YAML
+    'application/json',
+    'text/x-json',
+    'application/x-yaml',
+    'text/yaml',
+    'text/x-yaml',
+  ] as const,
+} as const;
+
+/**
+ * Type des types MIME acceptés
+ */
+export type AcceptedMimeTypes = typeof ACCEPTED_MIME_TYPES;
+
+/**
+ * Type guard pour vérifier si un MIME type est une image
+ */
+export function isImageMimeType(mimeType: string): mimeType is ImageMimeType {
+  return (ACCEPTED_MIME_TYPES.IMAGE as unknown as string[]).includes(mimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est audio
+ */
+export function isAudioMimeType(mimeType: string): mimeType is AudioMimeType {
+  // Nettoyer le MIME type en enlevant les paramètres (ex: audio/webm;codecs=opus -> audio/webm)
+  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
+  return (ACCEPTED_MIME_TYPES.AUDIO as unknown as string[]).includes(cleanMimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est vidéo
+ */
+export function isVideoMimeType(mimeType: string): mimeType is VideoMimeType {
+  // Nettoyer le MIME type en enlevant les paramètres (ex: video/webm;codecs=vp8 -> video/webm)
+  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
+  return (ACCEPTED_MIME_TYPES.VIDEO as unknown as string[]).includes(cleanMimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est texte
+ */
+export function isTextMimeType(mimeType: string): mimeType is TextMimeType {
+  return (ACCEPTED_MIME_TYPES.TEXT as unknown as string[]).includes(mimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est document
+ */
+export function isDocumentMimeType(mimeType: string): mimeType is DocumentMimeType {
+  return (ACCEPTED_MIME_TYPES.DOCUMENT as unknown as string[]).includes(mimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est code
+ */
+export function isCodeMimeType(mimeType: string): mimeType is CodeMimeType {
+  return (ACCEPTED_MIME_TYPES.CODE as unknown as string[]).includes(mimeType);
+}
+
+/**
+ * Type guard pour vérifier si un MIME type est accepté
+ */
+export function isAcceptedMimeType(mimeType: string): mimeType is AcceptedMimeType {
+  return isImageMimeType(mimeType) || 
+         isAudioMimeType(mimeType) || 
+         isVideoMimeType(mimeType) || 
+         isTextMimeType(mimeType) || 
+         isDocumentMimeType(mimeType) ||
+         isCodeMimeType(mimeType);
+}
+
+/**
+ * Extensions de fichiers considérées comme du code
+ * Liste complète pour supporter tous les langages courants
+ */
+const CODE_EXTENSIONS = [
+  // Scripts shell
+  '.sh', '.bash', '.zsh', '.fish', '.ksh',
+  // Web
+  '.html', '.htm', '.css', '.scss', '.sass', '.less',
+  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+  // Langages compilés
+  '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.hxx',
+  '.java', '.class', '.kt', '.kts',
+  '.cs', '.vb',
+  '.go', '.rs', '.swift',
+  // Langages dynamiques
+  '.py', '.pyw', '.pyc', '.pyo',
+  '.rb', '.erb',
+  '.php', '.phtml',
+  '.pl', '.pm',
+  '.lua',
+  // Fonctionnel
+  '.hs', '.lhs',
+  '.ml', '.mli',
+  '.fs', '.fsi', '.fsx',
+  '.clj', '.cljs', '.cljc',
+  '.scala', '.sc',
+  // Query languages
+  '.sql', '.mysql', '.pgsql',
+  '.graphql', '.gql',
+  // Markup & Data
+  '.xml', '.xsl', '.xslt',
+  '.json', '.jsonc', '.json5',
+  '.yaml', '.yml',
+  '.toml',
+  '.ini', '.cfg', '.conf',
+  // Documentation
+  '.md', '.markdown', '.mdown', '.mkd',
+  '.rst',
+  '.tex',
+  // Autres
+  '.r', '.R',
+  '.m', '.mm',
+  '.dart',
+  '.vim',
+  '.el', '.lisp',
+  '.asm', '.s',
+  '.dockerfile', '.docker',
+  '.makefile', '.mk',
+  '.gradle',
+  '.cmake',
+] as const;
+
+/**
+ * Extensions de fichiers considérées comme du texte
+ */
+const TEXT_EXTENSIONS = [
+  '.txt', '.text',
+  '.log',
+  '.csv', '.tsv',
+  '.rtf',
+] as const;
+
+/**
+ * Détermine le type d'attachement basé sur le MIME type et optionnellement le nom de fichier
+ * @param mimeType - Type MIME du fichier
+ * @param filename - Nom du fichier (optionnel) pour détecter le type par extension
+ * @returns Type d'attachement
+ */
+export function getAttachmentType(mimeType: string, filename?: string): AttachmentType {
+  // 1. D'abord vérifier le MIME type (plus fiable)
+  if (isImageMimeType(mimeType)) {
+    return 'image';
+  }
+  if (isAudioMimeType(mimeType)) {
+    return 'audio';
+  }
+  if (isVideoMimeType(mimeType)) {
+    return 'video';
+  }
+  if (isTextMimeType(mimeType)) {
+    return 'text';
+  }
+  if (isCodeMimeType(mimeType)) {
+    return 'code';
+  }
+
+  // 2. Si un nom de fichier est fourni, vérifier l'extension
+  if (filename) {
+    const lowerFilename = filename.toLowerCase();
+
+    // Vérifier les extensions de code
+    for (const ext of CODE_EXTENSIONS) {
+      if (lowerFilename.endsWith(ext)) {
+        return 'code';
+      }
+    }
+
+    // Vérifier les extensions de texte
+    for (const ext of TEXT_EXTENSIONS) {
+      if (lowerFilename.endsWith(ext)) {
+        return 'text';
+      }
+    }
+
+    // Cas spéciaux sans extension ou avec extensions particulières
+    const filenameBase = lowerFilename.split('/').pop() || '';
+    const specialCodeFiles = [
+      'dockerfile', 'makefile', 'rakefile', 'gemfile', 'vagrantfile',
+      '.gitignore', '.dockerignore', '.env', '.env.local', '.env.example',
+      '.eslintrc', '.prettierrc', '.babelrc', 'tsconfig.json', 'package.json',
+      '.editorconfig', '.npmrc', '.yarnrc',
+    ];
+
+    if (specialCodeFiles.some(special => filenameBase === special || filenameBase.endsWith(special))) {
+      return 'code';
+    }
+  }
+
+  // 3. Par défaut, traiter comme document
+  return 'document';
+}
+
+/**
+ * Obtient la limite de taille pour un type d'attachement
+ */
+export function getSizeLimit(type: AttachmentType): number {
+  switch (type) {
+    case 'image':
+      return UPLOAD_LIMITS.IMAGE;
+    case 'audio':
+      return UPLOAD_LIMITS.AUDIO;
+    case 'video':
+      return UPLOAD_LIMITS.VIDEO;
+    case 'text':
+      return UPLOAD_LIMITS.TEXT;
+    case 'code':
+      return UPLOAD_LIMITS.CODE;
+    case 'document':
+      return UPLOAD_LIMITS.DOCUMENT;
+    default: {
+      // Exhaustive check - assure que tous les cas sont couverts
+      const _exhaustiveCheck: never = type;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      void _exhaustiveCheck;
+      return UPLOAD_LIMITS.DOCUMENT;
+    }
+  }
+}
+
+/**
+ * Unités de taille de fichier
+ */
+const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+
+/**
+ * Type pour les unités de taille
+ */
+export type FileSizeUnit = typeof FILE_SIZE_UNITS[number];
+
+/**
+ * Formate une taille de fichier pour l'affichage
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const sizeIndex = Math.min(i, FILE_SIZE_UNITS.length - 1);
+  return `${parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(2))} ${FILE_SIZE_UNITS[sizeIndex]}`;
+}
+

@@ -1,0 +1,14 @@
+🎉 New Feature Available!
+
+You can now send images and documents directly in your Meeshy conversations! 📸📄
+
+✨ Features:
+• Support for images (JPG, PNG, GIF, WebP)
+• Support for documents (PDF, DOC, TXT, etc.)
+• Real-time image preview
+• Interactive image gallery
+• Secure file download
+
+To send a file, simply click on the attachment icon in the message box and select your files!
+
+Enjoy this new way to communicate! 🚀

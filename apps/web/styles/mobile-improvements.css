@@ -1,0 +1,524 @@
+/* Améliorations mobiles pour Meeshy */
+
+  /* Suppression du défilement sur mobile */
+@media (max-width: 768px) {
+  /* Supprimer le défilement horizontal et vertical */
+  body {
+    overflow-x: hidden !important;
+    /* Maintenir la couleur de fond de base */
+  }  html {
+    overflow-x: hidden !important;
+  }
+  
+  /* Conteneur principal sans défilement */
+  .main-container {
+    overflow-x: hidden !important;
+  }
+}
+
+/* Réduction des tailles de polices sur mobile */
+@media (max-width: 768px) {
+  /* Titres et headers */
+  h1 {
+    font-size: 1.5rem !important; /* Au lieu de 2rem+ */
+  }
+  
+  h2 {
+    font-size: 1.25rem !important; /* Au lieu de 1.5rem+ */
+  }
+  
+  h3 {
+    font-size: 1.125rem !important; /* Au lieu de 1.25rem+ */
+  }
+  
+  /* Titres de conversations */
+  .conversation-title {
+    font-size: 0.875rem !important;
+    line-height: 1.125rem !important;
+  }
+  
+  /* Messages et contenu */
+  .bubble-message .text-base {
+    font-size: 0.875rem !important; /* 14px au lieu de 16px */
+  }
+  
+  .bubble-message .text-sm {
+    font-size: 0.75rem !important; /* 12px au lieu de 14px */
+  }
+  
+  .bubble-message .text-xs {
+    font-size: 0.6875rem !important; /* 11px au lieu de 12px */
+  }
+  
+  /* Navigation et boutons */
+  .navigation-text {
+    font-size: 0.875rem !important;
+  }
+  
+  /* Liste des conversations */
+  .conversation-list-item h3 {
+    font-size: 0.875rem !important;
+  }
+  
+  .conversation-list-item p {
+    font-size: 0.75rem !important;
+  }
+  
+  /* Participants et métadonnées */
+  .participant-name {
+    font-size: 0.75rem !important;
+  }
+  
+  .timestamp {
+    font-size: 0.6875rem !important;
+  }
+  
+  /* Champs de saisie */
+  input, textarea {
+    font-size: 0.875rem !important;
+  }
+  
+  /* Composition de messages */
+  .message-composer textarea {
+    font-size: 0.875rem !important;
+  }
+  
+  /* Tooltips et petits textes */
+  .tooltip-content {
+    font-size: 0.75rem !important;
+  }
+  
+  /* Réduction de l'espacement global sur mobile */
+  .mobile-compact {
+    padding: 0.75rem !important;
+  }
+  
+  .mobile-compact-small {
+    padding: 0.5rem !important;
+  }
+  
+  /* Headers de conversations avec polices réduites */
+  .conversation-header h2 {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+  }
+  
+  .conversation-header .text-sm {
+    font-size: 0.75rem !important;
+  }
+  
+  /* Réduction des avatars sur mobile */
+  .mobile-avatar {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
+  
+  .mobile-avatar-large {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+  
+  /* Sidebar et détails de conversation */
+  .conversation-details .text-lg {
+    font-size: 1rem !important;
+  }
+  
+  .conversation-details .text-base {
+    font-size: 0.875rem !important;
+  }
+  
+  /* Messages de statut et typing */
+  .typing-indicator {
+    font-size: 0.75rem !important;
+  }
+  
+  .status-text {
+    font-size: 0.6875rem !important;
+  }
+}
+
+/* Masquer les toasts sur mobile */
+@media (max-width: 768px) {
+  /* Masquer complètement le système de toasts sur mobile */
+  .sonner-toaster {
+    display: none !important;
+  }
+  
+  /* Masquer les toasts de notifications */
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  
+  /* Masquer le système de notifications toast */
+  .toast-container {
+    display: none !important;
+  }
+  
+  /* Masquer les toasts React Hot Toast si utilisés */
+  [data-hot-toast] {
+    display: none !important;
+  }
+  
+  /* Classes spécifiques aux toasts de Meeshy */
+  .notification-toast,
+  .message-toast,
+  .connection-toast {
+    display: none !important;
+  }
+  
+  /* Masquer les toasts de traduction */
+  .translation-toast {
+    display: none !important;
+  }
+  
+  /* S'assurer que les overlays de toasts sont masqués */
+  .toast-overlay,
+  .notification-overlay {
+    display: none !important;
+  }
+}
+
+/* Styles spécifiques pour les conversations directes */
+@media (max-width: 768px) {
+  /* Titre de conversation direct optimisé */
+  .direct-conversation-title {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    max-width: calc(100vw - 10rem) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Troncature des titres de conversation selon la règle 14 caractères en mobile */
+  .conversation-title-truncated {
+    max-width: 14ch !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+    display: block !important;
+  }
+  
+}
+
+/* Troncature des titres de conversation pour desktop/tablet (32 caractères) */
+.conversation-title-truncated-desktop {
+  max-width: 28ch !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: left !important;
+  display: block !important;
+}
+
+@media (max-width: 768px) {
+  /* Masquer le header de la page quand une conversation est ouverte */
+  .conversation-open-mobile header {
+    display: none !important;
+  }
+  
+  /* Page de listing de conversations pleine largeur */
+  .conversation-listing-mobile {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 30 !important;
+    overflow-x: hidden !important;
+    border-radius: 0 !important;
+    transform: translateX(0) !important;
+  }
+  
+  /* Centrage de la zone du titre dans la liste */
+  .conversation-listing-mobile .flex-shrink-0 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    text-align: center !important;
+    width: 100% !important;
+  }
+  
+  .conversation-listing-mobile .flex.items-center.justify-between {
+    justify-content: center !important;
+    text-align: center !important;
+    width: 100% !important;
+  }
+  
+  /* Alignement du contenu de la liste */
+  .conversation-list-mobile .flex-1 {
+    width: 100% !important;
+    padding: 0 1rem !important;
+  }
+  
+  .conversation-list-mobile .space-y-2 {
+    width: 100% !important;
+  }
+  
+  /* Header de conversation compact - simplifié */
+  .conversation-header-mobile {
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid hsl(var(--border)) !important;
+    background: white !important;
+    /* Pas de position fixed, laisse le flux normal pour éviter les conflits */
+  }
+  
+  /* Centrage du contenu du header de conversation */
+  .conversation-header-mobile .flex.items-center.gap-3 {
+    width: 100% !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+  
+  .conversation-header-mobile .flex-1 {
+    text-align: center !important;
+    width: 100% !important;
+  }
+  
+  /* Simplification du layout mobile - conversation */
+  @media (max-width: 768px) {
+    /* Zone des messages simplifiée */
+    .messages-container {
+      padding: 0.5rem !important; /* Réduction de 3/4 de l'espace */
+      padding-bottom: 5rem !important; /* Espace pour la zone de saisie fixe */
+      background: white !important;
+      min-height: calc(100vh - 4rem) !important;
+    }
+    
+    /* Zone de saisie mobile optimisée */
+    .fixed.bottom-0 {
+      padding: 0.75rem !important;
+      background: white !important;
+      border-top: 2px solid #e5e7eb !important;
+      box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+      z-index: 50 !important;
+    }
+  }
+  
+  /* Bouton fixe pour créer une nouvelle conversation */
+  .conversation-list-mobile .absolute.bottom-4 {
+    position: fixed !important;
+    bottom: 1rem !important;
+    left: 1rem !important;
+    right: 1rem !important;
+    z-index: 60 !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+  }
+  
+  /* Assurer que le bouton est visible au-dessus du contenu */
+  .conversation-list-mobile .absolute.bottom-4 button {
+    backdrop-filter: blur(8px) !important;
+    background: hsl(var(--primary)) !important;
+    border: 1px solid hsl(var(--primary)) !important;
+  }
+  
+  /* Onglets de contacts empilés sur mobile */
+  .contacts-tabs-mobile {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+  
+  .contacts-tabs-mobile [role="tablist"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    width: 100% !important;
+  }
+  
+  .contacts-tabs-mobile [role="tab"] {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    padding: 0.75rem !important;
+    text-align: left !important;
+  }
+  
+  /* Layout mobile simplifié - suppression des règles conflictuelles */
+  
+  /* Liste de conversations pleine largeur et hauteur */
+  .conversation-list-mobile {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: calc(100vh - 4rem) !important;
+    position: fixed !important;
+    top: 4rem !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 40 !important;
+    overflow-x: hidden !important;
+    border-radius: 0 !important;
+    transform: translateX(0) !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Réduction de l'espacement dans les bubbles de messages - 3/4 en moins */
+  @media (max-width: 768px) {
+    .bubble-message {
+      margin: 0.125rem 0 !important; /* Réduction de 3/4 (de 0.5rem à 0.125rem) */
+      padding: 0.375rem 0.5rem !important; /* Réduction de 3/4 (de 1.5rem 2rem à 0.375rem 0.5rem) */
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+    
+    /* Espacement entre les messages réduit */
+    .space-y-4 > * + * {
+      margin-top: 0.25rem !important; /* Réduction de 3/4 (de 1rem à 0.25rem) */
+    }
+  }
+
+  
+  /* Réduction des tailles de titres de 40% sur mobile */
+  h1 {
+    font-size: 1.5rem !important; /* 24px * 0.6 = 14.4px ≈ 1.5rem */
+  }
+  
+  h2 {
+    font-size: 1.25rem !important; /* 20px * 0.6 = 12px ≈ 1.25rem */
+  }
+  
+  h3 {
+    font-size: 1rem !important; /* 16px * 0.6 = 9.6px ≈ 1rem */
+  }
+  
+  h4 {
+    font-size: 0.875rem !important; /* 14px * 0.6 = 8.4px ≈ 0.875rem */
+  }
+  
+  h5 {
+    font-size: 0.75rem !important; /* 12px * 0.6 = 7.2px ≈ 0.75rem */
+  }
+  
+  h6 {
+    font-size: 0.6875rem !important; /* 11px * 0.6 = 6.6px ≈ 0.6875rem */
+  }
+  
+  /* Réduction des classes de taille de texte */
+  .text-4xl {
+    font-size: 1.875rem !important; /* 36px * 0.6 = 21.6px ≈ 1.875rem */
+  }
+  
+  .text-3xl {
+    font-size: 1.5rem !important; /* 30px * 0.6 = 18px ≈ 1.5rem */
+  }
+  
+  .text-2xl {
+    font-size: 1.25rem !important; /* 24px * 0.6 = 14.4px ≈ 1.25rem */
+  }
+  
+  .text-xl {
+    font-size: 1rem !important; /* 20px * 0.6 = 12px ≈ 1rem */
+  }
+  
+  .text-lg {
+    font-size: 0.875rem !important; /* 18px * 0.6 = 10.8px ≈ 0.875rem */
+  }
+  
+  .text-base {
+    font-size: 0.75rem !important; /* 16px * 0.6 = 9.6px ≈ 0.75rem */
+  }
+  
+  .text-sm {
+    font-size: 0.6875rem !important; /* 14px * 0.6 = 8.4px ≈ 0.6875rem */
+  }
+  
+  .text-xs {
+    font-size: 0.625rem !important; /* 12px * 0.6 = 7.2px ≈ 0.625rem */
+  }
+  
+  /* Indicateurs de langue plus compacts */
+  .language-indicator-mobile {
+    font-size: 0.625rem !important;
+    padding: 0.125rem 0.25rem !important;
+  }
+}
+
+/* Classes utilitaires pour le responsive */
+.hide-mobile {
+  @media (max-width: 768px) {
+    display: none !important;
+  }
+}
+
+.show-mobile {
+  @media (min-width: 769px) {
+    display: none !important;
+  }
+}
+
+/* Améliorations de responsivité pour les modales */
+@media (max-width: 768px) {
+  /* Modales - Ajustements pour mobile */
+  [data-radix-dialog-content] {
+    margin: 0.5rem !important;
+    max-height: calc(100vh - 1rem) !important;
+    width: calc(100vw - 1rem) !important;
+  }
+  
+  /* Contenu des modales - Padding réduit sur mobile */
+  [data-radix-dialog-content] .p-6 {
+    padding: 1rem !important;
+  }
+  
+  /* Headers des modales - Taille de police réduite */
+  [data-radix-dialog-content] h2 {
+    font-size: 1.125rem !important;
+    line-height: 1.5rem !important;
+  }
+  
+  /* Boutons dans les modales - Taille adaptée */
+  [data-radix-dialog-content] button {
+    min-height: 2.5rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  /* Inputs dans les modales - Taille adaptée */
+  [data-radix-dialog-content] input,
+  [data-radix-dialog-content] textarea,
+  [data-radix-dialog-content] select {
+    min-height: 2.5rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  /* Grilles dans les modales - Passage en colonne unique */
+  [data-radix-dialog-content] .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  [data-radix-dialog-content] .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Espacement réduit dans les modales */
+  [data-radix-dialog-content] .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+  
+  [data-radix-dialog-content] .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+}
+
+.mobile-text-xs {
+  @media (max-width: 768px) {
+    font-size: 0.6875rem !important;
+  }
+}
+
+.mobile-text-sm {
+  @media (max-width: 768px) {
+    font-size: 0.75rem !important;
+  }
+}
+
+.mobile-text-base {
+  @media (max-width: 768px) {
+    font-size: 0.875rem !important;
+  }
+}

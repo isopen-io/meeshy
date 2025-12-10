@@ -1,0 +1,72 @@
+# =============================================================================
+# REUSABLE WORKFLOW: Common Setup
+# =============================================================================
+# Provides reusable setup steps for Node.js, pnpm, and Python
+# =============================================================================
+
+name: Setup
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '22'
+      pnpm-version:
+        description: 'pnpm version to use'
+        required: false
+        type: string
+        default: '9'
+      python-version:
+        description: 'Python version to use (empty to skip Python setup)'
+        required: false
+        type: string
+        default: ''
+      install-dependencies:
+        description: 'Whether to install dependencies'
+        required: false
+        type: boolean
+        default: true
+      working-directory:
+        description: 'Working directory for install'
+        required: false
+        type: string
+        default: '.'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'pnpm'
+
+      - name: Setup Python
+        if: inputs.python-version != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: 'pip'
+          cache-dependency-path: services/translator/requirements.txt
+
+      - name: Install Node.js dependencies
+        if: inputs.install-dependencies
+        run: pnpm install --no-frozen-lockfile
+        working-directory: ${{ inputs.working-directory }}
+
+      - name: Install Python dependencies
+        if: inputs.python-version != '' && inputs.install-dependencies
+        run: pip install -r requirements.txt
+        working-directory: services/translator

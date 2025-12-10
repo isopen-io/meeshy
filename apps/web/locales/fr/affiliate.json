@@ -1,0 +1,56 @@
+{
+  "affiliate": {
+    "copy": "Copier",
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié !",
+    "errorCopying": "Erreur lors de la copie",
+    "share": "Partager",
+    "shareApp": "Partager l'application",
+    "shareLink": "Partager le lien",
+    "shareTitle": "Partager Meeshy",
+    "shareMessage": "Rejoignez-moi sur Meeshy !",
+    "shareMessagePlaceholder": "Message personnalisé (optionnel)",
+    "errorSharing": "Erreur lors du partage",
+    "newToken": "Nouveau lien d'affiliation",
+    "createNewToken": "Créer un nouveau lien d'affiliation",
+    "tokenName": "Nom du lien d'affiliation",
+    "tokenNamePlaceholder": "Ex: Campagne d'été 2025",
+    "enterTokenName": "Entrez un nom pour votre lien d'affiliation",
+    "tokenCreated": "Lien d'affiliation créé avec succès !",
+    "errorCreatingToken": "Erreur lors de la création du lien d'affiliation",
+    "existingTokens": "Liens d'affiliation existants",
+    "selectToken": "Sélectionner un lien d'affiliation",
+    "errorLoadingTokens": "Erreur lors du chargement des liens d'affiliation",
+    "uses": "utilisations",
+    "modalTitle": "Partager Meeshy",
+    "modalDescription": "Partagez Meeshy avec vos amis et collègues",
+    "shareVia": {
+      "title": "Partager via",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram",
+      "twitter": "Twitter",
+      "facebook": "Facebook",
+      "email": "Email",
+      "sms": "SMS"
+    },
+    "actions": {
+      "create": "Créer",
+      "creating": "Création...",
+      "cancel": "Annuler",
+      "close": "Fermer"
+    },
+    "tokenStatus": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "expired": "Expiré",
+      "limitReached": "Limite atteinte"
+    },
+    "tokenDetails": {
+      "created": "Créé le",
+      "expires": "Expire le",
+      "currentUses": "Utilisations actuelles",
+      "maxUses": "Utilisations max",
+      "unlimited": "Illimité"
+    }
+  }
+}

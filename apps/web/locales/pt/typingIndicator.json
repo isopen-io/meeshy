@@ -1,0 +1,16 @@
+{
+  "typingIndicator": {
+    "typing": "Digitando...",
+    "isTyping": "está digitando",
+    "areTyping": "estão digitando",
+    "single": "{name} está digitando...",
+    "double": "{name1} e {name2} estão digitando...",
+    "multiple": "{name} e {count} outras pessoas estão digitando...",
+    "typingIndicator": {
+      "typing": "Digitando...",
+      "isTyping": "está digitando",
+      "areTyping": "estão digitando",
+      "multipleTyping": "pessoas estão digitando"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+# Dossier de build TypeScript
+dist/
+
+# Fichiers générés par TypeScript dans les sources
+types/**/*.js
+types/**/*.d.ts
+types/**/*.js.map
+types/**/*.d.ts.map
+
+# Client Prisma généré
+client/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.DS_Store
+

@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-py"
+  interface = "asyncio"
+  recursive_type_depth = 5
+  
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+/// Utilisateur enregistré de la plateforme
+model User {
+  id                          String                   @id @default(auto()) @map("_id") @db.ObjectId
+  username                    String                   @unique
+  firstName                   String
+  lastName                    String
+  bio                         String                   @default("")
+  email                       String                   @unique
+  phoneNumber                 String?
+  password                    String
+  displayName                 String?
+  avatar                      String?
+  isOnline                    Boolean                  @default(false)
+  lastSeen                    DateTime                 @default(now())
+  lastActiveAt                DateTime                 @default(now())
+  systemLanguage              String                   @default("en")
+  regionalLanguage            String                   @default("fr")
+  customDestinationLanguage   String?
+  autoTranslateEnabled        Boolean                  @default(true)
+  translateToSystemLanguage   Boolean                  @default(true)
+  translateToRegionalLanguage Boolean                  @default(false)
+  useCustomDestination        Boolean                  @default(false)
+  /// USER, ADMIN, MODO, AUDIT, ANALYST, BIGBOSS
+  role                        String                   @default("USER")
+  isActive                    Boolean                  @default(true)
+  deactivatedAt               DateTime?
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+  
+  createdCommunities          Community[]              @relation("CommunityCreator")
+  communityMemberships        CommunityMember[]
+  conversations               ConversationMember[]
+  conversationPreferences     ConversationPreference[]
+  createdShareLinks           ConversationShareLink[]  @relation("ShareLinkCreator")
+  receivedFriendRequests      FriendRequest[]          @relation("FriendRequestReceiver")
+  sentFriendRequests          FriendRequest[]          @relation("FriendRequestSender")
+  messageStatus               MessageStatus[]
+  sentMessages                Message[]                @relation("MessageSender")
+  reactions                   Reaction[]               @relation("UserReactions")
+  notifications               Notification[]
+  typingIndicators            TypingIndicator[]
+  preferences                 UserPreference[]
+  stats                       UserStats?
+  createdAffiliateTokens      AffiliateToken[]         @relation("AffiliateTokenCreator")
+  affiliateRelations          AffiliateRelation[]      @relation("AffiliateUser")
+  referredRelations           AffiliateRelation[]      @relation("ReferredUser")
+  createdTrackingLinks        TrackingLink[]           @relation("TrackingLinkCreator")
+  trackingLinkClicks          TrackingLinkClick[]      @relation("TrackingLinkClickUser")
+}
+
+/// Conversation entre utilisateurs (direct, group, public, global)
+model Conversation {
+  id                    String                   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Identifiant lisible par l'homme (ex: "mee_meeshy", "general", "mee_support")
+  identifier            String                   @unique
+  /// direct, group, public, global
+  type                  String
+  title                 String?
+  description           String?
+  image                 String?
+  avatar                String?
+  communityId           String?                  @db.ObjectId
+  isActive              Boolean                  @default(true)
+  isArchived            Boolean                  @default(false)
+  lastMessageAt         DateTime                 @default(now())
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  
+  anonymousParticipants AnonymousParticipant[]
+  members               ConversationMember[]
+  preferences           ConversationPreference[]
+  shareLinks            ConversationShareLink[]
+  community             Community?               @relation(fields: [communityId], references: [id])
+  messages              Message[]
+  typingIndicators      TypingIndicator[]
+}
+
+/// Appartenance d'un utilisateur à une conversation
+model ConversationMember {
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId   String       @db.ObjectId
+  userId           String       @db.ObjectId
+  /// admin, moderator, member
+  role             String       @default("member")
+  canSendMessage   Boolean      @default(true)
+  canSendFiles     Boolean      @default(true)
+  canSendImages    Boolean      @default(true)
+  canSendVideos    Boolean      @default(true)
+  canSendAudios    Boolean      @default(true)
+  canSendLocations Boolean      @default(true)
+  canSendLinks     Boolean      @default(true)
+  joinedAt         DateTime     @default(now())
+  leftAt           DateTime?
+  isActive         Boolean      @default(true)
+  
+  user             User         @relation(fields: [userId], references: [id])
+  conversation     Conversation @relation(fields: [conversationId], references: [id])
+}
+
+/// Lien de partage pour accès anonyme à une conversation
+model ConversationShareLink {
+  id                     String                 @id @default(auto()) @map("_id") @db.ObjectId
+  linkId                 String                 @unique
+  /// Identifiant lisible par l'homme (ex: "mshy_meeshy-public", "mshy_support-link")
+  identifier             String                 @unique
+  conversationId         String                 @db.ObjectId
+  createdBy              String                 @db.ObjectId
+  name                   String?
+  description            String?
+  maxUses                Int?
+  currentUses            Int                    @default(0)
+  maxConcurrentUsers     Int?
+  currentConcurrentUsers Int                    @default(0)
+  maxUniqueSessions      Int?
+  currentUniqueSessions  Int                    @default(0)
+  expiresAt              DateTime?
+  isActive               Boolean                @default(true)
+  allowAnonymousMessages Boolean                @default(true)
+  allowAnonymousFiles    Boolean                @default(false)
+  allowAnonymousImages   Boolean                @default(true)
+  allowViewHistory       Boolean                @default(true)
+  requireNickname        Boolean                @default(true)
+  requireEmail           Boolean                @default(false)
+  allowedCountries       String[]               @default([])
+  allowedLanguages       String[]               @default([])
+  allowedIpRanges        String[]               @default([])
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  
+  anonymousParticipants  AnonymousParticipant[] @relation("ShareLinkParticipants")
+  creator                User                   @relation("ShareLinkCreator", fields: [createdBy], references: [id])
+  conversation           Conversation           @relation(fields: [conversationId], references: [id])
+}
+
+/// Participant anonyme via lien de partage
+model AnonymousParticipant {
+  id              String                @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String                @db.ObjectId
+  shareLinkId     String                @db.ObjectId
+  firstName       String
+  lastName        String
+  username        String
+  email           String?
+  sessionToken    String                @unique
+  ipAddress       String?
+  country         String?
+  language        String                @default("fr")
+  deviceFingerprint String?
+  isActive        Boolean               @default(true)
+  isOnline        Boolean               @default(false)
+  lastActiveAt    DateTime              @default(now())
+  canSendMessages Boolean               @default(true)
+  canSendFiles    Boolean               @default(false)
+  canSendImages   Boolean               @default(true)
+  joinedAt        DateTime              @default(now())
+  lastSeenAt      DateTime              @default(now())
+  leftAt          DateTime?
+  
+  shareLink       ConversationShareLink @relation("ShareLinkParticipants", fields: [shareLinkId], references: [id])
+  conversation    Conversation          @relation(fields: [conversationId], references: [id])
+  sentMessages    Message[]             @relation("AnonymousMessageSender")
+  reactions       Reaction[]            @relation("AnonymousReactions")
+  trackingLinkClicks TrackingLinkClick[] @relation("TrackingLinkClickAnonymous")
+}
+
+/// Message dans une conversation
+model Message {
+  id                String                @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId    String                @db.ObjectId
+  senderId          String?               @db.ObjectId
+  anonymousSenderId String?               @db.ObjectId
+  content           String
+  originalLanguage  String                @default("fr")
+  /// text, image, file, audio, video, location, system
+  messageType       String                @default("text")
+  isEdited          Boolean               @default(false)
+  editedAt          DateTime?
+  isDeleted         Boolean               @default(false)
+  deletedAt         DateTime?
+  replyToId         String?               @db.ObjectId
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  
+  status            MessageStatus[]       @relation("MessageStatusMessage")
+  statusResponses   MessageStatus[]       @relation("MessageStatusResponse")
+  translations      MessageTranslation[]
+  attachments       MessageAttachment[]
+  reactions         Reaction[]            @relation("MessageReactions")
+  replyTo           Message?              @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies           Message[]             @relation("MessageReplies")
+  anonymousSender   AnonymousParticipant? @relation("AnonymousMessageSender", fields: [anonymousSenderId], references: [id])
+  sender            User?                 @relation("MessageSender", fields: [senderId], references: [id])
+  conversation      Conversation          @relation(fields: [conversationId], references: [id])
+}
+
+/// Traduction d'un message
+model MessageTranslation {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId         String   @db.ObjectId
+  sourceLanguage    String
+  targetLanguage    String
+  translatedContent String
+  translationModel  String   // "basic", "medium", "premium"
+  cacheKey          String   @unique
+  confidenceScore   Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  message           Message  @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  // Contrainte d'unicité: une seule traduction par message et langue cible
+  // Permet de mettre à jour la traduction existante vers un niveau supérieur
+  @@unique([messageId, targetLanguage], name: "messageId_targetLanguage")
+  @@index([messageId])
+  @@index([targetLanguage])
+  @@index([translationModel])
+}
+
+/// Attachement de fichier pour un message
+model MessageAttachment {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId       String   @db.ObjectId
+  fileName        String   // Nom de fichier généré (unique)
+  originalName    String   // Nom original du fichier
+  mimeType        String   // Type MIME (image/jpeg, application/pdf, etc.)
+  fileSize        Int      // Taille en bytes
+  filePath        String   // Chemin relatif: attachments/YYYY/mm/userId/filename
+  fileUrl         String   // URL complète pour accès
+  
+  // Métadonnées spécifiques aux images
+  width           Int?
+  height          Int?
+  thumbnailPath   String?  // Miniature générée pour images
+  thumbnailUrl    String?
+  
+  // Métadonnées spécifiques audio/vidéo
+  duration        Int?     // Durée en secondes
+  
+  // Métadonnées générales
+  uploadedBy      String   @db.ObjectId // ID utilisateur ou anonyme
+  isAnonymous     Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@index([messageId])
+  @@index([uploadedBy])
+}
+
+/// Statut de reception, lecture ou réponse d'un message par un utilisateur
+model MessageStatus {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  messageId  String    @db.ObjectId
+  userId     String    @db.ObjectId
+  receivedAt DateTime? /// Quand le message a été reçu par l'utilisateur
+  readAt     DateTime? /// Quand le message a été lu par l'utilisateur
+  answer     String?   @db.ObjectId /// Last answer to the message by the user
+  user       User      @relation(fields: [userId], references: [id])
+  message    Message   @relation("MessageStatusMessage", fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  response   Message?  @relation("MessageStatusResponse", fields: [answer], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([messageId, userId], name: "messageId_userId")
+}
+
+/// Réaction emoji sur un message par un utilisateur
+model Reaction {
+  id              String                @id @default(auto()) @map("_id") @db.ObjectId
+  messageId       String                @db.ObjectId
+  userId          String?               @db.ObjectId // null pour utilisateurs anonymes
+  anonymousUserId String?               @db.ObjectId // ID de l'utilisateur anonyme
+  emoji           String                // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  message         Message               @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  user            User?                 @relation("UserReactions", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser   AnonymousParticipant? @relation("AnonymousReactions", fields: [anonymousUserId], references: [id], onDelete: Cascade)
+  
+  // Contrainte: un utilisateur ne peut ajouter le même emoji qu'une seule fois par message
+  @@unique([messageId, userId, emoji], name: "user_reaction_unique")
+  // Contrainte: un utilisateur anonyme ne peut ajouter le même emoji qu'une seule fois par message
+  @@unique([messageId, anonymousUserId, emoji], name: "anonymous_reaction_unique")
+  @@index([messageId])
+  @@index([userId])
+  @@index([anonymousUserId])
+  @@index([emoji])
+}
+
+/// Demande d'amitié entre utilisateurs
+model FriendRequest {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId   String   @db.ObjectId
+  receiverId String   @db.ObjectId
+  /// pending, accepted, rejected, blocked
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  receiver   User     @relation("FriendRequestReceiver", fields: [receiverId], references: [id])
+  sender     User     @relation("FriendRequestSender", fields: [senderId], references: [id])
+}
+
+/// Indicateur de frappe en cours pour des tests... A supprimer après les tests
+model TypingIndicator {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  userId         String       @db.ObjectId
+  isTyping       Boolean      @default(true)
+  startedAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+/// Notification pour un utilisateur
+model Notification {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  /// new_conversation, new_message, message_edited, friend_request, etc.
+  type      String
+  title     String
+  content   String
+  data      String?
+  priority  String    @default("normal")
+  isRead    Boolean   @default(false)
+  emailSent Boolean   @default(false)
+  pushSent  Boolean   @default(false)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+/// Communauté (représente une communauté de conversation)
+model Community {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  /// Identifiant lisible par l'homme (ex: "mshy_meeshy-paris", "mshy_support-lycee-njanda")
+  identifier             String                 @unique
+  name        String
+  description String?
+  avatar      String?
+  isPrivate   Boolean       @default(true)
+  createdBy   String        @db.ObjectId
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  members     CommunityMember[]
+  creator     User          @relation("CommunityCreator", fields: [createdBy], references: [id])
+  Conversation Conversation[]
+}
+
+/// Appartenance aux communautés 
+model CommunityMember {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String   @db.ObjectId
+  userId      String   @db.ObjectId
+  joinedAt    DateTime @default(now())
+  /// admin, moderator, member
+  role             String       @default("member")
+
+  user        User     @relation(fields: [userId], references: [id])
+  community   Community @relation(fields: [communityId], references: [id])
+}
+
+/// Statistiques d'utilisation d'un utilisateur
+model UserStats {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                   String   @unique @db.ObjectId
+  messagesSent             Int      @default(0)
+  messagesReceived         Int      @default(0)
+  charactersTyped          Int      @default(0)
+  imageMessagesSent        Int      @default(0)
+  filesShared              Int      @default(0)
+  conversationsJoined      Int      @default(0)
+  communitiesCreated       Int      @default(0)
+  friendsAdded             Int      @default(0)
+  friendRequestsSent       Int      @default(0)
+  translationsUsed         Int      @default(0)
+  languagesDetected        Int      @default(0)
+  autoTranslateTimeMinutes Int      @default(0)
+  totalOnlineTimeMinutes   Int      @default(0)
+  sessionCount             Int      @default(0)
+  lastActiveAt             DateTime @default(now())
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  
+  user                     User     @relation(fields: [userId], references: [id])
+}
+
+/// Préférence utilisateur générale
+model UserPreference {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  key         String
+  value       String
+  valueType   String   @default("string")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+/// Préférence spécifique à une conversation
+model ConversationPreference {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  userId         String       @db.ObjectId
+  key            String
+  value          String
+  valueType      String       @default("string")
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+/// Token d'affiliation pour inviter des utilisateurs
+model AffiliateToken {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  token       String   @unique
+  name        String   // Nom de la campagne d'affiliation
+  createdBy   String   @db.ObjectId
+  maxUses     Int?     // Limite d'utilisation (null = illimité)
+  currentUses Int      @default(0)
+  expiresAt   DateTime? // Date d'expiration (null = pas d'expiration)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  creator     User     @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations AffiliateRelation[]
+}
+
+/// Relation d'affiliation entre utilisateurs
+model AffiliateRelation {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  affiliateTokenId String   @db.ObjectId
+  affiliateUserId  String   @db.ObjectId // Utilisateur qui a invité
+  referredUserId   String   @db.ObjectId // Utilisateur invité
+  status          String   @default("pending") // pending, completed, expired
+  createdAt       DateTime @default(now())
+  completedAt     DateTime? // Date de finalisation de l'inscription
+  
+  affiliateToken  AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+  affiliateUser   User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
+  referredUser    User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Lien de tracking pour compter les clics sur les liens partagés
+model TrackingLink {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  token           String   @unique // Token de 6 caractères (ex: "a1b2c3")
+  name            String?  // Nom du lien (max 32 caractères)
+  originalUrl     String   // URL originale complète
+  shortUrl        String   // URL courte générée (meeshy.me/l/<token>)
+  createdBy       String?  @db.ObjectId // Utilisateur qui a créé le lien (null si anonyme)
+  conversationId  String?  @db.ObjectId // Conversation où le lien a été partagé
+  messageId       String?  @db.ObjectId // Message contenant le lien
+  totalClicks     Int      @default(0) // Nombre total de clics
+  uniqueClicks    Int      @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  isActive        Boolean  @default(true) // Le lien est-il actif
+  expiresAt       DateTime? // Date d'expiration (null = pas d'expiration)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastClickedAt   DateTime? // Date du dernier clic
+  
+  clicks          TrackingLinkClick[]
+  creator         User?    @relation("TrackingLinkCreator", fields: [createdBy], references: [id])
+}
+
+/// Clic sur un lien de tracking
+model TrackingLinkClick {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  trackingLinkId  String   @db.ObjectId
+  userId          String?  @db.ObjectId // Utilisateur connecté qui a cliqué (null si anonyme)
+  anonymousId     String?  @db.ObjectId // Participant anonyme qui a cliqué
+  ipAddress       String?  // Adresse IP du visiteur
+  country         String?  // Pays d'origine
+  city            String?  // Ville
+  region          String?  // Région
+  userAgent       String?  // User agent du navigateur
+  browser         String?  // Navigateur détecté
+  os              String?  // Système d'exploitation
+  device          String?  // Type d'appareil (mobile, desktop, tablet)
+  language        String?  // Langue du navigateur
+  referrer        String?  // Page d'origine
+  deviceFingerprint String? // Empreinte unique du device
+  clickedAt       DateTime @default(now())
+  
+  trackingLink    TrackingLink @relation(fields: [trackingLinkId], references: [id])
+  user            User?        @relation("TrackingLinkClickUser", fields: [userId], references: [id])
+  anonymousUser   AnonymousParticipant? @relation("TrackingLinkClickAnonymous", fields: [anonymousId], references: [id])
+}

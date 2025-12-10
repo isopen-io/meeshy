@@ -1,0 +1,113 @@
+{
+  "partners": {
+    "title": "Torne-se Parceiro",
+    "subtitle": "Junte-se ao nosso ecossistema e desenvolva seu negócio com Meeshy",
+    "backHome": "Voltar ao início",
+    "enterprise": {
+      "title": "Soluções Empresariais",
+      "description": "Soluções sob medida para grandes organizações com necessidades específicas",
+      "pricing": "Preços personalizados",
+      "features": {
+        "sso": "Autenticação SSO (SAML, OAuth)",
+        "customization": "Personalização completa da interface",
+        "deployment": "Implantação local ou nuvem privada",
+        "support": "Suporte prioritário 24/7",
+        "analytics": "Analytics e relatórios avançados"
+      }
+    },
+    "education": {
+      "title": "Soluções Educacionais",
+      "description": "Facilite a aprendizagem multilíngue e a colaboração internacional",
+      "pricing": "Preços preferenciais para educação",
+      "features": {
+        "classrooms": "Salas de aula virtuais multilíngues",
+        "admin": "Gerenciamento centralizado de contas",
+        "learning": "Ferramentas de aprendizagem integradas",
+        "exchange": "Suporte para programas de intercâmbio",
+        "curriculum": "Integração com plataformas LMS"
+      }
+    },
+    "deployment": {
+      "title": "Opções de Implantação",
+      "cloud": {
+        "title": "Nuvem",
+        "description": "Implantação rápida e escalável em nossa infraestrutura segura",
+        "features": {
+          "quick": "Configuração em minutos",
+          "scalable": "Escalabilidade automática",
+          "maintenance": "Manutenção incluída",
+          "updates": "Atualizações automáticas"
+        }
+      },
+      "onPremise": {
+        "title": "Local",
+        "description": "Controle total com implantação em sua infraestrutura",
+        "features": {
+          "security": "Segurança máxima",
+          "compliance": "Conformidade regulatória",
+          "customization": "Personalização completa",
+          "performance": "Desempenho otimizado"
+        }
+      }
+    },
+    "useCases": {
+      "title": "Casos de Uso",
+      "business": {
+        "title": "Empresas",
+        "items": {
+          "collaboration": "Colaboração de equipes internacionais",
+          "support": "Suporte ao cliente multilíngue",
+          "meetings": "Reuniões multilíngues",
+          "training": "Treinamento global"
+        }
+      },
+      "education": {
+        "title": "Educação",
+        "items": {
+          "international": "Programas internacionais",
+          "language": "Aprendizagem de idiomas",
+          "research": "Pesquisa colaborativa",
+          "cultural": "Intercâmbios culturais"
+        }
+      },
+      "community": {
+        "title": "Comunidades",
+        "items": {
+          "nonprofits": "Organizações sem fins lucrativos",
+          "events": "Eventos internacionais",
+          "volunteer": "Programas de voluntariado",
+          "healthcare": "Serviços de saúde multilíngues"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Benefícios para Parceiros",
+      "support": {
+        "title": "Suporte Prioritário",
+        "description": "Acesso à nossa equipe de suporte dedicada 24/7"
+      },
+      "visibility": {
+        "title": "Visibilidade",
+        "description": "Destaque em nosso site e em nossas comunicações"
+      },
+      "priority": {
+        "title": "Acesso Prioritário",
+        "description": "Acesso antecipado a novos recursos"
+      }
+    },
+    "types": {
+      "tech": {
+        "title": "Parceiros Tecnológicos",
+        "description": "Integre Meeshy em suas soluções",
+        "features": "API completa, SDK, webhooks, documentação detalhada"
+      }
+    },
+    "become": {
+      "title": "Tornar-se Parceiro",
+      "description": "Junte-se ao nosso programa de parceria e desenvolva seu negócio",
+      "contact": "Entre em contato",
+      "api": "Documentação da API",
+      "about": "Saiba mais"
+    }
+  }
+}

@@ -1,0 +1,230 @@
+/* Styles spécifiques pour le Bubble Stream */
+
+/* Animation d'apparition des nouvelles bulles */
+@keyframes bubble-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bubble-message {
+  animation: bubble-slide-in 0.4s ease-out;
+}
+
+/* Animation au survol des bulles - Ombres désactivées */
+.bubble-message:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Animation pour les icônes d'action */
+.action-icon {
+  transition: all 0.2s ease;
+}
+
+.action-icon:hover {
+  transform: scale(1.1);
+}
+
+/* Pulse animation pour les pastilles de langues */
+@keyframes pulse-language {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.language-indicator.active {
+  animation: pulse-language 2s infinite;
+}
+
+/* Animation de flip pour la traduction */
+@keyframes flip-translation {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+.translation-flip {
+  animation: flip-translation 0.6s ease-in-out;
+}
+
+/* Styles pour le textarea expansible */
+.expandable-textarea {
+  transition: height 0.2s ease;
+  max-height: 160px;
+  resize: none;
+}
+
+/* Scrollbar personnalisée pour le feed */
+.feed-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.feed-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* Indicateur de frappe */
+@keyframes typing-dots {
+  0%, 20% {
+    color: rgba(0, 0, 0, 0.4);
+    text-shadow: 0.25em 0 0 rgba(0, 0, 0, 0.2),
+                 0.5em 0 0 rgba(0, 0, 0, 0.2);
+  }
+  40% {
+    color: rgba(0, 0, 0, 1);
+    text-shadow: 0.25em 0 0 rgba(0, 0, 0, 0.4),
+                 0.5em 0 0 rgba(0, 0, 0, 0.2);
+  }
+  60% {
+    text-shadow: 0.25em 0 0 rgba(0, 0, 0, 1),
+                 0.5em 0 0 rgba(0, 0, 0, 0.4);
+  }
+  80%, 100% {
+    text-shadow: 0.25em 0 0 rgba(0, 0, 0, 1),
+                 0.5em 0 0 rgba(0, 0, 0, 1);
+  }
+}
+
+.typing-indicator::before {
+  content: "⋯";
+  animation: typing-dots 1.4s infinite;
+}
+
+/* Responsive design pour mobile */
+@media (max-width: 768px) {
+  .bubble-message {
+    margin: 0 -0.5rem;
+    border-radius: 1rem;
+  }
+  
+  .language-indicators {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  
+  .header-search {
+    display: none;
+  }
+  
+  .composition-area {
+    padding: 1rem;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+}
+
+/* Styles pour les badges de langue avec drapeaux */
+.language-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.language-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Effet de gradient pour le feed */
+.feed-gradient {
+  background: linear-gradient(
+    to bottom,
+    rgba(239, 246, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.9) 10%,
+    rgba(255, 255, 255, 1) 20%,
+    rgba(255, 255, 255, 1) 80%,
+    rgba(239, 246, 255, 0.9) 90%,
+    rgba(239, 246, 255, 0.8) 100%
+  );
+}
+
+/* Animation pour le bouton d'envoi */
+.send-button {
+  transition: all 0.2s ease;
+}
+
+.send-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.send-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Styles pour les hashtags trending */
+.trending-hashtag {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.trending-hashtag:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: rgb(37, 99, 235);
+  transform: translateX(4px);
+}
+
+/* Loading skeleton pour les messages */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.message-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, transparent 37%, #f0f0f0 63%);
+  background-size: 400px 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+/* Effet glassmorphism pour certains éléments */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+/* Styles pour les notifications toast personnalisées */
+.bubble-toast {
+  border-left: 4px solid rgb(99, 102, 241);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}

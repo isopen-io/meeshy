@@ -1,0 +1,49 @@
+{
+  "profile": {
+    "title": "Profile",
+    "userProfile": "User Profile",
+    "userStats": "User Statistics",
+    "messagesSent": "Messages sent",
+    "messagesReceived": "Messages received",
+    "conversations": "My conversations",
+    "groups": "My groups",
+    "memberSince": "Member since",
+    "sendMessage": "Send message",
+    "addFriend": "Add",
+    "cancelFriendRequest": "Cancel request",
+    "userNotFound": "User not found",
+    "userNotFoundDescription": "This user does not exist or is no longer available",
+    "loading": "Loading profile...",
+    "online": "Online",
+    "offline": "Offline",
+    "edit": "Edit",
+    "editProfile": "Edit profile",
+    "personalInfo": "Personal Information",
+    "languages": "Languages",
+    "quickActions": "Quick Actions",
+    "systemLanguage": "System language",
+    "regionalLanguage": "Regional language",
+    "customDestinationLanguage": "Custom destination language",
+    "autoTranslateEnabled": "Automatic translation enabled",
+    "autoTranslateDisabled": "Automatic translation disabled",
+    "dateUnavailable": "Date unavailable",
+    "phone": "Phone",
+    "email": "Email",
+    "errors": {
+      "cannotMessageYourself": "You cannot create a conversation with yourself",
+      "invalidUser": "Cannot create conversation: invalid user",
+      "conversationCreationFailed": "Cannot create conversation",
+      "sessionExpired": "Session expired",
+      "sendFriendRequestFailed": "Error sending friend request",
+      "cancelFriendRequestFailed": "Error cancelling friend request",
+      "notAuthenticated": "Not authenticated",
+      "loadProfileError": "Error loading profile"
+    },
+    "success": {
+      "conversationCreated": "Conversation created",
+      "friendRequestSent": "Friend request sent",
+      "friendRequestCancelled": "Friend request cancelled"
+    }
+  }
+}
+

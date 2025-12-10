@@ -1,0 +1,118 @@
+{
+  "partners": {
+    "title": "Partners",
+    "subtitle": "Join our partner ecosystem and help connect the world through breaking language barriers.",
+    "backHome": "Back to home",
+    "enterprise": {
+      "title": "Enterprise Teams",
+      "description": "Deploy Meeshy in your company to enable seamless multilingual communication across global teams.",
+      "features": {
+        "deployment": "On-premise or cloud deployment",
+        "sso": "SSO and Active Directory integration",
+        "analytics": "Team communication analytics",
+        "support": "24/7 enterprise support",
+        "customization": "Custom branding and features"
+      },
+      "pricing": "Contact us for enterprise pricing"
+    },
+    "education": {
+      "title": "Educational Institutions",
+      "description": "Enable international collaboration in schools and universities with multilingual communication tools.",
+      "features": {
+        "classrooms": "Multilingual virtual classrooms",
+        "exchange": "Student exchange programs support",
+        "learning": "Language learning integration",
+        "admin": "Administrative dashboard",
+        "curriculum": "Curriculum-based language support"
+      },
+      "pricing": "Special pricing for educational institutions"
+    },
+    "types": {
+      "tech": {
+        "title": "Technology Partners",
+        "description": "Integrate Meeshy's translation technology into your products and services.",
+        "features": [
+          "API access for custom integrations",
+          "White-label solutions available",
+          "Technical support and documentation",
+          "Revenue sharing opportunities"
+        ]
+      }
+    },
+    "deployment": {
+      "title": "Deployment Solutions",
+      "onPremise": {
+        "title": "On-Premise Deployment",
+        "description": "Complete control of your data with enterprise-grade on-premise deployment.",
+        "features": {
+          "security": "Maximum security and data control",
+          "compliance": "Regulatory compliance (GDPR, HIPAA)",
+          "customization": "Full customization options",
+          "performance": "Optimized performance for your infrastructure"
+        }
+      },
+      "cloud": {
+        "title": "Cloud Deployment",
+        "description": "Fast and scalable deployment with our managed cloud solution.",
+        "features": {
+          "quick": "Quick deployment (< 24 hours)",
+          "scalable": "Automatic scalability",
+          "maintenance": "Managed maintenance and updates",
+          "updates": "Instant access to new features"
+        }
+      }
+    },
+    "useCases": {
+      "title": "Use Cases",
+      "business": {
+        "title": "International Business",
+        "items": {
+          "meetings": "Multilingual meetings and calls",
+          "support": "Customer support in multiple languages",
+          "collaboration": "Team collaboration across borders",
+          "training": "Training and onboarding programs"
+        }
+      },
+      "education": {
+        "title": "Education",
+        "items": {
+          "language": "Language learning programs",
+          "international": "International student programs",
+          "research": "Research collaboration",
+          "cultural": "Cultural exchange programs"
+        }
+      },
+      "community": {
+        "title": "Community Organizations",
+        "items": {
+          "nonprofits": "Non-profit international programs",
+          "events": "Multilingual events",
+          "volunteer": "Volunteer coordination",
+          "healthcare": "Healthcare services"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Partner Benefits",
+      "priority": {
+        "title": "Priority Support",
+        "description": "24/7 dedicated support for all partners with guaranteed response times."
+      },
+      "support": {
+        "title": "Technical Support",
+        "description": "Access to our technical team for integration and deployment assistance."
+      },
+      "visibility": {
+        "title": "Co-Marketing",
+        "description": "Joint marketing opportunities and visibility on our partner page."
+      }
+    },
+    "become": {
+      "title": "Become a Partner",
+      "description": "Ready to transform communication in your organization? Contact us to discuss a customized partnership.",
+      "contact": "Contact us",
+      "about": "About Us",
+      "api": "API Documentation"
+    }
+  }
+}

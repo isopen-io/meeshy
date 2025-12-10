@@ -1,0 +1,842 @@
+openapi: 3.0.3
+info:
+  title: Meeshy Notifications API
+  description: |
+    Comprehensive notification system API for Meeshy platform.
+
+    **Security Features:**
+    - XSS Protection via input sanitization
+    - IDOR Prevention with userId verification
+    - Rate Limiting (100 req/min per user)
+    - NoSQL Injection Protection
+    - Audit Logging
+
+    **Authentication:**
+    All endpoints require JWT authentication via Bearer token.
+
+  version: 2.0.0
+  contact:
+    name: Meeshy API Support
+    email: support@meeshy.me
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.meeshy.me
+    description: Production server
+  - url: https://staging-api.meeshy.me
+    description: Staging server
+  - url: http://localhost:5000
+    description: Development server
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: notifications
+    description: Notification management endpoints
+  - name: preferences
+    description: Notification preferences management
+  - name: stats
+    description: Notification statistics
+
+paths:
+  /notifications:
+    get:
+      tags:
+        - notifications
+      summary: Get user notifications
+      description: |
+        Retrieve paginated list of user's notifications with optional filtering.
+
+        **Rate Limit:** 100 requests per minute per user
+
+        **Security:** IDOR protected - only returns authenticated user's notifications
+      operationId: getNotifications
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: unread
+          in: query
+          description: Filter by read status
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: type
+          in: query
+          description: Filter by notification type
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - new_message
+              - new_conversation_direct
+              - new_conversation_group
+              - message_reply
+              - member_joined
+              - contact_request
+              - contact_accepted
+              - user_mentioned
+              - message_reaction
+              - missed_call
+              - system
+              - message_edited
+            default: all
+        - name: priority
+          in: query
+          description: Filter by priority
+          required: false
+          schema:
+            type: string
+            enum:
+              - low
+              - normal
+              - high
+              - urgent
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-RateLimit-Limit:
+              description: Rate limit maximum requests
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              description: Remaining requests in window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when rate limit resets
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/{id}/read:
+    patch:
+      tags:
+        - notifications
+      summary: Mark notification as read
+      description: |
+        Mark a specific notification as read.
+
+        **Rate Limit:** 100 requests per minute per user
+
+        **Security:** IDOR protected - only allows marking own notifications
+      operationId: markNotificationAsRead
+      parameters:
+        - name: id
+          in: path
+          description: Notification ID (MongoDB ObjectId)
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+            example: '507f1f77bcf86cd799439011'
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Notification not found (or not owned by user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/read-all:
+    patch:
+      tags:
+        - notifications
+      summary: Mark all notifications as read
+      description: |
+        Mark all unread notifications as read for the authenticated user.
+
+        **Rate Limit:** 10 requests per minute per user (strict)
+
+        **Security:** IDOR protected - only marks own notifications
+      operationId: markAllNotificationsAsRead
+      responses:
+        '200':
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'All notifications marked as read'
+                  count:
+                    type: integer
+                    description: Number of notifications marked
+                    example: 15
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/{id}:
+    delete:
+      tags:
+        - notifications
+      summary: Delete notification
+      description: |
+        Delete a specific notification.
+
+        **Rate Limit:** 100 requests per minute per user
+
+        **Security:** IDOR protected - only allows deleting own notifications
+      operationId: deleteNotification
+      parameters:
+        - name: id
+          in: path
+          description: Notification ID (MongoDB ObjectId)
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{24}$'
+            example: '507f1f77bcf86cd799439011'
+      responses:
+        '200':
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Notification not found (or not owned by user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/read:
+    delete:
+      tags:
+        - notifications
+      summary: Delete all read notifications
+      description: |
+        Delete all read notifications for the authenticated user.
+
+        **Rate Limit:** 10 requests per minute per user (strict)
+
+        **Security:** IDOR protected - only deletes own notifications
+      operationId: deleteReadNotifications
+      responses:
+        '200':
+          description: Read notifications deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'Read notifications deleted'
+                  count:
+                    type: integer
+                    description: Number of notifications deleted
+                    example: 23
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/preferences:
+    get:
+      tags:
+        - preferences
+      summary: Get notification preferences
+      description: |
+        Retrieve notification preferences for the authenticated user.
+        Creates default preferences if none exist.
+
+        **Rate Limit:** 100 requests per minute per user
+      operationId: getNotificationPreferences
+      responses:
+        '200':
+          description: Preferences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/NotificationPreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - preferences
+      summary: Update notification preferences
+      description: |
+        Update notification preferences for the authenticated user.
+
+        **Rate Limit:** 10 requests per minute per user (strict)
+
+        **Validation:** All fields validated with Zod schema
+      operationId: updateNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferencesRequest'
+      responses:
+        '200':
+          description: Preferences updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'Preferences updated'
+                  data:
+                    $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/stats:
+    get:
+      tags:
+        - stats
+      summary: Get notification statistics
+      description: |
+        Retrieve notification statistics for the authenticated user.
+
+        **Rate Limit:** 100 requests per minute per user
+      operationId: getNotificationStats
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/NotificationStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notifications/batch/mark-read:
+    post:
+      tags:
+        - notifications
+      summary: Batch mark notifications as read
+      description: |
+        Mark multiple notifications as read in a single request.
+
+        **Rate Limit:** 5 requests per minute per user (batch limit)
+
+        **Limits:** Maximum 100 notifications per batch
+
+        **Security:** IDOR protected - only marks own notifications
+      operationId: batchMarkNotificationsAsRead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notificationIds
+              properties:
+                notificationIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+                    pattern: '^[a-f0-9]{24}$'
+                  example:
+                    - '507f1f77bcf86cd799439011'
+                    - '507f1f77bcf86cd799439012'
+                    - '507f1f77bcf86cd799439013'
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: '3 notifications marked as read'
+                  count:
+                    type: integer
+                    example: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Notification ID (MongoDB ObjectId)
+          example: '507f1f77bcf86cd799439011'
+        userId:
+          type: string
+          description: Recipient user ID
+          example: '507f1f77bcf86cd799439012'
+        type:
+          type: string
+          enum:
+            - new_message
+            - new_conversation_direct
+            - new_conversation_group
+            - message_reply
+            - member_joined
+            - contact_request
+            - contact_accepted
+            - user_mentioned
+            - message_reaction
+            - missed_call
+            - system
+            - message_edited
+          example: 'new_message'
+        title:
+          type: string
+          description: Notification title (sanitized)
+          example: 'New message from John'
+        content:
+          type: string
+          description: Notification content (sanitized)
+          example: 'Hey, check out this new feature!'
+        priority:
+          type: string
+          enum:
+            - low
+            - normal
+            - high
+            - urgent
+          default: normal
+          example: 'normal'
+        isRead:
+          type: boolean
+          example: false
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2025-11-21T10:30:00Z'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-11-21T10:00:00Z'
+        senderId:
+          type: string
+          nullable: true
+          example: '507f1f77bcf86cd799439013'
+        senderUsername:
+          type: string
+          nullable: true
+          example: 'john_doe'
+        senderAvatar:
+          type: string
+          nullable: true
+          format: uri
+          example: 'https://cdn.meeshy.me/avatars/john.png'
+        messagePreview:
+          type: string
+          nullable: true
+          example: 'Hey, check out this new feature!'
+        conversationId:
+          type: string
+          nullable: true
+          example: '507f1f77bcf86cd799439014'
+        messageId:
+          type: string
+          nullable: true
+          example: '507f1f77bcf86cd799439015'
+        data:
+          type: object
+          nullable: true
+          description: Additional notification data (sanitized JSON)
+
+    NotificationsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            notifications:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 20
+                total:
+                  type: integer
+                  example: 150
+                hasMore:
+                  type: boolean
+                  example: true
+            unreadCount:
+              type: integer
+              example: 12
+
+    NotificationPreferences:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '507f1f77bcf86cd799439016'
+        userId:
+          type: string
+          example: '507f1f77bcf86cd799439012'
+        pushEnabled:
+          type: boolean
+          default: true
+          example: true
+        emailEnabled:
+          type: boolean
+          default: true
+          example: true
+        soundEnabled:
+          type: boolean
+          default: true
+          example: true
+        newMessageEnabled:
+          type: boolean
+          default: true
+          example: true
+        replyEnabled:
+          type: boolean
+          default: true
+          example: true
+        mentionEnabled:
+          type: boolean
+          default: true
+          example: true
+        reactionEnabled:
+          type: boolean
+          default: true
+          example: true
+        missedCallEnabled:
+          type: boolean
+          default: true
+          example: true
+        systemEnabled:
+          type: boolean
+          default: true
+          example: true
+        conversationEnabled:
+          type: boolean
+          default: true
+          example: true
+        contactRequestEnabled:
+          type: boolean
+          default: true
+          example: true
+        memberJoinedEnabled:
+          type: boolean
+          default: true
+          example: true
+        dndEnabled:
+          type: boolean
+          default: false
+          example: false
+        dndStartTime:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: '22:00'
+        dndEndTime:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: '08:00'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-11-01T00:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2025-11-21T10:00:00Z'
+
+    UpdateNotificationPreferencesRequest:
+      type: object
+      properties:
+        pushEnabled:
+          type: boolean
+        emailEnabled:
+          type: boolean
+        soundEnabled:
+          type: boolean
+        newMessageEnabled:
+          type: boolean
+        replyEnabled:
+          type: boolean
+        mentionEnabled:
+          type: boolean
+        reactionEnabled:
+          type: boolean
+        missedCallEnabled:
+          type: boolean
+        systemEnabled:
+          type: boolean
+        conversationEnabled:
+          type: boolean
+        contactRequestEnabled:
+          type: boolean
+        memberJoinedEnabled:
+          type: boolean
+        dndEnabled:
+          type: boolean
+        dndStartTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: '22:00'
+        dndEndTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: '08:00'
+
+    NotificationStats:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total notifications
+          example: 150
+        unread:
+          type: integer
+          description: Unread notifications
+          example: 12
+        byType:
+          type: object
+          description: Counts by notification type
+          additionalProperties:
+            type: integer
+          example:
+            new_message: 85
+            message_reply: 30
+            user_mentioned: 20
+            missed_call: 10
+            system: 5
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 'Operation completed successfully'
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 'An error occurred'
+        error:
+          type: string
+          nullable: true
+          example: 'Detailed error message'
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 'Validation failed'
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: 'page'
+              message:
+                type: string
+                example: 'Page must be >= 1'
+              code:
+                type: string
+                example: 'invalid_type'
+
+  responses:
+    BadRequest:
+      description: Bad request - validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+    Unauthorized:
+      description: Unauthorized - missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: 'Unauthorized'
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Rate limit maximum requests
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Remaining requests (0 when limited)
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Unix timestamp when rate limit resets
+          schema:
+            type: integer
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: 'Too many requests. Please wait before trying again.'
+              error:
+                type: string
+                example: 'RATE_LIMIT_EXCEEDED'
+              retryAfter:
+                type: integer
+                example: 45
+              limit:
+                type: integer
+                example: 100
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: 'Internal server error'

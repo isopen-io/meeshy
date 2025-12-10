@@ -1,0 +1,90 @@
+{
+  "dashboard": {
+    "title": "Painel",
+    "welcome": "Bem-vindo de volta",
+    "greeting": "Olá, {name}! 👋",
+    "greetingFallback": "Olá, Usuário! 👋",
+    "overview": "Aqui está uma visão geral da sua atividade de mensagens hoje.",
+    "loading": "Carregando painel...",
+    "errorLoading": "❌ Erro ao carregar: {message}",
+    "retry": "Tentar novamente",
+    "stats": {
+      "totalConversations": "Total de conversas",
+      "totalCommunities": "Total de comunidades",
+      "totalGroups": "Total de comunidades",
+      "totalMessages": "Total de mensagens",
+      "activeConversations": "Conversas ativas",
+      "translationsToday": "Traduções hoje",
+      "totalLinks": "Total de links",
+      "conversations": "Conversas",
+      "communities": "Comunidades",
+      "groups": "Comunidades",
+      "messages": "Mensagens",
+      "activeConversationsTitle": "Conversas ativas",
+      "translations": "Traduções",
+      "links": "Links",
+      "total": "Total",
+      "active": "Ativas",
+      "thisWeek": "Esta semana",
+      "inProgress": "Em andamento",
+      "today": "Hoje",
+      "created": "Criadas"
+    },
+    "recentConversations": "Conversas recentes",
+    "recentCommunities": "Comunidades recentes",
+    "recentGroups": "Comunidades recentes",
+    "createLink": "Criar link",
+    "createConversation": "Criar conv.",
+    "shareApp": "Link de afiliado",
+    "newConversation": "Nova conv.",
+    "createCommunity": "Criar com.",
+    "refresh": "Atualizar",
+    "loadingError": "Erro ao carregar",
+    "noData": "Nenhum dado disponível",
+    "errorUnknown": "Erro desconhecido",
+    "dataLoadingError": "Erro ao carregar dados",
+    "actions": {
+      "createLink": "Criar link",
+      "newConversation": "Nova conversa",
+      "createConversation": "Criar conversa",
+      "createCommunity": "Criar comunidade",
+      "createGroup": "Criar comunidade",
+      "viewAll": "Ver tudo",
+      "startConversation": "Iniciar conversa",
+      "createCommunityButton": "Criar comunidade",
+      "createGroupButton": "Criar comunidade",
+      "settings": "Configurações",
+      "shareApp": "Criar link de afiliado"
+    },
+    "quickActions": {
+      "title": "Ações rápidas",
+      "description": "Acesse rapidamente as funcionalidades principais",
+      "newConversation": "Nova conversa",
+      "createLink": "Criar link",
+      "createCommunity": "Criar comunidade",
+      "createGroup": "Criar comunidade",
+      "shareApp": "Criar link de afiliado",
+      "settings": "Configurações"
+    },
+    "emptyStates": {
+      "noRecentConversations": "Nenhuma conversa recente",
+      "noRecentCommunities": "Nenhuma comunidade recente",
+      "noRecentGroups": "Nenhuma comunidade recente"
+    },
+    "success": {
+      "linkCreated": "Link de conversa criado com sucesso!",
+      "conversationCreated": "Conversa criada com sucesso!",
+      "groupCreated": "Comunidade criada com sucesso!"
+    },
+    "time": {
+      "format": "pt-BR"
+    },
+    "communities": {
+      "private": "Privada",
+      "members": "membros",
+      "member": "membro",
+      "membersCount": "{count} membros"
+    },
+    "anonymous": "Anônimo"
+  }
+}

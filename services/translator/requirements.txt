@@ -1,0 +1,57 @@
+# Configuration d'environnement
+python-dotenv>=1.1.1
+
+# Framework web
+fastapi>=0.116.1
+uvicorn[standard]>=0.35.0
+pydantic-settings>=2.10.1
+pydantic>=2.11.7
+
+# Communication gRPC et ZeroMQ
+grpcio>=1.74.0
+grpcio-tools>=1.74.0
+grpcio-reflection>=1.74.0
+protobuf>=6.32.0
+pyzmq>=27.0.2
+
+# Machine Learning et NLP (versions compatibles)
+torch>=2.8.0
+transformers>=4.55.4
+tokenizers>=0.21.4
+accelerate>=1.10.0
+datasets>=4.0.0
+sentencepiece>=0.2.1
+huggingface_hub>=0.32.0
+safetensors>=0.5.0
+
+# Cache et base de données
+redis>=6.4.0
+prisma>=0.15.0
+asyncpg>=0.30.0
+aiosqlite>=0.21.0
+
+# Détection de langue et analyse de texte
+langdetect>=1.0.9
+nltk>=3.9.1
+textstat>=0.7.8
+
+# Utilitaires système
+psutil>=7.0.0
+numpy>=2.3.2
+pandas>=2.3.2
+aiohttp>=3.12.15
+python-multipart>=0.0.20
+aiofiles>=24.1.0
+
+# Logging et monitoring
+loguru>=0.7.3
+prometheus-client>=0.22.1
+
+# Tests
+pytest>=8.4.1
+pytest-asyncio>=1.1.0
+pytest-cov>=6.2.1
+# FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
+httpx==0.24.1
+httpcore==0.17.3
+

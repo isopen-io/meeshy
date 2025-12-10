@@ -1,0 +1,16 @@
+{
+  "typingIndicator": {
+    "typing": "Typing...",
+    "isTyping": "is typing",
+    "areTyping": "are typing",
+    "single": "{name} is typing...",
+    "double": "{name1} and {name2} are typing...",
+    "multiple": "{name} and {count} others are typing...",
+    "typingIndicator": {
+      "typing": "Typing...",
+      "isTyping": "is typing",
+      "areTyping": "are typing",
+      "multipleTyping": "people are typing"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "header": {
+    "login": "Se connecter",
+    "loginTitle": "Connexion",
+    "loginDescription": "Connectez-vous à votre compte Meeshy",
+    "register": "S'inscrire",
+    "registerTitle": "Créer un compte",
+    "registerDescription": "Rejoignez Meeshy et commencez à discuter",
+    "joinConversation": "Rejoindre",
+    "joinTitle": "Rejoindre une conversation",
+    "joinDescription": "Entrez le code de conversation pour participer",
+    "shareLink": "Partager",
+    "shareLinkCopied": "Lien copié dans le presse-papiers",
+    "backToConversation": "Retour à la conversation",
+    "profile": "Profil",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter",
+    "anonymousWarning": "Session anonyme",
+    "clearSession": "Effacer la session",
+    "clearSessionTitle": "Effacer la session anonyme",
+    "clearSessionDescription": "Êtes-vous sûr de vouloir effacer votre session anonyme ? Cette action est irréversible.",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "guest": "Invité",
+    "theme": "Thème",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système",
+    "continueChat": "Continuer la discussion",
+    "signUp": "S'inscrire",
+    "language": "Langue",
+    "interfaceLanguage": "Langue d'interface"
+  }
+}
+

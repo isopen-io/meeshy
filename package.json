@@ -1,0 +1,55 @@
+{
+  "name": "meeshy",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@meeshy/web",
+    "dev:gateway": "turbo run dev --filter=@meeshy/gateway",
+    "dev:translator": "turbo run dev --filter=@meeshy/translator",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=@meeshy/web",
+    "build:gateway": "turbo run build --filter=@meeshy/gateway",
+    "build:translator": "turbo run build --filter=@meeshy/translator",
+    "start": "turbo run start",
+    "test": "turbo run test",
+    "test:web": "turbo run test --filter=@meeshy/web",
+    "test:gateway": "turbo run test --filter=@meeshy/gateway",
+    "test:translator": "turbo run test --filter=@meeshy/translator",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "docker:build": "docker-compose -f docker-compose.yml build",
+    "docker:up": "docker-compose -f docker-compose.yml up -d",
+    "docker:down": "docker-compose -f docker-compose.yml down",
+    "docker:logs": "docker-compose -f docker-compose.yml logs -f",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
+    "prepare": "turbo run prepare",
+    "postinstall": "turbo run generate --filter=@meeshy/shared"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "turbo": "^2.3.3",
+    "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "onnxruntime-node",
+        "sharp",
+        "@tensorflow/tfjs-node",
+        "@xenova/transformers"
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "about": {
+    "title": "À propos de Meeshy",
+    "subtitle": "Nous croyons que les barrières linguistiques ne devraient jamais faire obstacle aux connexions significatives.",
+    "backHome": "Retour à l'accueil",
+    "mission": {
+      "title": "Notre Mission",
+      "description": "Connecter le monde, une traduction à la fois. Notre plateforme permet aux gens des quatre coins du monde de communiquer librement, en abattant les murs qui nous séparent et en construisant des ponts de compréhension."
+    },
+    "values": {
+      "globalAccess": {
+        "title": "Accessibilité Mondiale",
+        "description": "Rendre la communication multilingue accessible à tous, partout dans le monde."
+      },
+      "innovation": {
+        "title": "Innovation",
+        "description": "Utiliser les dernières technologies d'IA pour des traductions précises et rapides."
+      },
+      "privacy": {
+        "title": "Respect de la Vie Privée",
+        "description": "Vos conversations restent privées et sécurisées grâce à la traduction côté serveur alimentée par des modèles d'IA avancés."
+      }
+    },
+    "team": {
+      "title": "Notre Équipe",
+      "description": "Fait avec ❤️ par des développeurs qui croient que la communication ne devrait avoir aucune limite.",
+      "details": "Meeshy est développé par une équipe passionnée de développeurs, linguistes et designers qui partagent une vision commune : un monde où la langue n'est plus un obstacle à la communication humaine."
+    },
+    "cta": {
+      "title": "Vous voulez en savoir plus ?",
+      "contact": "Contactez-nous",
+      "joinUs": "Rejoignez-nous",
+      "terms": "Conditions d'utilisation",
+      "privacy": "Politique de confidentialité"
+    }
+  }
+}

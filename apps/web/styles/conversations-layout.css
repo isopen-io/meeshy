@@ -1,0 +1,386 @@
+/* Styles spécifiques pour le layout des conversations */
+
+/* Container principal */
+.conversation-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Liste des conversations */
+.conversation-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  position: relative;
+  z-index: 10;
+}
+
+/* Zone de conversation */
+.conversation-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Header de conversation */
+.conversation-header {
+  flex-shrink: 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  z-index: 20;
+  position: relative;
+}
+
+/* Zone des messages */
+.messages-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.messages-container {
+  height: 100%;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Zone de composition */
+.composer-area {
+  flex-shrink: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 20;
+  position: relative;
+}
+
+/* Mobile spécifique */
+@media (max-width: 768px) {
+  .conversation-layout {
+    position: fixed;
+    inset: 0;
+  }
+
+  .conversation-list-container.mobile-show {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+
+  .conversation-list-container.mobile-hide {
+    display: none;
+  }
+
+  .conversation-area.mobile-hide {
+    display: none;
+  }
+
+  .conversation-header {
+    position: sticky;
+    top: 0;
+  }
+
+  .composer-area {
+    position: sticky;
+    bottom: 0;
+  }
+
+  /* Safe area pour iOS */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* Animations de transition */
+.conversation-transition {
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+/* Éviter les superpositions */
+.no-overlap {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Scrollbar personnalisée */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Amélioration du scroll pour les conversations et messages */
+.conversation-scroll {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  /* Force hardware acceleration */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+.conversation-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversation-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation-scroll::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.conversation-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Forcer le défilement sur les containers */
+.force-scroll {
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
+
+/* Container spécifique pour les listes de conversations */
+.conversation-list-scroll {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  /* Force le scroll même avec Tailwind */
+  position: relative;
+  /* Force hardware acceleration */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+/* Force le scroll sur les TabsContent */
+[data-radix-tabs-content] {
+  overflow: visible !important;
+}
+
+/* Container parent des conversations */
+.conversation-list-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-list-container .conversation-list-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Container spécifique pour les messages */
+.messages-scroll {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  /* Force hardware acceleration */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+  /* Force le scroll même si le contenu est court */
+  overflow-anchor: none;
+  /* Forcer les dimensions */
+  min-height: 200px !important;
+  position: relative !important;
+}
+
+/* Header sticky pour la liste des conversations */
+.conversation-list-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: hsl(var(--card) / 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Fix pour les problèmes de rendu */
+.render-fix {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Conteneur de messages optimisé */
+.messages-optimized {
+  contain: layout style paint;
+  content-visibility: auto;
+}
+
+/* Z-index hiérarchie */
+.z-base { z-index: 1; }
+.z-list { z-index: 10; }
+.z-header { z-index: 20; }
+.z-composer { z-index: 20; }
+.z-modal { z-index: 50; }
+.z-popover { z-index: 60; }
+.z-tooltip { z-index: 70; }
+
+/* Container pour les messages avec popovers */
+.bubble-message-container {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Forcer les popovers de traduction à s'afficher correctement */
+.bubble-message [data-radix-popover-content],
+.translation-popover {
+  z-index: 9999 !important;
+  position: fixed !important;
+}
+
+/* Forcer les wrappers Radix UI aussi */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* S'assurer que les triggers des popovers sont visibles */
+.bubble-message [data-radix-popover-trigger] {
+  position: relative;
+  z-index: 1;
+}
+
+/* Grille responsive pour desktop */
+@media (min-width: 1024px) {
+  .conversation-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) 1fr;
+    gap: 0;
+  }
+
+  .conversation-list-container {
+    border-radius: 0;
+  }
+
+  .conversation-area {
+    border-radius: 0;
+  }
+}
+
+/* Très grandes écrans */
+@media (min-width: 1536px) {
+  .conversation-layout {
+    grid-template-columns: minmax(384px, 448px) 1fr;
+  }
+}
+
+/* Règles spécifiques pour forcer le scroll des messages */
+.messages-scroll * {
+  box-sizing: border-box;
+}
+
+/* Conteneur parent des messages */
+.messages-scroll-parent {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+
+/* Force le scroll sur tous les éléments avec scroll dans le nom */
+[class*="scroll"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(0,0,0,0.3) transparent !important;
+}
+
+/* S'assurer que tous les conteneurs restent dans la vue */
+.conversation-layout {
+  height: 100% !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Conteneur principal des conversations */
+.conversation-layout > div {
+  height: 100% !important;
+  max-height: calc(100vh - 64px) !important;
+  overflow: hidden !important;
+}
+
+/* Sidebar conversations */
+.conversation-list-container {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Zone principale de conversation */
+main[class*="flex-1"] {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Ajustement automatique de la zone des messages selon la taille du composer */
+main[class*="flex-1"] > div:nth-child(3) {
+  /* Zone des messages - s'ajuste automatiquement */
+  flex: 1 !important;
+  min-height: 0 !important;
+  max-height: calc(100% - 160px) !important; /* Réserver 160px minimum pour le composer */
+}
+
+/* Zone de composition - toujours visible */
+.conversation-composer-zone {
+  position: relative !important;
+  z-index: 20 !important;
+  background: var(--card) !important;
+  border-top: 1px solid var(--border) !important;
+  min-height: 60px !important;
+  flex-shrink: 0 !important;
+}
+
+
+

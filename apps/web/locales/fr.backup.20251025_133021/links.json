@@ -1,0 +1,258 @@
+{
+  "links": {
+    "title": "Liens de partage",
+    "createLink": "Créer un lien",
+    "unnamedLink": "Lien sans nom",
+    "conversation": "Conversation",
+    "linkNameTemplate": {
+      "default": "{participantLimit} lien pour la conversation '{conversationTitle}' valable {duration}",
+      "openToAll": "ouvert à tous",
+      "limitedToParticipants": "limité à {count} participant(s)",
+      "limitedToUses": "limité à {count} utilisation(s)",
+      "days": "{count} jour(s)",
+      "indefinitely": "indéfiniment"
+    },
+    "searchPlaceholder": "Rechercher des liens...",
+    "tabs": {
+      "shareLinks": "Liens de partage",
+      "trackingLinks": "Liens suivis",
+      "active": "Actifs",
+      "disabled": "Désactivés",
+      "expired": "Expirés"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "expired": "Expiré",
+      "never": "Jamais",
+      "daysRemaining": "{days} jour(s) restant(s)",
+      "hoursRemaining": "{hours} heure(s) restante(s)"
+    },
+    "stats": {
+      "created": "Créé",
+      "expires": "Expire",
+      "uses": "Utilisations",
+      "active": "Actif",
+      "totalClicks": "Clics totaux",
+      "uniqueClicks": "Clics uniques",
+      "lastClicked": "Dernier clic"
+    },
+    "actions": {
+      "menu": "Menu",
+      "viewDetails": "Voir les détails",
+      "copy": "Copier le lien",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "enable": "Activer",
+      "disable": "Désactiver",
+      "extend7Days": "Prolonger de 7 jours",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "saving": "Enregistrement..."
+    },
+    "details": {
+      "title": "Détails du lien",
+      "linkName": "Nom du lien",
+      "linkUrl": "URL du lien",
+      "description": "Description",
+      "conversation": "Conversation",
+      "creator": "Créé par",
+      "created": "Créé",
+      "lastUpdated": "Dernière mise à jour",
+      "expires": "Expire",
+      "dates": "Dates",
+      "usage": "Utilisation",
+      "totalUses": "Utilisations totales",
+      "totalParticipants": "Participants totaux",
+      "activeUsers": "Utilisateurs actifs",
+      "permissions": "Permissions",
+      "languages": "Langues autorisées"
+    },
+    "edit": {
+      "title": "Modifier le lien",
+      "linkName": "Nom du lien",
+      "linkNamePlaceholder": "Entrez le nom du lien",
+      "description": "Description",
+      "descriptionPlaceholder": "Entrez une description",
+      "expiresAt": "Date d'expiration",
+      "expiresAtDescription": "Quand ce lien expirera",
+      "selectDate": "Sélectionner une date",
+      "maxUses": "Utilisations maximum",
+      "maxUsesDescription": "Nombre maximum de fois que ce lien peut être utilisé",
+      "permissions": "Permissions",
+      "requirements": "Exigences"
+    },
+    "permissions": {
+      "allowed": "Autorisé",
+      "denied": "Refusé",
+      "messages": "Messages",
+      "messagesDescription": "Autoriser l'envoi de messages",
+      "images": "Images",
+      "imagesDescription": "Autoriser le partage d'images",
+      "files": "Fichiers",
+      "filesDescription": "Autoriser le partage de fichiers",
+      "viewHistory": "Voir l'historique",
+      "viewHistoryDescription": "Autoriser la consultation de l'historique des conversations"
+    },
+    "requirements": {
+      "nickname": "Pseudonyme",
+      "nicknameDescription": "Exiger un pseudonyme pour rejoindre",
+      "email": "Email",
+      "emailDescription": "Exiger un email pour rejoindre"
+    },
+    "confirm": {
+      "delete": "Êtes-vous sûr de vouloir supprimer ce lien ?"
+    },
+    "success": {
+      "linkCreated": "Lien créé avec succès",
+      "linkCopied": "Lien copié dans le presse-papiers",
+      "linkDeleted": "Lien supprimé avec succès",
+      "linkEnabled": "Lien activé avec succès",
+      "linkDisabled": "Lien désactivé avec succès",
+      "linkUpdated": "Lien mis à jour avec succès"
+    },
+    "errors": {
+      "loadFailed": "Erreur lors du chargement des liens",
+      "deleteFailed": "Erreur lors de la suppression du lien",
+      "toggleFailed": "Erreur lors de la mise à jour du statut du lien",
+      "extendFailed": "Erreur lors de la prolongation du lien",
+      "updateFailed": "Erreur lors de la mise à jour du lien"
+    },
+    "durationOptions": {
+      "1": {
+        "label": "1 jour",
+        "description": "Le lien expire dans 1 jour"
+      },
+      "3": {
+        "label": "3 jours",
+        "description": "Le lien expire dans 3 jours"
+      },
+      "7": {
+        "label": "7 jours",
+        "description": "Le lien expire dans 1 semaine"
+      },
+      "14": {
+        "label": "14 jours",
+        "description": "Le lien expire dans 2 semaines"
+      },
+      "30": {
+        "label": "30 jours",
+        "description": "Le lien expire dans 1 mois"
+      },
+      "60": {
+        "label": "60 jours",
+        "description": "Le lien expire dans 2 mois"
+      },
+      "90": {
+        "label": "90 jours",
+        "description": "Le lien expire dans 3 mois"
+      },
+      "180": {
+        "label": "180 jours",
+        "description": "Le lien expire dans 6 mois"
+      },
+      "365": {
+        "label": "365 jours",
+        "description": "Le lien expire dans 1 an"
+      },
+      "730": {
+        "label": "730 jours",
+        "description": "Le lien expire dans 2 ans"
+      }
+    },
+    "limitOptions": {
+      "unlimited": {
+        "label": "Illimité",
+        "description": "Pas de limite sur le nombre d'utilisations"
+      },
+      "5": {
+        "label": "5 utilisations",
+        "description": "Le lien peut être utilisé 5 fois"
+      },
+      "10": {
+        "label": "10 utilisations",
+        "description": "Le lien peut être utilisé 10 fois"
+      },
+      "25": {
+        "label": "25 utilisations",
+        "description": "Le lien peut être utilisé 25 fois"
+      },
+      "50": {
+        "label": "50 utilisations",
+        "description": "Le lien peut être utilisé 50 fois"
+      },
+      "100": {
+        "label": "100 utilisations",
+        "description": "Le lien peut être utilisé 100 fois"
+      },
+      "250": {
+        "label": "250 utilisations",
+        "description": "Le lien peut être utilisé 250 fois"
+      },
+      "500": {
+        "label": "500 utilisations",
+        "description": "Le lien peut être utilisé 500 fois"
+      },
+      "1000": {
+        "label": "1000 utilisations",
+        "description": "Le lien peut être utilisé 1000 fois"
+      },
+      "5000": {
+        "label": "5000 utilisations",
+        "description": "Le lien peut être utilisé 5000 fois"
+      }
+    },
+    "tracking": {
+      "title": "Liens suivis",
+      "createLink": "Créer un lien suivi",
+      "originalUrl": "URL originale",
+      "shortUrl": "URL courte",
+      "trackingUrl": "URL de suivi",
+      "noLinks": "Aucun lien suivi",
+      "noLinksDescription": "Créez votre premier lien suivi pour surveiller les clics et l'engagement",
+      "stats": {
+        "totalLinks": "Liens totaux",
+        "totalClicks": "Clics totaux",
+        "uniqueClicks": "Visiteurs uniques",
+        "activeLinks": "Liens actifs"
+      },
+      "details": {
+        "title": "Statistiques du lien de suivi",
+        "overview": "Aperçu",
+        "performance": "Performance",
+        "geography": "Géographie",
+        "devices": "Appareils",
+        "browsers": "Navigateurs",
+        "timeline": "Chronologie",
+        "clicksByCountry": "Clics par pays",
+        "clicksByDevice": "Clics par appareil",
+        "clicksByBrowser": "Clics par navigateur",
+        "clicksByDate": "Clics dans le temps",
+        "topReferrers": "Principaux référents",
+        "referrer": "Référent",
+        "clicks": "Clics"
+      },
+      "actions": {
+        "viewStats": "Voir les statistiques",
+        "copyShortUrl": "Copier l'URL courte",
+        "deactivate": "Désactiver",
+        "activate": "Activer"
+      },
+      "success": {
+        "created": "Lien de suivi créé avec succès",
+        "copied": "Lien copié dans le presse-papiers",
+        "deactivated": "Lien désactivé avec succès",
+        "activated": "Lien activé avec succès",
+        "deleted": "Lien supprimé avec succès"
+      },
+      "errors": {
+        "loadFailed": "Erreur lors du chargement des liens de suivi",
+        "createFailed": "Erreur lors de la création du lien de suivi",
+        "statsFailed": "Erreur lors du chargement des statistiques",
+        "deactivateFailed": "Erreur lors de la désactivation du lien",
+        "deleteFailed": "Erreur lors de la suppression du lien"
+      }
+    }
+  }
+}
+
