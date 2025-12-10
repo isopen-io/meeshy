@@ -17,7 +17,7 @@ ARG PNPM_VERSION=latest
 # === ENVIRONMENT VARIABLES ===
 ENV NODE_ENV=${NODE_ENV} \
     PNPM_HOME="/pnpm" \
-    PATH="$PNPM_HOME:$PATH" \
+    PATH="/pnpm:$PATH" \
     NPM_CONFIG_CACHE="/tmp/.npm" \
     YARN_CACHE_FOLDER="/tmp/.yarn"
 
