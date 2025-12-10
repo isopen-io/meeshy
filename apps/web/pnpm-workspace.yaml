@@ -1,0 +1,17 @@
+packages:
+  - '.'
+  - 'shared'
+
+ignoredBuiltDependencies:
+  - '@tensorflow/tfjs-node'
+  - core-js
+  - onnxruntime-node
+  - protobufjs
+  - sharp
+  - unrs-resolver
+
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma
