@@ -4,6 +4,7 @@
 # Multi-architecture builds for all services
 # Supports: linux/amd64, linux/arm64
 # Registry: Docker Hub (isopen/meeshy-*)
+# Package managers: bun (default) or pnpm
 # =============================================================================
 
 name: Docker
@@ -52,13 +53,23 @@ on:
           - linux/amd64,linux/arm64
           - linux/amd64
           - linux/arm64
+      package_manager:
+        description: 'Package manager for builds'
+        required: false
+        type: choice
+        default: 'bun'
+        options:
+          - bun
+          - pnpm
 
 env:
   DOCKER_REGISTRY: docker.io
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64,linux/arm64
   NODE_VERSION: '22'
+  BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
+  PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -166,7 +177,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -227,6 +245,7 @@ jobs:
             BUILD_DATE=${{ github.event.repository.updated_at }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
+            PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
 
       - name: Security scan
         uses: aquasecurity/trivy-action@master
@@ -267,6 +286,8 @@ jobs:
       - name: Build Summary
         run: |
           echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.build.result }}" == "success" ]]; then
             echo "All images built and pushed successfully." >> $GITHUB_STEP_SUMMARY

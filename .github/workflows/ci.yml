@@ -3,6 +3,7 @@
 # =============================================================================
 # Continuous Integration: Lint, Type-check, Test
 # Optimized for monorepo with Turborepo
+# Supports: bun (default) or pnpm
 # =============================================================================
 
 name: CI
@@ -12,13 +13,26 @@ on:
     branches: [main, dev, develop]
   pull_request:
     branches: [main, dev, develop]
+  workflow_dispatch:
+    inputs:
+      package_manager:
+        description: 'Package manager to use'
+        required: false
+        type: choice
+        default: 'bun'
+        options:
+          - bun
+          - pnpm
 
 env:
   NODE_VERSION: '22'
+  BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
   PYTHON_VERSION: '3.12'
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  # Default to bun, can be overridden by workflow_dispatch
+  PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -29,13 +43,20 @@ jobs:
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
-    name: Quality
+    name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -44,24 +65,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: ${{ env.PACKAGE_MANAGER == 'pnpm' && 'pnpm' || '' }}
 
-      - name: Install dependencies
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun install
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
       - name: Lint
-        run: pnpm run lint
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
       - name: Type-check
-        run: pnpm run type-check
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check
         continue-on-error: true
 
   # ===========================================================================
   # TEST: Unit Tests (Parallel by package)
   # ===========================================================================
   test:
-    name: Test
+    name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
     strategy:
@@ -82,7 +108,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -91,12 +124,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: ${{ env.PACKAGE_MANAGER == 'pnpm' && 'pnpm' || '' }}
 
-      - name: Install dependencies
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun install
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      - name: Run tests
+      - name: Run tests (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun run test --filter=${{ matrix.package.filter }}
+        continue-on-error: true
+
+      - name: Run tests (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm run test --filter=${{ matrix.package.filter }}
         continue-on-error: true
 
@@ -184,7 +228,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -193,9 +244,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: ${{ env.PACKAGE_MANAGER == 'pnpm' && 'pnpm' || '' }}
 
-      - name: Install dependencies
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun install
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
       - name: Validate Prisma schema
@@ -220,14 +276,21 @@ jobs:
   # BUILD: Verify build works
   # ===========================================================================
   build:
-    name: Build
+    name: Build (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
       - name: Setup pnpm
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
@@ -236,12 +299,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: ${{ env.PACKAGE_MANAGER == 'pnpm' && 'pnpm' || '' }}
 
-      - name: Install dependencies
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun install
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build all packages
+      - name: Build all packages (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: bun run build
+
+      - name: Build all packages (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm run build
 
   # ===========================================================================
@@ -256,6 +329,8 @@ jobs:
       - name: Pipeline Summary
         run: |
           echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
