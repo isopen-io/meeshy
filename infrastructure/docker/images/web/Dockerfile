@@ -1,7 +1,8 @@
 # syntax=docker.io/docker/dockerfile:1
 # =============================================================================
 # MEESHY WEB - Next.js Application
-# Build context: apps/web/ directory (shared/ copied during CI)
+# Build context: monorepo root
+# Dockerfile: infrastructure/docker/images/web/Dockerfile
 # =============================================================================
 FROM node:22-alpine AS base
 
@@ -24,25 +25,30 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat tini
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
+# Copy package files from monorepo
+COPY apps/web/package.json ./
+COPY pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml ./
 
-# Note: shared/ directory is copied by CI before Docker build
-RUN mkdir -p ./shared
-COPY shared/package.json ./shared/
+# Copy shared package
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/prisma ./packages/shared/prisma/
 
-# Create workspace config
-RUN echo 'packages:\n  - "."\n  - "shared"' > pnpm-workspace.yaml
+# Setup workspace for web only
+RUN echo 'packages:\n  - "."\n  - "packages/shared"' > pnpm-workspace.yaml
 
 # Install dependencies
-RUN corepack enable pnpm && pnpm i --no-frozen-lockfile
+RUN corepack enable pnpm && pnpm i --filter @meeshy/web --filter @meeshy/shared
 
 # ===== BUILDER STAGE =====
 FROM base AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . ./
+COPY --from=deps /app/packages ./packages
+
+# Copy web app source
+COPY apps/web/ ./
 
 ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
 ARG NEXT_PUBLIC_WS_URL=wss://gate.meeshy.me

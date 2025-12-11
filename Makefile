@@ -123,17 +123,17 @@ quick: ## Démarrage rapide (pull + start + health)
 
 build-gateway: ## Builder l'image Gateway localement
 	@echo "$(BLUE)🔨 Build de l'image Gateway...$(NC)"
-	@docker build -t isopen/meeshy-gateway:latest -f $(GATEWAY_DIR)/Dockerfile $(GATEWAY_DIR)
+	@docker build -t isopen/meeshy-gateway:latest -f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
 	@echo "$(GREEN)✓ Image Gateway buildée$(NC)"
 
 build-translator: ## Builder l'image Translator localement
 	@echo "$(BLUE)🔨 Build de l'image Translator...$(NC)"
-	@docker build -t isopen/meeshy-translator:latest -f $(TRANSLATOR_DIR)/Dockerfile $(TRANSLATOR_DIR)
+	@docker build -t isopen/meeshy-translator:latest -f $(INFRA_DIR)/docker/images/translator/Dockerfile .
 	@echo "$(GREEN)✓ Image Translator buildée$(NC)"
 
 build-frontend: ## Builder l'image Frontend localement
 	@echo "$(BLUE)🔨 Build de l'image Frontend...$(NC)"
-	@docker build -t isopen/meeshy-frontend:latest -f $(WEB_DIR)/Dockerfile $(WEB_DIR)
+	@docker build -t isopen/meeshy-frontend:latest -f $(INFRA_DIR)/docker/images/web/Dockerfile .
 	@echo "$(GREEN)✓ Image Frontend buildée$(NC)"
 
 build-all: build-gateway build-translator build-frontend ## Builder toutes les images localement
