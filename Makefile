@@ -11,9 +11,16 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 # Variables
-COMPOSE_FILE := docker-compose.dev.yml
-ENV_FILE := .env.dev
-HEALTH_SCRIPT := ./health-check.sh
+COMPOSE_DIR := infrastructure/docker/compose
+COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.dev.yml
+ENV_FILE := infrastructure/envs/.env.example
+HEALTH_SCRIPT := ./scripts/health-check.sh
+
+# Paths
+WEB_DIR := apps/web
+GATEWAY_DIR := services/gateway
+TRANSLATOR_DIR := services/translator
+INFRA_DIR := infrastructure
 
 help: ## Afficher cette aide
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════╗$(NC)"
@@ -116,17 +123,17 @@ quick: ## Démarrage rapide (pull + start + health)
 
 build-gateway: ## Builder l'image Gateway localement
 	@echo "$(BLUE)🔨 Build de l'image Gateway...$(NC)"
-	@cd gateway && docker build -t isopen/meeshy-gateway:latest .
+	@docker build -t isopen/meeshy-gateway:latest -f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
 	@echo "$(GREEN)✓ Image Gateway buildée$(NC)"
 
 build-translator: ## Builder l'image Translator localement
 	@echo "$(BLUE)🔨 Build de l'image Translator...$(NC)"
-	@cd translator && docker build -t isopen/meeshy-translator:latest .
+	@docker build -t isopen/meeshy-translator:latest -f $(INFRA_DIR)/docker/images/translator/Dockerfile .
 	@echo "$(GREEN)✓ Image Translator buildée$(NC)"
 
 build-frontend: ## Builder l'image Frontend localement
 	@echo "$(BLUE)🔨 Build de l'image Frontend...$(NC)"
-	@cd frontend && docker build -t isopen/meeshy-frontend:latest .
+	@docker build -t isopen/meeshy-frontend:latest -f $(INFRA_DIR)/docker/images/web/Dockerfile .
 	@echo "$(GREEN)✓ Image Frontend buildée$(NC)"
 
 build-all: build-gateway build-translator build-frontend ## Builder toutes les images localement
