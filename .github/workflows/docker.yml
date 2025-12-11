@@ -62,6 +62,11 @@ on:
         options:
           - bun
           - pnpm
+      no_cache:
+        description: 'Build without cache (force rebuild)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   DOCKER_REGISTRY: docker.io
@@ -234,7 +239,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.service }}
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
+          cache-from: ${{ github.event.inputs.no_cache != 'true' && format('type=gha,scope={0}', matrix.service) || '' }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           provenance: true
           sbom: true
