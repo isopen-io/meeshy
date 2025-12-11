@@ -133,7 +133,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"service":"web","context":"./apps/web","dockerfile":"./apps/web/Dockerfile","image":"meeshy-frontend","version":"'$VERSION'"}'
+            MATRIX+='{"service":"web","context":".","dockerfile":"./infrastructure/docker/images/web/Dockerfile","image":"meeshy-frontend","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -141,7 +141,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat services/gateway/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"service":"gateway","context":"./services/gateway","dockerfile":"./services/gateway/Dockerfile","image":"meeshy-gateway","version":"'$VERSION'"}'
+            MATRIX+='{"service":"gateway","context":".","dockerfile":"./infrastructure/docker/images/gateway/Dockerfile","image":"meeshy-gateway","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -149,7 +149,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat services/translator/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"service":"translator","context":"./services/translator","dockerfile":"./services/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'"}'
+            MATRIX+='{"service":"translator","context":".","dockerfile":"./infrastructure/docker/images/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -195,11 +195,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Prepare shared files
-        run: |
-          # Copy shared package to service context for Docker build
-          mkdir -p ${{ matrix.context }}/shared
-          cp -r packages/shared/* ${{ matrix.context }}/shared/ 2>/dev/null || true
+      # Note: shared files are copied directly in Dockerfiles from monorepo root context
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
