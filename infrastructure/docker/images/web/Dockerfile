@@ -28,17 +28,16 @@ WORKDIR /app
 # Copy package files from monorepo
 COPY apps/web/package.json ./
 COPY pnpm-lock.yaml ./
-COPY pnpm-workspace.yaml ./
 
 # Copy shared package
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/shared/prisma ./packages/shared/prisma/
 
-# Setup workspace for web only
-RUN echo 'packages:\n  - "."\n  - "packages/shared"' > pnpm-workspace.yaml
+# Setup workspace for web only (printf for proper newlines)
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
 # Install dependencies
-RUN corepack enable pnpm && pnpm i --filter @meeshy/web --filter @meeshy/shared
+RUN corepack enable pnpm && pnpm install --no-frozen-lockfile
 
 # ===== BUILDER STAGE =====
 FROM base AS builder

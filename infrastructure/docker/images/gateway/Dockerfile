@@ -45,13 +45,13 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy monorepo package files
-COPY --chown=gateway:nodejs pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --chown=gateway:nodejs pnpm-lock.yaml ./
 COPY --chown=gateway:nodejs services/gateway/package.json ./
 COPY --chown=gateway:nodejs packages/shared/package.json ./packages/shared/
 COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
 
-# Create workspace config for gateway only
-RUN echo 'packages:\n  - "."\n  - "packages/shared"' > pnpm-workspace.yaml
+# Create workspace config for gateway only (printf for proper newlines)
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile --prod=false \
