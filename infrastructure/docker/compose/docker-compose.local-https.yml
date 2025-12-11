@@ -1,0 +1,224 @@
+# =============================================================================
+# MEESHY - Docker Compose Local Development with HTTPS (mkcert)
+# =============================================================================
+# Usage:
+#   ./scripts/dev.sh --secure --with-containers
+#   make dev-secure
+#
+# Prerequisites:
+#   - mkcert installed (brew install mkcert / apt install mkcert)
+#   - Run: mkcert -install (one time)
+#   - Certificates generated in infrastructure/docker/compose/certs/
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # TRAEFIK - Reverse Proxy with Local HTTPS
+  # ===========================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: meeshy-traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs:/etc/traefik/certs:ro
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic/traefik.yml:ro
+    networks:
+      - meeshy-local-network
+    labels:
+      - "traefik.enable=true"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ===========================================================================
+  # DATABASE - MongoDB with Replica Set
+  # ===========================================================================
+  database:
+    image: mongo:8.0
+    container_name: meeshy-local-database
+    restart: unless-stopped
+    command: mongod --replSet rs0 --bind_ip_all --noauth
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-meeshy}
+    ports:
+      - "27017:27017"
+    volumes:
+      - local_database_data:/data/db
+      - local_database_config:/data/configdb
+    networks:
+      - meeshy-local-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # MongoDB Replica Set Init (one-shot)
+  mongo-init:
+    image: mongo:8.0
+    container_name: meeshy-mongo-init
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - meeshy-local-network
+    entrypoint: >
+      mongosh --host database:27017 --eval '
+        rs.status().ok || rs.initiate({
+          _id: "rs0",
+          members: [{ _id: 0, host: "database:27017" }]
+        });
+      '
+    restart: "no"
+
+  # ===========================================================================
+  # CACHE - Redis
+  # ===========================================================================
+  redis:
+    image: redis:8-alpine
+    container_name: meeshy-local-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - local_redis_data:/data
+    networks:
+      - meeshy-local-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================================================
+  # FRONTEND - Next.js (optional, can run natively)
+  # ===========================================================================
+  frontend:
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
+    container_name: meeshy-local-frontend
+    restart: unless-stopped
+    profiles: ["full"]
+    build:
+      context: ../../..
+      dockerfile: infrastructure/docker/images/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://localhost/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://localhost}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://localhost}
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost/api}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://localhost}
+    networks:
+      - meeshy-local-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3100"
+    depends_on:
+      - traefik
+      - gateway
+
+  # ===========================================================================
+  # GATEWAY - Fastify API (optional, can run natively)
+  # ===========================================================================
+  gateway:
+    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
+    container_name: meeshy-local-gateway
+    restart: unless-stopped
+    profiles: ["full"]
+    build:
+      context: ../../..
+      dockerfile: infrastructure/docker/images/gateway/Dockerfile
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-meeshy-dev-secret}
+      - ZMQ_TRANSLATOR_HOST=translator
+      - ZMQ_TRANSLATOR_PORT=5555
+    networks:
+      - meeshy-local-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=(Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.gateway.entrypoints=websecure"
+      - "traefik.http.routers.gateway.tls=true"
+      - "traefik.http.services.gateway.loadbalancer.server.port=3000"
+      # WebSocket
+      - "traefik.http.routers.gateway-ws.rule=(Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.gateway-ws.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ws.tls=true"
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===========================================================================
+  # TRANSLATOR - ML Service (optional, can run natively)
+  # ===========================================================================
+  translator:
+    image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
+    container_name: meeshy-local-translator
+    restart: unless-stopped
+    profiles: ["full"]
+    build:
+      context: ../../..
+      dockerfile: infrastructure/docker/images/translator/Dockerfile
+    environment:
+      - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      - PYTHONPATH=/workspace
+      - HF_HOME=/workspace/models
+    ports:
+      - "8000:8000"
+    volumes:
+      - local_models_data:/workspace/models
+    networks:
+      - meeshy-local-network
+    depends_on:
+      database:
+        condition: service_healthy
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  meeshy-local-network:
+    driver: bridge
+    name: meeshy-local-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  local_database_data:
+    name: meeshy-local-database-data
+  local_database_config:
+    name: meeshy-local-database-config
+  local_redis_data:
+    name: meeshy-local-redis-data
+  local_models_data:
+    name: meeshy-local-models-data
