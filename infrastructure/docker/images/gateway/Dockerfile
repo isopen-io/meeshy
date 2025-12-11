@@ -1,6 +1,7 @@
 # =============================================================================
 # MEESHY GATEWAY - Fastify Service
-# Build context: services/gateway/ directory (shared/ copied during CI)
+# Build context: monorepo root
+# Dockerfile: infrastructure/docker/images/gateway/Dockerfile
 # =============================================================================
 FROM node:22-alpine
 
@@ -14,7 +15,7 @@ ARG PNPM_VERSION=9.15.0
 
 ENV NODE_ENV=${NODE_ENV} \
     PNPM_HOME="/pnpm" \
-    PATH="/pnpm:$PATH"
+    PATH="$PNPM_HOME:$PATH"
 
 # Runtime configuration
 ARG FASTIFY_PORT=3000
@@ -43,30 +44,32 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Create workspace config
-RUN echo 'packages:\n  - "."\n  - "shared"' > pnpm-workspace.yaml
+# Copy monorepo package files
+COPY --chown=gateway:nodejs pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --chown=gateway:nodejs services/gateway/package.json ./
+COPY --chown=gateway:nodejs packages/shared/package.json ./packages/shared/
+COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
 
-# Copy package files
-COPY --chown=gateway:nodejs package.json pnpm-lock.yaml* ./
-# Note: shared/ directory is copied by CI before Docker build
-RUN mkdir -p ./shared
-COPY --chown=gateway:nodejs shared/package.json ./shared/
+# Create workspace config for gateway only
+RUN echo 'packages:\n  - "."\n  - "packages/shared"' > pnpm-workspace.yaml
 
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile --prod=false \
     && pnpm store prune
 
 # Copy source code
-COPY --chown=gateway:nodejs src/ ./src/
-COPY --chown=gateway:nodejs shared/ ./shared/
-COPY --chown=gateway:nodejs tsconfig.json ./
-COPY --chown=gateway:nodejs docker-entrypoint.sh ./
+COPY --chown=gateway:nodejs services/gateway/src/ ./src/
+COPY --chown=gateway:nodejs services/gateway/tsconfig.json ./
+COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
+
+# Copy entrypoint if exists
+COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./ 2>/dev/null || true
 
 # Build
 RUN echo "Building TypeScript..." \
-    && PRISMA_CLIENT_OUTPUT_DIRECTORY=./shared/prisma npx prisma generate --schema=./shared/prisma/schema.prisma 2>/dev/null || true \
+    && PRISMA_CLIENT_OUTPUT_DIRECTORY=./packages/shared/prisma npx prisma generate --schema=./packages/shared/prisma/schema.prisma 2>/dev/null || true \
     && pnpm exec tsc \
-    && cp -ar shared/prisma dist/shared/ 2>/dev/null || true \
+    && cp -ar packages/shared/prisma dist/packages/shared/ 2>/dev/null || true \
     && echo "Build completed" \
     && rm -rf src/ tsconfig.json \
     && pnpm install --prod --ignore-scripts \
