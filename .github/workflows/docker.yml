@@ -74,7 +74,6 @@ env:
   PLATFORMS: linux/amd64,linux/arm64
   NODE_VERSION: '22'
   BUN_VERSION: '1.1.38'
-  PNPM_VERSION: '9'
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
 concurrency:
@@ -192,8 +191,6 @@ jobs:
       - name: Setup pnpm
         if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

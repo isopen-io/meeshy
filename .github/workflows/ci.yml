@@ -27,7 +27,6 @@ on:
 env:
   NODE_VERSION: '22'
   BUN_VERSION: '1.1.38'
-  PNPM_VERSION: '9'
   PYTHON_VERSION: '3.12'
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -58,8 +57,6 @@ jobs:
       # pnpm is always needed for turborepo (defined in package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -117,8 +114,6 @@ jobs:
       # pnpm is always needed for turborepo (defined in package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -237,8 +232,6 @@ jobs:
       # pnpm is always needed for turborepo (defined in package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -292,8 +285,6 @@ jobs:
       # pnpm is always needed for turborepo (defined in package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
