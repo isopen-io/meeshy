@@ -51,6 +51,9 @@ COPY --from=deps /app/packages ./packages
 # Copy web app source
 COPY apps/web/ ./
 
+# Recreate correct pnpm-workspace.yaml (apps/web/ copy overwrites it with wrong paths)
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
+
 ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
 ARG NEXT_PUBLIC_WS_URL=wss://gate.meeshy.me
 ARG NEXT_PUBLIC_BACKEND_URL=https://gate.meeshy.me
