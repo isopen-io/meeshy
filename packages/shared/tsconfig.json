@@ -37,7 +37,10 @@
     "allowUnusedLabels": false,
     
     /* Completeness */
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    /* Type Loading - Explicit types to prevent auto-loading of @types/* */
+    "types": ["node"]
   },
   "include": ["types/**/*.ts", "utils/**/*.ts", "encryption/**/*.ts"],
   "exclude": [
