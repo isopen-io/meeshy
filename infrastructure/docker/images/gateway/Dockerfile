@@ -65,10 +65,16 @@ COPY --chown=gateway:nodejs packages/shared/package.json ./packages/shared/
 COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
 
 # === SETUP WORKSPACE CONFIG ===
+# For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
 # For pnpm: create pnpm-workspace.yaml
-# For bun: add workspaces field to package.json
-RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
-    node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
+RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      echo "=== Configuring bun workspace ===" && \
+      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
+      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
+    else \
+      echo "=== Configuring pnpm workspace ===" && \
+      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
+    fi
 
 # === INSTALL DEPENDENCIES ===
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
