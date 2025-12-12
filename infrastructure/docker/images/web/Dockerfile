@@ -22,6 +22,7 @@ ENV NODE_ENV=production \
 
 # ===== DEPS STAGE =====
 FROM base AS deps
+ARG PNPM_VERSION=9.15.0
 RUN apk add --no-cache libc6-compat tini
 WORKDIR /app
 
@@ -37,10 +38,11 @@ COPY packages/shared/prisma ./packages/shared/prisma/
 RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
 # Install dependencies
-RUN corepack enable pnpm && pnpm install --no-frozen-lockfile
+RUN corepack enable pnpm@${PNPM_VERSION} && pnpm install --no-frozen-lockfile
 
 # ===== BUILDER STAGE =====
 FROM base AS builder
+ARG PNPM_VERSION=9.15.0
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -58,7 +60,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL} \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable pnpm && pnpm run build
+RUN corepack enable pnpm@${PNPM_VERSION} && pnpm run build
 
 # ===== RUNNER STAGE =====
 FROM base AS runner

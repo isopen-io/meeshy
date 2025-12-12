@@ -189,11 +189,10 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # pnpm version is read from packageManager field in package.json
       - name: Setup pnpm
         if: env.PACKAGE_MANAGER == 'pnpm'
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
