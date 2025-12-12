@@ -4,7 +4,7 @@
 # Multi-architecture builds for all services
 # Supports: linux/amd64, linux/arm64
 # Registry: Docker Hub (isopen/meeshy-*)
-# Package managers: bun (default) or pnpm
+# Package managers: pnpm (default) or bun
 # =============================================================================
 
 name: Docker
@@ -58,10 +58,10 @@ on:
         description: 'Package manager for builds'
         required: false
         type: choice
-        default: 'bun'
+        default: 'pnpm'
         options:
-          - bun
           - pnpm
+          - bun
       no_cache:
         description: 'Build without cache (force rebuild)'
         required: false
@@ -75,7 +75,7 @@ env:
   NODE_VERSION: '22'
   BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
-  PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
+  PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'pnpm' }}
 
 concurrency:
   group: docker-${{ github.ref }}
