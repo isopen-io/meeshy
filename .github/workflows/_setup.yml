@@ -15,10 +15,10 @@ on:
         type: string
         default: '22'
       pnpm-version:
-        description: 'pnpm version to use'
+        description: 'pnpm version (leave empty to use packageManager from package.json)'
         required: false
         type: string
-        default: '9'
+        default: ''
       python-version:
         description: 'Python version to use (empty to skip Python setup)'
         required: false
@@ -42,10 +42,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm version is read from packageManager field in package.json
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ inputs.pnpm-version }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
