@@ -94,7 +94,11 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
 # === BUILD SHARED PACKAGE ===
 RUN echo "=== Building shared package ===" && \
     cd packages/shared && \
-    npx tsc --project tsconfig.json && \
+    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      bun run tsc --project tsconfig.json; \
+    else \
+      pnpm exec tsc --project tsconfig.json; \
+    fi && \
     cd /app
 
 # === COPY SOURCE CODE ===
