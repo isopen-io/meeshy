@@ -38,7 +38,7 @@ COPY packages/shared/prisma ./packages/shared/prisma/
 RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
 # Install dependencies
-RUN corepack enable pnpm@${PNPM_VERSION} && pnpm install --no-frozen-lockfile
+RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate && pnpm install --no-frozen-lockfile
 
 # ===== BUILDER STAGE =====
 FROM base AS builder
@@ -60,7 +60,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL} \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable pnpm@${PNPM_VERSION} && pnpm run build
+RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate && pnpm run build
 
 # ===== RUNNER STAGE =====
 FROM base AS runner
