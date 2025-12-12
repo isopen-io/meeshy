@@ -55,11 +55,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # pnpm is always needed for turborepo (defined in package.json packageManager)
+      # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -121,11 +119,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # pnpm is always needed for turborepo (defined in package.json packageManager)
+      # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -248,11 +244,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # pnpm is always needed for turborepo (defined in package.json packageManager)
+      # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -310,11 +304,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # pnpm is always needed for turborepo (defined in package.json packageManager)
+      # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
