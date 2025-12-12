@@ -1,7 +1,7 @@
 # =============================================================================
 # MEESHY - CI Pipeline
 # =============================================================================
-# Continuous Integration: Lint, Type-check, Test
+# Continuous Integration: Lint, Type-check, Test with Coverage, Build
 # Optimized for monorepo with Turborepo
 # Supports: bun (default) or pnpm
 # =============================================================================
@@ -89,7 +89,8 @@ jobs:
         continue-on-error: true
 
   # ===========================================================================
-  # TEST: Unit Tests (Parallel by package)
+  # TEST: Unit Tests with Coverage (Parallel by package)
+  # Minimum coverage threshold: 90%
   # ===========================================================================
   test:
     name: Test ${{ matrix.package.name }}
@@ -144,15 +145,13 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      - name: Run tests (bun)
+      - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun run test --filter=${{ matrix.package.filter }}
-        continue-on-error: true
+        run: bun run test:coverage --filter=${{ matrix.package.filter }}
 
-      - name: Run tests (pnpm)
+      - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm run test --filter=${{ matrix.package.filter }}
-        continue-on-error: true
+        run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -163,10 +162,11 @@ jobs:
           name: ${{ matrix.package.name }}-coverage
 
   # ===========================================================================
-  # TEST: Python Tests
+  # TEST: Python Tests with Coverage
+  # Minimum coverage threshold: 90%
   # ===========================================================================
   test-python:
-    name: Test Python
+    name: Test Python (translator)
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -185,13 +185,11 @@ jobs:
           cd services/translator
           pip install -r requirements.txt
           pip install pytest pytest-cov
-        continue-on-error: true
 
-      - name: Run tests
+      - name: Run tests with coverage (90% minimum)
         run: |
           cd services/translator
-          pytest --cov=src --cov-report=xml || true
-        continue-on-error: true
+          pytest
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -273,7 +271,6 @@ jobs:
         run: |
           cd packages/shared
           npx prisma validate
-        continue-on-error: true
 
       - name: Check Prisma format
         run: |
@@ -285,10 +282,9 @@ jobs:
         run: |
           cd packages/shared
           npx prisma generate
-        continue-on-error: true
 
   # ===========================================================================
-  # BUILD: Verify build works
+  # BUILD: Verify builds work (like in Dockerfiles)
   # ===========================================================================
   build:
     name: Build (${{ github.event.inputs.package_manager || 'bun' }})
@@ -329,13 +325,23 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build all packages (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: bun run build
+      # Build shared package (like in Dockerfiles)
+      - name: Build shared package
+        run: |
+          cd packages/shared
+          pnpm exec tsc
 
-      - name: Build all packages (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm run build
+      # Build gateway (like in Dockerfiles)
+      - name: Build gateway
+        run: |
+          cd services/gateway
+          pnpm exec tsc
+
+      # Build web frontend (like in Dockerfiles)
+      - name: Build web frontend
+        run: |
+          cd apps/web
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run build' || 'pnpm run build' }}
 
   # ===========================================================================
   # SUMMARY
