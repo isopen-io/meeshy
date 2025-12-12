@@ -61,8 +61,9 @@ WORKDIR /app
 COPY --chown=gateway:nodejs pnpm-lock.yaml* ./
 COPY --chown=gateway:nodejs bun.lock* ./
 COPY --chown=gateway:nodejs services/gateway/package.json ./
-COPY --chown=gateway:nodejs packages/shared/package.json ./packages/shared/
-COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
+
+# Copy shared package (full source for building)
+COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
 
 # === SETUP WORKSPACE CONFIG ===
 # For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
@@ -90,10 +91,15 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       pnpm store prune; \
     fi
 
+# === BUILD SHARED PACKAGE ===
+RUN echo "=== Building shared package ===" && \
+    cd packages/shared && \
+    npx tsc --project tsconfig.json && \
+    cd /app
+
 # === COPY SOURCE CODE ===
 COPY --chown=gateway:nodejs services/gateway/src/ ./src/
 COPY --chown=gateway:nodejs services/gateway/tsconfig.json ./
-COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
 
 # Copy entrypoint script
 COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./
