@@ -64,8 +64,11 @@ COPY --chown=gateway:nodejs services/gateway/package.json ./
 COPY --chown=gateway:nodejs packages/shared/package.json ./packages/shared/
 COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
 
-# Create workspace config for gateway only (printf for proper newlines)
-RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
+# === SETUP WORKSPACE CONFIG ===
+# For pnpm: create pnpm-workspace.yaml
+# For bun: add workspaces field to package.json
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+    node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
 
 # === INSTALL DEPENDENCIES ===
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
