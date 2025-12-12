@@ -52,9 +52,8 @@ COPY apps/web/package.json ./
 COPY pnpm-lock.yaml* ./
 COPY bun.lock* ./
 
-# Copy shared package
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/shared/prisma ./packages/shared/prisma/
+# Copy shared package (full source for building)
+COPY packages/shared/ ./packages/shared/
 
 # === SETUP WORKSPACE CONFIG ===
 # For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
@@ -80,6 +79,12 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       corepack prepare pnpm@${PNPM_VERSION} --activate && \
       pnpm install --no-frozen-lockfile; \
     fi
+
+# === BUILD SHARED PACKAGE ===
+RUN echo "=== Building shared package ===" && \
+    cd packages/shared && \
+    npx tsc --project tsconfig.json && \
+    cd /app
 
 # ===== BUILDER STAGE =====
 FROM base AS builder
