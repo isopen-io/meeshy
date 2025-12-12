@@ -56,10 +56,13 @@ COPY bun.lock* ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/shared/prisma ./packages/shared/prisma/
 
-# Setup workspace for web only (printf for proper newlines)
-RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
+# === SETUP WORKSPACE CONFIG ===
+# For pnpm: create pnpm-workspace.yaml
+# For bun: add workspaces field to package.json
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+    node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
 
-# Install package manager and dependencies based on PACKAGE_MANAGER arg
+# === INSTALL DEPENDENCIES ===
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing with bun ===" && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
@@ -95,8 +98,10 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
 # Copy web app source
 COPY apps/web/ ./
 
-# Recreate correct pnpm-workspace.yaml (apps/web/ copy overwrites it with wrong paths)
-RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
+# === RECREATE WORKSPACE CONFIG ===
+# apps/web/ copy overwrites workspace config with wrong paths
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+    node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
 
 # === BUILD ENVIRONMENT VARIABLES ===
 ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
