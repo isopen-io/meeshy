@@ -81,13 +81,13 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
     fi
 
 # === BUILD SHARED PACKAGE ===
-# Use package manager exec to run tsc (not npx which installs wrong package)
-RUN echo "=== Building shared package (v2) ===" && \
+# Use the build script defined in package.json which runs tsc
+RUN echo "=== Building shared package (v3) ===" && \
     cd packages/shared && \
     if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      bun run tsc --project tsconfig.json; \
+      bun run build; \
     else \
-      pnpm exec tsc --project tsconfig.json; \
+      pnpm run build; \
     fi && \
     cd /app
 
