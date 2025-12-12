@@ -62,8 +62,8 @@ COPY --chown=gateway:nodejs services/gateway/src/ ./src/
 COPY --chown=gateway:nodejs services/gateway/tsconfig.json ./
 COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
 
-# Copy entrypoint if exists
-COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./ 2>/dev/null || true
+# Copy entrypoint script
+COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./
 
 # Build
 RUN echo "Building TypeScript..." \
