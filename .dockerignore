@@ -71,7 +71,10 @@ docker-compose*.yml
 # === Scripts (except entrypoint) ===
 **/scripts/
 **/*.sh
-!gateway/docker-entrypoint.sh
+!services/gateway/docker-entrypoint.sh
+!services/translator/docker-entrypoint.sh
+!services/translator/docker-entrypoint-mongodb.sh
+!services/translator/docker-entrypoint-volumes.sh
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/
