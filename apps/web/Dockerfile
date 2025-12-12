@@ -33,7 +33,7 @@ RUN mkdir -p ./shared
 COPY shared/package.json ./shared/
 
 # Create workspace config
-RUN echo 'packages:\n  - "."\n  - "shared"' > pnpm-workspace.yaml
+RUN printf 'packages:\n  - "."\n  - "shared"\n' > pnpm-workspace.yaml
 
 # Install dependencies
 RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate && pnpm i --no-frozen-lockfile
@@ -45,6 +45,9 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . ./
+
+# Recreate correct pnpm-workspace.yaml (COPY may overwrite it with wrong format)
+RUN printf 'packages:\n  - "."\n  - "shared"\n' > pnpm-workspace.yaml
 
 ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
 ARG NEXT_PUBLIC_WS_URL=wss://gate.meeshy.me
