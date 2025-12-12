@@ -1,28 +1,37 @@
+# syntax=docker.io/docker/dockerfile:1
 # =============================================================================
 # MEESHY GATEWAY - Fastify Service
 # Build context: monorepo root
 # Dockerfile: infrastructure/docker/images/gateway/Dockerfile
 # Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
 # =============================================================================
-FROM node:22-alpine
+FROM node:22-alpine AS base
 
+# === MAINTAINER INFORMATION ===
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
-      description="Meeshy Gateway - Fastify API Service" \
+      description="Meeshy Gateway - Fastify API Service with WebSocket support" \
+      version="1.0.0" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
-      org.opencontainers.image.vendor="Meeshy"
+      org.opencontainers.image.documentation="https://docs.meeshy.me/gateway" \
+      org.opencontainers.image.vendor="Meeshy" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="Meeshy Gateway" \
+      org.opencontainers.image.description="Fastify API gateway for Meeshy platform"
 
-# Package manager configuration (bun or pnpm)
+# === BUILD ARGUMENTS ===
 ARG PACKAGE_MANAGER=bun
 ARG NODE_ENV=production
 ARG PNPM_VERSION=9.15.0
 ARG BUN_VERSION=1.1.38
 
+# === ENVIRONMENT VARIABLES ===
 ENV NODE_ENV=${NODE_ENV} \
     PNPM_HOME="/pnpm" \
     BUN_INSTALL="/bun" \
-    PATH="/pnpm:/bun/bin:$PATH"
+    PATH="/pnpm:/bun/bin:$PATH" \
+    NPM_CONFIG_CACHE="/tmp/.npm"
 
-# Runtime configuration
+# === RUNTIME CONFIGURATION ===
 ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
 ARG LOG_LEVEL=info
@@ -32,7 +41,7 @@ ENV FASTIFY_PORT=${FASTIFY_PORT} \
     LOG_LEVEL=${LOG_LEVEL} \
     PORT=${FASTIFY_PORT}
 
-# System setup
+# === SYSTEM SETUP ===
 RUN apk add --no-cache \
         tini \
         curl \
@@ -48,7 +57,7 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy monorepo package files
+# === COPY PACKAGE FILES ===
 COPY --chown=gateway:nodejs pnpm-lock.yaml* ./
 COPY --chown=gateway:nodejs bun.lock* ./
 COPY --chown=gateway:nodejs services/gateway/package.json ./
@@ -58,21 +67,21 @@ COPY --chown=gateway:nodejs packages/shared/prisma ./packages/shared/prisma/
 # Create workspace config for gateway only (printf for proper newlines)
 RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
-# Install package manager and dependencies based on PACKAGE_MANAGER arg
+# === INSTALL DEPENDENCIES ===
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "Installing with bun..." && \
+      echo "=== Installing with bun ===" && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
       bun install --no-save; \
     else \
-      echo "Installing with pnpm..." && \
+      echo "=== Installing with pnpm ===" && \
       corepack enable pnpm && \
       corepack prepare pnpm@${PNPM_VERSION} --activate && \
       pnpm install --no-frozen-lockfile --prod=false && \
       pnpm store prune; \
     fi
 
-# Copy source code
+# === COPY SOURCE CODE ===
 COPY --chown=gateway:nodejs services/gateway/src/ ./src/
 COPY --chown=gateway:nodejs services/gateway/tsconfig.json ./
 COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
@@ -80,8 +89,8 @@ COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
 # Copy entrypoint script
 COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./
 
-# Build with appropriate package manager
-RUN echo "Building TypeScript..." \
+# === BUILD APPLICATION ===
+RUN echo "=== Building TypeScript ===" \
     && PRISMA_CLIENT_OUTPUT_DIRECTORY=./packages/shared/prisma npx prisma generate --schema=./packages/shared/prisma/schema.prisma 2>/dev/null || true \
     && if [ "$PACKAGE_MANAGER" = "bun" ]; then \
          bun run tsc; \
@@ -89,7 +98,7 @@ RUN echo "Building TypeScript..." \
          pnpm exec tsc; \
        fi \
     && cp -ar packages/shared/prisma dist/packages/shared/ 2>/dev/null || true \
-    && echo "Build completed" \
+    && echo "=== Build completed ===" \
     && rm -rf src/ tsconfig.json \
     && if [ "$PACKAGE_MANAGER" = "bun" ]; then \
          bun install --production --no-save; \
@@ -99,13 +108,18 @@ RUN echo "Building TypeScript..." \
        fi \
     && chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
 
+# === SET PERMISSIONS ===
 RUN chown -R gateway:nodejs /app
 
+# Expose port
 EXPOSE ${FASTIFY_PORT}
 
+# Use tini as entrypoint for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
 
+# === HEALTH CHECK ===
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${FASTIFY_PORT}/health || exit 1
 
+# Start Gateway service
 CMD ["sh", "-c", "node dist/src/server.js"]
