@@ -61,11 +61,18 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js (with pnpm cache)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
+
+      - name: Setup Node.js (without cache for bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -120,11 +127,18 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js (with pnpm cache)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
+
+      - name: Setup Node.js (without cache for bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -240,11 +254,18 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js (with pnpm cache)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
+
+      - name: Setup Node.js (without cache for bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -295,11 +316,18 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js (with pnpm cache)
+        if: env.PACKAGE_MANAGER == 'pnpm'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
+
+      - name: Setup Node.js (without cache for bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies (bun)
         if: env.PACKAGE_MANAGER == 'bun'
