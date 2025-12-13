@@ -166,15 +166,14 @@ WORKDIR /app
 
 # Copy production node_modules from prod-deps
 COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
-COPY --from=prod-deps --chown=gateway:nodejs /app/packages/shared/node_modules ./packages/shared/node_modules 2>/dev/null || true
 
 # Copy built artifacts from builder
 COPY --from=builder --chown=gateway:nodejs /app/dist ./dist
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared ./packages/shared
 
-# Copy entrypoint
+# Copy entrypoint and set permissions
 COPY --from=builder --chown=gateway:nodejs /app/docker-entrypoint.sh ./
-RUN chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
+RUN chmod +x /app/docker-entrypoint.sh || true
 
 # Copy package.json for runtime metadata
 COPY --chown=gateway:nodejs services/gateway/package.json ./
