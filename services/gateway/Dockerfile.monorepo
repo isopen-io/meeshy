@@ -1,8 +1,10 @@
 # =============================================================================
-# MEESHY GATEWAY - Fastify Service (Monorepo Build)
+# MEESHY GATEWAY - Fastify Service (Monorepo Build - Optimized)
 # Build context: Root of monorepo
 # Usage: docker build -f services/gateway/Dockerfile.monorepo -t meeshy-gateway .
 # =============================================================================
+
+# ===== BASE STAGE =====
 FROM node:22-alpine AS base
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
@@ -12,23 +14,21 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
 
 ARG PNPM_VERSION=9.15.0
 
-ENV NODE_ENV=production \
-    PNPM_HOME="/pnpm" \
+ENV PNPM_HOME="/pnpm" \
     PATH="/pnpm:$PATH"
 
-# System setup
-RUN apk add --no-cache \
-        tini \
-        curl \
-        python3 \
-        make \
-        g++ \
-        ffmpeg \
-    && corepack enable pnpm \
-    && corepack prepare pnpm@${PNPM_VERSION} --activate
+RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# ===== DEPS STAGE =====
+# ===== DEPS STAGE (with build tools) =====
 FROM base AS deps
+
+# Build tools for native modules (bcrypt, sharp, zeromq)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake
+
 WORKDIR /app
 
 # Copy root workspace files
@@ -38,22 +38,17 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY services/gateway/package.json ./services/gateway/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install ALL dependencies
+RUN pnpm install --no-frozen-lockfile && pnpm store prune
 
 # ===== BUILDER STAGE =====
-FROM base AS builder
-WORKDIR /app
+FROM deps AS builder
 
-# Copy dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/services/gateway/node_modules ./services/gateway/node_modules
+WORKDIR /app
 
 # Copy source files
 COPY packages/shared ./packages/shared
 COPY services/gateway ./services/gateway
-COPY pnpm-workspace.yaml ./
 
 # Build shared package first
 WORKDIR /app/packages/shared
@@ -66,9 +61,30 @@ RUN npx prisma generate --schema=./prisma/schema.prisma || true
 WORKDIR /app/services/gateway
 RUN pnpm build
 
-# ===== RUNNER STAGE =====
-FROM base AS runner
+# ===== PROD-DEPS STAGE (production dependencies only) =====
+FROM base AS prod-deps
+
+# Build tools needed for native module installation
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake
+
 WORKDIR /app
+
+# Copy root workspace files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy package.json files
+COPY packages/shared/package.json ./packages/shared/
+COPY services/gateway/package.json ./services/gateway/
+
+# Install ONLY production dependencies
+RUN pnpm install --no-frozen-lockfile --prod && pnpm store prune
+
+# ===== RUNNER STAGE (minimal runtime - NO build tools) =====
+FROM node:22-alpine AS runner
 
 ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
@@ -80,22 +96,31 @@ ENV NODE_ENV=production \
     LOG_LEVEL=${LOG_LEVEL} \
     PORT=${FASTIFY_PORT}
 
-# Create user
-RUN addgroup -g 1001 -S nodejs \
+# Runtime dependencies only (no build tools!)
+RUN apk add --no-cache \
+    tini \
+    curl \
+    ffmpeg \
+    && addgroup -g 1001 -S nodejs \
     && adduser -u 1001 -S -G nodejs gateway \
     && mkdir -p /app/logs \
     && chown -R gateway:nodejs /app
 
-# Copy built artifacts
+WORKDIR /app
+
+# Copy production node_modules from prod-deps
+COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=gateway:nodejs /app/services/gateway/node_modules ./services/gateway/node_modules 2>/dev/null || true
+
+# Copy built artifacts from builder
 COPY --from=builder --chown=gateway:nodejs /app/services/gateway/dist ./dist
-COPY --from=builder --chown=gateway:nodejs /app/services/gateway/node_modules ./node_modules
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared/dist ./node_modules/@meeshy/shared/dist
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared/prisma ./node_modules/@meeshy/shared/prisma
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared/package.json ./node_modules/@meeshy/shared/
 
-# Copy entrypoint (expects docker-entrypoint.sh to exist)
+# Copy entrypoint
 COPY --from=builder /app/services/gateway/docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh || true
+RUN chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
 
 USER gateway
 
