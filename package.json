@@ -23,6 +23,7 @@
     "build:translator": "turbo run build --filter=@meeshy/translator",
     "start": "turbo run start",
     "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
     "test:web": "turbo run test --filter=@meeshy/web",
     "test:gateway": "turbo run test --filter=@meeshy/gateway",
     "test:translator": "turbo run test --filter=@meeshy/translator",
