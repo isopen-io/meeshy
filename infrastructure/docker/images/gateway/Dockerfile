@@ -1,13 +1,14 @@
 # syntax=docker.io/docker/dockerfile:1
 # =============================================================================
-# MEESHY GATEWAY - Fastify Service
+# MEESHY GATEWAY - Fastify Service (Optimized Multi-Stage Build)
 # Build context: monorepo root
 # Dockerfile: infrastructure/docker/images/gateway/Dockerfile
 # Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
 # =============================================================================
+
+# ===== BASE STAGE =====
 FROM node:22-alpine AS base
 
-# === MAINTAINER INFORMATION ===
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Gateway - Fastify API Service with WebSocket support" \
       version="1.0.0" \
@@ -18,38 +19,144 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.title="Meeshy Gateway" \
       org.opencontainers.image.description="Fastify API gateway for Meeshy platform"
 
-# === BUILD ARGUMENTS ===
 ARG PACKAGE_MANAGER=bun
-ARG NODE_ENV=production
 ARG PNPM_VERSION=9.15.0
 ARG BUN_VERSION=1.1.38
 
-# === ENVIRONMENT VARIABLES ===
-ENV NODE_ENV=${NODE_ENV} \
-    PNPM_HOME="/pnpm" \
+ENV PNPM_HOME="/pnpm" \
     BUN_INSTALL="/bun" \
-    PATH="/pnpm:/bun/bin:$PATH" \
-    NPM_CONFIG_CACHE="/tmp/.npm"
+    PATH="/pnpm:/bun/bin:$PATH"
 
-# === RUNTIME CONFIGURATION ===
+# ===== DEPS STAGE (with build tools) =====
+FROM base AS deps
+
+ARG PACKAGE_MANAGER=bun
+ARG PNPM_VERSION=9.15.0
+ARG BUN_VERSION=1.1.38
+
+# Build tools for native modules (bcrypt, sharp, zeromq)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake \
+    bash \
+    curl
+
+WORKDIR /app
+
+# Copy package files
+COPY pnpm-lock.yaml* bun.lock* ./
+COPY services/gateway/package.json ./
+COPY packages/shared/ ./packages/shared/
+
+# Setup workspace config and install dependencies
+RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      echo "=== Configuring bun workspace ===" && \
+      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
+      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
+      ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
+      bun install --no-save; \
+    else \
+      echo "=== Configuring pnpm workspace ===" && \
+      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+      corepack enable pnpm && \
+      corepack prepare pnpm@${PNPM_VERSION} --activate && \
+      pnpm install --no-frozen-lockfile && \
+      pnpm store prune; \
+    fi
+
+# ===== BUILDER STAGE =====
+FROM deps AS builder
+
+ARG PACKAGE_MANAGER=bun
+
+WORKDIR /app
+
+# Build shared package
+RUN echo "=== Building shared package ===" && \
+    cd packages/shared && \
+    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      bun run tsc --project tsconfig.json; \
+    else \
+      pnpm exec tsc --project tsconfig.json; \
+    fi
+
+# Copy gateway source code
+COPY services/gateway/src/ ./src/
+COPY services/gateway/tsconfig.json ./
+COPY services/gateway/docker-entrypoint.sh ./
+
+# Build gateway
+RUN echo "=== Building TypeScript ===" && \
+    PRISMA_CLIENT_OUTPUT_DIRECTORY=./packages/shared/prisma npx prisma generate --schema=./packages/shared/prisma/schema.prisma 2>/dev/null || true && \
+    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      bun run tsc; \
+    else \
+      pnpm exec tsc; \
+    fi && \
+    cp -ar packages/shared/prisma dist/packages/shared/ 2>/dev/null || true && \
+    echo "=== Build completed ==="
+
+# ===== PROD-DEPS STAGE (production dependencies only) =====
+FROM base AS prod-deps
+
+ARG PACKAGE_MANAGER=bun
+ARG PNPM_VERSION=9.15.0
+ARG BUN_VERSION=1.1.38
+
+# Build tools for native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake \
+    bash \
+    curl
+
+WORKDIR /app
+
+# Copy package files
+COPY pnpm-lock.yaml* bun.lock* ./
+COPY services/gateway/package.json ./
+COPY packages/shared/package.json ./packages/shared/
+
+# Setup workspace and install production dependencies only
+RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      echo "=== Installing production deps with bun ===" && \
+      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
+      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
+      ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
+      bun install --production --no-save; \
+    else \
+      echo "=== Installing production deps with pnpm ===" && \
+      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+      corepack enable pnpm && \
+      corepack prepare pnpm@${PNPM_VERSION} --activate && \
+      pnpm install --no-frozen-lockfile --prod && \
+      pnpm store prune; \
+    fi
+
+# ===== RUNNER STAGE (minimal runtime - NO build tools) =====
+FROM node:22-alpine AS runner
+
 ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
 ARG LOG_LEVEL=info
 
-ENV FASTIFY_PORT=${FASTIFY_PORT} \
+ENV NODE_ENV=production \
+    FASTIFY_PORT=${FASTIFY_PORT} \
     FASTIFY_HOST=${FASTIFY_HOST} \
     LOG_LEVEL=${LOG_LEVEL} \
     PORT=${FASTIFY_PORT}
 
-# === SYSTEM SETUP ===
+# Runtime dependencies only (no build tools!)
 RUN apk add --no-cache \
-        tini \
-        curl \
-        bash \
-        python3 \
-        make \
-        g++ \
-        ffmpeg \
+    tini \
+    curl \
+    ffmpeg \
     && addgroup -g 1001 -S nodejs \
     && adduser -u 1001 -S -G nodejs gateway \
     && mkdir -p /app/logs \
@@ -57,89 +164,28 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# === COPY PACKAGE FILES ===
-COPY --chown=gateway:nodejs pnpm-lock.yaml* ./
-COPY --chown=gateway:nodejs bun.lock* ./
+# Copy production node_modules from prod-deps
+COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=gateway:nodejs /app/packages/shared/node_modules ./packages/shared/node_modules 2>/dev/null || true
+
+# Copy built artifacts from builder
+COPY --from=builder --chown=gateway:nodejs /app/dist ./dist
+COPY --from=builder --chown=gateway:nodejs /app/packages/shared ./packages/shared
+
+# Copy entrypoint
+COPY --from=builder --chown=gateway:nodejs /app/docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
+
+# Copy package.json for runtime metadata
 COPY --chown=gateway:nodejs services/gateway/package.json ./
 
-# Copy shared package (full source for building)
-COPY --chown=gateway:nodejs packages/shared/ ./packages/shared/
+USER gateway
 
-# === SETUP WORKSPACE CONFIG ===
-# For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
-# For pnpm: create pnpm-workspace.yaml
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "=== Configuring bun workspace ===" && \
-      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
-      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    else \
-      echo "=== Configuring pnpm workspace ===" && \
-      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    fi
-
-# === INSTALL DEPENDENCIES ===
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "=== Installing with bun ===" && \
-      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
-      ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      bun install --no-save; \
-    else \
-      echo "=== Installing with pnpm ===" && \
-      corepack enable pnpm && \
-      corepack prepare pnpm@${PNPM_VERSION} --activate && \
-      pnpm install --no-frozen-lockfile --prod=false && \
-      pnpm store prune; \
-    fi
-
-# === BUILD SHARED PACKAGE ===
-# Use package manager exec to run tsc (not npx which installs wrong package)
-RUN echo "=== Building shared package (v2) ===" && \
-    cd packages/shared && \
-    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      bun run tsc --project tsconfig.json; \
-    else \
-      pnpm exec tsc --project tsconfig.json; \
-    fi && \
-    cd /app
-
-# === COPY SOURCE CODE ===
-COPY --chown=gateway:nodejs services/gateway/src/ ./src/
-COPY --chown=gateway:nodejs services/gateway/tsconfig.json ./
-
-# Copy entrypoint script
-COPY --chown=gateway:nodejs services/gateway/docker-entrypoint.sh ./
-
-# === BUILD APPLICATION ===
-RUN echo "=== Building TypeScript ===" \
-    && PRISMA_CLIENT_OUTPUT_DIRECTORY=./packages/shared/prisma npx prisma generate --schema=./packages/shared/prisma/schema.prisma 2>/dev/null || true \
-    && if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-         bun run tsc; \
-       else \
-         pnpm exec tsc; \
-       fi \
-    && cp -ar packages/shared/prisma dist/packages/shared/ 2>/dev/null || true \
-    && echo "=== Build completed ===" \
-    && rm -rf src/ tsconfig.json \
-    && if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-         bun install --production --no-save; \
-       else \
-         pnpm install --prod --ignore-scripts && \
-         pnpm store prune; \
-       fi \
-    && chmod +x /app/docker-entrypoint.sh 2>/dev/null || true
-
-# === SET PERMISSIONS ===
-RUN chown -R gateway:nodejs /app
-
-# Expose port
 EXPOSE ${FASTIFY_PORT}
 
-# Use tini as entrypoint for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# === HEALTH CHECK ===
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${FASTIFY_PORT}/health || exit 1
 
-# Start Gateway service
-CMD ["sh", "-c", "node dist/src/server.js"]
+CMD ["node", "dist/src/server.js"]
