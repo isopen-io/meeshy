@@ -173,6 +173,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js (for Prisma)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -180,13 +185,22 @@ jobs:
           cache: 'pip'
           cache-dependency-path: services/translator/requirements.txt
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           cd services/translator
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
+      - name: Generate Prisma client (Python)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd services/translator
+          prisma generate --schema=../../packages/shared/prisma/schema.prisma
+
       - name: Run tests with coverage (90% minimum)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
           pytest
@@ -268,17 +282,23 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Validate Prisma schema
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd packages/shared
           npx prisma validate
 
       - name: Check Prisma format
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd packages/shared
           npx prisma format --check || true
         continue-on-error: true
 
       - name: Generate Prisma client
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd packages/shared
           npx prisma generate
