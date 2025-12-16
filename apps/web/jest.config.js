@@ -14,10 +14,13 @@ const customJestConfig = {
     // Handle module aliases (this will be automatically configured for you soon)
     '^@/(.*)$': '<rootDir>/$1',
     '^@meeshy/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
+    // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
+    '^lucide-react$': '<rootDir>/__mocks__/lucide-react.js',
+    '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/__mocks__/lucide-react.js',
   },
-  // Transform ESM packages
+  // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [
-    '/node_modules/(?!(lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates)/)',
+    'node_modules/(?!(\\.pnpm|lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',

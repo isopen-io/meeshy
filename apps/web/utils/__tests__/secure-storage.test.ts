@@ -157,17 +157,24 @@ describe('SecureStorage', () => {
     });
 
     it('should handle decryption failures', async () => {
-      // Set data with one session
+      // Set valid data first
       await SecureStorage.setSecure('test', { value: 'test' });
 
-      // Clear session (simulates logout)
-      sessionStorage.clear();
+      // Tamper with the encrypted data to cause decryption failure
+      const originalData = localStorage.getItem('test');
+      if (originalData) {
+        // Modify the base64 data to corrupt it (change some characters)
+        const corruptedData = originalData.slice(0, -10) + 'CORRUPTED!';
+        localStorage.setItem('test', corruptedData);
+      }
 
-      // Try to decrypt with different session
+      // Try to decrypt corrupted data
       const result = await SecureStorage.getSecure('test');
 
-      // Should fail gracefully
+      // Should fail gracefully and return null
       expect(result).toBeNull();
+      // Corrupted data should be removed
+      expect(localStorage.getItem('test')).toBeNull();
     });
   });
 
