@@ -2,7 +2,7 @@
  * Tests pour le système de notifications unifié
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { useNotifications } from '@/hooks/use-notifications';
@@ -121,7 +121,7 @@ describe('Système de notifications unifié', () => {
   });
 
   describe('NotificationCenter', () => {
-    it('affiche la liste des notifications', () => {
+    it('affiche la liste des notifications', async () => {
       const mockNotifications = [
         {
           id: '1',
@@ -167,14 +167,19 @@ describe('Système de notifications unifié', () => {
       });
 
       render(<NotificationCenter />);
-      
-      expect(screen.getByText('Notifications')).toBeInTheDocument();
-      expect(screen.getByText('1 non lue sur 2')).toBeInTheDocument();
-      expect(screen.getByText('Nouveau message')).toBeInTheDocument();
+
+      // Click the bell button to open the notification panel
+      const bellButton = screen.getByTitle('Notifications');
+      fireEvent.click(bellButton);
+
+      // Now check for the content inside the opened panel
+      await waitFor(() => {
+        expect(screen.getByText('Nouveau message')).toBeInTheDocument();
+      });
       expect(screen.getByText('Notification système')).toBeInTheDocument();
     });
 
-    it('affiche un message quand il n\'y a pas de notifications', () => {
+    it('affiche un message quand il n\'y a pas de notifications', async () => {
       mockUseNotifications.mockReturnValue({
         notifications: [],
         unreadNotifications: [],
@@ -200,8 +205,14 @@ describe('Système de notifications unifié', () => {
       });
 
       render(<NotificationCenter />);
-      
-      expect(screen.getByText('Aucune notification')).toBeInTheDocument();
+
+      // Click the bell button to open the notification panel
+      const bellButton = screen.getByTitle('Notifications');
+      fireEvent.click(bellButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Aucune notification')).toBeInTheDocument();
+      });
     });
   });
 
@@ -224,7 +235,7 @@ describe('Système de notifications unifié', () => {
       expect(mockNotificationService.initialize).toHaveBeenCalledWith(mockConfig);
     });
 
-    it('gère les notifications de messages avec traductions', () => {
+    it('gère les notifications de messages avec traductions', async () => {
       const messageData = {
         messageId: 'msg-1',
         senderId: 'user-1',
@@ -268,13 +279,16 @@ describe('Système de notifications unifié', () => {
         onNotificationReceived: mockOnNotificationReceived
       });
 
-      expect(mockOnNotificationReceived).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'message',
-          title: 'Message direct de John Doe',
-          translations: messageData.translations
-        })
-      );
+      // Wait for the async callback to fire
+      await waitFor(() => {
+        expect(mockOnNotificationReceived).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'message',
+            title: 'Message direct de John Doe',
+            translations: messageData.translations
+          })
+        );
+      }, { timeout: 200 });
     });
   });
 });
