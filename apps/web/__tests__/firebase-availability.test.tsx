@@ -273,6 +273,7 @@ describe('Firebase FCM - Tests conditionnels', () => {
     // Mock Notification
     Object.defineProperty(window, 'Notification', {
       writable: true,
+      configurable: true,
       value: {
         permission: 'default',
         requestPermission: jest.fn().mockResolvedValue('granted'),
@@ -285,11 +286,15 @@ describe('Firebase FCM - Tests conditionnels', () => {
   it('Gère gracieusement l\'absence de support des notifications', () => {
     // Supprimer Notification
     const originalNotification = (window as any).Notification;
-    delete (window as any).Notification;
+    Object.defineProperty(window, 'Notification', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
 
     // L'app ne doit pas crash
     const TestComponent = () => {
-      const hasNotificationSupport = typeof window !== 'undefined' && 'Notification' in window;
+      const hasNotificationSupport = typeof window !== 'undefined' && window.Notification !== undefined;
       return <div>{hasNotificationSupport ? 'Supported' : 'Not Supported'}</div>;
     };
 
@@ -298,7 +303,11 @@ describe('Firebase FCM - Tests conditionnels', () => {
     expect(screen.getByText('Not Supported')).toBeInTheDocument();
 
     // Restaurer
-    (window as any).Notification = originalNotification;
+    Object.defineProperty(window, 'Notification', {
+      value: originalNotification,
+      writable: true,
+      configurable: true
+    });
   });
 });
 
@@ -437,9 +446,11 @@ describe('Tests de résilience', () => {
   it('Gère les erreurs réseau gracieusement', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
+    // Configure mock to store callbacks for later invocation
+    const errorCallbacks: Function[] = [];
     mockSocket.on.mockImplementation((event: string, callback: Function) => {
       if (event === 'error') {
-        callback(new Error('Network error'));
+        errorCallbacks.push(callback);
       }
       return mockSocket;
     });
@@ -453,7 +464,12 @@ describe('Tests de résilience', () => {
       console.error('Socket error:', error);
     });
 
-    expect(errorHandled).toBe(false); // Pas d'erreur au départ
+    // Error not triggered yet
+    expect(errorHandled).toBe(false);
+
+    // Now simulate an error being triggered
+    errorCallbacks.forEach(cb => cb(new Error('Network error')));
+    expect(errorHandled).toBe(true);
 
     consoleError.mockRestore();
   });

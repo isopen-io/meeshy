@@ -65,7 +65,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.getGroups();
 
-      expect(mockedApiService.get).toHaveBeenCalledWith('/groups', undefined);
+      expect(mockedApiService.get).toHaveBeenCalledWith('/communities', undefined);
       expect(result.data.groups).toHaveLength(2);
       expect(result.data.groups[0].name).toBe('Groupe de test');
     });
@@ -87,7 +87,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.getGroups(filters);
 
-      expect(mockedApiService.get).toHaveBeenCalledWith('/groups', filters);
+      expect(mockedApiService.get).toHaveBeenCalledWith('/communities', filters);
       expect(result.data.groups).toHaveLength(1);
       expect(result.data.page).toBe(2);
     });
@@ -97,7 +97,7 @@ describe('GroupsService', () => {
       mockedApiService.get.mockRejectedValue(error);
 
       await expect(groupsService.getGroups()).rejects.toThrow('Network error');
-      expect(mockedApiService.get).toHaveBeenCalledWith('/groups', undefined);
+      expect(mockedApiService.get).toHaveBeenCalledWith('/communities', undefined);
     });
   });
 
@@ -113,7 +113,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.getGroupById(groupId);
 
-      expect(mockedApiService.get).toHaveBeenCalledWith(`/groups/${groupId}`);
+      expect(mockedApiService.get).toHaveBeenCalledWith(`/communities/${groupId}`);
       expect(result.data.id).toBe(groupId);
       expect(result.data.name).toBe('Groupe de test');
     });
@@ -152,7 +152,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.createGroup(groupData);
 
-      expect(mockedApiService.post).toHaveBeenCalledWith('/groups', groupData);
+      expect(mockedApiService.post).toHaveBeenCalledWith('/communities', groupData);
       expect(result.data.name).toBe('Nouveau groupe');
       expect(result.data.isPrivate).toBe(false);
     });
@@ -191,7 +191,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.updateGroup(groupId, updateData);
 
-      expect(mockedApiService.patch).toHaveBeenCalledWith(`/groups/${groupId}`, updateData);
+      expect(mockedApiService.patch).toHaveBeenCalledWith(`/communities/${groupId}`, updateData);
       expect(result.data.name).toBe('Nom modifié');
     });
   });
@@ -208,7 +208,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.deleteGroup(groupId);
 
-      expect(mockedApiService.delete).toHaveBeenCalledWith(`/groups/${groupId}`);
+      expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}`);
       expect(result.status).toBe(204);
     });
   });
@@ -225,7 +225,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.getGroupMembers(groupId);
 
-      expect(mockedApiService.get).toHaveBeenCalledWith(`/groups/${groupId}/members`);
+      expect(mockedApiService.get).toHaveBeenCalledWith(`/communities/${groupId}/members`);
       expect(result.data).toHaveLength(3);
       expect(result.data[0].role).toBe('ADMIN');
     });
@@ -255,7 +255,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.inviteMember(groupId, memberData);
 
-      expect(mockedApiService.post).toHaveBeenCalledWith(`/groups/${groupId}/members`, memberData);
+      expect(mockedApiService.post).toHaveBeenCalledWith(`/communities/${groupId}/members`, memberData);
       expect(result.data.userId).toBe('user-123');
       expect(result.data.role).toBe('MEMBER');
     });
@@ -280,7 +280,7 @@ describe('GroupsService', () => {
       const result = await groupsService.updateMemberRole(groupId, memberId, newRole);
 
       expect(mockedApiService.patch).toHaveBeenCalledWith(
-        `/groups/${groupId}/members/${memberId}`,
+        `/communities/${groupId}/members/${memberId}`,
         { role: newRole }
       );
       expect(result.data.role).toBe(UserRoleEnum.ADMIN);
@@ -301,7 +301,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.removeMember(groupId, memberId);
 
-      expect(mockedApiService.delete).toHaveBeenCalledWith(`/groups/${groupId}/members/${memberId}`);
+      expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}/members/${memberId}`);
       expect(result.status).toBe(204);
     });
   });
@@ -356,7 +356,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.generateInviteLink(groupId);
 
-      expect(mockedApiService.post).toHaveBeenCalledWith(`/groups/${groupId}/invite-link`, {
+      expect(mockedApiService.post).toHaveBeenCalledWith(`/communities/${groupId}/invite-link`, {
         expiresIn: 7 * 24 * 60 * 60 * 1000,
       });
       expect(result.data.link).toContain('group-1');
@@ -378,7 +378,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.generateInviteLink(groupId, customExpiration);
 
-      expect(mockedApiService.post).toHaveBeenCalledWith(`/groups/${groupId}/invite-link`, {
+      expect(mockedApiService.post).toHaveBeenCalledWith(`/communities/${groupId}/invite-link`, {
         expiresIn: customExpiration,
       });
     });
@@ -399,7 +399,7 @@ describe('GroupsService', () => {
 
       const result = await groupsService.joinGroupByInvite(inviteCode);
 
-      expect(mockedApiService.post).toHaveBeenCalledWith('/groups/join-by-invite', {
+      expect(mockedApiService.post).toHaveBeenCalledWith('/communities/join-by-invite', {
         inviteCode,
       });
       expect(result.data.group.id).toBe('group-1');
