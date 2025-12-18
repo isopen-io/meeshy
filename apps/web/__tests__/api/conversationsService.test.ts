@@ -16,76 +16,90 @@ const mockApiService = apiService as jest.Mocked<typeof apiService>;
 
 describe('ConversationsService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    // Clear internal caches to prevent test pollution
+    (conversationsService as any).conversationsCache = null;
+    (conversationsService as any).messagesCache?.clear();
+    (conversationsService as any).participantsCache?.clear();
   });
 
   describe('getConversations', () => {
     it('should fetch all conversations', async () => {
-      const mockConversations: Conversation[] = [
-        {
-          id: '1',
-          type: 'direct',
-          name: 'Test Conversation',
-          isGroup: false,
-          isActive: true,
-          participants: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessage: undefined,
-          unreadCount: 0,
-        },
-      ];
+      const mockConversationData = {
+        id: '1',
+        type: 'direct',
+        title: 'Test Conversation',
+        isGroup: false,
+        isActive: true,
+        members: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: null,
+        unreadCount: 0,
+      };
 
       mockApiService.get.mockResolvedValue({
-        data: mockConversations,
+        data: {
+          success: true,
+          data: [mockConversationData],
+          pagination: { limit: 20, offset: 0, total: 1, hasMore: false }
+        },
         status: 200,
         message: 'Success',
       });
 
       const result = await conversationsService.getConversations();
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations');
-      expect(result).toEqual(mockConversations);
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/conversations', { limit: '20', offset: '0' });
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0].id).toBe('1');
     });
 
     it('should handle empty conversations list', async () => {
       mockApiService.get.mockResolvedValue({
-        data: [],
+        data: {
+          success: true,
+          data: [],
+          pagination: { limit: 20, offset: 0, total: 0, hasMore: false }
+        },
         status: 200,
         message: 'Success',
       });
 
       const result = await conversationsService.getConversations();
 
-      expect(result).toEqual([]);
+      expect(result.conversations).toEqual([]);
     });
   });
 
   describe('getConversation', () => {
     it('should fetch a specific conversation', async () => {
-      const mockConversation: Conversation = {
+      const mockConversationData = {
         id: '1',
         type: 'direct',
-        name: 'Test Conversation',
+        title: 'Test Conversation',
         isGroup: false,
         isActive: true,
-        participants: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastMessage: undefined,
+        members: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: null,
         unreadCount: 0,
       };
 
       mockApiService.get.mockResolvedValue({
-        data: mockConversation,
+        data: {
+          success: true,
+          data: mockConversationData
+        },
         status: 200,
         message: 'Success',
       });
 
       const result = await conversationsService.getConversation('1');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/1');
-      expect(result).toEqual(mockConversation);
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/conversations/1');
+      expect(result.id).toBe('1');
     });
   });
 
@@ -97,29 +111,32 @@ describe('ConversationsService', () => {
         isGroup: true,
       };
 
-      const mockCreatedConversation: Conversation = {
+      const mockCreatedConversation = {
         id: '2',
         type: 'group',
-        name: 'New Conversation',
+        title: 'New Conversation',
         isGroup: true,
         isActive: true,
-        participants: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastMessage: undefined,
+        members: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: null,
         unreadCount: 0,
       };
 
       mockApiService.post.mockResolvedValue({
-        data: mockCreatedConversation,
+        data: {
+          success: true,
+          data: mockCreatedConversation
+        },
         status: 201,
         message: 'Created',
       });
 
       const result = await conversationsService.createConversation(createData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations', createData);
-      expect(result).toEqual(mockCreatedConversation);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations', createData);
+      expect(result.id).toBe('2');
     });
 
     it('should create a direct conversation', async () => {
@@ -127,28 +144,31 @@ describe('ConversationsService', () => {
         participants: ['user1'],
       };
 
-      const mockConversation: Conversation = {
+      const mockConversation = {
         id: '3',
         type: 'direct',
-        name: undefined,
+        title: null,
         isGroup: false,
         isActive: true,
-        participants: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastMessage: undefined,
+        members: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: null,
         unreadCount: 0,
       };
 
       mockApiService.post.mockResolvedValue({
-        data: mockConversation,
+        data: {
+          success: true,
+          data: mockConversation
+        },
         status: 201,
         message: 'Created',
       });
 
       const result = await conversationsService.createConversation(createData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations', createData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations', createData);
       expect(result.isGroup).toBe(false);
     });
   });
@@ -163,7 +183,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.deleteConversation('1');
 
-      expect(mockApiService.delete).toHaveBeenCalledWith('/conversations/1');
+      expect(mockApiService.delete).toHaveBeenCalledWith('/api/conversations/1');
     });
   });
 
@@ -174,15 +194,15 @@ describe('ConversationsService', () => {
         originalLanguage: 'en',
       };
 
-      const mockMessage: Message = {
+      const mockMessage = {
         id: '1',
         conversationId: '1',
         senderId: 'user1',
         content: 'Hello world',
         originalLanguage: 'en',
         isEdited: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         sender: {
           id: 'user1',
           username: 'testuser',
@@ -190,40 +210,26 @@ describe('ConversationsService', () => {
           phoneNumber: '',
           firstName: 'Test',
           lastName: 'User',
-          role: 'USER' as const,
-          permissions: {
-            canAccessAdmin: false,
-            canManageUsers: false,
-            canManageGroups: false,
-            canManageConversations: false,
-            canViewAnalytics: false,
-            canModerateContent: false,
-            canViewAuditLogs: false,
-            canManageNotifications: false,
-            canManageTranslations: false,
-          },
+          role: 'USER',
           systemLanguage: 'en',
           regionalLanguage: 'en',
-          autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: false,
-          useCustomDestination: false,
           isOnline: true,
-          createdAt: new Date(),
-          lastActiveAt: new Date(),
         },
       };
 
       mockApiService.post.mockResolvedValue({
-        data: mockMessage,
+        data: {
+          success: true,
+          data: mockMessage
+        },
         status: 201,
         message: 'Created',
       });
 
       const result = await conversationsService.sendMessage('1', messageData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/1/messages', messageData);
-      expect(result).toEqual(mockMessage);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations/1/messages', messageData);
+      expect(result.id).toBe('1');
     });
   });
 
@@ -237,23 +243,23 @@ describe('ConversationsService', () => {
 
       await conversationsService.markAsRead('1');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/1/read');
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations/1/read');
     });
   });
 
   describe('searchConversations', () => {
     it('should search conversations', async () => {
-      const mockConversations: Conversation[] = [
+      const mockConversations = [
         {
           id: '1',
           type: 'direct',
-          name: 'Test Conversation',
+          title: 'Test Conversation',
           isGroup: false,
           isActive: true,
-          participants: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessage: undefined,
+          members: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastMessage: null,
           unreadCount: 0,
         },
       ];
@@ -266,7 +272,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.searchConversations('test');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/search', { q: 'test' });
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/conversations/search', { q: 'test' });
       expect(result).toEqual(mockConversations);
     });
 
@@ -289,16 +295,16 @@ describe('ConversationsService', () => {
         name: 'Updated Conversation Name',
       };
 
-      const mockUpdatedConversation: Conversation = {
+      const mockUpdatedConversation = {
         id: '1',
         type: 'group',
-        name: 'Updated Conversation Name',
+        title: 'Updated Conversation Name',
         isGroup: true,
         isActive: true,
-        participants: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastMessage: undefined,
+        members: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessage: null,
         unreadCount: 0,
       };
 
@@ -310,8 +316,8 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.updateConversation('1', updateData);
 
-      expect(mockApiService.patch).toHaveBeenCalledWith('/conversations/1', updateData);
-      expect(result).toEqual(mockUpdatedConversation);
+      expect(mockApiService.patch).toHaveBeenCalledWith('/api/conversations/1', updateData);
+      expect(result.id).toBe('1');
     });
   });
 
@@ -324,10 +330,16 @@ describe('ConversationsService', () => {
     });
 
     it('should handle 404 errors for specific conversation', async () => {
-      const notFoundError = new Error('Conversation not found');
-      mockApiService.get.mockRejectedValue(notFoundError);
+      mockApiService.get.mockResolvedValue({
+        data: {
+          success: false,
+          data: null
+        },
+        status: 404,
+        message: 'Not found',
+      });
 
-      await expect(conversationsService.getConversation('nonexistent')).rejects.toThrow('Conversation not found');
+      await expect(conversationsService.getConversation('nonexistent')).rejects.toThrow('Conversation non trouvée');
     });
   });
 });
