@@ -41,21 +41,25 @@ export function generateConversationIdentifier(title?: string): string {
     now.getHours().toString().padStart(2, '0') +
     now.getMinutes().toString().padStart(2, '0') +
     now.getSeconds().toString().padStart(2, '0');
-  
+
   if (title) {
-    // Sanitiser le titre : enlever les caractères spéciaux, remplacer les espaces par des tirets
+    // Sanitiser le titre :
+    // 1. Normaliser les accents (NFD décompose é en e + accent, puis on supprime les accents)
+    // 2. Enlever les caractères spéciaux, remplacer les espaces par des tirets
     const sanitizedTitle = title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Supprimer les diacritiques (accents)
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '') // Garder seulement lettres, chiffres, espaces et tirets
       .replace(/\s+/g, '-') // Remplacer les espaces par des tirets
       .replace(/-+/g, '-') // Remplacer les tirets multiples par un seul
       .replace(/^-|-$/g, ''); // Enlever les tirets en début/fin
-    
+
     if (sanitizedTitle.length > 0) {
       return `mshy_${sanitizedTitle}-${timestamp}`;
     }
   }
-  
+
   // Fallback: générer un identifiant unique avec préfixe mshy_
   const uniqueId = Math.random().toString(36).slice(2, 10);
   return `mshy_${uniqueId}-${timestamp}`;

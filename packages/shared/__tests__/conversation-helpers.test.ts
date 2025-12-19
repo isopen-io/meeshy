@@ -115,6 +115,32 @@ describe('generateConversationIdentifier', () => {
     const identifier = generateConversationIdentifier('test---multiple---dashes');
     expect(identifier).toBe('mshy_test-multiple-dashes-20240315103045');
   });
+
+  it('should normalize French accents', () => {
+    const identifier = generateConversationIdentifier('Café résumé');
+    expect(identifier).toBe('mshy_cafe-resume-20240315103045');
+  });
+
+  it('should normalize various accented characters', () => {
+    // NFD normalization: àâä→aaa, éèêë→eeee, ïî→ii, ô→o, ùûü→uuu, ç→c
+    const identifier = generateConversationIdentifier('àâäéèêëïîôùûüç');
+    expect(identifier).toBe('mshy_aaaeeeeiiouuuc-20240315103045');
+  });
+
+  it('should handle mixed accents and special characters', () => {
+    const identifier = generateConversationIdentifier('Réunion équipe été 2024!');
+    expect(identifier).toBe('mshy_reunion-equipe-ete-2024-20240315103045');
+  });
+
+  it('should handle German umlauts', () => {
+    const identifier = generateConversationIdentifier('Größe über');
+    expect(identifier).toBe('mshy_groe-uber-20240315103045');
+  });
+
+  it('should handle Spanish characters', () => {
+    const identifier = generateConversationIdentifier('Niño año');
+    expect(identifier).toBe('mshy_nino-ano-20240315103045');
+  });
 });
 
 describe('isValidMongoId', () => {
