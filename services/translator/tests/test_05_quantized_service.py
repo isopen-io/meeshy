@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 import asyncio
+import pytest
 
 # Ajouter le répertoire src au path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -26,6 +27,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+@pytest.mark.asyncio
 async def test_quantized_service_creation():
     """Test de création du service quantifié"""
     logger.info("🧪 Test 05.1: Création du service quantifié")
@@ -58,6 +60,7 @@ async def test_quantized_service_creation():
         logger.error(f"❌ Erreur création service quantifié: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_model_sharing():
     """Test du partage de modèles"""
     logger.info("🧪 Test 05.2: Partage de modèles")
@@ -98,6 +101,7 @@ async def test_model_sharing():
         logger.error(f"❌ Erreur partage modèles: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_fallback_system():
     """Test du système de fallback"""
     logger.info("🧪 Test 05.3: Système de fallback")
@@ -125,6 +129,7 @@ async def test_fallback_system():
         logger.error(f"❌ Erreur système fallback: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_translation_quality():
     """Test de la qualité de traduction"""
     logger.info("🧪 Test 05.4: Qualité de traduction")
@@ -196,6 +201,7 @@ async def test_translation_quality():
         logger.error(f"❌ Erreur test qualité: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_performance_metrics():
     """Test des métriques de performance"""
     logger.info("🧪 Test 05.5: Métriques de performance")
