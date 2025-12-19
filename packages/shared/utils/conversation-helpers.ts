@@ -44,9 +44,18 @@ export function generateConversationIdentifier(title?: string): string {
 
   if (title) {
     // Sanitiser le titre :
-    // 1. Normaliser les accents (NFD décompose é en e + accent, puis on supprime les accents)
-    // 2. Enlever les caractères spéciaux, remplacer les espaces par des tirets
+    // 1. Convertir les caractères allemands en équivalents romans (ö→oe, ü→ue, ä→ae, ß→ss)
+    // 2. Normaliser les accents (NFD décompose é en e + accent, puis on supprime les accents)
+    // 3. Enlever les caractères spéciaux, remplacer les espaces par des tirets
     const sanitizedTitle = title
+      // Caractères allemands → équivalents romans
+      .replace(/ö/g, 'oe')
+      .replace(/Ö/g, 'Oe')
+      .replace(/ü/g, 'ue')
+      .replace(/Ü/g, 'Ue')
+      .replace(/ä/g, 'ae')
+      .replace(/Ä/g, 'Ae')
+      .replace(/ß/g, 'ss')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Supprimer les diacritiques (accents)
       .toLowerCase()

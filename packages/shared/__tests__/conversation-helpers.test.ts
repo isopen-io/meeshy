@@ -122,9 +122,10 @@ describe('generateConversationIdentifier', () => {
   });
 
   it('should normalize various accented characters', () => {
-    // NFD normalization: àâä→aaa, éèêë→eeee, ïî→ii, ô→o, ùûü→uuu, ç→c
+    // German umlauts: ä→ae, ü→ue, then NFD for others
+    // àâ→aa, ä→ae, éèêë→eeee, ïî→ii, ô→o, ùû→uu, ü→ue, ç→c
     const identifier = generateConversationIdentifier('àâäéèêëïîôùûüç');
-    expect(identifier).toBe('mshy_aaaeeeeiiouuuc-20240315103045');
+    expect(identifier).toBe('mshy_aaaeeeeeiiouuuec-20240315103045');
   });
 
   it('should handle mixed accents and special characters', () => {
@@ -132,9 +133,15 @@ describe('generateConversationIdentifier', () => {
     expect(identifier).toBe('mshy_reunion-equipe-ete-2024-20240315103045');
   });
 
-  it('should handle German umlauts', () => {
+  it('should handle German umlauts with proper transliteration', () => {
+    // ö→oe, ü→ue, ä→ae, ß→ss
     const identifier = generateConversationIdentifier('Größe über');
-    expect(identifier).toBe('mshy_groe-uber-20240315103045');
+    expect(identifier).toBe('mshy_groesse-ueber-20240315103045');
+  });
+
+  it('should handle all German special characters', () => {
+    const identifier = generateConversationIdentifier('Öffentliche Äußerung');
+    expect(identifier).toBe('mshy_oeffentliche-aeusserung-20240315103045');
   });
 
   it('should handle Spanish characters', () => {
