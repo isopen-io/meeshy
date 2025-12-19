@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 import asyncio
+import pytest
 
 # Ajouter le répertoire src au path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -51,6 +52,7 @@ def test_service_creation():
         logger.error(f"❌ Erreur création service: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_model_verification_integration():
     """Test de l'intégration de la vérification des modèles"""
     logger.info("🧪 Test 04.2: Intégration de la vérification des modèles")
@@ -91,6 +93,7 @@ async def test_model_verification_integration():
         logger.error(f"❌ Erreur intégration vérification: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_service_initialization():
     """Test de l'initialisation du service"""
     logger.info("🧪 Test 04.3: Initialisation du service")
@@ -128,6 +131,7 @@ async def test_service_initialization():
         logger.error(f"❌ Erreur initialisation service: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_translation_with_local_models():
     """Test de traduction avec des modèles locaux"""
     logger.info("🧪 Test 04.4: Traduction avec modèles locaux")
