@@ -1,9 +1,10 @@
 /**
  * Signal Protocol Module
  *
- * Exports all Signal Protocol types, interfaces, and services
+ * Exports Signal Protocol types and interfaces.
+ * Actual protocol implementations are in platform-specific code
+ * (apps/web for browser, services/gateway for Node.js).
  */
 
 export * from './signal-types';
 export * from './signal-store-interface';
-export * from './signal-protocol-service';
