@@ -173,7 +173,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (for Prisma)
+      # Node.js is required by Python Prisma for client generation
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -196,7 +197,7 @@ jobs:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
-          npx prisma@6 generate --schema=../../packages/shared/prisma/schema.prisma
+          python -m prisma generate
 
       - name: Run tests with coverage (90% minimum)
         env:
