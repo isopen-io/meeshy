@@ -202,9 +202,12 @@ jobs:
       - name: Run tests with coverage (90% minimum)
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
+          CI: "true"
+        timeout-minutes: 10
         run: |
           cd services/translator
-          pytest
+          # Skip slow model download tests in CI (they require downloading large ML models)
+          pytest --ignore=tests/test_03_model_download.py --ignore=tests/test_04_service_integration.py --ignore=tests/test_05_quantized_service.py -x
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
