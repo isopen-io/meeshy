@@ -8,6 +8,7 @@ import {
   getEncryptionStatus,
   type EncryptionMode,
 } from '../types/encryption';
+import { createProtocolAddress } from '../encryption/signal/signal-types';
 
 describe('isMessageEncrypted', () => {
   it('should return false for system messages', () => {
@@ -201,5 +202,37 @@ describe('getEncryptionStatus', () => {
     expect(status.canTranslate).toBe(false);
     expect(status.enabledAt).toBe(enabledAt);
     expect(status.enabledBy).toBe('user-789');
+  });
+});
+
+describe('createProtocolAddress', () => {
+  it('should create a ProtocolAddressLike object with name and deviceId', () => {
+    const address = createProtocolAddress('user-123', 1);
+
+    expect(address.name()).toBe('user-123');
+    expect(address.deviceId()).toBe(1);
+  });
+
+  it('should work with different device IDs', () => {
+    const address1 = createProtocolAddress('user-456', 1);
+    const address2 = createProtocolAddress('user-456', 2);
+
+    expect(address1.deviceId()).toBe(1);
+    expect(address2.deviceId()).toBe(2);
+  });
+
+  it('should work with empty string name', () => {
+    const address = createProtocolAddress('', 0);
+
+    expect(address.name()).toBe('');
+    expect(address.deviceId()).toBe(0);
+  });
+
+  it('should work with UUID as name', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+    const address = createProtocolAddress(uuid, 5);
+
+    expect(address.name()).toBe(uuid);
+    expect(address.deviceId()).toBe(5);
   });
 });
