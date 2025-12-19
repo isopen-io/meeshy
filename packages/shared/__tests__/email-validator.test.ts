@@ -123,4 +123,27 @@ describe('getEmailValidationError', () => {
   it('should return error for consecutive dots', () => {
     expect(getEmailValidationError('user@example..com')).toBe('Email ne peut pas contenir deux points consécutifs');
   });
+
+  it('should return error for domain ending with dot', () => {
+    // When domain ends with dot, TLD is empty so it fails TLD validation first
+    expect(getEmailValidationError('user@example.com.')).toBe('Extension de domaine invalide (ex: .com, .fr)');
+  });
+
+  it('should return error for local part starting with dot', () => {
+    expect(getEmailValidationError('.user@example.com')).toBe('Email ne peut pas commencer ou finir par un point');
+  });
+
+  it('should return error for local part ending with dot', () => {
+    expect(getEmailValidationError('user.@example.com')).toBe('Email ne peut pas commencer ou finir par un point');
+  });
+
+  it('should return error for email too long', () => {
+    const longEmail = 'a'.repeat(250) + '@example.com';
+    expect(getEmailValidationError(longEmail)).toBe('Email trop long (maximum 255 caractères)');
+  });
+
+  it('should return error for invalid format (fails regex)', () => {
+    // Edge case: passes all checks but fails the final regex
+    expect(getEmailValidationError('user@-example.com')).toBe('Format d\'email invalide');
+  });
 });
