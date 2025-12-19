@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 import asyncio
+import pytest
 
 # Ajouter le répertoire src au path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -67,6 +68,7 @@ def test_download_small_model():
         logger.error(f"❌ Erreur téléchargement: {e}")
         return False
 
+@pytest.mark.asyncio
 async def test_async_download():
     """Test de téléchargement asynchrone"""
     logger.info("🧪 Test 03.2: Téléchargement asynchrone")
