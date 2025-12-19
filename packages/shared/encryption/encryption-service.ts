@@ -23,9 +23,20 @@ import {
   prepareForStorage,
   reconstructPayload,
 } from './encryption-utils';
-import type { SignalProtocolService } from './signal/signal-protocol-service';
-import type { PreKeyBundle, SignalEncryptedMessage } from './signal/signal-types';
-import { ProtocolAddress } from './signal/signal-stubs';
+import type { PreKeyBundle, SignalEncryptedMessage, ProtocolAddressLike } from './signal/signal-types';
+import { createProtocolAddress } from './signal/signal-types';
+
+/**
+ * Signal Protocol Service Interface
+ * Platform-specific implementations provide the actual Signal Protocol operations
+ */
+export interface SignalProtocolService {
+  generatePreKeyBundle(): Promise<PreKeyBundle>;
+  hasSession(address: ProtocolAddressLike): Promise<boolean>;
+  encryptMessage(address: ProtocolAddressLike, plaintext: Uint8Array): Promise<SignalEncryptedMessage>;
+  decryptMessage(address: ProtocolAddressLike, message: SignalEncryptedMessage): Promise<Uint8Array>;
+  processPreKeyBundle(address: ProtocolAddressLike, bundle: PreKeyBundle): Promise<void>;
+}
 
 /**
  * Key Storage Interface
@@ -248,7 +259,7 @@ export class SharedEncryptionService {
 
     // E2EE mode with Signal Protocol
     if (mode === 'e2ee' && this.signalService && recipientUserId) {
-      const recipientAddress = ProtocolAddress.new(recipientUserId, this.deviceId);
+      const recipientAddress = createProtocolAddress(recipientUserId, this.deviceId);
 
       // Check if session exists, if not establish it
       const hasSession = await this.signalService.hasSession(recipientAddress);
@@ -259,9 +270,10 @@ export class SharedEncryptionService {
       }
 
       // Encrypt using Signal Protocol (Double Ratchet)
+      const plaintextBytes = new TextEncoder().encode(plaintext);
       const signalMessage = await this.signalService.encryptMessage(
         recipientAddress,
-        plaintext
+        plaintextBytes
       );
 
       return {
@@ -341,7 +353,7 @@ export class SharedEncryptionService {
         throw new Error('Sender user ID required for E2EE decryption');
       }
 
-      const senderAddress = ProtocolAddress.new(senderUserId, this.deviceId);
+      const senderAddress = createProtocolAddress(senderUserId, this.deviceId);
 
       const signalMessage: SignalEncryptedMessage = {
         type: metadata.messageType || 2,
@@ -352,7 +364,8 @@ export class SharedEncryptionService {
         previousCounter: 0,
       };
 
-      return await this.signalService.decryptMessage(senderAddress, signalMessage);
+      const decryptedBytes = await this.signalService.decryptMessage(senderAddress, signalMessage);
+      return new TextDecoder().decode(decryptedBytes);
     }
 
     // Server-encrypted mode decryption
@@ -383,7 +396,7 @@ export class SharedEncryptionService {
 
     // Use Signal Protocol for session establishment
     if (this.signalService && recipientPreKeyBundle) {
-      const recipientAddress = ProtocolAddress.new(recipientUserId, this.deviceId);
+      const recipientAddress = createProtocolAddress(recipientUserId, this.deviceId);
 
       // Process pre-key bundle to establish session (X3DH)
       await this.signalService.processPreKeyBundle(recipientAddress, recipientPreKeyBundle);
