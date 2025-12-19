@@ -6,6 +6,26 @@
  */
 
 /**
+ * Protocol Address - identifies a user's device
+ * Simple interface matching @signalapp/libsignal-client ProtocolAddress
+ */
+export interface ProtocolAddressLike {
+  name(): string;
+  deviceId(): number;
+}
+
+/**
+ * Create a ProtocolAddress-like object
+ * Use this for type compatibility when the real libsignal is not available
+ */
+export function createProtocolAddress(name: string, deviceId: number): ProtocolAddressLike {
+  return {
+    name: () => name,
+    deviceId: () => deviceId,
+  };
+}
+
+/**
  * Pre-Key Bundle for initial key exchange
  */
 export interface PreKeyBundle {

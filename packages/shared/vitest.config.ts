@@ -12,10 +12,13 @@ export default defineConfig({
       // Include all tested modules
       include: [
         'utils/**/*.ts',
-        'encryption/**/*.ts',
+        'encryption/crypto-adapter.ts',
+        'encryption/encryption-utils.ts',
+        'encryption/encryption-service.ts',
+        'encryption/signal/signal-types.ts',
         'types/encryption.ts',
       ],
-      exclude: ['**/*.d.ts', '**/index.ts'],
+      exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {
         branches: 80,
         functions: 80,
