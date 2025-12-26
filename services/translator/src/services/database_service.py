@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 from typing import Optional, Dict, Any
+import httpx
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -45,10 +46,10 @@ class DatabaseService:
                     self.prisma = Prisma(
                         http={
                             'timeout': 60.0,  # Timeout global de 60 secondes
-                            'limits': {
-                                'max_connections': 10,  # Limiter les connexions
-                                'max_keepalive_connections': 5
-                            }
+                            'limits': httpx.Limits(
+                                max_connections=10,  # Limiter les connexions
+                                max_keepalive_connections=5
+                            )
                         }
                     )
                 
