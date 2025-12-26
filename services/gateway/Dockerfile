@@ -52,9 +52,14 @@ COPY shared/ ./shared/
 COPY tsconfig.json ./
 
 # Generate Prisma client and build TypeScript
-RUN PRISMA_CLIENT_OUTPUT_DIRECTORY=./shared/prisma npx prisma generate --schema=./shared/prisma/schema.prisma 2>/dev/null || true \
-    && pnpm exec tsc \
-    && cp -ar shared/prisma dist/shared/ 2>/dev/null || true
+RUN echo "=== Generating Prisma client ===" && \
+    npx prisma generate --schema=./shared/prisma/schema.prisma && \
+    echo "=== Building TypeScript ===" && \
+    pnpm exec tsc && \
+    echo "=== Copying Prisma client to dist ===" && \
+    mkdir -p dist/shared/prisma && \
+    cp -ar shared/prisma/client dist/shared/prisma/ && \
+    cp shared/prisma/schema.prisma dist/shared/prisma/
 
 # ===== PROD-DEPS STAGE (production dependencies only) =====
 FROM base AS prod-deps
