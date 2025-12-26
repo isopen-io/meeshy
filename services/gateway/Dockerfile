@@ -112,6 +112,12 @@ COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=gateway:nodejs /app/dist ./dist
 COPY --from=builder --chown=gateway:nodejs /app/shared ./shared
 
+# Fix @meeshy/shared symlink: Docker COPY resolves symlinks to copies,
+# so we need to recreate the symlink to point to the built shared folder
+# which contains the generated Prisma client
+RUN rm -rf node_modules/@meeshy/shared && \
+    ln -s ../shared node_modules/@meeshy/shared
+
 # Copy entrypoint
 COPY --chown=gateway:nodejs docker-entrypoint.sh ./
 RUN chmod +x /app/docker-entrypoint.sh || true
