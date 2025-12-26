@@ -3,6 +3,70 @@ set -e
 
 echo "[TRANSLATOR] Demarrage du service Translator avec migrations Prisma (MongoDB)..."
 
+# Fonction pour générer le client Prisma Python si nécessaire
+generate_prisma_client() {
+    echo "[TRANSLATOR] Verification du client Prisma Python..."
+
+    # Vérifier si le client Prisma Python est déjà généré
+    if python3 -c "import prisma; from prisma import Prisma; print('Client Prisma OK')" 2>/dev/null; then
+        echo "[TRANSLATOR] Client Prisma Python deja genere"
+        return 0
+    fi
+
+    echo "[TRANSLATOR] Client Prisma Python non trouve, generation en cours..."
+
+    # Chercher le schema Prisma dans plusieurs emplacements possibles
+    SCHEMA_PATHS=(
+        "/workspace/schema.prisma"
+        "/workspace/shared/prisma/schema.prisma"
+        "/workspace/prisma/schema.prisma"
+    )
+
+    SCHEMA_PATH=""
+    for path in "${SCHEMA_PATHS[@]}"; do
+        if [ -f "$path" ]; then
+            # Vérifier que c'est bien un schema Python (prisma-client-py)
+            if grep -q "prisma-client-py" "$path" 2>/dev/null; then
+                SCHEMA_PATH="$path"
+                echo "[TRANSLATOR] Schema Prisma Python trouve: $SCHEMA_PATH"
+                break
+            fi
+        fi
+    done
+
+    if [ -z "$SCHEMA_PATH" ]; then
+        echo "[TRANSLATOR] ERREUR: Aucun schema Prisma Python trouve!"
+        echo "[TRANSLATOR] Schemas recherches: ${SCHEMA_PATHS[*]}"
+
+        # Afficher les fichiers disponibles pour debug
+        echo "[TRANSLATOR] Contenu de /workspace:"
+        ls -la /workspace/ 2>/dev/null || true
+        echo "[TRANSLATOR] Fichiers .prisma:"
+        find /workspace -name "*.prisma" 2>/dev/null || true
+
+        return 1
+    fi
+
+    # Générer le client Prisma Python
+    echo "[TRANSLATOR] Generation du client Prisma depuis $SCHEMA_PATH..."
+
+    if prisma generate --schema="$SCHEMA_PATH"; then
+        echo "[TRANSLATOR] Client Prisma Python genere avec succes"
+
+        # Vérifier que le client fonctionne
+        if python3 -c "import prisma; from prisma import Prisma; print('Verification OK')" 2>/dev/null; then
+            echo "[TRANSLATOR] Client Prisma Python verifie et fonctionnel"
+            return 0
+        else
+            echo "[TRANSLATOR] ERREUR: Le client Prisma genere ne fonctionne pas"
+            return 1
+        fi
+    else
+        echo "[TRANSLATOR] ERREUR: Echec de la generation du client Prisma"
+        return 1
+    fi
+}
+
 # Fonction pour attendre que la base de données soit prête
 wait_for_database() {
     echo "[TRANSLATOR] Attente de la base de donnees MongoDB..."
@@ -143,9 +207,14 @@ check_database_integrity() {
 # Fonction principale
 main() {
     echo "[TRANSLATOR] Demarrage du processus d initialisation MongoDB..."
-    
-    # Le client Prisma est deja genere dans l'image Docker
-    
+
+    # Générer le client Prisma Python si nécessaire
+    if ! generate_prisma_client; then
+        echo "[TRANSLATOR] ERREUR CRITIQUE: Impossible de generer le client Prisma"
+        echo "[TRANSLATOR] Le service ne peut pas demarrer sans le client Prisma"
+        exit 1
+    fi
+
     # Attendre que la base de donnees soit prete
     wait_for_database
     
