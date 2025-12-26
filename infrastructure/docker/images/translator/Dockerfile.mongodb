@@ -76,15 +76,22 @@ RUN pip install --upgrade pip --no-cache-dir \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
 
-# Copy translator source code
+# Copy translator source code (includes schema.prisma with prisma-client-py)
 COPY --chown=translator:translator services/translator/ ./
 
-# Copy shared package for Prisma schema
+# Copy shared package for Prisma schema (JavaScript client, as fallback)
 COPY --chown=translator:translator packages/shared/prisma ./shared/prisma/
 
-# Generate Prisma client
-RUN if [ -f "/workspace/shared/prisma/schema.prisma" ]; then \
+# Generate Prisma Python client
+# Priority: 1. Local schema.prisma (Python client), 2. shared/prisma/schema.prisma
+RUN if [ -f "/workspace/schema.prisma" ] && grep -q "prisma-client-py" "/workspace/schema.prisma"; then \
+        echo "Generating Prisma Python client from /workspace/schema.prisma..." && \
+        prisma generate --schema=/workspace/schema.prisma; \
+    elif [ -f "/workspace/shared/prisma/schema.prisma" ]; then \
+        echo "Generating Prisma client from /workspace/shared/prisma/schema.prisma..." && \
         prisma generate --schema=/workspace/shared/prisma/schema.prisma; \
+    else \
+        echo "Warning: No Prisma schema found, client will be generated at runtime"; \
     fi
 
 # Set permissions
