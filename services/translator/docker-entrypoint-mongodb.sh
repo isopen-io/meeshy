@@ -3,6 +3,58 @@ set -e
 
 echo "[TRANSLATOR] Demarrage du service Translator avec migrations Prisma (MongoDB)..."
 
+# =============================================================================
+# FIX VOLUME PERMISSIONS AND SWITCH TO NON-ROOT USER
+# =============================================================================
+# Docker named volumes are created with root ownership. This section fixes
+# permissions on mounted volumes before switching to the 'translator' user.
+# =============================================================================
+
+fix_volume_permissions() {
+    echo "[TRANSLATOR] Verification et correction des permissions des volumes..."
+
+    # List of directories that may be mounted as volumes
+    VOLUME_DIRS=(
+        "/workspace/models"
+        "/workspace/cache"
+        "/workspace/logs"
+    )
+
+    for dir in "${VOLUME_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            # Check if directory is owned by root (UID 0)
+            CURRENT_OWNER=$(stat -c '%u' "$dir" 2>/dev/null || echo "unknown")
+            if [ "$CURRENT_OWNER" = "0" ]; then
+                echo "[TRANSLATOR] Correction des permissions pour $dir (owned by root)..."
+                chown -R translator:translator "$dir"
+                chmod -R 755 "$dir"
+                echo "[TRANSLATOR] Permissions corrigees pour $dir"
+            else
+                echo "[TRANSLATOR] Permissions OK pour $dir (owner UID: $CURRENT_OWNER)"
+            fi
+        else
+            echo "[TRANSLATOR] Creation du repertoire $dir..."
+            mkdir -p "$dir"
+            chown -R translator:translator "$dir"
+            chmod -R 755 "$dir"
+        fi
+    done
+
+    echo "[TRANSLATOR] Verification des permissions terminee"
+}
+
+# Only fix permissions if running as root
+if [ "$(id -u)" = "0" ]; then
+    echo "[TRANSLATOR] Execution en tant que root, correction des permissions..."
+    fix_volume_permissions
+
+    echo "[TRANSLATOR] Passage a l'utilisateur translator..."
+    exec gosu translator "$0" "$@"
+fi
+
+# From here, we are running as 'translator' user
+echo "[TRANSLATOR] Execution en tant que: $(id)"
+
 # Fonction pour générer le client Prisma Python si nécessaire
 generate_prisma_client() {
     echo "[TRANSLATOR] Verification du client Prisma Python..."
