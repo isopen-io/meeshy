@@ -37,7 +37,9 @@
     },
     "./prisma/client": {
       "types": "./prisma/client/index.d.ts",
-      "import": "./prisma/client/index.js"
+      "import": "./prisma/client/index.js",
+      "require": "./prisma/client/index.js",
+      "default": "./prisma/client/index.js"
     }
   },
   "files": [
