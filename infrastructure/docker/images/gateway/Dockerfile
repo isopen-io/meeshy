@@ -89,14 +89,18 @@ COPY services/gateway/tsconfig.json ./
 COPY services/gateway/docker-entrypoint.sh ./
 
 # Build gateway
-RUN echo "=== Building TypeScript ===" && \
-    PRISMA_CLIENT_OUTPUT_DIRECTORY=./packages/shared/prisma npx prisma generate --schema=./packages/shared/prisma/schema.prisma 2>/dev/null || true && \
+RUN echo "=== Generating Prisma client ===" && \
+    npx prisma generate --schema=./packages/shared/prisma/schema.prisma && \
+    echo "=== Building TypeScript ===" && \
     if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       bun run tsc; \
     else \
       pnpm exec tsc; \
     fi && \
-    cp -ar packages/shared/prisma dist/packages/shared/ 2>/dev/null || true && \
+    echo "=== Copying Prisma client to dist ===" && \
+    mkdir -p dist/packages/shared/prisma && \
+    cp -ar packages/shared/prisma/client dist/packages/shared/prisma/ && \
+    cp packages/shared/prisma/schema.prisma dist/packages/shared/prisma/ && \
     echo "=== Build completed ==="
 
 # ===== PROD-DEPS STAGE (production dependencies only) =====
