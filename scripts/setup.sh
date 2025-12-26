@@ -10,9 +10,10 @@
 #   ./scripts/setup.sh [OPTIONS]
 #
 # Options:
+#   --native          Lancer en mode natif (Node.js/Python locaux)
+#   --docker          Lancer via Docker (images conteneurisées)
 #   --skip-browser    Ne pas ouvrir le navigateur automatiquement
 #   --https           Démarrer en mode HTTPS (pour iOS Safari)
-#   --with-containers Démarrer les conteneurs Docker (MongoDB, Redis)
 #   -h, --help        Afficher cette aide
 #
 # Ce script fonctionne sur:
@@ -31,33 +32,31 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Options par défaut
 SKIP_BROWSER=false
 USE_HTTPS=false
-START_CONTAINERS=true
-EXTRA_ARGS=""
+RUN_MODE=""  # "native" ou "docker"
 
 # Parse les arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --native)
+      RUN_MODE="native"
+      shift
+      ;;
+    --docker)
+      RUN_MODE="docker"
+      shift
+      ;;
     --skip-browser)
       SKIP_BROWSER=true
       shift
       ;;
     --https|--secure)
       USE_HTTPS=true
-      EXTRA_ARGS="$EXTRA_ARGS --https"
-      shift
-      ;;
-    --with-containers)
-      START_CONTAINERS=true
-      EXTRA_ARGS="$EXTRA_ARGS --with-containers"
-      shift
-      ;;
-    --no-containers)
-      START_CONTAINERS=false
       shift
       ;;
     -h|--help)
@@ -68,16 +67,17 @@ while [[ $# -gt 0 ]]; do
       echo "configure l'environnement et démarre l'application."
       echo ""
       echo "Options:"
+      echo "  --native          Lancer en mode natif (Bun/Python locaux) - Plus rapide au dev"
+      echo "  --docker          Lancer via Docker (tout conteneurisé) - Plus simple"
       echo "  --skip-browser    Ne pas ouvrir le navigateur automatiquement"
       echo "  --https           Démarrer en mode HTTPS (pour iOS Safari)"
-      echo "  --with-containers Démarrer les conteneurs Docker (MongoDB, Redis) [défaut]"
-      echo "  --no-containers   Ne pas démarrer les conteneurs Docker"
       echo "  -h, --help        Afficher cette aide"
       echo ""
       echo "Exemples:"
-      echo "  $0                          # Setup complet avec ouverture du navigateur"
-      echo "  $0 --skip-browser           # Setup sans ouvrir le navigateur"
-      echo "  $0 --https                  # Setup avec HTTPS pour mobile"
+      echo "  $0                  # Menu interactif pour choisir le mode"
+      echo "  $0 --native         # Setup + lancement natif"
+      echo "  $0 --docker         # Setup + lancement Docker"
+      echo "  $0 --native --https # Mode natif avec HTTPS"
       echo ""
       exit 0
       ;;
@@ -93,19 +93,13 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+clear
 echo ""
-echo -e "${CYAN}================================================================${NC}"
-echo -e "${CYAN}     MEESHY - SETUP AUTOMATIQUE POUR MACHINE VIERGE${NC}"
-echo -e "${CYAN}================================================================${NC}"
-echo ""
-echo -e "${BLUE}Ce script va:${NC}"
-echo -e "  1. Installer les programmes système manquants"
-echo -e "  2. Installer les dépendances du projet"
-echo -e "  3. Configurer l'environnement"
-echo -e "  4. Démarrer l'application"
-if [ "$SKIP_BROWSER" = false ]; then
-  echo -e "  5. Ouvrir le navigateur"
-fi
+echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║                                                               ║${NC}"
+echo -e "${CYAN}║     ${BOLD}MEESHY - SETUP AUTOMATIQUE POUR MACHINE VIERGE${NC}${CYAN}          ║${NC}"
+echo -e "${CYAN}║                                                               ║${NC}"
+echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 cd "$PROJECT_ROOT"
@@ -143,6 +137,55 @@ echo -e "${BLUE}Système détecté:${NC} $OS"
 echo ""
 
 # =============================================================================
+# Menu de sélection du mode
+# =============================================================================
+
+select_run_mode() {
+    if [ -n "$RUN_MODE" ]; then
+        return
+    fi
+
+    echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║              CHOISISSEZ VOTRE MODE D'EXÉCUTION                ║${NC}"
+    echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${CYAN}  [1] ${BOLD}Mode Natif${NC} ${GREEN}(Recommandé pour le développement)${NC}"
+    echo -e "      └─ Installe Bun, Python, et exécute les services localement"
+    echo -e "      └─ Redémarrage rapide (~5 secondes)"
+    echo -e "      └─ Hot reload instantané"
+    echo -e "      └─ Nécessite: Docker uniquement pour MongoDB/Redis"
+    echo ""
+    echo -e "${CYAN}  [2] ${BOLD}Mode Docker${NC} ${BLUE}(Tout-en-un)${NC}"
+    echo -e "      └─ Utilise les images Docker pour tous les services"
+    echo -e "      └─ Aucune dépendance locale requise (sauf Docker)"
+    echo -e "      └─ Redémarrage plus lent (~30-60 secondes)"
+    echo -e "      └─ Isolation complète"
+    echo ""
+
+    while true; do
+        read -p "Votre choix [1/2]: " choice
+        case $choice in
+            1)
+                RUN_MODE="native"
+                echo ""
+                echo -e "${GREEN}Mode natif sélectionné${NC}"
+                break
+                ;;
+            2)
+                RUN_MODE="docker"
+                echo ""
+                echo -e "${GREEN}Mode Docker sélectionné${NC}"
+                break
+                ;;
+            *)
+                echo -e "${RED}Choix invalide. Entrez 1 ou 2.${NC}"
+                ;;
+        esac
+    done
+    echo ""
+}
+
+# =============================================================================
 # Fonctions d'installation par OS
 # =============================================================================
 
@@ -174,79 +217,39 @@ install_homebrew() {
     fi
 }
 
-# Installation de Node.js
-install_nodejs() {
-    if ! command -v node &> /dev/null; then
-        confirm_install "Node.js"
-        echo -e "${YELLOW}Installation de Node.js...${NC}"
+# Installation de Bun (remplace Node.js + pnpm)
+install_bun() {
+    if ! command -v bun &> /dev/null; then
+        confirm_install "Bun"
+        echo -e "${YELLOW}Installation de Bun...${NC}"
 
-        case $OS in
-            macos)
-                install_homebrew
-                brew install node@22
-                brew link node@22 --force --overwrite
-                ;;
-            debian)
-                curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-                sudo apt-get install -y nodejs
-                ;;
-            fedora)
-                sudo dnf install -y nodejs
-                ;;
-            arch)
-                sudo pacman -S --noconfirm nodejs npm
-                ;;
-            *)
-                echo -e "${RED}OS non supporté pour l'installation automatique de Node.js${NC}"
-                echo -e "${YELLOW}Installez Node.js 22+ manuellement: https://nodejs.org/${NC}"
-                exit 1
-                ;;
-        esac
-        echo -e "${GREEN}Node.js installé avec succès${NC}"
-    fi
+        # Installation universelle via le script officiel
+        curl -fsSL https://bun.sh/install | bash
 
-    NODE_VERSION=$(node --version | cut -d'.' -f1 | tr -d 'v')
-    if [ "$NODE_VERSION" -lt 22 ]; then
-        echo -e "${YELLOW}Node.js version 22+ requise (version actuelle: $(node --version))${NC}"
-        echo -e "${YELLOW}Mise à jour de Node.js...${NC}"
+        # Ajouter Bun au PATH pour la session courante
+        export BUN_INSTALL="$HOME/.bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
 
-        case $OS in
-            macos)
-                brew upgrade node@22 || brew install node@22
-                brew link node@22 --force --overwrite
-                ;;
-            debian)
-                curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-                sudo apt-get install -y nodejs
-                ;;
-            *)
-                echo -e "${RED}Mettez à jour Node.js manuellement vers la version 22+${NC}"
-                exit 1
-                ;;
-        esac
-    fi
-    echo -e "${GREEN}Node.js $(node --version)${NC}"
-}
-
-# Installation de pnpm
-install_pnpm() {
-    if ! command -v pnpm &> /dev/null; then
-        confirm_install "pnpm"
-        echo -e "${YELLOW}Installation de pnpm...${NC}"
-
-        # Installation via corepack (méthode recommandée avec Node.js 16.13+)
-        if command -v corepack &> /dev/null; then
-            corepack enable
-            corepack prepare pnpm@latest --activate
-        else
-            npm install -g pnpm
+        # Vérifier que l'installation a réussi
+        if ! command -v bun &> /dev/null; then
+            # Essayer de sourcer le profile
+            [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+            [ -f "$HOME/.zshrc" ] && source "$HOME/.zshrc"
         fi
-        echo -e "${GREEN}pnpm installé avec succès${NC}"
+
+        echo -e "${GREEN}Bun installé avec succès${NC}"
     fi
-    echo -e "${GREEN}pnpm $(pnpm --version)${NC}"
+
+    if command -v bun &> /dev/null; then
+        echo -e "${GREEN}Bun $(bun --version)${NC}"
+    else
+        echo -e "${RED}Bun n'a pas pu être installé. Ajoutez ~/.bun/bin à votre PATH${NC}"
+        echo -e "${YELLOW}Puis relancez ce script.${NC}"
+        exit 1
+    fi
 }
 
-# Installation de Python
+# Installation de Python (uniquement pour mode natif)
 install_python() {
     if ! command -v python3 &> /dev/null; then
         confirm_install "Python 3"
@@ -404,7 +407,6 @@ EOF
 
             case $OS in
                 macos)
-                    # Docker Desktop inclut docker-compose
                     echo -e "${GREEN}docker-compose est inclus avec Docker Desktop${NC}"
                     ;;
                 debian|fedora)
@@ -432,13 +434,12 @@ install_system_deps() {
 
     case $OS in
         debian)
-            # Installer les dépendances nécessaires
             DEPS_TO_INSTALL=""
-
             command -v curl &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL curl"
             command -v git &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL git"
             command -v nc &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL netcat-openbsd"
             command -v lsof &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL lsof"
+            command -v unzip &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL unzip"
 
             if [ -n "$DEPS_TO_INSTALL" ]; then
                 echo -e "${YELLOW}Installation des dépendances:$DEPS_TO_INSTALL${NC}"
@@ -452,6 +453,7 @@ install_system_deps() {
             command -v git &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL git"
             command -v nc &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL nc"
             command -v lsof &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL lsof"
+            command -v unzip &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL unzip"
 
             if [ -n "$DEPS_TO_INSTALL" ]; then
                 sudo dnf install -y $DEPS_TO_INSTALL
@@ -463,6 +465,7 @@ install_system_deps() {
             command -v git &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL git"
             command -v nc &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL openbsd-netcat"
             command -v lsof &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL lsof"
+            command -v unzip &> /dev/null || DEPS_TO_INSTALL="$DEPS_TO_INSTALL unzip"
 
             if [ -n "$DEPS_TO_INSTALL" ]; then
                 sudo pacman -S --noconfirm $DEPS_TO_INSTALL
@@ -508,20 +511,28 @@ open_browser() {
 }
 
 # =============================================================================
+# Sélection du mode
+# =============================================================================
+
+select_run_mode
+
+# =============================================================================
 # Installation principale
 # =============================================================================
 
-echo -e "${PURPLE}================================================================${NC}"
-echo -e "${PURPLE}ÉTAPE 1: Installation des programmes système${NC}"
-echo -e "${PURPLE}================================================================${NC}"
+echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${PURPLE}║         ÉTAPE 1: Installation des programmes système          ║${NC}"
+echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 install_system_deps
-install_nodejs
-install_pnpm
-install_python
 install_docker
 install_docker_compose
+
+if [ "$RUN_MODE" = "native" ]; then
+    install_bun
+    install_python
+fi
 
 echo ""
 echo -e "${GREEN}Tous les programmes système sont installés !${NC}"
@@ -531,117 +542,202 @@ echo ""
 # Installation des dépendances du projet
 # =============================================================================
 
-echo -e "${PURPLE}================================================================${NC}"
-echo -e "${PURPLE}ÉTAPE 2: Installation des dépendances du projet${NC}"
-echo -e "${PURPLE}================================================================${NC}"
-echo ""
+if [ "$RUN_MODE" = "native" ]; then
+    echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║         ÉTAPE 2: Installation des dépendances du projet       ║${NC}"
+    echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
 
-echo -e "${BLUE}Installation des dépendances npm...${NC}"
-pnpm install
+    echo -e "${BLUE}Installation des dépendances avec Bun...${NC}"
 
-echo ""
-echo -e "${GREEN}Dépendances du projet installées !${NC}"
-echo ""
+    # S'assurer que bun est dans le PATH
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+
+    bun install
+
+    echo ""
+    echo -e "${GREEN}Dépendances du projet installées !${NC}"
+    echo ""
+fi
 
 # =============================================================================
 # Démarrage de l'application
 # =============================================================================
 
-echo -e "${PURPLE}================================================================${NC}"
-echo -e "${PURPLE}ÉTAPE 3: Démarrage de l'application Meeshy${NC}"
-echo -e "${PURPLE}================================================================${NC}"
+echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+if [ "$RUN_MODE" = "native" ]; then
+    echo -e "${PURPLE}║      ÉTAPE 3: Démarrage de l'application (Mode Natif)         ║${NC}"
+else
+    echo -e "${PURPLE}║      ÉTAPE 3: Démarrage de l'application (Mode Docker)        ║${NC}"
+fi
+echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-
-# Préparer le script de développement
-DEV_SCRIPT="$PROJECT_ROOT/scripts/development/development-start-local.sh"
-
-if [ ! -f "$DEV_SCRIPT" ]; then
-    echo -e "${RED}Script de démarrage non trouvé: $DEV_SCRIPT${NC}"
-    exit 1
-fi
-
-chmod +x "$DEV_SCRIPT"
-
-# Construire les arguments
-DEV_ARGS=""
-if [ "$START_CONTAINERS" = true ]; then
-    DEV_ARGS="$DEV_ARGS --with-containers"
-fi
-if [ "$USE_HTTPS" = true ]; then
-    DEV_ARGS="$DEV_ARGS --https"
-fi
-
-# Démarrer en arrière-plan et capturer l'output
-echo -e "${BLUE}Démarrage des services...${NC}"
-echo ""
-
-# Créer un fichier temporaire pour suivre l'état
-STARTUP_LOG=$(mktemp)
-STARTUP_COMPLETE=false
-
-# Lancer le script de développement
-$DEV_SCRIPT $DEV_ARGS &
-DEV_PID=$!
-
-# Attendre que les services soient prêts
-echo -e "${YELLOW}Attente du démarrage des services...${NC}"
 
 FRONTEND_URL="http://localhost:3100"
 if [ "$USE_HTTPS" = true ]; then
     FRONTEND_URL="https://localhost:3100"
 fi
 
-# Attendre que le frontend soit accessible (max 120 secondes)
-MAX_WAIT=120
-WAIT_COUNT=0
+if [ "$RUN_MODE" = "docker" ]; then
+    # ==========================================================================
+    # MODE DOCKER - Tout en conteneurs
+    # ==========================================================================
 
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    if curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>/dev/null | grep -q "200\|301\|302"; then
-        STARTUP_COMPLETE=true
-        break
-    fi
+    echo -e "${BLUE}Démarrage de tous les services via Docker Compose...${NC}"
+    echo ""
 
-    # Vérifier que le processus de développement est toujours en cours
-    if ! kill -0 $DEV_PID 2>/dev/null; then
-        echo -e "${RED}Le script de développement s'est arrêté de manière inattendue${NC}"
+    COMPOSE_FILE="$PROJECT_ROOT/infrastructure/docker/compose/docker-compose.dev.yml"
+
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        echo -e "${RED}Fichier docker-compose non trouvé: $COMPOSE_FILE${NC}"
         exit 1
     fi
 
-    sleep 2
-    WAIT_COUNT=$((WAIT_COUNT + 2))
-    echo -ne "\r${BLUE}Attente... ${WAIT_COUNT}s / ${MAX_WAIT}s${NC}    "
-done
+    # Démarrer tous les services
+    docker-compose -f "$COMPOSE_FILE" up -d
 
-echo ""
+    echo ""
+    echo -e "${YELLOW}Attente du démarrage des services...${NC}"
 
-if [ "$STARTUP_COMPLETE" = true ]; then
-    echo ""
-    echo -e "${GREEN}================================================================${NC}"
-    echo -e "${GREEN}    MEESHY EST PRET !${NC}"
-    echo -e "${GREEN}================================================================${NC}"
-    echo ""
-    echo -e "${CYAN}URLs disponibles:${NC}"
-    echo -e "  ${PURPLE}Frontend:${NC}     $FRONTEND_URL"
-    echo -e "  ${PURPLE}Gateway API:${NC}  http://localhost:3000"
-    echo -e "  ${PURPLE}Translator:${NC}   http://localhost:8000"
-    echo ""
+    # Attendre que les services soient prêts
+    MAX_WAIT=120
+    WAIT_COUNT=0
+    STARTUP_COMPLETE=false
 
-    # Ouvrir le navigateur si demandé
-    if [ "$SKIP_BROWSER" = false ]; then
+    while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        if curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>/dev/null | grep -q "200\|301\|302"; then
+            STARTUP_COMPLETE=true
+            break
+        fi
+
         sleep 2
-        open_browser "$FRONTEND_URL"
-        echo -e "${GREEN}Navigateur ouvert sur $FRONTEND_URL${NC}"
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        echo -ne "\r${BLUE}Attente... ${WAIT_COUNT}s / ${MAX_WAIT}s${NC}    "
+    done
+
+    echo ""
+
+    if [ "$STARTUP_COMPLETE" = true ]; then
+        echo ""
+        echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                    MEESHY EST PRÊT !                          ║${NC}"
+        echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${CYAN}URLs disponibles:${NC}"
+        echo -e "  ${PURPLE}Frontend:${NC}      $FRONTEND_URL"
+        echo -e "  ${PURPLE}Gateway API:${NC}   http://localhost:3000"
+        echo -e "  ${PURPLE}Translator:${NC}    http://localhost:8000"
+        echo -e "  ${PURPLE}MongoDB UI:${NC}    http://localhost:3001"
+        echo -e "  ${PURPLE}Redis UI:${NC}      http://localhost:7843"
+        echo ""
+        echo -e "${CYAN}Comptes par défaut:${NC}"
+        echo -e "  ${BLUE}Admin:${NC}    admin@meeshy.local / admin123"
+        echo -e "  ${BLUE}Meeshy:${NC}   meeshy@meeshy.local / meeshy123"
+        echo ""
+
+        # Ouvrir le navigateur si demandé
+        if [ "$SKIP_BROWSER" = false ]; then
+            sleep 2
+            open_browser "$FRONTEND_URL"
+            echo -e "${GREEN}Navigateur ouvert sur $FRONTEND_URL${NC}"
+        fi
+
+        echo ""
+        echo -e "${YELLOW}Commandes utiles:${NC}"
+        echo -e "  ${BLUE}Voir les logs:${NC}     docker-compose -f $COMPOSE_FILE logs -f"
+        echo -e "  ${BLUE}Arrêter:${NC}           docker-compose -f $COMPOSE_FILE down"
+        echo -e "  ${BLUE}Redémarrer:${NC}        docker-compose -f $COMPOSE_FILE restart"
+        echo ""
+    else
+        echo -e "${RED}Les services n'ont pas démarré dans le temps imparti${NC}"
+        echo -e "${YELLOW}Vérifiez les logs: docker-compose -f $COMPOSE_FILE logs${NC}"
+        exit 1
     fi
 
-    echo ""
-    echo -e "${YELLOW}Appuyez sur Ctrl+C pour arrêter tous les services${NC}"
+else
+    # ==========================================================================
+    # MODE NATIF - Services locaux avec Bun
+    # ==========================================================================
+
+    # Préparer le script de développement
+    DEV_SCRIPT="$PROJECT_ROOT/scripts/development/development-start-local.sh"
+
+    if [ ! -f "$DEV_SCRIPT" ]; then
+        echo -e "${RED}Script de démarrage non trouvé: $DEV_SCRIPT${NC}"
+        exit 1
+    fi
+
+    chmod +x "$DEV_SCRIPT"
+
+    # Construire les arguments
+    DEV_ARGS="--with-containers"
+    if [ "$USE_HTTPS" = true ]; then
+        DEV_ARGS="$DEV_ARGS --https"
+    fi
+
+    echo -e "${BLUE}Démarrage des services en mode natif...${NC}"
     echo ""
 
-    # Attendre le script de développement
-    wait $DEV_PID
-else
-    echo -e "${RED}Les services n'ont pas démarré dans le temps imparti${NC}"
-    echo -e "${YELLOW}Vérifiez les logs pour plus de détails${NC}"
-    kill $DEV_PID 2>/dev/null
-    exit 1
+    # Lancer le script de développement
+    $DEV_SCRIPT $DEV_ARGS &
+    DEV_PID=$!
+
+    # Attendre que les services soient prêts
+    echo -e "${YELLOW}Attente du démarrage des services...${NC}"
+
+    MAX_WAIT=120
+    WAIT_COUNT=0
+    STARTUP_COMPLETE=false
+
+    while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        if curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>/dev/null | grep -q "200\|301\|302"; then
+            STARTUP_COMPLETE=true
+            break
+        fi
+
+        # Vérifier que le processus de développement est toujours en cours
+        if ! kill -0 $DEV_PID 2>/dev/null; then
+            echo -e "${RED}Le script de développement s'est arrêté de manière inattendue${NC}"
+            exit 1
+        fi
+
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        echo -ne "\r${BLUE}Attente... ${WAIT_COUNT}s / ${MAX_WAIT}s${NC}    "
+    done
+
+    echo ""
+
+    if [ "$STARTUP_COMPLETE" = true ]; then
+        echo ""
+        echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                    MEESHY EST PRÊT !                          ║${NC}"
+        echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${CYAN}URLs disponibles:${NC}"
+        echo -e "  ${PURPLE}Frontend:${NC}     $FRONTEND_URL"
+        echo -e "  ${PURPLE}Gateway API:${NC}  http://localhost:3000"
+        echo -e "  ${PURPLE}Translator:${NC}   http://localhost:8000"
+        echo ""
+
+        # Ouvrir le navigateur si demandé
+        if [ "$SKIP_BROWSER" = false ]; then
+            sleep 2
+            open_browser "$FRONTEND_URL"
+            echo -e "${GREEN}Navigateur ouvert sur $FRONTEND_URL${NC}"
+        fi
+
+        echo ""
+        echo -e "${YELLOW}Appuyez sur Ctrl+C pour arrêter tous les services${NC}"
+        echo ""
+
+        # Attendre le script de développement
+        wait $DEV_PID
+    else
+        echo -e "${RED}Les services n'ont pas démarré dans le temps imparti${NC}"
+        echo -e "${YELLOW}Vérifiez les logs pour plus de détails${NC}"
+        kill $DEV_PID 2>/dev/null
+        exit 1
+    fi
 fi
