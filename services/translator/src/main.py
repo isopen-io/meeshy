@@ -42,6 +42,18 @@ from services.translation_ml_service import TranslationMLService
 
 from api.translation_api import TranslationAPI
 
+# Import des services audio (optionnel)
+AUDIO_SERVICES_AVAILABLE = False
+try:
+    from services.audio_message_pipeline import get_audio_pipeline
+    from services.transcription_service import get_transcription_service
+    from services.voice_clone_service import get_voice_clone_service
+    from services.tts_service import get_tts_service
+    AUDIO_SERVICES_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"[TRANSLATOR] ⚠️ Audio services non disponibles: {e}")
+
 # Configuration du logging
 # Production: WARNING (seulement les avertissements et erreurs)
 # Development: INFO (toutes les infos)
@@ -122,11 +134,38 @@ class MeeshyTranslationServer:
             await self.zmq_server.initialize()
             logger.info("[TRANSLATOR] ✅ Serveur ZMQ configuré avec service ML unifié")
             
-            # 3. Initialiser l'API FastAPI avec le service ML unifié
+            # 3. Initialiser les services audio si disponibles
+            audio_pipeline = None
+            transcription_service = None
+            voice_clone_service = None
+            tts_service = None
+
+            if AUDIO_SERVICES_AVAILABLE:
+                try:
+                    logger.info("[TRANSLATOR] 🎤 Initialisation des services audio...")
+                    transcription_service = get_transcription_service()
+                    voice_clone_service = get_voice_clone_service()
+                    tts_service = get_tts_service()
+                    audio_pipeline = get_audio_pipeline()
+
+                    # Injecter les dépendances
+                    audio_pipeline.set_translation_service(self.translation_service)
+                    audio_pipeline.set_database_service(self.zmq_server.database_service)
+
+                    logger.info("[TRANSLATOR] ✅ Services audio configurés")
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services audio: {e}")
+
+            # 4. Initialiser l'API FastAPI avec le service ML unifié
             self.translation_api = TranslationAPI(
                 translation_service=self.translation_service,
                 database_service=self.zmq_server.database_service,
-                zmq_server=self.zmq_server
+                zmq_server=self.zmq_server,
+                # Audio services
+                transcription_service=transcription_service,
+                voice_clone_service=voice_clone_service,
+                tts_service=tts_service,
+                audio_pipeline=audio_pipeline
             )
             logger.info("[TRANSLATOR] ✅ API FastAPI configurée avec service ML unifié")
             
