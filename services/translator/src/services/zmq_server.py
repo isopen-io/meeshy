@@ -23,6 +23,15 @@ from .database_service import DatabaseService
 # Import de la configuration des limites
 from config.message_limits import can_translate_message, MessageLimits
 
+# Import du pipeline audio (chargé dynamiquement pour éviter les imports circulaires)
+AUDIO_PIPELINE_AVAILABLE = False
+try:
+    from .audio_message_pipeline import AudioMessagePipeline, AudioMessageMetadata, get_audio_pipeline
+    AUDIO_PIPELINE_AVAILABLE = True
+    logger.info("✅ [ZMQ] AudioMessagePipeline disponible")
+except ImportError as e:
+    logger.warning(f"⚠️ [ZMQ] AudioMessagePipeline non disponible: {e}")
+
 # Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -671,8 +680,11 @@ class ZMQTranslationServer:
         try:
             request_data = json.loads(message.decode('utf-8'))
             
-            # Vérifier si c'est un message de ping
-            if request_data.get('type') == 'ping':
+            # Dispatcher selon le type de message
+            message_type = request_data.get('type')
+
+            # === PING ===
+            if message_type == 'ping':
                 logger.info(f"🏓 [TRANSLATOR] Ping reçu, timestamp: {request_data.get('timestamp')}")
                 # Répondre au ping via PUB
                 ping_response = {
@@ -680,13 +692,19 @@ class ZMQTranslationServer:
                     'timestamp': time.time(),
                     'translator_status': 'alive',
                     'translator_port_pub': self.gateway_sub_port,
-                    'translator_port_pull': self.gateway_push_port
+                    'translator_port_pull': self.gateway_push_port,
+                    'audio_pipeline_available': AUDIO_PIPELINE_AVAILABLE
                 }
                 if self.pub_socket:
                     await self.pub_socket.send(json.dumps(ping_response).encode('utf-8'))
                     logger.info(f"🏓 [TRANSLATOR] Pong envoyé via port {self.gateway_sub_port}")
                 else:
                     logger.error(f"❌ [TRANSLATOR] Socket PUB non disponible pour pong (port {self.gateway_sub_port})")
+                return
+
+            # === AUDIO PROCESSING ===
+            if message_type == 'audio_process':
+                await self._handle_audio_process_request(request_data)
                 return
             
             # Vérifier que c'est une requête de traduction valide
@@ -750,7 +768,195 @@ class ZMQTranslationServer:
             logger.error(f"Erreur de décodage JSON: {e}")
         except Exception as e:
             logger.error(f"Erreur lors du traitement de la requête: {e}")
-    
+
+    async def _handle_audio_process_request(self, request_data: dict):
+        """
+        Traite une requête de processing audio.
+
+        Pipeline complet:
+        1. Transcription (mobile ou Whisper)
+        2. Traduction vers les langues cibles
+        3. Clonage vocal
+        4. Génération TTS
+
+        Format attendu:
+        {
+            "type": "audio_process",
+            "messageId": str,
+            "attachmentId": str,
+            "conversationId": str,
+            "senderId": str,
+            "audioUrl": str,
+            "audioPath": str,
+            "audioDurationMs": int,
+            "mobileTranscription": {
+                "text": str,
+                "language": str,
+                "confidence": float,
+                "source": str
+            },
+            "targetLanguages": [str],
+            "generateVoiceClone": bool,
+            "modelType": str
+        }
+        """
+        task_id = str(uuid.uuid4())
+        start_time = time.time()
+
+        logger.info(f"🎤 [TRANSLATOR] Audio process request reçu: {request_data.get('messageId')}")
+
+        if not AUDIO_PIPELINE_AVAILABLE:
+            logger.error("[TRANSLATOR] Audio pipeline non disponible")
+            await self._publish_audio_error(
+                task_id=task_id,
+                message_id=request_data.get('messageId', ''),
+                attachment_id=request_data.get('attachmentId', ''),
+                error="Audio pipeline not available",
+                error_code="pipeline_unavailable"
+            )
+            return
+
+        try:
+            # Valider les données requises
+            required_fields = ['messageId', 'attachmentId', 'audioPath', 'senderId']
+            for field in required_fields:
+                if not request_data.get(field):
+                    raise ValueError(f"Champ requis manquant: {field}")
+
+            # Préparer les métadonnées mobiles
+            metadata = None
+            mobile_trans = request_data.get('mobileTranscription')
+            if mobile_trans and mobile_trans.get('text'):
+                metadata = AudioMessageMetadata(
+                    transcription=mobile_trans.get('text'),
+                    language=mobile_trans.get('language'),
+                    confidence=mobile_trans.get('confidence'),
+                    source=mobile_trans.get('source'),
+                    segments=mobile_trans.get('segments')
+                )
+
+            # Obtenir le pipeline et l'initialiser
+            pipeline = get_audio_pipeline()
+
+            # Injecter les services si pas encore fait
+            if pipeline.translation_service is None and hasattr(self, 'pool_manager') and self.pool_manager.translation_service:
+                pipeline.set_translation_service(self.pool_manager.translation_service)
+
+            if pipeline.database_service is None and hasattr(self, 'database_service'):
+                pipeline.set_database_service(self.database_service)
+
+            # Exécuter le pipeline audio
+            result = await pipeline.process_audio_message(
+                audio_path=request_data.get('audioPath'),
+                audio_url=request_data.get('audioUrl', ''),
+                sender_id=request_data.get('senderId'),
+                conversation_id=request_data.get('conversationId', ''),
+                message_id=request_data.get('messageId'),
+                attachment_id=request_data.get('attachmentId'),
+                audio_duration_ms=request_data.get('audioDurationMs', 0),
+                metadata=metadata,
+                target_languages=request_data.get('targetLanguages'),
+                generate_voice_clone=request_data.get('generateVoiceClone', True),
+                model_type=request_data.get('modelType', 'medium')
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            # Publier le résultat
+            await self._publish_audio_result(task_id, result, processing_time)
+
+            logger.info(
+                f"✅ [TRANSLATOR] Audio process terminé: "
+                f"msg={result.message_id}, "
+                f"translations={len(result.translations)}, "
+                f"time={processing_time}ms"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
+            import traceback
+            traceback.print_exc()
+
+            await self._publish_audio_error(
+                task_id=task_id,
+                message_id=request_data.get('messageId', ''),
+                attachment_id=request_data.get('attachmentId', ''),
+                error=str(e),
+                error_code="processing_failed"
+            )
+
+    async def _publish_audio_result(self, task_id: str, result, processing_time: int):
+        """Publie le résultat du processing audio via PUB"""
+        try:
+            # Construire le message de résultat
+            message = {
+                'type': 'audio_process_completed',
+                'taskId': task_id,
+                'messageId': result.message_id,
+                'attachmentId': result.attachment_id,
+                'transcription': {
+                    'text': result.original.transcription,
+                    'language': result.original.language,
+                    'confidence': result.original.confidence,
+                    'source': result.original.source,
+                    'segments': result.original.segments
+                },
+                'translatedAudios': [
+                    {
+                        'targetLanguage': t.language,
+                        'translatedText': t.translated_text,
+                        'audioUrl': t.audio_url,
+                        'audioPath': t.audio_path,
+                        'durationMs': t.duration_ms,
+                        'voiceCloned': t.voice_cloned,
+                        'voiceQuality': t.voice_quality
+                    }
+                    for t in result.translations.values()
+                ],
+                'voiceModelUserId': result.voice_model_user_id,
+                'voiceModelQuality': result.voice_model_quality,
+                'processingTimeMs': processing_time,
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+                logger.info(f"✅ [TRANSLATOR] Audio result publié: {result.message_id}")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio result")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result: {e}")
+
+    async def _publish_audio_error(
+        self,
+        task_id: str,
+        message_id: str,
+        attachment_id: str,
+        error: str,
+        error_code: str
+    ):
+        """Publie une erreur de processing audio via PUB"""
+        try:
+            message = {
+                'type': 'audio_process_error',
+                'taskId': task_id,
+                'messageId': message_id,
+                'attachmentId': attachment_id,
+                'error': error,
+                'errorCode': error_code,
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+                logger.warning(f"⚠️ [TRANSLATOR] Audio error publié: {message_id} - {error_code}")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio error")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
         try:

@@ -43,6 +43,27 @@ aiohttp>=3.12.15
 python-multipart>=0.0.20
 aiofiles>=24.1.0
 
+# ═══════════════════════════════════════════════════════════════
+# AUDIO PROCESSING - Transcription, Voice Clone, TTS
+# ═══════════════════════════════════════════════════════════════
+
+# Transcription (Speech-to-Text)
+faster-whisper>=1.0.0
+
+# Voice Cloning (OpenVoice V2)
+# Note: OpenVoice requires manual installation from git:
+# pip install git+https://github.com/myshell-ai/OpenVoice.git
+
+# Text-to-Speech (XTTS/Coqui)
+TTS>=0.22.0
+
+# Audio Processing utilities
+pydub>=0.25.1
+librosa>=0.10.0
+soundfile>=0.12.1
+scipy>=1.11.4
+ffmpeg-python>=0.2.0
+
 # Logging et monitoring
 loguru>=0.7.3
 prometheus-client>=0.22.1

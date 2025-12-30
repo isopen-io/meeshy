@@ -122,6 +122,9 @@ model User {
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
+
+  // Voice cloning relation
+  voiceModel UserVoiceModel?
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -313,6 +316,10 @@ model Message {
   anonymousSender AnonymousParticipant? @relation("AnonymousMessageSender", fields: [anonymousSenderId], references: [id])
   sender          User?                 @relation("MessageSender", fields: [senderId], references: [id])
   conversation    Conversation          @relation(fields: [conversationId], references: [id])
+
+  // Audio processing relations
+  audioTranscriptions MessageAudioTranscription[]
+  translatedAudios    MessageTranslatedAudio[]
 }
 
 /// Traduction d'un message
@@ -381,6 +388,10 @@ model MessageAttachment {
   metadata  Json? // JSON blob for additional metadata
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Audio processing relations
+  transcription    MessageAudioTranscription?
+  translatedAudios MessageTranslatedAudio[]
 
   @@index([messageId])
   @@index([uploadedBy])
@@ -1195,4 +1206,136 @@ model SignalPreKeyBundle {
 
   @@index([lastRotatedAt])
   @@map("signal_pre_key_bundles")
+}
+
+/// =====================================================
+/// AUDIO TRANSCRIPTION & TTS / VOICE CLONING MODELS
+/// =====================================================
+
+/// Transcription d'un message audio
+model MessageAudioTranscription {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Relation vers l'attachment source (unique - 1 transcription par attachment)
+  attachmentId String            @unique @db.ObjectId
+  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Relation vers le message (pour requêtes directes)
+  messageId String  @db.ObjectId
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Texte transcrit
+  transcribedText String
+
+  /// Langue détectée (code ISO 639-1: fr, en, es...)
+  language String
+
+  /// Score de confiance (0-1)
+  confidence Float
+
+  /// Source de la transcription: "mobile" (iOS/Android) ou "whisper" (serveur)
+  source String
+
+  /// Segments avec timestamps (JSON optionnel)
+  segments Json?
+
+  /// Durée audio en millisecondes
+  audioDurationMs Int
+
+  /// Modèle utilisé (si whisper: "whisper-large-v3")
+  model String?
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@index([language])
+  @@map("message_audio_transcriptions")
+}
+
+/// Version audio traduite d'un message (une par langue destinataire)
+model MessageTranslatedAudio {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Relation vers l'attachment source
+  attachmentId String            @db.ObjectId
+  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Relation vers le message
+  messageId String  @db.ObjectId
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Langue de cette version (code ISO 639-1)
+  targetLanguage String
+
+  /// Texte traduit utilisé pour la synthèse
+  translatedText String
+
+  /// Chemin du fichier audio généré
+  audioPath String
+
+  /// URL accessible pour lecture
+  audioUrl String
+
+  /// Durée en millisecondes
+  durationMs Int
+
+  /// Format audio (mp3, wav, ogg)
+  format String @default("mp3")
+
+  /// Voix clonée utilisée (true si clonage vocal actif)
+  voiceCloned Boolean @default(true)
+
+  /// Qualité du clonage vocal (0-1)
+  voiceQuality Float
+
+  /// ID du modèle de voix utilisé
+  voiceModelId String? @db.ObjectId
+
+  /// Modèle TTS utilisé (xtts, openvoice)
+  ttsModel String @default("xtts")
+
+  createdAt DateTime @default(now())
+
+  /// Une seule version par attachment + langue
+  @@unique([attachmentId, targetLanguage])
+  @@index([messageId])
+  @@index([targetLanguage])
+  @@map("message_translated_audios")
+}
+
+/// Modèle de voix cloné d'un utilisateur
+model UserVoiceModel {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  /// Chemin vers le fichier d'embedding de la voix
+  embeddingPath String
+
+  /// Nombre d'audios utilisés pour l'entraînement
+  audioCount Int
+
+  /// Durée totale des audios d'entraînement (ms)
+  totalDurationMs Int
+
+  /// Score de qualité du modèle (0-1)
+  /// - 0-0.3: faible (audio trop court)
+  /// - 0.3-0.5: moyen
+  /// - 0.5-0.7: bon
+  /// - 0.7-1.0: excellent
+  qualityScore Float
+
+  /// Version du modèle (incrémentée à chaque recalibration)
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Prochaine recalibration prévue (mensuelle)
+  nextRecalibrationAt DateTime?
+
+  /// Relation vers l'utilisateur
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+  @@map("user_voice_models")
 }
