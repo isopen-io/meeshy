@@ -318,12 +318,13 @@ async def test_voice_clone_model_improvement(voice_cache_dir, mock_audio_file):
     user_id = "improve_test_user"
     initial_embedding = np.random.randn(256).astype(np.float32)
 
+    initial_quality_score = 0.5
     initial_model = VoiceModel(
         user_id=user_id,
         embedding_path=str(voice_cache_dir / user_id / "embedding.pkl"),
         audio_count=1,
         total_duration_ms=10000,
-        quality_score=0.5,
+        quality_score=initial_quality_score,
         version=1,
         created_at=datetime.now(),
         updated_at=datetime.now() - timedelta(days=1),  # Updated yesterday
@@ -340,7 +341,8 @@ async def test_voice_clone_model_improvement(voice_cache_dir, mock_audio_file):
 
     assert improved_model.version == 2
     assert improved_model.audio_count == 2
-    assert improved_model.quality_score > initial_model.quality_score
+    # The model is mutated in place, so check against the captured initial value
+    assert improved_model.quality_score > initial_quality_score
     assert improved_model.embedding is not None
 
     # Check weighted average was applied
