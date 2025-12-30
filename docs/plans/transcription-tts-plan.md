@@ -12,6 +12,636 @@ Ce plan détaille l'intégration d'un **pipeline audio complet** dans le service
 
 ---
 
+## INTÉGRATION AVEC LE CODE EXISTANT
+
+### Analyse du Code Actuel
+
+#### 1. Structures Gateway Existantes
+
+**AttachmentService** (`services/gateway/src/services/AttachmentService.ts`):
+- Le champ `metadata` JSON dans `messageAttachment` stocke déjà `audioEffectsTimeline`
+- Les métadonnées audio (duration, codec, sampleRate) sont extraites côté client (Web Audio API) ou serveur
+- Format actuel des métadonnées passées à l'upload:
+
+```typescript
+// EXISTANT - services/gateway/src/services/AttachmentService.ts:469-490
+metadata: {
+  duration: number,           // secondes
+  bitrate: number,            // bps
+  sampleRate: number,         // Hz
+  codec: string,
+  channels: number,
+  audioEffectsTimeline?: {    // Effets audio appliqués
+    events: AudioEffect[]
+  }
+}
+```
+
+**ZMQ Translation Client** (`services/gateway/src/services/zmq-translation-client.ts`):
+- Pattern PUSH/SUB sur ports 5555 (commandes) et 5558 (résultats)
+- Interface `TranslationRequest` existante:
+
+```typescript
+// EXISTANT - zmq-translation-client.ts:11-18
+interface TranslationRequest {
+  messageId: string;
+  text: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  conversationId: string;
+  modelType?: string;
+}
+```
+
+**Message Flow** (`services/gateway/src/socketio/MeeshySocketIOManager.ts`):
+- `CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS` pour messages avec fichiers
+- Broadcast via `SERVER_EVENTS.MESSAGE_NEW` avec attachments inclus
+- `SERVER_EVENTS.MESSAGE_TRANSLATION` pour traductions prêtes
+
+#### 2. Structures Translator Existantes
+
+**MeeshyTranslationServer** (`services/translator/src/main.py`):
+- Initialisation: Settings → TranslationMLService → ZMQTranslationServer → TranslationAPI
+- Modèles chargés en arrière-plan (non-bloquant)
+- Pattern Singleton pour TranslationMLService
+
+**ZMQ Message Types** (`services/translator/src/services/zmq_server.py`):
+- `type: "translation"` - Traduction de texte
+- `type: "ping"` - Health check
+- Résultats: `translation_completed`, `translation_error`, `translation_skipped`
+
+---
+
+### NOUVELLES STRUCTURES À AJOUTER
+
+#### 1. Extension du champ `metadata` pour transcription mobile
+
+**Format étendu pour `messageAttachment.metadata`**:
+
+```typescript
+// NOUVEAU - À documenter pour les clients mobiles
+interface AudioAttachmentMetadata {
+  // EXISTANT
+  audioEffectsTimeline?: {
+    events: AudioEffect[]
+  };
+
+  // NOUVEAU - Transcription faite sur mobile
+  transcription?: {
+    text: string;              // Texte transcrit
+    language: string;          // Code langue ISO 639-1 (fr, en, es...)
+    confidence: number;        // Score 0-1
+    source: "ios_speech" | "android_speech" | "whisperkit" | "other";
+    segments?: Array<{         // Optionnel - timestamps
+      text: string;
+      startMs: number;
+      endMs: number;
+    }>;
+  };
+}
+```
+
+**Modification AttachmentService** (`services/gateway/src/services/AttachmentService.ts`):
+
+```typescript
+// À AJOUTER dans uploadFile() après ligne 490
+if (providedMetadata.transcription) {
+  console.log('📝 [AttachmentService] Mobile transcription found:', {
+    text: providedMetadata.transcription.text.substring(0, 50) + '...',
+    language: providedMetadata.transcription.language,
+    source: providedMetadata.transcription.source
+  });
+  metadata.transcription = providedMetadata.transcription;
+}
+```
+
+#### 2. Nouveau Type de Message ZMQ: `audio_process`
+
+**Interface AudioProcessRequest** (Gateway → Translator):
+
+```typescript
+// NOUVEAU - services/gateway/src/services/zmq-translation-client.ts
+interface AudioProcessRequest {
+  type: "audio_process";
+
+  // Identifiants
+  messageId: string;
+  attachmentId: string;
+  conversationId: string;
+  senderId: string;
+
+  // Audio source
+  audioUrl: string;            // URL accessible du fichier audio
+  audioPath: string;           // Chemin relatif dans uploads/
+  audioDurationMs: number;
+
+  // Transcription mobile (optionnelle)
+  mobileTranscription?: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: string;
+  };
+
+  // Langues cibles (extraites des membres de la conversation)
+  targetLanguages: string[];
+
+  // Options
+  generateVoiceClone: boolean;  // true par défaut
+  modelType: "basic" | "medium" | "premium";
+}
+```
+
+**Interface AudioProcessResult** (Translator → Gateway):
+
+```typescript
+// NOUVEAU - services/gateway/src/services/zmq-translation-client.ts
+interface AudioProcessResult {
+  type: "audio_process_completed";
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+
+  // Transcription
+  transcription: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: "mobile" | "whisper";
+    segments?: TranscriptionSegment[];
+  };
+
+  // Traductions audio générées (une par langue)
+  translatedAudios: Array<{
+    targetLanguage: string;
+    translatedText: string;
+    audioUrl: string;          // URL accessible
+    audioPath: string;         // Chemin stockage
+    durationMs: number;
+    voiceCloned: boolean;
+    voiceQuality: number;      // 0-1
+  }>;
+
+  // Métadonnées
+  voiceModelUserId: string;
+  voiceModelQuality: number;
+  processingTimeMs: number;
+  timestamp: number;
+}
+
+interface AudioProcessError {
+  type: "audio_process_error";
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  error: string;
+  errorCode: "transcription_failed" | "translation_failed" | "tts_failed" | "voice_clone_failed";
+}
+```
+
+#### 3. Nouveaux Événements Socket.IO
+
+**Ajout dans `packages/shared/types/socketio-events.ts`**:
+
+```typescript
+// NOUVEAU - Événements Audio
+export const SERVER_EVENTS = {
+  // ... existants ...
+
+  // Audio Processing
+  AUDIO_TRANSCRIPTION_READY: 'audio:transcription:ready',
+  AUDIO_TRANSLATION_READY: 'audio:translation:ready',      // Émis pour chaque langue
+  AUDIO_PROCESSING_COMPLETE: 'audio:processing:complete',  // Tout le pipeline terminé
+  AUDIO_PROCESSING_ERROR: 'audio:processing:error',
+
+  // Voice Model
+  VOICE_MODEL_CREATED: 'voice:model:created',
+  VOICE_MODEL_IMPROVED: 'voice:model:improved',
+  VOICE_MODEL_RECALIBRATED: 'voice:model:recalibrated',
+} as const;
+
+// Payloads
+interface AudioTranscriptionReadyPayload {
+  messageId: string;
+  attachmentId: string;
+  transcription: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: "mobile" | "whisper";
+  };
+}
+
+interface AudioTranslationReadyPayload {
+  messageId: string;
+  attachmentId: string;
+  targetLanguage: string;
+  translatedText: string;
+  audioUrl: string;
+  durationMs: number;
+  voiceCloned: boolean;
+}
+
+interface AudioProcessingCompletePayload {
+  messageId: string;
+  attachmentId: string;
+  transcription: TranscriptionData;
+  translatedAudios: TranslatedAudioData[];
+  processingTimeMs: number;
+}
+```
+
+#### 4. Déclenchement du Pipeline Audio
+
+**Option retenue: Automatique pour les messages audio**
+
+Modification dans `MeeshySocketIOManager.ts` après création du message:
+
+```typescript
+// NOUVEAU - services/gateway/src/socketio/MeeshySocketIOManager.ts
+// Après la création du message avec attachments (vers ligne 1950)
+
+private async _triggerAudioProcessingIfNeeded(
+  message: Message,
+  attachments: MessageAttachment[],
+  conversationId: string
+): Promise<void> {
+  // Filtrer les attachments audio
+  const audioAttachments = attachments.filter(att =>
+    att.mimeType.startsWith('audio/')
+  );
+
+  if (audioAttachments.length === 0) return;
+
+  // Récupérer les langues cibles des membres
+  const targetLanguages = await this._getConversationTargetLanguages(
+    conversationId,
+    message.senderId,
+    message.originalLanguage
+  );
+
+  // Envoyer chaque audio au pipeline
+  for (const attachment of audioAttachments) {
+    const request: AudioProcessRequest = {
+      type: "audio_process",
+      messageId: message.id,
+      attachmentId: attachment.id,
+      conversationId: conversationId,
+      senderId: message.senderId,
+      audioUrl: attachment.fileUrl,
+      audioPath: attachment.filePath,
+      audioDurationMs: (attachment.duration || 0) * 1000,
+      mobileTranscription: (attachment.metadata as any)?.transcription,
+      targetLanguages: targetLanguages,
+      generateVoiceClone: true,
+      modelType: "medium"
+    };
+
+    await this.zmqClient.sendAudioProcessRequest(request);
+
+    logger.info(`[Audio] Triggered processing for attachment ${attachment.id}`);
+  }
+}
+```
+
+#### 5. Gestion des Résultats Audio (Gateway)
+
+**Nouveau handler dans ZMQTranslationClient**:
+
+```typescript
+// NOUVEAU - services/gateway/src/services/zmq-translation-client.ts
+
+private _handleAudioProcessResult(event: AudioProcessResult | AudioProcessError): void {
+  if (event.type === 'audio_process_completed') {
+    // Émettre transcription ready
+    this.emit('audioTranscriptionReady', {
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      transcription: event.transcription
+    });
+
+    // Émettre chaque traduction audio
+    for (const audio of event.translatedAudios) {
+      this.emit('audioTranslationReady', {
+        messageId: event.messageId,
+        attachmentId: event.attachmentId,
+        targetLanguage: audio.targetLanguage,
+        translatedText: audio.translatedText,
+        audioUrl: audio.audioUrl,
+        durationMs: audio.durationMs,
+        voiceCloned: audio.voiceCloned
+      });
+    }
+
+    // Émettre processing complete
+    this.emit('audioProcessingComplete', event);
+
+  } else if (event.type === 'audio_process_error') {
+    this.emit('audioProcessingError', event);
+  }
+}
+```
+
+**Handler Socket.IO dans MeeshySocketIOManager**:
+
+```typescript
+// NOUVEAU - Écouter les événements audio du ZMQ client
+this.zmqClient.on('audioTranscriptionReady', async (data) => {
+  // Sauvegarder en BDD
+  await this.saveAudioTranscription(data);
+
+  // Broadcast à la conversation
+  this.io.to(`conversation_${data.conversationId}`)
+    .emit(SERVER_EVENTS.AUDIO_TRANSCRIPTION_READY, data);
+});
+
+this.zmqClient.on('audioTranslationReady', async (data) => {
+  // Sauvegarder en BDD
+  await this.saveTranslatedAudio(data);
+
+  // Broadcast à la conversation
+  this.io.to(`conversation_${data.conversationId}`)
+    .emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, data);
+});
+```
+
+#### 6. Stockage des Audios Générés
+
+**Structure de fichiers**:
+
+```
+uploads/
+└── attachments/           # Existant - audios originaux
+    └── YYYY/mm/userId/
+        └── audio_UUID.webm
+
+outputs/                   # NOUVEAU - audios générés
+└── audio/
+    └── translated/
+        └── YYYY/mm/
+            └── {messageId}_{targetLang}.mp3
+    └── voice_models/
+        └── {userId}/
+            └── embedding.pkl
+            └── metadata.json
+```
+
+**Nouvelle route pour servir les audios générés**:
+
+```typescript
+// NOUVEAU - services/gateway/src/routes/audio-outputs.ts
+router.get('/outputs/audio/:path(*)', async (request, reply) => {
+  const filePath = path.join(OUTPUTS_DIR, 'audio', request.params.path);
+
+  if (!fs.existsSync(filePath)) {
+    return reply.status(404).send({ error: 'Audio not found' });
+  }
+
+  const mimeType = getMimeType(filePath);
+  return reply.type(mimeType).send(fs.createReadStream(filePath));
+});
+```
+
+#### 7. Relation Prisma: Attachment → TranslatedAudios
+
+**Modification du schéma**:
+
+```prisma
+// packages/shared/prisma/schema.prisma
+
+model MessageAttachment {
+  // ... champs existants ...
+
+  // NOUVEAU - Relation vers la transcription
+  transcription    MessageAudioTranscription?
+
+  // NOUVEAU - Relation vers les audios traduits
+  translatedAudios MessageTranslatedAudio[]
+}
+
+model MessageAudioTranscription {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  // Relation vers l'attachment source
+  attachmentId    String   @unique @db.ObjectId
+  attachment      MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  // Relation vers le message (pour requêtes directes)
+  messageId       String   @db.ObjectId
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Données de transcription
+  transcribedText String
+  language        String
+  confidence      Float
+  source          String   // "mobile" | "whisper"
+  segments        Json?    // Timestamps optionnels
+  audioDurationMs Int
+  model           String?  // "whisper-large-v3" si serveur
+
+  createdAt       DateTime @default(now())
+
+  @@index([messageId])
+  @@index([language])
+  @@map("message_audio_transcriptions")
+}
+
+model MessageTranslatedAudio {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  // Relation vers l'attachment source
+  attachmentId    String   @db.ObjectId
+  attachment      MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  // Relation vers le message
+  messageId       String   @db.ObjectId
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Données audio traduit
+  targetLanguage  String
+  translatedText  String
+  audioPath       String
+  audioUrl        String
+  durationMs      Int
+  format          String   @default("mp3")
+
+  // Clonage vocal
+  voiceCloned     Boolean  @default(true)
+  voiceQuality    Float
+  voiceModelId    String?  @db.ObjectId
+
+  // Métadonnées
+  ttsModel        String   @default("xtts")
+  createdAt       DateTime @default(now())
+
+  // Contrainte: une seule version par attachment + langue
+  @@unique([attachmentId, targetLanguage])
+  @@index([messageId])
+  @@index([targetLanguage])
+  @@map("message_translated_audios")
+}
+```
+
+---
+
+### FLOW COMPLET INTÉGRÉ
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 1. CLIENT MOBILE (iOS/Android)                                                       │
+│    ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│    │  a. Enregistre audio                                                          │ │
+│    │  b. Transcrit localement (iOS Speech / Android Speech / WhisperKit)          │ │
+│    │  c. Upload avec metadata:                                                      │ │
+│    │     POST /attachments/upload                                                   │ │
+│    │     FormData: {                                                                │ │
+│    │       file: audio.webm,                                                        │ │
+│    │       metadata_0: {                                                            │ │
+│    │         duration: 5.2,                                                         │ │
+│    │         codec: "opus",                                                         │ │
+│    │         transcription: {        // ← NOUVEAU                                   │ │
+│    │           text: "Bonjour!",                                                    │ │
+│    │           language: "fr",                                                      │ │
+│    │           confidence: 0.92,                                                    │ │
+│    │           source: "ios_speech"                                                 │ │
+│    │         }                                                                      │ │
+│    │       }                                                                        │ │
+│    │     }                                                                          │ │
+│    │  d. Socket: MESSAGE_SEND_WITH_ATTACHMENTS { attachmentIds: [...] }            │ │
+│    └──────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          ↓
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 2. GATEWAY                                                                           │
+│    ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│    │  a. AttachmentService.uploadFile()                                            │ │
+│    │     → Stocke metadata.transcription dans messageAttachment.metadata           │ │
+│    │                                                                                │ │
+│    │  b. MeeshySocketIOManager._handleMessageSendWithAttachments()                 │ │
+│    │     → Crée Message + associe Attachments                                       │ │
+│    │     → Broadcast MESSAGE_NEW                                                    │ │
+│    │                                                                                │ │
+│    │  c. _triggerAudioProcessingIfNeeded() // ← NOUVEAU                            │ │
+│    │     → Détecte mimeType audio/*                                                │ │
+│    │     → Récupère targetLanguages des membres                                    │ │
+│    │     → ZMQ PUSH: AudioProcessRequest {                                         │ │
+│    │         type: "audio_process",                                                │ │
+│    │         messageId, attachmentId, audioPath,                                   │ │
+│    │         mobileTranscription: metadata.transcription,                          │ │
+│    │         targetLanguages: ["en", "es", "de"]                                   │ │
+│    │       }                                                                        │ │
+│    └──────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          ↓ ZMQ PUSH (port 5555)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 3. TRANSLATOR SERVICE                                                                │
+│    ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│    │  ZMQTranslationServer._handle_audio_process()  // ← NOUVEAU                   │ │
+│    │                                                                                │ │
+│    │  ÉTAPE 1: TRANSCRIPTION                                                       │ │
+│    │  ┌────────────────────────────────────────────────────────────────────────┐   │ │
+│    │  │  if mobileTranscription:                                               │   │ │
+│    │  │      transcription = mobileTranscription  # Réutiliser                 │   │ │
+│    │  │  else:                                                                 │   │ │
+│    │  │      transcription = TranscriptionService.transcribe(audioPath)        │   │ │
+│    │  └────────────────────────────────────────────────────────────────────────┘   │ │
+│    │                                    ↓                                           │ │
+│    │  ÉTAPE 2: CLONAGE VOCAL                                                       │ │
+│    │  ┌────────────────────────────────────────────────────────────────────────┐   │ │
+│    │  │  voice_model = VoiceCloneService.get_or_create(                        │   │ │
+│    │  │      user_id=senderId,                                                 │   │ │
+│    │  │      audio_path=audioPath,                                             │   │ │
+│    │  │      duration_ms=audioDurationMs                                       │   │ │
+│    │  │  )                                                                     │   │ │
+│    │  │  # Si audio trop court → agrège historique audios de l'utilisateur    │   │ │
+│    │  │  # Cache modèle 30 jours, amélioration continue                        │   │ │
+│    │  └────────────────────────────────────────────────────────────────────────┘   │ │
+│    │                                    ↓                                           │ │
+│    │  ÉTAPE 3: POUR CHAQUE targetLanguage                                          │ │
+│    │  ┌────────────────────────────────────────────────────────────────────────┐   │ │
+│    │  │  # 3a. Traduire texte                                                  │   │ │
+│    │  │  translated_text = TranslationMLService.translate(                     │   │ │
+│    │  │      text=transcription.text,                                          │   │ │
+│    │  │      source=transcription.language,                                    │   │ │
+│    │  │      target=targetLanguage                                             │   │ │
+│    │  │  )                                                                     │   │ │
+│    │  │                                                                        │   │ │
+│    │  │  # 3b. Générer audio avec voix clonée                                  │   │ │
+│    │  │  audio_result = TTSService.synthesize_with_voice(                      │   │ │
+│    │  │      text=translated_text,                                             │   │ │
+│    │  │      voice_model=voice_model,                                          │   │ │
+│    │  │      language=targetLanguage                                           │   │ │
+│    │  │  )                                                                     │   │ │
+│    │  │                                                                        │   │ │
+│    │  │  # 3c. Stocker fichier audio                                           │   │ │
+│    │  │  audio_path = f"outputs/audio/translated/{messageId}_{lang}.mp3"       │   │ │
+│    │  └────────────────────────────────────────────────────────────────────────┘   │ │
+│    │                                    ↓                                           │ │
+│    │  ÉTAPE 4: PUBLIER RÉSULTAT                                                    │ │
+│    │  ┌────────────────────────────────────────────────────────────────────────┐   │ │
+│    │  │  ZMQ PUB: AudioProcessResult {                                         │   │ │
+│    │  │      type: "audio_process_completed",                                  │   │ │
+│    │  │      messageId, attachmentId,                                          │   │ │
+│    │  │      transcription: { text, language, confidence, source },            │   │ │
+│    │  │      translatedAudios: [                                               │   │ │
+│    │  │          { targetLanguage: "en", audioUrl: "...", ... },               │   │ │
+│    │  │          { targetLanguage: "es", audioUrl: "...", ... },               │   │ │
+│    │  │      ]                                                                 │   │ │
+│    │  │  }                                                                     │   │ │
+│    │  └────────────────────────────────────────────────────────────────────────┘   │ │
+│    └──────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          ↓ ZMQ PUB (port 5558)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 4. GATEWAY (réception résultat)                                                      │
+│    ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│    │  ZMQTranslationClient._handleAudioProcessResult()                             │ │
+│    │                                                                                │ │
+│    │  a. Sauvegarder en BDD:                                                       │ │
+│    │     → MessageAudioTranscription                                               │ │
+│    │     → MessageTranslatedAudio[] (une par langue)                               │ │
+│    │                                                                                │ │
+│    │  b. Émettre événements Socket.IO:                                             │ │
+│    │     → AUDIO_TRANSCRIPTION_READY                                               │ │
+│    │     → AUDIO_TRANSLATION_READY (pour chaque langue)                            │ │
+│    │     → AUDIO_PROCESSING_COMPLETE                                               │ │
+│    └──────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          ↓ Socket.IO
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 5. CLIENTS (tous les membres de la conversation)                                     │
+│    ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│    │  socket.on('audio:transcription:ready', (data) => {                           │ │
+│    │      // Afficher texte transcrit sous le message audio                        │ │
+│    │  });                                                                           │ │
+│    │                                                                                │ │
+│    │  socket.on('audio:translation:ready', (data) => {                             │ │
+│    │      // Si data.targetLanguage === user.preferredLanguage                     │ │
+│    │      // → Afficher bouton "Écouter traduction" avec audioUrl                  │ │
+│    │      // → Afficher texte traduit                                              │ │
+│    │  });                                                                           │ │
+│    └──────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### MODIFICATIONS FICHIERS EXISTANTS (RÉSUMÉ)
+
+| Fichier | Modification |
+|---------|-------------|
+| `gateway/src/services/AttachmentService.ts` | Stocker `metadata.transcription` |
+| `gateway/src/services/zmq-translation-client.ts` | Ajouter `AudioProcessRequest`, handler résultats |
+| `gateway/src/socketio/MeeshySocketIOManager.ts` | Trigger audio processing, émettre événements |
+| `shared/types/socketio-events.ts` | Nouveaux événements `AUDIO_*` |
+| `shared/prisma/schema.prisma` | Relations Attachment ↔ Transcription ↔ TranslatedAudio |
+| `translator/src/services/zmq_server.py` | Handler `audio_process` |
+| `translator/src/main.py` | Initialiser nouveaux services |
+
+---
+
+---
+
 ## Architecture Cible
 
 ```
