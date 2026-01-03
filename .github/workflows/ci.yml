@@ -303,6 +303,87 @@ jobs:
           retention-days: 30
 
   # ===========================================================================
+  # TEST: TTS/STT Integration Tests
+  # Tests UnifiedTTSService, TranscriptionService, and E2E voice pipeline
+  # ===========================================================================
+  test-tts-stt:
+    name: TTS/STT Integration
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: services/translator/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsndfile1 libsox-dev
+
+      - name: Install Python dependencies
+        run: |
+          cd services/translator
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run UnifiedTTSService tests
+        env:
+          CI: "true"
+        timeout-minutes: 10
+        run: |
+          cd services/translator
+          python -m pytest tests/test_14_unified_tts_service.py -v --tb=short
+
+      - name: Run TranscriptionService tests
+        env:
+          CI: "true"
+        timeout-minutes: 10
+        run: |
+          cd services/translator
+          python -m pytest tests/test_06_transcription_service.py -v --tb=short
+
+      - name: Run Voice Translation E2E tests
+        env:
+          CI: "true"
+        timeout-minutes: 15
+        run: |
+          cd services/translator
+          python -m pytest tests/test_15_voice_translation_e2e.py -v -s --tb=short 2>&1 | tee e2e_test_output.log
+
+      - name: Generate E2E report
+        if: always()
+        run: |
+          cd services/translator
+          echo "# TTS/STT Integration Test Report" > e2e_report.md
+          echo "" >> e2e_report.md
+          echo "## Test Summary" >> e2e_report.md
+          echo "- UnifiedTTSService: Multi-model TTS with hot-loading" >> e2e_report.md
+          echo "- TranscriptionService: Whisper-based STT" >> e2e_report.md
+          echo "- Voice Translation E2E: Full pipeline validation" >> e2e_report.md
+          echo "" >> e2e_report.md
+          echo "## 90% Word Equivalence Requirement" >> e2e_report.md
+          echo "The E2E tests validate that:" >> e2e_report.md
+          echo "1. Text is translated correctly" >> e2e_report.md
+          echo "2. TTS generates intelligible audio" >> e2e_report.md
+          echo "3. STT transcription matches translation at 90%+ word overlap" >> e2e_report.md
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tts-stt-test-results
+          path: |
+            services/translator/e2e_test_output.log
+            services/translator/e2e_report.md
+          retention-days: 7
+
+  # ===========================================================================
   # TEST: Voice API Tests (Gateway + Translator)
   # Complete coverage for Voice API endpoints and handlers
   # ===========================================================================
@@ -614,7 +695,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, test, test-python, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -628,6 +709,8 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Voice E2E Benchmark | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Prisma | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
