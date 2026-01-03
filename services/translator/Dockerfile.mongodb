@@ -2,7 +2,7 @@
 # MEESHY TRANSLATOR - FastAPI ML Service
 # Build context: services/translator/ directory (shared/ copied during CI)
 # =============================================================================
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Translator - FastAPI ML Service" \
