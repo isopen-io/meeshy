@@ -38,7 +38,7 @@ ENV GRPC_HOST=${GRPC_HOST} \
     LOG_LEVEL=${LOG_LEVEL} \
     WORKERS=${WORKERS}
 
-# System setup
+# System setup (including gosu for secure user switching)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         wget \
@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libopenblas-dev \
         liblapack-dev \
         netcat-openbsd \
+        gosu \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g pnpm@${PNPM_VERSION} prisma@latest \
@@ -101,7 +102,8 @@ RUN chown -R translator:translator /workspace \
 
 EXPOSE ${HTTP_PORT} ${GRPC_PORT}
 
-USER translator:translator
+# Start as root to fix volume permissions, then switch to translator in entrypoint
+# USER translator:translator  # Moved to entrypoint for volume permission fix
 
 ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
 
