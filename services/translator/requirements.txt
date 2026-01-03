@@ -59,7 +59,7 @@ aiofiles==24.1.0
 # Supports: Python 3.8+ including Python 3.12 ✓
 # Note: 1.1.0+ removed tokenizers dependency (uses ctranslate2's tokenizer)
 # and allows av>=11 which has pre-built wheels (av-12.x+)
-faster-whisper==1.1.0
+faster-whisper==1.2.1
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # TTS (Text-to-Speech) - MANDATORY - Multi-model support
