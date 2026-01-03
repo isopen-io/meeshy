@@ -1,5 +1,6 @@
 """
-Configuration du service de traduction Meeshy - Version simplifiée
+Configuration du service de traduction Meeshy - Version Production
+Inclut: Audio services, Voice API, Analytics, Pipeline async
 """
 
 import os
@@ -7,11 +8,39 @@ from pathlib import Path
 
 class Settings:
     """Configuration du service de traduction"""
-    
+
     def __init__(self):
         # Configuration générale
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
         self.workers = int(os.getenv("WORKERS", "16"))
+
+        # ═══════════════════════════════════════════════════════════════
+        # AUDIO SERVICES CONFIGURATION
+        # ═══════════════════════════════════════════════════════════════
+        self.enable_audio_services = os.getenv("ENABLE_AUDIO_SERVICES", "true").lower() == "true"
+        self.enable_voice_api = os.getenv("ENABLE_VOICE_API", "true").lower() == "true"
+
+        # Whisper configuration
+        self.whisper_model = os.getenv("WHISPER_MODEL", "base")
+        self.whisper_device = os.getenv("WHISPER_DEVICE", "auto")
+        self.whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
+
+        # XTTS configuration
+        self.xtts_models_path = os.getenv("XTTS_MODELS_PATH", "./models/xtts")
+        self.xtts_device = os.getenv("XTTS_DEVICE", "auto")
+
+        # Voice cloning
+        self.voice_model_cache_dir = os.getenv("VOICE_MODEL_CACHE_DIR", "./voice_models")
+        self.voice_clone_device = os.getenv("VOICE_CLONE_DEVICE", "cpu")
+
+        # Audio output
+        self.audio_output_dir = os.getenv("AUDIO_OUTPUT_DIR", "./audio_output")
+
+        # Analytics
+        self.analytics_data_dir = os.getenv("ANALYTICS_DATA_DIR", "./analytics_data")
+
+        # Pipeline async
+        self.max_concurrent_jobs = int(os.getenv("MAX_CONCURRENT_JOBS", "10"))
         
         # Configuration des ports
         self.fastapi_port = int(os.getenv("FASTAPI_PORT", "8000"))
