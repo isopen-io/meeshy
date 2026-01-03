@@ -50,12 +50,28 @@ aiofiles>=24.1.0
 # Transcription (Speech-to-Text)
 faster-whisper>=1.0.0
 
-# Voice Cloning (OpenVoice V2)
+# ═══════════════════════════════════════════════════════════════
+# TTS MODELS - Multi-model support (select via TTS_MODEL env var)
+# ═══════════════════════════════════════════════════════════════
+
+# OPTION 1: Chatterbox (RECOMMENDED - Apache 2.0 license)
+# Best quality/speed balance, commercial use allowed
+# Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
+chatterbox-tts>=0.1.0
+
+# OPTION 2: Higgs Audio V2 (State-of-the-art quality)
+# ⚠️ WARNING: Commercial use limited to <100k users/year
+# Set TTS_MODEL=higgs-audio-v2
+# Uses transformers (already included above)
+
+# OPTION 3: XTTS v2 (Legacy - NON-COMMERCIAL)
+# ⚠️ WARNING: Coqui Public License - NO commercial use!
+# Set TTS_MODEL=xtts-v2
+TTS>=0.22.0
+
+# Voice Cloning (OpenVoice V2) - Legacy, optional
 # Note: OpenVoice requires manual installation from git:
 # pip install git+https://github.com/myshell-ai/OpenVoice.git
-
-# Text-to-Speech (XTTS/Coqui)
-TTS>=0.22.0
 
 # Audio Processing utilities
 pydub>=0.25.1
