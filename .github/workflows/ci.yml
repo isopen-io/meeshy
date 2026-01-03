@@ -186,10 +186,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: services/translator/requirements.txt
 
-      - name: Install system dependencies (ffmpeg)
+      - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg pkg-config \
+            libavformat-dev libavcodec-dev libavdevice-dev \
+            libavutil-dev libswscale-dev libswresample-dev libavfilter-dev
 
       - name: Install Python dependencies
         run: |
@@ -251,10 +253,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: services/translator/requirements.txt
 
-      - name: Install system dependencies
+      - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsndfile1
+          sudo apt-get install -y ffmpeg libsndfile1 pkg-config \
+            libavformat-dev libavcodec-dev libavdevice-dev \
+            libavutil-dev libswscale-dev libswresample-dev libavfilter-dev
 
       - name: Install Python dependencies
         run: |
@@ -322,10 +326,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: services/translator/requirements.txt
 
-      - name: Install system dependencies
+      - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsndfile1 libsox-dev
+          sudo apt-get install -y ffmpeg libsndfile1 libsox-dev pkg-config \
+            libavformat-dev libavcodec-dev libavdevice-dev \
+            libavutil-dev libswscale-dev libswresample-dev libavfilter-dev
 
       - name: Install Python dependencies
         run: |
@@ -425,10 +431,12 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      - name: Install system dependencies
+      - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libsndfile1
+          sudo apt-get install -y ffmpeg libsndfile1 pkg-config \
+            libavformat-dev libavcodec-dev libavdevice-dev \
+            libavutil-dev libswscale-dev libswresample-dev libavfilter-dev
 
       - name: Install Python dependencies
         run: |
