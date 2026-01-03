@@ -279,6 +279,7 @@ jobs:
         if: always()
         run: |
           cd services/translator
+          mkdir -p test_audio_output
           echo "# Audio Pipeline Test Report" > test_audio_output/README.md
           echo "" >> test_audio_output/README.md
           echo "Generated on: $(date -u)" >> test_audio_output/README.md
