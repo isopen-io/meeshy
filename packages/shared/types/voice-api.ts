@@ -7,8 +7,8 @@
 // REQUEST TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface VoiceTranslateRequest {
-  type: 'voice_translate';
+// Base interface for voice translation options (without type discriminator)
+interface VoiceTranslateOptions {
   taskId: string;
   userId: string;
   audioBase64?: string;
@@ -21,7 +21,11 @@ export interface VoiceTranslateRequest {
   callbackMetadata?: Record<string, unknown>;
 }
 
-export interface VoiceTranslateAsyncRequest extends VoiceTranslateRequest {
+export interface VoiceTranslateRequest extends VoiceTranslateOptions {
+  type: 'voice_translate';
+}
+
+export interface VoiceTranslateAsyncRequest extends VoiceTranslateOptions {
   type: 'voice_translate_async';
 }
 

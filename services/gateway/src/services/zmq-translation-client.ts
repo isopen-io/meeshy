@@ -174,6 +174,9 @@ export interface VoiceJobProgressEvent {
 
 export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
 
+// Combined event type for all ZMQ events
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent;
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
@@ -333,7 +336,7 @@ export class ZMQTranslationClient extends EventEmitter {
   private async _handleTranslationResult(message: Buffer): Promise<void> {
     try {
       const messageStr = message.toString('utf-8');
-      const event: TranslationEvent = JSON.parse(messageStr);
+      const event: ZMQEvent = JSON.parse(messageStr);
       
       // Vérifier le type d'événement
       if (event.type === 'translation_completed') {

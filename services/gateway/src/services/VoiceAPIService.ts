@@ -444,7 +444,7 @@ export class VoiceAPIService extends EventEmitter {
       period: period ?? 'all'
     };
 
-    return this._sendRequest<UserStats>(request, 10000);
+    return this._sendRequest<VoiceUserStats>(request, 10000);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -461,7 +461,7 @@ export class VoiceAPIService extends EventEmitter {
       userId
     };
 
-    return this._sendRequest<SystemMetrics>(request, 10000);
+    return this._sendRequest<VoiceSystemMetrics>(request, 10000);
   }
 
   /**
@@ -485,7 +485,7 @@ export class VoiceAPIService extends EventEmitter {
       taskId: randomUUID()
     };
 
-    return this._sendRequest<SupportedLanguage[]>(request, 5000);
+    return this._sendRequest<VoiceSupportedLanguage[]>(request, 5000);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
