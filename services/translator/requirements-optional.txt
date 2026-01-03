@@ -1,17 +1,21 @@
 # =============================================================================
-# OPTIONAL DEPENDENCIES - Translator Service
+# OPTIONAL/LEGACY DEPENDENCIES - Translator Service
 # =============================================================================
 # These packages have special requirements and are NOT installed by default.
 # Install manually based on your needs.
+#
+# NOTE: Core TTS/STT features use:
+#   - STT: faster-whisper (mandatory, Python 3.12 compatible)
+#   - TTS: chatterbox-tts (mandatory default, Python 3.12 compatible)
 # =============================================================================
 
 # ─────────────────────────────────────────────────────────────────────────────
-# XTTS v2 (Coqui TTS) - Legacy TTS Model
+# XTTS v2 (Coqui TTS) - LEGACY TTS Model
 # ─────────────────────────────────────────────────────────────────────────────
-# ⚠️ WARNINGS:
-#   - Coqui Public License - NO commercial use allowed!
-#   - Requires Python < 3.12 (not compatible with Python 3.12+)
-#   - Coqui has closed in 2024, this model is no longer maintained
+# ⚠️ CONSTRAINTS:
+#   ❌ Coqui Public License - NO commercial use allowed
+#   ❌ Requires Python < 3.12 (incompatible with Python 3.12+)
+#   ❌ Coqui closed in 2024, model no longer maintained
 #
 # Installation (Python 3.11 only):
 #   pip install TTS>=0.22.0
@@ -21,7 +25,7 @@
 TTS>=0.22.0
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OpenVoice V2 - Voice Cloning (Legacy)
+# OpenVoice V2 - Legacy Voice Cloning
 # ─────────────────────────────────────────────────────────────────────────────
 # Installation from git:
 #   pip install git+https://github.com/myshell-ai/OpenVoice.git
