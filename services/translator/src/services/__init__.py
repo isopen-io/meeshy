@@ -4,6 +4,7 @@ Contient les services essentiels du système de traduction
 
 ✅ Migration terminée : QuantizedMLService actif
 ✅ Audio Pipeline: Transcription, Voice Clone, TTS
+✅ Voice API: VoiceAnalyzer, TranslationPipeline, Analytics
 """
 
 # ZMQ Server (optional - requires pyzmq)
@@ -34,6 +35,22 @@ except ImportError as e:
     get_tts_service = None
     get_audio_pipeline = None
 
+# Voice API services (production-ready)
+VOICE_API_AVAILABLE = False
+try:
+    from .voice_analyzer_service import VoiceAnalyzerService, get_voice_analyzer_service
+    from .translation_pipeline_service import TranslationPipelineService, get_translation_pipeline_service
+    from .analytics_service import AnalyticsService, get_analytics_service
+    VOICE_API_AVAILABLE = True
+except ImportError as e:
+    # Provide stubs for type hints
+    VoiceAnalyzerService = None
+    TranslationPipelineService = None
+    AnalyticsService = None
+    get_voice_analyzer_service = None
+    get_translation_pipeline_service = None
+    get_analytics_service = None
+
 __all__ = [
     "ZMQTranslationServer",
     "ZMQ_AVAILABLE",
@@ -47,5 +64,13 @@ __all__ = [
     "get_voice_clone_service",
     "get_tts_service",
     "get_audio_pipeline",
-    "AUDIO_SERVICES_AVAILABLE"
+    "AUDIO_SERVICES_AVAILABLE",
+    # Voice API services
+    "VoiceAnalyzerService",
+    "TranslationPipelineService",
+    "AnalyticsService",
+    "get_voice_analyzer_service",
+    "get_translation_pipeline_service",
+    "get_analytics_service",
+    "VOICE_API_AVAILABLE"
 ]

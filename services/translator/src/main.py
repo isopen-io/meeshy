@@ -51,8 +51,18 @@ try:
     from services.tts_service import get_tts_service
     AUDIO_SERVICES_AVAILABLE = True
 except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.warning(f"[TRANSLATOR] ⚠️ Audio services non disponibles: {e}")
+    pass  # Will be logged later
+
+# Import des services Voice API (optionnel)
+VOICE_API_AVAILABLE = False
+try:
+    from services.voice_analyzer_service import get_voice_analyzer_service
+    from services.translation_pipeline_service import get_translation_pipeline_service
+    from services.analytics_service import get_analytics_service
+    from api.voice_api import create_voice_api_router
+    VOICE_API_AVAILABLE = True
+except ImportError as e:
+    pass  # Will be logged later
 
 # Configuration du logging
 # Production: WARNING (seulement les avertissements et erreurs)
@@ -156,7 +166,33 @@ class MeeshyTranslationServer:
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services audio: {e}")
 
-            # 4. Initialiser l'API FastAPI avec le service ML unifié
+            # 4. Initialiser les services Voice API si disponibles
+            voice_analyzer = None
+            translation_pipeline = None
+            analytics_service = None
+
+            if VOICE_API_AVAILABLE and self.settings.enable_voice_api:
+                try:
+                    logger.info("[TRANSLATOR] 🎙️ Initialisation des services Voice API...")
+                    voice_analyzer = get_voice_analyzer_service()
+                    translation_pipeline = get_translation_pipeline_service()
+                    analytics_service = get_analytics_service()
+
+                    # Injecter les services dans le pipeline
+                    translation_pipeline.set_services(
+                        transcription_service=transcription_service,
+                        voice_clone_service=voice_clone_service,
+                        tts_service=tts_service,
+                        translation_service=self.translation_service
+                    )
+
+                    logger.info("[TRANSLATOR] ✅ Services Voice API configurés")
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services Voice API: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # 5. Initialiser l'API FastAPI avec le service ML unifié
             self.translation_api = TranslationAPI(
                 translation_service=self.translation_service,
                 database_service=self.zmq_server.database_service,
@@ -167,6 +203,24 @@ class MeeshyTranslationServer:
                 tts_service=tts_service,
                 audio_pipeline=audio_pipeline
             )
+
+            # 6. Ajouter le routeur Voice API si disponible
+            if VOICE_API_AVAILABLE and self.settings.enable_voice_api:
+                try:
+                    voice_router = create_voice_api_router(
+                        transcription_service=transcription_service,
+                        voice_clone_service=voice_clone_service,
+                        tts_service=tts_service,
+                        translation_service=self.translation_service,
+                        translation_pipeline=translation_pipeline,
+                        voice_analyzer=voice_analyzer,
+                        analytics_service=analytics_service
+                    )
+                    self.translation_api.app.include_router(voice_router)
+                    logger.info("[TRANSLATOR] ✅ Voice API Router ajouté (20+ endpoints)")
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur ajout Voice API Router: {e}")
+
             logger.info("[TRANSLATOR] ✅ API FastAPI configurée avec service ML unifié")
             
             self.is_initialized = True
