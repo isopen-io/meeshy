@@ -66,8 +66,10 @@ chatterbox-tts>=0.1.0
 
 # OPTION 3: XTTS v2 (Legacy - NON-COMMERCIAL)
 # ⚠️ WARNING: Coqui Public License - NO commercial use!
+# ⚠️ REQUIRES Python < 3.12 (not compatible with Python 3.12+)
 # Set TTS_MODEL=xtts-v2
-TTS>=0.22.0
+# To install manually: pip install TTS>=0.22.0
+# TTS>=0.22.0  # OPTIONAL - disabled by default (Python 3.11 only)
 
 # Voice Cloning (OpenVoice V2) - Legacy, optional
 # Note: OpenVoice requires manual installation from git:

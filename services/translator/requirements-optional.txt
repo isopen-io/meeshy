@@ -1,0 +1,28 @@
+# =============================================================================
+# OPTIONAL DEPENDENCIES - Translator Service
+# =============================================================================
+# These packages have special requirements and are NOT installed by default.
+# Install manually based on your needs.
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# XTTS v2 (Coqui TTS) - Legacy TTS Model
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ WARNINGS:
+#   - Coqui Public License - NO commercial use allowed!
+#   - Requires Python < 3.12 (not compatible with Python 3.12+)
+#   - Coqui has closed in 2024, this model is no longer maintained
+#
+# Installation (Python 3.11 only):
+#   pip install TTS>=0.22.0
+#
+# Usage: Set TTS_MODEL=xtts-v2 in environment
+# ─────────────────────────────────────────────────────────────────────────────
+TTS>=0.22.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenVoice V2 - Voice Cloning (Legacy)
+# ─────────────────────────────────────────────────────────────────────────────
+# Installation from git:
+#   pip install git+https://github.com/myshell-ai/OpenVoice.git
+# ─────────────────────────────────────────────────────────────────────────────
