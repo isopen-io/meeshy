@@ -37,7 +37,7 @@ textstat==0.7.4
 
 # Utilitaires système
 psutil==6.1.1
-numpy==1.26.4
+numpy==1.26.0
 pandas==2.2.3
 aiohttp==3.11.11
 python-multipart==0.0.20
