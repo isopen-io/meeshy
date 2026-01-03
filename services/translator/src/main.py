@@ -44,12 +44,26 @@ from api.translation_api import TranslationAPI
 
 # Import des services audio (optionnel)
 AUDIO_SERVICES_AVAILABLE = False
+UNIFIED_TTS_AVAILABLE = False
 try:
     from services.audio_message_pipeline import get_audio_pipeline
     from services.transcription_service import get_transcription_service
     from services.voice_clone_service import get_voice_clone_service
     from services.tts_service import get_tts_service
     AUDIO_SERVICES_AVAILABLE = True
+except ImportError as e:
+    pass  # Will be logged later
+
+# Import du service TTS unifié (Chatterbox, Higgs Audio V2, XTTS)
+try:
+    from services.unified_tts_service import (
+        get_unified_tts_service,
+        UnifiedTTSService,
+        TTSModel,
+        TTS_MODEL_INFO,
+        check_license_compliance
+    )
+    UNIFIED_TTS_AVAILABLE = True
 except ImportError as e:
     pass  # Will be logged later
 
@@ -61,6 +75,14 @@ try:
     from services.analytics_service import get_analytics_service
     from api.voice_api import create_voice_api_router
     VOICE_API_AVAILABLE = True
+except ImportError as e:
+    pass  # Will be logged later
+
+# Import de l'API TTS Models (optionnel)
+TTS_MODELS_API_AVAILABLE = False
+try:
+    from api.tts_models_api import create_tts_models_router
+    TTS_MODELS_API_AVAILABLE = True
 except ImportError as e:
     pass  # Will be logged later
 
@@ -149,13 +171,53 @@ class MeeshyTranslationServer:
             transcription_service = None
             voice_clone_service = None
             tts_service = None
+            unified_tts_service = None
+
+            # 3.1 Initialiser le service TTS unifié (Chatterbox, Higgs Audio V2, XTTS)
+            if UNIFIED_TTS_AVAILABLE:
+                try:
+                    tts_model_name = self.settings.tts_model
+                    logger.info(f"[TRANSLATOR] 🎵 Initialisation du service TTS unifié (modèle: {tts_model_name})...")
+
+                    # Vérifier la licence
+                    try:
+                        tts_model = TTSModel(tts_model_name)
+                        is_commercial_ok, license_warning = check_license_compliance(tts_model)
+
+                        if license_warning:
+                            logger.warning(license_warning)
+                            print(f"\n{license_warning}\n")
+
+                        if is_commercial_ok:
+                            logger.info(f"[TRANSLATOR] ✅ Modèle TTS '{tts_model_name}' - Licence commerciale OK")
+                        else:
+                            logger.warning(f"[TRANSLATOR] ⚠️ Modèle TTS '{tts_model_name}' - Usage commercial LIMITÉ")
+                    except ValueError:
+                        logger.warning(f"[TRANSLATOR] ⚠️ Modèle TTS inconnu: {tts_model_name}, utilisation de chatterbox par défaut")
+                        tts_model = TTSModel.CHATTERBOX
+
+                    unified_tts_service = get_unified_tts_service()
+                    logger.info(f"[TRANSLATOR] ✅ Service TTS unifié configuré: {unified_tts_service.current_model.value}")
+
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur init TTS unifié: {e}")
+                    import traceback
+                    traceback.print_exc()
 
             if AUDIO_SERVICES_AVAILABLE:
                 try:
                     logger.info("[TRANSLATOR] 🎤 Initialisation des services audio...")
                     transcription_service = get_transcription_service()
                     voice_clone_service = get_voice_clone_service()
-                    tts_service = get_tts_service()
+
+                    # Utiliser le service TTS unifié si disponible, sinon l'ancien
+                    if unified_tts_service:
+                        tts_service = unified_tts_service
+                        logger.info("[TRANSLATOR] ✅ Utilisation du service TTS unifié (Chatterbox/Higgs/XTTS)")
+                    else:
+                        tts_service = get_tts_service()
+                        logger.info("[TRANSLATOR] ⚠️ Utilisation du service TTS legacy (XTTS)")
+
                     audio_pipeline = get_audio_pipeline()
 
                     # Injecter les dépendances
@@ -220,6 +282,17 @@ class MeeshyTranslationServer:
                     logger.info("[TRANSLATOR] ✅ Voice API Router ajouté (20+ endpoints)")
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur ajout Voice API Router: {e}")
+
+            # 7. Ajouter le routeur TTS Models API si disponible
+            if TTS_MODELS_API_AVAILABLE and unified_tts_service:
+                try:
+                    tts_models_router = create_tts_models_router(
+                        unified_tts_service=unified_tts_service
+                    )
+                    self.translation_api.app.include_router(tts_models_router)
+                    logger.info("[TRANSLATOR] ✅ TTS Models API Router ajouté (gestion Chatterbox/Higgs/XTTS)")
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur ajout TTS Models API Router: {e}")
 
             logger.info("[TRANSLATOR] ✅ API FastAPI configurée avec service ML unifié")
             

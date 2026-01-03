@@ -22,7 +22,11 @@ ENV HOME=/workspace \
     LOG_DIR=/workspace/logs \
     MODELS_PATH=/workspace/models \
     TORCH_HOME=/workspace/models \
-    HF_HOME=/workspace/models
+    HF_HOME=/workspace/models \
+    # TTS Model Selection (chatterbox, chatterbox-turbo, higgs-audio-v2, xtts-v2)
+    TTS_MODEL=chatterbox \
+    TTS_DEVICE=auto \
+    TTS_OUTPUT_DIR=/workspace/audio_output
 
 # Runtime configuration
 ARG GRPC_HOST=0.0.0.0
@@ -39,6 +43,7 @@ ENV GRPC_HOST=${GRPC_HOST} \
     WORKERS=${WORKERS}
 
 # System setup (including gosu for secure user switching)
+# ffmpeg is required for audio processing (Chatterbox, Higgs Audio, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         wget \
@@ -51,12 +56,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         liblapack-dev \
         netcat-openbsd \
         gosu \
+        ffmpeg \
+        libsndfile1 \
+        libsox-dev \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g pnpm@${PNPM_VERSION} prisma@latest \
     && groupadd translator \
     && useradd -g translator -m translator \
-    && mkdir -p /workspace/{logs,cache,models,shared,generated} \
+    && mkdir -p /workspace/{logs,cache,models,shared,generated,audio_output} \
     && chown -R translator:translator /workspace \
     && update-ca-certificates \
     && apt-get purge -y --auto-remove build-essential wget curl git \
@@ -69,12 +77,31 @@ WORKDIR /workspace
 COPY --chown=translator:translator requirements.txt ./
 
 # Install Python dependencies
+# Note: torchaudio is required for Chatterbox TTS
 RUN pip install --upgrade pip --no-cache-dir \
     && pip install --no-cache-dir prisma hf_transfer python-dotenv \
     && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install --default-timeout=300 --no-cache-dir -r requirements.txt \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
+
+# ═══════════════════════════════════════════════════════════════
+# TTS MODEL INSTALLATION INFO
+# ═══════════════════════════════════════════════════════════════
+# Models are downloaded on first use. To pre-download:
+#
+# Chatterbox (default, recommended):
+#   python -c "from chatterbox.tts import ChatterboxTTS; ChatterboxTTS.from_pretrained()"
+#
+# Chatterbox Turbo:
+#   python -c "from chatterbox.tts import ChatterboxTTS; ChatterboxTTS.from_pretrained('ResembleAI/chatterbox-turbo')"
+#
+# Higgs Audio V2 (⚠️ license: <100k users):
+#   python -c "from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('bosonai/higgs-audio-v2-generation-3B-base', trust_remote_code=True)"
+#
+# XTTS v2 (⚠️ non-commercial only):
+#   python -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2')"
+# ═══════════════════════════════════════════════════════════════
 
 # Copy source code
 COPY --chown=translator:translator . ./

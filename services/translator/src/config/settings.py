@@ -25,13 +25,26 @@ class Settings:
         self.whisper_device = os.getenv("WHISPER_DEVICE", "auto")
         self.whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 
-        # XTTS configuration
+        # ═══════════════════════════════════════════════════════════════
+        # TTS MODEL SELECTION
+        # Options: chatterbox (recommandé), chatterbox-turbo, higgs-audio-v2, xtts-v2
+        # ═══════════════════════════════════════════════════════════════
+        self.tts_model = os.getenv("TTS_MODEL", "chatterbox")
+        self.tts_device = os.getenv("TTS_DEVICE", "auto")
+        self.tts_output_dir = os.getenv("TTS_OUTPUT_DIR", "./audio_output")
+        self.tts_default_format = os.getenv("TTS_DEFAULT_FORMAT", "mp3")
+
+        # XTTS configuration (legacy - non-commercial)
         self.xtts_models_path = os.getenv("XTTS_MODELS_PATH", "./models/xtts")
         self.xtts_device = os.getenv("XTTS_DEVICE", "auto")
 
         # Voice cloning
         self.voice_model_cache_dir = os.getenv("VOICE_MODEL_CACHE_DIR", "./voice_models")
         self.voice_clone_device = os.getenv("VOICE_CLONE_DEVICE", "cpu")
+
+        # Chatterbox configuration
+        self.chatterbox_exaggeration = float(os.getenv("CHATTERBOX_EXAGGERATION", "0.5"))
+        self.chatterbox_cfg_weight = float(os.getenv("CHATTERBOX_CFG_WEIGHT", "0.5"))
 
         # Audio output
         self.audio_output_dir = os.getenv("AUDIO_OUTPUT_DIR", "./audio_output")
