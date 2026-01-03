@@ -858,10 +858,11 @@ class UnifiedTTSService:
         """
         Initialise le service avec le modèle spécifié.
 
-        Logique:
-        1. Si le modèle demandé est disponible et téléchargé → le charger
-        2. Si le modèle demandé peut être téléchargé → télécharger et charger
-        3. Sinon → fallback sur Chatterbox
+        Logique NON-BLOQUANTE:
+        1. Cherche un modèle disponible localement (priorité: demandé > chatterbox > autres)
+        2. Si trouvé → le charger immédiatement
+        3. Télécharge les modèles manquants en ARRIÈRE-PLAN
+        4. Si aucun modèle local → mode "pending" jusqu'à fin du premier téléchargement
         """
         model = model or self.requested_model
 
@@ -873,96 +874,160 @@ class UnifiedTTSService:
                 self.is_initialized = True
                 return True
 
-            # Créer le backend si nécessaire
+            # ─────────────────────────────────────────────────────
+            # ÉTAPE 1: Trouver un modèle disponible localement
+            # ─────────────────────────────────────────────────────
+            local_model = await self._find_local_model(model)
+
+            if local_model:
+                # Charger le modèle local immédiatement
+                success = await self._load_model(local_model)
+
+                if success:
+                    # Télécharger les autres modèles en arrière-plan
+                    asyncio.create_task(self._download_models_background(model))
+                    return True
+
+            # ─────────────────────────────────────────────────────
+            # ÉTAPE 2: Aucun modèle local - téléchargement en arrière-plan
+            # ─────────────────────────────────────────────────────
+            logger.warning("[TTS] ⚠️ Aucun modèle TTS disponible localement")
+            logger.info("[TTS] 📥 Démarrage des téléchargements en arrière-plan...")
+
+            # Lancer les téléchargements en arrière-plan (priorité: demandé, puis chatterbox)
+            asyncio.create_task(self._download_and_load_first_available(model))
+
+            # Service démarre en mode "pending" - sera prêt après le premier téléchargement
+            self.is_initialized = True  # Le service est "initialisé" mais sans modèle actif
+            logger.info("[TTS] ⏳ Service TTS démarré en mode pending (téléchargement en cours)")
+
+            return True
+
+    async def _find_local_model(self, preferred: TTSModel) -> Optional[TTSModel]:
+        """
+        Cherche un modèle disponible localement.
+
+        Priorité:
+        1. Le modèle demandé
+        2. Chatterbox (fallback par défaut)
+        3. Chatterbox Turbo
+        4. Tout autre modèle disponible
+        """
+        # Ordre de priorité
+        priority_order = [
+            preferred,
+            TTSModel.CHATTERBOX,
+            TTSModel.CHATTERBOX_TURBO,
+            TTSModel.HIGGS_AUDIO_V2,
+            TTSModel.XTTS_V2
+        ]
+        # Supprimer les doublons tout en gardant l'ordre
+        seen = set()
+        priority_order = [m for m in priority_order if not (m in seen or seen.add(m))]
+
+        for model in priority_order:
             if model not in self.backends:
                 self.backends[model] = self._create_backend(model)
 
             backend = self.backends[model]
 
-            # Vérifier si le package est disponible
-            if not backend.is_available:
-                logger.warning(f"[TTS] Package {model.value} non disponible, fallback sur Chatterbox")
-                return await self._fallback_to_chatterbox()
+            if backend.is_available and backend.is_model_downloaded():
+                logger.info(f"[TTS] ✅ Modèle local trouvé: {model.value}")
+                return model
 
-            # Vérifier si le modèle est téléchargé
-            if not backend.is_model_downloaded():
-                logger.info(f"[TTS] Modèle {model.value} non téléchargé localement")
+        return None
 
-                # Essayer de télécharger si espace suffisant
-                if self._can_download_model(model):
-                    logger.info(f"[TTS] Téléchargement du modèle {model.value}...")
-                    success = await backend.download_model()
+    async def _load_model(self, model: TTSModel) -> bool:
+        """Charge un modèle en mémoire"""
+        if model not in self.backends:
+            self.backends[model] = self._create_backend(model)
 
-                    if not success:
-                        logger.warning(f"[TTS] Échec téléchargement {model.value}, fallback sur Chatterbox")
-                        return await self._fallback_to_chatterbox()
-                else:
-                    logger.warning(f"[TTS] Espace disque insuffisant pour {model.value}, fallback sur Chatterbox")
-                    return await self._fallback_to_chatterbox()
+        backend = self.backends[model]
 
-            # Afficher l'alerte de licence si nécessaire
-            model_info = TTS_MODEL_INFO[model]
-            if model_info.license_warning:
-                logger.warning(model_info.license_warning)
-                print(f"\n{model_info.license_warning}\n")
+        # Afficher l'alerte de licence si nécessaire
+        model_info = TTS_MODEL_INFO[model]
+        if model_info.license_warning:
+            logger.warning(model_info.license_warning)
+            print(f"\n{model_info.license_warning}\n")
 
-            # Charger le modèle
-            success = await backend.initialize()
-
-            if success:
-                self.active_backend = backend
-                self.current_model = model
-                self.is_initialized = True
-                logger.info(f"✅ [TTS] Modèle {model.value} chargé avec succès")
-
-                # Lancer le téléchargement des autres modèles en arrière-plan
-                asyncio.create_task(self._download_other_models_background())
-
-                return True
-            else:
-                logger.warning(f"[TTS] Échec chargement {model.value}, fallback sur Chatterbox")
-                return await self._fallback_to_chatterbox()
-
-    async def _fallback_to_chatterbox(self) -> bool:
-        """Fallback sur Chatterbox (modèle par défaut)"""
-        fallback_model = TTSModel.get_fallback()
-
-        if self.current_model == fallback_model and self.active_backend and self.active_backend.is_initialized:
-            return True
-
-        logger.info(f"[TTS] 🔄 Fallback sur {fallback_model.value}...")
-
-        if fallback_model not in self.backends:
-            self.backends[fallback_model] = self._create_backend(fallback_model)
-
-        backend = self.backends[fallback_model]
-
-        if not backend.is_available:
-            logger.error("[TTS] ❌ Chatterbox (fallback) non disponible! Aucun modèle TTS utilisable.")
-            return False
-
-        # Télécharger si nécessaire
-        if not backend.is_model_downloaded():
-            logger.info("[TTS] Téléchargement de Chatterbox (fallback)...")
-            await backend.download_model()
-
+        logger.info(f"[TTS] 🔄 Chargement du modèle {model.value}...")
         success = await backend.initialize()
 
         if success:
             self.active_backend = backend
-            self.current_model = fallback_model
+            self.current_model = model
             self.is_initialized = True
-            logger.info(f"✅ [TTS] Fallback sur {fallback_model.value} réussi")
+            logger.info(f"✅ [TTS] Modèle {model.value} chargé avec succès")
             return True
         else:
-            logger.error("[TTS] ❌ Échec du fallback sur Chatterbox!")
+            logger.error(f"[TTS] ❌ Échec du chargement de {model.value}")
             return False
 
-    async def _download_other_models_background(self):
-        """Télécharge les autres modèles en arrière-plan si espace disponible"""
+    async def _download_and_load_first_available(self, preferred: TTSModel):
+        """
+        Télécharge et charge le premier modèle disponible.
+        Appelé quand aucun modèle n'est disponible localement.
+        """
+        # Priorité: modèle demandé, puis Chatterbox
+        models_to_try = [preferred]
+        if preferred != TTSModel.CHATTERBOX:
+            models_to_try.append(TTSModel.CHATTERBOX)
+
+        for model in models_to_try:
+            if model not in self.backends:
+                self.backends[model] = self._create_backend(model)
+
+            backend = self.backends[model]
+
+            if not backend.is_available:
+                logger.warning(f"[TTS] Package {model.value} non disponible, skip")
+                continue
+
+            if not self._can_download_model(model):
+                logger.warning(f"[TTS] Espace disque insuffisant pour {model.value}, skip")
+                continue
+
+            logger.info(f"[TTS] 📥 Téléchargement prioritaire de {model.value}...")
+
+            try:
+                success = await backend.download_model()
+
+                if success:
+                    # Charger le modèle après téléchargement
+                    load_success = await self._load_model(model)
+
+                    if load_success:
+                        logger.info(f"[TTS] ✅ Premier modèle prêt: {model.value}")
+                        # Continuer avec les téléchargements en arrière-plan
+                        asyncio.create_task(self._download_models_background(preferred))
+                        return
+
+            except Exception as e:
+                logger.error(f"[TTS] ❌ Erreur téléchargement {model.value}: {e}")
+                continue
+
+        logger.error("[TTS] ❌ Impossible de télécharger/charger un modèle TTS!")
+
+    async def _download_models_background(self, preferred: TTSModel):
+        """
+        Télécharge les modèles en arrière-plan si espace disponible.
+
+        Priorité de téléchargement:
+        1. Le modèle demandé (s'il n'est pas celui chargé)
+        2. Chatterbox (fallback)
+        3. Autres modèles
+        """
         await asyncio.sleep(5)  # Attendre que le service soit stable
 
-        for model in TTSModel:
+        # Ordre de priorité pour les téléchargements
+        priority_order = [preferred, TTSModel.CHATTERBOX, TTSModel.CHATTERBOX_TURBO]
+        # Ajouter les autres modèles
+        for m in TTSModel:
+            if m not in priority_order:
+                priority_order.append(m)
+
+        for model in priority_order:
+            # Skip le modèle actuellement chargé
             if model == self.current_model:
                 continue
 
@@ -977,10 +1042,12 @@ class UnifiedTTSService:
 
             # Vérifier si le modèle est déjà téléchargé
             if backend.is_model_downloaded():
+                logger.debug(f"[TTS] {model.value} déjà téléchargé, skip")
                 continue
 
             # Vérifier si le package est disponible
             if not backend.is_available:
+                logger.debug(f"[TTS] Package {model.value} non disponible, skip")
                 continue
 
             # Vérifier l'espace disque
@@ -994,6 +1061,7 @@ class UnifiedTTSService:
             async def download_task(m: TTSModel, b: BaseTTSBackend):
                 try:
                     await b.download_model()
+                    logger.info(f"[TTS] ✅ {m.value} téléchargé avec succès (arrière-plan)")
                 except Exception as e:
                     logger.warning(f"[TTS] Erreur téléchargement arrière-plan {m.value}: {e}")
                 finally:
@@ -1003,7 +1071,7 @@ class UnifiedTTSService:
             task = asyncio.create_task(download_task(model, backend))
             self._background_downloads[model] = task
 
-            # Attendre un peu entre chaque téléchargement
+            # Attendre un peu entre chaque téléchargement pour éviter surcharge
             await asyncio.sleep(30)
 
     async def switch_model(self, model: TTSModel, force: bool = False) -> bool:
@@ -1062,24 +1130,34 @@ class UnifiedTTSService:
         output_format: str = None,
         message_id: Optional[str] = None,
         model: TTSModel = None,
+        max_wait_seconds: int = 120,
         **kwargs
     ) -> UnifiedTTSResult:
         """Synthétise du texte avec clonage vocal."""
         start_time = time.time()
 
         # Changer de modèle si nécessaire
-        if model and model != self.current_model:
+        if model and model != self.current_model and self.active_backend:
             success = await self.switch_model(model)
             if not success:
                 # Fallback sur le modèle actuel
                 logger.warning(f"[TTS] Impossible de changer vers {model.value}, utilisation de {self.current_model.value}")
 
-        # Initialiser si nécessaire
+        # Attendre qu'un modèle soit disponible (mode pending)
         if not self.active_backend:
-            await self.initialize()
+            logger.info("[TTS] ⏳ Attente d'un modèle TTS (téléchargement en cours)...")
+            waited = 0
+            while not self.active_backend and waited < max_wait_seconds:
+                await asyncio.sleep(2)
+                waited += 2
+                if waited % 10 == 0:
+                    logger.info(f"[TTS] ⏳ Attente modèle TTS... ({waited}s)")
 
         if not self.active_backend:
-            raise RuntimeError(f"Aucun backend TTS disponible")
+            raise RuntimeError(
+                f"Aucun backend TTS disponible après {max_wait_seconds}s. "
+                "Vérifiez la connexion internet et l'espace disque."
+            )
 
         # Préparer le fichier de sortie
         output_format = output_format or self.default_format
@@ -1198,23 +1276,36 @@ class UnifiedTTSService:
         info = TTS_MODEL_INFO[model or self.current_model]
         return info.languages
 
+    @property
+    def is_ready(self) -> bool:
+        """Retourne True si un modèle est chargé et prêt à synthétiser"""
+        return self.active_backend is not None and self.active_backend.is_initialized
+
     async def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du service"""
         models_status = await self.get_all_models_status()
 
-        return {
-            "service": "UnifiedTTSService",
-            "initialized": self.is_initialized,
-            "current_model": self.current_model.value,
-            "requested_model": self.requested_model.value,
-            "fallback_model": TTSModel.get_fallback().value,
-            "current_model_info": {
+        # Infos sur le modèle actuel (si chargé)
+        current_model_info = None
+        if self.active_backend:
+            current_model_info = {
                 "name": TTS_MODEL_INFO[self.current_model].display_name,
                 "license": TTS_MODEL_INFO[self.current_model].license,
                 "commercial_use": TTS_MODEL_INFO[self.current_model].commercial_use,
                 "quality_score": TTS_MODEL_INFO[self.current_model].quality_score,
                 "languages_count": len(TTS_MODEL_INFO[self.current_model].languages)
-            },
+            }
+
+        return {
+            "service": "UnifiedTTSService",
+            "initialized": self.is_initialized,
+            "is_ready": self.is_ready,
+            "status": "ready" if self.is_ready else "pending",
+            "current_model": self.current_model.value if self.active_backend else None,
+            "requested_model": self.requested_model.value,
+            "fallback_model": TTSModel.get_fallback().value,
+            "current_model_info": current_model_info,
+            "background_downloads_count": len(self._background_downloads),
             "models_status": {
                 model: {
                     "is_available": status.is_available,
