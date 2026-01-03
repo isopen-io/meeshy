@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { TranslationService } from '../services/TranslationService';
-import { logError } from '../utils/logger';
+import { logError, logger } from '../utils/logger';
 
 // ===== SCHÉMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -60,10 +59,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         });
 
         if (!existingMessage) {
-          console.error(`❌ [GATEWAY] Message ${validatedData.message_id} non trouvé`);
+          logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
           return reply.status(404).send({
             success: false,
-            error: 'Message not found'
+            error: 'Message not found',
+            errorCode: 'MESSAGE_NOT_FOUND'
           });
         }
 
@@ -81,7 +81,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
 
         // DÉCLENCHEMENT NON-BLOQUANT - pas d'await !
         translationService.handleNewMessage(messageData).catch((error: any) => {
-          console.error(`❌ [GATEWAY] Erreur lors de la retraduction asynchrone:`, error);
+          logger.error(`[Translation] Async retranslation error: ${error.message}`);
         });
 
         // RÉPONSE IMMÉDIATE - pas d'attente
@@ -142,7 +142,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           undefined, // JWT token
           undefined  // Session token
         ).catch((error: any) => {
-          console.error(`❌ [GATEWAY] Erreur lors du traitement asynchrone:`, error);
+          logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
 
         // RÉPONSE IMMÉDIATE - pas d'attente
@@ -156,19 +156,22 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
       }
 
     } catch (error) {
-      console.error('❌ [GATEWAY] Erreur lors de la validation de la requête:', error);
-      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logError(logger, '[Translation] Request validation error:', error);
+
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
           error: 'Invalid request data',
+          errorCode: 'VALIDATION_ERROR',
           details: error.errors
         });
       }
-      
+
       return reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: errorMessage,
+        errorCode: 'INTERNAL_ERROR'
       });
     }
   });
@@ -193,10 +196,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         });
       }
     } catch (error) {
-      console.error('❌ [GATEWAY] Erreur lors de la récupération du statut:', error);
+      logError(logger, '[Translation] Status retrieval error:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Failed to get translation status'
+        error: 'Failed to get translation status',
+        errorCode: 'STATUS_ERROR'
       });
     }
   });
@@ -229,11 +233,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
       if (!conversation) {
         return reply.status(404).send({
           success: false,
-          error: `Conversation avec l'identifiant '${identifier}' non trouvée`
+          error: `Conversation with identifier '${identifier}' not found`,
+          errorCode: 'CONVERSATION_NOT_FOUND'
         });
       }
-      
-      
+
       return reply.send({
         success: true,
         data: {
@@ -249,11 +253,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
       });
       
     } catch (error) {
-      console.error('❌ [GATEWAY] Erreur lors de la récupération de la conversation:', error);
-      
+      logError(logger, '[Translation] Conversation retrieval error:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Erreur interne du serveur'
+        error: 'Internal server error',
+        errorCode: 'INTERNAL_ERROR'
       });
     }
   });

@@ -247,29 +247,21 @@ export async function translationRoutes(fastify: FastifyInstance) {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logError(request.log, 'Translation error:', error);
-      
-      // Extraction sécurisée des données de la requête
-      const requestBody = request.body as Partial<{ 
-        text: string; 
-        source_language: string; 
-        target_language: string; 
-      }>;
-      const fallbackTranslation = `[${requestBody.target_language?.toUpperCase() || 'XX'}] ${requestBody.text || 'Error'}`;
-      
-      return reply.status(200).send({
-        success: true,
-        data: {
-          translated_text: fallbackTranslation,
-          source_language: requestBody.source_language || 'auto',
-          target_language: requestBody.target_language || 'en',
-          original_text: requestBody.text || '',
-          model: 'fallback', // CORRECTION: Utiliser 'model' au lieu de 'model_used'
-          confidence: 0.1,
-          processing_time: 0.001,
-          from_cache: false,
-          error: errorMessage,
-          timestamp: new Date().toISOString()
-        }
+
+      // Determine appropriate status code based on error type
+      let statusCode = 500;
+      let errorCode = 'TRANSLATION_ERROR';
+
+      if (error instanceof z.ZodError) {
+        statusCode = 400;
+        errorCode = 'VALIDATION_ERROR';
+      }
+
+      return reply.status(statusCode).send({
+        success: false,
+        error: errorMessage,
+        errorCode,
+        timestamp: new Date().toISOString()
       });
     }
   });
