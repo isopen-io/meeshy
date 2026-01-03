@@ -57,7 +57,8 @@ aiofiles==24.1.0
 # ─────────────────────────────────────────────────────────────────────────────────
 # faster-whisper provides high-quality transcription with language detection
 # Supports: Python 3.8+ including Python 3.12 ✓
-faster-whisper==1.0.0
+# Note: 1.0.3+ allows av>=11,<13 which has pre-built wheels (av-12.x)
+faster-whisper==1.0.3
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # TTS (Text-to-Speech) - MANDATORY - Multi-model support
