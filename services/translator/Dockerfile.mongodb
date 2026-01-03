@@ -2,7 +2,7 @@
 # MEESHY TRANSLATOR - FastAPI ML Service
 # Build context: services/translator/ directory (shared/ copied during CI)
 # =============================================================================
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Translator - FastAPI ML Service" \
@@ -44,8 +44,10 @@ ENV GRPC_HOST=${GRPC_HOST} \
 
 # System setup (including gosu for secure user switching)
 # ffmpeg is required for audio processing (Chatterbox, Higgs Audio, etc.)
+# Note: build-essential, pkg-config, and libav*-dev are needed for PyAV (av package)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        pkg-config \
         wget \
         tini \
         curl \
@@ -57,6 +59,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         netcat-openbsd \
         gosu \
         ffmpeg \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev \
         libsndfile1 \
         libsox-dev \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
@@ -66,17 +75,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && useradd -g translator -m translator \
     && mkdir -p /workspace/{logs,cache,models,shared,generated,audio_output} \
     && chown -R translator:translator /workspace \
-    && update-ca-certificates \
-    && apt-get purge -y --auto-remove build-essential wget curl git \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && update-ca-certificates
 
 WORKDIR /workspace
 
 # Copy requirements
 COPY --chown=translator:translator requirements.txt ./
 
-# Install Python dependencies
+# Install Python dependencies (requires build-essential and pkg-config for PyAV)
 # Note: torchaudio is required for Chatterbox TTS
 RUN pip install --upgrade pip --no-cache-dir \
     && pip install --no-cache-dir prisma hf_transfer python-dotenv \
@@ -84,6 +90,23 @@ RUN pip install --upgrade pip --no-cache-dir \
     && pip install --default-timeout=300 --no-cache-dir -r requirements.txt \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
+
+# Clean up build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove \
+        build-essential \
+        pkg-config \
+        wget \
+        curl \
+        git \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # ═══════════════════════════════════════════════════════════════
 # TTS MODEL INSTALLATION INFO
