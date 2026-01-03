@@ -1,47 +1,47 @@
 # Configuration d'environnement
-python-dotenv>=1.1.1
+python-dotenv==1.1.1
 
 # Framework web
-fastapi>=0.116.1
-uvicorn[standard]>=0.35.0
-pydantic-settings>=2.10.1
-pydantic>=2.11.7
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+pydantic==2.10.5
 
 # Communication gRPC et ZeroMQ
-grpcio>=1.74.0
-grpcio-tools>=1.74.0
-grpcio-reflection>=1.74.0
-protobuf>=6.32.0
-pyzmq>=27.0.2
+grpcio==1.69.0
+grpcio-tools==1.69.0
+grpcio-reflection==1.69.0
+protobuf==5.29.3
+pyzmq==26.2.0
 
-# Machine Learning et NLP (versions compatibles)
-torch>=2.8.0
-transformers>=4.55.4
-tokenizers>=0.21.4
-accelerate>=1.10.0
-datasets>=4.0.0
-sentencepiece>=0.2.1
-huggingface_hub>=0.32.0
-safetensors>=0.5.0
+# Machine Learning et NLP (pinned for compatibility)
+# torch is installed separately via --index-url in Dockerfile
+transformers==4.47.1
+tokenizers==0.21.0
+accelerate==1.2.1
+datasets==3.2.0
+sentencepiece==0.2.0
+huggingface_hub==0.27.1
+safetensors==0.5.2
 
 # Cache et base de données
-redis>=6.4.0
-prisma>=0.15.0
-asyncpg>=0.30.0
-aiosqlite>=0.21.0
+redis==5.2.1
+prisma==0.15.0
+asyncpg==0.30.0
+aiosqlite==0.20.0
 
 # Détection de langue et analyse de texte
-langdetect>=1.0.9
-nltk>=3.9.1
-textstat>=0.7.8
+langdetect==1.0.9
+nltk==3.9.1
+textstat==0.7.4
 
 # Utilitaires système
-psutil>=7.0.0
-numpy>=2.3.2
-pandas>=2.3.2
-aiohttp>=3.12.15
-python-multipart>=0.0.20
-aiofiles>=24.1.0
+psutil==6.1.1
+numpy==1.26.4
+pandas==2.2.3
+aiohttp==3.11.11
+python-multipart==0.0.20
+aiofiles==24.1.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VOICE FEATURES - MANDATORY FOR MEESHY PLATFORM
@@ -57,7 +57,7 @@ aiofiles>=24.1.0
 # ─────────────────────────────────────────────────────────────────────────────────
 # faster-whisper provides high-quality transcription with language detection
 # Supports: Python 3.8+ including Python 3.12 ✓
-faster-whisper>=1.0.0
+faster-whisper==1.0.0
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # TTS (Text-to-Speech) - MANDATORY - Multi-model support
@@ -70,7 +70,7 @@ faster-whisper>=1.0.0
 # ✓ Commercial use allowed
 # ✓ Supports Python 3.12+
 # Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
-chatterbox-tts>=0.1.0
+chatterbox-tts==0.1.1
 
 # HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
 # ✓ Uses transformers (already included above)
@@ -87,27 +87,26 @@ chatterbox-tts>=0.1.0
 # ❌ Coqui closed in 2024, model no longer maintained
 # To install manually (Python 3.11 only): pip install TTS>=0.22.0
 # Set TTS_MODEL=xtts-v2
-# TTS>=0.22.0  # DISABLED - see requirements-optional.txt
+TTS==0.22.0
 
 # OpenVoice V2 (LEGACY) - Voice Cloning
 # To install: pip install git+https://github.com/myshell-ai/OpenVoice.git
 
 # Audio Processing utilities
-pydub>=0.25.1
-librosa>=0.10.0
-soundfile>=0.12.1
-scipy>=1.11.4
-ffmpeg-python>=0.2.0
+pydub==0.25.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+scipy==1.14.1
+ffmpeg-python==0.2.0
 
 # Logging et monitoring
-loguru>=0.7.3
-prometheus-client>=0.22.1
+loguru==0.7.3
+prometheus-client==0.21.1
 
 # Tests
-pytest>=8.4.1
-pytest-asyncio>=1.1.0
-pytest-cov>=6.2.1
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
 httpx==0.24.1
 httpcore==0.17.3
-
