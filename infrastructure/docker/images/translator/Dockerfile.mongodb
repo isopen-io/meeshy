@@ -39,9 +39,11 @@ ENV GRPC_HOST=${GRPC_HOST} \
     LOG_LEVEL=${LOG_LEVEL} \
     WORKERS=${WORKERS}
 
-# System setup
+# System setup - install build tools and runtime dependencies
+# Note: build-essential, pkg-config, and libav*-dev are needed for PyAV (av package)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        pkg-config \
         wget \
         tini \
         curl \
@@ -51,6 +53,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libopenblas-dev \
         liblapack-dev \
         netcat-openbsd \
+        ffmpeg \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev \
+        libsndfile1 \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g pnpm@${PNPM_VERSION} prisma@latest \
@@ -58,23 +69,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && useradd -g translator -m translator \
     && mkdir -p /workspace/{logs,cache,models,shared,generated} \
     && chown -R translator:translator /workspace \
-    && update-ca-certificates \
-    && apt-get purge -y --auto-remove build-essential wget curl git \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && update-ca-certificates
 
 WORKDIR /workspace
 
 # Copy requirements from monorepo
 COPY --chown=translator:translator services/translator/requirements.txt ./
 
-# Install Python dependencies
+# Install Python dependencies (requires build-essential and pkg-config for PyAV)
 RUN pip install --upgrade pip --no-cache-dir \
     && pip install --no-cache-dir prisma hf_transfer python-dotenv \
     && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install --default-timeout=300 --no-cache-dir -r requirements.txt \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
+
+# Clean up build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove \
+        build-essential \
+        pkg-config \
+        wget \
+        curl \
+        git \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Copy translator source code (includes schema.prisma with prisma-client-py)
 COPY --chown=translator:translator services/translator/ ./
