@@ -43,35 +43,54 @@ aiohttp>=3.12.15
 python-multipart>=0.0.20
 aiofiles>=24.1.0
 
-# ═══════════════════════════════════════════════════════════════
-# AUDIO PROCESSING - Transcription, Voice Clone, TTS
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# VOICE FEATURES - MANDATORY FOR MEESHY PLATFORM
+# ═══════════════════════════════════════════════════════════════════════════════
+# Meeshy requires both STT (Speech-to-Text) and TTS (Text-to-Speech) for:
+# - Voice message transcription
+# - Translated audio generation with voice cloning
+# - Real-time voice translation pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Transcription (Speech-to-Text)
+# ─────────────────────────────────────────────────────────────────────────────────
+# STT (Speech-to-Text) - MANDATORY
+# ─────────────────────────────────────────────────────────────────────────────────
+# faster-whisper provides high-quality transcription with language detection
+# Supports: Python 3.8+ including Python 3.12 ✓
 faster-whisper>=1.0.0
 
-# ═══════════════════════════════════════════════════════════════
-# TTS MODELS - Multi-model support (select via TTS_MODEL env var)
-# ═══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────────
+# TTS (Text-to-Speech) - MANDATORY - Multi-model support
+# Select model via TTS_MODEL environment variable
+# Default: chatterbox (recommended for commercial use)
+# ─────────────────────────────────────────────────────────────────────────────────
 
-# OPTION 1: Chatterbox (RECOMMENDED - Apache 2.0 license)
-# Best quality/speed balance, commercial use allowed
+# CHATTERBOX (DEFAULT - MANDATORY) - Apache 2.0 License
+# ✓ Best quality/speed balance for production
+# ✓ Commercial use allowed
+# ✓ Supports Python 3.12+
 # Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
 chatterbox-tts>=0.1.0
 
-# OPTION 2: Higgs Audio V2 (State-of-the-art quality)
-# ⚠️ WARNING: Commercial use limited to <100k users/year
+# HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
+# ✓ Uses transformers (already included above)
+# ⚠️ Commercial use limited to <100k users/year
 # Set TTS_MODEL=higgs-audio-v2
-# Uses transformers (already included above)
 
-# OPTION 3: XTTS v2 (Legacy - NON-COMMERCIAL)
-# ⚠️ WARNING: Coqui Public License - NO commercial use!
+# ─────────────────────────────────────────────────────────────────────────────────
+# LEGACY TTS OPTIONS (NOT INSTALLED BY DEFAULT)
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# XTTS v2 (LEGACY - NOT RECOMMENDED)
+# ❌ Coqui Public License - NO commercial use allowed
+# ❌ REQUIRES Python < 3.12 (incompatible with Python 3.12+)
+# ❌ Coqui closed in 2024, model no longer maintained
+# To install manually (Python 3.11 only): pip install TTS>=0.22.0
 # Set TTS_MODEL=xtts-v2
-TTS>=0.22.0
+# TTS>=0.22.0  # DISABLED - see requirements-optional.txt
 
-# Voice Cloning (OpenVoice V2) - Legacy, optional
-# Note: OpenVoice requires manual installation from git:
-# pip install git+https://github.com/myshell-ai/OpenVoice.git
+# OpenVoice V2 (LEGACY) - Voice Cloning
+# To install: pip install git+https://github.com/myshell-ai/OpenVoice.git
 
 # Audio Processing utilities
 pydub>=0.25.1
