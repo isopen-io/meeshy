@@ -87,9 +87,10 @@ chatterbox-tts==0.1.1
 # ❌ Coqui Public License - NO commercial use allowed
 # ❌ REQUIRES Python < 3.12 (incompatible with Python 3.12+)
 # ❌ Coqui closed in 2024, model no longer maintained
+# ❌ Has dependency conflicts with CPU-only torch from PyTorch index
 # To install manually (Python 3.11 only): pip install TTS>=0.22.0
 # Set TTS_MODEL=xtts-v2
-TTS==0.22.0
+# TTS==0.22.0  # Commented out - use chatterbox-tts instead (Apache 2.0 license)
 
 # OpenVoice V2 (LEGACY) - Voice Cloning
 # To install: pip install git+https://github.com/myshell-ai/OpenVoice.git
