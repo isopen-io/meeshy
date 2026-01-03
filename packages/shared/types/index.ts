@@ -67,6 +67,9 @@ export * from './encryption';
 // Export des types de préférences utilisateur
 export * from './user-preferences';
 
+// Export des types Voice API
+export * from './voice-api';
+
 // ===== UTILITAIRES PARTAGÉS =====
 export * from '../utils';
 

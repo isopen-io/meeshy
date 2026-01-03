@@ -32,6 +32,15 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ [ZMQ] AudioMessagePipeline non disponible: {e}")
 
+# Import du Voice API handler
+VOICE_API_AVAILABLE = False
+try:
+    from .voice_api_handler import VoiceAPIHandler, get_voice_api_handler
+    VOICE_API_AVAILABLE = True
+    logger.info("✅ [ZMQ] VoiceAPIHandler disponible")
+except ImportError as e:
+    logger.warning(f"⚠️ [ZMQ] VoiceAPIHandler non disponible: {e}")
+
 # Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -564,11 +573,17 @@ class ZMQTranslationServer:
         
         # Service de base de données
         self.database_service = DatabaseService(database_url)
-        
+
+        # Voice API handler
+        self.voice_api_handler = None
+        if VOICE_API_AVAILABLE:
+            self.voice_api_handler = get_voice_api_handler()
+            logger.info("✅ [ZMQ] VoiceAPIHandler initialisé")
+
         # État du serveur
         self.running = False
         self.worker_tasks = []
-        
+
         logger.info(f"ZMQTranslationServer initialisé: Gateway PUSH {host}:{gateway_push_port} (PULL bind)")
         logger.info(f"ZMQTranslationServer initialisé: Gateway SUB {host}:{gateway_sub_port} (PUB bind)")
 
@@ -705,6 +720,11 @@ class ZMQTranslationServer:
             # === AUDIO PROCESSING ===
             if message_type == 'audio_process':
                 await self._handle_audio_process_request(request_data)
+                return
+
+            # === VOICE API ===
+            if VOICE_API_AVAILABLE and self.voice_api_handler and self.voice_api_handler.is_voice_api_request(message_type):
+                await self._handle_voice_api_request(request_data)
                 return
             
             # Vérifier que c'est une requête de traduction valide
@@ -956,6 +976,68 @@ class ZMQTranslationServer:
 
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+
+    async def _handle_voice_api_request(self, request_data: dict):
+        """
+        Traite une requête Voice API.
+        Délègue au VoiceAPIHandler et publie le résultat via PUB.
+        """
+        try:
+            if not self.voice_api_handler:
+                logger.error("[TRANSLATOR] Voice API handler non disponible")
+                return
+
+            # Déléguer au handler
+            response = await self.voice_api_handler.handle_request(request_data)
+
+            # Publier la réponse via PUB
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(response).encode('utf-8'))
+                logger.info(f"📤 [TRANSLATOR] Voice API response publiée: {response.get('taskId')} ({response.get('type')})")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour Voice API response")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur Voice API: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Publier une erreur
+            error_response = {
+                'type': 'voice_api_error',
+                'taskId': request_data.get('taskId', ''),
+                'requestType': request_data.get('type', ''),
+                'error': str(e),
+                'errorCode': 'INTERNAL_ERROR',
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(error_response).encode('utf-8'))
+
+    def set_voice_api_services(
+        self,
+        transcription_service=None,
+        translation_service=None,
+        voice_clone_service=None,
+        tts_service=None,
+        voice_analyzer=None,
+        translation_pipeline=None,
+        analytics_service=None
+    ):
+        """
+        Configure les services pour le Voice API handler.
+        Appelé par main.py après initialisation des services.
+        """
+        if self.voice_api_handler:
+            self.voice_api_handler.transcription_service = transcription_service
+            self.voice_api_handler.translation_service = translation_service
+            self.voice_api_handler.voice_clone_service = voice_clone_service
+            self.voice_api_handler.tts_service = tts_service
+            self.voice_api_handler.voice_analyzer = voice_analyzer
+            self.voice_api_handler.translation_pipeline = translation_pipeline
+            self.voice_api_handler.analytics_service = analytics_service
+            logger.info("✅ [ZMQ] Voice API services configurés")
 
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
