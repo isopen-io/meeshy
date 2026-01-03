@@ -5,12 +5,14 @@ Gestion des modèles TTS (Chatterbox, Higgs Audio V2, XTTS)
 Endpoints:
 - GET /v1/tts/models - Liste tous les modèles disponibles
 - GET /v1/tts/models/current - Modèle actuel
-- POST /v1/tts/models/switch - Changer de modèle
+- GET /v1/tts/models/status - Statut de tous les modèles (local/téléchargé/chargé)
+- POST /v1/tts/models/switch - Changer de modèle (hot-loading)
+- POST /v1/tts/models/{model}/download - Télécharger un modèle
 - GET /v1/tts/models/{model}/info - Infos détaillées d'un modèle
 - GET /v1/tts/models/{model}/license - Informations de licence
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import logging
@@ -35,7 +37,26 @@ class TTSModelInfoResponse(BaseModel):
     quality_score: int
     speed_score: int
     vram_gb: float
+    model_size_gb: float
     is_recommended: bool = False
+
+
+class TTSModelStatusResponse(BaseModel):
+    """Statut d'un modèle TTS"""
+    model: str
+    is_available: bool       # Package Python installé
+    is_downloaded: bool      # Modèle téléchargé localement
+    is_loaded: bool          # Modèle chargé en mémoire (actif)
+    is_downloading: bool     # Téléchargement en cours
+    download_progress: float # Progression 0-100
+
+
+class TTSAllModelsStatusResponse(BaseModel):
+    """Statut de tous les modèles"""
+    current_model: str
+    fallback_model: str
+    disk_space_available_gb: float
+    models: Dict[str, TTSModelStatusResponse]
 
 
 class TTSModelsListResponse(BaseModel):
@@ -49,6 +70,7 @@ class TTSModelSwitchRequest(BaseModel):
     """Requête de changement de modèle"""
     model: str = Field(..., description="Model name: chatterbox, chatterbox-turbo, higgs-audio-v2, xtts-v2")
     acknowledge_license: bool = Field(False, description="Acknowledge license restrictions for non-commercial models")
+    force: bool = Field(False, description="Force reload even if already active")
 
 
 class TTSModelSwitchResponse(BaseModel):
@@ -57,6 +79,18 @@ class TTSModelSwitchResponse(BaseModel):
     previous_model: str
     new_model: str
     license_warning: Optional[str]
+    message: str
+
+
+class TTSModelDownloadRequest(BaseModel):
+    """Requête de téléchargement d'un modèle"""
+    background: bool = Field(True, description="Download in background")
+
+
+class TTSModelDownloadResponse(BaseModel):
+    """Réponse de téléchargement"""
+    model: str
+    status: str  # "started", "already_downloaded", "downloading", "completed", "failed"
     message: str
 
 
@@ -77,6 +111,7 @@ class TTSCurrentModelResponse(BaseModel):
     license: str
     commercial_use: bool
     is_initialized: bool
+    is_downloaded: bool
     languages_count: int
     quality_score: int
 
@@ -115,6 +150,7 @@ def create_tts_models_router(unified_tts_service=None) -> APIRouter:
             quality_score=info.quality_score,
             speed_score=info.speed_score,
             vram_gb=info.vram_gb,
+            model_size_gb=info.model_size_gb,
             is_recommended=(model_enum == TTSModel.CHATTERBOX)
         )
 
@@ -162,15 +198,173 @@ def create_tts_models_router(unified_tts_service=None) -> APIRouter:
         current = unified_tts_service.current_model
         info = TTS_MODEL_INFO[current]
 
+        # Vérifier si le modèle est téléchargé
+        status = await unified_tts_service.get_model_status(current)
+
         return TTSCurrentModelResponse(
             model=current.value,
             display_name=info.display_name,
             license=info.license,
             commercial_use=info.commercial_use,
             is_initialized=unified_tts_service.is_initialized,
+            is_downloaded=status.is_downloaded,
             languages_count=len(info.languages),
             quality_score=info.quality_score
         )
+
+    # ─────────────────────────────────────────────────────
+    # ENDPOINT: Statut de tous les modèles TTS
+    # ─────────────────────────────────────────────────────
+    @router.get("/models/status", response_model=TTSAllModelsStatusResponse)
+    async def get_all_models_status():
+        """
+        Retourne le statut de tous les modèles TTS.
+
+        Inclut:
+        - is_available: Package Python installé
+        - is_downloaded: Modèle téléchargé localement
+        - is_loaded: Modèle chargé en mémoire (actif)
+        - is_downloading: Téléchargement en cours
+        - download_progress: Progression 0-100%
+        """
+        if not unified_tts_service:
+            raise HTTPException(
+                status_code=503,
+                detail="TTS service not available"
+            )
+
+        all_status = await unified_tts_service.get_all_models_status()
+
+        models = {}
+        for model_name, status in all_status.items():
+            models[model_name] = TTSModelStatusResponse(
+                model=model_name,
+                is_available=status.is_available,
+                is_downloaded=status.is_downloaded,
+                is_loaded=status.is_loaded,
+                is_downloading=status.is_downloading,
+                download_progress=status.download_progress
+            )
+
+        return TTSAllModelsStatusResponse(
+            current_model=unified_tts_service.current_model.value,
+            fallback_model=TTSModel.get_fallback().value,
+            disk_space_available_gb=unified_tts_service._get_available_disk_space_gb(),
+            models=models
+        )
+
+    # ─────────────────────────────────────────────────────
+    # ENDPOINT: Télécharger un modèle TTS
+    # ─────────────────────────────────────────────────────
+    @router.post("/models/{model_name}/download", response_model=TTSModelDownloadResponse)
+    async def download_model(
+        model_name: str,
+        request: TTSModelDownloadRequest = TTSModelDownloadRequest(),
+        background_tasks: BackgroundTasks = None
+    ):
+        """
+        Télécharge un modèle TTS spécifique.
+
+        Args:
+            model_name: Nom du modèle (chatterbox, chatterbox-turbo, higgs-audio-v2, xtts-v2)
+            request: Options de téléchargement (background=True par défaut)
+
+        Returns:
+            TTSModelDownloadResponse avec le statut du téléchargement
+        """
+        if not unified_tts_service or not TTSModel:
+            raise HTTPException(
+                status_code=503,
+                detail="TTS service not available"
+            )
+
+        # Valider le modèle
+        try:
+            model_enum = TTSModel(model_name)
+        except ValueError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Model not found: {model_name}. Valid options: {[m.value for m in TTSModel]}"
+            )
+
+        # Vérifier le statut actuel
+        status = await unified_tts_service.get_model_status(model_enum)
+
+        if not status.is_available:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Python package for {model_name} is not installed"
+            )
+
+        if status.is_downloaded:
+            return TTSModelDownloadResponse(
+                model=model_name,
+                status="already_downloaded",
+                message=f"Model {model_name} is already downloaded"
+            )
+
+        if status.is_downloading:
+            return TTSModelDownloadResponse(
+                model=model_name,
+                status="downloading",
+                message=f"Model {model_name} is currently downloading ({status.download_progress:.1f}%)"
+            )
+
+        # Vérifier l'espace disque
+        if not unified_tts_service._can_download_model(model_enum):
+            model_info = TTS_MODEL_INFO[model_enum]
+            raise HTTPException(
+                status_code=507,
+                detail={
+                    "error": "Insufficient disk space",
+                    "required_gb": model_info.model_size_gb,
+                    "available_gb": unified_tts_service._get_available_disk_space_gb()
+                }
+            )
+
+        # Obtenir le backend
+        if model_enum not in unified_tts_service.backends:
+            unified_tts_service.backends[model_enum] = unified_tts_service._create_backend(model_enum)
+        backend = unified_tts_service.backends[model_enum]
+
+        if request.background and background_tasks:
+            # Téléchargement en arrière-plan
+            async def background_download():
+                try:
+                    await backend.download_model()
+                    logger.info(f"[TTS] ✅ Téléchargement de {model_name} terminé")
+                except Exception as e:
+                    logger.error(f"[TTS] ❌ Erreur téléchargement {model_name}: {e}")
+
+            import asyncio
+            asyncio.create_task(background_download())
+
+            return TTSModelDownloadResponse(
+                model=model_name,
+                status="started",
+                message=f"Download of {model_name} started in background. Use GET /models/status to check progress."
+            )
+        else:
+            # Téléchargement synchrone
+            try:
+                success = await backend.download_model()
+                if success:
+                    return TTSModelDownloadResponse(
+                        model=model_name,
+                        status="completed",
+                        message=f"Model {model_name} downloaded successfully"
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to download model {model_name}"
+                    )
+            except Exception as e:
+                logger.error(f"[TTS] Erreur téléchargement {model_name}: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=str(e)
+                )
 
     # ─────────────────────────────────────────────────────
     # ENDPOINT: Changer de modèle TTS
