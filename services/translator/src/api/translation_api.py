@@ -14,6 +14,13 @@ import asyncio
 from api.health import health_router, set_services
 from config.message_limits import can_translate_message, MessageLimits
 
+# Import du audio router (lazy loading)
+try:
+    from api.audio_api import create_audio_router
+    AUDIO_API_AVAILABLE = True
+except ImportError:
+    AUDIO_API_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # ===== MODÈLES PYDANTIC =====
@@ -53,20 +60,36 @@ class ErrorResponse(BaseModel):
 
 class TranslationAPI:
     """API FastAPI pour le service de traduction"""
-    
-    def __init__(self, translation_service, database_service=None, zmq_server=None):
+
+    def __init__(
+        self,
+        translation_service,
+        database_service=None,
+        zmq_server=None,
+        # Audio processing services (optional)
+        transcription_service=None,
+        voice_clone_service=None,
+        tts_service=None,
+        audio_pipeline=None
+    ):
         self.translation_service = translation_service
         self.database_service = database_service
         self.zmq_server = zmq_server
-        
+
+        # Audio services
+        self.transcription_service = transcription_service
+        self.voice_clone_service = voice_clone_service
+        self.tts_service = tts_service
+        self.audio_pipeline = audio_pipeline
+
         self.app = FastAPI(
             title="Meeshy Translation API",
-            description="Service de traduction multi-langues avec ML",
-            version="1.0.0",
+            description="Service de traduction multi-langues avec ML et audio processing",
+            version="1.1.0",
             docs_url="/docs",
             redoc_url="/redoc"
         )
-        
+
         # Configuration CORS
         self.app.add_middleware(
             CORSMiddleware,
@@ -75,20 +98,32 @@ class TranslationAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-        
+
         # Configurer les services pour le health check
         set_services(
             trans_service=translation_service,
             db_service=database_service,
             zmq_srv=zmq_server
         )
-        
+
         # Inclure le routeur de santé principal
         self.app.include_router(health_router)
-        
+
+        # Inclure le routeur audio si disponible
+        if AUDIO_API_AVAILABLE:
+            audio_router = create_audio_router(
+                transcription_service=transcription_service,
+                voice_clone_service=voice_clone_service,
+                tts_service=tts_service,
+                translation_service=translation_service,
+                audio_pipeline=audio_pipeline
+            )
+            self.app.include_router(audio_router)
+            logger.info("[TRANSLATOR] 🎤 Audio API routes registered")
+
         # Enregistrer les autres routes
         self._register_routes()
-        
+
         # Variables de monitoring
         self.start_time = None
     

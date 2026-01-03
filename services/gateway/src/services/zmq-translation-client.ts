@@ -66,6 +66,117 @@ export interface PongEvent {
 
 export type TranslationEvent = TranslationCompletedEvent | TranslationErrorEvent | PongEvent;
 
+// ═══════════════════════════════════════════════════════════════
+// AUDIO PROCESSING TYPES
+// ═══════════════════════════════════════════════════════════════
+
+export interface AudioProcessRequest {
+  type: 'audio_process';
+  messageId: string;
+  attachmentId: string;
+  conversationId: string;
+  senderId: string;
+  audioUrl: string;
+  audioPath: string;
+  audioDurationMs: number;
+  mobileTranscription?: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: string;
+    segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  };
+  targetLanguages: string[];
+  generateVoiceClone: boolean;
+  modelType: string;
+}
+
+export interface TranscriptionData {
+  text: string;
+  language: string;
+  confidence: number;
+  source: 'mobile' | 'whisper';
+  segments?: Array<{ text: string; startMs: number; endMs: number }>;
+}
+
+export interface TranslatedAudioData {
+  targetLanguage: string;
+  translatedText: string;
+  audioUrl: string;
+  audioPath: string;
+  durationMs: number;
+  voiceCloned: boolean;
+  voiceQuality: number;
+}
+
+export interface AudioProcessCompletedEvent {
+  type: 'audio_process_completed';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  transcription: TranscriptionData;
+  translatedAudios: TranslatedAudioData[];
+  voiceModelUserId: string;
+  voiceModelQuality: number;
+  processingTimeMs: number;
+  timestamp: number;
+}
+
+export interface AudioProcessErrorEvent {
+  type: 'audio_process_error';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  error: string;
+  errorCode: string;
+  timestamp: number;
+}
+
+export type AudioEvent = AudioProcessCompletedEvent | AudioProcessErrorEvent;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VOICE API TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface VoiceAPIRequest {
+  type: string;
+  taskId: string;
+  userId?: string;
+  [key: string]: any;
+}
+
+export interface VoiceAPISuccessEvent {
+  type: 'voice_api_success';
+  taskId: string;
+  requestType: string;
+  result: any;
+  processingTimeMs: number;
+  timestamp: number;
+}
+
+export interface VoiceAPIErrorEvent {
+  type: 'voice_api_error';
+  taskId: string;
+  requestType: string;
+  error: string;
+  errorCode: string;
+  timestamp: number;
+}
+
+export interface VoiceJobProgressEvent {
+  type: 'voice_job_progress';
+  taskId: string;
+  jobId: string;
+  progress: number;
+  currentStep: string;
+  timestamp: number;
+}
+
+export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
+
+// Combined event type for all ZMQ events
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent;
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
@@ -225,7 +336,7 @@ export class ZMQTranslationClient extends EventEmitter {
   private async _handleTranslationResult(message: Buffer): Promise<void> {
     try {
       const messageStr = message.toString('utf-8');
-      const event: TranslationEvent = JSON.parse(messageStr);
+      const event: ZMQEvent = JSON.parse(messageStr);
       
       // Vérifier le type d'événement
       if (event.type === 'translation_completed') {
@@ -296,8 +407,101 @@ export class ZMQTranslationClient extends EventEmitter {
         
         // Nettoyer la requête en cours
         this.pendingRequests.delete(errorEvent.taskId);
+
+      // ═══════════════════════════════════════════════════════════════
+      // AUDIO PROCESS EVENTS
+      // ═══════════════════════════════════════════════════════════════
+      } else if (event.type === 'audio_process_completed') {
+        const audioEvent = event as unknown as AudioProcessCompletedEvent;
+
+        logger.info(`🎤 [GATEWAY] Audio process terminé: ${audioEvent.messageId}`);
+        logger.info(`   📝 Transcription: ${audioEvent.transcription.text.substring(0, 50)}...`);
+        logger.info(`   🌍 Traductions audio: ${audioEvent.translatedAudios.length} versions`);
+
+        // Émettre l'événement de succès audio
+        this.emit('audioProcessCompleted', {
+          taskId: audioEvent.taskId,
+          messageId: audioEvent.messageId,
+          attachmentId: audioEvent.attachmentId,
+          transcription: audioEvent.transcription,
+          translatedAudios: audioEvent.translatedAudios,
+          voiceModelUserId: audioEvent.voiceModelUserId,
+          voiceModelQuality: audioEvent.voiceModelQuality,
+          processingTimeMs: audioEvent.processingTimeMs
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(audioEvent.taskId);
+
+      } else if (event.type === 'audio_process_error') {
+        const audioError = event as unknown as AudioProcessErrorEvent;
+
+        logger.error(`❌ [GATEWAY] Audio process erreur: ${audioError.messageId} - ${audioError.error}`);
+
+        // Émettre l'événement d'erreur audio
+        this.emit('audioProcessError', {
+          taskId: audioError.taskId,
+          messageId: audioError.messageId,
+          attachmentId: audioError.attachmentId,
+          error: audioError.error,
+          errorCode: audioError.errorCode
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(audioError.taskId);
+
+      // ═══════════════════════════════════════════════════════════════
+      // VOICE API EVENTS
+      // ═══════════════════════════════════════════════════════════════
+      } else if (event.type === 'voice_api_success') {
+        const voiceEvent = event as unknown as VoiceAPISuccessEvent;
+
+        logger.info(`🎤 [GATEWAY] Voice API success: ${voiceEvent.taskId} (${voiceEvent.processingTimeMs}ms)`);
+
+        // Émettre l'événement de succès Voice API
+        this.emit('voiceAPISuccess', {
+          taskId: voiceEvent.taskId,
+          requestType: voiceEvent.requestType,
+          result: voiceEvent.result,
+          processingTimeMs: voiceEvent.processingTimeMs,
+          timestamp: voiceEvent.timestamp
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(voiceEvent.taskId);
+
+      } else if (event.type === 'voice_api_error') {
+        const voiceError = event as unknown as VoiceAPIErrorEvent;
+
+        logger.error(`❌ [GATEWAY] Voice API error: ${voiceError.taskId} - ${voiceError.errorCode}: ${voiceError.error}`);
+
+        // Émettre l'événement d'erreur Voice API
+        this.emit('voiceAPIError', {
+          taskId: voiceError.taskId,
+          requestType: voiceError.requestType,
+          error: voiceError.error,
+          errorCode: voiceError.errorCode,
+          timestamp: voiceError.timestamp
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(voiceError.taskId);
+
+      } else if (event.type === 'voice_job_progress') {
+        const progressEvent = event as unknown as VoiceJobProgressEvent;
+
+        logger.info(`📊 [GATEWAY] Voice job progress: ${progressEvent.jobId} - ${progressEvent.progress}% (${progressEvent.currentStep})`);
+
+        // Émettre l'événement de progression
+        this.emit('voiceJobProgress', {
+          taskId: progressEvent.taskId,
+          jobId: progressEvent.jobId,
+          progress: progressEvent.progress,
+          currentStep: progressEvent.currentStep,
+          timestamp: progressEvent.timestamp
+        });
       }
-      
+
     } catch (error) {
       logger.error(`❌ [GATEWAY] Erreur traitement message ZMQ: ${error}`);
     }
@@ -371,6 +575,60 @@ export class ZMQTranslationClient extends EventEmitter {
     }
   }
 
+  /**
+   * Envoie une requête de processing audio au service translator.
+   * Le translator va:
+   * 1. Transcrire l'audio (ou utiliser la transcription mobile)
+   * 2. Traduire vers les langues cibles
+   * 3. Cloner la voix de l'émetteur
+   * 4. Générer des versions audio traduites
+   */
+  async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
+    if (!this.pushSocket) {
+      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour audio process');
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    try {
+      const taskId = randomUUID();
+
+      // Préparer le message de commande audio
+      const requestMessage: AudioProcessRequest = {
+        type: 'audio_process',
+        ...request
+      };
+
+      logger.info('🎤 [GATEWAY] ENVOI AUDIO PROCESS:');
+      logger.info(`   📋 taskId: ${taskId}`);
+      logger.info(`   📋 messageId: ${request.messageId}`);
+      logger.info(`   📋 attachmentId: ${request.attachmentId}`);
+      logger.info(`   📋 senderId: ${request.senderId}`);
+      logger.info(`   📋 targetLanguages: [${request.targetLanguages.join(', ')}]`);
+      logger.info(`   📋 audioDurationMs: ${request.audioDurationMs}`);
+      logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
+
+      // Envoyer via PUSH
+      await this.pushSocket.send(JSON.stringify(requestMessage));
+
+      // Mettre à jour les statistiques
+      this.stats.requests_sent++;
+
+      // Stocker la requête en cours pour traçabilité
+      this.pendingRequests.set(taskId, {
+        request: requestMessage as any,
+        timestamp: Date.now()
+      });
+
+      logger.info(`📤 [ZMQ-Client] Audio process PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+
+      return taskId;
+
+    } catch (error) {
+      logger.error(`❌ Erreur envoi audio process: ${error}`);
+      throw error;
+    }
+  }
+
   async translateText(
     text: string,
     sourceLanguage: string,
@@ -409,6 +667,49 @@ export class ZMQTranslationClient extends EventEmitter {
     };
     
     return await this.sendTranslationRequest(request);
+  }
+
+  /**
+   * Envoie une requête Voice API au service translator.
+   * Supporte toutes les opérations Voice API:
+   * - voice_translate / voice_translate_async
+   * - voice_analyze / voice_compare
+   * - voice_profile_* (CRUD)
+   * - voice_feedback / voice_history / voice_stats
+   * - voice_admin_metrics / voice_health / voice_languages
+   */
+  async sendVoiceAPIRequest(request: VoiceAPIRequest): Promise<string> {
+    if (!this.pushSocket) {
+      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour Voice API');
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    try {
+      logger.info('🎤 [GATEWAY] ENVOI VOICE API REQUEST:');
+      logger.info(`   📋 type: ${request.type}`);
+      logger.info(`   📋 taskId: ${request.taskId}`);
+      logger.info(`   📋 userId: ${request.userId || 'N/A'}`);
+
+      // Envoyer via PUSH
+      await this.pushSocket.send(JSON.stringify(request));
+
+      // Mettre à jour les statistiques
+      this.stats.requests_sent++;
+
+      // Stocker la requête en cours pour traçabilité
+      this.pendingRequests.set(request.taskId, {
+        request: request as any,
+        timestamp: Date.now()
+      });
+
+      logger.info(`📤 [ZMQ-Client] Voice API request envoyée: taskId=${request.taskId}, type=${request.type}`);
+
+      return request.taskId;
+
+    } catch (error) {
+      logger.error(`❌ Erreur envoi Voice API request: ${error}`);
+      throw error;
+    }
   }
 
   async healthCheck(): Promise<boolean> {
