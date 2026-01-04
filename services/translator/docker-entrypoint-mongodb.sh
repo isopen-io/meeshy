@@ -256,6 +256,62 @@ check_database_integrity() {
     echo "[TRANSLATOR] Initialisation terminee sans verification d integrite complexe"
 }
 
+# Fonction pour télécharger les modèles ML au démarrage
+download_ml_models() {
+    echo "[TRANSLATOR] Verification et telechargement des modeles ML..."
+
+    # Configurer les variables d'environnement pour le téléchargement
+    export HF_HUB_OFFLINE=0
+    export TRANSFORMERS_OFFLINE=0
+    export HF_HOME=${HF_HOME:-/workspace/models}
+    export HUGGINGFACE_HUB_CACHE=${HF_HOME}
+
+    # Script Python pour télécharger les modèles nécessaires
+    python3 -c "
+import os
+import sys
+
+# Configuration
+HF_HOME = os.environ.get('HF_HOME', '/workspace/models')
+os.environ['HF_HOME'] = HF_HOME
+os.environ['HUGGINGFACE_HUB_CACHE'] = HF_HOME
+os.environ['TRANSFORMERS_CACHE'] = HF_HOME
+
+print(f'[TRANSLATOR] Repertoire des modeles: {HF_HOME}')
+
+try:
+    # Télécharger les modèles de traduction (Helsinki-NLP)
+    print('[TRANSLATOR] Verification des modeles de traduction...')
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+    # Liste des paires de langues les plus utilisées
+    TRANSLATION_MODELS = [
+        'Helsinki-NLP/opus-mt-en-fr',
+        'Helsinki-NLP/opus-mt-fr-en',
+    ]
+
+    for model_name in TRANSLATION_MODELS:
+        try:
+            print(f'[TRANSLATOR] Chargement: {model_name}...')
+            AutoTokenizer.from_pretrained(model_name, cache_dir=HF_HOME)
+            AutoModelForSeq2SeqLM.from_pretrained(model_name, cache_dir=HF_HOME)
+            print(f'[TRANSLATOR] OK: {model_name}')
+        except Exception as e:
+            print(f'[TRANSLATOR] Skip {model_name}: {e}')
+
+    print('[TRANSLATOR] Modeles de traduction verifies')
+
+except ImportError as e:
+    print(f'[TRANSLATOR] Transformers non disponible: {e}')
+except Exception as e:
+    print(f'[TRANSLATOR] Erreur telechargement modeles: {e}')
+
+print('[TRANSLATOR] Verification des modeles terminee')
+" || echo "[TRANSLATOR] Telechargement des modeles ignore (erreur non critique)"
+
+    echo "[TRANSLATOR] Modeles ML verifies"
+}
+
 # Fonction principale
 main() {
     echo "[TRANSLATOR] Demarrage du processus d initialisation MongoDB..."
@@ -269,15 +325,18 @@ main() {
 
     # Attendre que la base de donnees soit prete
     wait_for_database
-    
+
     # Executer les migrations Prisma
     run_prisma_migrations
-    
+
     # Verifier l integrite de la base de donnees
     check_database_integrity
-    
+
+    # Télécharger les modèles ML si nécessaire
+    download_ml_models
+
     echo "[TRANSLATOR] Demarrage de l application Translator..."
-    
+
     # Demarrer l application Python
     exec python3 -u src/main.py
 }
