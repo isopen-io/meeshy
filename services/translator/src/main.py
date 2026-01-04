@@ -94,14 +94,6 @@ try:
 except ImportError as e:
     pass  # Will be logged later
 
-# Import de l'API Voice Profile (optionnel)
-VOICE_PROFILE_API_AVAILABLE = False
-try:
-    from api.voice_profile_api import create_voice_profile_router
-    VOICE_PROFILE_API_AVAILABLE = True
-except ImportError as e:
-    pass  # Will be logged later
-
 # Configuration du logging
 # Production: WARNING (seulement les avertissements et erreurs)
 # Development: INFO (toutes les infos)
@@ -322,18 +314,6 @@ class MeeshyTranslationServer:
                     logger.info("[TRANSLATOR] ✅ TTS Models API Router ajouté (gestion Chatterbox/Higgs/XTTS)")
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur ajout TTS Models API Router: {e}")
-
-            # 8. Ajouter le routeur Voice Profile API si disponible
-            if VOICE_PROFILE_API_AVAILABLE and voice_clone_service:
-                try:
-                    voice_profile_router = create_voice_profile_router(
-                        voice_clone_service=voice_clone_service,
-                        database_service=self.zmq_server.database_service
-                    )
-                    self.translation_api.app.include_router(voice_profile_router)
-                    logger.info("[TRANSLATOR] ✅ Voice Profile API Router ajouté (consent, register, update, delete)")
-                except Exception as e:
-                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur ajout Voice Profile API Router: {e}")
 
             logger.info("[TRANSLATOR] ✅ API FastAPI configurée avec service ML unifié")
             
