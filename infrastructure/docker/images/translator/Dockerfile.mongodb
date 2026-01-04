@@ -77,22 +77,12 @@ WORKDIR /workspace
 COPY --chown=translator:translator services/translator/requirements.txt ./
 
 # Install Python dependencies (requires build-essential and pkg-config for PyAV)
-# IMPORTANT: Disable model downloads during build - models are downloaded at runtime
-ENV TRANSFORMERS_OFFLINE=1 \
-    HF_HUB_OFFLINE=1 \
-    HUGGINGFACE_HUB_CACHE=/workspace/models \
-    SENTENCE_TRANSFORMERS_HOME=/workspace/models
-
 RUN pip install --upgrade pip --no-cache-dir \
     && pip install --no-cache-dir prisma hf_transfer python-dotenv \
     && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install --default-timeout=300 --no-cache-dir -r requirements.txt \
     && pip install pymongo \
     && rm -rf ~/.cache/pip
-
-# Reset offline mode - models will be downloaded at container startup
-ENV TRANSFORMERS_OFFLINE=0 \
-    HF_HUB_OFFLINE=0
 
 # Clean up build dependencies to reduce image size
 RUN apt-get purge -y --auto-remove \
