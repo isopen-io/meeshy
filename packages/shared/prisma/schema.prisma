@@ -1380,17 +1380,21 @@ model UserVoiceModel {
   /// ============================================
   /// VOICE FINGERPRINT (For identification)
   /// ============================================
-  /// JSON object containing unique voice signature:
+  /// JSON object containing unique voice signature for quick matching.
+  /// NOTE: Does NOT contain the full embedding vector (stored in embeddingPath binary file).
+  /// The fingerprint uses hashes for fast comparison, not raw vectors.
   /// {
   ///   "fingerprint_id": "vfp_abc123",
   ///   "version": "1.0",
   ///   "signature": "sha256_hash_64_chars",
   ///   "signature_short": "12_char_short",
   ///   "components": { "pitch_hash": "...", "spectral_hash": "...", "prosody_hash": "..." },
-  ///   "embedding_vector": [0.1, 0.2, ...],
   ///   "checksum": "crc32_8_chars",
   ///   "metadata": { "audio_duration_ms": 15000, "created_at": "2025-01-01T00:00:00Z" }
   /// }
+  /// For vector similarity search at scale, consider using:
+  /// - MongoDB Atlas Vector Search (native)
+  /// - Pinecone / Qdrant / Milvus (dedicated vector DB)
   fingerprint Json?
 
   /// Short signature for quick lookups (12 chars from fingerprint)

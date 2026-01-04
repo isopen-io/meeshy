@@ -735,7 +735,7 @@ def test_voice_fingerprint_serialization():
 
     original = VoiceFingerprint.generate_from_characteristics(chars, audio_duration_ms=10000)
 
-    # Serialize
+    # Serialize (default: NO embedding_vector to save space)
     data = original.to_dict()
     assert "fingerprint_id" in data
     assert "signature" in data
@@ -743,13 +743,25 @@ def test_voice_fingerprint_serialization():
     assert "checksum" in data
     assert "metadata" in data
     assert data["metadata"]["audio_duration_ms"] == 10000
+    assert "embedding_vector" not in data  # NOT included by default (stored in binary file)
+    assert "embedding_dimensions" in data["metadata"]  # Only dimensions stored
 
-    # Deserialize
+    # Serialize with embedding (for debug/export only)
+    data_with_embedding = original.to_dict(include_embedding=True)
+    assert "embedding_vector" in data_with_embedding
+    assert len(data_with_embedding["embedding_vector"]) > 0
+
+    # Deserialize (without embedding)
     restored = VoiceFingerprint.from_dict(data)
     assert restored.fingerprint_id == original.fingerprint_id
     assert restored.signature == original.signature
     assert restored.pitch_hash == original.pitch_hash
     assert restored.checksum == original.checksum
+    assert not restored.can_compute_similarity()  # No embedding loaded
+
+    # Deserialize with embedding
+    restored_with_embedding = VoiceFingerprint.from_dict(data_with_embedding)
+    assert restored_with_embedding.can_compute_similarity()  # Embedding loaded
 
     logger.info("VoiceFingerprint serialization works correctly")
 

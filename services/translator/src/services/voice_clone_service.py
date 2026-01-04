@@ -211,8 +211,19 @@ class VoiceFingerprint:
         """Vérifie si deux empreintes correspondent (même personne)"""
         return self.similarity_score(other) >= threshold
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    def to_dict(self, include_embedding: bool = False) -> Dict[str, Any]:
+        """
+        Sérialise le fingerprint pour stockage.
+
+        NOTE: L'embedding_vector n'est PAS inclus par défaut car :
+        - Il est volumineux (256+ floats)
+        - Il est déjà stocké dans le fichier .pkl binaire
+        - Pour la recherche vectorielle à grande échelle, utiliser une BD vectorielle
+
+        Args:
+            include_embedding: Si True, inclut l'embedding (pour debug/export uniquement)
+        """
+        result = {
             "fingerprint_id": self.fingerprint_id,
             "version": self.version,
             "signature": self.signature,
@@ -222,19 +233,31 @@ class VoiceFingerprint:
                 "spectral_hash": self.spectral_hash,
                 "prosody_hash": self.prosody_hash
             },
-            "embedding_vector_length": len(self.embedding_vector),
             "checksum": self.checksum,
             "metadata": {
                 "created_at": self.created_at.isoformat(),
                 "audio_duration_ms": self.audio_duration_ms,
-                "sample_count": self.sample_count
+                "sample_count": self.sample_count,
+                "embedding_dimensions": len(self.embedding_vector)
             },
             "integrity_valid": self.verify_checksum()
         }
 
+        # Inclure l'embedding uniquement si demandé (debug/export)
+        if include_embedding and self.embedding_vector:
+            result["embedding_vector"] = self.embedding_vector
+
+        return result
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'VoiceFingerprint':
-        """Reconstruit depuis un dictionnaire"""
+        """
+        Reconstruit depuis un dictionnaire (stockage DB).
+
+        NOTE: L'embedding_vector n'est généralement PAS inclus dans le dict
+        car il est stocké séparément en binaire. Pour la comparaison de similarité,
+        l'embedding doit être chargé depuis le fichier .pkl.
+        """
         fp = cls()
         fp.fingerprint_id = data.get("fingerprint_id", "")
         fp.version = data.get("version", "1.0")
@@ -246,6 +269,8 @@ class VoiceFingerprint:
         fp.spectral_hash = components.get("spectral_hash", "")
         fp.prosody_hash = components.get("prosody_hash", "")
 
+        # L'embedding_vector n'est pas stocké en DB par défaut (trop volumineux)
+        # Il sera vide sauf si explicitement inclus (debug/export)
         fp.embedding_vector = data.get("embedding_vector", [])
         fp.checksum = data.get("checksum", "")
 
@@ -256,6 +281,10 @@ class VoiceFingerprint:
         fp.sample_count = metadata.get("sample_count", 1)
 
         return fp
+
+    def can_compute_similarity(self) -> bool:
+        """Vérifie si le fingerprint peut calculer la similarité (embedding chargé)"""
+        return len(self.embedding_vector) > 0
 
 
 @dataclass
