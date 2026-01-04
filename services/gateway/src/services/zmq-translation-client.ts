@@ -172,8 +172,6 @@ export interface VoiceJobProgressEvent {
   timestamp: number;
 }
 
-export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
-
 // ═══════════════════════════════════════════════════════════════════════════
 // VOICE PROFILE TYPES (Internal ZMQ communication with Translator)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -252,10 +250,31 @@ export interface VoiceProfileErrorEvent {
   timestamp: number;
 }
 
-export type VoiceProfileEvent = VoiceProfileAnalyzeResult | VoiceProfileVerifyResult | VoiceProfileCompareResult | VoiceProfileErrorEvent;
+// Voice Profile specific event union (for service-level typing)
+export type VoiceProfileEvent =
+  | VoiceProfileAnalyzeResult
+  | VoiceProfileVerifyResult
+  | VoiceProfileCompareResult
+  | VoiceProfileErrorEvent;
 
-// Combined event type for all ZMQ events
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent | VoiceProfileEvent;
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED VOICE EVENT TYPE
+// All voice-related events (API + Profile) are combined for simpler handling
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type VoiceEvent =
+  // Voice API events (high-level operations)
+  | VoiceAPISuccessEvent
+  | VoiceAPIErrorEvent
+  | VoiceJobProgressEvent
+  // Voice Profile events (internal audio processing)
+  | VoiceProfileAnalyzeResult
+  | VoiceProfileVerifyResult
+  | VoiceProfileCompareResult
+  | VoiceProfileErrorEvent;
+
+// Combined event type for all ZMQ events (normalized: Translation, Audio, Voice)
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent;
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -580,6 +599,53 @@ export class ZMQTranslationClient extends EventEmitter {
           currentStep: progressEvent.currentStep,
           timestamp: progressEvent.timestamp
         });
+
+      // ═══════════════════════════════════════════════════════════════
+      // VOICE PROFILE EVENTS (Internal audio processing results)
+      // ═══════════════════════════════════════════════════════════════
+      } else if (event.type === 'voice_profile_analyze_result') {
+        const profileEvent = event as unknown as VoiceProfileAnalyzeResult;
+
+        if (profileEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profile analyzed: ${profileEvent.request_id} - quality: ${profileEvent.quality_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile analyze failed: ${profileEvent.request_id} - ${profileEvent.error}`);
+        }
+
+        this.emit('voiceProfileAnalyzeResult', profileEvent);
+        this.pendingRequests.delete(profileEvent.request_id);
+
+      } else if (event.type === 'voice_profile_verify_result') {
+        const verifyEvent = event as unknown as VoiceProfileVerifyResult;
+
+        if (verifyEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profile verified: ${verifyEvent.request_id} - match: ${verifyEvent.is_match}, score: ${verifyEvent.similarity_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile verify failed: ${verifyEvent.request_id} - ${verifyEvent.error}`);
+        }
+
+        this.emit('voiceProfileVerifyResult', verifyEvent);
+        this.pendingRequests.delete(verifyEvent.request_id);
+
+      } else if (event.type === 'voice_profile_compare_result') {
+        const compareEvent = event as unknown as VoiceProfileCompareResult;
+
+        if (compareEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profiles compared: ${compareEvent.request_id} - match: ${compareEvent.is_match}, score: ${compareEvent.similarity_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile compare failed: ${compareEvent.request_id} - ${compareEvent.error}`);
+        }
+
+        this.emit('voiceProfileCompareResult', compareEvent);
+        this.pendingRequests.delete(compareEvent.request_id);
+
+      } else if (event.type === 'voice_profile_error') {
+        const profileError = event as unknown as VoiceProfileErrorEvent;
+
+        logger.error(`❌ [GATEWAY] Voice profile error: ${profileError.request_id} - ${profileError.error}`);
+
+        this.emit('voiceProfileError', profileError);
+        this.pendingRequests.delete(profileError.request_id);
       }
 
     } catch (error) {

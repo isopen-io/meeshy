@@ -100,14 +100,17 @@ export class VoiceProfileService extends EventEmitter {
     this.prisma = prisma;
     this.zmqClient = zmqClient;
 
-    // Listen for ZMQ events
-    this.zmqClient.on('voice_profile_analyze_result', (event: VoiceProfileAnalyzeResult) => {
+    // Listen for ZMQ events (camelCase event names from ZMQ client)
+    this.zmqClient.on('voiceProfileAnalyzeResult', (event: VoiceProfileAnalyzeResult) => {
       this.handleZmqResponse(event);
     });
-    this.zmqClient.on('voice_profile_verify_result', (event: VoiceProfileVerifyResult) => {
+    this.zmqClient.on('voiceProfileVerifyResult', (event: VoiceProfileVerifyResult) => {
       this.handleZmqResponse(event);
     });
-    this.zmqClient.on('voice_profile_error', (event: VoiceProfileEvent) => {
+    this.zmqClient.on('voiceProfileCompareResult', (event: VoiceProfileEvent) => {
+      this.handleZmqResponse(event);
+    });
+    this.zmqClient.on('voiceProfileError', (event: VoiceProfileEvent) => {
       this.handleZmqResponse(event);
     });
   }
