@@ -673,14 +673,29 @@ class TranslationPipelineService:
     ) -> str:
         """
         Génère un nom de fichier de sortie avec métadonnées.
-        Format: translated_{messageId}_{attachmentId}_{profileId}_{lang}_{timestamp}.{ext}
+        Format: mshy_gen_{model_version}_{embedding_type}_{userId}_{lang}_{jobId}_{messageId}_{attachmentId}_{profileId}_{timestamp}.{ext}
         """
-        msg_id = message_id or job.callback_metadata.get('message_id', job.id)
-        att_id = attachment_id or job.callback_metadata.get('attachment_id', 'noatt')
-        prof_id = profile_id or job.callback_metadata.get('profile_id', job.user_id[:8])
+        msg_id = message_id or job.callback_metadata.get('message_id', '')
+        att_id = attachment_id or job.callback_metadata.get('attachment_id', '')
+        prof_id = profile_id or job.callback_metadata.get('profile_id', '')
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        return f"translated_{msg_id}_{att_id}_{prof_id}_{target_lang}_{timestamp}.{ext}"
+        # Base: préserve le format original mshy_gen avec les détails du job
+        base = f"mshy_gen_{job.model_version}_{job.embedding_type}_{job.user_id[:8]}_{target_lang}_{job.id[-8:]}"
+
+        # Ajouter les détails d'attachement si disponibles
+        details = []
+        if msg_id:
+            details.append(f"msg{msg_id[:8]}")
+        if att_id:
+            details.append(f"att{att_id[:8]}")
+        if prof_id:
+            details.append(f"prof{prof_id[:8]}")
+
+        if details:
+            return f"{base}_{'_'.join(details)}_{timestamp}.{ext}"
+        else:
+            return f"{base}_{timestamp}.{ext}"
 
     async def translate_sync(
         self,
