@@ -99,7 +99,7 @@ def mock_voice_model(output_dir):
 # ═══════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_tts_service_singleton():
+async def test_tts_service_singleton(output_dir):
     """Test singleton pattern"""
     logger.info("Test 08.1: Singleton pattern")
 
@@ -109,7 +109,7 @@ async def test_tts_service_singleton():
     # Reset singleton for testing
     TTSService._instance = None
 
-    service1 = TTSService()
+    service1 = TTSService(output_dir=str(output_dir))
     service2 = TTSService()
 
     assert service1 is service2
@@ -169,7 +169,7 @@ async def test_tts_result_dataclass():
 
 
 @pytest.mark.asyncio
-async def test_tts_language_mapping():
+async def test_tts_language_mapping(output_dir):
     """Test language code mapping to XTTS codes"""
     logger.info("Test 08.4: Language mapping")
 
@@ -177,7 +177,7 @@ async def test_tts_language_mapping():
         pytest.skip("TTSService not available")
 
     TTSService._instance = None
-    service = TTSService()
+    service = TTSService(output_dir=str(output_dir))
 
     test_cases = [
         ("fr", "fr"),
@@ -338,7 +338,7 @@ async def test_tts_synthesize_fallback_no_voice_file(output_dir):
 
 
 @pytest.mark.asyncio
-async def test_tts_supported_languages():
+async def test_tts_supported_languages(output_dir):
     """Test getting supported languages"""
     logger.info("Test 08.8: Supported languages")
 
@@ -346,7 +346,7 @@ async def test_tts_supported_languages():
         pytest.skip("TTSService not available")
 
     TTSService._instance = None
-    service = TTSService()
+    service = TTSService(output_dir=str(output_dir))
 
     languages = service.get_supported_languages()
 
