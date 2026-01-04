@@ -11,7 +11,9 @@ import asyncio
 import threading
 import pickle
 import json
-from typing import Optional, List, Dict, Any
+import hashlib
+import struct
+from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -40,6 +42,220 @@ try:
 except ImportError:
     logger.warning("⚠️ [VOICE_CLONE] numpy/pydub/soundfile non disponibles")
     import numpy as np  # numpy should be available
+
+
+@dataclass
+class VoiceFingerprint:
+    """
+    Empreinte vocale unique pour identification et vérification.
+    Génère une signature cryptographique basée sur les caractéristiques vocales.
+    """
+    # Identifiants
+    fingerprint_id: str = ""              # ID unique de l'empreinte (hash court)
+    version: str = "1.0"                  # Version de l'algorithme de fingerprint
+
+    # Signature principale (SHA-256)
+    signature: str = ""                   # Hash SHA-256 des caractéristiques
+    signature_short: str = ""             # Hash court (12 caractères) pour affichage
+
+    # Composants du fingerprint (pour matching partiel)
+    pitch_hash: str = ""                  # Hash du profil de pitch
+    spectral_hash: str = ""               # Hash des caractéristiques spectrales
+    prosody_hash: str = ""                # Hash de la prosodie
+
+    # Vecteur d'embedding pour similarité
+    embedding_vector: List[float] = field(default_factory=list)  # Vecteur normalisé
+
+    # Métadonnées
+    created_at: datetime = field(default_factory=datetime.now)
+    audio_duration_ms: int = 0
+    sample_count: int = 1                 # Nombre d'échantillons utilisés
+
+    # Checksum de vérification
+    checksum: str = ""                    # CRC32 pour vérification d'intégrité
+
+    @staticmethod
+    def generate_from_characteristics(
+        chars: 'VoiceCharacteristics',
+        audio_duration_ms: int = 0,
+        embedding: np.ndarray = None
+    ) -> 'VoiceFingerprint':
+        """
+        Génère une empreinte vocale à partir des caractéristiques.
+
+        L'algorithme combine:
+        1. Pitch profile (F0 stats)
+        2. Spectral features (brightness, warmth)
+        3. Prosodic features (energy, silence)
+        4. Optional: embedding vector from voice model
+        """
+        fp = VoiceFingerprint()
+        fp.audio_duration_ms = audio_duration_ms
+        fp.created_at = datetime.now()
+
+        # 1. Créer le hash du pitch
+        pitch_data = struct.pack(
+            'ffff',
+            chars.pitch_mean_hz,
+            chars.pitch_std_hz,
+            chars.pitch_min_hz,
+            chars.pitch_max_hz
+        )
+        fp.pitch_hash = hashlib.sha256(pitch_data).hexdigest()[:16]
+
+        # 2. Créer le hash spectral
+        spectral_data = struct.pack(
+            'ffff',
+            chars.brightness,
+            chars.warmth,
+            chars.breathiness,
+            chars.nasality
+        )
+        fp.spectral_hash = hashlib.sha256(spectral_data).hexdigest()[:16]
+
+        # 3. Créer le hash prosodique
+        prosody_data = struct.pack(
+            'ffff',
+            chars.energy_mean,
+            chars.energy_std,
+            chars.silence_ratio,
+            chars.speech_rate_wpm
+        )
+        fp.prosody_hash = hashlib.sha256(prosody_data).hexdigest()[:16]
+
+        # 4. Signature principale (combinaison de tous les composants)
+        combined = f"{fp.pitch_hash}{fp.spectral_hash}{fp.prosody_hash}"
+        combined += f"{chars.voice_type}{chars.estimated_gender}"
+        fp.signature = hashlib.sha256(combined.encode()).hexdigest()
+        fp.signature_short = fp.signature[:12]
+        fp.fingerprint_id = f"vfp_{fp.signature_short}"
+
+        # 5. Créer le vecteur d'embedding normalisé
+        fp.embedding_vector = [
+            chars.pitch_mean_hz / 500.0,      # Normalize pitch (0-500 Hz -> 0-1)
+            chars.pitch_std_hz / 100.0,       # Normalize std
+            chars.brightness / 5000.0,         # Normalize brightness
+            chars.warmth / 10.0,               # Normalize warmth
+            chars.energy_mean * 100,           # Scale energy
+            chars.silence_ratio,               # Already 0-1
+            1.0 if chars.estimated_gender == "male" else 0.0,
+            1.0 if chars.estimated_gender == "female" else 0.0,
+            1.0 if chars.estimated_gender == "child" else 0.0,
+        ]
+
+        # Ajouter l'embedding du modèle si disponible
+        if embedding is not None and len(embedding) > 0:
+            # Prendre les 16 premières valeurs de l'embedding
+            embed_normalized = embedding.flatten()[:16]
+            embed_normalized = embed_normalized / (np.linalg.norm(embed_normalized) + 1e-10)
+            fp.embedding_vector.extend(embed_normalized.tolist())
+
+        # 6. Calculer le checksum CRC32
+        checksum_data = f"{fp.signature}{fp.pitch_hash}{fp.spectral_hash}{fp.prosody_hash}"
+        fp.checksum = format(
+            abs(hash(checksum_data)) % (2**32),
+            '08x'
+        )
+
+        return fp
+
+    def verify_checksum(self) -> bool:
+        """Vérifie l'intégrité de l'empreinte"""
+        expected_data = f"{self.signature}{self.pitch_hash}{self.spectral_hash}{self.prosody_hash}"
+        expected_checksum = format(
+            abs(hash(expected_data)) % (2**32),
+            '08x'
+        )
+        return self.checksum == expected_checksum
+
+    def similarity_score(self, other: 'VoiceFingerprint') -> float:
+        """
+        Calcule la similarité entre deux empreintes vocales.
+        Retourne un score entre 0 (différent) et 1 (identique).
+        """
+        score = 0.0
+        weights_total = 0.0
+
+        # 1. Comparaison des hashes (match exact = 1.0, sinon 0)
+        if self.pitch_hash == other.pitch_hash:
+            score += 0.3
+        weights_total += 0.3
+
+        if self.spectral_hash == other.spectral_hash:
+            score += 0.2
+        weights_total += 0.2
+
+        if self.prosody_hash == other.prosody_hash:
+            score += 0.1
+        weights_total += 0.1
+
+        # 2. Comparaison des vecteurs d'embedding (cosine similarity)
+        if self.embedding_vector and other.embedding_vector:
+            min_len = min(len(self.embedding_vector), len(other.embedding_vector))
+            v1 = np.array(self.embedding_vector[:min_len])
+            v2 = np.array(other.embedding_vector[:min_len])
+
+            norm1 = np.linalg.norm(v1)
+            norm2 = np.linalg.norm(v2)
+
+            if norm1 > 0 and norm2 > 0:
+                cosine_sim = np.dot(v1, v2) / (norm1 * norm2)
+                # Convert from [-1, 1] to [0, 1]
+                cosine_sim = (cosine_sim + 1) / 2
+                score += cosine_sim * 0.4
+            weights_total += 0.4
+
+        return score / weights_total if weights_total > 0 else 0.0
+
+    def matches(self, other: 'VoiceFingerprint', threshold: float = 0.85) -> bool:
+        """Vérifie si deux empreintes correspondent (même personne)"""
+        return self.similarity_score(other) >= threshold
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "fingerprint_id": self.fingerprint_id,
+            "version": self.version,
+            "signature": self.signature,
+            "signature_short": self.signature_short,
+            "components": {
+                "pitch_hash": self.pitch_hash,
+                "spectral_hash": self.spectral_hash,
+                "prosody_hash": self.prosody_hash
+            },
+            "embedding_vector_length": len(self.embedding_vector),
+            "checksum": self.checksum,
+            "metadata": {
+                "created_at": self.created_at.isoformat(),
+                "audio_duration_ms": self.audio_duration_ms,
+                "sample_count": self.sample_count
+            },
+            "integrity_valid": self.verify_checksum()
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'VoiceFingerprint':
+        """Reconstruit depuis un dictionnaire"""
+        fp = cls()
+        fp.fingerprint_id = data.get("fingerprint_id", "")
+        fp.version = data.get("version", "1.0")
+        fp.signature = data.get("signature", "")
+        fp.signature_short = data.get("signature_short", "")
+
+        components = data.get("components", {})
+        fp.pitch_hash = components.get("pitch_hash", "")
+        fp.spectral_hash = components.get("spectral_hash", "")
+        fp.prosody_hash = components.get("prosody_hash", "")
+
+        fp.embedding_vector = data.get("embedding_vector", [])
+        fp.checksum = data.get("checksum", "")
+
+        metadata = data.get("metadata", {})
+        if metadata.get("created_at"):
+            fp.created_at = datetime.fromisoformat(metadata["created_at"])
+        fp.audio_duration_ms = metadata.get("audio_duration_ms", 0)
+        fp.sample_count = metadata.get("sample_count", 1)
+
+        return fp
 
 
 @dataclass
@@ -107,6 +323,27 @@ class VoiceCharacteristics:
             }
         }
 
+    def generate_fingerprint(
+        self,
+        audio_duration_ms: int = 0,
+        embedding: np.ndarray = None
+    ) -> 'VoiceFingerprint':
+        """
+        Génère une empreinte vocale unique à partir de ces caractéristiques.
+
+        Args:
+            audio_duration_ms: Durée de l'audio source en millisecondes
+            embedding: Vecteur d'embedding optionnel (OpenVoice)
+
+        Returns:
+            VoiceFingerprint: Empreinte vocale unique avec signature et checksum
+        """
+        return VoiceFingerprint.generate_from_characteristics(
+            self,
+            audio_duration_ms=audio_duration_ms,
+            embedding=embedding
+        )
+
 
 @dataclass
 class SpeakerInfo:
@@ -120,8 +357,27 @@ class SpeakerInfo:
     # Segments temporels où ce locuteur parle
     segments: List[Dict[str, float]] = field(default_factory=list)  # [{"start": 0.0, "end": 2.5}, ...]
 
+    # Empreinte vocale unique du locuteur
+    fingerprint: Optional[VoiceFingerprint] = None
+
+    def generate_fingerprint(self, embedding: np.ndarray = None) -> VoiceFingerprint:
+        """
+        Génère l'empreinte vocale unique de ce locuteur.
+
+        Args:
+            embedding: Vecteur d'embedding optionnel (OpenVoice)
+
+        Returns:
+            VoiceFingerprint: Empreinte vocale unique
+        """
+        self.fingerprint = self.voice_characteristics.generate_fingerprint(
+            audio_duration_ms=self.speaking_time_ms,
+            embedding=embedding
+        )
+        return self.fingerprint
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "speaker_id": self.speaker_id,
             "is_primary": self.is_primary,
             "speaking_time_ms": self.speaking_time_ms,
@@ -130,6 +386,9 @@ class SpeakerInfo:
             "segments_count": len(self.segments),
             "segments": self.segments[:10]  # Limiter à 10 segments pour la sérialisation
         }
+        if self.fingerprint:
+            result["fingerprint"] = self.fingerprint.to_dict()
+        return result
 
 
 @dataclass
@@ -280,12 +539,54 @@ class VoiceModel:
     # Audio utilisé pour la dernière génération
     source_audio_id: str = ""  # attachment_id de l'audio source
 
+    # Profil vocal détaillé
+    voice_characteristics: Optional[VoiceCharacteristics] = None
+    fingerprint: Optional[VoiceFingerprint] = None
+
     # Runtime only (not persisted)
     embedding: Optional[np.ndarray] = field(default=None, repr=False)
 
+    def generate_fingerprint(self) -> Optional[VoiceFingerprint]:
+        """
+        Génère l'empreinte vocale unique de ce modèle.
+        Utilise les caractéristiques vocales et l'embedding si disponibles.
+
+        Returns:
+            VoiceFingerprint: Empreinte vocale unique, ou None si pas de données
+        """
+        if self.voice_characteristics:
+            self.fingerprint = self.voice_characteristics.generate_fingerprint(
+                audio_duration_ms=self.total_duration_ms,
+                embedding=self.embedding
+            )
+            return self.fingerprint
+        elif self.embedding is not None:
+            # Générer une empreinte basique depuis l'embedding seul
+            fp = VoiceFingerprint()
+            fp.audio_duration_ms = self.total_duration_ms
+            fp.created_at = datetime.now()
+
+            # Hash de l'embedding
+            embed_data = self.embedding.tobytes()
+            fp.signature = hashlib.sha256(embed_data).hexdigest()
+            fp.signature_short = fp.signature[:12]
+            fp.fingerprint_id = f"vfp_{fp.signature_short}"
+
+            # Vecteur normalisé
+            embed_normalized = self.embedding.flatten()[:25]
+            embed_normalized = embed_normalized / (np.linalg.norm(embed_normalized) + 1e-10)
+            fp.embedding_vector = embed_normalized.tolist()
+
+            # Checksum
+            fp.checksum = format(abs(hash(fp.signature)) % (2**32), '08x')
+
+            self.fingerprint = fp
+            return self.fingerprint
+        return None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convertit en dictionnaire (pour JSON)"""
-        return {
+        result = {
             "user_id": self.user_id,
             "profile_id": self.profile_id,
             "embedding_path": self.embedding_path,
@@ -298,11 +599,16 @@ class VoiceModel:
             "updated_at": self.updated_at.isoformat(),
             "next_recalibration_at": self.next_recalibration_at.isoformat() if self.next_recalibration_at else None
         }
+        if self.voice_characteristics:
+            result["voice_characteristics"] = self.voice_characteristics.to_dict()
+        if self.fingerprint:
+            result["fingerprint"] = self.fingerprint.to_dict()
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'VoiceModel':
         """Crée depuis un dictionnaire"""
-        return cls(
+        model = cls(
             user_id=data["user_id"],
             embedding_path=data["embedding_path"],
             audio_count=data["audio_count"],
@@ -315,6 +621,37 @@ class VoiceModel:
             updated_at=datetime.fromisoformat(data["updated_at"]),
             next_recalibration_at=datetime.fromisoformat(data["next_recalibration_at"]) if data.get("next_recalibration_at") else None
         )
+
+        # Restaurer les caractéristiques vocales si présentes
+        if data.get("voice_characteristics"):
+            vc_data = data["voice_characteristics"]
+            model.voice_characteristics = VoiceCharacteristics(
+                pitch_mean_hz=vc_data.get("pitch", {}).get("mean_hz", 0),
+                pitch_std_hz=vc_data.get("pitch", {}).get("std_hz", 0),
+                pitch_min_hz=vc_data.get("pitch", {}).get("min_hz", 0),
+                pitch_max_hz=vc_data.get("pitch", {}).get("max_hz", 0),
+                voice_type=vc_data.get("classification", {}).get("voice_type", "unknown"),
+                estimated_gender=vc_data.get("classification", {}).get("estimated_gender", "unknown"),
+                estimated_age_range=vc_data.get("classification", {}).get("estimated_age_range", "unknown"),
+                brightness=vc_data.get("spectral", {}).get("brightness", 0),
+                warmth=vc_data.get("spectral", {}).get("warmth", 0),
+                breathiness=vc_data.get("spectral", {}).get("breathiness", 0),
+                nasality=vc_data.get("spectral", {}).get("nasality", 0),
+                speech_rate_wpm=vc_data.get("prosody", {}).get("speech_rate_wpm", 0),
+                energy_mean=vc_data.get("prosody", {}).get("energy_mean", 0),
+                energy_std=vc_data.get("prosody", {}).get("energy_std", 0),
+                silence_ratio=vc_data.get("prosody", {}).get("silence_ratio", 0),
+                sample_rate=vc_data.get("technical", {}).get("sample_rate", 0),
+                bit_depth=vc_data.get("technical", {}).get("bit_depth", 0),
+                channels=vc_data.get("technical", {}).get("channels", 1),
+                codec=vc_data.get("technical", {}).get("codec", "")
+            )
+
+        # Restaurer l'empreinte vocale si présente
+        if data.get("fingerprint"):
+            model.fingerprint = VoiceFingerprint.from_dict(data["fingerprint"])
+
+        return model
 
 
 class VoiceAnalyzer:
