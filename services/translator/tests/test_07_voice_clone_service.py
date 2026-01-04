@@ -84,7 +84,7 @@ def mock_voice_model_data():
 # ═══════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_voice_clone_singleton():
+async def test_voice_clone_singleton(voice_cache_dir):
     """Test singleton pattern"""
     logger.info("Test 07.1: Singleton pattern")
 
@@ -94,7 +94,7 @@ async def test_voice_clone_singleton():
     # Reset singleton for testing
     VoiceCloneService._instance = None
 
-    service1 = VoiceCloneService()
+    service1 = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
     service2 = VoiceCloneService()
 
     assert service1 is service2
@@ -149,7 +149,7 @@ async def test_voice_model_dataclass(mock_voice_model_data):
 
 
 @pytest.mark.asyncio
-async def test_voice_clone_quality_score():
+async def test_voice_clone_quality_score(voice_cache_dir):
     """Test quality score calculation"""
     logger.info("Test 07.4: Quality score calculation")
 
@@ -157,7 +157,7 @@ async def test_voice_clone_quality_score():
         pytest.skip("VoiceCloneService not available")
 
     VoiceCloneService._instance = None
-    service = VoiceCloneService()
+    service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
 
     # Test different duration thresholds
     test_cases = [
