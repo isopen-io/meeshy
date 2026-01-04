@@ -39,6 +39,7 @@
     "postinstall": "turbo run generate --filter=@meeshy/shared"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "concurrently": "^9.1.0",
     "turbo": "^2.3.3",
     "typescript": "^5.8.3"
