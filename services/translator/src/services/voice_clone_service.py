@@ -363,17 +363,19 @@ class VoiceCloneService:
         profile_id = uuid_module.uuid4().hex[:12]
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        # Extraire l'embedding de voix - stocker directement dans embeddings/voices/
-        self.voice_cache_dir.mkdir(parents=True, exist_ok=True)
+        # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
+        user_dir = self.voice_cache_dir / user_id
+        user_dir.mkdir(parents=True, exist_ok=True)
 
-        embedding = await self._extract_voice_embedding(combined_audio, self.voice_cache_dir)
+        # Extraire l'embedding de voix
+        embedding = await self._extract_voice_embedding(combined_audio, user_dir)
 
         # Calculer score de qualité
         quality_score = self._calculate_quality_score(total_duration_ms, len(valid_paths))
 
         # Chemin de l'embedding avec nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
         embedding_filename = f"{user_id}_{profile_id}_{timestamp}.pkl"
-        embedding_path = str(self.voice_cache_dir / embedding_filename)
+        embedding_path = str(user_dir / embedding_filename)
 
         # Créer le modèle
         model = VoiceModel(
@@ -658,17 +660,11 @@ class VoiceCloneService:
         return min(1.0, base_score + audio_bonus)
 
     async def _load_cached_model(self, user_id: str) -> Optional[VoiceModel]:
-        """Charge un modèle depuis le cache fichier"""
-        # Nouvelle structure: metadata stocké directement dans voice_cache_dir
-        metadata_path = self.voice_cache_dir / f"{user_id}_metadata.json"
+        """Charge un modèle depuis le cache fichier: {voice_cache_dir}/{user_id}/metadata.json"""
+        metadata_path = self.voice_cache_dir / user_id / "metadata.json"
 
-        # Fallback pour ancienne structure (migration)
         if not metadata_path.exists():
-            old_metadata_path = self.voice_cache_dir / user_id / "metadata.json"
-            if old_metadata_path.exists():
-                metadata_path = old_metadata_path
-            else:
-                return None
+            return None
 
         try:
             with open(metadata_path, 'r') as f:
@@ -689,21 +685,21 @@ class VoiceCloneService:
         return model
 
     async def _save_model_to_cache(self, model: VoiceModel):
-        """Sauvegarde un modèle dans le cache fichier"""
-        self.voice_cache_dir.mkdir(parents=True, exist_ok=True)
+        """Sauvegarde un modèle dans le cache fichier: {voice_cache_dir}/{user_id}/"""
+        user_dir = self.voice_cache_dir / model.user_id
+        user_dir.mkdir(parents=True, exist_ok=True)
 
-        # Sauvegarder les métadonnées avec la nouvelle convention: {userId}_metadata.json
-        metadata_path = self.voice_cache_dir / f"{model.user_id}_metadata.json"
+        # Sauvegarder les métadonnées: {user_id}/metadata.json
+        metadata_path = user_dir / "metadata.json"
         with open(metadata_path, 'w') as f:
             json.dump(model.to_dict(), f, indent=2)
 
-        # Sauvegarder l'embedding avec la nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
+        # Sauvegarder l'embedding: {user_id}/{userId}_{profileId}_{timestamp}.pkl
         if model.embedding is not None:
-            # L'embedding_path est déjà configuré avec la bonne convention dans _create_voice_model
             with open(model.embedding_path, 'wb') as f:
                 pickle.dump(model.embedding, f)
 
-        logger.info(f"[VOICE_CLONE] 💾 Modèle sauvegardé: {model.embedding_path}")
+        logger.info(f"[VOICE_CLONE] 💾 Modèle sauvegardé: {user_dir}")
 
     async def schedule_quarterly_recalibration(self):
         """
@@ -751,23 +747,13 @@ class VoiceCloneService:
         logger.info(f"[VOICE_CLONE] ✅ Recalibration trimestrielle terminée: {recalibrated} modèles mis à jour")
 
     async def _list_all_cached_models(self) -> List[VoiceModel]:
-        """Liste tous les modèles en cache"""
+        """Liste tous les modèles en cache: parcourt {voice_cache_dir}/{user_id}/"""
         models = []
-        # Nouvelle structure: fichiers {userId}_metadata.json dans voice_cache_dir
-        for metadata_file in self.voice_cache_dir.glob("*_metadata.json"):
-            user_id = metadata_file.stem.replace("_metadata", "")
-            model = await self._load_cached_model(user_id)
-            if model:
-                models.append(model)
-
-        # Fallback pour ancienne structure (sous-répertoires utilisateur)
         for user_dir in self.voice_cache_dir.iterdir():
             if user_dir.is_dir():
-                # Éviter les doublons si déjà chargé via nouvelle structure
-                if not any(m.user_id == user_dir.name for m in models):
-                    model = await self._load_cached_model(user_dir.name)
-                    if model:
-                        models.append(model)
+                model = await self._load_cached_model(user_dir.name)
+                if model:
+                    models.append(model)
         return models
 
     async def get_stats(self) -> Dict[str, Any]:
