@@ -444,6 +444,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio
 
+      - name: Generate Prisma client (Python)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd services/translator
+          python -m prisma generate
+
       # Gateway Voice API Tests
       - name: Run Gateway Voice API tests
         run: |
@@ -454,6 +461,7 @@ jobs:
       - name: Run Python Voice API tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
         timeout-minutes: 10
         run: |
           cd services/translator
