@@ -275,104 +275,17 @@ export class VoiceAPIService extends EventEmitter {
   // ═══════════════════════════════════════════════════════════════════════════
   // VOICE PROFILES
   // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Get voice profile by ID
-   */
-  async getProfile(userId: string, profileId: string): Promise<VoiceProfile> {
-    const request: VoiceProfileRequest = {
-      type: 'voice_profile_get',
-      taskId: randomUUID(),
-      userId,
-      profileId
-    };
-
-    return this._sendRequest<VoiceProfile>(request, 10000);
-  }
-
-  /**
-   * Create a new voice profile
-   */
-  async createProfile(
-    userId: string,
-    options: {
-      name: string;
-      audioBase64?: string;
-      audioPath?: string;
-      metadata?: Record<string, any>;
-    }
-  ): Promise<VoiceProfile> {
-    const request: VoiceProfileRequest = {
-      type: 'voice_profile_create',
-      taskId: randomUUID(),
-      userId,
-      name: options.name,
-      audioBase64: options.audioBase64,
-      audioPath: options.audioPath,
-      metadata: options.metadata
-    };
-
-    return this._sendRequest<VoiceProfile>(request, 30000);
-  }
-
-  /**
-   * Update a voice profile
-   */
-  async updateProfile(
-    userId: string,
-    profileId: string,
-    options: {
-      name?: string;
-      audioBase64?: string;
-      audioPath?: string;
-      metadata?: Record<string, any>;
-    }
-  ): Promise<VoiceProfile> {
-    const request: VoiceProfileRequest = {
-      type: 'voice_profile_update',
-      taskId: randomUUID(),
-      userId,
-      profileId,
-      name: options.name,
-      audioBase64: options.audioBase64,
-      audioPath: options.audioPath,
-      metadata: options.metadata
-    };
-
-    return this._sendRequest<VoiceProfile>(request, 30000);
-  }
-
-  /**
-   * Delete a voice profile
-   */
-  async deleteProfile(userId: string, profileId: string): Promise<{ success: boolean }> {
-    const request: VoiceProfileRequest = {
-      type: 'voice_profile_delete',
-      taskId: randomUUID(),
-      userId,
-      profileId
-    };
-
-    return this._sendRequest<{ success: boolean }>(request, 10000);
-  }
-
-  /**
-   * List user's voice profiles
-   */
-  async listProfiles(
-    userId: string,
-    options?: { limit?: number; offset?: number }
-  ): Promise<{ profiles: VoiceProfile[]; total: number }> {
-    const request: VoiceProfileRequest = {
-      type: 'voice_profile_list',
-      taskId: randomUUID(),
-      userId,
-      limit: options?.limit ?? 20,
-      offset: options?.offset ?? 0
-    };
-
-    return this._sendRequest<{ profiles: VoiceProfile[]; total: number }>(request, 10000);
-  }
+  //
+  // NOTE: Voice profile management has been moved to VoiceProfileService
+  // which provides:
+  // - GDPR-compliant consent management
+  // - Profile registration via attachmentId OR direct audio
+  // - Profile calibration (add audio samples)
+  // - Age-based expiration (minors vs adults)
+  // - Database persistence
+  //
+  // Use VoiceProfileService for all profile operations.
+  // ═══════════════════════════════════════════════════════════════════════════
 
   // ═══════════════════════════════════════════════════════════════════════════
   // FEEDBACK & ANALYTICS

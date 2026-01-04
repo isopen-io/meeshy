@@ -2,8 +2,9 @@
  * Voice Profile Service
  *
  * Handles voice profile management:
- * - Consent workflow
- * - Profile registration (sends audio to Translator via ZMQ)
+ * - Consent workflow (GDPR compliant)
+ * - Profile registration via attachmentId OR direct audio
+ * - Profile calibration (add audio samples)
  * - Profile update with fingerprint verification
  * - Profile deletion
  *
@@ -14,6 +15,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+import { promises as fs } from 'fs';
+import path from 'path';
 import {
   ZMQTranslationClient,
   VoiceProfileAnalyzeRequest,
@@ -47,14 +50,25 @@ export interface ConsentRequest {
   birthDate?: string;  // ISO date string for age verification
 }
 
-export interface RegisterProfileRequest {
-  audioData: string;  // base64 encoded audio
-  audioFormat: string;  // wav, mp3, ogg
+/**
+ * Audio input - either from attachment or direct upload
+ */
+export interface AudioInput {
+  // Option 1: From existing attachment
+  attachmentId?: string;
+
+  // Option 2: Direct audio data
+  audioData?: string;  // base64 encoded audio
+  audioFormat?: string;  // wav, mp3, ogg, webm
 }
 
-export interface UpdateProfileRequest {
-  audioData: string;
-  audioFormat: string;
+export interface RegisterProfileRequest extends AudioInput {}
+
+export interface UpdateProfileRequest extends AudioInput {}
+
+export interface CalibrateProfileRequest extends AudioInput {
+  // Additional calibration options
+  replaceExisting?: boolean;  // Replace profile instead of adding samples
 }
 
 export interface VoiceProfileDetails {
@@ -62,12 +76,14 @@ export interface VoiceProfileDetails {
   userId: string;
   qualityScore: number;
   audioDurationMs: number;
+  audioCount: number;
   voiceCharacteristics: Record<string, any> | null;
   signatureShort: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
   expiresAt: Date | null;
+  needsCalibration: boolean;
   consentStatus: {
     voiceRecordingConsentAt: Date | null;
     voiceCloningEnabledAt: Date | null;
@@ -89,6 +105,7 @@ export interface ServiceResult<T> {
 export class VoiceProfileService extends EventEmitter {
   private prisma: PrismaClient;
   private zmqClient: ZMQTranslationClient;
+  private uploadBasePath: string;
   private pendingRequests: Map<string, {
     resolve: (value: VoiceProfileEvent) => void;
     reject: (error: Error) => void;
@@ -99,6 +116,7 @@ export class VoiceProfileService extends EventEmitter {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
+    this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
 
     // Listen for ZMQ events (camelCase event names from ZMQ client)
     this.zmqClient.on('voiceProfileAnalyzeResult', (event: VoiceProfileAnalyzeResult) => {
@@ -135,6 +153,109 @@ export class VoiceProfileService extends EventEmitter {
 
       this.pendingRequests.set(requestId, { resolve, reject, timeout });
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUDIO INPUT RESOLUTION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Resolve audio input to base64 data and format
+   * Supports both attachmentId and direct audio data
+   */
+  private async resolveAudioInput(
+    userId: string,
+    input: AudioInput
+  ): Promise<{ audioData: string; audioFormat: string }> {
+    // Option 1: Direct audio data
+    if (input.audioData) {
+      if (!input.audioFormat) {
+        throw new Error('audioFormat is required when providing audioData directly');
+      }
+      return {
+        audioData: input.audioData,
+        audioFormat: input.audioFormat
+      };
+    }
+
+    // Option 2: From attachment
+    if (input.attachmentId) {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: input.attachmentId },
+        include: {
+          message: {
+            select: {
+              conversationId: true,
+              senderId: true
+            }
+          }
+        }
+      });
+
+      if (!attachment) {
+        throw new Error('Attachment not found');
+      }
+
+      // Verify it's an audio file
+      if (!attachment.mimeType.startsWith('audio/')) {
+        throw new Error(`Invalid attachment type: ${attachment.mimeType}. Expected audio file.`);
+      }
+
+      // Verify user has access
+      const hasAccess = await this.verifyAttachmentAccess(userId, attachment);
+      if (!hasAccess) {
+        throw new Error('Access denied to this attachment');
+      }
+
+      // Read audio file
+      const fullPath = path.join(this.uploadBasePath, attachment.filePath);
+      const audioBuffer = await fs.readFile(fullPath);
+      const audioData = audioBuffer.toString('base64');
+
+      // Determine format from mime type
+      const audioFormat = this.mimeTypeToFormat(attachment.mimeType);
+
+      return { audioData, audioFormat };
+    }
+
+    throw new Error('Either attachmentId or audioData must be provided');
+  }
+
+  private async verifyAttachmentAccess(userId: string, attachment: any): Promise<boolean> {
+    // User uploaded the attachment
+    if (attachment.uploadedBy === userId) {
+      return true;
+    }
+
+    // User is part of the conversation
+    if (attachment.message?.conversationId) {
+      const member = await this.prisma.conversationMember.findFirst({
+        where: {
+          conversationId: attachment.message.conversationId,
+          userId: userId,
+          isActive: true
+        }
+      });
+      return !!member;
+    }
+
+    return false;
+  }
+
+  private mimeTypeToFormat(mimeType: string): string {
+    const formats: Record<string, string> = {
+      'audio/wav': 'wav',
+      'audio/wave': 'wav',
+      'audio/x-wav': 'wav',
+      'audio/mpeg': 'mp3',
+      'audio/mp3': 'mp3',
+      'audio/ogg': 'ogg',
+      'audio/webm': 'webm',
+      'audio/mp4': 'm4a',
+      'audio/x-m4a': 'm4a',
+      'audio/flac': 'flac'
+    };
+    return formats[mimeType] || 'wav';
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -263,8 +384,11 @@ export class VoiceProfileService extends EventEmitter {
 
       // Check if profile already exists
       if (user.voiceModel) {
-        return { success: false, error: 'Profile already exists. Use update endpoint.', errorCode: 'PROFILE_EXISTS' };
+        return { success: false, error: 'Profile already exists. Use update or calibrate endpoint.', errorCode: 'PROFILE_EXISTS' };
       }
+
+      // Resolve audio input (attachmentId or direct audio)
+      const { audioData, audioFormat } = await this.resolveAudioInput(userId, request);
 
       // Send audio to Translator for analysis
       const requestId = randomUUID();
@@ -272,8 +396,8 @@ export class VoiceProfileService extends EventEmitter {
         type: 'voice_profile_analyze',
         request_id: requestId,
         user_id: userId,
-        audio_data: request.audioData,
-        audio_format: request.audioFormat,
+        audio_data: audioData,
+        audio_format: audioFormat,
         is_update: false
       };
 
@@ -308,23 +432,7 @@ export class VoiceProfileService extends EventEmitter {
 
       return {
         success: true,
-        data: {
-          profileId: voiceModel.profileId || '',
-          userId: voiceModel.userId,
-          qualityScore: voiceModel.qualityScore,
-          audioDurationMs: voiceModel.totalDurationMs,
-          voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | null,
-          signatureShort: voiceModel.signatureShort,
-          version: voiceModel.version,
-          createdAt: voiceModel.createdAt,
-          updatedAt: voiceModel.updatedAt,
-          expiresAt: voiceModel.nextRecalibrationAt,
-          consentStatus: {
-            voiceRecordingConsentAt: user.voiceProfileConsentAt,
-            voiceCloningEnabledAt: user.voiceCloningEnabledAt,
-            ageVerificationConsentAt: null
-          }
-        }
+        data: this.formatProfileDetails(voiceModel, user)
       };
     } catch (error) {
       console.error('[VoiceProfileService] Error registering profile:', error);
@@ -337,13 +445,16 @@ export class VoiceProfileService extends EventEmitter {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PROFILE UPDATE
+  // PROFILE CALIBRATION (Add audio samples)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async updateProfile(
+  /**
+   * Add audio samples to calibrate/improve the voice profile
+   * This allows users to progressively improve their profile quality
+   */
+  async calibrateProfile(
     userId: string,
-    profileId: string,
-    request: UpdateProfileRequest
+    request: CalibrateProfileRequest
   ): Promise<ServiceResult<VoiceProfileDetails>> {
     try {
       // Get existing profile
@@ -353,23 +464,22 @@ export class VoiceProfileService extends EventEmitter {
       });
 
       if (!voiceModel) {
-        return { success: false, error: 'Profile not found', errorCode: 'PROFILE_NOT_FOUND' };
+        return { success: false, error: 'Profile not found. Register first.', errorCode: 'PROFILE_NOT_FOUND' };
       }
 
-      if (voiceModel.profileId !== profileId) {
-        return { success: false, error: 'Profile ID mismatch', errorCode: 'PROFILE_MISMATCH' };
-      }
+      // Resolve audio input
+      const { audioData, audioFormat } = await this.resolveAudioInput(userId, request);
 
-      // Send audio to Translator for analysis with fingerprint verification
+      // Send audio to Translator for analysis
       const requestId = randomUUID();
       const zmqRequest: VoiceProfileAnalyzeRequest = {
         type: 'voice_profile_analyze',
         request_id: requestId,
         user_id: userId,
-        audio_data: request.audioData,
-        audio_format: request.audioFormat,
-        is_update: true,
-        existing_fingerprint: voiceModel.fingerprint as Record<string, any> || undefined
+        audio_data: audioData,
+        audio_format: audioFormat,
+        is_update: !request.replaceExisting,
+        existing_fingerprint: request.replaceExisting ? undefined : (voiceModel.fingerprint as Record<string, any> || undefined)
       };
 
       await this.zmqClient.sendVoiceProfileRequest(zmqRequest);
@@ -378,55 +488,61 @@ export class VoiceProfileService extends EventEmitter {
       const response = await this.waitForZmqResponse(requestId) as VoiceProfileAnalyzeResult;
 
       if (!response.success) {
-        return { success: false, error: response.error || 'Update failed', errorCode: 'UPDATE_FAILED' };
+        return { success: false, error: response.error || 'Calibration failed', errorCode: 'CALIBRATION_FAILED' };
       }
 
       // Calculate new expiration
       const expiresAt = this.calculateExpirationDate(voiceModel.user.birthDate);
 
       // Update database
+      const updateData: any = {
+        qualityScore: response.quality_score || voiceModel.qualityScore,
+        version: voiceModel.version + 1,
+        voiceCharacteristics: response.voice_characteristics || voiceModel.voiceCharacteristics,
+        fingerprint: response.fingerprint || voiceModel.fingerprint,
+        signatureShort: response.signature_short || voiceModel.signatureShort,
+        nextRecalibrationAt: expiresAt
+      };
+
+      if (request.replaceExisting) {
+        // Replace: reset counts
+        updateData.audioCount = 1;
+        updateData.totalDurationMs = response.audio_duration_ms || 0;
+      } else {
+        // Add: increment counts
+        updateData.audioCount = voiceModel.audioCount + 1;
+        updateData.totalDurationMs = voiceModel.totalDurationMs + (response.audio_duration_ms || 0);
+      }
+
       const updated = await this.prisma.userVoiceModel.update({
         where: { userId },
-        data: {
-          audioCount: voiceModel.audioCount + 1,
-          totalDurationMs: voiceModel.totalDurationMs + (response.audio_duration_ms || 0),
-          qualityScore: response.quality_score || voiceModel.qualityScore,
-          version: voiceModel.version + 1,
-          voiceCharacteristics: response.voice_characteristics || voiceModel.voiceCharacteristics,
-          fingerprint: response.fingerprint || voiceModel.fingerprint,
-          signatureShort: response.signature_short || voiceModel.signatureShort,
-          nextRecalibrationAt: expiresAt
-        }
+        data: updateData
       });
 
       return {
         success: true,
-        data: {
-          profileId: updated.profileId || '',
-          userId: updated.userId,
-          qualityScore: updated.qualityScore,
-          audioDurationMs: updated.totalDurationMs,
-          voiceCharacteristics: updated.voiceCharacteristics as Record<string, any> | null,
-          signatureShort: updated.signatureShort,
-          version: updated.version,
-          createdAt: updated.createdAt,
-          updatedAt: updated.updatedAt,
-          expiresAt: updated.nextRecalibrationAt,
-          consentStatus: {
-            voiceRecordingConsentAt: voiceModel.user.voiceProfileConsentAt,
-            voiceCloningEnabledAt: voiceModel.user.voiceCloningEnabledAt,
-            ageVerificationConsentAt: voiceModel.user.ageVerificationConsentAt
-          }
-        }
+        data: this.formatProfileDetails(updated, voiceModel.user)
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error updating profile:', error);
+      console.error('[VoiceProfileService] Error calibrating profile:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Update failed',
-        errorCode: 'UPDATE_FAILED'
+        error: error instanceof Error ? error.message : 'Calibration failed',
+        errorCode: 'CALIBRATION_FAILED'
       };
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROFILE UPDATE (with fingerprint verification)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async updateProfile(
+    userId: string,
+    request: UpdateProfileRequest
+  ): Promise<ServiceResult<VoiceProfileDetails>> {
+    // Update is essentially calibration without replacement
+    return this.calibrateProfile(userId, { ...request, replaceExisting: false });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -446,23 +562,7 @@ export class VoiceProfileService extends EventEmitter {
 
       return {
         success: true,
-        data: {
-          profileId: voiceModel.profileId || '',
-          userId: voiceModel.userId,
-          qualityScore: voiceModel.qualityScore,
-          audioDurationMs: voiceModel.totalDurationMs,
-          voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | null,
-          signatureShort: voiceModel.signatureShort,
-          version: voiceModel.version,
-          createdAt: voiceModel.createdAt,
-          updatedAt: voiceModel.updatedAt,
-          expiresAt: voiceModel.nextRecalibrationAt,
-          consentStatus: {
-            voiceRecordingConsentAt: voiceModel.user.voiceProfileConsentAt,
-            voiceCloningEnabledAt: voiceModel.user.voiceCloningEnabledAt,
-            ageVerificationConsentAt: voiceModel.user.ageVerificationConsentAt
-          }
-        }
+        data: this.formatProfileDetails(voiceModel, voiceModel.user)
       };
     } catch (error) {
       console.error('[VoiceProfileService] Error getting profile:', error);
@@ -511,6 +611,33 @@ export class VoiceProfileService extends EventEmitter {
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  private formatProfileDetails(voiceModel: any, user: any): VoiceProfileDetails {
+    const now = new Date();
+    const needsCalibration = voiceModel.nextRecalibrationAt
+      ? voiceModel.nextRecalibrationAt < now
+      : false;
+
+    return {
+      profileId: voiceModel.profileId || '',
+      userId: voiceModel.userId,
+      qualityScore: voiceModel.qualityScore,
+      audioDurationMs: voiceModel.totalDurationMs,
+      audioCount: voiceModel.audioCount,
+      voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | null,
+      signatureShort: voiceModel.signatureShort,
+      version: voiceModel.version,
+      createdAt: voiceModel.createdAt,
+      updatedAt: voiceModel.updatedAt,
+      expiresAt: voiceModel.nextRecalibrationAt,
+      needsCalibration,
+      consentStatus: {
+        voiceRecordingConsentAt: user.voiceProfileConsentAt,
+        voiceCloningEnabledAt: user.voiceCloningEnabledAt,
+        ageVerificationConsentAt: user.ageVerificationConsentAt
+      }
+    };
+  }
 
   private calculateExpirationDate(birthDate: Date | null): Date {
     const now = new Date();
