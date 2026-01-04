@@ -34,7 +34,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   const zmqClient = await ZMQSingleton.getInstance();
 
   const voiceProfileService = new VoiceProfileService(prisma, zmqClient);
-  const authMiddleware = createUnifiedAuthMiddleware({ requireRegistered: true });
+  const authMiddleware = createUnifiedAuthMiddleware(prisma, { requireAuth: true, allowAnonymous: false });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONSENT ENDPOINTS
