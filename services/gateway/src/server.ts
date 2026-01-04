@@ -57,6 +57,7 @@ import { friendRequestRoutes } from './routes/friends';
 import { attachmentRoutes } from './routes/attachments';
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
+import { voiceProfileRoutes } from './routes/voice-profile';
 import { InitService } from './services/init.service';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -688,6 +689,9 @@ class MeeshyServer {
 
     // Register call routes with /api prefix (Phase 1A: P2P Video Calls MVP)
     await this.server.register(callRoutes, { prefix: '/api' });
+
+    // Register voice profile routes with /api/voice/profile prefix
+    await this.server.register(voiceProfileRoutes, { prefix: '/api/voice/profile' });
 
     logger.info('✓ REST API routes configured successfully');
   }

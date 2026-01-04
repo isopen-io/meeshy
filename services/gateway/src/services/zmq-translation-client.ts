@@ -174,8 +174,88 @@ export interface VoiceJobProgressEvent {
 
 export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// VOICE PROFILE TYPES (Internal ZMQ communication with Translator)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface VoiceProfileAnalyzeRequest {
+  type: 'voice_profile_analyze';
+  request_id: string;
+  user_id: string;
+  audio_data: string;  // base64 encoded
+  audio_format: string;  // wav, mp3, ogg
+  is_update?: boolean;
+  existing_fingerprint?: Record<string, any>;
+}
+
+export interface VoiceProfileVerifyRequest {
+  type: 'voice_profile_verify';
+  request_id: string;
+  user_id: string;
+  audio_data: string;
+  audio_format: string;
+  existing_fingerprint: Record<string, any>;
+}
+
+export interface VoiceProfileCompareRequest {
+  type: 'voice_profile_compare';
+  request_id: string;
+  fingerprint_a: Record<string, any>;
+  fingerprint_b: Record<string, any>;
+}
+
+export type VoiceProfileRequest = VoiceProfileAnalyzeRequest | VoiceProfileVerifyRequest | VoiceProfileCompareRequest;
+
+export interface VoiceProfileAnalyzeResult {
+  type: 'voice_profile_analyze_result';
+  request_id: string;
+  success: boolean;
+  user_id: string;
+  profile_id?: string;
+  quality_score?: number;
+  audio_duration_ms?: number;
+  voice_characteristics?: Record<string, any>;
+  fingerprint?: Record<string, any>;
+  fingerprint_id?: string;
+  signature_short?: string;
+  embedding_path?: string;
+  error?: string;
+}
+
+export interface VoiceProfileVerifyResult {
+  type: 'voice_profile_verify_result';
+  request_id: string;
+  success: boolean;
+  user_id: string;
+  is_match?: boolean;
+  similarity_score?: number;
+  threshold?: number;
+  error?: string;
+}
+
+export interface VoiceProfileCompareResult {
+  type: 'voice_profile_compare_result';
+  request_id: string;
+  success: boolean;
+  similarity_score?: number;
+  is_match?: boolean;
+  threshold?: number;
+  error?: string;
+}
+
+export interface VoiceProfileErrorEvent {
+  type: 'voice_profile_error';
+  request_id: string;
+  user_id?: string;
+  error: string;
+  success: false;
+  timestamp: number;
+}
+
+export type VoiceProfileEvent = VoiceProfileAnalyzeResult | VoiceProfileVerifyResult | VoiceProfileCompareResult | VoiceProfileErrorEvent;
+
 // Combined event type for all ZMQ events
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent;
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent | VoiceProfileEvent;
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -708,6 +788,47 @@ export class ZMQTranslationClient extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ Erreur envoi Voice API request: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a voice profile request to Translator for audio processing.
+   *
+   * Supported types:
+   * - voice_profile_analyze: Analyze audio for profile creation/update
+   * - voice_profile_verify: Verify audio matches existing profile
+   * - voice_profile_compare: Compare two fingerprints
+   */
+  async sendVoiceProfileRequest(request: VoiceProfileRequest): Promise<string> {
+    if (!this.pushSocket) {
+      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour Voice Profile');
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    try {
+      logger.info('🎤 [GATEWAY] ENVOI VOICE PROFILE REQUEST:');
+      logger.info(`   📋 type: ${request.type}`);
+      logger.info(`   📋 request_id: ${request.request_id}`);
+
+      // Envoyer via PUSH
+      await this.pushSocket.send(JSON.stringify(request));
+
+      // Mettre à jour les statistiques
+      this.stats.requests_sent++;
+
+      // Stocker la requête en cours pour traçabilité
+      this.pendingRequests.set(request.request_id, {
+        request: request as any,
+        timestamp: Date.now()
+      });
+
+      logger.info(`📤 [ZMQ-Client] Voice Profile request envoyée: request_id=${request.request_id}, type=${request.type}`);
+
+      return request.request_id;
+
+    } catch (error) {
+      logger.error(`❌ Erreur envoi Voice Profile request: ${error}`);
       throw error;
     }
   }
