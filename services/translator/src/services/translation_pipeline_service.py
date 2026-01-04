@@ -673,15 +673,15 @@ class TranslationPipelineService:
     ) -> str:
         """
         Génère un nom de fichier de sortie avec métadonnées.
-        Format: mshy_gen_{model_version}_{embedding_type}_{userId}_{lang}_{jobId}_{messageId}_{attachmentId}_{profileId}_{timestamp}.{ext}
+        Format: mshy_gen_{version}_{embedding}_{userId}_{lang}_{jobId}[_msg{id}][_att{id}][_prof{id}]_{timestamp}.{ext}
         """
         msg_id = message_id or job.callback_metadata.get('message_id', '')
         att_id = attachment_id or job.callback_metadata.get('attachment_id', '')
         prof_id = profile_id or job.callback_metadata.get('profile_id', '')
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        # Base: préserve le format original mshy_gen avec les détails du job
-        base = f"mshy_gen_{job.model_version}_{job.embedding_type}_{job.user_id[:8]}_{target_lang}_{job.id[-8:]}"
+        # Base: model_version contient déjà "mshy_gen_v1", pas besoin de préfixe supplémentaire
+        base = f"{job.model_version}_{job.embedding_type}_{job.user_id[:8]}_{target_lang}_{job.id[-8:]}"
 
         # Ajouter les détails d'attachement si disponibles
         details = []
