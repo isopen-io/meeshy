@@ -4,17 +4,33 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AttachmentService } from '../services/AttachmentService';
+import { AttachmentTranslateService } from '../services/AttachmentTranslateService';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 
 export async function attachmentRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService((fastify as any).prisma);
-  
+
+  // Initialize translate service if ZMQ client is available
+  let translateService: AttachmentTranslateService | null = null;
+  if ((fastify as any).zmqClient) {
+    translateService = new AttachmentTranslateService(
+      (fastify as any).prisma,
+      (fastify as any).zmqClient
+    );
+  }
+
   // Middleware d'authentification optionnel (supporte JWT + Session anonyme)
   const authOptional = createUnifiedAuthMiddleware((fastify as any).prisma, {
     requireAuth: false,
     allowAnonymous: true
+  });
+
+  // Middleware d'authentification requise
+  const authRequired = createUnifiedAuthMiddleware((fastify as any).prisma, {
+    requireAuth: true,
+    allowAnonymous: false
   });
 
   /**
@@ -661,6 +677,220 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error fetching attachments',
+        });
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ATTACHMENT TRANSLATION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * POST /attachments/:attachmentId/translate
+   * Translate an attachment based on its type:
+   * - audio/* → AudioTranslateService
+   * - image/* → ImageTranslateService (not implemented)
+   * - video/* → VideoTranslateService (not implemented)
+   * - application/pdf, text/* → DocumentTranslateService (not implemented)
+   */
+  fastify.post(
+    '/attachments/:attachmentId/translate',
+    {
+      onRequest: [authRequired],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['targetLanguages'],
+          properties: {
+            targetLanguages: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 1
+            },
+            sourceLanguage: { type: 'string' },
+            generateVoiceClone: { type: 'boolean' },
+            async: { type: 'boolean' },
+            webhookUrl: { type: 'string', format: 'uri' },
+            priority: { type: 'number', minimum: 1, maximum: 10 }
+          }
+        }
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        if (!translateService) {
+          return reply.status(503).send({
+            success: false,
+            error: 'Translation service not available',
+            code: 'SERVICE_UNAVAILABLE'
+          });
+        }
+
+        const authContext = (request as any).authContext;
+        if (!authContext?.isAuthenticated) {
+          return reply.status(401).send({
+            success: false,
+            error: 'Authentication required',
+            code: 'UNAUTHORIZED'
+          });
+        }
+
+        const { attachmentId } = request.params as { attachmentId: string };
+        const body = request.body as {
+          targetLanguages: string[];
+          sourceLanguage?: string;
+          generateVoiceClone?: boolean;
+          async?: boolean;
+          webhookUrl?: string;
+          priority?: number;
+        };
+
+        const userId = authContext.userId;
+
+        const result = await translateService.translate(userId, attachmentId, {
+          targetLanguages: body.targetLanguages,
+          sourceLanguage: body.sourceLanguage,
+          generateVoiceClone: body.generateVoiceClone,
+          async: body.async,
+          webhookUrl: body.webhookUrl,
+          priority: body.priority
+        });
+
+        if (!result.success) {
+          const statusCode = result.errorCode === 'ATTACHMENT_NOT_FOUND' ? 404 :
+                            result.errorCode === 'ACCESS_DENIED' ? 403 :
+                            result.errorCode === 'NOT_IMPLEMENTED' ? 501 :
+                            400;
+          return reply.status(statusCode).send({
+            success: false,
+            error: result.error,
+            code: result.errorCode
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: result.data
+        });
+      } catch (error: any) {
+        console.error('[AttachmentRoutes] ❌ Error translating attachment:', error);
+        return reply.status(500).send({
+          success: false,
+          error: error.message || 'Error translating attachment',
+          code: 'TRANSLATION_FAILED'
+        });
+      }
+    }
+  );
+
+  /**
+   * GET /attachments/:attachmentId/translate/:jobId
+   * Get translation job status (for async translations)
+   */
+  fastify.get(
+    '/attachments/:attachmentId/translate/:jobId',
+    {
+      onRequest: [authRequired]
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        if (!translateService) {
+          return reply.status(503).send({
+            success: false,
+            error: 'Translation service not available',
+            code: 'SERVICE_UNAVAILABLE'
+          });
+        }
+
+        const authContext = (request as any).authContext;
+        if (!authContext?.isAuthenticated) {
+          return reply.status(401).send({
+            success: false,
+            error: 'Authentication required',
+            code: 'UNAUTHORIZED'
+          });
+        }
+
+        const { jobId } = request.params as { attachmentId: string; jobId: string };
+        const userId = authContext.userId;
+
+        const result = await translateService.getTranslationStatus(userId, jobId);
+
+        if (!result.success) {
+          return reply.status(404).send({
+            success: false,
+            error: result.error,
+            code: result.errorCode
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: result.data
+        });
+      } catch (error: any) {
+        console.error('[AttachmentRoutes] ❌ Error getting translation status:', error);
+        return reply.status(500).send({
+          success: false,
+          error: error.message || 'Error getting translation status',
+          code: 'STATUS_FAILED'
+        });
+      }
+    }
+  );
+
+  /**
+   * DELETE /attachments/:attachmentId/translate/:jobId
+   * Cancel a translation job
+   */
+  fastify.delete(
+    '/attachments/:attachmentId/translate/:jobId',
+    {
+      onRequest: [authRequired]
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        if (!translateService) {
+          return reply.status(503).send({
+            success: false,
+            error: 'Translation service not available',
+            code: 'SERVICE_UNAVAILABLE'
+          });
+        }
+
+        const authContext = (request as any).authContext;
+        if (!authContext?.isAuthenticated) {
+          return reply.status(401).send({
+            success: false,
+            error: 'Authentication required',
+            code: 'UNAUTHORIZED'
+          });
+        }
+
+        const { jobId } = request.params as { attachmentId: string; jobId: string };
+        const userId = authContext.userId;
+
+        const result = await translateService.cancelTranslation(userId, jobId);
+
+        if (!result.success) {
+          return reply.status(400).send({
+            success: false,
+            error: result.error,
+            code: result.errorCode
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: result.data
+        });
+      } catch (error: any) {
+        console.error('[AttachmentRoutes] ❌ Error cancelling translation:', error);
+        return reply.status(500).send({
+          success: false,
+          error: error.message || 'Error cancelling translation',
+          code: 'CANCEL_FAILED'
         });
       }
     }
