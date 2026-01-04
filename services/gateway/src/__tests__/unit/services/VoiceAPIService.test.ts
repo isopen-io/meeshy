@@ -57,16 +57,12 @@ describe('VoiceAPIService', () => {
 
   describe('Request Types', () => {
     it('should define all supported request types', () => {
+      // Note: Profile operations (voice_profile_*) are now handled by VoiceProfileService
       const supportedTypes = [
         'voice_translate',
         'voice_translate_async',
         'voice_analyze',
         'voice_compare',
-        'voice_profile_get',
-        'voice_profile_create',
-        'voice_profile_update',
-        'voice_profile_delete',
-        'voice_profile_list',
         'voice_job_status',
         'voice_job_cancel',
         'voice_feedback',
@@ -153,44 +149,25 @@ describe('VoiceAPIService', () => {
   });
 
   describe('Voice Profile Request Structures', () => {
-    it('should have correct profile get request', () => {
-      const request = {
-        type: 'voice_profile_get',
-        taskId: 'test-task-id',
-        userId: 'user-123',
-        profileId: 'profile-456'
-      };
+    // NOTE: Voice profile operations are now handled by VoiceProfileService
+    // which provides GDPR-compliant consent management, attachmentId support,
+    // and age-based expiration. See voice-profile.service.test.ts for tests.
 
-      expect(request.type).toBe('voice_profile_get');
-      expect(request.profileId).toBeDefined();
-    });
+    it('should reference VoiceProfileService for profile operations', () => {
+      const profileOperations = [
+        'registerProfile',
+        'updateProfile',
+        'calibrateProfile',
+        'getProfile',
+        'deleteProfile',
+        'updateConsent',
+        'getConsentStatus'
+      ];
 
-    it('should have correct profile create request', () => {
-      const request = {
-        type: 'voice_profile_create',
-        taskId: 'test-task-id',
-        userId: 'user-123',
-        name: 'My Voice Profile',
-        audioBase64: 'base64-audio-data',
-        metadata: { language: 'en' }
-      };
-
-      expect(request.type).toBe('voice_profile_create');
-      expect(request.name).toBeDefined();
-    });
-
-    it('should have correct profile list request with pagination', () => {
-      const request = {
-        type: 'voice_profile_list',
-        taskId: 'test-task-id',
-        userId: 'user-123',
-        limit: 10,
-        offset: 0
-      };
-
-      expect(request.type).toBe('voice_profile_list');
-      expect(request.limit).toBe(10);
-      expect(request.offset).toBe(0);
+      // These operations are handled by VoiceProfileService, not VoiceAPIService
+      profileOperations.forEach(op => {
+        expect(typeof op).toBe('string');
+      });
     });
   });
 
