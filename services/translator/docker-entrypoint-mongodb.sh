@@ -250,7 +250,7 @@ else:
 # Fonction pour verifier l integrite de la base de donnees MongoDB
 check_database_integrity() {
     echo "[TRANSLATOR] Verification de l integrite de la base de donnees MongoDB..."
-    
+
     # Simplification: pas de verification d integrite complexe
     echo "[TRANSLATOR] Verification d integrite simplifiee..."
     echo "[TRANSLATOR] Initialisation terminee sans verification d integrite complexe"
@@ -269,15 +269,18 @@ main() {
 
     # Attendre que la base de donnees soit prete
     wait_for_database
-    
+
     # Executer les migrations Prisma
     run_prisma_migrations
-    
+
     # Verifier l integrite de la base de donnees
     check_database_integrity
-    
+
+    # Les modèles ML sont téléchargés par l'application Python (main.py)
+    # Pas besoin de les télécharger ici
+
     echo "[TRANSLATOR] Demarrage de l application Translator..."
-    
+
     # Demarrer l application Python
     exec python3 -u src/main.py
 }

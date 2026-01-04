@@ -246,6 +246,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node.js is required by Python Prisma for client generation
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -266,6 +272,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio
 
+      - name: Generate Prisma client (Python)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd services/translator
+          python -m prisma generate
+
       - name: Create audio output directory
         run: |
           mkdir -p services/translator/test_audio_output
@@ -273,6 +286,7 @@ jobs:
       - name: Run audio pipeline tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
           AUDIO_OUTPUT_DIR: "test_audio_output"
         timeout-minutes: 15
         run: |
@@ -319,6 +333,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node.js is required by Python Prisma for client generation
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -339,9 +359,17 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov
 
+      - name: Generate Prisma client (Python)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd services/translator
+          python -m prisma generate
+
       - name: Run UnifiedTTSService tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
         timeout-minutes: 10
         run: |
           cd services/translator
@@ -350,6 +378,7 @@ jobs:
       - name: Run TranscriptionService tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
         timeout-minutes: 10
         run: |
           cd services/translator
@@ -358,6 +387,7 @@ jobs:
       - name: Run Voice Translation E2E tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
         timeout-minutes: 15
         run: |
           cd services/translator
@@ -444,6 +474,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio
 
+      - name: Generate Prisma client (Python)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd services/translator
+          python -m prisma generate
+
       # Gateway Voice API Tests
       - name: Run Gateway Voice API tests
         run: |
@@ -454,6 +491,7 @@ jobs:
       - name: Run Python Voice API tests
         env:
           CI: "true"
+          DATABASE_URL: "mongodb://localhost:27017/test"
         timeout-minutes: 10
         run: |
           cd services/translator

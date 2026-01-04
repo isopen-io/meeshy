@@ -172,10 +172,109 @@ export interface VoiceJobProgressEvent {
   timestamp: number;
 }
 
-export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
+// ═══════════════════════════════════════════════════════════════════════════
+// VOICE PROFILE TYPES (Internal ZMQ communication with Translator)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Combined event type for all ZMQ events
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceAPIEvent;
+export interface VoiceProfileAnalyzeRequest {
+  type: 'voice_profile_analyze';
+  request_id: string;
+  user_id: string;
+  audio_data: string;  // base64 encoded
+  audio_format: string;  // wav, mp3, ogg
+  is_update?: boolean;
+  existing_fingerprint?: Record<string, any>;
+}
+
+export interface VoiceProfileVerifyRequest {
+  type: 'voice_profile_verify';
+  request_id: string;
+  user_id: string;
+  audio_data: string;
+  audio_format: string;
+  existing_fingerprint: Record<string, any>;
+}
+
+export interface VoiceProfileCompareRequest {
+  type: 'voice_profile_compare';
+  request_id: string;
+  fingerprint_a: Record<string, any>;
+  fingerprint_b: Record<string, any>;
+}
+
+export type VoiceProfileRequest = VoiceProfileAnalyzeRequest | VoiceProfileVerifyRequest | VoiceProfileCompareRequest;
+
+export interface VoiceProfileAnalyzeResult {
+  type: 'voice_profile_analyze_result';
+  request_id: string;
+  success: boolean;
+  user_id: string;
+  profile_id?: string;
+  quality_score?: number;
+  audio_duration_ms?: number;
+  voice_characteristics?: Record<string, any>;
+  fingerprint?: Record<string, any>;
+  fingerprint_id?: string;
+  signature_short?: string;
+  embedding_path?: string;
+  error?: string;
+}
+
+export interface VoiceProfileVerifyResult {
+  type: 'voice_profile_verify_result';
+  request_id: string;
+  success: boolean;
+  user_id: string;
+  is_match?: boolean;
+  similarity_score?: number;
+  threshold?: number;
+  error?: string;
+}
+
+export interface VoiceProfileCompareResult {
+  type: 'voice_profile_compare_result';
+  request_id: string;
+  success: boolean;
+  similarity_score?: number;
+  is_match?: boolean;
+  threshold?: number;
+  error?: string;
+}
+
+export interface VoiceProfileErrorEvent {
+  type: 'voice_profile_error';
+  request_id: string;
+  user_id?: string;
+  error: string;
+  success: false;
+  timestamp: number;
+}
+
+// Voice Profile specific event union (for service-level typing)
+export type VoiceProfileEvent =
+  | VoiceProfileAnalyzeResult
+  | VoiceProfileVerifyResult
+  | VoiceProfileCompareResult
+  | VoiceProfileErrorEvent;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED VOICE EVENT TYPE
+// All voice-related events (API + Profile) are combined for simpler handling
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type VoiceEvent =
+  // Voice API events (high-level operations)
+  | VoiceAPISuccessEvent
+  | VoiceAPIErrorEvent
+  | VoiceJobProgressEvent
+  // Voice Profile events (internal audio processing)
+  | VoiceProfileAnalyzeResult
+  | VoiceProfileVerifyResult
+  | VoiceProfileCompareResult
+  | VoiceProfileErrorEvent;
+
+// Combined event type for all ZMQ events (normalized: Translation, Audio, Voice)
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent;
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -500,6 +599,53 @@ export class ZMQTranslationClient extends EventEmitter {
           currentStep: progressEvent.currentStep,
           timestamp: progressEvent.timestamp
         });
+
+      // ═══════════════════════════════════════════════════════════════
+      // VOICE PROFILE EVENTS (Internal audio processing results)
+      // ═══════════════════════════════════════════════════════════════
+      } else if (event.type === 'voice_profile_analyze_result') {
+        const profileEvent = event as unknown as VoiceProfileAnalyzeResult;
+
+        if (profileEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profile analyzed: ${profileEvent.request_id} - quality: ${profileEvent.quality_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile analyze failed: ${profileEvent.request_id} - ${profileEvent.error}`);
+        }
+
+        this.emit('voiceProfileAnalyzeResult', profileEvent);
+        this.pendingRequests.delete(profileEvent.request_id);
+
+      } else if (event.type === 'voice_profile_verify_result') {
+        const verifyEvent = event as unknown as VoiceProfileVerifyResult;
+
+        if (verifyEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profile verified: ${verifyEvent.request_id} - match: ${verifyEvent.is_match}, score: ${verifyEvent.similarity_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile verify failed: ${verifyEvent.request_id} - ${verifyEvent.error}`);
+        }
+
+        this.emit('voiceProfileVerifyResult', verifyEvent);
+        this.pendingRequests.delete(verifyEvent.request_id);
+
+      } else if (event.type === 'voice_profile_compare_result') {
+        const compareEvent = event as unknown as VoiceProfileCompareResult;
+
+        if (compareEvent.success) {
+          logger.info(`🎤 [GATEWAY] Voice profiles compared: ${compareEvent.request_id} - match: ${compareEvent.is_match}, score: ${compareEvent.similarity_score}`);
+        } else {
+          logger.error(`❌ [GATEWAY] Voice profile compare failed: ${compareEvent.request_id} - ${compareEvent.error}`);
+        }
+
+        this.emit('voiceProfileCompareResult', compareEvent);
+        this.pendingRequests.delete(compareEvent.request_id);
+
+      } else if (event.type === 'voice_profile_error') {
+        const profileError = event as unknown as VoiceProfileErrorEvent;
+
+        logger.error(`❌ [GATEWAY] Voice profile error: ${profileError.request_id} - ${profileError.error}`);
+
+        this.emit('voiceProfileError', profileError);
+        this.pendingRequests.delete(profileError.request_id);
       }
 
     } catch (error) {
@@ -708,6 +854,47 @@ export class ZMQTranslationClient extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ Erreur envoi Voice API request: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a voice profile request to Translator for audio processing.
+   *
+   * Supported types:
+   * - voice_profile_analyze: Analyze audio for profile creation/update
+   * - voice_profile_verify: Verify audio matches existing profile
+   * - voice_profile_compare: Compare two fingerprints
+   */
+  async sendVoiceProfileRequest(request: VoiceProfileRequest): Promise<string> {
+    if (!this.pushSocket) {
+      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour Voice Profile');
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    try {
+      logger.info('🎤 [GATEWAY] ENVOI VOICE PROFILE REQUEST:');
+      logger.info(`   📋 type: ${request.type}`);
+      logger.info(`   📋 request_id: ${request.request_id}`);
+
+      // Envoyer via PUSH
+      await this.pushSocket.send(JSON.stringify(request));
+
+      // Mettre à jour les statistiques
+      this.stats.requests_sent++;
+
+      // Stocker la requête en cours pour traçabilité
+      this.pendingRequests.set(request.request_id, {
+        request: request as any,
+        timestamp: Date.now()
+      });
+
+      logger.info(`📤 [ZMQ-Client] Voice Profile request envoyée: request_id=${request.request_id}, type=${request.type}`);
+
+      return request.request_id;
+
+    } catch (error) {
+      logger.error(`❌ Erreur envoi Voice Profile request: ${error}`);
       throw error;
     }
   }

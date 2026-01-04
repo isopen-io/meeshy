@@ -31,23 +31,24 @@ class Settings:
         # ═══════════════════════════════════════════════════════════════
         self.tts_model = os.getenv("TTS_MODEL", "chatterbox")
         self.tts_device = os.getenv("TTS_DEVICE", "auto")
-        self.tts_output_dir = os.getenv("TTS_OUTPUT_DIR", "./audio_output")
+        self.tts_output_dir = os.getenv("TTS_OUTPUT_DIR", "./generated/audios")
         self.tts_default_format = os.getenv("TTS_DEFAULT_FORMAT", "mp3")
 
         # XTTS configuration (legacy - non-commercial)
         self.xtts_models_path = os.getenv("XTTS_MODELS_PATH", "./models/xtts")
         self.xtts_device = os.getenv("XTTS_DEVICE", "auto")
 
-        # Voice cloning
-        self.voice_model_cache_dir = os.getenv("VOICE_MODEL_CACHE_DIR", "./voice_models")
+        # Voice cloning - embeddings stored in embeddings/voices/
+        self.voice_model_cache_dir = os.getenv("VOICE_MODEL_CACHE_DIR", "./embeddings/voices")
         self.voice_clone_device = os.getenv("VOICE_CLONE_DEVICE", "cpu")
+        self.voice_profile_cache_ttl = int(os.getenv("VOICE_PROFILE_CACHE_TTL", "7776000"))  # 90 days (3 months)
 
         # Chatterbox configuration
         self.chatterbox_exaggeration = float(os.getenv("CHATTERBOX_EXAGGERATION", "0.5"))
         self.chatterbox_cfg_weight = float(os.getenv("CHATTERBOX_CFG_WEIGHT", "0.5"))
 
-        # Audio output
-        self.audio_output_dir = os.getenv("AUDIO_OUTPUT_DIR", "./audio_output")
+        # Audio output - translated audios stored in generated/audios/
+        self.audio_output_dir = os.getenv("AUDIO_OUTPUT_DIR", "./generated/audios")
 
         # Analytics
         self.analytics_data_dir = os.getenv("ANALYTICS_DATA_DIR", "./analytics_data")
@@ -68,6 +69,17 @@ class Settings:
         self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.translation_cache_ttl = int(os.getenv("TRANSLATION_CACHE_TTL", "3600"))
         self.cache_max_entries = int(os.getenv("CACHE_MAX_ENTRIES", "10000"))
+
+        # ═══════════════════════════════════════════════════════════════
+        # REDIS KEY PATTERNS
+        # Clés utilisées pour le cache Redis des transcriptions et traductions
+        # ═══════════════════════════════════════════════════════════════
+        # Transcription STT originale - indexée par attachmentId (pas messageId)
+        self.redis_key_transcription = "audio:transcription:{attachment_id}"
+        # Traduction audio générée
+        self.redis_key_translated_audio = "audio:translation:{attachment_id}:{lang}"
+        # Profil vocal utilisateur
+        self.redis_key_voice_profile = "voice:profile:{user_id}"
         
         # Configuration ML
         self.ml_batch_size = int(os.getenv("ML_BATCH_SIZE", "16"))
