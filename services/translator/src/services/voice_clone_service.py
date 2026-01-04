@@ -43,6 +43,66 @@ except ImportError:
 
 
 @dataclass
+class AudioQualityMetadata:
+    """Métadonnées de qualité audio pour sélection du meilleur audio"""
+    attachment_id: str
+    file_path: str
+    duration_ms: int = 0
+    noise_level: float = 0.0  # 0 = pas de bruit, 1 = très bruité
+    clarity_score: float = 1.0  # 0 = pas clair, 1 = très clair
+    has_other_speakers: bool = False  # True si d'autres voix détectées
+    created_at: datetime = field(default_factory=datetime.now)
+    # Score global calculé pour tri
+    overall_score: float = 0.0
+
+    def calculate_overall_score(self) -> float:
+        """
+        Calcule un score global pour la sélection du meilleur audio.
+        Critères (par ordre de priorité):
+        1. Pas d'autres locuteurs (pénalité forte)
+        2. Clarté élevée
+        3. Bruit faible
+        4. Durée longue (normalisée)
+        5. Date récente (bonus léger)
+        """
+        score = 0.0
+
+        # Pénalité forte si autres locuteurs détectés
+        if self.has_other_speakers:
+            score -= 0.5
+
+        # Score de clarté (0-0.3)
+        score += self.clarity_score * 0.3
+
+        # Score de bruit inversé (0-0.2)
+        score += (1.0 - self.noise_level) * 0.2
+
+        # Score de durée (normalisé, max 60s = 0.3)
+        duration_score = min(self.duration_ms / 60000, 1.0) * 0.3
+        score += duration_score
+
+        # Bonus récence (max 0.1 pour les audios de moins de 7 jours)
+        age_days = (datetime.now() - self.created_at).days
+        recency_bonus = max(0, 0.1 - (age_days * 0.01))
+        score += recency_bonus
+
+        self.overall_score = score
+        return score
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "attachment_id": self.attachment_id,
+            "file_path": self.file_path,
+            "duration_ms": self.duration_ms,
+            "noise_level": self.noise_level,
+            "clarity_score": self.clarity_score,
+            "has_other_speakers": self.has_other_speakers,
+            "created_at": self.created_at.isoformat(),
+            "overall_score": self.overall_score
+        }
+
+
+@dataclass
 class VoiceModel:
     """Modèle de voix cloné d'un utilisateur"""
     user_id: str
@@ -50,10 +110,13 @@ class VoiceModel:
     audio_count: int
     total_duration_ms: int
     quality_score: float  # 0-1
+    profile_id: str = ""  # ID unique du profil vocal
     version: int = 1
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     next_recalibration_at: Optional[datetime] = None
+    # Audio utilisé pour la dernière génération
+    source_audio_id: str = ""  # attachment_id de l'audio source
 
     # Runtime only (not persisted)
     embedding: Optional[np.ndarray] = field(default=None, repr=False)
@@ -62,11 +125,13 @@ class VoiceModel:
         """Convertit en dictionnaire (pour JSON)"""
         return {
             "user_id": self.user_id,
+            "profile_id": self.profile_id,
             "embedding_path": self.embedding_path,
             "audio_count": self.audio_count,
             "total_duration_ms": self.total_duration_ms,
             "quality_score": self.quality_score,
             "version": self.version,
+            "source_audio_id": self.source_audio_id,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "next_recalibration_at": self.next_recalibration_at.isoformat() if self.next_recalibration_at else None
@@ -81,7 +146,9 @@ class VoiceModel:
             audio_count=data["audio_count"],
             total_duration_ms=data["total_duration_ms"],
             quality_score=data["quality_score"],
+            profile_id=data.get("profile_id", ""),
             version=data.get("version", 1),
+            source_audio_id=data.get("source_audio_id", ""),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
             next_recalibration_at=datetime.fromisoformat(data["next_recalibration_at"]) if data.get("next_recalibration_at") else None
@@ -94,10 +161,11 @@ class VoiceCloneService:
 
     Fonctionnalités:
     - Création de modèles de voix à partir d'audios
-    - Cache des modèles (30 jours)
+    - Cache des modèles (90 jours / 3 mois)
     - Agrégation d'audios si durée insuffisante
     - Amélioration continue des modèles
-    - Recalibration mensuelle
+    - Recalibration trimestrielle
+    - Sélection du meilleur audio (le plus long, le plus clair, sans bruit)
     """
 
     _instance = None
@@ -105,7 +173,7 @@ class VoiceCloneService:
 
     # Configuration
     MIN_AUDIO_DURATION_MS = 10_000  # 10 secondes minimum pour clonage de qualité
-    VOICE_MODEL_MAX_AGE_DAYS = 30   # Recalibration mensuelle
+    VOICE_MODEL_MAX_AGE_DAYS = 90   # Recalibration trimestrielle (3 mois)
     MAX_AUDIO_HISTORY = 20          # Nombre max d'audios à agréger
     IMPROVEMENT_WEIGHT_OLD = 0.7    # Poids de l'ancien embedding
     IMPROVEMENT_WEIGHT_NEW = 0.3    # Poids du nouveau
@@ -276,6 +344,7 @@ class VoiceCloneService:
         total_duration_ms: int
     ) -> VoiceModel:
         """Crée un nouveau modèle de voix à partir des audios"""
+        import uuid as uuid_module
         start_time = time.time()
         logger.info(f"[VOICE_CLONE] 🎤 Création modèle pour {user_id} ({len(audio_paths)} audios)")
 
@@ -290,17 +359,21 @@ class VoiceCloneService:
         else:
             combined_audio = valid_paths[0]
 
-        # Extraire l'embedding de voix
-        user_dir = self.voice_cache_dir / user_id
-        user_dir.mkdir(parents=True, exist_ok=True)
+        # Générer un profile_id unique
+        profile_id = uuid_module.uuid4().hex[:12]
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        embedding = await self._extract_voice_embedding(combined_audio, user_dir)
+        # Extraire l'embedding de voix - stocker directement dans embeddings/voices/
+        self.voice_cache_dir.mkdir(parents=True, exist_ok=True)
+
+        embedding = await self._extract_voice_embedding(combined_audio, self.voice_cache_dir)
 
         # Calculer score de qualité
         quality_score = self._calculate_quality_score(total_duration_ms, len(valid_paths))
 
-        # Chemin de l'embedding
-        embedding_path = str(user_dir / "embedding.pkl")
+        # Chemin de l'embedding avec nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
+        embedding_filename = f"{user_id}_{profile_id}_{timestamp}.pkl"
+        embedding_path = str(self.voice_cache_dir / embedding_filename)
 
         # Créer le modèle
         model = VoiceModel(
@@ -309,6 +382,7 @@ class VoiceCloneService:
             audio_count=len(valid_paths),
             total_duration_ms=total_duration_ms,
             quality_score=quality_score,
+            profile_id=profile_id,
             version=1,
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -456,6 +530,86 @@ class VoiceCloneService:
             logger.error(f"[VOICE_CLONE] Erreur récupération historique: {e}")
             return []
 
+    async def _get_best_audio_for_cloning(
+        self,
+        user_id: str,
+        limit: int = 10
+    ) -> Optional[AudioQualityMetadata]:
+        """
+        Sélectionne le meilleur audio pour le clonage vocal.
+        Critères (par ordre de priorité):
+        1. Le plus long
+        2. Le plus clair (sans bruit)
+        3. Sans autres locuteurs
+        4. Le plus récent
+
+        Returns:
+            AudioQualityMetadata du meilleur audio, ou None si aucun audio trouvé
+        """
+        if not self.database_service:
+            logger.warning("[VOICE_CLONE] Database service non disponible")
+            return None
+
+        try:
+            # Requête pour récupérer les audios avec métadonnées de qualité
+            attachments = await self.database_service.prisma.messageattachment.find_many(
+                where={
+                    "message": {
+                        "senderId": user_id
+                    },
+                    "mimeType": {
+                        "startswith": "audio/"
+                    }
+                },
+                order={"createdAt": "desc"},
+                take=limit
+            )
+
+            if not attachments:
+                return None
+
+            # Convertir en AudioQualityMetadata et calculer les scores
+            quality_audios: List[AudioQualityMetadata] = []
+            for att in attachments:
+                if att.filePath and os.path.exists(att.filePath):
+                    duration_ms = await self._get_audio_duration_ms(att.filePath)
+
+                    # Extraire les métadonnées de qualité si disponibles
+                    # Ces champs doivent être ajoutés au schéma Prisma de MessageAttachment
+                    noise_level = getattr(att, 'noiseLevel', 0.0) or 0.0
+                    clarity_score = getattr(att, 'clarityScore', 1.0) or 1.0
+                    has_other_speakers = getattr(att, 'hasOtherSpeakers', False) or False
+
+                    audio_meta = AudioQualityMetadata(
+                        attachment_id=att.id,
+                        file_path=att.filePath,
+                        duration_ms=duration_ms,
+                        noise_level=noise_level,
+                        clarity_score=clarity_score,
+                        has_other_speakers=has_other_speakers,
+                        created_at=att.createdAt if hasattr(att, 'createdAt') else datetime.now()
+                    )
+                    audio_meta.calculate_overall_score()
+                    quality_audios.append(audio_meta)
+
+            if not quality_audios:
+                return None
+
+            # Trier par score décroissant et retourner le meilleur
+            quality_audios.sort(key=lambda x: x.overall_score, reverse=True)
+            best_audio = quality_audios[0]
+
+            logger.info(
+                f"[VOICE_CLONE] 🎯 Meilleur audio sélectionné pour {user_id}: "
+                f"id={best_audio.attachment_id}, duration={best_audio.duration_ms}ms, "
+                f"score={best_audio.overall_score:.2f}"
+            )
+            return best_audio
+
+        except Exception as e:
+            logger.error(f"[VOICE_CLONE] Erreur sélection meilleur audio: {e}")
+            return None
+
     async def _calculate_total_duration(self, audio_paths: List[str]) -> int:
         """Calcule la durée totale de plusieurs fichiers audio"""
         total = 0
@@ -505,10 +659,16 @@ class VoiceCloneService:
 
     async def _load_cached_model(self, user_id: str) -> Optional[VoiceModel]:
         """Charge un modèle depuis le cache fichier"""
-        metadata_path = self.voice_cache_dir / user_id / "metadata.json"
+        # Nouvelle structure: metadata stocké directement dans voice_cache_dir
+        metadata_path = self.voice_cache_dir / f"{user_id}_metadata.json"
 
+        # Fallback pour ancienne structure (migration)
         if not metadata_path.exists():
-            return None
+            old_metadata_path = self.voice_cache_dir / user_id / "metadata.json"
+            if old_metadata_path.exists():
+                metadata_path = old_metadata_path
+            else:
+                return None
 
         try:
             with open(metadata_path, 'r') as f:
@@ -530,29 +690,28 @@ class VoiceCloneService:
 
     async def _save_model_to_cache(self, model: VoiceModel):
         """Sauvegarde un modèle dans le cache fichier"""
-        user_dir = self.voice_cache_dir / model.user_id
-        user_dir.mkdir(parents=True, exist_ok=True)
+        self.voice_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Sauvegarder les métadonnées
-        metadata_path = user_dir / "metadata.json"
+        # Sauvegarder les métadonnées avec la nouvelle convention: {userId}_metadata.json
+        metadata_path = self.voice_cache_dir / f"{model.user_id}_metadata.json"
         with open(metadata_path, 'w') as f:
             json.dump(model.to_dict(), f, indent=2)
 
-        # Sauvegarder l'embedding
+        # Sauvegarder l'embedding avec la nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
         if model.embedding is not None:
-            embedding_path = user_dir / "embedding.pkl"
-            with open(embedding_path, 'wb') as f:
+            # L'embedding_path est déjà configuré avec la bonne convention dans _create_voice_model
+            with open(model.embedding_path, 'wb') as f:
                 pickle.dump(model.embedding, f)
-            model.embedding_path = str(embedding_path)
 
-        logger.info(f"[VOICE_CLONE] 💾 Modèle sauvegardé: {user_dir}")
+        logger.info(f"[VOICE_CLONE] 💾 Modèle sauvegardé: {model.embedding_path}")
 
-    async def schedule_monthly_recalibration(self):
+    async def schedule_quarterly_recalibration(self):
         """
-        Tâche planifiée pour recalibrer les modèles de voix mensuellement.
+        Tâche planifiée pour recalibrer les modèles de voix trimestriellement (tous les 3 mois).
         À exécuter via un cron job ou un scheduler.
+        Sélectionne le meilleur audio: le plus long, le plus clair, sans bruit, le plus récent.
         """
-        logger.info("[VOICE_CLONE] 🔄 Démarrage recalibration mensuelle...")
+        logger.info("[VOICE_CLONE] 🔄 Démarrage recalibration trimestrielle...")
 
         # Lister tous les modèles en cache
         all_models = await self._list_all_cached_models()
@@ -562,28 +721,53 @@ class VoiceCloneService:
             if model.next_recalibration_at and datetime.now() >= model.next_recalibration_at:
                 logger.info(f"[VOICE_CLONE] 🔄 Recalibration pour {model.user_id}")
 
-                # Récupérer les audios récents
-                recent_audios = await self._get_user_audio_history(model.user_id)
+                # Sélectionner le meilleur audio basé sur les critères de qualité
+                best_audio = await self._get_best_audio_for_cloning(model.user_id)
 
-                if recent_audios:
-                    total_duration = await self._calculate_total_duration(recent_audios)
+                if best_audio:
+                    # Utiliser le meilleur audio pour régénérer le modèle
                     await self._create_voice_model(
                         model.user_id,
-                        recent_audios,
-                        total_duration
+                        [best_audio.file_path],
+                        best_audio.duration_ms
                     )
                     recalibrated += 1
+                    logger.info(
+                        f"[VOICE_CLONE] ✅ Modèle recalibré pour {model.user_id} "
+                        f"avec audio {best_audio.attachment_id} (score: {best_audio.overall_score:.2f})"
+                    )
+                else:
+                    # Fallback: utiliser l'historique audio classique
+                    recent_audios = await self._get_user_audio_history(model.user_id)
+                    if recent_audios:
+                        total_duration = await self._calculate_total_duration(recent_audios)
+                        await self._create_voice_model(
+                            model.user_id,
+                            recent_audios,
+                            total_duration
+                        )
+                        recalibrated += 1
 
-        logger.info(f"[VOICE_CLONE] ✅ Recalibration terminée: {recalibrated} modèles mis à jour")
+        logger.info(f"[VOICE_CLONE] ✅ Recalibration trimestrielle terminée: {recalibrated} modèles mis à jour")
 
     async def _list_all_cached_models(self) -> List[VoiceModel]:
         """Liste tous les modèles en cache"""
         models = []
+        # Nouvelle structure: fichiers {userId}_metadata.json dans voice_cache_dir
+        for metadata_file in self.voice_cache_dir.glob("*_metadata.json"):
+            user_id = metadata_file.stem.replace("_metadata", "")
+            model = await self._load_cached_model(user_id)
+            if model:
+                models.append(model)
+
+        # Fallback pour ancienne structure (sous-répertoires utilisateur)
         for user_dir in self.voice_cache_dir.iterdir():
             if user_dir.is_dir():
-                model = await self._load_cached_model(user_dir.name)
-                if model:
-                    models.append(model)
+                # Éviter les doublons si déjà chargé via nouvelle structure
+                if not any(m.user_id == user_dir.name for m in models):
+                    model = await self._load_cached_model(user_dir.name)
+                    if model:
+                        models.append(model)
         return models
 
     async def get_stats(self) -> Dict[str, Any]:
