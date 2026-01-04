@@ -17,6 +17,13 @@ import time
 import psutil
 from collections import defaultdict
 
+# Configuration du logging (must be before imports that use logger)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Import du service de base de données
 from .database_service import DatabaseService
 
@@ -40,13 +47,6 @@ try:
     logger.info("✅ [ZMQ] VoiceAPIHandler disponible")
 except ImportError as e:
     logger.warning(f"⚠️ [ZMQ] VoiceAPIHandler non disponible: {e}")
-
-# Configuration du logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @dataclass
 class TranslationTask:
