@@ -654,6 +654,74 @@ class VoiceModel:
         return model
 
 
+@dataclass
+class TemporaryVoiceProfile:
+    """
+    Profil vocal temporaire pour la traduction multi-voix.
+
+    Ces profils ne sont PAS sauvegardés en cache et sont utilisés uniquement
+    pour la durée d'une traduction. Chaque locuteur dans l'audio original
+    obtient un profil temporaire pour que la traduction conserve les voix distinctes.
+    """
+    speaker_id: str                     # ID du locuteur (speaker_0, speaker_1, etc.)
+    speaker_info: SpeakerInfo           # Informations complètes du locuteur
+    audio_path: str                     # Chemin vers l'audio extrait de ce locuteur
+    embedding: Optional[np.ndarray] = field(default=None, repr=False)
+
+    # Correspondance avec un utilisateur existant
+    matched_user_id: Optional[str] = None
+    is_user_match: bool = False         # True si ce locuteur correspond à l'utilisateur émetteur
+
+    # Segments temporels originaux (pour reconstruction)
+    original_segments: List[Dict[str, float]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "speaker_id": self.speaker_id,
+            "speaker_info": self.speaker_info.to_dict(),
+            "audio_path": self.audio_path,
+            "matched_user_id": self.matched_user_id,
+            "is_user_match": self.is_user_match,
+            "segments_count": len(self.original_segments)
+        }
+
+
+@dataclass
+class MultiSpeakerTranslationContext:
+    """
+    Contexte pour la traduction d'un audio multi-locuteurs.
+
+    Contient tous les profils temporaires et les informations nécessaires
+    pour reconstruire l'audio traduit avec les bonnes voix.
+    """
+    source_audio_path: str              # Audio original
+    source_duration_ms: int             # Durée originale
+    speaker_count: int                  # Nombre de locuteurs
+    profiles: List[TemporaryVoiceProfile] = field(default_factory=list)
+    user_profile: Optional[TemporaryVoiceProfile] = None  # Profil de l'utilisateur émetteur
+
+    # Segments chronologiques pour reconstruction
+    # Format: [(start_ms, end_ms, speaker_id, text_original, text_traduit), ...]
+    segments_timeline: List[Tuple] = field(default_factory=list)
+
+    def get_profile(self, speaker_id: str) -> Optional[TemporaryVoiceProfile]:
+        """Récupère le profil d'un locuteur par son ID"""
+        for profile in self.profiles:
+            if profile.speaker_id == speaker_id:
+                return profile
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "source_audio_path": self.source_audio_path,
+            "source_duration_ms": self.source_duration_ms,
+            "speaker_count": self.speaker_count,
+            "profiles": [p.to_dict() for p in self.profiles],
+            "user_speaker_id": self.user_profile.speaker_id if self.user_profile else None,
+            "segments_count": len(self.segments_timeline)
+        }
+
+
 class VoiceAnalyzer:
     """
     Analyseur de voix pour extraction de caractéristiques détaillées.
@@ -1126,6 +1194,238 @@ class VoiceAnalyzer:
 
         return output_path, extracted_metadata
 
+    async def extract_all_speakers_audio(
+        self,
+        audio_path: str,
+        output_dir: str,
+        min_segment_duration_ms: int = 100
+    ) -> Dict[str, Tuple[str, SpeakerInfo]]:
+        """
+        Extrait l'audio de CHAQUE locuteur séparément.
+
+        Pour la traduction multi-voix: chaque locuteur obtient son propre
+        fichier audio pour permettre un clonage vocal individuel.
+
+        Args:
+            audio_path: Chemin vers le fichier audio source
+            output_dir: Répertoire de sortie pour les fichiers extraits
+            min_segment_duration_ms: Durée minimum d'un segment
+
+        Returns:
+            Dict[speaker_id, (audio_path, SpeakerInfo)]: Audio et info par locuteur
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio non trouvé: {audio_path}")
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._extract_all_speakers_sync,
+            audio_path,
+            output_dir,
+            min_segment_duration_ms
+        )
+
+    def _extract_all_speakers_sync(
+        self,
+        audio_path: str,
+        output_dir: str,
+        min_segment_duration_ms: int
+    ) -> Dict[str, Tuple[str, SpeakerInfo]]:
+        """Extraction synchrone de tous les locuteurs"""
+        import librosa
+        import soundfile as sf
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Analyser l'audio complet
+        metadata = self._analyze_audio_sync(audio_path)
+
+        if not metadata.speakers:
+            logger.warning("[VOICE_ANALYZER] Aucun locuteur détecté")
+            return {}
+
+        # Charger l'audio
+        audio, sr = librosa.load(audio_path, sr=22050)
+        min_samples = int(min_segment_duration_ms * sr / 1000)
+
+        result = {}
+        base_name = os.path.splitext(os.path.basename(audio_path))[0]
+
+        for speaker in metadata.speakers:
+            segments = speaker.segments
+            if not segments:
+                continue
+
+            # Filtrer les segments trop courts
+            valid_segments = []
+            for seg in segments:
+                start_sample = int(seg["start"] * sr)
+                end_sample = int(seg["end"] * sr)
+                if (end_sample - start_sample) >= min_samples:
+                    valid_segments.append((start_sample, end_sample))
+
+            if not valid_segments:
+                continue
+
+            # Extraire et concaténer les segments
+            extracted_audio = []
+            for start, end in valid_segments:
+                extracted_audio.append(audio[start:end])
+
+            speaker_audio = np.concatenate(extracted_audio)
+
+            # Sauvegarder
+            output_path = os.path.join(output_dir, f"{base_name}_{speaker.speaker_id}.wav")
+            sf.write(output_path, speaker_audio, sr)
+
+            # Générer l'empreinte vocale pour ce locuteur
+            speaker.generate_fingerprint()
+
+            # Mettre à jour la durée
+            speaker.speaking_time_ms = int(len(speaker_audio) / sr * 1000)
+
+            result[speaker.speaker_id] = (output_path, speaker)
+            logger.info(
+                f"[VOICE_ANALYZER] Locuteur {speaker.speaker_id} extrait: "
+                f"{speaker.speaking_time_ms}ms, {len(valid_segments)} segments"
+            )
+
+        return result
+
+    def identify_user_speaker(
+        self,
+        speakers: List[SpeakerInfo],
+        user_fingerprint: VoiceFingerprint,
+        similarity_threshold: float = 0.75
+    ) -> Optional[SpeakerInfo]:
+        """
+        Identifie quel locuteur correspond à un profil utilisateur existant.
+
+        Compare les empreintes vocales de chaque locuteur avec celle de
+        l'utilisateur pour trouver une correspondance.
+
+        Args:
+            speakers: Liste des locuteurs détectés
+            user_fingerprint: Empreinte vocale de l'utilisateur
+            similarity_threshold: Seuil de similarité (0-1)
+
+        Returns:
+            SpeakerInfo du locuteur correspondant, ou None si aucune correspondance
+        """
+        if not speakers or not user_fingerprint:
+            return None
+
+        best_match = None
+        best_score = 0.0
+
+        for speaker in speakers:
+            # Générer l'empreinte si pas encore fait
+            if not speaker.fingerprint:
+                speaker.generate_fingerprint()
+
+            if not speaker.fingerprint:
+                continue
+
+            # Calculer la similarité
+            score = user_fingerprint.similarity_score(speaker.fingerprint)
+
+            logger.debug(
+                f"[VOICE_ANALYZER] Similarité {speaker.speaker_id} <-> utilisateur: {score:.3f}"
+            )
+
+            if score > best_score and score >= similarity_threshold:
+                best_score = score
+                best_match = speaker
+
+        if best_match:
+            logger.info(
+                f"[VOICE_ANALYZER] Utilisateur identifié: {best_match.speaker_id} "
+                f"(similarité: {best_score:.3f})"
+            )
+
+        return best_match
+
+    def can_create_user_profile(self, metadata: RecordingMetadata) -> Tuple[bool, str]:
+        """
+        Vérifie si on peut créer un profil utilisateur à partir de cet audio.
+
+        Règles:
+        - Un seul locuteur principal clairement identifiable
+        - Qualité audio suffisante
+        - Durée minimum de parole
+
+        Args:
+            metadata: Métadonnées de l'enregistrement analysé
+
+        Returns:
+            Tuple[bool, str]: (peut créer, raison)
+        """
+        # Vérifier le nombre de locuteurs
+        if metadata.speaker_count > 1:
+            # Vérifier si le locuteur principal domine clairement
+            if metadata.primary_speaker:
+                primary_ratio = metadata.primary_speaker.speaking_ratio
+                if primary_ratio < 0.7:
+                    return False, f"Locuteur principal ne domine pas assez ({primary_ratio:.0%})"
+            else:
+                return False, "Plusieurs locuteurs sans dominant clair"
+
+        # Vérifier la qualité
+        if metadata.clarity_score < 0.5:
+            return False, f"Qualité audio insuffisante ({metadata.clarity_score:.0%})"
+
+        # Vérifier la durée
+        if metadata.primary_speaker:
+            if metadata.primary_speaker.speaking_time_ms < 5000:
+                return False, f"Durée de parole insuffisante ({metadata.primary_speaker.speaking_time_ms}ms)"
+
+        return True, "OK"
+
+    def can_update_user_profile(
+        self,
+        metadata: RecordingMetadata,
+        existing_fingerprint: VoiceFingerprint,
+        similarity_threshold: float = 0.80
+    ) -> Tuple[bool, str, Optional[SpeakerInfo]]:
+        """
+        Vérifie si on peut mettre à jour un profil utilisateur existant.
+
+        Règles:
+        - Le locuteur principal doit avoir une signature similaire au profil existant
+        - Qualité audio suffisante
+
+        Args:
+            metadata: Métadonnées de l'enregistrement
+            existing_fingerprint: Empreinte du profil existant
+            similarity_threshold: Seuil de similarité requis
+
+        Returns:
+            Tuple[bool, str, Optional[SpeakerInfo]]: (peut màj, raison, locuteur correspondant)
+        """
+        if not metadata.primary_speaker:
+            return False, "Aucun locuteur principal détecté", None
+
+        # Générer l'empreinte du locuteur principal
+        primary = metadata.primary_speaker
+        if not primary.fingerprint:
+            primary.generate_fingerprint()
+
+        if not primary.fingerprint:
+            return False, "Impossible de générer l'empreinte vocale", None
+
+        # Comparer avec le profil existant
+        similarity = existing_fingerprint.similarity_score(primary.fingerprint)
+
+        if similarity < similarity_threshold:
+            return False, f"Signature vocale différente ({similarity:.0%} < {similarity_threshold:.0%})", None
+
+        # Vérifier la qualité
+        if metadata.clarity_score < 0.5:
+            return False, f"Qualité audio insuffisante ({metadata.clarity_score:.0%})", None
+
+        return True, f"Signature correspondante ({similarity:.0%})", primary
+
     async def compare_voices(
         self,
         original_path: str,
@@ -1493,12 +1793,37 @@ class VoiceCloneService:
         existing_model: VoiceModel,
         new_audio_path: str
     ) -> VoiceModel:
-        """Améliore un modèle existant avec un nouvel audio"""
-        logger.info(f"[VOICE_CLONE] 🔄 Amélioration modèle pour {existing_model.user_id}")
+        """
+        Améliore un modèle existant avec un nouvel audio.
 
-        # Charger l'embedding existant
+        RÈGLE: La mise à jour n'est effectuée QUE si la signature vocale
+        du nouvel audio correspond au profil existant (similarité > 80%).
+        """
+        logger.info(f"[VOICE_CLONE] 🔄 Vérification amélioration modèle pour {existing_model.user_id}")
+
+        voice_analyzer = get_voice_analyzer()
+
+        # Charger l'embedding existant si nécessaire
         if existing_model.embedding is None:
             existing_model = await self._load_embedding(existing_model)
+
+        # Vérifier si la signature correspond avant mise à jour
+        if existing_model.fingerprint:
+            metadata = await voice_analyzer.analyze_audio(new_audio_path)
+            can_update, reason, matched_speaker = voice_analyzer.can_update_user_profile(
+                metadata,
+                existing_model.fingerprint,
+                similarity_threshold=0.80
+            )
+
+            if not can_update:
+                logger.warning(
+                    f"[VOICE_CLONE] ⚠️ Mise à jour refusée pour {existing_model.user_id}: {reason}"
+                )
+                # Retourner le modèle existant sans modification
+                return existing_model
+
+            logger.info(f"[VOICE_CLONE] ✅ Signature vocale vérifiée: {reason}")
 
         # Extraire embedding du nouvel audio
         user_dir = self.voice_cache_dir / existing_model.user_id / "temp"
@@ -1522,6 +1847,10 @@ class VoiceCloneService:
         existing_model.quality_score = min(1.0, existing_model.quality_score + 0.05)
         existing_model.version += 1
         existing_model.next_recalibration_at = datetime.now() + timedelta(days=self.VOICE_MODEL_MAX_AGE_DAYS)
+
+        # Régénérer l'empreinte vocale avec le nouvel embedding
+        if existing_model.voice_characteristics:
+            existing_model.generate_fingerprint()
 
         # Sauvegarder
         await self._save_model_to_cache(existing_model)
@@ -1858,6 +2187,164 @@ class VoiceCloneService:
             "min_audio_duration_ms": self.MIN_AUDIO_DURATION_MS,
             "max_age_days": self.VOICE_MODEL_MAX_AGE_DAYS
         }
+
+    # =========================================================================
+    # TRADUCTION MULTI-VOIX
+    # =========================================================================
+
+    async def prepare_multi_speaker_translation(
+        self,
+        audio_path: str,
+        user_id: str,
+        temp_dir: str
+    ) -> MultiSpeakerTranslationContext:
+        """
+        Prépare le contexte pour une traduction audio multi-locuteurs.
+
+        Cette méthode:
+        1. Analyse l'audio pour détecter tous les locuteurs
+        2. Extrait l'audio de chaque locuteur séparément
+        3. Crée des profils temporaires (non cachés)
+        4. Si l'utilisateur a un profil existant, identifie sa voix
+
+        Args:
+            audio_path: Chemin vers l'audio source
+            user_id: ID de l'utilisateur émetteur
+            temp_dir: Répertoire pour les fichiers temporaires
+
+        Returns:
+            MultiSpeakerTranslationContext avec tous les profils prêts
+        """
+        logger.info(f"[VOICE_CLONE] 🎭 Préparation traduction multi-voix: {audio_path}")
+
+        voice_analyzer = get_voice_analyzer()
+
+        # 1. Extraire l'audio de chaque locuteur
+        speakers_audio = await voice_analyzer.extract_all_speakers_audio(
+            audio_path,
+            temp_dir,
+            min_segment_duration_ms=100
+        )
+
+        if not speakers_audio:
+            raise ValueError("Aucun locuteur détecté dans l'audio")
+
+        # 2. Récupérer le profil utilisateur existant (si disponible)
+        user_model = await self._load_cached_model(user_id)
+        user_fingerprint = user_model.fingerprint if user_model else None
+
+        # 3. Créer les profils temporaires
+        profiles: List[TemporaryVoiceProfile] = []
+        user_profile: Optional[TemporaryVoiceProfile] = None
+
+        # Récupérer la durée totale
+        total_duration_ms = await self._get_audio_duration_ms(audio_path)
+
+        for speaker_id, (speaker_audio_path, speaker_info) in speakers_audio.items():
+            # Extraire l'embedding temporaire
+            temp_embedding = await self._extract_voice_embedding(
+                speaker_audio_path,
+                Path(temp_dir)
+            )
+
+            profile = TemporaryVoiceProfile(
+                speaker_id=speaker_id,
+                speaker_info=speaker_info,
+                audio_path=speaker_audio_path,
+                embedding=temp_embedding,
+                original_segments=speaker_info.segments
+            )
+
+            # Vérifier si ce locuteur correspond à l'utilisateur
+            if user_fingerprint and speaker_info.fingerprint:
+                similarity = user_fingerprint.similarity_score(speaker_info.fingerprint)
+                if similarity >= 0.75:
+                    profile.matched_user_id = user_id
+                    profile.is_user_match = True
+                    user_profile = profile
+                    logger.info(
+                        f"[VOICE_CLONE] 🎯 Utilisateur {user_id} identifié: "
+                        f"{speaker_id} (similarité: {similarity:.0%})"
+                    )
+
+            profiles.append(profile)
+
+        # 4. Créer le contexte
+        context = MultiSpeakerTranslationContext(
+            source_audio_path=audio_path,
+            source_duration_ms=total_duration_ms,
+            speaker_count=len(profiles),
+            profiles=profiles,
+            user_profile=user_profile
+        )
+
+        logger.info(
+            f"[VOICE_CLONE] ✅ Contexte multi-voix prêt: "
+            f"{len(profiles)} locuteurs, utilisateur identifié: {user_profile is not None}"
+        )
+
+        return context
+
+    async def should_update_user_profile(
+        self,
+        user_id: str,
+        audio_path: str
+    ) -> Tuple[bool, str]:
+        """
+        Détermine si le profil utilisateur doit être mis à jour avec cet audio.
+
+        Règles:
+        - Création: Un seul locuteur principal (>70% du temps de parole)
+        - Mise à jour: Signature vocale doit correspondre au profil existant (>80%)
+
+        Args:
+            user_id: ID de l'utilisateur
+            audio_path: Chemin vers l'audio
+
+        Returns:
+            Tuple[bool, str]: (doit mettre à jour, raison)
+        """
+        voice_analyzer = get_voice_analyzer()
+
+        # Analyser l'audio
+        metadata = await voice_analyzer.analyze_audio(audio_path)
+
+        # Charger le profil existant
+        existing_model = await self._load_cached_model(user_id)
+
+        if existing_model and existing_model.fingerprint:
+            # Vérifier si on peut METTRE À JOUR
+            can_update, reason, _ = voice_analyzer.can_update_user_profile(
+                metadata,
+                existing_model.fingerprint,
+                similarity_threshold=0.80
+            )
+            if can_update:
+                return True, f"Mise à jour possible: {reason}"
+            else:
+                return False, f"Mise à jour impossible: {reason}"
+        else:
+            # Vérifier si on peut CRÉER
+            can_create, reason = voice_analyzer.can_create_user_profile(metadata)
+            if can_create:
+                return True, f"Création possible: {reason}"
+            else:
+                return False, f"Création impossible: {reason}"
+
+    async def cleanup_temp_profiles(self, context: MultiSpeakerTranslationContext):
+        """
+        Nettoie les fichiers temporaires d'une traduction multi-voix.
+
+        Args:
+            context: Contexte de traduction à nettoyer
+        """
+        for profile in context.profiles:
+            try:
+                if os.path.exists(profile.audio_path):
+                    os.remove(profile.audio_path)
+                    logger.debug(f"[VOICE_CLONE] Nettoyage: {profile.audio_path}")
+            except Exception as e:
+                logger.warning(f"[VOICE_CLONE] Erreur nettoyage {profile.audio_path}: {e}")
 
     async def close(self):
         """Libère les ressources"""
