@@ -387,7 +387,8 @@ class TestAnalyticsServiceFeedback:
         """Test submitting feedback"""
         await analytics_service.initialize()
 
-        feedback_id = await analytics_service.submit_feedback(
+        # submit_feedback returns QualityFeedback object
+        feedback = await analytics_service.submit_feedback(
             user_id="user_001",
             translation_id="trans_001",
             rating=5,
@@ -395,8 +396,9 @@ class TestAnalyticsServiceFeedback:
             comment="Excellent!"
         )
 
-        assert feedback_id is not None
-        assert feedback_id.startswith("fb_")
+        assert feedback is not None
+        assert feedback.id.startswith("fb_")
+        assert feedback.rating == 5
 
     @pytest.mark.asyncio
     async def test_get_feedback_by_translation(self, analytics_service):
@@ -411,18 +413,19 @@ class TestAnalyticsServiceFeedback:
             feedback_type=FeedbackType.OVERALL
         )
 
-        # Get feedback
-        feedback = await analytics_service.get_feedback_by_translation("trans_002")
-        assert feedback is not None
-        assert feedback.rating == 4
+        # Get feedback - returns a list
+        feedbacks = await analytics_service.get_feedback_for_translation("trans_002")
+        assert len(feedbacks) > 0
+        assert feedbacks[0].rating == 4
 
     @pytest.mark.asyncio
     async def test_get_feedback_nonexistent(self, analytics_service):
         """Test getting feedback that doesn't exist"""
         await analytics_service.initialize()
 
-        feedback = await analytics_service.get_feedback_by_translation("nonexistent")
-        assert feedback is None
+        # Returns empty list for nonexistent
+        feedbacks = await analytics_service.get_feedback_for_translation("nonexistent")
+        assert feedbacks == []
 
 
 class TestAnalyticsServiceHistory:
@@ -433,8 +436,10 @@ class TestAnalyticsServiceHistory:
         """Test recording translation"""
         await analytics_service.initialize()
 
-        entry_id = await analytics_service.record_translation(
+        # record_translation requires translation_id and returns TranslationHistoryEntry
+        entry = await analytics_service.record_translation(
             user_id="user_003",
+            translation_id="trans_hist_001",
             source_language="en",
             target_language="fr",
             original_text="Hello",
@@ -444,7 +449,8 @@ class TestAnalyticsServiceHistory:
             processing_time_ms=1200
         )
 
-        assert entry_id is not None
+        assert entry is not None
+        assert entry.id == "trans_hist_001"
 
     @pytest.mark.asyncio
     async def test_get_user_history(self, analytics_service):
@@ -455,6 +461,7 @@ class TestAnalyticsServiceHistory:
         for i in range(5):
             await analytics_service.record_translation(
                 user_id="user_004",
+                translation_id=f"trans_004_{i}",
                 source_language="en",
                 target_language="es",
                 original_text=f"Text {i}",
@@ -464,9 +471,10 @@ class TestAnalyticsServiceHistory:
                 processing_time_ms=1000
             )
 
-        # Get history
-        history = await analytics_service.get_user_history("user_004")
-        assert len(history) == 5
+        # Get history - returns tuple (entries, total_count)
+        entries, total = await analytics_service.get_user_history("user_004")
+        assert len(entries) == 5
+        assert total == 5
 
     @pytest.mark.asyncio
     async def test_get_user_history_with_limit(self, analytics_service):
@@ -477,6 +485,7 @@ class TestAnalyticsServiceHistory:
         for i in range(10):
             await analytics_service.record_translation(
                 user_id="user_005",
+                translation_id=f"trans_005_{i}",
                 source_language="fr",
                 target_language="en",
                 original_text=f"Texte {i}",
@@ -486,9 +495,10 @@ class TestAnalyticsServiceHistory:
                 processing_time_ms=900
             )
 
-        # Get limited history
-        history = await analytics_service.get_user_history("user_005", limit=5)
-        assert len(history) == 5
+        # Get limited history - returns tuple (entries, total_count)
+        entries, total = await analytics_service.get_user_history("user_005", limit=5)
+        assert len(entries) == 5
+        assert total == 10
 
 
 class TestAnalyticsServiceStats:
@@ -503,6 +513,7 @@ class TestAnalyticsServiceStats:
         for i in range(3):
             await analytics_service.record_translation(
                 user_id="user_006",
+                translation_id=f"trans_006_{i}",
                 source_language="en",
                 target_language=["fr", "es", "de"][i],
                 original_text=f"Text {i}",
@@ -535,7 +546,8 @@ class TestAnalyticsServiceABTesting:
         """Test creating A/B test"""
         await analytics_service.initialize()
 
-        test_id = await analytics_service.create_ab_test(
+        # create_ab_test returns ABTest object
+        ab_test = await analytics_service.create_ab_test(
             name="Model Test",
             description="Compare TTS models",
             variants=[
@@ -545,57 +557,57 @@ class TestAnalyticsServiceABTesting:
             traffic_split=[0.5, 0.5]
         )
 
-        assert test_id is not None
-        assert test_id.startswith("ab_")
+        assert ab_test is not None
+        assert ab_test.id.startswith("ab_")
+        assert ab_test.name == "Model Test"
 
     @pytest.mark.asyncio
     async def test_get_ab_test(self, analytics_service):
-        """Test getting A/B test"""
+        """Test getting A/B test from internal storage"""
         await analytics_service.initialize()
 
         # Create test
-        test_id = await analytics_service.create_ab_test(
+        ab_test = await analytics_service.create_ab_test(
             name="Speed Test",
             description="Test speed options",
             variants=[{"name": "fast"}, {"name": "slow"}]
         )
 
-        # Get test
-        test = await analytics_service.get_ab_test(test_id)
-        assert test is not None
-        assert test.name == "Speed Test"
+        # Get test from internal storage
+        retrieved = analytics_service._ab_tests.get(ab_test.id)
+        assert retrieved is not None
+        assert retrieved.name == "Speed Test"
 
     @pytest.mark.asyncio
     async def test_start_ab_test(self, analytics_service):
         """Test starting A/B test"""
         await analytics_service.initialize()
 
-        test_id = await analytics_service.create_ab_test(
+        ab_test = await analytics_service.create_ab_test(
             name="Quality Test",
             description="Test quality settings",
             variants=[{"name": "low"}, {"name": "high"}]
         )
 
-        success = await analytics_service.start_ab_test(test_id)
-        assert success is True
-
-        test = await analytics_service.get_ab_test(test_id)
-        assert test.status == ABTestStatus.ACTIVE
+        # start_ab_test expects the test_id string
+        started_test = await analytics_service.start_ab_test(ab_test.id)
+        assert started_test.status == ABTestStatus.ACTIVE
 
     @pytest.mark.asyncio
     async def test_get_variant_for_user(self, analytics_service):
         """Test getting variant for user"""
         await analytics_service.initialize()
 
-        test_id = await analytics_service.create_ab_test(
+        ab_test = await analytics_service.create_ab_test(
             name="User Test",
             description="Assign users to variants",
             variants=[{"name": "A"}, {"name": "B"}],
             traffic_split=[0.5, 0.5]
         )
-        await analytics_service.start_ab_test(test_id)
+        await analytics_service.start_ab_test(ab_test.id)
 
-        variant = await analytics_service.get_variant_for_user(test_id, "user_123")
+        # Method is get_ab_test_variant
+        variant = await analytics_service.get_ab_test_variant(ab_test.id, "user_123")
         assert variant is not None
         assert variant["name"] in ["A", "B"]
 
@@ -604,20 +616,23 @@ class TestAnalyticsServiceABTesting:
         """Test recording A/B test result"""
         await analytics_service.initialize()
 
-        test_id = await analytics_service.create_ab_test(
+        ab_test = await analytics_service.create_ab_test(
             name="Result Test",
             description="Test result recording",
             variants=[{"name": "control"}, {"name": "treatment"}]
         )
-        await analytics_service.start_ab_test(test_id)
+        await analytics_service.start_ab_test(ab_test.id)
 
-        # Record result
-        success = await analytics_service.record_ab_result(
-            test_id=test_id,
+        # Method is record_ab_test_result and returns None
+        await analytics_service.record_ab_test_result(
+            test_id=ab_test.id,
             variant_name="control",
             rating=5
         )
-        assert success is True
+
+        # Verify the result was recorded
+        test = analytics_service._ab_tests.get(ab_test.id)
+        assert len(test.variant_ratings.get("control", [])) == 1
 
 
 class TestAnalyticsServicePersistence:
@@ -651,10 +666,10 @@ class TestAnalyticsServicePersistence:
         service2 = AnalyticsService(data_dir=str(temp_data_dir))
         await service2.initialize()
 
-        # Check data was loaded
-        feedback = await service2.get_feedback_by_translation("persist_trans")
-        assert feedback is not None
-        assert feedback.rating == 5
+        # Check data was loaded - method is get_feedback_for_translation and returns list
+        feedbacks = await service2.get_feedback_for_translation("persist_trans")
+        assert len(feedbacks) > 0
+        assert feedbacks[0].rating == 5
 
 
 # ═══════════════════════════════════════════════════════════════
