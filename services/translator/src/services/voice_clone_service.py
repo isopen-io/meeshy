@@ -43,15 +43,171 @@ except ImportError:
 
 
 @dataclass
+class VoiceCharacteristics:
+    """Caractéristiques détaillées d'une voix extraites de l'audio"""
+    # Pitch (fréquence fondamentale)
+    pitch_mean_hz: float = 0.0          # Pitch moyen en Hz
+    pitch_std_hz: float = 0.0           # Écart-type du pitch
+    pitch_min_hz: float = 0.0           # Pitch minimum
+    pitch_max_hz: float = 0.0           # Pitch maximum
+
+    # Classification vocale
+    voice_type: str = "unknown"          # "high_female", "medium_female", "low_female", "high_male", "medium_male", "low_male", "child"
+    estimated_gender: str = "unknown"    # "male", "female", "child", "unknown"
+    estimated_age_range: str = "unknown" # "child", "teen", "adult", "senior"
+
+    # Caractéristiques spectrales
+    brightness: float = 0.0             # Centroïde spectral moyen (Hz)
+    warmth: float = 0.0                 # Énergie basses fréquences
+    breathiness: float = 0.0            # Niveau de souffle dans la voix
+    nasality: float = 0.0               # Niveau de nasalité
+
+    # Prosodie
+    speech_rate_wpm: float = 0.0        # Mots par minute estimés
+    energy_mean: float = 0.0            # Énergie moyenne (volume)
+    energy_std: float = 0.0             # Variation d'énergie
+    silence_ratio: float = 0.0          # Ratio de silence
+
+    # Qualité technique
+    sample_rate: int = 0                # Taux d'échantillonnage
+    bit_depth: int = 0                  # Profondeur de bits
+    channels: int = 1                   # Nombre de canaux
+    codec: str = ""                     # Codec audio détecté
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "pitch": {
+                "mean_hz": round(self.pitch_mean_hz, 2),
+                "std_hz": round(self.pitch_std_hz, 2),
+                "min_hz": round(self.pitch_min_hz, 2),
+                "max_hz": round(self.pitch_max_hz, 2)
+            },
+            "classification": {
+                "voice_type": self.voice_type,
+                "estimated_gender": self.estimated_gender,
+                "estimated_age_range": self.estimated_age_range
+            },
+            "spectral": {
+                "brightness": round(self.brightness, 2),
+                "warmth": round(self.warmth, 2),
+                "breathiness": round(self.breathiness, 2),
+                "nasality": round(self.nasality, 2)
+            },
+            "prosody": {
+                "speech_rate_wpm": round(self.speech_rate_wpm, 1),
+                "energy_mean": round(self.energy_mean, 4),
+                "energy_std": round(self.energy_std, 4),
+                "silence_ratio": round(self.silence_ratio, 3)
+            },
+            "technical": {
+                "sample_rate": self.sample_rate,
+                "bit_depth": self.bit_depth,
+                "channels": self.channels,
+                "codec": self.codec
+            }
+        }
+
+
+@dataclass
+class SpeakerInfo:
+    """Informations sur un locuteur détecté dans l'audio"""
+    speaker_id: str                     # ID unique du locuteur (speaker_0, speaker_1, etc.)
+    is_primary: bool = False            # True si c'est le locuteur principal
+    speaking_time_ms: int = 0           # Temps de parole en ms
+    speaking_ratio: float = 0.0         # Ratio du temps de parole total
+    voice_characteristics: VoiceCharacteristics = field(default_factory=VoiceCharacteristics)
+
+    # Segments temporels où ce locuteur parle
+    segments: List[Dict[str, float]] = field(default_factory=list)  # [{"start": 0.0, "end": 2.5}, ...]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "speaker_id": self.speaker_id,
+            "is_primary": self.is_primary,
+            "speaking_time_ms": self.speaking_time_ms,
+            "speaking_ratio": round(self.speaking_ratio, 3),
+            "voice_characteristics": self.voice_characteristics.to_dict(),
+            "segments_count": len(self.segments),
+            "segments": self.segments[:10]  # Limiter à 10 segments pour la sérialisation
+        }
+
+
+@dataclass
+class RecordingMetadata:
+    """Métadonnées complètes d'un enregistrement audio"""
+    # Informations de base
+    file_path: str
+    duration_ms: int = 0
+    file_size_bytes: int = 0
+    format: str = ""                    # "wav", "mp3", "ogg", etc.
+
+    # Qualité audio
+    noise_level: float = 0.0            # 0 = pas de bruit, 1 = très bruité
+    snr_db: float = 0.0                 # Signal-to-noise ratio en dB
+    clarity_score: float = 1.0          # 0 = pas clair, 1 = très clair
+    clipping_detected: bool = False     # True si saturation détectée
+    background_music: bool = False      # True si musique de fond détectée
+
+    # Environnement
+    reverb_level: float = 0.0           # Niveau de réverbération (0-1)
+    room_size_estimate: str = "unknown" # "small", "medium", "large", "outdoor"
+
+    # Multi-locuteurs
+    speaker_count: int = 1              # Nombre de locuteurs détectés
+    speakers: List[SpeakerInfo] = field(default_factory=list)
+    primary_speaker: Optional[SpeakerInfo] = None
+
+    # Timestamps
+    created_at: datetime = field(default_factory=datetime.now)
+    analyzed_at: datetime = field(default_factory=datetime.now)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "file": {
+                "path": self.file_path,
+                "duration_ms": self.duration_ms,
+                "size_bytes": self.file_size_bytes,
+                "format": self.format
+            },
+            "quality": {
+                "noise_level": round(self.noise_level, 3),
+                "snr_db": round(self.snr_db, 2),
+                "clarity_score": round(self.clarity_score, 3),
+                "clipping_detected": self.clipping_detected,
+                "background_music": self.background_music
+            },
+            "environment": {
+                "reverb_level": round(self.reverb_level, 3),
+                "room_size_estimate": self.room_size_estimate
+            },
+            "speakers": {
+                "count": self.speaker_count,
+                "speakers": [s.to_dict() for s in self.speakers],
+                "primary_speaker_id": self.primary_speaker.speaker_id if self.primary_speaker else None
+            },
+            "timestamps": {
+                "created_at": self.created_at.isoformat(),
+                "analyzed_at": self.analyzed_at.isoformat()
+            }
+        }
+
+
+@dataclass
 class AudioQualityMetadata:
     """Métadonnées de qualité audio pour sélection du meilleur audio"""
     attachment_id: str
     file_path: str
     duration_ms: int = 0
-    noise_level: float = 0.0  # 0 = pas de bruit, 1 = très bruité
-    clarity_score: float = 1.0  # 0 = pas clair, 1 = très clair
-    has_other_speakers: bool = False  # True si d'autres voix détectées
+    noise_level: float = 0.0            # 0 = pas de bruit, 1 = très bruité
+    clarity_score: float = 1.0          # 0 = pas clair, 1 = très clair
+    has_other_speakers: bool = False    # True si d'autres voix détectées
+    speaker_count: int = 1              # Nombre de locuteurs
     created_at: datetime = field(default_factory=datetime.now)
+
+    # Métadonnées étendues
+    recording_metadata: Optional[RecordingMetadata] = None
+    primary_voice: Optional[VoiceCharacteristics] = None
+
     # Score global calculé pour tri
     overall_score: float = 0.0
 
@@ -68,8 +224,8 @@ class AudioQualityMetadata:
         score = 0.0
 
         # Pénalité forte si autres locuteurs détectés
-        if self.has_other_speakers:
-            score -= 0.5
+        if self.has_other_speakers or self.speaker_count > 1:
+            score -= 0.3 * (self.speaker_count - 1)
 
         # Score de clarté (0-0.3)
         score += self.clarity_score * 0.3
@@ -90,16 +246,22 @@ class AudioQualityMetadata:
         return score
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "attachment_id": self.attachment_id,
             "file_path": self.file_path,
             "duration_ms": self.duration_ms,
             "noise_level": self.noise_level,
             "clarity_score": self.clarity_score,
             "has_other_speakers": self.has_other_speakers,
+            "speaker_count": self.speaker_count,
             "created_at": self.created_at.isoformat(),
             "overall_score": self.overall_score
         }
+        if self.recording_metadata:
+            result["recording_metadata"] = self.recording_metadata.to_dict()
+        if self.primary_voice:
+            result["primary_voice"] = self.primary_voice.to_dict()
+        return result
 
 
 @dataclass
@@ -153,6 +315,426 @@ class VoiceModel:
             updated_at=datetime.fromisoformat(data["updated_at"]),
             next_recalibration_at=datetime.fromisoformat(data["next_recalibration_at"]) if data.get("next_recalibration_at") else None
         )
+
+
+class VoiceAnalyzer:
+    """
+    Analyseur de voix pour extraction de caractéristiques détaillées.
+    Utilise librosa pour l'analyse audio et pyannote (optionnel) pour la diarisation.
+    """
+
+    # Seuils de classification vocale par pitch
+    PITCH_THRESHOLDS = {
+        "child": (250, 500),      # Enfant: 250-500 Hz
+        "high_female": (200, 350),
+        "medium_female": (165, 250),
+        "low_female": (140, 200),
+        "high_male": (130, 180),
+        "medium_male": (100, 150),
+        "low_male": (65, 120),
+    }
+
+    def __init__(self):
+        self._pyannote_available = False
+        self._librosa_available = False
+
+        try:
+            import librosa
+            self._librosa_available = True
+        except ImportError:
+            logger.warning("[VOICE_ANALYZER] librosa non disponible")
+
+        try:
+            from pyannote.audio import Pipeline
+            self._pyannote_available = True
+        except ImportError:
+            logger.debug("[VOICE_ANALYZER] pyannote non disponible - diarisation désactivée")
+
+    async def analyze_audio(self, audio_path: str) -> RecordingMetadata:
+        """
+        Analyse complète d'un fichier audio.
+        Extrait les caractéristiques vocales, détecte les locuteurs, évalue la qualité.
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio non trouvé: {audio_path}")
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._analyze_audio_sync, audio_path)
+
+    def _analyze_audio_sync(self, audio_path: str) -> RecordingMetadata:
+        """Analyse synchrone de l'audio (exécutée dans un thread)"""
+        import librosa
+
+        # Charger l'audio
+        audio, sr = librosa.load(audio_path, sr=22050)
+        duration_ms = int(len(audio) / sr * 1000)
+
+        # Informations fichier
+        file_size = os.path.getsize(audio_path)
+        file_format = os.path.splitext(audio_path)[1].lstrip('.')
+
+        # Créer les métadonnées de base
+        metadata = RecordingMetadata(
+            file_path=audio_path,
+            duration_ms=duration_ms,
+            file_size_bytes=file_size,
+            format=file_format,
+            analyzed_at=datetime.now()
+        )
+
+        # Analyse de qualité
+        metadata.noise_level = self._estimate_noise_level(audio, sr)
+        metadata.snr_db = self._estimate_snr(audio, sr)
+        metadata.clarity_score = self._calculate_clarity(audio, sr)
+        metadata.clipping_detected = self._detect_clipping(audio)
+        metadata.reverb_level = self._estimate_reverb(audio, sr)
+        metadata.room_size_estimate = self._estimate_room_size(metadata.reverb_level)
+
+        # Analyse des locuteurs (simplifiée sans pyannote)
+        speakers = self._analyze_speakers(audio, sr)
+        metadata.speaker_count = len(speakers)
+        metadata.speakers = speakers
+        metadata.primary_speaker = self._identify_primary_speaker(speakers)
+
+        if metadata.speaker_count > 1:
+            logger.info(f"[VOICE_ANALYZER] {metadata.speaker_count} locuteurs détectés")
+
+        return metadata
+
+    def _estimate_noise_level(self, audio: np.ndarray, sr: int) -> float:
+        """Estime le niveau de bruit (0 = propre, 1 = très bruité)"""
+        try:
+            import librosa
+
+            # Calculer le spectre
+            stft = np.abs(librosa.stft(audio))
+
+            # Estimer le plancher de bruit (percentile bas)
+            noise_floor = np.percentile(stft, 10)
+            signal_level = np.percentile(stft, 90)
+
+            if signal_level == 0:
+                return 0.5
+
+            # Ratio bruit/signal normalisé
+            noise_ratio = noise_floor / (signal_level + 1e-10)
+            return min(1.0, noise_ratio * 2)
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur estimation bruit: {e}")
+            return 0.0
+
+    def _estimate_snr(self, audio: np.ndarray, sr: int) -> float:
+        """Estime le rapport signal/bruit en dB"""
+        try:
+            # Énergie du signal
+            signal_power = np.mean(audio ** 2)
+
+            # Estimer le bruit (segments silencieux)
+            frame_length = int(sr * 0.02)  # 20ms frames
+            hop_length = int(sr * 0.01)    # 10ms hop
+
+            frames = librosa.util.frame(audio, frame_length=frame_length, hop_length=hop_length)
+            frame_energy = np.sum(frames ** 2, axis=0)
+
+            # Bruit = énergie des 10% frames les plus silencieux
+            noise_power = np.percentile(frame_energy, 10) / frame_length
+
+            if noise_power == 0:
+                return 40.0  # Très propre
+
+            snr = 10 * np.log10(signal_power / (noise_power + 1e-10))
+            return max(-10, min(60, snr))
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur estimation SNR: {e}")
+            return 20.0
+
+    def _calculate_clarity(self, audio: np.ndarray, sr: int) -> float:
+        """Calcule un score de clarté vocale (0-1)"""
+        try:
+            import librosa
+
+            # Centroïde spectral (indicateur de clarté)
+            centroid = librosa.feature.spectral_centroid(y=audio, sr=sr)[0]
+            mean_centroid = np.mean(centroid)
+
+            # Clarté optimale entre 1000-3000 Hz pour la voix
+            if 1000 <= mean_centroid <= 3000:
+                clarity = 1.0
+            elif mean_centroid < 1000:
+                clarity = mean_centroid / 1000
+            else:
+                clarity = max(0, 1 - (mean_centroid - 3000) / 3000)
+
+            # Ajuster par la variance spectrale (trop de variance = moins clair)
+            spectral_bandwidth = librosa.feature.spectral_bandwidth(y=audio, sr=sr)[0]
+            bandwidth_penalty = min(0.3, np.std(spectral_bandwidth) / 1000)
+
+            return max(0, min(1, clarity - bandwidth_penalty))
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur calcul clarté: {e}")
+            return 0.5
+
+    def _detect_clipping(self, audio: np.ndarray) -> bool:
+        """Détecte la saturation audio"""
+        threshold = 0.99
+        clipped_samples = np.sum(np.abs(audio) >= threshold)
+        clip_ratio = clipped_samples / len(audio)
+        return clip_ratio > 0.001  # Plus de 0.1% de samples saturés
+
+    def _estimate_reverb(self, audio: np.ndarray, sr: int) -> float:
+        """Estime le niveau de réverbération (0-1)"""
+        try:
+            import librosa
+
+            # Utiliser la décroissance de l'enveloppe
+            envelope = np.abs(librosa.onset.onset_strength(y=audio, sr=sr))
+
+            # Calculer le temps de décroissance
+            if len(envelope) < 10:
+                return 0.0
+
+            # Autocorrélation pour détecter les échos
+            autocorr = np.correlate(envelope, envelope, mode='full')
+            autocorr = autocorr[len(autocorr)//2:]
+
+            # Normaliser
+            if autocorr[0] != 0:
+                autocorr = autocorr / autocorr[0]
+
+            # Chercher les pics secondaires (échos)
+            peaks = []
+            for i in range(1, min(len(autocorr), 50)):
+                if autocorr[i] > 0.3:
+                    peaks.append(autocorr[i])
+
+            if not peaks:
+                return 0.0
+
+            return min(1.0, np.mean(peaks))
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur estimation reverb: {e}")
+            return 0.0
+
+    def _estimate_room_size(self, reverb_level: float) -> str:
+        """Estime la taille de la pièce basée sur la réverbération"""
+        if reverb_level < 0.1:
+            return "small"  # Proche du micro, peu de réverb
+        elif reverb_level < 0.3:
+            return "medium"
+        elif reverb_level < 0.6:
+            return "large"
+        else:
+            return "outdoor"  # Beaucoup de réverb/écho
+
+    def _analyze_speakers(self, audio: np.ndarray, sr: int) -> List[SpeakerInfo]:
+        """
+        Analyse les locuteurs dans l'audio.
+        Utilise pyannote si disponible, sinon une analyse simplifiée.
+        """
+        if self._pyannote_available:
+            return self._analyze_speakers_pyannote(audio, sr)
+        else:
+            return self._analyze_speakers_simple(audio, sr)
+
+    def _analyze_speakers_simple(self, audio: np.ndarray, sr: int) -> List[SpeakerInfo]:
+        """
+        Analyse simplifiée des locuteurs sans diarisation.
+        Suppose un seul locuteur principal et extrait ses caractéristiques.
+        """
+        try:
+            import librosa
+
+            # Extraire les caractéristiques vocales
+            voice_chars = self._extract_voice_characteristics(audio, sr)
+
+            # Calculer le temps de parole (segments non-silencieux)
+            rms = librosa.feature.rms(y=audio)[0]
+            speech_frames = np.sum(rms > np.percentile(rms, 20))
+            total_frames = len(rms)
+            speaking_ratio = speech_frames / total_frames if total_frames > 0 else 1.0
+            speaking_time_ms = int(len(audio) / sr * 1000 * speaking_ratio)
+
+            # Créer le locuteur principal
+            primary_speaker = SpeakerInfo(
+                speaker_id="speaker_0",
+                is_primary=True,
+                speaking_time_ms=speaking_time_ms,
+                speaking_ratio=speaking_ratio,
+                voice_characteristics=voice_chars,
+                segments=[{"start": 0.0, "end": len(audio) / sr}]
+            )
+
+            return [primary_speaker]
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur analyse locuteurs: {e}")
+            return [SpeakerInfo(speaker_id="speaker_0", is_primary=True)]
+
+    def _analyze_speakers_pyannote(self, audio: np.ndarray, sr: int) -> List[SpeakerInfo]:
+        """Analyse des locuteurs avec pyannote (diarisation)"""
+        # TODO: Implémenter avec pyannote.audio quand disponible
+        # Pour l'instant, fallback sur l'analyse simple
+        return self._analyze_speakers_simple(audio, sr)
+
+    def _extract_voice_characteristics(self, audio: np.ndarray, sr: int) -> VoiceCharacteristics:
+        """Extrait les caractéristiques détaillées d'une voix"""
+        try:
+            import librosa
+
+            chars = VoiceCharacteristics()
+            chars.sample_rate = sr
+
+            # Analyse du pitch (F0)
+            f0, voiced_flag, voiced_probs = librosa.pyin(
+                audio,
+                fmin=librosa.note_to_hz('C2'),  # ~65 Hz
+                fmax=librosa.note_to_hz('C7'),  # ~2093 Hz
+                sr=sr
+            )
+
+            # Filtrer les valeurs NaN
+            f0_valid = f0[~np.isnan(f0)]
+
+            if len(f0_valid) > 0:
+                chars.pitch_mean_hz = float(np.mean(f0_valid))
+                chars.pitch_std_hz = float(np.std(f0_valid))
+                chars.pitch_min_hz = float(np.min(f0_valid))
+                chars.pitch_max_hz = float(np.max(f0_valid))
+
+                # Classification vocale
+                chars.voice_type, chars.estimated_gender = self._classify_voice(chars.pitch_mean_hz)
+                chars.estimated_age_range = self._estimate_age(chars.pitch_mean_hz, chars.pitch_std_hz)
+
+            # Caractéristiques spectrales
+            # Brightness (centroïde spectral)
+            centroid = librosa.feature.spectral_centroid(y=audio, sr=sr)[0]
+            chars.brightness = float(np.mean(centroid))
+
+            # Warmth (énergie basses fréquences)
+            spec = np.abs(librosa.stft(audio))
+            low_freq_bins = int(500 / (sr / 2) * spec.shape[0])  # Jusqu'à 500 Hz
+            chars.warmth = float(np.mean(spec[:low_freq_bins, :]))
+
+            # Énergie
+            rms = librosa.feature.rms(y=audio)[0]
+            chars.energy_mean = float(np.mean(rms))
+            chars.energy_std = float(np.std(rms))
+
+            # Ratio de silence
+            silence_threshold = np.percentile(rms, 10)
+            chars.silence_ratio = float(np.sum(rms < silence_threshold) / len(rms))
+
+            return chars
+
+        except Exception as e:
+            logger.warning(f"[VOICE_ANALYZER] Erreur extraction caractéristiques: {e}")
+            return VoiceCharacteristics()
+
+    def _classify_voice(self, pitch_hz: float) -> tuple:
+        """Classifie le type de voix basé sur le pitch"""
+        if pitch_hz >= 250:
+            return ("child", "child")
+        elif pitch_hz >= 200:
+            return ("high_female", "female")
+        elif pitch_hz >= 165:
+            return ("medium_female", "female")
+        elif pitch_hz >= 140:
+            return ("low_female", "female")
+        elif pitch_hz >= 130:
+            return ("high_male", "male")
+        elif pitch_hz >= 100:
+            return ("medium_male", "male")
+        else:
+            return ("low_male", "male")
+
+    def _estimate_age(self, pitch_hz: float, pitch_std: float) -> str:
+        """Estime la tranche d'âge basée sur le pitch"""
+        if pitch_hz >= 250:
+            return "child"
+        elif pitch_hz >= 200 and pitch_std > 30:
+            return "teen"
+        elif pitch_hz < 90:
+            return "senior"
+        else:
+            return "adult"
+
+    def _identify_primary_speaker(self, speakers: List[SpeakerInfo]) -> Optional[SpeakerInfo]:
+        """Identifie le locuteur principal (celui qui parle le plus)"""
+        if not speakers:
+            return None
+
+        # Trier par temps de parole décroissant
+        sorted_speakers = sorted(speakers, key=lambda s: s.speaking_time_ms, reverse=True)
+
+        # Marquer le premier comme principal
+        primary = sorted_speakers[0]
+        primary.is_primary = True
+
+        return primary
+
+    async def compare_voices(
+        self,
+        original_path: str,
+        cloned_path: str
+    ) -> Dict[str, Any]:
+        """Compare une voix originale et clonée pour mesurer la similarité"""
+        original_meta = await self.analyze_audio(original_path)
+        cloned_meta = await self.analyze_audio(cloned_path)
+
+        if not original_meta.primary_speaker or not cloned_meta.primary_speaker:
+            return {"similarity": 0.0, "error": "Locuteur principal non détecté"}
+
+        orig_voice = original_meta.primary_speaker.voice_characteristics
+        clone_voice = cloned_meta.primary_speaker.voice_characteristics
+
+        # Similarité du pitch
+        if orig_voice.pitch_mean_hz > 0 and clone_voice.pitch_mean_hz > 0:
+            pitch_diff = abs(orig_voice.pitch_mean_hz - clone_voice.pitch_mean_hz)
+            pitch_sim = max(0, 1 - pitch_diff / orig_voice.pitch_mean_hz)
+        else:
+            pitch_sim = 0.0
+
+        # Similarité de la brillance
+        if orig_voice.brightness > 0:
+            bright_diff = abs(orig_voice.brightness - clone_voice.brightness)
+            bright_sim = max(0, 1 - bright_diff / orig_voice.brightness)
+        else:
+            bright_sim = 0.0
+
+        # Similarité de l'énergie
+        if orig_voice.energy_mean > 0:
+            energy_diff = abs(orig_voice.energy_mean - clone_voice.energy_mean)
+            energy_sim = max(0, 1 - energy_diff / orig_voice.energy_mean)
+        else:
+            energy_sim = 0.0
+
+        # Score global
+        overall = (pitch_sim * 0.4 + bright_sim * 0.3 + energy_sim * 0.3)
+
+        return {
+            "pitch_similarity": round(pitch_sim, 3),
+            "brightness_similarity": round(bright_sim, 3),
+            "energy_similarity": round(energy_sim, 3),
+            "overall_similarity": round(overall, 3),
+            "original_voice": orig_voice.to_dict(),
+            "cloned_voice": clone_voice.to_dict()
+        }
+
+
+# Instance singleton de l'analyseur
+_voice_analyzer_instance: Optional[VoiceAnalyzer] = None
+
+
+def get_voice_analyzer() -> VoiceAnalyzer:
+    """Retourne l'instance singleton de l'analyseur vocal"""
+    global _voice_analyzer_instance
+    if _voice_analyzer_instance is None:
+        _voice_analyzer_instance = VoiceAnalyzer()
+    return _voice_analyzer_instance
 
 
 class VoiceCloneService:
