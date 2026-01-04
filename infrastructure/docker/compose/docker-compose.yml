@@ -67,6 +67,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      - REDIS_URL=redis://redis:6379
       - PYTHONPATH=/workspace
       - PYTHONUNBUFFERED=1
       - HF_HOME=/workspace/models
