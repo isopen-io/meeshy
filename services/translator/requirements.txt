@@ -16,8 +16,8 @@ pyzmq==26.2.0
 
 # Machine Learning et NLP (pinned for compatibility)
 # torch is installed separately via --index-url in Dockerfile
-transformers==4.47.1
-tokenizers==0.21.0
+transformers==4.46.3
+tokenizers==0.20.4
 accelerate==1.2.1
 datasets==3.2.0
 sentencepiece==0.2.0
@@ -37,7 +37,7 @@ textstat==0.7.4
 
 # Utilitaires système
 psutil==6.1.1
-numpy==1.26.4
+numpy==1.26.0
 pandas==2.2.3
 aiohttp==3.11.11
 python-multipart==0.0.20
@@ -97,7 +97,7 @@ chatterbox-tts==0.1.1
 
 # Audio Processing utilities
 pydub==0.25.1
-librosa==0.10.2.post1
+librosa==0.10.0
 soundfile==0.12.1
 scipy==1.14.1
 ffmpeg-python==0.2.0

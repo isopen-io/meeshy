@@ -1,6 +1,9 @@
 """
 Service de base de données pour le Translator Meeshy
 Gère la sauvegarde et la récupération des traductions
+
+Note: User management and voice profile persistence are handled by Gateway.
+Translator only stores translation cache and handles audio processing.
 """
 
 import asyncio
