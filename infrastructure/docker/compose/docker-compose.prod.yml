@@ -157,6 +157,7 @@ services:
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
       - PRISMA_SCHEMA_PATH=${PRISMA_SCHEMA_PATH}
       - PYTHONPATH=/workspace:/workspace/generated
       - PYTHONUNBUFFERED=1

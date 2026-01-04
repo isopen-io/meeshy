@@ -565,7 +565,13 @@ class TranslationPipelineService:
 
         # Générer l'audio
         if self.tts_service:
-            output_filename = self._generate_output_filename(job, target_lang)
+            # Récupérer le profile_id du voice model si disponible
+            profile_id = getattr(voice_model, 'profile_id', None) if voice_model else None
+            output_filename = self._generate_output_filename(
+                job=job,
+                target_lang=target_lang,
+                profile_id=profile_id
+            )
             output_path = self.audio_output_dir / output_filename
 
             if voice_model:
@@ -656,12 +662,40 @@ class TranslationPipelineService:
         unique = uuid.uuid4().hex[:8]
         return f"mshy_{timestamp}_{user_id[:8]}_{unique}"
 
-    def _generate_output_filename(self, job: TranslationJob, target_lang: str) -> str:
-        """Génère un nom de fichier de sortie avec métadonnées"""
-        return (
-            f"mshy_gen_{job.model_version}_{job.embedding_type}_"
-            f"{job.user_id[:8]}_{target_lang}_{job.id[-8:]}.mp3"
-        )
+    def _generate_output_filename(
+        self,
+        job: TranslationJob,
+        target_lang: str,
+        message_id: str = None,
+        attachment_id: str = None,
+        profile_id: str = None,
+        ext: str = "mp3"
+    ) -> str:
+        """
+        Génère un nom de fichier de sortie avec métadonnées.
+        Format: mshy_gen_{version}_{embedding}_{userId}_{lang}_{jobId}[_msg{id}][_att{id}][_prof{id}]_{timestamp}.{ext}
+        """
+        msg_id = message_id or job.callback_metadata.get('message_id', '')
+        att_id = attachment_id or job.callback_metadata.get('attachment_id', '')
+        prof_id = profile_id or job.callback_metadata.get('profile_id', '')
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+        # Base: model_version contient déjà "mshy_gen_v1", pas besoin de préfixe supplémentaire
+        base = f"{job.model_version}_{job.embedding_type}_{job.user_id[:8]}_{target_lang}_{job.id[-8:]}"
+
+        # Ajouter les détails d'attachement si disponibles
+        details = []
+        if msg_id:
+            details.append(f"msg{msg_id[:8]}")
+        if att_id:
+            details.append(f"att{att_id[:8]}")
+        if prof_id:
+            details.append(f"prof{prof_id[:8]}")
+
+        if details:
+            return f"{base}_{'_'.join(details)}_{timestamp}.{ext}"
+        else:
+            return f"{base}_{timestamp}.{ext}"
 
     async def translate_sync(
         self,

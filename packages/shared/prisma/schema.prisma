@@ -85,6 +85,26 @@ model User {
   /// Last key rotation timestamp
   lastKeyRotation DateTime?
 
+  // ============================================
+  // VOICE PROFILE & CONSENT FIELDS
+  // ============================================
+  /// Date of consent for voice profile recording (null = not consented)
+  /// User must explicitly consent before recording their voice profile
+  voiceProfileConsentAt DateTime?
+
+  /// Date of age verification consent (null = not verified)
+  /// Required for users under 18 - voice profile expires every 2 months
+  ageVerificationConsentAt DateTime?
+
+  /// User's declared birth date (for age-based profile expiration)
+  birthDate DateTime?
+
+  /// Date when user enabled voice cloning for their messages (null = disabled)
+  voiceCloningEnabledAt DateTime?
+
+  /// Last voice profile update notification sent
+  voiceProfileUpdateNotifiedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1245,10 +1265,45 @@ model MessageAudioTranscription {
   /// Modèle utilisé (si whisper: "whisper-large-v3")
   model String?
 
+  /// ============================================
+  /// SPEAKER DIARIZATION (Multi-speaker support)
+  /// ============================================
+  /// Number of distinct speakers detected in the audio
+  speakerCount Int?
+
+  /// ID of the primary speaker (who speaks the most)
+  primarySpeakerId String?
+
+  /// Speaker analysis metadata as JSON:
+  /// {
+  ///   "speakers": [
+  ///     {
+  ///       "speaker_id": "speaker_0",
+  ///       "is_primary": true,
+  ///       "speaking_time_ms": 25000,
+  ///       "speaking_ratio": 0.7,
+  ///       "voice_characteristics": {...},
+  ///       "fingerprint": {...},
+  ///       "segments": [{"start": 0.0, "end": 5.0}, ...]
+  ///     }
+  ///   ],
+  ///   "clarity_score": 0.85,
+  ///   "has_background_noise": false,
+  ///   "noise_level_db": -45.0
+  /// }
+  speakerAnalysis Json?
+
+  /// Whether the sender's voice was identified in the audio
+  senderVoiceIdentified Boolean?
+
+  /// Matched speaker ID if sender was identified
+  senderSpeakerId String?
+
   createdAt DateTime @default(now())
 
   @@index([messageId])
   @@index([language])
+  @@index([speakerCount])
   @@map("message_audio_transcriptions")
 }
 
@@ -1308,6 +1363,9 @@ model UserVoiceModel {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
   userId String @unique @db.ObjectId
 
+  /// Identifiant unique du profil vocal (vfp_xxx)
+  profileId String? @unique
+
   /// Chemin vers le fichier d'embedding de la voix
   embeddingPath String
 
@@ -1327,6 +1385,41 @@ model UserVoiceModel {
   /// Version du modèle (incrémentée à chaque recalibration)
   version Int @default(1)
 
+  /// ============================================
+  /// VOICE CHARACTERISTICS
+  /// ============================================
+  /// JSON object containing voice analysis data:
+  /// {
+  ///   "pitch": { "mean_hz": 150.0, "std_hz": 25.0, "min_hz": 100.0, "max_hz": 200.0 },
+  ///   "classification": { "voice_type": "medium_male", "estimated_gender": "male", "estimated_age_range": "adult" },
+  ///   "spectral": { "brightness": 1500.0, "warmth": 3.5, "breathiness": 0.1, "nasality": 0.05 },
+  ///   "prosody": { "energy_mean": 0.05, "energy_std": 0.02, "silence_ratio": 0.2, "speech_rate_wpm": 130.0 }
+  /// }
+  voiceCharacteristics Json?
+
+  /// ============================================
+  /// VOICE FINGERPRINT (For identification)
+  /// ============================================
+  /// JSON object containing unique voice signature for quick matching.
+  /// NOTE: Does NOT contain the full embedding vector (stored in embeddingPath binary file).
+  /// The fingerprint uses hashes for fast comparison, not raw vectors.
+  /// {
+  ///   "fingerprint_id": "vfp_abc123",
+  ///   "version": "1.0",
+  ///   "signature": "sha256_hash_64_chars",
+  ///   "signature_short": "12_char_short",
+  ///   "components": { "pitch_hash": "...", "spectral_hash": "...", "prosody_hash": "..." },
+  ///   "checksum": "crc32_8_chars",
+  ///   "metadata": { "audio_duration_ms": 15000, "created_at": "2025-01-01T00:00:00Z" }
+  /// }
+  /// For vector similarity search at scale, consider using:
+  /// - MongoDB Atlas Vector Search (native)
+  /// - Pinecone / Qdrant / Milvus (dedicated vector DB)
+  fingerprint Json?
+
+  /// Short signature for quick lookups (12 chars from fingerprint)
+  signatureShort String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1337,5 +1430,6 @@ model UserVoiceModel {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
+  @@index([signatureShort])
   @@map("user_voice_models")
 }
