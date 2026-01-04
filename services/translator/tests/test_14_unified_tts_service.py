@@ -137,15 +137,15 @@ async def test_tts_model_info():
 # ═══════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_unified_tts_singleton(reset_singleton):
+async def test_unified_tts_singleton(reset_singleton, output_dir):
     """Test singleton pattern"""
     logger.info("Test 14.3: Singleton pattern")
 
     if not SERVICE_AVAILABLE:
         pytest.skip("UnifiedTTSService not available")
 
-    service1 = UnifiedTTSService()
-    service2 = UnifiedTTSService()
+    service1 = UnifiedTTSService(output_dir=str(output_dir))
+    service2 = UnifiedTTSService(output_dir=str(output_dir))
 
     assert service1 is service2
     logger.info("Singleton pattern works correctly")
