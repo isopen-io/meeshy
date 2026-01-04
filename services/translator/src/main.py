@@ -42,6 +42,14 @@ from services.translation_ml_service import TranslationMLService
 
 from api.translation_api import TranslationAPI
 
+# Import du service Redis (cache avec fallback mémoire)
+REDIS_AVAILABLE = False
+try:
+    from services.redis_service import get_redis_service, get_audio_cache_service
+    REDIS_AVAILABLE = True
+except ImportError as e:
+    pass  # Will be logged later
+
 # Import des services audio (optionnel)
 AUDIO_SERVICES_AVAILABLE = False
 UNIFIED_TTS_AVAILABLE = False
@@ -104,12 +112,14 @@ logger = logging.getLogger(__name__)
 
 class MeeshyTranslationServer:
     """Serveur de traduction haute performance Meeshy"""
-    
+
     def __init__(self):
         self.settings = Settings()
         self.translation_service = None
         self.zmq_server = None
         self.translation_api = None
+        self.redis_service = None
+        self.audio_cache_service = None
         self.is_initialized = False
     
     async def initialize(self) -> bool:
@@ -126,9 +136,20 @@ class MeeshyTranslationServer:
             
             logger.info(f"[TRANSLATOR] ✅ Service ML unifié créé (modèles seront chargés en arrière-plan)")
             logger.info(f"[TRANSLATOR] 📚 Le chargement des modèles ML démarrera après le serveur FastAPI...")
-            logger.info(f"[TRANSLATOR] ✅ Service ML unifié créé (modèles seront chargés en arrière-plan)")
-            logger.info(f"[TRANSLATOR] 📚 Le chargement des modèles ML démarrera après le serveur FastAPI...")
-            
+
+            # 1.5 Initialiser le service Redis (cache avec fallback mémoire)
+            if REDIS_AVAILABLE:
+                try:
+                    logger.info("[TRANSLATOR] 🔴 Initialisation du service Redis...")
+                    self.redis_service = get_redis_service()
+                    await self.redis_service.initialize()
+                    self.audio_cache_service = get_audio_cache_service(self.settings)
+
+                    stats = self.redis_service.get_stats()
+                    logger.info(f"[TRANSLATOR] ✅ Service Redis initialisé (mode: {stats['mode']})")
+                except Exception as e:
+                    logger.warning(f"[TRANSLATOR] ⚠️ Erreur init Redis: {e} - cache mémoire utilisé")
+
             # 2. Initialiser le serveur ZMQ avec le service ML unifié
             zmq_push_port = int(os.getenv('TRANSLATOR_ZMQ_PULL_PORT', '5555'))
             zmq_pub_port = int(os.getenv('TRANSLATOR_ZMQ_PUB_PORT', '5558'))
@@ -432,16 +453,19 @@ class MeeshyTranslationServer:
     async def stop(self):
         """Arrête le serveur de traduction"""
         logger.info("🛑 Arrêt du serveur de traduction haute performance...")
-        
+
         try:
             if self.zmq_server:
                 await self.zmq_server.stop()
-            
+
             if self.translation_service:
                 await self.translation_service.close()
-            
+
+            if self.redis_service:
+                await self.redis_service.close()
+
             logger.info("✅ Serveur de traduction haute performance arrêté")
-            
+
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'arrêt: {e}")
 
