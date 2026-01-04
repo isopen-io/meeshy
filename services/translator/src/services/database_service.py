@@ -1,12 +1,14 @@
 """
 Service de base de données pour le Translator Meeshy
 Gère la sauvegarde et la récupération des traductions
+Gère les profils vocaux et le consentement utilisateur
 """
 
 import asyncio
 import logging
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from datetime import datetime
 import httpx
 from prisma import Prisma
 
@@ -319,3 +321,390 @@ class DatabaseService:
                 "status": "error",
                 "error": str(e)
             }
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # VOICE PROFILE & CONSENT METHODS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get user by ID with consent and voice profile fields.
+
+        Args:
+            user_id: User ID (MongoDB ObjectId)
+
+        Returns:
+            Dict with user data or None if not found
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return None
+
+        try:
+            user = await self.prisma.user.find_unique(
+                where={"id": user_id},
+                include={"voiceModel": True}
+            )
+
+            if user:
+                return {
+                    "id": user.id,
+                    "username": user.username,
+                    "voiceProfileConsentAt": user.voiceProfileConsentAt.isoformat() if user.voiceProfileConsentAt else None,
+                    "ageVerificationConsentAt": user.ageVerificationConsentAt.isoformat() if user.ageVerificationConsentAt else None,
+                    "birthDate": user.birthDate,
+                    "voiceCloningEnabledAt": user.voiceCloningEnabledAt.isoformat() if user.voiceCloningEnabledAt else None,
+                    "voiceProfileUpdateNotifiedAt": user.voiceProfileUpdateNotifiedAt.isoformat() if user.voiceProfileUpdateNotifiedAt else None,
+                    "voiceModel": user.voiceModel
+                }
+
+            return None
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur récupération utilisateur: {e}")
+            return None
+
+    async def update_user_consent(
+        self,
+        user_id: str,
+        voice_profile_consent_at: Optional[datetime] = None,
+        age_verification_consent_at: Optional[datetime] = None,
+        birth_date: Optional[datetime] = None,
+        voice_cloning_enabled_at: Optional[datetime] = None
+    ) -> bool:
+        """
+        Update user consent fields for voice profile.
+
+        Args:
+            user_id: User ID
+            voice_profile_consent_at: Consent timestamp for voice recording
+            age_verification_consent_at: Age verification consent timestamp
+            birth_date: User's birth date
+            voice_cloning_enabled_at: Timestamp when voice cloning was enabled
+
+        Returns:
+            bool: True if update succeeded
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            data = {}
+            if voice_profile_consent_at is not None:
+                data["voiceProfileConsentAt"] = voice_profile_consent_at
+            if age_verification_consent_at is not None:
+                data["ageVerificationConsentAt"] = age_verification_consent_at
+            if birth_date is not None:
+                data["birthDate"] = birth_date
+            if voice_cloning_enabled_at is not None:
+                data["voiceCloningEnabledAt"] = voice_cloning_enabled_at
+
+            if not data:
+                logger.warning("⚠️ [TRANSLATOR-DB] Aucune donnée de consentement à mettre à jour")
+                return False
+
+            await self.prisma.user.update(
+                where={"id": user_id},
+                data=data
+            )
+
+            logger.info(f"✅ [TRANSLATOR-DB] Consentement utilisateur mis à jour: {user_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur mise à jour consentement: {e}")
+            return False
+
+    async def save_voice_profile(
+        self,
+        user_id: str,
+        profile_id: str,
+        embedding_path: str,
+        audio_count: int,
+        total_duration_ms: int,
+        quality_score: float,
+        version: int = 1,
+        voice_characteristics: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Dict[str, Any]] = None,
+        signature_short: Optional[str] = None,
+        next_recalibration_at: Optional[datetime] = None
+    ) -> bool:
+        """
+        Save a new voice profile to database (UserVoiceModel).
+
+        Embeddings are stored as binary files on disk (embeddingPath).
+        The database stores metadata and fingerprints for quick lookup.
+
+        Args:
+            user_id: User ID
+            profile_id: Unique profile identifier (vp_xxx)
+            embedding_path: Path to the .pkl embedding file
+            audio_count: Number of audio samples used
+            total_duration_ms: Total audio duration in ms
+            quality_score: Model quality score (0-1)
+            version: Model version
+            voice_characteristics: Voice analysis data (pitch, spectral, etc.)
+            fingerprint: Voice signature for identification
+            signature_short: 12-char short signature for quick lookups
+            next_recalibration_at: When profile should be recalibrated
+
+        Returns:
+            bool: True if save succeeded
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            # Check if profile already exists
+            existing = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            if existing:
+                logger.warning(f"⚠️ [TRANSLATOR-DB] Profil vocal existe déjà pour {user_id}")
+                return False
+
+            # Create new voice profile
+            await self.prisma.uservoicemodel.create(
+                data={
+                    "userId": user_id,
+                    "profileId": profile_id,
+                    "embeddingPath": embedding_path,
+                    "audioCount": audio_count,
+                    "totalDurationMs": total_duration_ms,
+                    "qualityScore": quality_score,
+                    "version": version,
+                    "voiceCharacteristics": voice_characteristics,
+                    "fingerprint": fingerprint,
+                    "signatureShort": signature_short,
+                    "nextRecalibrationAt": next_recalibration_at
+                }
+            )
+
+            logger.info(f"✅ [TRANSLATOR-DB] Profil vocal créé: {profile_id} pour {user_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur création profil vocal: {e}")
+            import traceback
+            logger.error(f"[TRANSLATOR-DB] Stack trace:\n{traceback.format_exc()}")
+            return False
+
+    async def update_voice_profile(
+        self,
+        user_id: str,
+        quality_score: Optional[float] = None,
+        audio_count: Optional[int] = None,
+        total_duration_ms: Optional[int] = None,
+        version: Optional[int] = None,
+        voice_characteristics: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Dict[str, Any]] = None,
+        signature_short: Optional[str] = None,
+        next_recalibration_at: Optional[datetime] = None
+    ) -> bool:
+        """
+        Update an existing voice profile.
+
+        Args:
+            user_id: User ID
+            quality_score: Updated quality score
+            audio_count: Updated audio count
+            total_duration_ms: Updated total duration
+            version: New version number
+            voice_characteristics: Updated voice analysis
+            fingerprint: Updated voice signature
+            signature_short: Updated short signature
+            next_recalibration_at: New recalibration date
+
+        Returns:
+            bool: True if update succeeded
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            data = {}
+            if quality_score is not None:
+                data["qualityScore"] = quality_score
+            if audio_count is not None:
+                data["audioCount"] = audio_count
+            if total_duration_ms is not None:
+                data["totalDurationMs"] = total_duration_ms
+            if version is not None:
+                data["version"] = version
+            if voice_characteristics is not None:
+                data["voiceCharacteristics"] = voice_characteristics
+            if fingerprint is not None:
+                data["fingerprint"] = fingerprint
+            if signature_short is not None:
+                data["signatureShort"] = signature_short
+            if next_recalibration_at is not None:
+                data["nextRecalibrationAt"] = next_recalibration_at
+
+            if not data:
+                logger.warning("⚠️ [TRANSLATOR-DB] Aucune donnée de profil à mettre à jour")
+                return False
+
+            await self.prisma.uservoicemodel.update(
+                where={"userId": user_id},
+                data=data
+            )
+
+            logger.info(f"✅ [TRANSLATOR-DB] Profil vocal mis à jour pour {user_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur mise à jour profil vocal: {e}")
+            return False
+
+    async def delete_voice_profile(self, user_id: str) -> bool:
+        """
+        Delete a voice profile from database.
+
+        Note: This only deletes the database record.
+        The caller should also delete the embedding files from disk.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            bool: True if delete succeeded
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            # Delete the voice model
+            await self.prisma.uservoicemodel.delete(
+                where={"userId": user_id}
+            )
+
+            # Also reset consent fields on user
+            await self.prisma.user.update(
+                where={"id": user_id},
+                data={
+                    "voiceProfileConsentAt": None,
+                    "voiceCloningEnabledAt": None
+                }
+            )
+
+            logger.info(f"🗑️ [TRANSLATOR-DB] Profil vocal supprimé pour {user_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur suppression profil vocal: {e}")
+            return False
+
+    async def get_voice_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get voice profile for a user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with voice profile data or None
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return None
+
+        try:
+            profile = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            if profile:
+                return {
+                    "id": profile.id,
+                    "userId": profile.userId,
+                    "profileId": profile.profileId,
+                    "embeddingPath": profile.embeddingPath,
+                    "audioCount": profile.audioCount,
+                    "totalDurationMs": profile.totalDurationMs,
+                    "qualityScore": profile.qualityScore,
+                    "version": profile.version,
+                    "voiceCharacteristics": profile.voiceCharacteristics,
+                    "fingerprint": profile.fingerprint,
+                    "signatureShort": profile.signatureShort,
+                    "nextRecalibrationAt": profile.nextRecalibrationAt.isoformat() if profile.nextRecalibrationAt else None,
+                    "createdAt": profile.createdAt.isoformat() if profile.createdAt else None,
+                    "updatedAt": profile.updatedAt.isoformat() if profile.updatedAt else None
+                }
+
+            return None
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur récupération profil vocal: {e}")
+            return None
+
+    async def get_profiles_needing_recalibration(
+        self,
+        before_date: Optional[datetime] = None,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Get voice profiles that need recalibration.
+
+        Args:
+            before_date: Get profiles with recalibration date before this
+            limit: Maximum number of profiles to return
+
+        Returns:
+            List of voice profiles needing update
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return []
+
+        try:
+            check_date = before_date or datetime.now()
+
+            profiles = await self.prisma.uservoicemodel.find_many(
+                where={
+                    "nextRecalibrationAt": {"lte": check_date}
+                },
+                take=limit,
+                order_by={"nextRecalibrationAt": "asc"}
+            )
+
+            return [
+                {
+                    "userId": p.userId,
+                    "profileId": p.profileId,
+                    "qualityScore": p.qualityScore,
+                    "nextRecalibrationAt": p.nextRecalibrationAt.isoformat() if p.nextRecalibrationAt else None
+                }
+                for p in profiles
+            ]
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur récupération profils à recalibrer: {e}")
+            return []
+
+    async def notify_profile_update(self, user_id: str) -> bool:
+        """
+        Mark that user was notified about profile update.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            bool: True if update succeeded
+        """
+        if not self.is_connected:
+            return False
+
+        try:
+            await self.prisma.user.update(
+                where={"id": user_id},
+                data={"voiceProfileUpdateNotifiedAt": datetime.now()}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur notification profil: {e}")
+            return False

@@ -85,6 +85,26 @@ model User {
   /// Last key rotation timestamp
   lastKeyRotation DateTime?
 
+  // ============================================
+  // VOICE PROFILE & CONSENT FIELDS
+  // ============================================
+  /// Date of consent for voice profile recording (null = not consented)
+  /// User must explicitly consent before recording their voice profile
+  voiceProfileConsentAt DateTime?
+
+  /// Date of age verification consent (null = not verified)
+  /// Required for users under 18 - voice profile expires every 2 months
+  ageVerificationConsentAt DateTime?
+
+  /// User's declared birth date (for age-based profile expiration)
+  birthDate DateTime?
+
+  /// Date when user enabled voice cloning for their messages (null = disabled)
+  voiceCloningEnabledAt DateTime?
+
+  /// Last voice profile update notification sent
+  voiceProfileUpdateNotifiedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
