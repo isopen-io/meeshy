@@ -651,8 +651,12 @@ class TestVoiceAPIRouter:
     """Tests pour le routeur Voice API"""
 
     @pytest.fixture
-    def mock_services(self, temp_data_dir):
+    def mock_services(self, temp_data_dir, monkeypatch):
         """Crée des mocks pour tous les services"""
+        # Set environment variables to use temp directories
+        monkeypatch.setenv('UPLOAD_DIR', temp_data_dir)
+        monkeypatch.setenv('AUDIO_OUTPUT_DIR', temp_data_dir)
+
         # Mock transcription service
         transcription_service = MagicMock()
         transcription_service.is_initialized = True
