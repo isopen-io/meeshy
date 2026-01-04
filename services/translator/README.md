@@ -163,7 +163,96 @@ Le service expose un serveur ZMQ sur le port **5555** pour la communication inte
 
 ## 🧪 Tests
 
-### Tests automatisés complets
+### Local Development Setup (macOS/Linux)
+
+The translator service tests can be run locally on macOS or Linux. Here's a complete setup guide:
+
+#### Prerequisites
+
+```bash
+# macOS: Install system dependencies via Homebrew
+brew install python@3.12 portaudio libsndfile ffmpeg
+
+# Linux (Ubuntu/Debian):
+# sudo apt-get install python3.12 python3.12-venv portaudio19-dev libsndfile1 ffmpeg
+
+# Verify Python version
+python3 --version  # Should be 3.12+
+```
+
+#### Environment Setup
+
+```bash
+cd services/translator
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov
+```
+
+#### Running Tests
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all unit tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_07_voice_clone_service.py -v
+
+# Run speaker diarization tests
+pytest tests/test_08_speaker_diarization.py -v
+
+# Run with coverage
+pytest tests/ -v --cov=src --cov-report=html
+
+# Run tests matching a pattern
+pytest tests/ -v -k "fingerprint"
+
+# Run tests and stop on first failure
+pytest tests/ -v -x
+```
+
+#### Notes for macOS
+
+- **Apple Silicon (M1/M2/M3)**: PyTorch and audio libraries work natively
+- **NumPy/SciPy**: Ensure you use compatible versions with your Python
+- **librosa**: Requires `libsndfile` (`brew install libsndfile`)
+- **pyaudio**: Requires `portaudio` (`brew install portaudio`)
+- **ffmpeg**: Required for audio format conversions
+
+#### Quick Test (No ML Models Required)
+
+Most unit tests use mocks and don't require downloading ML models:
+
+```bash
+# These tests run quickly without GPU/ML models
+pytest tests/test_07_voice_clone_service.py -v
+pytest tests/test_08_speaker_diarization.py -v
+```
+
+#### Full Integration Tests (With ML Models)
+
+For tests requiring actual ML models:
+
+```bash
+# Set model cache directory
+export MODELS_PATH=/path/to/models
+
+# Run full test suite (slower, downloads models)
+pytest tests/ -v --run-integration
+```
+
+### Tests automatisés complets (Mock Server)
 
 ```bash
 # Démarrer le serveur mock dans un terminal
@@ -184,7 +273,7 @@ python test_simple.py  # Tests des imports et configuration
 ```
 📊 RÉSULTATS DES TESTS:
 health               : ✅ PASS
-info                 : ✅ PASS  
+info                 : ✅ PASS
 fastapi_translation  : ✅ PASS
 zmq_translation      : ✅ PASS
 
