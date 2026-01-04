@@ -1013,6 +1013,119 @@ class VoiceAnalyzer:
 
         return primary
 
+    async def extract_primary_speaker_audio(
+        self,
+        audio_path: str,
+        output_path: Optional[str] = None,
+        min_segment_duration_ms: int = 100
+    ) -> Tuple[str, RecordingMetadata]:
+        """
+        Extrait uniquement l'audio du locuteur principal.
+
+        Analyse l'audio, identifie le locuteur principal (celui qui parle le plus),
+        et extrait uniquement ses segments de parole pour le clonage vocal.
+
+        Args:
+            audio_path: Chemin vers le fichier audio source
+            output_path: Chemin de sortie (optionnel, généré automatiquement si None)
+            min_segment_duration_ms: Durée minimum d'un segment à conserver
+
+        Returns:
+            Tuple[str, RecordingMetadata]: (chemin audio extrait, métadonnées complètes)
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio non trouvé: {audio_path}")
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._extract_primary_speaker_sync,
+            audio_path,
+            output_path,
+            min_segment_duration_ms
+        )
+
+    def _extract_primary_speaker_sync(
+        self,
+        audio_path: str,
+        output_path: Optional[str],
+        min_segment_duration_ms: int
+    ) -> Tuple[str, RecordingMetadata]:
+        """Extraction synchrone du locuteur principal"""
+        import librosa
+        import soundfile as sf
+
+        # Analyser l'audio complet
+        metadata = self._analyze_audio_sync(audio_path)
+
+        if not metadata.primary_speaker:
+            logger.warning("[VOICE_ANALYZER] Aucun locuteur principal détecté")
+            return audio_path, metadata
+
+        primary = metadata.primary_speaker
+        segments = primary.segments
+
+        if not segments:
+            logger.warning("[VOICE_ANALYZER] Aucun segment pour le locuteur principal")
+            return audio_path, metadata
+
+        # Charger l'audio
+        audio, sr = librosa.load(audio_path, sr=22050)
+
+        # Filtrer les segments trop courts
+        min_samples = int(min_segment_duration_ms * sr / 1000)
+        valid_segments = []
+        for seg in segments:
+            start_sample = int(seg["start"] * sr)
+            end_sample = int(seg["end"] * sr)
+            if (end_sample - start_sample) >= min_samples:
+                valid_segments.append((start_sample, end_sample))
+
+        if not valid_segments:
+            logger.warning("[VOICE_ANALYZER] Aucun segment valide après filtrage")
+            return audio_path, metadata
+
+        # Extraire et concaténer les segments du locuteur principal
+        extracted_audio = []
+        for start, end in valid_segments:
+            extracted_audio.append(audio[start:end])
+
+        primary_audio = np.concatenate(extracted_audio)
+
+        # Générer le chemin de sortie si non fourni
+        if output_path is None:
+            base_name = os.path.splitext(audio_path)[0]
+            output_path = f"{base_name}_primary_speaker.wav"
+
+        # Sauvegarder l'audio extrait
+        sf.write(output_path, primary_audio, sr)
+
+        # Mettre à jour les métadonnées
+        extracted_duration_ms = int(len(primary_audio) / sr * 1000)
+        logger.info(
+            f"[VOICE_ANALYZER] Audio du locuteur principal extrait: "
+            f"{len(valid_segments)} segments, {extracted_duration_ms}ms "
+            f"(original: {metadata.duration_ms}ms)"
+        )
+
+        # Créer de nouvelles métadonnées pour l'audio extrait
+        extracted_metadata = RecordingMetadata(
+            file_path=output_path,
+            duration_ms=extracted_duration_ms,
+            file_size_bytes=os.path.getsize(output_path),
+            format="wav",
+            noise_level=metadata.noise_level,
+            snr_db=metadata.snr_db,
+            clarity_score=metadata.clarity_score,
+            clipping_detected=metadata.clipping_detected,
+            speaker_count=1,  # Maintenant un seul locuteur
+            speakers=[primary],
+            primary_speaker=primary,
+            analyzed_at=datetime.now()
+        )
+
+        return output_path, extracted_metadata
+
     async def compare_voices(
         self,
         original_path: str,
@@ -1262,7 +1375,12 @@ class VoiceCloneService:
         audio_paths: List[str],
         total_duration_ms: int
     ) -> VoiceModel:
-        """Crée un nouveau modèle de voix à partir des audios"""
+        """
+        Crée un nouveau modèle de voix à partir des audios.
+
+        IMPORTANT: Extrait uniquement les segments du locuteur principal
+        pour garantir que le clonage ne concerne que sa voix.
+        """
         import uuid as uuid_module
         start_time = time.time()
         logger.info(f"[VOICE_CLONE] 🎤 Création modèle pour {user_id} ({len(audio_paths)} audios)")
@@ -1272,44 +1390,95 @@ class VoiceCloneService:
         if not valid_paths:
             raise ValueError("Aucun fichier audio valide trouvé")
 
-        # Concaténer les audios si multiples
-        if len(valid_paths) > 1:
-            combined_audio = await self._concatenate_audios(valid_paths, user_id)
+        # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
+        user_dir = self.voice_cache_dir / user_id
+        user_dir.mkdir(parents=True, exist_ok=True)
+
+        # =====================================================================
+        # EXTRACTION DU LOCUTEUR PRINCIPAL UNIQUEMENT
+        # Pour chaque audio, extraire uniquement les segments du locuteur principal
+        # =====================================================================
+        voice_analyzer = get_voice_analyzer()
+        extracted_paths = []
+        primary_voice_chars = None
+        recording_metadata = None
+
+        for audio_path in valid_paths:
+            try:
+                # Extraire uniquement les segments du locuteur principal
+                extracted_path, metadata = await voice_analyzer.extract_primary_speaker_audio(
+                    audio_path,
+                    output_path=str(user_dir / f"primary_{os.path.basename(audio_path)}"),
+                    min_segment_duration_ms=100
+                )
+                extracted_paths.append(extracted_path)
+
+                # Conserver les caractéristiques vocales du premier locuteur principal
+                if primary_voice_chars is None and metadata.primary_speaker:
+                    primary_voice_chars = metadata.primary_speaker.voice_characteristics
+                    recording_metadata = metadata
+                    logger.info(
+                        f"[VOICE_CLONE] Locuteur principal détecté: "
+                        f"gender={primary_voice_chars.estimated_gender}, "
+                        f"pitch={primary_voice_chars.pitch_mean_hz:.1f}Hz"
+                    )
+
+            except Exception as e:
+                logger.warning(f"[VOICE_CLONE] Erreur extraction locuteur principal: {e}")
+                # Fallback: utiliser l'audio complet
+                extracted_paths.append(audio_path)
+
+        # Recalculer la durée totale après extraction
+        extracted_duration_ms = 0
+        for path in extracted_paths:
+            extracted_duration_ms += await self._get_audio_duration_ms(path)
+
+        logger.info(
+            f"[VOICE_CLONE] Audio extrait: {extracted_duration_ms}ms "
+            f"(original: {total_duration_ms}ms, {len(extracted_paths)} fichiers)"
+        )
+
+        # Concaténer les audios extraits si multiples
+        if len(extracted_paths) > 1:
+            combined_audio = await self._concatenate_audios(extracted_paths, user_id)
         else:
-            combined_audio = valid_paths[0]
+            combined_audio = extracted_paths[0]
 
         # Générer un profile_id unique
         profile_id = uuid_module.uuid4().hex[:12]
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
-        user_dir = self.voice_cache_dir / user_id
-        user_dir.mkdir(parents=True, exist_ok=True)
-
-        # Extraire l'embedding de voix
+        # Extraire l'embedding de voix (du locuteur principal uniquement)
         embedding = await self._extract_voice_embedding(combined_audio, user_dir)
 
         # Calculer score de qualité
-        quality_score = self._calculate_quality_score(total_duration_ms, len(valid_paths))
+        quality_score = self._calculate_quality_score(extracted_duration_ms, len(valid_paths))
 
         # Chemin de l'embedding avec nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
         embedding_filename = f"{user_id}_{profile_id}_{timestamp}.pkl"
         embedding_path = str(user_dir / embedding_filename)
 
-        # Créer le modèle
+        # Créer le modèle avec les caractéristiques vocales du locuteur principal
         model = VoiceModel(
             user_id=user_id,
             embedding_path=embedding_path,
             audio_count=len(valid_paths),
-            total_duration_ms=total_duration_ms,
+            total_duration_ms=extracted_duration_ms,  # Durée extraite, pas originale
             quality_score=quality_score,
             profile_id=profile_id,
             version=1,
             created_at=datetime.now(),
             updated_at=datetime.now(),
             next_recalibration_at=datetime.now() + timedelta(days=self.VOICE_MODEL_MAX_AGE_DAYS),
-            embedding=embedding
+            embedding=embedding,
+            voice_characteristics=primary_voice_chars  # Caractéristiques du locuteur principal
         )
+
+        # Générer l'empreinte vocale unique
+        if model.voice_characteristics or model.embedding is not None:
+            fingerprint = model.generate_fingerprint()
+            if fingerprint:
+                logger.info(f"[VOICE_CLONE] Empreinte vocale: {fingerprint.fingerprint_id}")
 
         # Sauvegarder
         await self._save_model_to_cache(model)
