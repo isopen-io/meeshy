@@ -243,14 +243,29 @@ class BaseTTSBackend(ABC):
 
 
 class ChatterboxBackend(BaseTTSBackend):
-    """Backend Chatterbox (Resemble AI) - MODÈLE PAR DÉFAUT ET FALLBACK"""
+    """Backend Chatterbox (Resemble AI) - MODÈLE PAR DÉFAUT ET FALLBACK
+
+    Supporte 2 modes:
+    - Monolingual (ChatterboxTTS): Anglais uniquement, plus léger
+    - Multilingual (ChatterboxMultilingualTTS): 23 langues supportées
+    """
+
+    # Langues supportées par le modèle multilingue
+    MULTILINGUAL_LANGUAGES = {
+        'ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'he', 'hi',
+        'it', 'ja', 'ko', 'ms', 'nl', 'no', 'pl', 'pt', 'ru', 'sv',
+        'sw', 'tr', 'zh'
+    }
 
     def __init__(self, device: str = "auto", turbo: bool = False):
         super().__init__()
         self.device = device
         self.turbo = turbo
-        self.model = None
+        self.model = None  # Monolingual model
+        self.model_multilingual = None  # Multilingual model
         self._available = False
+        self._available_multilingual = False
+        self._initialized_multilingual = False
         self._models_path = Path(os.getenv("MODELS_PATH", "/workspace/models"))
 
         try:
@@ -260,9 +275,16 @@ class ChatterboxBackend(BaseTTSBackend):
         except ImportError:
             logger.warning(f"⚠️ [TTS] Chatterbox {'Turbo' if turbo else ''} package non disponible")
 
+        try:
+            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+            self._available_multilingual = True
+            logger.info("✅ [TTS] Chatterbox Multilingual (23 langues) disponible")
+        except ImportError:
+            logger.warning("⚠️ [TTS] Chatterbox Multilingual non disponible")
+
     @property
     def is_available(self) -> bool:
-        return self._available
+        return self._available or self._available_multilingual
 
     def is_model_downloaded(self) -> bool:
         """Vérifie si le modèle Chatterbox est téléchargé"""
@@ -317,7 +339,20 @@ class ChatterboxBackend(BaseTTSBackend):
         finally:
             self._downloading = False
 
+    def _get_device(self):
+        """Détermine le device à utiliser."""
+        import torch
+        if self.device == "auto":
+            if torch.cuda.is_available():
+                return "cuda"
+            elif torch.backends.mps.is_available():
+                return "mps"
+            else:
+                return "cpu"
+        return self.device
+
     async def initialize(self) -> bool:
+        """Initialise le modèle monolingual (anglais)."""
         if self._initialized:
             return True
 
@@ -326,14 +361,8 @@ class ChatterboxBackend(BaseTTSBackend):
 
         try:
             from chatterbox.tts import ChatterboxTTS
-            import torch
 
-            # Déterminer le device
-            if self.device == "auto":
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-            else:
-                device = self.device
-
+            device = self._get_device()
             model_name = "Turbo" if self.turbo else ""
             logger.info(f"[TTS] 🔄 Chargement Chatterbox {model_name}...")
 
@@ -358,6 +387,53 @@ class ChatterboxBackend(BaseTTSBackend):
             logger.error(f"❌ [TTS] Erreur initialisation Chatterbox: {e}")
             return False
 
+    async def initialize_multilingual(self) -> bool:
+        """Initialise le modèle multilingue (23 langues)."""
+        if self._initialized_multilingual:
+            return True
+
+        if not self._available_multilingual:
+            logger.warning("[TTS] Chatterbox Multilingual non disponible")
+            return False
+
+        try:
+            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+            import torch
+
+            device = self._get_device()
+            logger.info(f"[TTS] 🔄 Chargement Chatterbox Multilingual (23 langues)...")
+
+            # Monkey patch torch.load pour gérer le mapping CUDA -> CPU/MPS
+            original_torch_load = torch.load
+
+            def patched_torch_load(*args, **kwargs):
+                if 'map_location' not in kwargs:
+                    kwargs['map_location'] = device
+                if 'weights_only' not in kwargs:
+                    kwargs['weights_only'] = False
+                return original_torch_load(*args, **kwargs)
+
+            torch.load = patched_torch_load
+
+            try:
+                loop = asyncio.get_event_loop()
+                self.model_multilingual = await loop.run_in_executor(
+                    None,
+                    lambda: ChatterboxMultilingualTTS.from_pretrained(device=device)
+                )
+            finally:
+                torch.load = original_torch_load
+
+            self._initialized_multilingual = True
+            logger.info(f"✅ [TTS] Chatterbox Multilingual initialisé sur {device}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TTS] Erreur initialisation Chatterbox Multilingual: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     async def synthesize(
         self,
         text: str,
@@ -368,44 +444,101 @@ class ChatterboxBackend(BaseTTSBackend):
         cfg_weight: float = 0.5,
         **kwargs
     ) -> str:
-        if not self._initialized:
-            await self.initialize()
-
-        if not self.model:
-            raise RuntimeError("Chatterbox non initialisé")
-
         import torchaudio
+
+        # Normaliser le code langue (ex: fr-FR -> fr)
+        lang_code = language.split('-')[0].lower() if language else 'en'
+
+        # Déterminer si on utilise le modèle multilingue
+        use_multilingual = (
+            lang_code != 'en' and
+            lang_code in self.MULTILINGUAL_LANGUAGES and
+            self._available_multilingual
+        )
+
+        if use_multilingual:
+            # Utiliser le modèle multilingue pour les langues non-anglaises
+            if not self._initialized_multilingual:
+                await self.initialize_multilingual()
+
+            if not self.model_multilingual:
+                # Fallback sur le modèle monolingual si multilingue échoue
+                logger.warning(f"[TTS] Multilingual non disponible, fallback sur monolingual pour {lang_code}")
+                use_multilingual = False
+
+        if not use_multilingual:
+            # Utiliser le modèle monolingual (anglais)
+            if not self._initialized:
+                await self.initialize()
+
+            if not self.model:
+                raise RuntimeError("Chatterbox non initialisé")
 
         loop = asyncio.get_event_loop()
 
-        # Générer l'audio
-        if speaker_audio_path and os.path.exists(speaker_audio_path):
-            wav = await loop.run_in_executor(
-                None,
-                lambda: self.model.generate(
-                    text,
-                    audio_prompt_path=speaker_audio_path,
-                    exaggeration=exaggeration,
-                    cfg_weight=cfg_weight
+        if use_multilingual:
+            # Génération multilingue
+            # Pour le clonage cross-langue, cfg_weight=0 réduit le transfert d'accent
+            effective_cfg = 0.0 if lang_code != 'en' else cfg_weight
+
+            if speaker_audio_path and os.path.exists(speaker_audio_path):
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: self.model_multilingual.generate(
+                        text=text,
+                        audio_prompt_path=speaker_audio_path,
+                        language_id=lang_code,
+                        exaggeration=exaggeration,
+                        cfg_weight=effective_cfg
+                    )
                 )
-            )
+            else:
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: self.model_multilingual.generate(
+                        text=text,
+                        language_id=lang_code,
+                        exaggeration=exaggeration,
+                        cfg_weight=effective_cfg
+                    )
+                )
+
+            sample_rate = self.model_multilingual.sr
+            logger.debug(f"[TTS] Synthèse multilingue: {lang_code}")
         else:
-            wav = await loop.run_in_executor(
-                None,
-                lambda: self.model.generate(text, exaggeration=exaggeration, cfg_weight=cfg_weight)
-            )
+            # Génération monolingual (anglais)
+            if speaker_audio_path and os.path.exists(speaker_audio_path):
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: self.model.generate(
+                        text,
+                        audio_prompt_path=speaker_audio_path,
+                        exaggeration=exaggeration,
+                        cfg_weight=cfg_weight
+                    )
+                )
+            else:
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: self.model.generate(text, exaggeration=exaggeration, cfg_weight=cfg_weight)
+                )
+
+            sample_rate = self.model.sr
+            logger.debug(f"[TTS] Synthèse monolingual: en")
 
         # Sauvegarder le fichier
         await loop.run_in_executor(
             None,
-            lambda: torchaudio.save(output_path, wav, self.model.sr)
+            lambda: torchaudio.save(output_path, wav, sample_rate)
         )
 
         return output_path
 
     async def close(self):
         self.model = None
+        self.model_multilingual = None
         self._initialized = False
+        self._initialized_multilingual = False
 
 
 class HiggsAudioBackend(BaseTTSBackend):
