@@ -1,23 +1,53 @@
 # =============================================================================
-# MEESHY - Docker Compose Local Development with HTTPS (mkcert)
+# MEESHY - Docker Compose Local Development with HTTPS + Network DNS
 # =============================================================================
 # Usage:
-#   ./scripts/dev.sh --secure --with-containers
-#   make dev-secure
+#   make docker-infra                    # Start infrastructure only
+#   make start-network                   # Start with network access
+#   make start-network HOST=mydev.local  # Custom hostname
 #
 # Prerequisites:
-#   - mkcert installed (brew install mkcert / apt install mkcert)
-#   - Run: mkcert -install (one time)
-#   - Certificates generated in infrastructure/docker/compose/certs/
+#   - mkcert installed (brew install mkcert)
+#   - Run: make setup-certs-network
+#
+# Network Access:
+#   - Configure other devices to use this machine as DNS server
+#   - Or add entries to /etc/hosts on each device
 # =============================================================================
 
 services:
+  # ===========================================================================
+  # DNSMASQ - Local DNS Server for Network Access
+  # ===========================================================================
+  # Allows other devices (mobile, tablets) to resolve *.meeshy.local
+  # Configure your devices to use ${HOST_IP}:53 as DNS server
+  dns:
+    image: andyshinn/dnsmasq:latest
+    container_name: meeshy-dns
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    volumes:
+      - ./config/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    networks:
+      - meeshy-local-network
+    healthcheck:
+      test: ["CMD", "nslookup", "meeshy.local", "127.0.0.1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # ===========================================================================
   # TRAEFIK - Reverse Proxy with Local HTTPS
   # ===========================================================================
   traefik:
     image: traefik:v3.0
     container_name: meeshy-traefik
+    restart: unless-stopped
     command:
       - "--api.insecure=true"
       - "--api.dashboard=true"
@@ -47,6 +77,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    # Note: DNS dependency removed - use /etc/hosts for local development
+    # depends_on:
+    #   dns:
+    #     condition: service_healthy
 
   # ===========================================================================
   # DATABASE - MongoDB with Replica Set
@@ -83,10 +117,17 @@ services:
       - meeshy-local-network
     entrypoint: >
       mongosh --host database:27017 --eval '
-        rs.status().ok || rs.initiate({
-          _id: "rs0",
-          members: [{ _id: 0, host: "database:27017" }]
-        });
+        try {
+          const status = rs.status();
+          print("Replica set already initialized, state: " + status.myState);
+        } catch (e) {
+          print("Initializing replica set...");
+          rs.initiate({
+            _id: "rs0",
+            members: [{ _id: 0, host: "localhost:27017" }]
+          });
+          print("Replica set initialized!");
+        }
       '
     restart: "no"
 
@@ -111,6 +152,51 @@ services:
       retries: 3
 
   # ===========================================================================
+  # MONGO EXPRESS - MongoDB Web UI (mongo.meeshy.local)
+  # ===========================================================================
+  mongo-express:
+    image: mongo-express:latest
+    container_name: meeshy-local-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_SERVER: database
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USER:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASS:-admin}
+    networks:
+      - meeshy-local-network
+    depends_on:
+      database:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mongo-ui.rule=Host(`mongo.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`mongo.meeshy.local`)"
+      - "traefik.http.routers.mongo-ui.entrypoints=websecure"
+      - "traefik.http.routers.mongo-ui.tls=true"
+      - "traefik.http.services.mongo-ui.loadbalancer.server.port=8081"
+
+  # ===========================================================================
+  # REDIS COMMANDER - Redis Web UI (redis.meeshy.local)
+  # ===========================================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: meeshy-local-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    networks:
+      - meeshy-local-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis-ui.rule=Host(`redis.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`redis.meeshy.local`)"
+      - "traefik.http.routers.redis-ui.entrypoints=websecure"
+      - "traefik.http.routers.redis-ui.tls=true"
+      - "traefik.http.services.redis-ui.loadbalancer.server.port=8081"
+
+  # ===========================================================================
   # FRONTEND - Next.js (optional, can run natively)
   # ===========================================================================
   frontend:
@@ -122,18 +208,19 @@ services:
       context: ../../..
       dockerfile: infrastructure/docker/images/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://localhost/api}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://localhost}
-        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://localhost}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://meeshy.local/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://meeshy.local}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://meeshy.local}
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost/api}
-      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://localhost}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://meeshy.local/api}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://meeshy.local}
     networks:
       - meeshy-local-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)"
+      # Frontend accessible via: meeshy.local, app.meeshy.local, localhost
+      - "traefik.http.routers.frontend.rule=Host(`localhost`) || Host(`meeshy.local`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`) || Host(`app.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`app.meeshy.local`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
@@ -163,14 +250,25 @@ services:
       - meeshy-local-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gateway.rule=(Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/api`)"
+      # Gateway via path: meeshy.local/api
+      - "traefik.http.routers.gateway.rule=(Host(`localhost`) || Host(`meeshy.local`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/api`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls=true"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
-      # WebSocket
-      - "traefik.http.routers.gateway-ws.rule=(Host(`localhost`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/socket.io`)"
+      # Gateway via subdomain: gate.meeshy.local, api.meeshy.local
+      - "traefik.http.routers.gateway-sub.rule=Host(`gate.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`gate.meeshy.local`) || Host(`api.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`api.meeshy.local`)"
+      - "traefik.http.routers.gateway-sub.entrypoints=websecure"
+      - "traefik.http.routers.gateway-sub.tls=true"
+      - "traefik.http.routers.gateway-sub.service=gateway"
+      # WebSocket via path
+      - "traefik.http.routers.gateway-ws.rule=(Host(`localhost`) || Host(`meeshy.local`) || Host(`${LOCAL_DOMAIN:-meeshy.local}`)) && PathPrefix(`/socket.io`)"
       - "traefik.http.routers.gateway-ws.entrypoints=websecure"
       - "traefik.http.routers.gateway-ws.tls=true"
+      # WebSocket via subdomain
+      - "traefik.http.routers.gateway-ws-sub.rule=(Host(`gate.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`gate.meeshy.local`)) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.gateway-ws-sub.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ws-sub.tls=true"
+      - "traefik.http.routers.gateway-ws-sub.service=gateway"
     depends_on:
       database:
         condition: service_healthy
@@ -198,6 +296,13 @@ services:
       - local_models_data:/workspace/models
     networks:
       - meeshy-local-network
+    labels:
+      - "traefik.enable=true"
+      # Translator via subdomain: ml.meeshy.local, translate.meeshy.local
+      - "traefik.http.routers.translator.rule=Host(`ml.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`ml.meeshy.local`) || Host(`translate.${LOCAL_DOMAIN:-meeshy.local}`) || Host(`translate.meeshy.local`)"
+      - "traefik.http.routers.translator.entrypoints=websecure"
+      - "traefik.http.routers.translator.tls=true"
+      - "traefik.http.services.translator.loadbalancer.server.port=8000"
     depends_on:
       database:
         condition: service_healthy

@@ -1,0 +1,53 @@
+# =============================================================================
+# DNSMasq Configuration for Meeshy Local Development
+# =============================================================================
+# Resolves *.meeshy.local and custom domains to your local machine
+# Allows access from any device on the network (mobile, tablets, etc.)
+#
+# Variables replaced by setup script:
+#   __HOST_IP__     - Local machine IP address
+#   __LOCAL_DOMAIN__ - Custom local domain (default: meeshy.local)
+# =============================================================================
+
+# Don't read /etc/resolv.conf
+no-resolv
+
+# Upstream DNS servers (fallback for non-local domains)
+server=8.8.8.8
+server=8.8.4.4
+server=1.1.1.1
+
+# =============================================================================
+# Local Domain Resolution
+# =============================================================================
+# All *.meeshy.local and the custom domain resolve to host machine
+address=/meeshy.local/__HOST_IP__
+address=/__LOCAL_DOMAIN__/__HOST_IP__
+
+# =============================================================================
+# Service-specific subdomains (optional, all point to same host)
+# =============================================================================
+# address=/app.meeshy.local/__HOST_IP__
+# address=/api.meeshy.local/__HOST_IP__
+# address=/ml.meeshy.local/__HOST_IP__
+
+# =============================================================================
+# DNS Server Configuration
+# =============================================================================
+# Listen on all interfaces
+listen-address=0.0.0.0
+
+# Don't use /etc/hosts
+no-hosts
+
+# Log DNS queries (useful for debugging)
+log-queries
+log-facility=-
+
+# Cache settings
+cache-size=1000
+no-negcache
+
+# Expand simple names to domain
+expand-hosts
+domain=meeshy.local
