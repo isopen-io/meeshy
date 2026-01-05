@@ -1,10 +1,14 @@
 # Makefile pour Meeshy - Développement Local et Docker
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
-.PHONY: help setup install generate build dev dev-web dev-gateway dev-translator \
-        start stop restart logs status clean reset health test urls \
-        docker-start docker-stop docker-logs docker-build docker-pull \
-        build-gateway build-translator build-frontend build-all \
+.PHONY: help setup setup-python setup-certs setup-certs-network setup-env setup-network setup-dns \
+        install generate build dev dev-web dev-gateway dev-translator \
+        start stop restart start-network share-cert network-info \
+        dev-tmux-network dev-bg-network \
+        logs status clean reset health test urls docker-infra docker-infra-simple \
+        docker-start docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
+        build-gateway build-translator build-frontend build-all-docker \
+        push-gateway push-translator push-frontend push-all release \
         dev-tmux dev-bg dev-fg check verify
 
 # Couleurs
@@ -14,6 +18,7 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 CYAN := \033[0;36m
 BOLD := \033[1m
+DIM := \033[2m
 NC := \033[0m
 
 # Runtime JavaScript (bun par défaut, pnpm en fallback)
@@ -32,8 +37,15 @@ PYTHON_OK := $(shell python3 -c "import sys; print('yes' if sys.version_info[:2]
 # Variables
 COMPOSE_DIR := infrastructure/docker/compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.dev.yml
-COMPOSE_LOCAL := $(COMPOSE_DIR)/docker-compose.local.yml
+COMPOSE_LOCAL := $(COMPOSE_DIR)/docker-compose.local-https.yml
+COMPOSE_LOCAL_SIMPLE := $(COMPOSE_DIR)/docker-compose.local.yml
+CERTS_DIR := $(COMPOSE_DIR)/certs
 ENV_FILE := infrastructure/envs/.env.example
+
+# Network Configuration (can be overridden: make start-network HOST=mydev.local)
+HOST_IP := $(shell ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | head -1 | awk '{print $$2}')
+HOST ?= $(HOST_IP)
+LOCAL_DOMAIN ?= meeshy.local
 
 # Paths
 WEB_DIR := apps/web
@@ -63,21 +75,30 @@ help: ## Afficher cette aide
 	fi
 	@echo ""
 	@echo "$(BLUE)🚀 DÉMARRAGE RAPIDE:$(NC)"
-	@echo "  $(YELLOW)make setup$(NC)      - Installation complète (install + generate + build)"
-	@echo "  $(YELLOW)make start$(NC)      - Lancer tous les services (auto-détecte tmux/bg)"
-	@echo "  $(YELLOW)make stop$(NC)       - Arrêter tous les services"
+	@echo "  $(YELLOW)make setup$(NC)          - Installation complète (certs + install + generate + build)"
+	@echo "  $(YELLOW)make start$(NC)          - Lancer tous les services (localhost)"
+	@echo "  $(YELLOW)make start-network$(NC)  - Lancer avec accès réseau 📱 (mobile/multi-device)"
+	@echo "  $(YELLOW)make stop$(NC)           - Arrêter tous les services"
 	@echo ""
 	@echo "$(BLUE)📦 INSTALLATION:$(NC)"
-	@grep -E '^(install|install-js|install-python|generate|build):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(install|install-js|install-python|setup-certs|generate|build):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🔧 DÉVELOPPEMENT:$(NC)"
 	@grep -E '^(dev-web|dev-gateway|dev-translator|dev-tmux|dev-bg):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(BLUE)📱 RÉSEAU (Mobile/Multi-Device):$(NC)"
+	@grep -E '^(start-network|share-cert|network-info):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🧪 TESTS & QUALITÉ:$(NC)"
 	@grep -E '^(test|test-gateway|test-web|lint|type-check|verify):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🐳 DOCKER:$(NC)"
-	@grep -E '^(docker-infra|docker-start|docker-stop):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(docker-infra|docker-infra-simple|docker-start|docker-start-network|docker-stop):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(BLUE)📦 BUILD & PUSH IMAGES:$(NC)"
+	@grep -E '^(build-gateway|build-translator|build-frontend|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(push-gateway|push-translator|push-frontend|push-all|release):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@echo "  $(DIM)Options: TAG=v1.0.0 DOCKER_REGISTRY=myrepo$(NC)"
 	@echo ""
 	@echo "$(BLUE)🔍 UTILITAIRES:$(NC)"
 	@grep -E '^(status|health|urls|logs|clean|kill):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
@@ -87,18 +108,97 @@ help: ## Afficher cette aide
 # SETUP COMPLET (One-liner)
 # =============================================================================
 
-setup: ## 🚀 Installation complète: install + generate + build
+setup: ## 🚀 Installation complète: pyenv + certs + install + generate + build
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║          MEESHY - Installation Complète                      ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@$(MAKE) setup-python
+	@$(MAKE) setup-certs
+	@$(MAKE) setup-env
 	@echo ""
 	@$(MAKE) install
 	@echo ""
 	@$(MAKE) generate
 	@echo ""
+	@$(MAKE) build
+	@echo ""
 	@echo "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(GREEN)║  ✅ Setup terminé ! Lancez: make start                       ║$(NC)"
 	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+
+setup-python: ## 🐍 Configurer Python 3.11 via pyenv pour le translator
+	@echo "$(BLUE)🐍 Configuration de Python 3.11 pour le translator...$(NC)"
+	@if ! command -v pyenv >/dev/null 2>&1; then \
+		echo "$(RED)❌ pyenv non installé. Installez-le avec: brew install pyenv$(NC)"; \
+		exit 1; \
+	fi
+	@REQUIRED_VERSION="3.11"; \
+	INSTALLED=$$(pyenv versions --bare 2>/dev/null | grep "^3\.11" | head -1); \
+	if [ -z "$$INSTALLED" ]; then \
+		echo "  $(YELLOW)Python 3.11 non trouvé, installation...$(NC)"; \
+		pyenv install 3.11 || exit 1; \
+		INSTALLED=$$(pyenv versions --bare | grep "^3\.11" | head -1); \
+	fi; \
+	echo "  $(GREEN)✓ Python $$INSTALLED disponible$(NC)"; \
+	cd $(TRANSLATOR_DIR) && echo "$$INSTALLED" > .python-version; \
+	echo "  $(GREEN)✓ .python-version configuré pour translator$(NC)"
+
+setup-env: ## 📝 Créer les fichiers .env pour le développement local
+	@echo "$(BLUE)📝 Configuration des fichiers .env...$(NC)"
+	@if [ ! -f $(TRANSLATOR_DIR)/.env ]; then \
+		echo "# MEESHY TRANSLATOR SERVICE - Local Development" > $(TRANSLATOR_DIR)/.env; \
+		echo "DEBUG=true" >> $(TRANSLATOR_DIR)/.env; \
+		echo "WORKERS=4" >> $(TRANSLATOR_DIR)/.env; \
+		echo "FASTAPI_PORT=8000" >> $(TRANSLATOR_DIR)/.env; \
+		echo "DATABASE_URL=mongodb://localhost:27017/meeshy" >> $(TRANSLATOR_DIR)/.env; \
+		echo "REDIS_URL=redis://localhost:6379" >> $(TRANSLATOR_DIR)/.env; \
+		echo "TTS_MODEL=chatterbox" >> $(TRANSLATOR_DIR)/.env; \
+		echo "TTS_OUTPUT_DIR=./generated/audios" >> $(TRANSLATOR_DIR)/.env; \
+		echo "UPLOAD_DIR=./uploads" >> $(TRANSLATOR_DIR)/.env; \
+		echo "OUTPUT_DIR=./generated/audios" >> $(TRANSLATOR_DIR)/.env; \
+		echo "VOICE_MODEL_CACHE_DIR=./embeddings/voices" >> $(TRANSLATOR_DIR)/.env; \
+		echo "MODELS_PATH=./models" >> $(TRANSLATOR_DIR)/.env; \
+		echo "HF_HOME=./models" >> $(TRANSLATOR_DIR)/.env; \
+		echo "TRANSFORMERS_CACHE=./models" >> $(TRANSLATOR_DIR)/.env; \
+		echo "  $(GREEN)✓ $(TRANSLATOR_DIR)/.env créé$(NC)"; \
+	else \
+		echo "  $(YELLOW)→ $(TRANSLATOR_DIR)/.env existe déjà$(NC)"; \
+	fi
+	@mkdir -p $(TRANSLATOR_DIR)/uploads $(TRANSLATOR_DIR)/generated/audios \
+		$(TRANSLATOR_DIR)/embeddings/voices $(TRANSLATOR_DIR)/analytics_data \
+		$(TRANSLATOR_DIR)/models
+	@echo "  $(GREEN)✓ Dossiers locaux créés$(NC)"
+
+setup-certs: ## 🔐 Générer les certificats SSL locaux (mkcert)
+	@echo "$(BLUE)🔐 Configuration des certificats SSL locaux...$(NC)"
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "$(RED)❌ mkcert non installé. Installez-le avec: brew install mkcert$(NC)"; \
+		exit 1; \
+	fi
+	@# Installer CA si pas déjà fait
+	@mkcert -install 2>/dev/null || true
+	@# Créer le dossier certs
+	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
+	@# Générer les certificats si absents
+	@if [ ! -f "$(WEB_DIR)/.cert/localhost.pem" ]; then \
+		echo "  $(YELLOW)Génération des certificats...$(NC)"; \
+		cd $(WEB_DIR)/.cert && mkcert localhost 127.0.0.1 ::1 meeshy.local; \
+		mv localhost+3.pem localhost.pem 2>/dev/null || true; \
+		mv localhost+3-key.pem localhost-key.pem 2>/dev/null || true; \
+	else \
+		echo "  $(GREEN)✓ Certificats existants$(NC)"; \
+	fi
+	@# Créer les liens symboliques pour Docker
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
+	@echo "  $(GREEN)✓ Certificats configurés$(NC)"
+	@echo ""
+	@echo "$(BOLD)📍 Fichiers créés:$(NC)"
+	@echo "    $(WEB_DIR)/.cert/localhost.pem"
+	@echo "    $(WEB_DIR)/.cert/localhost-key.pem"
+	@echo "    $(CERTS_DIR)/cert.pem -> symlink"
+	@echo "    $(CERTS_DIR)/key.pem -> symlink"
 
 # =============================================================================
 # INSTALLATION
@@ -106,38 +206,66 @@ setup: ## 🚀 Installation complète: install + generate + build
 
 install: ## Installer toutes les dépendances (JS + Python)
 	@echo "$(BLUE)📦 Installation des dépendances JavaScript avec $(JS_RUNTIME)...$(NC)"
-	@$(JS_RUNTIME) install --ignore-scripts
+	@$(JS_RUNTIME) install
 	@echo ""
-	@if [ "$(PYTHON_OK)" != "yes" ]; then \
-		echo "$(YELLOW)⚠️  Python 3.11 recommandé pour les dépendances ML (actuel: $(PYTHON_VERSION))$(NC)"; \
-		echo "$(CYAN)   Installez avec: pyenv install 3.11 && pyenv local 3.11$(NC)"; \
-		echo "$(CYAN)   Ou sur macOS: brew install python@3.11$(NC)"; \
-		echo ""; \
-	fi
-	@echo "$(BLUE)📦 Installation des dépendances Python ($(PYTHON_VERSION))...$(NC)"
+	@echo "$(BLUE)📦 Installation des dépendances Python (via pyenv Python 3.11)...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
-		python3 -m venv .venv 2>/dev/null || true && \
+		if [ -f .python-version ]; then \
+			PYENV_VERSION=$$(cat .python-version) && \
+			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)" && \
+			~/.pyenv/versions/$$PYENV_VERSION/bin/python -m venv .venv 2>/dev/null || python3 -m venv .venv; \
+		else \
+			python3 -m venv .venv; \
+		fi && \
 		. .venv/bin/activate && \
 		pip install -q --upgrade pip && \
 		pip install -r requirements.txt
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les dépendances installées$(NC)"
+	@echo ""
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          INSTALLATION SUMMARY                                ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📁 Created/Updated Folders:$(NC)"
+	@[ -d "node_modules" ] && echo "  $(GREEN)✓$(NC) ./node_modules ($$(du -sh node_modules 2>/dev/null | cut -f1))" || true
+	@[ -d "$(WEB_DIR)/node_modules" ] && echo "  $(GREEN)✓$(NC) $(WEB_DIR)/node_modules ($$(du -sh $(WEB_DIR)/node_modules 2>/dev/null | cut -f1))" || true
+	@[ -d "$(GATEWAY_DIR)/node_modules" ] && echo "  $(GREEN)✓$(NC) $(GATEWAY_DIR)/node_modules ($$(du -sh $(GATEWAY_DIR)/node_modules 2>/dev/null | cut -f1))" || true
+	@[ -d "$(SHARED_DIR)/node_modules" ] && echo "  $(GREEN)✓$(NC) $(SHARED_DIR)/node_modules ($$(du -sh $(SHARED_DIR)/node_modules 2>/dev/null | cut -f1))" || true
+	@[ -d "$(TRANSLATOR_DIR)/.venv" ] && echo "  $(GREEN)✓$(NC) $(TRANSLATOR_DIR)/.venv ($$(du -sh $(TRANSLATOR_DIR)/.venv 2>/dev/null | cut -f1))" || true
+	@echo ""
+	@echo "$(BOLD)📍 Installation Locations:$(NC)"
+	@echo "  $(YELLOW)JavaScript ($(JS_RUNTIME)):$(NC)"
+	@echo "    Root:       $(CURDIR)/node_modules"
+	@echo "    Web:        $(CURDIR)/$(WEB_DIR)/node_modules"
+	@echo "    Gateway:    $(CURDIR)/$(GATEWAY_DIR)/node_modules"
+	@echo "    Shared:     $(CURDIR)/$(SHARED_DIR)/node_modules"
+	@echo ""
+	@echo "  $(YELLOW)Python (venv):$(NC)"
+	@echo "    Venv:       $(CURDIR)/$(TRANSLATOR_DIR)/.venv"
+	@echo "    Python:     $(CURDIR)/$(TRANSLATOR_DIR)/.venv/bin/python"
+	@echo "    Pip:        $(CURDIR)/$(TRANSLATOR_DIR)/.venv/bin/pip"
+	@echo ""
+	@echo "$(BOLD)📊 Package Counts:$(NC)"
+	@JS_PKG=$$(find node_modules -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' '); echo "  JS packages (root):    $$((JS_PKG - 1))"
+	@PY_PKG=$$(cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null && pip list 2>/dev/null | tail -n +3 | wc -l | tr -d ' '); echo "  Python packages:       $$PY_PKG"
+	@echo ""
 
 install-js: ## Installer uniquement les dépendances JavaScript
 	@echo "$(BLUE)📦 Installation des dépendances JavaScript avec $(JS_RUNTIME)...$(NC)"
-	@$(JS_RUNTIME) install --ignore-scripts
+	@$(JS_RUNTIME) install
 	@echo "$(GREEN)✅ Dépendances JavaScript installées$(NC)"
 
 install-python: ## Installer uniquement les dépendances Python
-	@if [ "$(PYTHON_OK)" != "yes" ]; then \
-		echo "$(YELLOW)⚠️  Python 3.11 recommandé pour les dépendances ML (actuel: $(PYTHON_VERSION))$(NC)"; \
-		echo "$(CYAN)   Installez avec: pyenv install 3.11 && pyenv local 3.11$(NC)"; \
-		echo "$(CYAN)   Ou: brew install python@3.11 (macOS)$(NC)"; \
-		echo ""; \
-	fi
-	@echo "$(BLUE)📦 Installation des dépendances Python ($(PYTHON_VERSION))...$(NC)"
+	@echo "$(BLUE)📦 Installation des dépendances Python (via pyenv Python 3.11)...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
-		python3 -m venv .venv 2>/dev/null || true && \
+		if [ -f .python-version ]; then \
+			PYENV_VERSION=$$(cat .python-version) && \
+			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)" && \
+			~/.pyenv/versions/$$PYENV_VERSION/bin/python -m venv .venv 2>/dev/null || python3 -m venv .venv; \
+		else \
+			python3 -m venv .venv; \
+		fi && \
 		. .venv/bin/activate && \
 		pip install -q --upgrade pip && \
 		pip install -q -r requirements.txt
@@ -148,12 +276,39 @@ generate: ## Générer les clients Prisma (JS + Python) et builder shared
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run generate
 	@echo ""
 	@echo "$(BLUE)🔧 Génération du client Prisma Python...$(NC)"
-	@cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null && prisma generate 2>/dev/null || echo "$(YELLOW)⚠️  Prisma Python ignoré$(NC)"
+	@cd $(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && prisma generate; \
+		else \
+			echo "$(YELLOW)⚠️  venv non trouvé, lancez d'abord: make install$(NC)"; \
+		fi
 	@echo ""
 	@echo "$(BLUE)🔨 Build du package shared...$(NC)"
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run build
 	@echo ""
 	@echo "$(GREEN)✅ Génération terminée$(NC)"
+	@echo ""
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          GENERATE SUMMARY                                    ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📁 Created/Updated Folders:$(NC)"
+	@[ -d "$(SHARED_DIR)/prisma/client" ] && echo "  $(GREEN)✓$(NC) $(SHARED_DIR)/prisma/client ($$(du -sh $(SHARED_DIR)/prisma/client 2>/dev/null | cut -f1))" || echo "  $(RED)✗$(NC) $(SHARED_DIR)/prisma/client (missing)"
+	@[ -d "$(SHARED_DIR)/dist" ] && echo "  $(GREEN)✓$(NC) $(SHARED_DIR)/dist ($$(du -sh $(SHARED_DIR)/dist 2>/dev/null | cut -f1))" || echo "  $(RED)✗$(NC) $(SHARED_DIR)/dist (missing)"
+	@[ -d "$(TRANSLATOR_DIR)/prisma" ] && echo "  $(GREEN)✓$(NC) $(TRANSLATOR_DIR)/prisma (Python client)" || true
+	@echo ""
+	@echo "$(BOLD)📍 Generated Locations:$(NC)"
+	@echo "  $(YELLOW)Prisma Clients:$(NC)"
+	@echo "    JS Client:      $(CURDIR)/$(SHARED_DIR)/prisma/client"
+	@echo "    Python Client:  $(CURDIR)/$(TRANSLATOR_DIR)/.venv/lib/python*/site-packages/prisma"
+	@echo ""
+	@echo "  $(YELLOW)Built Packages:$(NC)"
+	@echo "    Shared dist:    $(CURDIR)/$(SHARED_DIR)/dist"
+	@echo ""
+	@echo "$(BOLD)📊 Generated Files:$(NC)"
+	@PRISMA_FILES=$$(find $(SHARED_DIR)/prisma/client -type f 2>/dev/null | wc -l | tr -d ' '); echo "  Prisma JS files:   $$PRISMA_FILES"
+	@DIST_FILES=$$(find $(SHARED_DIR)/dist -type f 2>/dev/null | wc -l | tr -d ' '); echo "  Shared dist files: $$DIST_FILES"
+	@echo ""
 
 build: ## Builder tous les services (TypeScript)
 	@echo "$(BLUE)🔨 Build de tous les services...$(NC)"
@@ -164,6 +319,31 @@ build: ## Builder tous les services (TypeScript)
 	@echo "  → Web..."
 	@cd $(WEB_DIR) && $(JS_RUNTIME) run build
 	@echo "$(GREEN)✅ Build terminé$(NC)"
+	@echo ""
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          BUILD SUMMARY                                       ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📁 Created/Updated Folders:$(NC)"
+	@[ -d "$(SHARED_DIR)/dist" ] && echo "  $(GREEN)✓$(NC) $(SHARED_DIR)/dist ($$(du -sh $(SHARED_DIR)/dist 2>/dev/null | cut -f1))" || echo "  $(RED)✗$(NC) $(SHARED_DIR)/dist (missing)"
+	@[ -d "$(GATEWAY_DIR)/dist" ] && echo "  $(GREEN)✓$(NC) $(GATEWAY_DIR)/dist ($$(du -sh $(GATEWAY_DIR)/dist 2>/dev/null | cut -f1))" || echo "  $(RED)✗$(NC) $(GATEWAY_DIR)/dist (missing)"
+	@[ -d "$(WEB_DIR)/.next" ] && echo "  $(GREEN)✓$(NC) $(WEB_DIR)/.next ($$(du -sh $(WEB_DIR)/.next 2>/dev/null | cut -f1))" || echo "  $(RED)✗$(NC) $(WEB_DIR)/.next (missing)"
+	@echo ""
+	@echo "$(BOLD)📍 Build Output Locations:$(NC)"
+	@echo "  $(YELLOW)TypeScript Builds:$(NC)"
+	@echo "    Shared:     $(CURDIR)/$(SHARED_DIR)/dist"
+	@echo "    Gateway:    $(CURDIR)/$(GATEWAY_DIR)/dist"
+	@echo ""
+	@echo "  $(YELLOW)Next.js Build:$(NC)"
+	@echo "    Web:        $(CURDIR)/$(WEB_DIR)/.next"
+	@echo "    Static:     $(CURDIR)/$(WEB_DIR)/.next/static"
+	@echo "    Server:     $(CURDIR)/$(WEB_DIR)/.next/server"
+	@echo ""
+	@echo "$(BOLD)📊 Build Stats:$(NC)"
+	@SHARED_FILES=$$(find $(SHARED_DIR)/dist -type f -name "*.js" 2>/dev/null | wc -l | tr -d ' '); echo "  Shared JS files:   $$SHARED_FILES"
+	@GATEWAY_FILES=$$(find $(GATEWAY_DIR)/dist -type f -name "*.js" 2>/dev/null | wc -l | tr -d ' '); echo "  Gateway JS files:  $$GATEWAY_FILES"
+	@NEXT_PAGES=$$(find $(WEB_DIR)/.next/server/app -type f -name "*.html" 2>/dev/null | wc -l | tr -d ' '); echo "  Next.js pages:     $$NEXT_PAGES"
+	@echo ""
 
 build-shared: ## Builder uniquement le package shared
 	@echo "$(BLUE)🔨 Build du package shared...$(NC)"
@@ -198,16 +378,66 @@ check: ## Vérifier que tout est prêt pour le lancement
 # LANCEMENT DES SERVICES
 # =============================================================================
 
+_preflight-check: ## Vérification complète des prérequis (interne)
+	@echo "$(BLUE)🔍 Vérification des prérequis...$(NC)"
+	@ERRORS=0; \
+	\
+	echo ""; \
+	echo "$(CYAN)1/5$(NC) Certificats SSL..."; \
+	if [ ! -f "$(CERTS_DIR)/cert.pem" ] || [ ! -f "$(CERTS_DIR)/key.pem" ]; then \
+		echo "  $(YELLOW)⚠️  Certificats manquants - génération...$(NC)"; \
+		$(MAKE) setup-certs || ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(GREEN)✓ Certificats présents$(NC)"; \
+	fi; \
+	\
+	echo "$(CYAN)2/5$(NC) Fichiers .env..."; \
+	if [ ! -f "$(WEB_DIR)/.env" ] || [ ! -f "$(GATEWAY_DIR)/.env" ]; then \
+		echo "  $(YELLOW)⚠️  .env manquants - génération...$(NC)"; \
+		$(MAKE) setup-env || ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(GREEN)✓ Fichiers .env présents$(NC)"; \
+	fi; \
+	\
+	echo "$(CYAN)3/5$(NC) Dépendances Node..."; \
+	if [ ! -d "node_modules" ]; then \
+		echo "  $(YELLOW)⚠️  node_modules manquant - exécutez 'make install'$(NC)"; \
+		ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(GREEN)✓ node_modules présent$(NC)"; \
+	fi; \
+	\
+	echo "$(CYAN)4/5$(NC) Environnement Python..."; \
+	if [ ! -d "$(TRANSLATOR_DIR)/.venv" ]; then \
+		echo "  $(YELLOW)⚠️  Python venv manquant - exécutez 'make install'$(NC)"; \
+		ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(GREEN)✓ Python venv présent$(NC)"; \
+	fi; \
+	\
+	echo "$(CYAN)5/5$(NC) Build shared..."; \
+	if [ ! -d "$(SHARED_DIR)/dist" ]; then \
+		echo "  $(YELLOW)⚠️  Shared non buildé - génération...$(NC)"; \
+		$(MAKE) generate || ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(GREEN)✓ Shared buildé$(NC)"; \
+	fi; \
+	\
+	echo ""; \
+	if [ $$ERRORS -gt 0 ]; then \
+		echo "$(RED)❌ $$ERRORS erreur(s) détectée(s). Exécutez 'make install' puis 'make build'$(NC)"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)✅ Tous les prérequis sont satisfaits$(NC)"; \
+	fi
+
 start: ## Lancer tous les services (auto-détecte tmux ou background)
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║          MEESHY - Démarrage des Services                     ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@# Vérifier les prérequis
-	@if [ ! -d "$(SHARED_DIR)/dist" ]; then \
-		echo "$(YELLOW)⚠️  Shared non buildé, exécution de 'make generate'...$(NC)"; \
-		$(MAKE) generate; \
-	fi
+	@# Vérification des prérequis
+	@$(MAKE) _preflight-check
 	@echo ""
 	@# Lancer Docker infra si disponible
 	@if [ "$(HAS_DOCKER)" = "yes" ]; then \
@@ -241,6 +471,243 @@ stop: ## Arrêter tous les services
 	@echo "$(GREEN)✅ Services arrêtés$(NC)"
 
 restart: stop start ## Redémarrer tous les services
+
+# =============================================================================
+# DÉVELOPPEMENT RÉSEAU (Accès depuis mobile/autres machines)
+# =============================================================================
+
+start-network: ## 🌐 Lancer avec accès réseau (HOST=smpdev02.local ou IP)
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║    MEESHY - Démarrage Réseau (Accès Mobile/Multi-Device)     ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@# Vérification des prérequis de base (sans certificats - gérés par setup-network)
+	@echo "$(BLUE)🔍 Vérification des prérequis...$(NC)"
+	@ERRORS=0; \
+	if [ ! -d "node_modules" ]; then \
+		echo "  $(RED)❌ node_modules manquant - exécutez 'make install'$(NC)"; \
+		ERRORS=$$((ERRORS+1)); \
+	fi; \
+	if [ ! -d "$(TRANSLATOR_DIR)/.venv" ]; then \
+		echo "  $(RED)❌ Python venv manquant - exécutez 'make install'$(NC)"; \
+		ERRORS=$$((ERRORS+1)); \
+	fi; \
+	if [ ! -d "$(SHARED_DIR)/dist" ]; then \
+		echo "  $(YELLOW)⚠️  Shared non buildé - génération...$(NC)"; \
+		$(MAKE) generate || ERRORS=$$((ERRORS+1)); \
+	fi; \
+	if [ $$ERRORS -gt 0 ]; then \
+		echo "$(RED)❌ Prérequis manquants. Exécutez 'make install' puis 'make build'$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "  $(GREEN)✓ Prérequis OK$(NC)"
+	@echo ""
+	@echo "$(BOLD)🌐 Configuration Réseau:$(NC)"
+	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
+	@echo "   Host:       $(GREEN)$(HOST)$(NC)"
+	@echo "   Domain:     $(GREEN)$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@# Générer la config DNS et les certificats réseau
+	@$(MAKE) setup-network HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
+	@echo ""
+	@# Démarrer l'infrastructure Docker
+	@$(MAKE) docker-infra
+	@echo ""
+	@# Créer les fichiers .env pour le réseau
+	@$(MAKE) _generate-env-network
+	@echo ""
+	@# Démarrer les services natifs
+	@if [ "$(HAS_TMUX)" = "yes" ]; then \
+		$(MAKE) dev-tmux-network; \
+	else \
+		$(MAKE) dev-bg-network; \
+	fi
+
+setup-network: ## 🔧 Configurer le réseau (DNS + certificats)
+	@echo "$(BLUE)🔧 Configuration du réseau pour $(HOST)...$(NC)"
+	@$(MAKE) setup-dns HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
+	@$(MAKE) setup-certs-network HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
+
+setup-dns: ## 🌐 Générer la configuration DNS (dnsmasq)
+	@echo "$(BLUE)🌐 Configuration DNS pour $(LOCAL_DOMAIN)...$(NC)"
+	@mkdir -p $(COMPOSE_DIR)/config
+	@sed -e 's/__HOST_IP__/$(HOST_IP)/g' \
+		 -e 's/__LOCAL_DOMAIN__/$(LOCAL_DOMAIN)/g' \
+		 $(COMPOSE_DIR)/config/dnsmasq.conf.template > $(COMPOSE_DIR)/config/dnsmasq.conf
+	@echo "  $(GREEN)✓ DNS configuré: *.$(LOCAL_DOMAIN) -> $(HOST_IP)$(NC)"
+
+setup-certs-network: ## 🔐 Générer certificats pour accès réseau (HOST=smpdev02.local)
+	@echo "$(BLUE)🔐 Configuration des certificats pour $(HOST)...$(NC)"
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "$(RED)❌ mkcert non installé. Installez-le avec: brew install mkcert$(NC)"; \
+		exit 1; \
+	fi
+	@mkcert -install 2>/dev/null || true
+	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
+	@echo "  $(YELLOW)Génération des certificats pour: localhost, $(HOST_IP), $(HOST), *.$(LOCAL_DOMAIN)$(NC)"
+	@cd $(WEB_DIR)/.cert && mkcert \
+		-key-file localhost-key.pem \
+		-cert-file localhost.pem \
+		localhost \
+		127.0.0.1 \
+		::1 \
+		$(HOST_IP) \
+		$(HOST) \
+		"*.$(LOCAL_DOMAIN)" \
+		$(LOCAL_DOMAIN)
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
+	@echo "  $(GREEN)✓ Certificats générés$(NC)"
+
+_generate-env-network:
+	@echo "$(BLUE)📝 Génération des fichiers .env pour le réseau...$(NC)"
+	@# Root .env
+	@echo "NODE_ENV=development" > .env
+	@echo "LOCAL_IP=$(HOST_IP)" >> .env
+	@echo "HOST=$(HOST)" >> .env
+	@echo "LOCAL_DOMAIN=$(LOCAL_DOMAIN)" >> .env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> .env
+	@echo "REDIS_URL=redis://localhost:6379" >> .env
+	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> .env
+	@# Frontend .env
+	@echo "NODE_ENV=development" > $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_API_URL=https://$(HOST):3000" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_WS_URL=wss://$(HOST):3000" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_BACKEND_URL=https://$(HOST):3000" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_TRANSLATION_URL=https://$(HOST):8000" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_FRONTEND_URL=https://$(HOST):3100" >> $(WEB_DIR)/.env
+	@# Gateway .env
+	@echo "NODE_ENV=development" > $(GATEWAY_DIR)/.env
+	@echo "USE_HTTPS=true" >> $(GATEWAY_DIR)/.env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(GATEWAY_DIR)/.env
+	@echo "REDIS_URL=redis://localhost:6379" >> $(GATEWAY_DIR)/.env
+	@echo "TRANSLATOR_URL=http://localhost:8000" >> $(GATEWAY_DIR)/.env
+	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> $(GATEWAY_DIR)/.env
+	@echo "PORT=3000" >> $(GATEWAY_DIR)/.env
+	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
+	@echo "PUBLIC_URL=https://$(HOST):3000" >> $(GATEWAY_DIR)/.env
+	@echo "FRONTEND_URL=https://$(HOST):3100" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://localhost:3100,https://$(HOST_IP):3100,https://$(HOST):3100,https://$(LOCAL_DOMAIN):3100" >> $(GATEWAY_DIR)/.env
+	@# Translator .env
+	@echo "ENVIRONMENT=development" > $(TRANSLATOR_DIR)/.env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(TRANSLATOR_DIR)/.env
+	@echo "REDIS_URL=redis://localhost:6379" >> $(TRANSLATOR_DIR)/.env
+	@echo "PORT=8000" >> $(TRANSLATOR_DIR)/.env
+	@echo "HOST=0.0.0.0" >> $(TRANSLATOR_DIR)/.env
+	@echo "  $(GREEN)✓ Fichiers .env générés$(NC)"
+
+dev-tmux-network: ## 🖥️  Lancer les services en mode tmux (réseau)
+	@echo "$(BLUE)🖥️  Démarrage des services dans tmux (mode réseau)...$(NC)"
+	@tmux kill-session -t meeshy 2>/dev/null || true
+	@tmux new-session -d -s meeshy -n translator \
+		"cd $(CURDIR)/$(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null; echo '🔤 Translator ($(HOST):8000)'; python3 src/main.py; read"
+	@sleep 2
+	@tmux new-window -t meeshy -n gateway \
+		"cd $(CURDIR)/$(GATEWAY_DIR) && echo '🚀 Gateway ($(HOST):3000)'; $(JS_RUNTIME) run dev; read"
+	@sleep 2
+	@tmux new-window -t meeshy -n web \
+		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(HOST):3100)'; $(JS_RUNTIME) run dev:https; read"
+	@echo ""
+	@$(MAKE) _show-network-urls
+	@echo ""
+	@read -p "$(YELLOW)Appuyez sur Entrée pour attacher à tmux...$(NC)" && tmux attach -t meeshy
+
+dev-bg-network: ## 🔄 Lancer les services en background (réseau)
+	@echo "$(BLUE)🔄 Démarrage des services en background (mode réseau)...$(NC)"
+	@mkdir -p $(PID_DIR) logs
+	@# Translator
+	@echo "  $(CYAN)🔤 Translator ($(HOST):8000)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null && \
+		python3 src/main.py > $(CURDIR)/logs/translator.log 2>&1 & echo $$! > $(CURDIR)/$(TRANSLATOR_PID)
+	@sleep 2
+	@# Gateway
+	@echo "  $(CYAN)🚀 Gateway ($(HOST):3000)...$(NC)"
+	@cd $(GATEWAY_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/gateway.log 2>&1 & echo $$! > $(CURDIR)/$(GATEWAY_PID)
+	@sleep 2
+	@# Web HTTPS
+	@echo "  $(CYAN)🎨 Web HTTPS ($(HOST):3100)...$(NC)"
+	@cd $(WEB_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_PID)
+	@sleep 3
+	@echo ""
+	@$(MAKE) _show-network-urls
+
+_show-network-urls:
+	@echo "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(GREEN)║  ✅ Services démarrés - Accès réseau activé                  ║$(NC)"
+	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📱 URLs d'accès (depuis n'importe quel appareil):$(NC)"
+	@echo "   Frontend:      $(GREEN)https://$(HOST):3100$(NC)"
+	@echo "   Gateway API:   $(GREEN)https://$(HOST):3000$(NC)"
+	@echo "   Translator:    $(GREEN)http://$(HOST):8000$(NC)"
+	@echo ""
+	@echo "$(BOLD)🔧 Via domaine local:$(NC)"
+	@echo "   Frontend:      $(GREEN)https://$(LOCAL_DOMAIN):3100$(NC)"
+	@echo ""
+	@echo "$(BOLD)📡 Serveur DNS local:$(NC)"
+	@echo "   $(CYAN)$(HOST_IP):53$(NC) (configurez vos appareils pour l'utiliser)"
+	@echo ""
+	@echo "$(BOLD)📋 Ou ajoutez dans /etc/hosts des autres machines:$(NC)"
+	@echo "   $(CYAN)$(HOST_IP)    $(HOST) $(LOCAL_DOMAIN)$(NC)"
+
+share-cert: ## 📱 Partager le certificat CA pour mobiles
+	@echo "$(BLUE)📱 Partage du certificat CA pour appareils mobiles...$(NC)"
+	@CA_ROOT=$$(mkcert -CAROOT 2>/dev/null); \
+	if [ -n "$$CA_ROOT" ] && [ -f "$$CA_ROOT/rootCA.pem" ]; then \
+		echo ""; \
+		echo "$(BOLD)📍 Certificat CA:$(NC)"; \
+		echo "   $(CYAN)$$CA_ROOT/rootCA.pem$(NC)"; \
+		echo ""; \
+		echo "$(BOLD)🔧 Options pour installer sur mobile:$(NC)"; \
+		echo ""; \
+		echo "  $(YELLOW)Option 1: Serveur HTTP temporaire$(NC)"; \
+		echo "   Exécutez: cd $$CA_ROOT && python3 -m http.server 8888"; \
+		echo "   Puis ouvrez: http://$(HOST_IP):8888/rootCA.pem sur votre mobile"; \
+		echo ""; \
+		echo "  $(YELLOW)Option 2: AirDrop (macOS -> iPhone)$(NC)"; \
+		echo "   Fichier: $$CA_ROOT/rootCA.pem"; \
+		echo ""; \
+		echo "  $(YELLOW)Option 3: Email$(NC)"; \
+		echo "   Envoyez rootCA.pem par email et ouvrez sur mobile"; \
+		echo ""; \
+		echo "$(BOLD)📲 Après transfert sur iPhone:$(NC)"; \
+		echo "   1. Ouvrez le fichier -> Profil téléchargé"; \
+		echo "   2. Réglages -> Général -> VPN et gestion -> Installer le profil"; \
+		echo "   3. Réglages -> Général -> Informations -> Réglages des certificats"; \
+		echo "   4. Activer la confiance pour le certificat"; \
+	else \
+		echo "$(RED)❌ CA root non trouvé. Exécutez d'abord: mkcert -install$(NC)"; \
+	fi
+
+network-info: ## 📡 Afficher les informations réseau
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          MEESHY - Informations Réseau                        ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)🖥️  Cette machine:$(NC)"
+	@echo "   IP locale:     $(GREEN)$(HOST_IP)$(NC)"
+	@echo "   Hostname:      $(GREEN)$$(hostname)$(NC)"
+	@echo ""
+	@echo "$(BOLD)📱 Sous-domaines disponibles (avec docker-start-network):$(NC)"
+	@echo "   Frontend:      $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Gateway API:   $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Translator:    $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://translate.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   MongoDB UI:    $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Redis UI:      $(GREEN)https://redis.$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@echo "$(BOLD)📡 Serveur DNS (après make docker-infra):$(NC)"
+	@echo "   DNS Server:    $(GREEN)$(HOST_IP):53$(NC)"
+	@echo "   Résout:        $(CYAN)*.$(LOCAL_DOMAIN) -> $(HOST_IP)$(NC)"
+	@echo ""
+	@echo "$(BOLD)🔧 Commandes:$(NC)"
+	@echo "   $(YELLOW)make start-network$(NC)                      - Natif + accès réseau"
+	@echo "   $(YELLOW)make docker-start-network$(NC)               - 100% Docker + sous-domaines"
+	@echo "   $(YELLOW)make docker-start-network HOST=mydev.local$(NC)"
+	@echo "   $(YELLOW)make share-cert$(NC)                         - Partager cert pour mobiles"
+	@echo ""
+	@echo "$(BOLD)📋 Configuration manuelle /etc/hosts:$(NC)"
+	@echo "   $(CYAN)$(HOST_IP)  $(LOCAL_DOMAIN) app.$(LOCAL_DOMAIN) gate.$(LOCAL_DOMAIN) api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   $(CYAN)$(HOST_IP)  ml.$(LOCAL_DOMAIN) translate.$(LOCAL_DOMAIN) mongo.$(LOCAL_DOMAIN) redis.$(LOCAL_DOMAIN)$(NC)"
 
 # =============================================================================
 # MODES DE LANCEMENT
@@ -383,20 +850,40 @@ logs-web: ## Afficher les logs du web
 # DOCKER COMPOSE
 # =============================================================================
 
-docker-infra: ## Démarrer uniquement MongoDB et Redis (pour dev natif)
+docker-infra: ## Démarrer l'infrastructure avec Traefik HTTPS (MongoDB + Redis)
 	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
 		echo "$(RED)❌ Docker non disponible$(NC)"; \
 		exit 1; \
 	fi
-	@echo "$(BLUE)🐳 Démarrage de l'infrastructure (MongoDB + Redis)...$(NC)"
+	@# Vérifier les certificats
+	@if [ ! -f "$(CERTS_DIR)/cert.pem" ]; then \
+		echo "$(YELLOW)⚠️  Certificats manquants, exécution de 'make setup-certs'...$(NC)"; \
+		$(MAKE) setup-certs; \
+	fi
+	@echo "$(BLUE)🐳 Démarrage de l'infrastructure avec HTTPS (Traefik + MongoDB + Redis)...$(NC)"
 	@docker compose -f $(COMPOSE_LOCAL) up -d
+	@echo "$(GREEN)✅ Infrastructure démarrée$(NC)"
+	@echo ""
+	@echo "$(BLUE)📍 Services:$(NC)"
+	@echo "   - Traefik:  $(GREEN)https://localhost$(NC) (reverse proxy)"
+	@echo "   - Dashboard: $(GREEN)http://localhost:8080$(NC) (Traefik UI)"
+	@echo "   - MongoDB:  mongodb://localhost:27017"
+	@echo "   - Redis:    redis://localhost:6379"
+
+docker-infra-simple: ## Démarrer infrastructure simple sans HTTPS (MongoDB + Redis uniquement)
+	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
+		echo "$(RED)❌ Docker non disponible$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🐳 Démarrage de l'infrastructure simple (MongoDB + Redis)...$(NC)"
+	@docker compose -f $(COMPOSE_LOCAL_SIMPLE) up -d
 	@echo "$(GREEN)✅ Infrastructure démarrée$(NC)"
 	@echo ""
 	@echo "$(BLUE)📍 Services:$(NC)"
 	@echo "   - MongoDB: mongodb://localhost:27017"
 	@echo "   - Redis:   redis://localhost:6379"
 
-docker-start: ## Démarrer tous les services via Docker Compose
+docker-start: ## Démarrer tous les services via Docker Compose (localhost)
 	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
 		echo "$(RED)❌ Docker non disponible$(NC)"; \
 		exit 1; \
@@ -405,6 +892,54 @@ docker-start: ## Démarrer tous les services via Docker Compose
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés$(NC)"
 	@$(MAKE) urls
+
+docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès réseau
+	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
+		echo "$(RED)❌ Docker non disponible$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║   MEESHY - Docker 100% avec Accès Réseau (Mobile/Devices)   ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)🌐 Configuration Réseau:$(NC)"
+	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
+	@echo "   Host:       $(GREEN)$(HOST)$(NC)"
+	@echo "   Domain:     $(GREEN)$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@# Configuration réseau (DNS + certificats)
+	@$(MAKE) setup-network HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
+	@echo ""
+	@# Générer .env avec URLs réseau pour Docker
+	@echo "$(BLUE)📝 Configuration des variables d'environnement réseau...$(NC)"
+	@echo "HOST_IP=$(HOST_IP)" > $(COMPOSE_DIR)/.env.network
+	@echo "HOST=$(HOST)" >> $(COMPOSE_DIR)/.env.network
+	@echo "LOCAL_DOMAIN=$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_API_URL=https://$(LOCAL_DOMAIN)/api" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_WS_URL=wss://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_BACKEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "  $(GREEN)✓ .env.network généré$(NC)"
+	@echo ""
+	@# Démarrer avec le profil full (tous les services)
+	@echo "$(BLUE)🐳 Démarrage de tous les services Docker...$(NC)"
+	@docker compose -f $(COMPOSE_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d
+	@echo ""
+	@echo "$(GREEN)✅ Services démarrés avec accès réseau$(NC)"
+	@echo ""
+	@echo "$(BOLD)📱 Accès par sous-domaine:$(NC)"
+	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://translate.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   MongoDB UI:   $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)  (admin/admin)"
+	@echo "   Redis UI:     $(GREEN)https://redis.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Traefik UI:   $(GREEN)http://$(HOST):8080$(NC)"
+	@echo ""
+	@echo "$(BOLD)📡 Configuration DNS:$(NC)"
+	@echo "   Serveur DNS:  $(GREEN)$(HOST_IP):53$(NC)"
+	@echo "   Résout:       $(CYAN)*.$(LOCAL_DOMAIN) -> $(HOST_IP)$(NC)"
+	@echo ""
+	@echo "$(YELLOW)💡 Pour les mobiles: make share-cert$(NC)"
 
 docker-stop: ## Arrêter tous les services Docker
 	@echo "$(YELLOW)⏹️  Arrêt des services Docker...$(NC)"
@@ -430,34 +965,123 @@ docker-build: ## Builder toutes les images Docker localement
 # =============================================================================
 # BUILD IMAGES DOCKER
 # =============================================================================
+# Variables pour le versioning (peut être surchargé: make push-all TAG=v1.2.3)
+DOCKER_REGISTRY ?= isopen
+TAG ?= latest
 
-build-gateway: ## Builder l'image Gateway
-	@echo "$(BLUE)🔨 Build de l'image Gateway...$(NC)"
-	@docker build -t isopen/meeshy-gateway:latest -f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
+# Préparation des dépendances partagées avant build Docker
+_prepare-docker-build:
+	@echo "$(BLUE)📦 Préparation des dépendances pour le build Docker...$(NC)"
+	@# Vérifier que shared est buildé
+	@if [ ! -d "$(SHARED_DIR)/dist" ]; then \
+		echo "  $(YELLOW)⚠️  Shared non buildé - génération...$(NC)"; \
+		$(MAKE) generate; \
+	else \
+		echo "  $(GREEN)✓ Shared déjà buildé$(NC)"; \
+	fi
+	@# Vérifier Prisma
+	@if [ ! -d "$(SHARED_DIR)/prisma/client" ]; then \
+		echo "  $(YELLOW)⚠️  Prisma client manquant - génération...$(NC)"; \
+		$(MAKE) generate; \
+	else \
+		echo "  $(GREEN)✓ Prisma client présent$(NC)"; \
+	fi
+
+build-gateway: _prepare-docker-build ## Builder l'image Gateway
+	@echo "$(BLUE)🔨 Build de l'image Gateway ($(DOCKER_REGISTRY)/meeshy-gateway:$(TAG))...$(NC)"
+	@docker build -t $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG) -f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker tag $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG) $(DOCKER_REGISTRY)/meeshy-gateway:latest; \
+	fi
 	@echo "$(GREEN)✅ Image Gateway buildée$(NC)"
 
-build-translator: ## Builder l'image Translator
-	@echo "$(BLUE)🔨 Build de l'image Translator...$(NC)"
-	@docker build -t isopen/meeshy-translator:latest -f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+build-translator: _prepare-docker-build ## Builder l'image Translator
+	@echo "$(BLUE)🔨 Build de l'image Translator ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG))...$(NC)"
+	@docker build -t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) -f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) $(DOCKER_REGISTRY)/meeshy-translator:latest; \
+	fi
 	@echo "$(GREEN)✅ Image Translator buildée$(NC)"
 
-build-frontend: ## Builder l'image Frontend
-	@echo "$(BLUE)🔨 Build de l'image Frontend...$(NC)"
-	@docker build -t isopen/meeshy-frontend:latest -f $(INFRA_DIR)/docker/images/web/Dockerfile .
+build-frontend: _prepare-docker-build ## Builder l'image Frontend
+	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-frontend:$(TAG))...$(NC)"
+	@docker build -t $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG) -f $(INFRA_DIR)/docker/images/web/Dockerfile .
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker tag $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG) $(DOCKER_REGISTRY)/meeshy-frontend:latest; \
+	fi
 	@echo "$(GREEN)✅ Image Frontend buildée$(NC)"
 
 build-all-docker: build-gateway build-translator build-frontend ## Builder toutes les images Docker
 	@echo "$(GREEN)✅ Toutes les images buildées$(NC)"
+	@echo ""
+	@echo "$(BLUE)📦 Images créées:$(NC)"
+	@docker images | grep "$(DOCKER_REGISTRY)/meeshy" | head -10
+
+# =============================================================================
+# PUSH IMAGES DOCKER HUB
+# =============================================================================
+
+push-gateway: ## Push l'image Gateway vers Docker Hub
+	@echo "$(BLUE)📤 Push de l'image Gateway...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG)
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker push $(DOCKER_REGISTRY)/meeshy-gateway:latest; \
+	fi
+	@echo "$(GREEN)✅ Gateway pushée$(NC)"
+
+push-translator: ## Push l'image Translator vers Docker Hub
+	@echo "$(BLUE)📤 Push de l'image Translator...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker push $(DOCKER_REGISTRY)/meeshy-translator:latest; \
+	fi
+	@echo "$(GREEN)✅ Translator pushée$(NC)"
+
+push-frontend: ## Push l'image Frontend vers Docker Hub
+	@echo "$(BLUE)📤 Push de l'image Frontend...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG)
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker push $(DOCKER_REGISTRY)/meeshy-frontend:latest; \
+	fi
+	@echo "$(GREEN)✅ Frontend pushée$(NC)"
+
+push-all: push-gateway push-translator push-frontend ## Push toutes les images vers Docker Hub
+	@echo ""
+	@echo "$(GREEN)✅ Toutes les images pushées vers $(DOCKER_REGISTRY)$(NC)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG)"
+
+# Build + Push en une commande
+release: build-all-docker push-all ## Builder et pusher toutes les images (TAG=v1.0.0)
+	@echo ""
+	@echo "$(GREEN)🚀 Release $(TAG) publiée!$(NC)"
+
+# Vérifier l'authentification Docker Hub
+docker-login: ## Se connecter à Docker Hub
+	@echo "$(BLUE)🔐 Connexion à Docker Hub...$(NC)"
+	@docker login
+	@echo "$(GREEN)✅ Connecté$(NC)"
+
+docker-images: ## Lister les images Meeshy locales
+	@echo "$(BLUE)📦 Images Meeshy locales:$(NC)"
+	@docker images | grep -E "REPOSITORY|meeshy" | head -20
 
 # =============================================================================
 # UTILITAIRES
 # =============================================================================
 
 urls: ## Afficher les URLs d'accès
-	@echo "$(BLUE)📍 URLs d'accès:$(NC)"
-	@echo "   - Frontend:        $(GREEN)http://localhost:3100$(NC)"
-	@echo "   - Gateway API:     $(GREEN)http://localhost:3000$(NC)"
+	@echo "$(BLUE)📍 URLs d'accès (HTTPS):$(NC)"
+	@echo "   - Frontend:        $(GREEN)https://localhost:3100$(NC)"
+	@echo "   - Gateway API:     $(GREEN)https://localhost:3000$(NC)"
 	@echo "   - Translator API:  $(GREEN)http://localhost:8000$(NC)"
+	@echo ""
+	@echo "$(BLUE)📍 Via Traefik (si docker-infra):$(NC)"
+	@echo "   - Frontend:        $(GREEN)https://localhost$(NC)"
+	@echo "   - Traefik UI:      $(GREEN)http://localhost:8080$(NC)"
+	@echo ""
+	@echo "$(BLUE)📍 Infrastructure:$(NC)"
 	@echo "   - MongoDB:         $(GREEN)mongodb://localhost:27017$(NC)"
 	@echo "   - Redis:           $(GREEN)redis://localhost:6379$(NC)"
 
