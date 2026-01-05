@@ -84,10 +84,14 @@ install-python: ## Installer uniquement les dépendances Python
 		pip install -q -r requirements.txt
 	@echo "$(GREEN)✅ Dépendances Python installées$(NC)"
 
-generate: ## Générer les clients Prisma
+generate: ## Générer les clients Prisma (JS + Python) et builder shared
 	@echo "$(BLUE)🔧 Génération des clients Prisma...$(NC)"
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run generate
-	@echo "$(GREEN)✅ Clients Prisma générés$(NC)"
+	@echo "$(BLUE)🔧 Génération du client Prisma Python...$(NC)"
+	@cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null && prisma generate 2>/dev/null || true
+	@echo "$(BLUE)🔨 Build du package shared...$(NC)"
+	@cd $(SHARED_DIR) && $(JS_RUNTIME) run build
+	@echo "$(GREEN)✅ Clients Prisma générés et shared buildé$(NC)"
 
 build: ## Builder tous les services (TypeScript)
 	@echo "$(BLUE)🔨 Build de tous les services...$(NC)"
@@ -141,17 +145,19 @@ dev-translator: ## Lancer le translator en mode dev (port 8000)
 		. .venv/bin/activate 2>/dev/null || true && \
 		python3 src/main.py
 
-dev-tmux: docker-infra ## Lancer tous les services dans tmux
+dev-tmux: ## Lancer tous les services dans tmux
 	@echo "$(BLUE)🖥️  Démarrage des services dans tmux...$(NC)"
-	@tmux new-session -d -s meeshy -n translator "cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null; python3 src/main.py; read"
+	@command -v docker >/dev/null 2>&1 && $(MAKE) docker-infra || echo "$(YELLOW)⚠️  Docker non disponible, services sans MongoDB/Redis$(NC)"
+	@tmux kill-session -t meeshy 2>/dev/null || true
+	@tmux new-session -d -s meeshy -n translator "cd $(CURDIR)/$(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null; python3 src/main.py; read"
 	@sleep 2
-	@tmux new-window -t meeshy -n gateway "cd $(GATEWAY_DIR) && $(JS_RUNTIME) run dev; read"
+	@tmux new-window -t meeshy -n gateway "cd $(CURDIR)/$(GATEWAY_DIR) && $(JS_RUNTIME) run dev; read"
 	@sleep 2
-	@tmux new-window -t meeshy -n web "cd $(WEB_DIR) && $(JS_RUNTIME) run dev; read"
+	@tmux new-window -t meeshy -n web "cd $(CURDIR)/$(WEB_DIR) && $(JS_RUNTIME) run dev; read"
 	@tmux attach-session -t meeshy
 	@echo "$(GREEN)✅ Services lancés dans tmux (session: meeshy)$(NC)"
 
-dev-parallel: docker-infra ## Lancer tous les services en parallèle (logs combinés)
+dev-parallel: ## Lancer tous les services en parallèle (logs combinés)
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║          MEESHY - Démarrage Parallèle                       ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
