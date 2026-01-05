@@ -166,8 +166,8 @@ DEFAULT_LANGUAGE=fr
 SUPPORTED_LANGUAGES=fr,en,es,de,pt,zh,ja,ar
 AUTO_DETECT_LANGUAGE=true
 
-# Translation models
-BASIC_MODEL=google/t5-small
+# Translation models (NLLB only)
+BASIC_MODEL=facebook/nllb-200-distilled-600M
 MEDIUM_MODEL=facebook/nllb-200-distilled-600M
 PREMIUM_MODEL=facebook/nllb-200-distilled-1.3B
 

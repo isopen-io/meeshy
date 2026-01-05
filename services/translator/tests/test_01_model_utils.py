@@ -60,11 +60,11 @@ def test_model_path_generation():
         settings = get_settings()
         manager = create_model_manager(settings.models_path)
         
-        # Test avec différents formats de noms
+        # Test avec différents formats de noms (NLLB uniquement)
         test_models = [
             "facebook/nllb-200-distilled-600M",
-            "Helsinki-NLP/opus-mt-en-fr",
-            "t5-small"
+            "facebook/nllb-200-distilled-1.3B",
+            "Helsinki-NLP/opus-mt-en-fr"
         ]
         
         for model_name in test_models:

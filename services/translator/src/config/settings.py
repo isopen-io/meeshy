@@ -27,25 +27,33 @@ class Settings:
 
         # ═══════════════════════════════════════════════════════════════
         # TTS MODEL SELECTION
-        # Options: chatterbox (recommandé), chatterbox-turbo, higgs-audio-v2, xtts-v2
+        # Options: chatterbox (recommande), chatterbox-turbo, higgs-audio-v2, xtts-v2
         # ═══════════════════════════════════════════════════════════════
         self.tts_model = os.getenv("TTS_MODEL", "chatterbox")
         self.tts_device = os.getenv("TTS_DEVICE", "auto")
         self.tts_output_dir = os.getenv("TTS_OUTPUT_DIR", "./generated/audios")
         self.tts_default_format = os.getenv("TTS_DEFAULT_FORMAT", "mp3")
 
-        # XTTS configuration (legacy - non-commercial)
-        self.xtts_models_path = os.getenv("XTTS_MODELS_PATH", "./models/xtts")
-        self.xtts_device = os.getenv("XTTS_DEVICE", "auto")
+        # ═══════════════════════════════════════════════════════════════
+        # VOICE/TTS MODELS PATHS (centralise dans MODELS_PATH)
+        # Structure:
+        #   models/
+        #   ├── huggingface/          # Chatterbox, Higgs, NLLB (auto-download)
+        #   ├── openvoice/            # OpenVoice V2 checkpoints
+        #   ├── xtts/                 # XTTS v2 (legacy)
+        #   └── whisper/              # Whisper STT
+        # ═══════════════════════════════════════════════════════════════
 
-        # Voice cloning - embeddings stored in embeddings/voices/
-        self.voice_model_cache_dir = os.getenv("VOICE_MODEL_CACHE_DIR", "./embeddings/voices")
+        # Voice cloning - OpenVoice V2
         self.voice_clone_device = os.getenv("VOICE_CLONE_DEVICE", "cpu")
-        self.voice_profile_cache_ttl = int(os.getenv("VOICE_PROFILE_CACHE_TTL", "7776000"))  # 90 days (3 months)
+        self.voice_profile_cache_ttl = int(os.getenv("VOICE_PROFILE_CACHE_TTL", "7776000"))  # 90 days
 
-        # Chatterbox configuration
+        # Chatterbox TTS configuration
         self.chatterbox_exaggeration = float(os.getenv("CHATTERBOX_EXAGGERATION", "0.5"))
         self.chatterbox_cfg_weight = float(os.getenv("CHATTERBOX_CFG_WEIGHT", "0.5"))
+
+        # XTTS configuration (legacy - non-commercial)
+        self.xtts_device = os.getenv("XTTS_DEVICE", "auto")
 
         # Audio output - translated audios stored in generated/audios/
         self.audio_output_dir = os.getenv("AUDIO_OUTPUT_DIR", "./generated/audios")
@@ -103,10 +111,12 @@ class Settings:
         self.supported_languages = os.getenv("SUPPORTED_LANGUAGES", "af,ar,bg,bn,cs,da,de,el,en,es,fa,fi,fr,he,hi,hr,hu,hy,id,ig,it,ja,ko,ln,lt,ms,nl,no,pl,pt,ro,ru,sv,sw,th,tr,uk,ur,vi,zh")
         self.auto_detect_language = os.getenv("AUTO_DETECT_LANGUAGE", "true").lower() == "true"
         
-        # Configuration des modèles de traduction - utiliser les valeurs du .env
-        self.basic_model = os.getenv("BASIC_MODEL", "t5-small") 
-        self.medium_model = os.getenv("MEDIUM_MODEL", "facebook/nllb-200-distilled-600M")
+        # Configuration des modèles de traduction NLLB uniquement
+        # basic = NLLB 600M (rapide), premium = NLLB 1.3B (qualité)
+        self.basic_model = os.getenv("BASIC_MODEL", "facebook/nllb-200-distilled-600M")
         self.premium_model = os.getenv("PREMIUM_MODEL", "facebook/nllb-200-distilled-1.3B")
+        # Alias pour compatibilité (medium = basic)
+        self.medium_model = self.basic_model
         
         # Configuration des performances
         self.translation_timeout = int(os.getenv("TRANSLATION_TIMEOUT", "20"))  # 20 secondes pour multicore AMD
@@ -122,7 +132,42 @@ class Settings:
         self.model_download_max_retries = int(os.getenv("MODEL_DOWNLOAD_MAX_RETRIES", "3"))
         self.model_download_timeout = int(os.getenv("MODEL_DOWNLOAD_TIMEOUT", "300"))  # 5 minutes par défaut
         self.model_download_consecutive_timeouts = int(os.getenv("MODEL_DOWNLOAD_CONSECUTIVE_TIMEOUTS", "3"))
-    
+
+    # ═══════════════════════════════════════════════════════════════
+    # MODEL SUBDIRECTORY PATHS (computed from models_path)
+    # ═══════════════════════════════════════════════════════════════
+
+    @property
+    def huggingface_cache_path(self) -> str:
+        """Chemin pour les modèles HuggingFace (Chatterbox, Higgs, NLLB)"""
+        return os.path.join(self.models_path, "huggingface")
+
+    @property
+    def openvoice_checkpoints_path(self) -> str:
+        """Chemin pour les checkpoints OpenVoice V2"""
+        return os.path.join(self.models_path, "openvoice")
+
+    @property
+    def xtts_models_path(self) -> str:
+        """Chemin pour les modèles XTTS v2 (legacy)"""
+        return os.path.join(self.models_path, "xtts")
+
+    @property
+    def whisper_models_path(self) -> str:
+        """Chemin pour les modèles Whisper STT"""
+        return os.path.join(self.models_path, "whisper")
+
+    def ensure_model_directories(self):
+        """Crée les répertoires de modèles s'ils n'existent pas"""
+        for path in [
+            self.models_path,
+            self.huggingface_cache_path,
+            self.openvoice_checkpoints_path,
+            self.xtts_models_path,
+            self.whisper_models_path
+        ]:
+            os.makedirs(path, exist_ok=True)
+
     @property
     def supported_languages_list(self):
         """Retourne la liste des langues supportées"""

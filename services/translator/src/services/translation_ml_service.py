@@ -134,29 +134,25 @@ class TranslationMLService:
         logger.info(f"🔍 [ML-SERVICE] TRANSFORMERS_CACHE env: {os.getenv('TRANSFORMERS_CACHE', 'NOT SET')}")
         self.device = os.getenv('DEVICE', 'cpu')
         
+        # Deux modèles NLLB uniquement: basic (600M) et premium (1.3B)
         self.model_configs = {
             'basic': {
                 'model_name': self.settings.basic_model,
                 'local_path': self.models_path / self.settings.basic_model,
-                'description': f'{self.settings.basic_model} - Modèle rapide',
+                'description': 'NLLB 600M - Rapide, bonne qualité',
                 'device': self.device,
                 'priority': 1  # Chargé en premier
-            },
-            'medium': {
-                'model_name': self.settings.medium_model,
-                'local_path': self.models_path / self.settings.medium_model,
-                'description': f'{self.settings.medium_model} - Modèle équilibré',
-                'device': self.device,
-                'priority': 2
             },
             'premium': {
                 'model_name': self.settings.premium_model,
                 'local_path': self.models_path / self.settings.premium_model,
-                'description': f'{self.settings.premium_model} - Modèle haute qualité',
+                'description': 'NLLB 1.3B - Haute qualité',
                 'device': self.device,
-                'priority': 3
+                'priority': 2
             }
         }
+        # Alias pour compatibilité
+        self.model_configs['medium'] = self.model_configs['basic']
         
         # Mapping des codes de langues NLLB
         self.lang_codes = {
@@ -170,21 +166,6 @@ class TranslationMLService:
             'ar': 'arb_Arab'
         }
         
-        # Mapping des noms de langues pour T5 (noms complets)
-        self.language_names = {
-            'fr': 'French',
-            'en': 'English', 
-            'es': 'Spanish',
-            'de': 'German',
-            'pt': 'Portuguese',
-            'zh': 'Chinese',
-            'ja': 'Japanese',
-            'ar': 'Arabic',
-            'it': 'Italian',
-            'ru': 'Russian',
-            'ko': 'Korean',
-            'nl': 'Dutch'
-        }
         
         # Stats globales (partagées entre tous les canaux)
         self.stats = {
@@ -749,166 +730,36 @@ class TranslationMLService:
                     if thread_tokenizer is None:
                         raise Exception(f"Impossible d'obtenir le tokenizer pour {model_type}")
                     
-                    # Différencier T5 et NLLB avec pipelines appropriés
-                    if "t5" in original_model_name.lower():
-                        # T5: utiliser text2text-generation avec tokenizer thread-local
-                        # OPTIMISATION CPU: Réduire max_length pour accélérer les inférences
-                        temp_pipeline = pipeline(
-                            "text2text-generation",
-                            model=shared_model,
-                            tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
-                            device=0 if self.device == 'cuda' and torch.cuda.is_available() else -1,
-                            max_length=256,  # Augmenté pour traductions de qualité
-                            batch_size=8  # Optimisé pour multicore AMD
-                        )
-                        
-                        # T5: format avec noms complets de langues
-                        source_name = self.language_names.get(source_lang, source_lang.capitalize())
-                        target_name = self.language_names.get(target_lang, target_lang.capitalize())
-                        instruction = f"translate {source_name} to {target_name}: {text}"
-                        
-                        logger.debug(f"T5 instruction: {instruction}")
-                        
-                        # OPTIMISATION MULTICORE: Paramètres optimisés pour AMD 18 cores
-                        # num_beams=4 pour qualité avec multicore
-                        result = temp_pipeline(
-                            instruction,
-                            max_new_tokens=256,  # Augmenté pour traductions complètes
-                            num_beams=4,  # Équilibre qualité/vitesse
-                            do_sample=False,
-                            early_stopping=True,
-                            repetition_penalty=1.1,
-                            length_penalty=1.0
-                        )
-                        
-                        # T5 retourne generated_text
-                        t5_success = False
-                        translated = None  # CORRECTION: Initialiser translated pour éviter UnboundLocalError
-                        if result and len(result) > 0 and 'generated_text' in result[0]:
-                            raw_text = result[0]['generated_text']
-                            
-                            # Nettoyer l'instruction si présente dans le résultat
-                            instruction_prefix = f"translate {source_name} to {target_name}:"
-                            if instruction_prefix in raw_text:
-                                parts = raw_text.split(instruction_prefix, 1)
-                                if len(parts) > 1:
-                                    translated = parts[1].strip()
-                                else:
-                                    translated = raw_text.strip()
-                            else:
-                                translated = raw_text.strip()
-                                
-                            # Validation: vérifier si T5 a vraiment traduit (pas juste répété l'instruction)
-                            # Rejeter SEULEMENT si:
-                            # 1. Vide
-                            # 2. Identique à l'original
-                            # 3. Contient l'instruction complète T5 (ex: "translate French to Spanish:")
-                            has_instruction = f"translate {source_name} to {target_name}:" in translated.lower()
-                            
-                            if not translated or translated.lower() == text.lower() or has_instruction:
-                                logger.warning(f"T5 traduction invalide: '{translated}', fallback vers NLLB")
-                                t5_success = False
-                            else:
-                                t5_success = True
-                                
-                        # Si T5 échoue, fallback automatique vers NLLB
-                        if not t5_success:
-                            logger.info(f"Fallback : T5 → NLLB {source_lang}→{target_lang}")
-                            # Nettoyer le pipeline T5 (tokenizer reste en cache)
-                            del temp_pipeline
-                            
-                            # CORRECTION: Chercher un modèle NLLB parmi les modèles chargés
-                            # Les clés sont 'basic', 'medium', 'premium', pas les noms de modèles
-                            nllb_model_type = None
-                            nllb_model_name = None
-                            
-                            # Chercher medium ou premium (qui sont des modèles NLLB)
-                            # CORRECTION: Utiliser un nom de variable différent pour éviter la collision
-                            for fallback_model_type in ['medium', 'premium']:
-                                if fallback_model_type in self.models:
-                                    config = self.model_configs.get(fallback_model_type, {})
-                                    fallback_model_name = config.get('model_name', '')
-                                    if 'nllb' in fallback_model_name.lower():
-                                        nllb_model_type = fallback_model_type
-                                        nllb_model_name = fallback_model_name
-                                        break
-                            
-                            if nllb_model_type is None:
-                                logger.warning(f"Modèle NLLB non chargé, impossible de faire le fallback")
-                                translated = f"[Translation-Failed] {text}"
-                            else:
-                                nllb_model = self.models[nllb_model_type]
-                                # OPTIMISATION: Utiliser tokenizer thread-local caché
-                                nllb_tokenizer = self._get_thread_local_tokenizer(nllb_model_type)
-                                if nllb_tokenizer is None:
-                                    logger.warning(f"Impossible d'obtenir tokenizer NLLB")
-                                    translated = f"[Translation-Failed] {text}"
-                                    return translated
-                                
-                                # OPTIMISATION MULTICORE: Paramètres optimisés pour AMD 18 cores
-                                nllb_pipeline = pipeline(
-                                    "translation",
-                                    model=nllb_model,
-                                    tokenizer=nllb_tokenizer,
-                                    device=0 if self.device == 'cuda' and torch.cuda.is_available() else -1,
-                                    max_length=512,  # Augmenté pour qualité
-                                    batch_size=8  # Optimisé pour multicore
-                                )
-                                
-                                nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
-                                nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
-                                
-                                nllb_result = nllb_pipeline(
-                                    text, 
-                                    src_lang=nllb_source, 
-                                    tgt_lang=nllb_target, 
-                                    max_length=512,  # Augmenté pour qualité
-                                    num_beams=4,  # Équilibre qualité/vitesse
-                                    early_stopping=True
-                                )
-                                
-                                if nllb_result and len(nllb_result) > 0 and 'translation_text' in nllb_result[0]:
-                                    translated = nllb_result[0]['translation_text']
-                                    logger.info(f"✅ Fallback NLLB réussi: '{text}' → '{translated}'")
-                                else:
-                                    translated = f"[NLLB-Fallback-Failed] {text}"
-                                
-                                # Nettoyer le pipeline (tokenizer reste en cache)
-                                del nllb_pipeline
-                            
-                            return translated
-                            
+                    # NLLB: utiliser translation avec tokenizer thread-local
+                    # OPTIMISATION MULTICORE: Paramètres optimisés pour AMD 18 cores
+                    temp_pipeline = pipeline(
+                        "translation",
+                        model=shared_model,
+                        tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
+                        device=0 if self.device == 'cuda' and torch.cuda.is_available() else -1,
+                        max_length=512,  # Augmenté pour qualité
+                        batch_size=8  # Optimisé pour multicore
+                    )
+
+                    # NLLB: codes de langue spéciaux
+                    nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
+                    nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+
+                    # OPTIMISATION MULTICORE: Paramètres optimisés pour qualité et vitesse
+                    result = temp_pipeline(
+                        text,
+                        src_lang=nllb_source,
+                        tgt_lang=nllb_target,
+                        max_length=512,  # Augmenté pour qualité
+                        num_beams=4,  # Équilibre qualité/vitesse sur multicore
+                        early_stopping=True
+                    )
+
+                    # NLLB retourne translation_text
+                    if result and len(result) > 0 and 'translation_text' in result[0]:
+                        translated = result[0]['translation_text']
                     else:
-                        # NLLB: utiliser translation avec tokenizer thread-local
-                        # OPTIMISATION MULTICORE: Paramètres optimisés pour AMD 18 cores
-                        temp_pipeline = pipeline(
-                            "translation",
-                            model=shared_model,
-                            tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
-                            device=0 if self.device == 'cuda' and torch.cuda.is_available() else -1,
-                            max_length=512,  # Augmenté pour qualité
-                            batch_size=8  # Optimisé pour multicore
-                        )
-                        
-                        # NLLB: codes de langue spéciaux
-                        nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
-                        nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
-                        
-                        # OPTIMISATION MULTICORE: Paramètres optimisés pour qualité et vitesse
-                        result = temp_pipeline(
-                            text, 
-                            src_lang=nllb_source, 
-                            tgt_lang=nllb_target, 
-                            max_length=512,  # Augmenté pour qualité
-                            num_beams=4,  # Équilibre qualité/vitesse sur multicore
-                            early_stopping=True
-                        )
-                        
-                        # NLLB retourne translation_text
-                        if result and len(result) > 0 and 'translation_text' in result[0]:
-                            translated = result[0]['translation_text']
-                        else:
-                            translated = f"[NLLB-No-Result] {text}"
+                        translated = f"[NLLB-No-Result] {text}"
                     
                     # Nettoyer tokenizer et pipeline temporaires
                     del thread_tokenizer
