@@ -70,30 +70,30 @@ configure_models_permissions() {
                 # Créer le dossier models s'il n'existe pas
                 mkdir -p /workspace/models
                 
-                # Créer les sous-dossiers nécessaires pour les modèles ML
-                mkdir -p /workspace/models/models--t5-small
+                # Créer les sous-dossiers nécessaires pour les modèles ML (NLLB uniquement)
                 mkdir -p /workspace/models/models--facebook--nllb-200-distilled-600M
+                mkdir -p /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 mkdir -p /workspace/models/cache
                 mkdir -p /workspace/models/huggingface
                 mkdir -p /workspace/models/transformers_cache
                 mkdir -p /workspace/models/torch_cache
-                
+
                 echo '🔐 Configuration des permissions pour l'\''utilisateur translator (UID 42420)...'
-                
+
                 # Configurer les permissions pour l'utilisateur translator (UID 42420)
                 chown -R 42420:42420 /workspace/models
                 chmod -R 755 /workspace/models
-                
+
                 # Configurer les permissions sur les sous-dossiers
-                chown -R 42420:42420 /workspace/models/models--t5-small
                 chown -R 42420:42420 /workspace/models/models--facebook--nllb-200-distilled-600M
+                chown -R 42420:42420 /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 chown -R 42420:42420 /workspace/models/cache
                 chown -R 42420:42420 /workspace/models/huggingface
                 chown -R 42420:42420 /workspace/models/transformers_cache
                 chown -R 42420:42420 /workspace/models/torch_cache
-                
-                chmod -R 755 /workspace/models/models--t5-small
+
                 chmod -R 755 /workspace/models/models--facebook--nllb-200-distilled-600M
+                chmod -R 755 /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 chmod -R 755 /workspace/models/cache
                 chmod -R 755 /workspace/models/huggingface
                 chmod -R 755 /workspace/models/transformers_cache

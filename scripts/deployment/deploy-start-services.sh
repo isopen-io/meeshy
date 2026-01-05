@@ -115,20 +115,20 @@ configure_models_permissions() {
                 chown -R 1000:1000 /workspace/models
                 chmod -R 755 /workspace/models
                 
-                # Créer les sous-dossiers nécessaires pour les modèles ML
-                mkdir -p /workspace/models/models--t5-small
+                # Créer les sous-dossiers nécessaires pour les modèles ML (NLLB uniquement)
                 mkdir -p /workspace/models/models--facebook--nllb-200-distilled-600M
+                mkdir -p /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 mkdir -p /workspace/models/cache
                 mkdir -p /workspace/models/huggingface
-                
+
                 # Configurer les permissions sur les sous-dossiers
-                chown -R 1000:1000 /workspace/models/models--t5-small
                 chown -R 1000:1000 /workspace/models/models--facebook--nllb-200-distilled-600M
+                chown -R 1000:1000 /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 chown -R 1000:1000 /workspace/models/cache
                 chown -R 1000:1000 /workspace/models/huggingface
-                
-                chmod -R 755 /workspace/models/models--t5-small
+
                 chmod -R 755 /workspace/models/models--facebook--nllb-200-distilled-600M
+                chmod -R 755 /workspace/models/models--facebook--nllb-200-distilled-1.3B
                 chmod -R 755 /workspace/models/cache
                 chmod -R 755 /workspace/models/huggingface
                 
