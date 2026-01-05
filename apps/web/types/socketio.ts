@@ -72,7 +72,7 @@ export interface ChatRoom {
 }
 
 export interface TranslationModel {
-  name: 'MT5' | 'NLLB';
+  name: 'NLLB';
   isLoaded: boolean;
   model?: unknown;
 }

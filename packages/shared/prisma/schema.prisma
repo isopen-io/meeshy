@@ -1366,8 +1366,21 @@ model UserVoiceModel {
   /// Identifiant unique du profil vocal (vfp_xxx)
   profileId String? @unique
 
-  /// Chemin vers le fichier d'embedding de la voix
-  embeddingPath String
+  /// ============================================
+  /// EMBEDDING STORAGE (Binary in MongoDB)
+  /// ============================================
+  /// Embedding vector stored as binary data (numpy array serialized)
+  /// Typically 256-512 floats = 1-2KB
+  embedding Bytes?
+
+  /// Model used to generate the embedding (e.g., "openvoice_v2", "resemblyzer")
+  embeddingModel String @default("openvoice_v2")
+
+  /// Dimension of the embedding vector (e.g., 256, 512)
+  embeddingDimension Int @default(256)
+
+  /// Legacy: Path to embedding file (deprecated, kept for migration)
+  embeddingPath String?
 
   /// Nombre d'audios utilisés pour l'entraînement
   audioCount Int

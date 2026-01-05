@@ -31,7 +31,7 @@
       "subtitle": "A modern messaging platform that breaks language barriers",
       "universalTranslation": {
         "title": "Universal Translation",
-        "description": "Support for over 15 languages with advanced AI models (MT5 and NLLB)"
+        "description": "Support for over 200 languages with advanced AI models (NLLB)"
       },
       "autoDetection": {
         "title": "Automatic Detection",
