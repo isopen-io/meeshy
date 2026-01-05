@@ -47,7 +47,7 @@ Cache Layer (Redis) + Database
 #### Translator Service (FastAPI)  
 - **CRUD**: Messages and **MessageTranslations** (create, update, delete, read)
 - **Read**: Conversations, user preferences via Prisma
-- **Translation**: MT5/NLLB via Transformers - translates to ALL required languages
+- **Translation**: NLLB via Transformers - translates to ALL required languages
 - **Cache**: Robust translation caching system per language pair
 - **Database**: Uses Prisma Client with full message management rights
 
@@ -117,7 +117,7 @@ interface UserLanguageConfig {
 4. Translator processes:
    - Determines required languages from conversation members
    - Checks MessageTranslation table for existing translations
-   - Translates missing languages using MT5 for basic, NLLB for medium (600M) and premium (1.3B)
+   - Translates missing languages using NLLB 600M for basic/medium, NLLB 1.3B for premium
    - Creates MessageTranslation records with cacheKey
 5. Translator → Gateway: TranslationResponse with all translations
 6. Gateway broadcasts to users based on their language configuration:
@@ -143,7 +143,7 @@ interface UserLanguageConfig {
 
 ### Translator (FastAPI)
 - **Framework**: FastAPI (high-performance Python)
-- **ML**: Transformers library (MT5 + NLLB)
+- **ML**: Transformers library (NLLB)
 - **ORM**: Prisma Client (full CRUD on messages and translations)
 - **Cache**: Redis + MessageTranslation table with cacheKey
 - **Protocols**: gRPC server, ZMQ/RabbitMQ consumer/publisher
@@ -228,7 +228,7 @@ translator/            # FastAPI service
 │   ├── api/           # HTTP endpoints
 │   ├── grpc/          # gRPC server for multi-language translation
 │   ├── queue/         # ZMQ/RabbitMQ consumer
-│   ├── models/        # ML model loading (MT5 + NLLB)
+│   ├── models/        # ML model loading (NLLB)
 │   ├── cache/         # Translation cache logic
 │   ├── services/      # Language detection and translation logic
 │   ├── prisma/        # Prisma client (CRUD messages & translations)
@@ -253,7 +253,7 @@ shared/
 ### Priority 2: Multi-Language Performance
 - **Translation Cache**: Leverage MessageTranslation table + Redis
 - **Language Detection**: Automatic source language identification
-- **Model Management**: Efficient loading of MT5/NLLB models
+- **Model Management**: Efficient loading of NLLB models
 - **Batch Processing**: Group translation operations
 
 ### Priority 3: Real-time Language Filtering
