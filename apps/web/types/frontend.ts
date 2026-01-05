@@ -36,7 +36,7 @@ export interface ChatRoom {
 // SocketResponse est maintenant importé depuis @shared/types
 
 export interface TranslationModel {
-  name: 'MT5' | 'NLLB';
+  name: 'NLLB';
   isLoaded: boolean;
   model?: unknown;
 }
