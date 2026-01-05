@@ -27,10 +27,15 @@ export interface TranslateOptions {
   priority?: number;
 }
 
+export interface AsyncJobSubmitResult {
+  jobId: string;
+  status: string;
+}
+
 export interface TranslationResult {
   type: 'audio' | 'image' | 'video' | 'document';
   attachmentId: string;
-  result: AudioTranslationResult | ImageTranslationResult | VideoTranslationResult | DocumentTranslationResult;
+  result: AudioTranslationResult | AsyncJobSubmitResult | ImageTranslationResult | VideoTranslationResult | DocumentTranslationResult;
 }
 
 export interface ImageTranslationResult {

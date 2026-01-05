@@ -163,9 +163,8 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
 
-    const { profileId } = request.params;
     const updateRequest = request.body as UpdateProfileRequest;
-    const result = await voiceProfileService.updateProfile(auth.registeredUser.id, profileId, updateRequest);
+    const result = await voiceProfileService.updateProfile(auth.registeredUser.id, updateRequest);
 
     if (!result.success) {
       const statusCode = result.errorCode === 'PROFILE_NOT_FOUND' ? 404 :

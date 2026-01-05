@@ -32,18 +32,6 @@ interface CompareBody {
   audioBase64_2?: string;
 }
 
-interface ProfileCreateBody {
-  name: string;
-  audioBase64?: string;
-  metadata?: Record<string, any>;
-}
-
-interface ProfileUpdateBody {
-  name?: string;
-  audioBase64?: string;
-  metadata?: Record<string, any>;
-}
-
 interface FeedbackBody {
   translationId: string;
   rating: number;
@@ -61,11 +49,6 @@ interface HistoryQuery {
 
 interface StatsQuery {
   period?: VoiceStatsPeriod;
-}
-
-interface ProfilesQuery {
-  limit?: number;
-  offset?: number;
 }
 
 // Error response helper
@@ -307,131 +290,10 @@ export function registerVoiceRoutes(
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // VOICE PROFILE ENDPOINTS
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * GET /api/v1/voice/profile
-   * List user's voice profiles
-   */
-  fastify.get(`${prefix}/profile`, async (request: FastifyRequest<{ Querystring: ProfilesQuery }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-    }
-
-    try {
-      const { limit, offset } = request.query;
-      const result = await voiceAPIService.listProfiles(userId, { limit, offset });
-      return reply.status(200).send(result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] List profiles error:', error);
-      return errorResponse(reply, error);
-    }
-  });
-
-  /**
-   * GET /api/v1/voice/profile/:profileId
-   * Get a specific voice profile
-   */
-  fastify.get(`${prefix}/profile/:profileId`, async (request: FastifyRequest<{ Params: { profileId: string } }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-    }
-
-    try {
-      const { profileId } = request.params;
-      const result = await voiceAPIService.getProfile(userId, profileId);
-      return reply.status(200).send(result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] Get profile error:', error);
-      return errorResponse(reply, error);
-    }
-  });
-
-  /**
-   * POST /api/v1/voice/profile
-   * Create a new voice profile
-   */
-  fastify.post(`${prefix}/profile`, async (request: FastifyRequest<{ Body: ProfileCreateBody }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-    }
-
-    try {
-      const { name, audioBase64, metadata } = request.body;
-
-      if (!name) {
-        return reply.status(400).send({
-          error: 'name is required',
-          code: 'INVALID_REQUEST'
-        });
-      }
-
-      const result = await voiceAPIService.createProfile(userId, {
-        name,
-        audioBase64,
-        metadata
-      });
-
-      return reply.status(201).send(result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] Create profile error:', error);
-      return errorResponse(reply, error);
-    }
-  });
-
-  /**
-   * PUT /api/v1/voice/profile/:profileId
-   * Update a voice profile
-   */
-  fastify.put(`${prefix}/profile/:profileId`, async (request: FastifyRequest<{ Params: { profileId: string }; Body: ProfileUpdateBody }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-    }
-
-    try {
-      const { profileId } = request.params;
-      const { name, audioBase64, metadata } = request.body;
-
-      const result = await voiceAPIService.updateProfile(userId, profileId, {
-        name,
-        audioBase64,
-        metadata
-      });
-
-      return reply.status(200).send(result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] Update profile error:', error);
-      return errorResponse(reply, error);
-    }
-  });
-
-  /**
-   * DELETE /api/v1/voice/profile/:profileId
-   * Delete a voice profile
-   */
-  fastify.delete(`${prefix}/profile/:profileId`, async (request: FastifyRequest<{ Params: { profileId: string } }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-    }
-
-    try {
-      const { profileId } = request.params;
-      const result = await voiceAPIService.deleteProfile(userId, profileId);
-      return reply.status(200).send(result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] Delete profile error:', error);
-      return errorResponse(reply, error);
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // FEEDBACK & ANALYTICS ENDPOINTS
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NOTE: Voice profile management is handled by /api/voice/profile routes
+  // See voice-profile.ts for consent, register, update, and delete operations
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
