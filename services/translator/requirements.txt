@@ -14,15 +14,16 @@ grpcio-reflection==1.69.0
 protobuf==5.29.3
 pyzmq==26.2.0
 
-# Machine Learning et NLP (pinned for compatibility)
+# Machine Learning et NLP
 # torch is installed separately via --index-url in Dockerfile
-transformers==4.46.3
-tokenizers==0.20.4
-accelerate==1.2.1
-datasets==3.2.0
-sentencepiece==0.2.0
-huggingface_hub==0.27.1
-safetensors==0.5.2
+# Versions flexibles pour compatibilité avec chatterbox-tts
+transformers>=4.46.0
+tokenizers>=0.20.0
+accelerate>=1.2.0
+datasets>=3.2.0
+sentencepiece>=0.2.0
+huggingface_hub>=0.27.0
+safetensors>=0.5.2
 
 # Cache et base de données
 redis==5.2.1
@@ -37,8 +38,8 @@ textstat==0.7.4
 
 # Utilitaires système
 psutil==6.1.1
-numpy==1.26.0
-pandas==2.2.3
+# numpy version managed by dependencies (chatterbox-tts, transformers, etc.)
+pandas>=2.2.3
 aiohttp==3.11.11
 python-multipart==0.0.20
 aiofiles==24.1.0
@@ -72,7 +73,7 @@ faster-whisper==1.2.1
 # ✓ Commercial use allowed
 # ✓ Supports Python 3.12+
 # Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
-chatterbox-tts==0.1.1
+chatterbox-tts>=0.1.6
 
 # HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
 # ✓ Uses transformers (already included above)
@@ -97,9 +98,9 @@ chatterbox-tts==0.1.1
 
 # Audio Processing utilities
 pydub==0.25.1
-librosa==0.10.0
-soundfile==0.12.1
-scipy==1.14.1
+librosa>=0.10.0  # Version gérée par chatterbox-tts
+soundfile>=0.12.1
+scipy>=1.14.1
 ffmpeg-python==0.2.0
 
 # Logging et monitoring
