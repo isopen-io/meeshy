@@ -291,6 +291,11 @@ else
 fi
 echo ""
 
+# Définir les répertoires des services (nouvelle structure monorepo)
+WEB_DIR="apps/web"
+GATEWAY_DIR="services/gateway"
+TRANSLATOR_DIR="services/translator"
+
 # Créer les fichiers .env.local
 echo -e "${BLUE}📝 Configuration des variables d'environnement...${NC}"
 
@@ -349,7 +354,7 @@ EOF
 echo -e "${GREEN}✅ .env créé${NC}"
 
 # .env Frontend
-cat > frontend/.env << EOF
+cat > ${WEB_DIR}/.env << EOF
 NODE_ENV=development
 
 # Configuration réseau
@@ -380,10 +385,10 @@ TRANSLATION_URL=http://localhost:8000
 # Base de données MongoDB (sans authentification pour développement local)
 DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true
 EOF
-echo -e "${GREEN}✅ frontend/.env créé${NC}"
+echo -e "${GREEN}✅ ${WEB_DIR}/.env créé${NC}"
 
 # .env Gateway
-cat > gateway/.env << EOF
+cat > ${GATEWAY_DIR}/.env << EOF
 NODE_ENV=development
 LOG_LEVEL=debug
 
@@ -423,11 +428,11 @@ FRONTEND_URL=${FRONTEND_URL}
 # CORS (inclut toutes les variations : localhost, 127.0.0.1, IP locale)
 CORS_ORIGINS=${CORS_ORIGINS}
 EOF
-echo -e "${GREEN}✅ gateway/.env créé${NC}"
+echo -e "${GREEN}✅ ${GATEWAY_DIR}/.env créé${NC}"
 
 # .env.local Translator (avec chemins absolus injectés)
-TRANSLATOR_ABS_DIR="${PROJECT_DIR}/translator"
-cat > translator/.env.local << EOF
+TRANSLATOR_ABS_DIR="${PROJECT_DIR}/${TRANSLATOR_DIR}"
+cat > ${TRANSLATOR_DIR}/.env.local << EOF
 # FastAPI Configuration
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
@@ -463,7 +468,7 @@ WORKER_COUNT=2
 # CORS
 CORS_ORIGINS=${CORS_ORIGINS}
 EOF
-echo -e "${GREEN}✅ translator/.env.local créé (avec chemins absolus: ${TRANSLATOR_ABS_DIR}/models)${NC}"
+echo -e "${GREEN}✅ ${TRANSLATOR_DIR}/.env.local créé (avec chemins absolus: ${TRANSLATOR_ABS_DIR}/models)${NC}"
 
 echo ""
 
@@ -503,47 +508,55 @@ echo ""
 # Vérifier que les dépendances sont installées
 echo -e "${BLUE}📦 Vérification des dépendances...${NC}"
 
+# Détecter le runtime JS (bun par défaut, pnpm en fallback)
+if command -v bun &> /dev/null; then
+    JS_RUNTIME="bun"
+else
+    JS_RUNTIME="pnpm"
+fi
+echo -e "${CYAN}   Runtime JS: ${JS_RUNTIME}${NC}"
+
 # Frontend
-if [ ! -d "frontend/node_modules" ]; then
+if [ ! -d "${WEB_DIR}/node_modules" ]; then
     echo -e "${YELLOW}📦 Installation des dépendances Frontend...${NC}"
-    cd frontend && pnpm install && cd ..
+    cd ${WEB_DIR} && ${JS_RUNTIME} install && cd ../..
 fi
 echo -e "${GREEN}✅ Dépendances Frontend OK${NC}"
 
 # Gateway
-if [ ! -d "gateway/node_modules" ]; then
+if [ ! -d "${GATEWAY_DIR}/node_modules" ]; then
     echo -e "${YELLOW}📦 Installation des dépendances Gateway...${NC}"
-    cd gateway && pnpm install && cd ..
+    cd ${GATEWAY_DIR} && ${JS_RUNTIME} install && cd ../..
 fi
 echo -e "${GREEN}✅ Dépendances Gateway OK${NC}"
 
 # Translator
-if [ ! -d "translator/venv" ]; then
+if [ ! -d "${TRANSLATOR_DIR}/.venv" ]; then
     echo -e "${YELLOW}📦 Création de l'environnement virtuel Python...${NC}"
-    cd translator && python3 -m venv venv && cd ..
+    cd ${TRANSLATOR_DIR} && python3 -m venv .venv && cd ../..
 fi
 
-if [ ! -f "translator/venv/bin/activate" ]; then
+if [ ! -f "${TRANSLATOR_DIR}/.venv/bin/activate" ]; then
     echo -e "${RED}❌ Environnement virtuel Python non créé${NC}"
     exit 1
 fi
 
 echo -e "${YELLOW}📦 Installation des dépendances Translator...${NC}"
-cd translator && source venv/bin/activate && pip install -q -r requirements.txt && cd ..
+cd ${TRANSLATOR_DIR} && source .venv/bin/activate && pip install -q -r requirements.txt && cd ../..
 echo -e "${GREEN}✅ Dépendances Translator OK${NC}"
 
 echo ""
 
 # Générer les clients Prisma
 echo -e "${BLUE}🔧 Génération des clients Prisma...${NC}"
-cd gateway
-pnpm run generate:prisma 2>/dev/null || echo -e "${YELLOW}⚠️  Prisma déjà généré${NC}"
-cd ..
+cd packages/shared
+${JS_RUNTIME} run generate 2>/dev/null || echo -e "${YELLOW}⚠️  Prisma déjà généré${NC}"
+cd ../..
 echo -e "${GREEN}✅ Clients Prisma générés${NC}"
 echo ""
 
 # Créer les répertoires de logs
-mkdir -p translator/logs gateway/logs frontend/.next
+mkdir -p ${TRANSLATOR_DIR}/logs ${GATEWAY_DIR}/logs ${WEB_DIR}/.next
 
 # Démarrer les services
 echo -e "${BLUE}🚀 Démarrage des services applicatifs...${NC}"
@@ -553,11 +566,11 @@ echo ""
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
 echo -e "${CYAN}🔤 Démarrage du Translator (Port 8000)${NC}"
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
-cd translator
+cd ${TRANSLATOR_DIR}
 # Le fichier .env contient déjà les chemins absolus, Python/FastAPI le lit automatiquement
 .venv/bin/python src/main.py > translator.log 2>&1 &
 TRANSLATOR_PID=$!
-cd ..
+cd ../..
 echo -e "${GREEN}✅ Translator démarré (PID: $TRANSLATOR_PID)${NC}"
 sleep 3
 
@@ -565,10 +578,10 @@ sleep 3
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
 echo -e "${CYAN}🌐 Démarrage du Gateway (Port 3000)${NC}"
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
-cd gateway
-pnpm run dev > gateway.log 2>&1 &
+cd ${GATEWAY_DIR}
+${JS_RUNTIME} run dev > gateway.log 2>&1 &
 GATEWAY_PID=$!
-cd ..
+cd ../..
 echo -e "${GREEN}✅ Gateway démarré (PID: $GATEWAY_PID)${NC}"
 sleep 5
 
@@ -579,10 +592,10 @@ if [ "$USE_HTTPS" = true ]; then
   echo -e "${CYAN}   🔒 Mode sécurisé activé${NC}"
 
   # Vérifier que les certificats existent
-  if [ ! -f "frontend/.cert/localhost-key.pem" ] || [ ! -f "frontend/.cert/localhost.pem" ]; then
+  if [ ! -f "${WEB_DIR}/.cert/localhost-key.pem" ] || [ ! -f "${WEB_DIR}/.cert/localhost.pem" ]; then
     echo -e "${RED}❌ Certificats SSL non trouvés !${NC}"
     echo -e "${YELLOW}   Générez-les avec mkcert:${NC}"
-    echo -e "${BLUE}   cd frontend${NC}"
+    echo -e "${BLUE}   cd ${WEB_DIR}${NC}"
     echo -e "${BLUE}   mkdir -p .cert${NC}"
     echo -e "${BLUE}   mkcert -key-file .cert/localhost-key.pem -cert-file .cert/localhost.pem \\${NC}"
     echo -e "${BLUE}          192.168.10.1 localhost local ::1 127.0.0.1 '*.localhost.home'${NC}"
@@ -593,14 +606,14 @@ else
   echo -e "${CYAN}🎨 Démarrage du Frontend HTTP (Port 3100)${NC}"
 fi
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
-cd frontend
+cd ${WEB_DIR}
 if [ "$USE_HTTPS" = true ]; then
-  pnpm run dev:https > frontend.log 2>&1 &
+  ${JS_RUNTIME} run dev:https > frontend.log 2>&1 &
 else
-  pnpm run dev > frontend.log 2>&1 &
+  ${JS_RUNTIME} run dev > frontend.log 2>&1 &
 fi
 FRONTEND_PID=$!
-cd ..
+cd ../..
 echo -e "${GREEN}✅ Frontend démarré (PID: $FRONTEND_PID)${NC}"
 sleep 5
 
@@ -651,9 +664,9 @@ echo ""
 echo -e "${YELLOW}📋 LOGS DES SERVICES${NC}"
 echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${BLUE}• Translator:${NC} tail -f translator/translator.log"
-echo -e "  ${BLUE}• Gateway:${NC}    tail -f gateway/gateway.log"
-echo -e "  ${BLUE}• Frontend:${NC}   tail -f frontend/frontend.log"
+echo -e "  ${BLUE}• Translator:${NC} tail -f ${TRANSLATOR_DIR}/translator.log"
+echo -e "  ${BLUE}• Gateway:${NC}    tail -f ${GATEWAY_DIR}/gateway.log"
+echo -e "  ${BLUE}• Frontend:${NC}   tail -f ${WEB_DIR}/frontend.log"
 echo ""
 echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
 echo ""
