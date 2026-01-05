@@ -25,6 +25,10 @@ HAS_TMUX := $(shell command -v tmux >/dev/null 2>&1 && echo "yes" || echo "no")
 # Détection Docker
 HAS_DOCKER := $(shell command -v docker >/dev/null 2>&1 && echo "yes" || echo "no")
 
+# Version Python requise (3.11.x recommandée pour les dépendances ML)
+PYTHON_VERSION := $(shell python3 --version 2>/dev/null | cut -d' ' -f2 | cut -d'.' -f1,2)
+PYTHON_OK := $(shell python3 -c "import sys; print('yes' if sys.version_info[:2] == (3, 11) else 'no')" 2>/dev/null || echo "no")
+
 # Variables
 COMPOSE_DIR := infrastructure/docker/compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.dev.yml
@@ -53,7 +57,10 @@ help: ## Afficher cette aide
 	@echo "$(CYAN)║          MEESHY - Commandes de Développement                ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@echo "$(BOLD)Runtime:$(NC) $(JS_RUNTIME) | $(BOLD)Tmux:$(NC) $(HAS_TMUX) | $(BOLD)Docker:$(NC) $(HAS_DOCKER)"
+	@echo "$(BOLD)Runtime:$(NC) $(JS_RUNTIME) | $(BOLD)Python:$(NC) $(PYTHON_VERSION) | $(BOLD)Tmux:$(NC) $(HAS_TMUX) | $(BOLD)Docker:$(NC) $(HAS_DOCKER)"
+	@if [ "$(PYTHON_OK)" != "yes" ]; then \
+		echo "$(YELLOW)⚠️  Python 3.11 recommandé (actuel: $(PYTHON_VERSION)). Voir: pyenv install 3.11$(NC)"; \
+	fi
 	@echo ""
 	@echo "$(BLUE)🚀 DÉMARRAGE RAPIDE:$(NC)"
 	@echo "  $(YELLOW)make setup$(NC)      - Installation complète (install + generate + build)"
@@ -101,12 +108,18 @@ install: ## Installer toutes les dépendances (JS + Python)
 	@echo "$(BLUE)📦 Installation des dépendances JavaScript avec $(JS_RUNTIME)...$(NC)"
 	@$(JS_RUNTIME) install --ignore-scripts
 	@echo ""
-	@echo "$(BLUE)📦 Installation des dépendances Python...$(NC)"
+	@if [ "$(PYTHON_OK)" != "yes" ]; then \
+		echo "$(YELLOW)⚠️  Python 3.11 recommandé pour les dépendances ML (actuel: $(PYTHON_VERSION))$(NC)"; \
+		echo "$(CYAN)   Installez avec: pyenv install 3.11 && pyenv local 3.11$(NC)"; \
+		echo "$(CYAN)   Ou sur macOS: brew install python@3.11$(NC)"; \
+		echo ""; \
+	fi
+	@echo "$(BLUE)📦 Installation des dépendances Python ($(PYTHON_VERSION))...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		python3 -m venv .venv 2>/dev/null || true && \
 		. .venv/bin/activate && \
 		pip install -q --upgrade pip && \
-		pip install -q -r requirements.txt
+		pip install -r requirements.txt
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les dépendances installées$(NC)"
 
@@ -116,7 +129,13 @@ install-js: ## Installer uniquement les dépendances JavaScript
 	@echo "$(GREEN)✅ Dépendances JavaScript installées$(NC)"
 
 install-python: ## Installer uniquement les dépendances Python
-	@echo "$(BLUE)📦 Installation des dépendances Python...$(NC)"
+	@if [ "$(PYTHON_OK)" != "yes" ]; then \
+		echo "$(YELLOW)⚠️  Python 3.11 recommandé pour les dépendances ML (actuel: $(PYTHON_VERSION))$(NC)"; \
+		echo "$(CYAN)   Installez avec: pyenv install 3.11 && pyenv local 3.11$(NC)"; \
+		echo "$(CYAN)   Ou: brew install python@3.11 (macOS)$(NC)"; \
+		echo ""; \
+	fi
+	@echo "$(BLUE)📦 Installation des dépendances Python ($(PYTHON_VERSION))...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		python3 -m venv .venv 2>/dev/null || true && \
 		. .venv/bin/activate && \
