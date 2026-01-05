@@ -302,17 +302,17 @@ class DatabaseService:
                     "status": "disconnected",
                     "error": "Database not connected"
                 }
-            
+
             # Test simple de connexion (MongoDB ne supporte pas SELECT 1)
             # Utiliser une requête MongoDB valide à la place
             await self.prisma.user.count()
-            
+
             return {
                 "connected": True,
                 "status": "healthy",
                 "type": "mongodb"
             }
-            
+
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR-DB] Erreur health check: {type(e).__name__}: {str(e)}")
             import traceback
@@ -322,3 +322,287 @@ class DatabaseService:
                 "status": "error",
                 "error": str(e)
             }
+
+    # =========================================================================
+    # VOICE PROFILE METHODS
+    # =========================================================================
+
+    async def save_voice_profile(
+        self,
+        user_id: str,
+        embedding: bytes,
+        audio_count: int,
+        total_duration_ms: int,
+        quality_score: float,
+        profile_id: str = None,
+        embedding_model: str = "openvoice_v2",
+        embedding_dimension: int = 256,
+        voice_characteristics: Dict[str, Any] = None,
+        fingerprint: Dict[str, Any] = None,
+        signature_short: str = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Sauvegarde ou met à jour un profil vocal en base de données
+
+        Args:
+            user_id: ID de l'utilisateur (ObjectId string)
+            embedding: Données binaires de l'embedding (numpy array sérialisé)
+            audio_count: Nombre d'audios utilisés pour l'entraînement
+            total_duration_ms: Durée totale des audios (ms)
+            quality_score: Score de qualité (0-1)
+            profile_id: Identifiant unique du profil (vfp_xxx)
+            embedding_model: Modèle utilisé (default: openvoice_v2)
+            embedding_dimension: Dimension du vecteur (default: 256)
+            voice_characteristics: Caractéristiques vocales (JSON)
+            fingerprint: Empreinte vocale (JSON)
+            signature_short: Signature courte pour lookups rapides
+
+        Returns:
+            Dict avec les données du profil ou None si erreur
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée, pas de sauvegarde")
+            return None
+
+        try:
+            # Vérifier si un profil existe déjà pour cet utilisateur
+            existing = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            data = {
+                "embedding": embedding,
+                "embeddingModel": embedding_model,
+                "embeddingDimension": embedding_dimension,
+                "audioCount": audio_count,
+                "totalDurationMs": total_duration_ms,
+                "qualityScore": quality_score,
+            }
+
+            if profile_id:
+                data["profileId"] = profile_id
+            if voice_characteristics:
+                data["voiceCharacteristics"] = voice_characteristics
+            if fingerprint:
+                data["fingerprint"] = fingerprint
+            if signature_short:
+                data["signatureShort"] = signature_short
+
+            if existing:
+                # Mise à jour avec incrémentation de version
+                result = await self.prisma.uservoicemodel.update(
+                    where={"userId": user_id},
+                    data={
+                        **data,
+                        "version": existing.version + 1,
+                    }
+                )
+                logger.info(f"🔄 [TRANSLATOR-DB] Profil vocal mis à jour: userId={user_id}, version={result.version}")
+            else:
+                # Création d'un nouveau profil
+                result = await self.prisma.uservoicemodel.create(
+                    data={
+                        "userId": user_id,
+                        **data,
+                    }
+                )
+                logger.info(f"✅ [TRANSLATOR-DB] Nouveau profil vocal créé: userId={user_id}")
+
+            return {
+                "id": result.id,
+                "userId": result.userId,
+                "profileId": result.profileId,
+                "embeddingModel": result.embeddingModel,
+                "embeddingDimension": result.embeddingDimension,
+                "audioCount": result.audioCount,
+                "totalDurationMs": result.totalDurationMs,
+                "qualityScore": result.qualityScore,
+                "version": result.version,
+                "createdAt": result.createdAt.isoformat() if result.createdAt else None,
+                "updatedAt": result.updatedAt.isoformat() if result.updatedAt else None,
+            }
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur sauvegarde profil vocal: {e}")
+            return None
+
+    async def get_voice_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Récupère un profil vocal depuis la base de données
+
+        Args:
+            user_id: ID de l'utilisateur (ObjectId string)
+
+        Returns:
+            Dict avec les données du profil (incluant embedding) ou None si non trouvé
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return None
+
+        try:
+            profile = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            if not profile:
+                logger.debug(f"🔍 [TRANSLATOR-DB] Aucun profil vocal trouvé pour userId={user_id}")
+                return None
+
+            return {
+                "id": profile.id,
+                "userId": profile.userId,
+                "profileId": profile.profileId,
+                "embedding": profile.embedding,  # bytes
+                "embeddingModel": profile.embeddingModel,
+                "embeddingDimension": profile.embeddingDimension,
+                "audioCount": profile.audioCount,
+                "totalDurationMs": profile.totalDurationMs,
+                "qualityScore": profile.qualityScore,
+                "version": profile.version,
+                "voiceCharacteristics": profile.voiceCharacteristics,
+                "fingerprint": profile.fingerprint,
+                "signatureShort": profile.signatureShort,
+                "createdAt": profile.createdAt.isoformat() if profile.createdAt else None,
+                "updatedAt": profile.updatedAt.isoformat() if profile.updatedAt else None,
+                "nextRecalibrationAt": profile.nextRecalibrationAt.isoformat() if profile.nextRecalibrationAt else None,
+            }
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur récupération profil vocal: {e}")
+            return None
+
+    async def get_voice_embedding(self, user_id: str) -> Optional[bytes]:
+        """
+        Récupère uniquement l'embedding d'un profil vocal (optimisé)
+
+        Args:
+            user_id: ID de l'utilisateur (ObjectId string)
+
+        Returns:
+            bytes de l'embedding ou None si non trouvé
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return None
+
+        try:
+            profile = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            if not profile or not profile.embedding:
+                return None
+
+            return profile.embedding
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur récupération embedding: {e}")
+            return None
+
+    async def update_voice_embedding(
+        self,
+        user_id: str,
+        embedding: bytes,
+        embedding_model: str = None,
+        embedding_dimension: int = None,
+    ) -> bool:
+        """
+        Met à jour uniquement l'embedding d'un profil vocal existant
+
+        Args:
+            user_id: ID de l'utilisateur
+            embedding: Nouvelles données binaires de l'embedding
+            embedding_model: Modèle utilisé (optionnel)
+            embedding_dimension: Dimension du vecteur (optionnel)
+
+        Returns:
+            bool: True si mise à jour réussie
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            # Vérifier que le profil existe
+            existing = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+
+            if not existing:
+                logger.warning(f"⚠️ [TRANSLATOR-DB] Profil vocal non trouvé pour userId={user_id}")
+                return False
+
+            data = {
+                "embedding": embedding,
+                "version": existing.version + 1,
+            }
+
+            if embedding_model:
+                data["embeddingModel"] = embedding_model
+            if embedding_dimension:
+                data["embeddingDimension"] = embedding_dimension
+
+            await self.prisma.uservoicemodel.update(
+                where={"userId": user_id},
+                data=data
+            )
+
+            logger.info(f"🔄 [TRANSLATOR-DB] Embedding mis à jour: userId={user_id}, version={existing.version + 1}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur mise à jour embedding: {e}")
+            return False
+
+    async def delete_voice_profile(self, user_id: str) -> bool:
+        """
+        Supprime un profil vocal
+
+        Args:
+            user_id: ID de l'utilisateur
+
+        Returns:
+            bool: True si suppression réussie
+        """
+        if not self.is_connected:
+            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+            return False
+
+        try:
+            result = await self.prisma.uservoicemodel.delete(
+                where={"userId": user_id}
+            )
+
+            if result:
+                logger.info(f"🗑️ [TRANSLATOR-DB] Profil vocal supprimé: userId={user_id}")
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur suppression profil vocal: {e}")
+            return False
+
+    async def voice_profile_exists(self, user_id: str) -> bool:
+        """
+        Vérifie si un profil vocal existe pour un utilisateur
+
+        Args:
+            user_id: ID de l'utilisateur
+
+        Returns:
+            bool: True si le profil existe
+        """
+        if not self.is_connected:
+            return False
+
+        try:
+            profile = await self.prisma.uservoicemodel.find_unique(
+                where={"userId": user_id}
+            )
+            return profile is not None
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR-DB] Erreur vérification profil vocal: {e}")
+            return False

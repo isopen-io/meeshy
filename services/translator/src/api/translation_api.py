@@ -258,22 +258,24 @@ class TranslationAPI:
         
         @self.app.get("/models")
         async def get_available_models():
-            """Retourne les modèles disponibles"""
+            """Retourne les modèles disponibles (NLLB uniquement)"""
+            # Deux modèles NLLB: basic (600M) et premium (1.3B)
+            # medium est un alias vers basic pour compatibilité
             models = {
                 "basic": {
-                    "name": "T5-Small",
-                    "description": "Modèle rapide pour traductions courantes",
-                    "languages": ["fr", "en", "es", "de"]
+                    "name": "NLLB-200-Distilled-600M",
+                    "description": "Modèle rapide, bonne qualité - 200+ langues",
+                    "languages": ["fr", "en", "es", "de", "pt", "zh", "ja", "ar", "...200+"]
                 },
                 "medium": {
                     "name": "NLLB-200-Distilled-600M",
-                    "description": "Modèle équilibré qualité/vitesse",
-                    "languages": ["fr", "en", "es", "de", "pt", "zh", "ja", "ar"]
+                    "description": "Alias vers basic (même modèle)",
+                    "languages": ["fr", "en", "es", "de", "pt", "zh", "ja", "ar", "...200+"]
                 },
                 "premium": {
                     "name": "NLLB-200-Distilled-1.3B",
-                    "description": "Modèle haute qualité",
-                    "languages": ["fr", "en", "es", "de", "pt", "zh", "ja", "ar"]
+                    "description": "Modèle haute qualité - 200+ langues",
+                    "languages": ["fr", "en", "es", "de", "pt", "zh", "ja", "ar", "...200+"]
                 }
             }
             return {"available_models": models}

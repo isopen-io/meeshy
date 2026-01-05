@@ -231,21 +231,25 @@ class MeeshyTranslationServer:
                     transcription_service = get_transcription_service()
                     voice_clone_service = get_voice_clone_service()
 
-                    # Utiliser le service TTS unifié si disponible, sinon l'ancien
+                    # Injecter MongoDB pour persistance des profils vocaux
+                    voice_clone_service.set_database_service(self.zmq_server.database_service)
+                    logger.info("[TRANSLATOR] ✅ Voice clone: MongoDB configure")
+
+                    # Utiliser le service TTS unifie si disponible, sinon l'ancien
                     if unified_tts_service:
                         tts_service = unified_tts_service
-                        logger.info("[TRANSLATOR] ✅ Utilisation du service TTS unifié (Chatterbox/Higgs/XTTS)")
+                        logger.info("[TRANSLATOR] ✅ Utilisation du service TTS unifie (Chatterbox/Higgs/XTTS)")
                     else:
                         tts_service = get_tts_service()
                         logger.info("[TRANSLATOR] ⚠️ Utilisation du service TTS legacy (XTTS)")
 
                     audio_pipeline = get_audio_pipeline()
 
-                    # Injecter les dépendances
+                    # Injecter les dependances
                     audio_pipeline.set_translation_service(self.translation_service)
                     audio_pipeline.set_database_service(self.zmq_server.database_service)
 
-                    logger.info("[TRANSLATOR] ✅ Services audio configurés")
+                    logger.info("[TRANSLATOR] ✅ Services audio configures")
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services audio: {e}")
 

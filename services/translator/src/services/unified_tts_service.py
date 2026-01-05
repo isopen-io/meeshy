@@ -25,6 +25,9 @@ from enum import Enum
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 
+# Import settings for centralized configuration
+from config.settings import get_settings
+
 # Configuration du logging
 logger = logging.getLogger(__name__)
 
@@ -266,7 +269,8 @@ class ChatterboxBackend(BaseTTSBackend):
         self._available = False
         self._available_multilingual = False
         self._initialized_multilingual = False
-        self._models_path = Path(os.getenv("MODELS_PATH", "/workspace/models"))
+        self._settings = get_settings()
+        self._models_path = Path(self._settings.huggingface_cache_path)
 
         try:
             from chatterbox.tts import ChatterboxTTS
@@ -315,14 +319,14 @@ class ChatterboxBackend(BaseTTSBackend):
             from huggingface_hub import snapshot_download
 
             model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
-            logger.info(f"[TTS] 📥 Téléchargement de {model_id}...")
+            logger.info(f"[TTS] 📥 Téléchargement de {model_id} vers {self._models_path}...")
 
             loop = asyncio.get_event_loop()
 
             def download():
                 return snapshot_download(
                     repo_id=model_id,
-                    cache_dir=str(self._models_path / "huggingface"),
+                    cache_dir=str(self._models_path),
                     resume_download=True
                 )
 
@@ -550,7 +554,8 @@ class HiggsAudioBackend(BaseTTSBackend):
         self.model = None
         self.tokenizer = None
         self._available = False
-        self._models_path = Path(os.getenv("MODELS_PATH", "/workspace/models"))
+        self._settings = get_settings()
+        self._models_path = Path(self._settings.huggingface_cache_path)
 
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -592,14 +597,14 @@ class HiggsAudioBackend(BaseTTSBackend):
             from huggingface_hub import snapshot_download
 
             model_id = "bosonai/higgs-audio-v2-generation-3B-base"
-            logger.info(f"[TTS] 📥 Téléchargement de {model_id}...")
+            logger.info(f"[TTS] 📥 Téléchargement de {model_id} vers {self._models_path}...")
 
             loop = asyncio.get_event_loop()
 
             def download():
                 return snapshot_download(
                     repo_id=model_id,
-                    cache_dir=str(self._models_path / "huggingface"),
+                    cache_dir=str(self._models_path),
                     resume_download=True
                 )
 
@@ -728,6 +733,8 @@ class XTTSBackend(BaseTTSBackend):
         self.device = device
         self.model = None
         self._available = False
+        self._settings = get_settings()
+        self._xtts_path = Path(self._settings.xtts_models_path)
 
         try:
             from TTS.api import TTS
@@ -746,10 +753,13 @@ class XTTSBackend(BaseTTSBackend):
             return False
 
         try:
-            # XTTS stocke les modèles dans un dossier spécifique
-            tts_models_path = Path.home() / ".local" / "share" / "tts"
-            xtts_path = tts_models_path / "tts_models--multilingual--multi-dataset--xtts_v2"
-            return xtts_path.exists()
+            # Vérifier dans notre chemin centralisé
+            xtts_model_path = self._xtts_path / "tts_models--multilingual--multi-dataset--xtts_v2"
+            if xtts_model_path.exists():
+                return True
+            # Fallback: vérifier l'ancien chemin par défaut
+            legacy_path = Path.home() / ".local" / "share" / "tts" / "tts_models--multilingual--multi-dataset--xtts_v2"
+            return legacy_path.exists()
         except Exception:
             return False
 
@@ -764,7 +774,9 @@ class XTTSBackend(BaseTTSBackend):
         try:
             from TTS.api import TTS
 
-            logger.info("[TTS] 📥 Téléchargement de XTTS v2...")
+            # Configurer TTS_HOME pour télécharger dans notre répertoire centralisé
+            os.environ['TTS_HOME'] = str(self._xtts_path)
+            logger.info(f"[TTS] 📥 Téléchargement de XTTS v2 vers {self._xtts_path}...")
 
             loop = asyncio.get_event_loop()
 
@@ -795,13 +807,16 @@ class XTTSBackend(BaseTTSBackend):
         try:
             from TTS.api import TTS
 
+            # Configurer TTS_HOME pour utiliser notre répertoire centralisé
+            os.environ['TTS_HOME'] = str(self._xtts_path)
+
             # Afficher l'alerte de licence
             model_info = TTS_MODEL_INFO[TTSModel.XTTS_V2]
             if model_info.license_warning:
                 logger.warning(model_info.license_warning)
                 print(f"\n{model_info.license_warning}\n")
 
-            logger.info("[TTS] 🔄 Chargement XTTS v2 (legacy)...")
+            logger.info(f"[TTS] 🔄 Chargement XTTS v2 (legacy) depuis {self._xtts_path}...")
 
             loop = asyncio.get_event_loop()
 
@@ -905,6 +920,9 @@ class UnifiedTTSService:
             return
 
         # Configuration
+        # Load settings
+        self._settings = get_settings()
+
         model_env = os.getenv("TTS_MODEL", "chatterbox")
         try:
             self.requested_model = model or TTSModel(model_env)
@@ -913,10 +931,10 @@ class UnifiedTTSService:
             self.requested_model = TTSModel.CHATTERBOX
 
         self.current_model = self.requested_model
-        self.output_dir = Path(output_dir or os.getenv("TTS_OUTPUT_DIR", "/app/outputs/audio"))
+        self.output_dir = Path(output_dir or os.getenv("TTS_OUTPUT_DIR", self._settings.tts_output_dir))
         self.device = os.getenv("TTS_DEVICE", device)
-        self.default_format = os.getenv("TTS_DEFAULT_FORMAT", "wav")
-        self.models_path = Path(os.getenv("MODELS_PATH", "/workspace/models"))
+        self.default_format = os.getenv("TTS_DEFAULT_FORMAT", self._settings.tts_default_format)
+        self.models_path = Path(self._settings.models_path)
 
         # Backends
         self.backends: Dict[TTSModel, BaseTTSBackend] = {}
