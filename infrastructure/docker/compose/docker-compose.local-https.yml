@@ -45,7 +45,7 @@ services:
   # TRAEFIK - Reverse Proxy with Local HTTPS
   # ===========================================================================
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.6.6
     container_name: meeshy-traefik
     restart: unless-stopped
     command:
@@ -65,7 +65,8 @@ services:
       - "443:443"
       - "8080:8080"  # Traefik Dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Use ~/.docker/run/docker.sock for macOS Docker Desktop
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - ./certs:/etc/traefik/certs:ro
       - ./traefik-dynamic.yml:/etc/traefik/dynamic/traefik.yml:ro
     networks:
