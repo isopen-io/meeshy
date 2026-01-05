@@ -47,6 +47,7 @@ import userPreferencesRoutes from './routes/user-preferences';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
+import { translationJobsRoutes } from './routes/translation-jobs';
 import { maintenanceRoutes } from './routes/maintenance';
 import { authTestRoutes } from './routes/auth-test';
 import affiliateRoutes from './routes/affiliate';
@@ -602,6 +603,9 @@ class MeeshyServer {
 
       // Enregistrer les routes de traduction (blocking)
       await fastify.register(translationBlockingRoutes);
+
+      // Enregistrer les routes de gestion des jobs de traduction
+      await fastify.register(translationJobsRoutes);
     }, { prefix: '/api' });
     
     // Register authentication routes with /api/auth prefix
