@@ -1,10 +1,10 @@
 """
 Service de traduction Meeshy
-Architecture: FastAPI + Prisma + MT5/NLLB + Redis + gRPC/ZMQ
+Architecture: FastAPI + Prisma + NLLB + Redis + gRPC/ZMQ
 
 Ce service implémente l'architecture de traduction complète selon les spécifications Meeshy:
 - CRUD complet sur Messages et MessageTranslations
-- Traduction multi-langues avec modèles MT5/NLLB
+- Traduction multi-langues avec modèles NLLB (200+ langues)
 - Cache Redis avec fallback local
 - Communication via API REST, gRPC et ZeroMQ
 - Support de la détection automatique de langue

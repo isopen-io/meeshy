@@ -15,15 +15,13 @@ protobuf==5.29.3
 pyzmq==26.2.0
 
 # Machine Learning et NLP
-# torch is installed separately via --index-url in Dockerfile
-# Versions flexibles pour compatibilité avec chatterbox-tts
-transformers>=4.46.0
-tokenizers>=0.20.0
-accelerate>=1.2.0
-datasets>=3.2.0
+# Versions gérées par chatterbox-tts pour compatibilité
+# torch, torchaudio, transformers, librosa installés via chatterbox-tts
+accelerate>=1.0.0
+datasets>=3.0.0
 sentencepiece>=0.2.0
-huggingface_hub>=0.27.0
-safetensors>=0.5.2
+huggingface_hub>=0.20.0
+safetensors>=0.4.0
 
 # Cache et base de données
 redis==5.2.1
@@ -39,7 +37,7 @@ textstat==0.7.4
 # Utilitaires système
 psutil==6.1.1
 # numpy version managed by dependencies (chatterbox-tts, transformers, etc.)
-pandas>=2.2.3
+pandas==2.2.3
 aiohttp==3.11.11
 python-multipart==0.0.20
 aiofiles==24.1.0
@@ -71,9 +69,9 @@ faster-whisper==1.2.1
 # CHATTERBOX (DEFAULT - MANDATORY) - Apache 2.0 License
 # ✓ Best quality/speed balance for production
 # ✓ Commercial use allowed
-# ✓ Supports Python 3.12+
+# ✓ Requires Python 3.11 (configured via .python-version)
 # Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
-chatterbox-tts>=0.1.6
+chatterbox-tts==0.1.6
 
 # HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
 # ✓ Uses transformers (already included above)
@@ -98,9 +96,9 @@ chatterbox-tts>=0.1.6
 
 # Audio Processing utilities
 pydub==0.25.1
-librosa>=0.10.0  # Version gérée par chatterbox-tts
+# librosa version managed by chatterbox-tts (0.11.0)
 soundfile>=0.12.1
-scipy>=1.14.1
+scipy>=1.10.0
 ffmpeg-python==0.2.0
 
 # Logging et monitoring

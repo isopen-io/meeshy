@@ -125,31 +125,27 @@ class QuantizedMLService:
         
         # Caches pour éviter les recalculs
         self._lang_codes_cache = None
-        self._language_names_cache = None
-        
+
         logger.info(f"🤖 Service ML Quantifié Optimisé créé: {model_type} avec {quantization_level}")
     
     @property
     def model_configs(self) -> Dict:
-        """Configuration des modèles avec cache lazy"""
+        """Configuration des modèles NLLB avec cache lazy"""
         if self._model_configs is None:
             self._model_configs = {
                 'basic': {
                     'model_name': self.settings.basic_model,
-                    'description': f'{self.settings.basic_model} quantifié',
-                    'max_length': 128
-                },
-                'medium': {
-                    'model_name': self.settings.medium_model,
-                    'description': f'{self.settings.medium_model} quantifié',
+                    'description': 'NLLB 600M quantifié - Rapide',
                     'max_length': 256
                 },
                 'premium': {
                     'model_name': self.settings.premium_model,
-                    'description': f'{self.settings.premium_model} quantifié',
+                    'description': 'NLLB 1.3B quantifié - Haute qualité',
                     'max_length': 512
                 }
             }
+            # Alias pour compatibilité
+            self._model_configs['medium'] = self._model_configs['basic']
         return self._model_configs
     
     @property
@@ -162,15 +158,6 @@ class QuantizedMLService:
             }
         return self._lang_codes_cache
     
-    @property
-    def language_names(self) -> Dict:
-        """Noms de langues avec cache"""
-        if self._language_names_cache is None:
-            self._language_names_cache = {
-                'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German',
-                'pt': 'Portuguese', 'zh': 'Chinese', 'ja': 'Japanese', 'ar': 'Arabic'
-            }
-        return self._language_names_cache
     
     @lru_cache(maxsize=1)
     def _get_shared_models_analysis(self) -> Tuple[Dict[str, list], Set[str]]:
@@ -706,172 +693,36 @@ class QuantizedMLService:
                     torch_dtype=torch.float32  # Forcer float32
                 )
                 
-                # Détection automatique du type de modèle
-                is_t5_model = "t5" in model_name.lower()
-                
-                # OPTIMISATION: Différencier T5 et NLLB avec pipelines appropriés
-                if is_t5_model:
-                    # T5: utiliser text2text-generation avec tokenizer thread-local
-                    temp_pipeline = pipeline(
-                        "text2text-generation",
-                        model=model,
-                        tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
-                        device=-1,  # Forcer CPU pour éviter les problèmes de tensors meta
-                        max_length=128,
-                        torch_dtype=torch.float32  # Forcer float32
-                    )
-                    
-                    # T5: format avec noms complets de langues
-                    source_name = self.language_names.get(source_language, source_language.capitalize())
-                    target_name = self.language_names.get(target_language, target_language.capitalize())
-                    instruction = f"translate {source_name} to {target_name}: {text}"
-                    
-                    # OPTIMISATION: Traduction avec paramètres optimisés
-                    result = temp_pipeline(
-                        instruction,
-                        max_new_tokens=64,
-                        num_beams=2,  # Réduire pour économiser la mémoire
-                        do_sample=False,
-                        early_stopping=True,
-                        repetition_penalty=1.1,
-                        length_penalty=1.0,
-                        pad_token_id=thread_tokenizer.eos_token_id
-                    )
-                    
-                    # T5 retourne generated_text
-                    t5_success = False
-                    if result and len(result) > 0 and 'generated_text' in result[0]:
-                        raw_text = result[0]['generated_text']
-                        
-                        # Nettoyer l'instruction si présente dans le résultat
-                        instruction_prefix = f"translate {source_name} to {target_name}:"
-                        if instruction_prefix in raw_text:
-                            parts = raw_text.split(instruction_prefix, 1)
-                            if len(parts) > 1:
-                                translated = parts[1].strip()
-                            else:
-                                translated = raw_text.strip()
-                        else:
-                            translated = raw_text.strip()
-                            
-                        # Validation: vérifier si T5 a vraiment traduit (pas juste répété l'instruction)
-                        # Rejeter SEULEMENT si:
-                        # 1. Vide
-                        # 2. Identique à l'original
-                        # 3. Contient l'instruction complète T5 (ex: "translate French to Spanish:")
-                        has_instruction = f"translate {source_name} to {target_name}:" in translated.lower()
-                        
-                        if not translated or translated.lower() == text.lower() or has_instruction:
-                            logger.warning(f"T5 traduction invalide: '{translated}', fallback vers NLLB")
-                            t5_success = False
-                        else:
-                            t5_success = True
-                            
-                    # Si T5 échoue, fallback automatique vers NLLB
-                    if not t5_success:
-                        logger.info(f"🔄 Fallback automatique: T5 → NLLB pour {source_language}→{target_language}")
-                        # Nettoyer le pipeline T5
-                        del temp_pipeline
-                        del thread_tokenizer
-                        
-                        # CORRECTION: Chercher un modèle NLLB parmi les modèles chargés
-                        # Les clés sont 'basic', 'medium', 'premium', pas les noms de modèles
-                        nllb_model_type = None
-                        nllb_model_name = None
-                        
-                        # Chercher medium ou premium (qui sont des modèles NLLB)
-                        for model_type_key in ['medium', 'premium']:
-                            if model_type_key in self.models:
-                                config = self.model_configs.get(model_type_key, {})
-                                model_name = config.get('model_name', '')
-                                if 'nllb' in model_name.lower():
-                                    nllb_model_type = model_type_key
-                                    nllb_model_name = model_name
-                                    break
-                        
-                        if nllb_model_type is None:
-                            logger.warning(f"Modèle NLLB non chargé, impossible de faire le fallback")
-                            translated = f"[Translation-Failed] {text}"
-                        else:
-                            try:
-                                # Utiliser le modèle NLLB déjà chargé
-                                nllb_model = self.models[nllb_model_type]
-                                nllb_tokenizer = AutoTokenizer.from_pretrained(
-                                    nllb_model_name,
-                                    cache_dir=str(self.settings.models_path),
-                                    local_files_only=True,
-                                    use_fast=True
-                                )
-                                
-                                nllb_pipeline = pipeline(
-                                    "translation",
-                                    model=nllb_model,
-                                    tokenizer=nllb_tokenizer,
-                                    device=-1,
-                                    max_length=128,
-                                    torch_dtype=torch.float32
-                                )
-                                
-                                nllb_source = self.lang_codes.get(source_language, 'eng_Latn')
-                                nllb_target = self.lang_codes.get(target_language, 'fra_Latn')
-                                
-                                nllb_result = nllb_pipeline(
-                                    text, 
-                                    src_lang=nllb_source, 
-                                    tgt_lang=nllb_target, 
-                                    max_length=128,
-                                    num_beams=2,
-                                    early_stopping=True
-                                )
-                                
-                                if nllb_result and len(nllb_result) > 0 and 'translation_text' in nllb_result[0]:
-                                    translated = nllb_result[0]['translation_text']
-                                    logger.info(f"✅ Fallback NLLB réussi: '{text}' → '{translated}'")
-                                else:
-                                    translated = f"[NLLB-Fallback-Failed] {text}"
-                                
-                                # Nettoyer (pas besoin de supprimer nllb_model car c'est self.models[nllb_model_type])
-                                del nllb_tokenizer
-                                del nllb_pipeline
-                                
-                            except Exception as e:
-                                logger.error(f"❌ Erreur fallback NLLB: {e}")
-                                translated = f"[NLLB-Fallback-Error] {text}"
-                        
-                        # CORRECTION: thread_tokenizer déjà supprimé, ne pas le supprimer à nouveau
-                        return translated
-                        
+                # NLLB: utiliser translation avec tokenizer thread-local
+                temp_pipeline = pipeline(
+                    "translation",
+                    model=model,
+                    tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
+                    device=0 if torch.cuda.is_available() else -1,
+                    max_length=256,
+                    torch_dtype=torch.float32  # Type de données standard
+                )
+
+                # NLLB: codes de langue spéciaux
+                nllb_source = self.lang_codes.get(source_language, 'eng_Latn')
+                nllb_target = self.lang_codes.get(target_language, 'fra_Latn')
+
+                # OPTIMISATION: Traduction avec paramètres optimisés
+                result = temp_pipeline(
+                    text,
+                    src_lang=nllb_source,
+                    tgt_lang=nllb_target,
+                    max_length=256,
+                    num_beams=2,  # Réduire pour économiser la mémoire
+                    early_stopping=True
+                )
+
+                # NLLB retourne translation_text
+                if result and len(result) > 0 and 'translation_text' in result[0]:
+                    translated = result[0]['translation_text']
                 else:
-                    # NLLB: utiliser translation avec tokenizer thread-local
-                    temp_pipeline = pipeline(
-                        "translation",
-                        model=model,
-                        tokenizer=thread_tokenizer,  # ← TOKENIZER THREAD-LOCAL
-                        device=0 if torch.cuda.is_available() else -1,
-                        max_length=128,
-                        torch_dtype=torch.float32  # Type de données standard
-                    )
-                    
-                    # NLLB: codes de langue spéciaux
-                    nllb_source = self.lang_codes.get(source_language, 'eng_Latn')
-                    nllb_target = self.lang_codes.get(target_language, 'fra_Latn')
-                    
-                    # OPTIMISATION: Traduction avec paramètres optimisés
-                    result = temp_pipeline(
-                        text, 
-                        src_lang=nllb_source, 
-                        tgt_lang=nllb_target, 
-                        max_length=128,
-                        num_beams=2,  # Réduire pour économiser la mémoire
-                        early_stopping=True
-                    )
-                    
-                    # NLLB retourne translation_text
-                    if result and len(result) > 0 and 'translation_text' in result[0]:
-                        translated = result[0]['translation_text']
-                    else:
-                        translated = f"[NLLB-No-Result] {text}"
-                
+                    translated = f"[NLLB-No-Result] {text}"
+
                 # OPTIMISATION: Nettoyer tokenizer et pipeline temporaires
                 del thread_tokenizer
                 del temp_pipeline

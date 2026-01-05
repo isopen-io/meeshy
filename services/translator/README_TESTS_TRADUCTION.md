@@ -8,7 +8,7 @@ Tester la pipeline complète de traduction anglais → français avec préservat
 
 ### 1. `test_real_translation.py` - Traduction ML réelle
 
-**Utilise le vrai service ML avec modèles NLLB/T5**
+**Utilise le vrai service ML avec modèles NLLB**
 
 ```bash
 # DANS L'ENVIRONNEMENT DOCKER (avec modèles ML)

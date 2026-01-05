@@ -7,9 +7,9 @@ Le **Meeshy Translation Service** est un microservice de traduction multi-langue
 ## 🚀 Fonctionnalités
 
 ### Services de traduction
-- **Modèles ML** : T5-Small, NLLB-200-Distilled (600M/1.3B)
+- **Modèles ML** : NLLB-200-Distilled (600M/1.3B)
 - **Détection automatique** de langue source
-- **8 langues supportées** : FR, EN, ES, DE, PT, ZH, JA, AR
+- **200+ langues supportées** : FR, EN, ES, DE, PT, ZH, JA, AR, et plus
 - **Cache intelligent** avec Redis et stockage local
 - **Traitement par lots** pour optimiser les performances
 
@@ -323,9 +323,9 @@ translator/
 
 | Type | Modèle | Description |
 |------|--------|-------------|
-| `basic` | t5-small | Rapide, langues européennes |
-| `medium` | nllb-200-distilled-600M | Équilibré, 200 langues |
-| `premium` | nllb-200-distilled-1.3B | Haute qualité, 200 langues |
+| `basic` | nllb-200-distilled-600M | Rapide, 200+ langues |
+| `medium` | nllb-200-distilled-600M | Alias vers basic |
+| `premium` | nllb-200-distilled-1.3B | Haute qualité, 200+ langues |
 
 ## 🐳 Docker
 
@@ -417,7 +417,7 @@ echo $MODELS_PATH
 ls -la $MODELS_PATH
 
 # Téléchargement manuel si nécessaire
-python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('t5-small')"
+python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('facebook/nllb-200-distilled-600M')"
 ```
 
 **Erreurs ZMQ :**
