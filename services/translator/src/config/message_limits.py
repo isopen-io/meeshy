@@ -8,21 +8,23 @@ import os
 class MessageLimits:
     """
     Limites de messages configurables via variables d'environnement
+    Aligné avec gateway/src/config/message-limits.ts
     """
-    
+
     # Limite maximale de caractères pour un message (validé à l'envoi)
-    MAX_MESSAGE_LENGTH = int(os.getenv('MAX_MESSAGE_LENGTH', '1024'))
-    
+    # Aligné avec frontend: 2000 caractères pour USER, 4000 pour MODERATOR+
+    MAX_MESSAGE_LENGTH = int(os.getenv('MAX_MESSAGE_LENGTH', '2000'))
+
     # Seuil pour convertir le texte en pièce jointe textuelle
     MAX_TEXT_ATTACHMENT_THRESHOLD = int(os.getenv('MAX_TEXT_ATTACHMENT_THRESHOLD', '2000'))
-    
+
     # Limite maximale de caractères pour la traduction
-    # SUPPRIMÉE: Plus de limite, les longs textes sont découpés en paragraphes
-    # Les messages sont traduits paragraphe par paragraphe pour gérer n'importe quelle longueur
-    MAX_TRANSLATION_LENGTH = int(os.getenv('MAX_TRANSLATION_LENGTH', '100000'))  # Limite très élevée pour désactivation
-    
-    # Limite maximale pour les textes longs (ancienne limite)
-    MAX_TEXT_LENGTH = int(os.getenv('MAX_TEXT_LENGTH', '100000'))  # Limite très élevée
+    # Les messages dépassant cette limite ne seront pas envoyés au service de traduction
+    # Aligné avec MAX_MESSAGE_LENGTH pour permettre la traduction de tous les messages valides
+    MAX_TRANSLATION_LENGTH = int(os.getenv('MAX_TRANSLATION_LENGTH', '10000'))
+
+    # Limite maximale pour les textes longs (legacy)
+    MAX_TEXT_LENGTH = int(os.getenv('MAX_TEXT_LENGTH', '10000'))
 
 
 def validate_message_length(content: str) -> tuple[bool, str | None]:
