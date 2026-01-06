@@ -28,6 +28,7 @@ env:
   NODE_VERSION: '22'
   BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
+  # Python 3.11 required: chatterbox-tts needs numpy<1.26.0 (no wheels for 3.12)
   PYTHON_VERSION: '3.11'
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
