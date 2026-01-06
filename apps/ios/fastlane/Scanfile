@@ -1,0 +1,33 @@
+# Scanfile for Meeshy iOS Test Configuration
+
+# Project and Scheme
+project("Meeshy.xcodeproj")
+scheme("Meeshy")
+
+# Test Devices
+devices([
+  "iPhone 15 Pro",
+  "iPhone 15 Pro Max",
+  "iPhone SE (3rd generation)",
+  "iPad Pro (12.9-inch) (6th generation)"
+])
+
+# Test Configuration
+configuration("Debug")
+clean(true)
+code_coverage(true)
+
+# Output
+output_directory("./fastlane/test_output")
+output_types("html,junit")
+
+# Test Settings
+skip_build(false)
+disable_concurrent_testing(false)
+max_concurrent_simulators(4)
+
+# Result Bundle
+result_bundle(true)
+output_files("report.html,report.junit")
+
+# For all available options run `fastlane action scan`

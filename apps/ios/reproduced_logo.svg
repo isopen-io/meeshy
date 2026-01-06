@@ -1,0 +1,19 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4338ca;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bgGradient)"/>
+  
+  <!-- Chat Bubble Outline -->
+  <path d="M312 312 H712 C756.183 312 792 347.817 792 392 V632 C792 676.183 756.183 712 712 712 H412 L312 812 V712 C267.817 712 232 676.183 232 632 V392 C232 347.817 267.817 312 312 312 Z" 
+        stroke="white" 
+        stroke-width="64" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        fill="none"/>
+</svg>

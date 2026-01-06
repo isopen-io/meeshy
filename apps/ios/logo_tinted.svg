@@ -1,0 +1,13 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Transparent Background -->
+  
+  <!-- Stacked Dashes (Solid Black for Tinting) -->
+  <!-- Top (Long) -->
+  <path d="M262 384 H762" stroke="black" stroke-width="80" stroke-linecap="round"/>
+  
+  <!-- Middle (Medium) -->
+  <path d="M262 512 H662" stroke="black" stroke-width="80" stroke-linecap="round"/>
+  
+  <!-- Bottom (Short) -->
+  <path d="M262 640 H562" stroke="black" stroke-width="80" stroke-linecap="round"/>
+</svg>

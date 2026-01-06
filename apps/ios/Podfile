@@ -1,0 +1,41 @@
+# Uncomment the next line to define a global platform for your project
+platform :ios, '16.0'
+
+target 'Meeshy' do
+  # Comment the next line if you don't want to use dynamic frameworks
+  use_frameworks!
+
+  # Pods for Meeshy
+  pod 'Socket.IO-Client-Swift', '~> 16.1.0'
+
+  # WebRTC for audio/video calls
+  pod 'GoogleWebRTC', '~> 1.1'
+
+  # Firebase
+  pod 'Firebase/Analytics', '~> 10.20'
+  pod 'Firebase/Crashlytics', '~> 10.20'
+  pod 'Firebase/Performance', '~> 10.20'
+  pod 'Firebase/Auth', '~> 10.20'
+  pod 'Firebase/Messaging', '~> 10.20'
+
+  # ONNX Runtime for on-device ML inference (voice cloning)
+  pod 'onnxruntime-objc', '~> 1.16.0'
+
+  target 'MeeshyTests' do
+    inherit! :search_paths
+    # Pods for testing
+  end
+
+  target 'MeeshyUITests' do
+    # Pods for testing
+  end
+
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+    end
+  end
+end

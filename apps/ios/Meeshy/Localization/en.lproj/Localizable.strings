@@ -1,0 +1,312 @@
+/*
+  Localizable.strings (English)
+  Meeshy
+
+  Complete English localization - 200+ strings
+*/
+
+// MARK: - Authentication
+"auth.signIn" = "Sign In";
+"auth.signUp" = "Sign Up";
+"auth.email" = "Email";
+"auth.password" = "Password";
+"auth.forgotPassword" = "Forgot Password?";
+"auth.resetPassword" = "Reset Password";
+"auth.logout" = "Logout";
+"auth.confirmPassword" = "Confirm Password";
+"auth.twoFactorAuth" = "Two-Factor Authentication";
+"auth.verificationCode" = "Verification Code";
+"auth.enterEmail" = "Enter your email";
+"auth.enterPassword" = "Enter your password";
+"auth.createAccount" = "Create Account";
+"auth.alreadyHaveAccount" = "Already have an account?";
+"auth.dontHaveAccount" = "Don't have an account?";
+"auth.passwordRequirements" = "Password must be at least 8 characters";
+"auth.invalidEmail" = "Invalid email address";
+"auth.invalidPassword" = "Invalid password";
+"auth.passwordMismatch" = "Passwords do not match";
+"auth.loginSuccess" = "Login successful";
+"auth.loginFailed" = "Login failed";
+"auth.signupSuccess" = "Account created successfully";
+"auth.signupFailed" = "Account creation failed";
+"auth.resetPasswordSent" = "Password reset email sent";
+"auth.resetPasswordFailed" = "Failed to send reset email";
+
+// MARK: - Chat & Messaging
+"chat.chats" = "Chats";
+"chat.newChat" = "New Chat";
+"chat.typeMessage" = "Type a message...";
+"chat.sendMessage" = "Send";
+"chat.editMessage" = "Edit Message";
+"chat.deleteMessage" = "Delete Message";
+"chat.replyMessage" = "Reply";
+"chat.forwardMessage" = "Forward";
+"chat.copyMessage" = "Copy";
+"chat.searchMessages" = "Search messages";
+"chat.noMessages" = "No messages yet";
+"chat.startConversation" = "Start a conversation";
+"chat.messageSent" = "Sent";
+"chat.messageDelivered" = "Delivered";
+"chat.messageRead" = "Read";
+"chat.messageFailed" = "Failed to send";
+"chat.retryMessage" = "Retry";
+"chat.deleteConfirm" = "Delete this message?";
+"chat.deleteForEveryone" = "Delete for everyone";
+"chat.deleteForMe" = "Delete for me";
+"chat.edited" = "Edited";
+"chat.replying" = "Replying to";
+"chat.forwarding" = "Forward to";
+"chat.selectContact" = "Select a contact";
+"chat.typing" = "typing...";
+"chat.online" = "online";
+"chat.offline" = "offline";
+"chat.lastSeen" = "last seen";
+
+// MARK: - Translation
+"translation.translate" = "Translate";
+"translation.translating" = "Translating...";
+"translation.translated" = "Translated";
+"translation.showOriginal" = "Show Original";
+"translation.hideOriginal" = "Hide Original";
+"translation.autoTranslate" = "Auto-translate messages";
+"translation.quality" = "Translation Quality";
+"translation.quality.basic" = "Basic (Fast)";
+"translation.quality.medium" = "Medium (Balanced)";
+"translation.quality.premium" = "Premium (Best Quality)";
+"translation.detectLanguage" = "Detect Language";
+"translation.sourceLanguage" = "Source Language";
+"translation.targetLanguage" = "Target Language";
+"translation.history" = "Translation History";
+"translation.clearHistory" = "Clear History";
+"translation.noHistory" = "No translation history";
+"translation.confidence" = "Confidence";
+"translation.provider" = "Provider";
+"translation.cached" = "From cache";
+"translation.processingTime" = "Processing time";
+"translation.error" = "Translation failed";
+"translation.error.network" = "Network error";
+"translation.error.unsupported" = "Unsupported language";
+"translation.error.invalid" = "Invalid text";
+"translation.statistics" = "Statistics";
+"translation.cacheHitRate" = "Cache hit rate";
+"translation.averageTime" = "Average time";
+
+// MARK: - Languages
+"language.english" = "English";
+"language.french" = "French";
+"language.russian" = "Russian";
+"language.portuguese" = "Portuguese";
+"language.auto" = "Auto-detect";
+"language.system" = "System Default";
+"language.change" = "Change Language";
+"language.appLanguage" = "App Language";
+"language.messageLanguage" = "Message Language";
+
+// MARK: - Settings
+"settings.title" = "Settings";
+"settings.profile" = "Profile";
+"settings.privacy" = "Privacy";
+"settings.security" = "Security";
+"settings.notifications" = "Notifications";
+"settings.language" = "Language";
+"settings.appearance" = "Appearance";
+"settings.about" = "About";
+"settings.version" = "Version";
+"settings.logout" = "Logout";
+"settings.account" = "Account";
+"settings.chat" = "Chat Settings";
+"settings.translation" = "Translation Settings";
+"settings.data" = "Data and Storage";
+"settings.help" = "Help & Support";
+"settings.legal" = "Legal";
+"settings.termsOfService" = "Terms of Service";
+"settings.privacyPolicy" = "Privacy Policy";
+"settings.licenses" = "Open Source Licenses";
+
+// MARK: - Profile
+"profile.edit" = "Edit Profile";
+"profile.displayName" = "Display Name";
+"profile.username" = "Username";
+"profile.bio" = "Bio";
+"profile.phoneNumber" = "Phone Number";
+"profile.avatar" = "Profile Picture";
+"profile.changeAvatar" = "Change Profile Picture";
+"profile.removeAvatar" = "Remove Profile Picture";
+"profile.save" = "Save Changes";
+"profile.cancel" = "Cancel";
+"profile.updated" = "Profile updated";
+"profile.updateFailed" = "Failed to update profile";
+
+// MARK: - Notifications
+"notification.message" = "New message";
+"notification.call" = "Incoming call";
+"notification.enable" = "Enable Notifications";
+"notification.disable" = "Disable Notifications";
+"notification.sound" = "Sound";
+"notification.vibration" = "Vibration";
+"notification.preview" = "Message Preview";
+"notification.inAppSounds" = "In-app Sounds";
+"notification.inAppVibration" = "In-app Vibration";
+"notification.muteConversation" = "Mute Conversation";
+"notification.unmuteConversation" = "Unmute Conversation";
+"notification.mutedFor" = "Muted for";
+"notification.1hour" = "1 hour";
+"notification.8hours" = "8 hours";
+"notification.1week" = "1 week";
+"notification.forever" = "Until I turn it back on";
+
+// MARK: - Calls
+"call.voice" = "Voice Call";
+"call.video" = "Video Call";
+"call.incoming" = "Incoming Call";
+"call.outgoing" = "Calling...";
+"call.ringing" = "Ringing...";
+"call.connected" = "Connected";
+"call.reconnecting" = "Reconnecting...";
+"call.end" = "End Call";
+"call.mute" = "Mute";
+"call.unmute" = "Unmute";
+"call.speaker" = "Speaker";
+"call.switchCamera" = "Switch Camera";
+"call.declined" = "Call declined";
+"call.missed" = "Missed call";
+"call.ended" = "Call ended";
+"call.busy" = "User is busy";
+"call.noAnswer" = "No answer";
+"call.duration" = "Duration";
+
+// MARK: - Media
+"media.camera" = "Camera";
+"media.photoLibrary" = "Photo Library";
+"media.document" = "Document";
+"media.location" = "Location";
+"media.contact" = "Contact";
+"media.voiceMessage" = "Voice Message";
+"media.recording" = "Recording...";
+"media.recordingCanceled" = "Recording canceled";
+"media.slideToCancel" = "Slide to cancel";
+"media.tapToPlay" = "Tap to play";
+"media.uploading" = "Uploading...";
+"media.downloading" = "Downloading...";
+"media.failed" = "Failed";
+"media.retry" = "Retry";
+
+// MARK: - Permissions
+"permission.camera" = "Camera Access";
+"permission.microphone" = "Microphone Access";
+"permission.photos" = "Photos Access";
+"permission.location" = "Location Access";
+"permission.contacts" = "Contacts Access";
+"permission.notifications" = "Notification Access";
+"permission.denied" = "Permission denied";
+"permission.deniedMessage" = "Please enable this permission in Settings";
+"permission.openSettings" = "Open Settings";
+
+// MARK: - Errors
+"error.generic" = "Something went wrong";
+"error.network" = "Network connection error";
+"error.auth" = "Authentication error";
+"error.permission" = "Permission denied";
+"error.notFound" = "Not found";
+"error.server" = "Server error";
+"error.timeout" = "Request timeout";
+"error.invalidData" = "Invalid data";
+"error.unknown" = "Unknown error";
+"error.tryAgain" = "Please try again";
+
+// MARK: - Common
+"common.ok" = "OK";
+"common.cancel" = "Cancel";
+"common.save" = "Save";
+"common.delete" = "Delete";
+"common.edit" = "Edit";
+"common.done" = "Done";
+"common.close" = "Close";
+"common.share" = "Share";
+"common.copy" = "Copy";
+"common.paste" = "Paste";
+"common.select" = "Select";
+"common.selectAll" = "Select All";
+"common.search" = "Search";
+"common.loading" = "Loading...";
+"common.retry" = "Retry";
+"common.yes" = "Yes";
+"common.no" = "No";
+"common.continue" = "Continue";
+"common.skip" = "Skip";
+"common.next" = "Next";
+"common.back" = "Back";
+"common.finish" = "Finish";
+"common.confirm" = "Confirm";
+"common.remove" = "Remove";
+"common.add" = "Add";
+"common.update" = "Update";
+"common.apply" = "Apply";
+"common.clear" = "Clear";
+"common.reset" = "Reset";
+"common.send" = "Send";
+"common.receive" = "Receive";
+"common.download" = "Download";
+"common.upload" = "Upload";
+"common.view" = "View";
+"common.hide" = "Hide";
+"common.show" = "Show";
+
+// MARK: - Time & Date
+"time.now" = "now";
+"time.justNow" = "just now";
+"time.today" = "Today";
+"time.yesterday" = "Yesterday";
+"time.tomorrow" = "Tomorrow";
+"time.minute" = "minute";
+"time.minutes" = "minutes";
+"time.hour" = "hour";
+"time.hours" = "hours";
+"time.day" = "day";
+"time.days" = "days";
+"time.week" = "week";
+"time.weeks" = "weeks";
+"time.month" = "month";
+"time.months" = "months";
+"time.year" = "year";
+"time.years" = "years";
+"time.ago" = "%@ ago";
+"time.in" = "in %@";
+
+// MARK: - Conversation
+"conversation.new" = "New Conversation";
+"conversation.group" = "Group";
+"conversation.create" = "Create Group";
+"conversation.addMembers" = "Add Members";
+"conversation.removeMember" = "Remove Member";
+"conversation.leaveGroup" = "Leave Group";
+"conversation.deleteConversation" = "Delete Conversation";
+"conversation.clearHistory" = "Clear Chat History";
+"conversation.block" = "Block User";
+"conversation.unblock" = "Unblock User";
+"conversation.report" = "Report";
+"conversation.mute" = "Mute";
+"conversation.unmute" = "Unmute";
+"conversation.archive" = "Archive";
+"conversation.unarchive" = "Unarchive";
+"conversation.pin" = "Pin";
+"conversation.unpin" = "Unpin";
+"conversation.markRead" = "Mark as Read";
+"conversation.markUnread" = "Mark as Unread";
+
+// MARK: - Search
+"search.recent" = "Recent";
+"search.noResults" = "No results found";
+"search.searching" = "Searching...";
+"search.clearRecent" = "Clear Recent Searches";
+
+// MARK: - Onboarding
+"onboarding.welcome" = "Welcome to Meeshy";
+"onboarding.subtitle" = "Secure messaging with built-in translation";
+"onboarding.getStarted" = "Get Started";
+"onboarding.feature1.title" = "Secure Messaging";
+"onboarding.feature1.description" = "End-to-end encrypted conversations";
+"onboarding.feature2.title" = "Auto Translation";
+"onboarding.feature2.description" = "Chat in any language with real-time translation";
+"onboarding.feature3.title" = "Voice & Video Calls";
+"onboarding.feature3.description" = "High-quality calls with crystal clear audio";
