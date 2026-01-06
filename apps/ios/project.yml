@@ -1,0 +1,55 @@
+# XcodeGen Project Configuration for Meeshy iOS App
+
+name: Meeshy
+options:
+  bundleIdPrefix: com.meeshy
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+  
+settings:
+  SWIFT_VERSION: "5.0"
+  IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+  PRODUCT_NAME: Meeshy
+  TARGETED_DEVICE_FAMILY: "1,2"
+
+targets:
+  Meeshy:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    
+    sources:
+      - path: Meeshy
+        excludes:
+          - "**/*.md"
+    
+    settings:
+      INFOPLIST_FILE: Meeshy/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.meeshy.app
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      ENABLE_PREVIEWS: YES
+      DEVELOPMENT_ASSET_PATHS: ""
+      CODE_SIGN_STYLE: Automatic
+      MARKETING_VERSION: "1.0"
+      CURRENT_PROJECT_VERSION: "1"
+      SWIFT_EMIT_LOC_STRINGS: YES
+      INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+      INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
+      INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+      INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    
+    scheme:
+      testTargets: []
+      
+    dependencies:
+      - package: SocketIO
+        product: SocketIO
+
+packages:
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: "16.1.0"
+

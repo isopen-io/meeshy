@@ -184,3 +184,75 @@ services/translator/.venv/
 services/translator/.coverage.*
 services/translator/coverage.lcov
 services/translator/coverage.xml
+
+# =============================================================================
+# iOS / Xcode
+# =============================================================================
+
+# Xcode user data
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Build artifacts
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcarchive
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods
+Pods/
+*.xcworkspace
+
+# Carthage
+Carthage/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/ui_test_output
+fastlane/.env.local
+fastlane/.env.*.local
+
+# iOS Scripts artifacts (keep scripts, .md, .wav - exclude models and generated)
+apps/ios/scripts/__pycache__/
+apps/ios/scripts/*_env/
+apps/ios/scripts/NLLBModels/
+apps/ios/scripts/*.onnx
+apps/ios/scripts/*.pt
+
+# ML Models (too large for git)
+*.mlmodelc
+*.mlpackage/
+apps/ios/Meeshy/Resources/MLModels/
+
+# iOS Certificates/Provisioning
+*.cer
+*.p12
+*.mobileprovision
+*.provisionprofile
+
+# Firebase config (contains sensitive data)
+GoogleService-Info.plist
+google-services.json

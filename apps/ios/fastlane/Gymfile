@@ -1,0 +1,23 @@
+# Gymfile for Meeshy iOS Build Configuration
+
+# Project and Scheme
+project("Meeshy.xcodeproj")
+scheme("Meeshy")
+
+# Build Configuration
+configuration("Production")
+clean(true)
+
+# Output
+output_directory("./build")
+output_name("Meeshy")
+
+# Export Options
+export_method("app-store")
+include_symbols(true)
+include_bitcode(false)
+
+# Xcode Settings
+xcargs("-allowProvisioningUpdates")
+
+# For all available options run `fastlane action gym`
