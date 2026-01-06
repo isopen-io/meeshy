@@ -1,0 +1,21 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dashGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4338ca;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background (Black) -->
+  <rect width="1024" height="1024" fill="#000000"/>
+  
+  <!-- Stacked Dashes (Gradient) -->
+  <!-- Top (Long) -->
+  <path d="M262 384 H762" stroke="url(#dashGradient)" stroke-width="80" stroke-linecap="round"/>
+  
+  <!-- Middle (Medium) -->
+  <path d="M262 512 H662" stroke="url(#dashGradient)" stroke-width="80" stroke-linecap="round"/>
+  
+  <!-- Bottom (Short) -->
+  <path d="M262 640 H562" stroke="url(#dashGradient)" stroke-width="80" stroke-linecap="round"/>
+</svg>

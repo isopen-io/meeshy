@@ -1,0 +1,25 @@
+# Matchfile for Meeshy iOS Code Signing
+
+git_url(ENV["MATCH_GIT_URL"] || "https://github.com/your-org/certificates")
+
+storage_mode("git")
+
+type("development") # The default type, can be: appstore, adhoc, enterprise or development
+
+# App Identifiers
+app_identifier([
+  "com.meeshy.app",
+  "com.meeshy.app.staging",
+  "com.meeshy.app.debug"
+])
+
+# Your Apple Developer Portal username
+username(ENV["FASTLANE_USER"] || "your-apple-id@example.com")
+
+# Team ID
+team_id(ENV["FASTLANE_TEAM_ID"] || "YOUR_TEAM_ID")
+
+# For all available options run `fastlane match --help`
+# Remove the # in the beginning of the line to enable the other options
+
+# The docs are available on https://docs.fastlane.tools/actions/match

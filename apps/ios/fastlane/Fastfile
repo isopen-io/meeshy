@@ -1,0 +1,351 @@
+# Fastfile for Meeshy iOS
+# Automation for build, test, and deployment
+
+default_platform(:ios)
+
+platform :ios do
+  # ========================================
+  # BEFORE ALL
+  # ========================================
+  before_all do
+    ensure_git_status_clean unless ENV['CI']
+  end
+
+  # ========================================
+  # TESTING LANES
+  # ========================================
+
+  desc "Run all unit tests"
+  lane :test do
+    scan(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Debug",
+      devices: ["iPhone 15 Pro"],
+      code_coverage: true,
+      output_directory: "./fastlane/test_output",
+      output_types: "html,junit",
+      clean: true
+    )
+  end
+
+  desc "Run UI tests"
+  lane :ui_test do
+    scan(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Debug",
+      devices: ["iPhone 15 Pro"],
+      only_testing: ["MeeshyUITests"],
+      output_directory: "./fastlane/ui_test_output",
+      output_types: "html,junit",
+      clean: true
+    )
+  end
+
+  desc "Run all tests (unit + UI)"
+  lane :test_all do
+    test
+    ui_test
+  end
+
+  # ========================================
+  # BUILD LANES
+  # ========================================
+
+  desc "Build Debug version"
+  lane :build_debug do
+    build_app(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Debug",
+      export_method: "development",
+      output_directory: "./build/debug",
+      output_name: "Meeshy-Debug.ipa",
+      clean: true
+    )
+  end
+
+  desc "Build Staging version"
+  lane :build_staging do
+    build_app(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Staging",
+      export_method: "ad-hoc",
+      output_directory: "./build/staging",
+      output_name: "Meeshy-Staging.ipa",
+      clean: true,
+      export_options: {
+        provisioningProfiles: {
+          "com.meeshy.app.staging" => "match AdHoc com.meeshy.app.staging"
+        }
+      }
+    )
+  end
+
+  desc "Build Production version"
+  lane :build_production do
+    build_app(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Production",
+      export_method: "app-store",
+      output_directory: "./build/production",
+      output_name: "Meeshy.ipa",
+      clean: true,
+      export_options: {
+        provisioningProfiles: {
+          "com.meeshy.app" => "match AppStore com.meeshy.app"
+        }
+      }
+    )
+  end
+
+  # ========================================
+  # CODE SIGNING
+  # ========================================
+
+  desc "Sync code signing certificates and provisioning profiles"
+  lane :sync_certificates do
+    match(
+      type: "development",
+      app_identifier: ["com.meeshy.app", "com.meeshy.app.staging", "com.meeshy.app.debug"],
+      readonly: is_ci
+    )
+
+    match(
+      type: "adhoc",
+      app_identifier: ["com.meeshy.app", "com.meeshy.app.staging"],
+      readonly: is_ci
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: "com.meeshy.app",
+      readonly: is_ci
+    )
+  end
+
+  desc "Register new devices"
+  lane :register_devices do
+    register_devices(
+      devices_file: "./fastlane/devices.txt"
+    )
+    match(type: "adhoc", force_for_new_devices: true)
+  end
+
+  # ========================================
+  # DEPLOYMENT LANES
+  # ========================================
+
+  desc "Deploy to TestFlight (Staging)"
+  lane :beta do |options|
+    # Ensure we're on a clean state
+    ensure_git_status_clean unless ENV['CI']
+
+    # Sync certificates
+    sync_certificates
+
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1
+    )
+
+    # Run tests
+    test unless options[:skip_tests]
+
+    # Build production version
+    build_production
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      groups: ["Internal Testers"],
+      changelog: "Bug fixes and improvements"
+    )
+
+    # Commit version bump
+    unless ENV['CI']
+      commit_version_bump(
+        message: "Bump build number for TestFlight [skip ci]",
+        xcodeproj: "Meeshy.xcodeproj"
+      )
+      push_to_git_remote
+    end
+
+    # Notify
+    slack(
+      message: "New iOS build uploaded to TestFlight!",
+      success: true
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  desc "Deploy to App Store"
+  lane :release do |options|
+    # Ensure we're on main branch
+    ensure_git_branch(branch: 'main') unless ENV['CI']
+    ensure_git_status_clean unless ENV['CI']
+
+    # Sync certificates
+    sync_certificates
+
+    # Increment version if specified
+    if options[:version]
+      increment_version_number(version_number: options[:version])
+    end
+
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1
+    )
+
+    # Run full test suite
+    test_all unless options[:skip_tests]
+
+    # Build production version
+    build_production
+
+    # Upload to App Store
+    upload_to_app_store(
+      submit_for_review: !options[:skip_review],
+      automatic_release: options[:auto_release] || false,
+      force: true,
+      skip_metadata: options[:skip_metadata] || false,
+      skip_screenshots: options[:skip_screenshots] || false,
+      precheck_include_in_app_purchases: false
+    )
+
+    # Tag release
+    unless ENV['CI'] || options[:skip_tag]
+      version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+      add_git_tag(tag: "v#{version}")
+      push_git_tags
+    end
+
+    # Commit version bump
+    unless ENV['CI']
+      commit_version_bump(
+        message: "Release version #{get_version_number} [skip ci]",
+        xcodeproj: "Meeshy.xcodeproj"
+      )
+      push_to_git_remote
+    end
+
+    # Notify
+    slack(
+      message: "New iOS version submitted to App Store! 🚀",
+      success: true
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  # ========================================
+  # UTILITY LANES
+  # ========================================
+
+  desc "Take screenshots for App Store"
+  lane :screenshots do
+    capture_screenshots(
+      scheme: "Meeshy",
+      devices: [
+        "iPhone 15 Pro Max",
+        "iPhone 15 Pro",
+        "iPhone SE (3rd generation)",
+        "iPad Pro (12.9-inch) (6th generation)"
+      ],
+      languages: ["en-US"],
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true
+    )
+  end
+
+  desc "Generate app icon from master file"
+  lane :generate_icons do
+    appicon(
+      appicon_image_file: "./Resources/AppIcon.png",
+      appicon_devices: [:iphone, :ipad, :ios_marketing],
+      appicon_path: "Meeshy/Assets.xcassets"
+    )
+  end
+
+  desc "Clean build artifacts"
+  lane :clean do
+    clear_derived_data
+    sh("rm -rf ../build")
+    sh("rm -rf ../fastlane/test_output")
+    sh("rm -rf ../fastlane/ui_test_output")
+  end
+
+  desc "Update dependencies"
+  lane :update_dependencies do
+    sh("cd .. && xcodebuild -resolvePackageDependencies")
+  end
+
+  desc "Lint Swift code"
+  lane :lint do
+    swiftlint(
+      mode: :lint,
+      config_file: ".swiftlint.yml",
+      raise_if_swiftlint_error: true
+    )
+  end
+
+  desc "Format Swift code"
+  lane :format do
+    swiftlint(
+      mode: :autocorrect,
+      config_file: ".swiftlint.yml"
+    )
+  end
+
+  desc "Bump version number"
+  lane :bump_version do |options|
+    type = options[:type] || "patch"
+
+    case type
+    when "major"
+      increment_version_number(bump_type: "major")
+    when "minor"
+      increment_version_number(bump_type: "minor")
+    when "patch"
+      increment_version_number(bump_type: "patch")
+    else
+      increment_version_number(version_number: type)
+    end
+
+    version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+    UI.success("Version bumped to #{version}")
+  end
+
+  # ========================================
+  # ERROR HANDLING
+  # ========================================
+
+  error do |lane, exception|
+    slack(
+      message: "iOS build failed in lane: #{lane}",
+      success: false,
+      attachment_properties: {
+        fields: [
+          {
+            title: "Error",
+            value: exception.to_s,
+            short: false
+          }
+        ]
+      }
+    ) if ENV['SLACK_WEBHOOK_URL']
+  end
+
+  # ========================================
+  # AFTER ALL
+  # ========================================
+
+  after_all do |lane|
+    notification(
+      title: "Fastlane",
+      message: "Lane #{lane} completed successfully!"
+    )
+  end
+end
