@@ -2,7 +2,7 @@
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-dns \
-        _generate-certs _link-certs \
+        _generate-certs _copy-certs-to-docker \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
@@ -295,10 +295,10 @@ setup-certs: ## 🔐 Générer les certificats SSL locaux (mkcert) si absents
 	else \
 		$(MAKE) _generate-certs; \
 	fi
-	@# S'assurer que les liens Docker existent
+	@# S'assurer que les certificats Docker existent
 	@mkdir -p $(CERTS_DIR)
 	@if [ -f "$(WEB_DIR)/.cert/localhost.pem" ] && [ ! -f "$(CERTS_DIR)/cert.pem" ]; then \
-		$(MAKE) _link-certs; \
+		$(MAKE) _copy-certs-to-docker; \
 	fi
 
 setup-certs-force: ## 🔐 Forcer la régénération des certificats SSL
@@ -308,13 +308,13 @@ setup-certs-force: ## 🔐 Forcer la régénération des certificats SSL
 		exit 1; \
 	fi
 	@$(MAKE) _generate-certs
-	@$(MAKE) _link-certs
 
 _generate-certs: ## (interne) Génère les certificats avec mkcert
 	@echo "  $(YELLOW)→ Installation de l'autorité de certification locale...$(NC)"
 	@mkcert -install 2>/dev/null || true
 	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
 	@echo "  $(YELLOW)→ Génération des certificats pour: *.$(LOCAL_DOMAIN), $(LOCAL_DOMAIN), localhost$(NC)"
+	@# Générer pour le frontend (Next.js)
 	@cd $(WEB_DIR)/.cert && mkcert \
 		-key-file localhost-key.pem \
 		-cert-file localhost.pem \
@@ -324,31 +324,32 @@ _generate-certs: ## (interne) Génère les certificats avec mkcert
 		127.0.0.1 \
 		::1 \
 		$(HOST_IP)
-	@echo "  $(GREEN)✓ Certificats générés$(NC)"
-
-_link-certs: ## (interne) Crée les liens/copies pour Docker
-	@mkdir -p $(CERTS_DIR)
-ifeq ($(OS),windows)
-	@copy "$(WEB_DIR)\.cert\localhost.pem" "$(CERTS_DIR)\cert.pem" 2>nul || true
-	@copy "$(WEB_DIR)\.cert\localhost-key.pem" "$(CERTS_DIR)\key.pem" 2>nul || true
-else
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || \
-		cp $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || \
-		cp $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem
-endif
-	@echo "  $(GREEN)✓ Liens Docker créés$(NC)"
+	@# Copier pour Docker/Traefik
+	@cp $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem
+	@cp $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem
+	@echo "  $(GREEN)✓ Certificats générés et copiés$(NC)"
 	@echo ""
-	@echo "$(BOLD)📍 Fichiers:$(NC)"
-	@echo "    $(WEB_DIR)/.cert/localhost.pem"
-	@echo "    $(WEB_DIR)/.cert/localhost-key.pem"
-	@echo "    $(CERTS_DIR)/cert.pem → (lien)"
-	@echo "    $(CERTS_DIR)/key.pem → (lien)"
+	@echo "$(BOLD)📍 Fichiers créés:$(NC)"
+	@echo "    $(WEB_DIR)/.cert/localhost.pem      (Next.js)"
+	@echo "    $(WEB_DIR)/.cert/localhost-key.pem  (Next.js)"
+	@echo "    $(CERTS_DIR)/cert.pem               (Docker/Traefik)"
+	@echo "    $(CERTS_DIR)/key.pem                (Docker/Traefik)"
 	@echo ""
 	@echo "$(BOLD)🌐 Domaines couverts:$(NC)"
 	@echo "    *.$(LOCAL_DOMAIN) (wildcard)"
 	@echo "    $(LOCAL_DOMAIN)"
 	@echo "    localhost, 127.0.0.1, $(HOST_IP)"
+
+_copy-certs-to-docker: ## (interne) Copie les certificats vers Docker
+	@mkdir -p $(CERTS_DIR)
+	@if [ -f "$(WEB_DIR)/.cert/localhost.pem" ]; then \
+		cp $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem; \
+		cp $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem; \
+		echo "  $(GREEN)✓ Certificats copiés vers $(CERTS_DIR)/$(NC)"; \
+	else \
+		echo "  $(RED)❌ Certificats source introuvables dans $(WEB_DIR)/.cert/$(NC)"; \
+		exit 1; \
+	fi
 
 # =============================================================================
 # INSTALLATION
