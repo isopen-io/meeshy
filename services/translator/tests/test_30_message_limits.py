@@ -12,14 +12,15 @@ class TestMessageLimits:
     """Tests for MessageLimits class"""
 
     def test_default_values(self):
-        """Test default configuration values"""
+        """Test default configuration values (aligned with gateway)"""
         # Import fresh to get defaults
         from src.config.message_limits import MessageLimits
 
-        assert MessageLimits.MAX_MESSAGE_LENGTH == 1024
+        # Aligned with gateway/src/config/message-limits.ts
+        assert MessageLimits.MAX_MESSAGE_LENGTH == 2000
         assert MessageLimits.MAX_TEXT_ATTACHMENT_THRESHOLD == 2000
-        assert MessageLimits.MAX_TRANSLATION_LENGTH == 100000
-        assert MessageLimits.MAX_TEXT_LENGTH == 100000
+        assert MessageLimits.MAX_TRANSLATION_LENGTH == 10000
+        assert MessageLimits.MAX_TEXT_LENGTH == 10000
 
     def test_env_override(self):
         """Test that environment variables override defaults"""
