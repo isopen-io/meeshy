@@ -176,3 +176,11 @@ infrastructure/docker/compose/certs/
 # Python virtual environments
 .venv/
 services/translator/.venv/
+
+# Playwright MCP cache
+.playwright-mcp/
+
+# Coverage temp files
+services/translator/.coverage.*
+services/translator/coverage.lcov
+services/translator/coverage.xml
