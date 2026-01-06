@@ -35,12 +35,13 @@ export function resolveUserLanguage(user: {
  */
 export function generateConversationIdentifier(title?: string): string {
   const now = new Date();
-  const timestamp = now.getFullYear().toString() +
-    (now.getMonth() + 1).toString().padStart(2, '0') +
-    now.getDate().toString().padStart(2, '0') +
-    now.getHours().toString().padStart(2, '0') +
-    now.getMinutes().toString().padStart(2, '0') +
-    now.getSeconds().toString().padStart(2, '0');
+  // Use UTC methods for consistent identifiers across timezones
+  const timestamp = now.getUTCFullYear().toString() +
+    (now.getUTCMonth() + 1).toString().padStart(2, '0') +
+    now.getUTCDate().toString().padStart(2, '0') +
+    now.getUTCHours().toString().padStart(2, '0') +
+    now.getUTCMinutes().toString().padStart(2, '0') +
+    now.getUTCSeconds().toString().padStart(2, '0');
 
   if (title) {
     // Sanitiser le titre :

@@ -14,23 +14,33 @@
     },
     "./types": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/types/index.js"
+      "import": "./dist/types/index.js",
+      "require": "./dist/types/index.js",
+      "default": "./dist/types/index.js"
     },
     "./types/*": {
       "types": "./dist/types/*.d.ts",
-      "import": "./dist/types/*.js"
+      "import": "./dist/types/*.js",
+      "require": "./dist/types/*.js",
+      "default": "./dist/types/*.js"
     },
     "./utils/*": {
       "types": "./dist/utils/*.d.ts",
-      "import": "./dist/utils/*.js"
+      "import": "./dist/utils/*.js",
+      "require": "./dist/utils/*.js",
+      "default": "./dist/utils/*.js"
     },
     "./encryption": {
       "types": "./dist/encryption/index.d.ts",
-      "import": "./dist/encryption/index.js"
+      "import": "./dist/encryption/index.js",
+      "require": "./dist/encryption/index.js",
+      "default": "./dist/encryption/index.js"
     },
     "./encryption/*": {
       "types": "./dist/encryption/*.d.ts",
-      "import": "./dist/encryption/*.js"
+      "import": "./dist/encryption/*.js",
+      "require": "./dist/encryption/*.js",
+      "default": "./dist/encryption/*.js"
     },
     "./prisma": {
       "types": "./prisma/schema.prisma"
