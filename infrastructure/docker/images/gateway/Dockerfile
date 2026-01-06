@@ -57,7 +57,7 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      bun install --no-save; \
+      bun install --no-save --no-frozen-lockfile; \
     else \
       echo "=== Configuring pnpm workspace ===" && \
       printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
@@ -133,7 +133,7 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      bun install --production --no-save; \
+      bun install --production --no-save --no-frozen-lockfile; \
     else \
       echo "=== Installing production deps with pnpm ===" && \
       printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \

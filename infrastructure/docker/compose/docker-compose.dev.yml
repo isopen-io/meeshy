@@ -1,67 +1,79 @@
+# =============================================================================
+# MEESHY - Docker Compose Development (localhost - HTTP)
+# =============================================================================
+# Configuration pour développement local simple sans HTTPS
+#
+# Usage:
+#   make docker-dev              # Démarrer tous les services
+#   make docker-dev-infra        # Démarrer seulement l'infrastructure (DB/Redis)
+#   make docker-stop             # Arrêter tous les services
+#
+# Services accessibles (HTTP):
+#   http://localhost:3100        - Frontend
+#   http://localhost:3000        - Gateway API
+#   http://localhost:8000        - Translator ML
+#   http://localhost:3001        - MongoDB UI (NoSQLClient)
+#   http://localhost:7843        - Redis UI
+#   mongodb://localhost:27017    - MongoDB
+#   redis://localhost:6379       - Redis
+# =============================================================================
 
-# Docker Compose pour l'environnement de DÉVELOPPEMENT LOCAL
-# Ce fichier démarre tous les services Meeshy en local avec les dernières images Docker
-# URLs d'accès:
-#   - Frontend: http://localhost:3100
-#   - Gateway API: http://localhost:3000
-#   - Translator API: http://localhost:8000
-#   - MongoDB: mongodb://localhost:27017
-#   - Redis: redis://localhost:6379
-#   - NoSQLClient (MongoDB UI): http://localhost:3001
-#   - P3X Redis UI: http://localhost:7843
+x-common-env: &common-env
+  TZ: ${TZ:-Europe/Paris}
 
 services:
-  # Base de données MongoDB avec Replica Set
+  # ===========================================================================
+  # DATABASE - MongoDB with Replica Set
+  # ===========================================================================
   database:
-    image: mongo:latest
-    platform: linux/arm64
+    image: mongo:7.0
     container_name: meeshy-dev-database
     restart: unless-stopped
     command: mongod --replSet rs0 --bind_ip_all --noauth
     environment:
+      <<: *common-env
       MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-meeshy}
     ports:
       - "27017:27017"
     volumes:
       - dev_database_data:/data/db
       - dev_database_config:/data/configdb
-      - ./shared/init-mongodb-replica.sh:/docker-entrypoint-initdb.d/init-mongodb-replica.sh:ro
-      - ./shared/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - meeshy-dev-network
     healthcheck:
-      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh mongodb://localhost:27017/${MONGODB_DATABASE:-meeshy} --quiet || exit 1"]
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # NoSQLClient - Interface MongoDB
-  nosqlclient:
-    image: mongoclient/mongoclient:latest
-    container_name: meeshy-dev-nosqlclient
-    restart: unless-stopped
-    environment:
-      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true"
-      ROOT_URL: "http://localhost:3001"
-      PORT: 3000
-    ports:
-      - "3001:3000"
+  # MongoDB Replica Set Init (one-shot)
+  mongo-init:
+    image: mongo:7.0
+    container_name: meeshy-dev-mongo-init
     depends_on:
       database:
         condition: service_healthy
     networks:
       - meeshy-dev-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    entrypoint: >
+      mongosh --host database:27017 --eval '
+        try {
+          const status = rs.status();
+          print("Replica set already initialized");
+        } catch (e) {
+          print("Initializing replica set...");
+          rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "database:27017" }] });
+          print("Replica set initialized!");
+        }
+      '
+    restart: "no"
 
-  # Cache Redis  
+  # ===========================================================================
+  # REDIS - Cache
+  # ===========================================================================
   redis:
-    image: redis:8-alpine
+    image: redis:7-alpine
     container_name: meeshy-dev-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
@@ -71,21 +83,52 @@ services:
       - dev_redis_data:/data
     networks:
       - meeshy-dev-network
+    environment:
+      <<: *common-env
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # P3X Redis UI - Interface Redis
+  # ===========================================================================
+  # NOSQLCLIENT - MongoDB Web UI
+  # ===========================================================================
+  nosqlclient:
+    image: mongoclient/mongoclient:latest
+    container_name: meeshy-dev-nosqlclient
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true"
+      ROOT_URL: "http://localhost:3001"
+      PORT: 3000
+    ports:
+      - "3001:3000"
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    networks:
+      - meeshy-dev-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ===========================================================================
+  # P3X REDIS UI - Redis Web UI
+  # ===========================================================================
   p3x-redis-ui:
     image: patrikx3/p3x-redis-ui:latest
     container_name: meeshy-dev-p3x-redis-ui
     restart: unless-stopped
     environment:
-      - P3X_REDIS_UI_SETTINGS={"hostname":"redis","port":6379,"password":"","meeshy-dev-database":0}
-      - P3X_REDIS_UI_HTTP_PORT=7843
-      - P3XRS_SETTINGS_PATH=/settings
+      <<: *common-env
+      P3X_REDIS_UI_SETTINGS: '{"hostname":"redis","port":6379,"password":"","database":0}'
+      P3X_REDIS_UI_HTTP_PORT: "7843"
+      P3XRS_SETTINGS_PATH: /settings
     ports:
       - "7843:7843"
     volumes:
@@ -102,29 +145,34 @@ services:
       retries: 3
       start_period: 30s
 
-  # Translator Service - Service de traduction ML
+  # ===========================================================================
+  # TRANSLATOR - ML Service (profile: full)
+  # ===========================================================================
   translator:
     image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
-    platform: linux/arm64
     container_name: meeshy-dev-translator
     restart: unless-stopped
+    profiles: ["full"]
     environment:
-      - DATABASE_TYPE=MONGODB
-      - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
-      - PRISMA_SCHEMA_PATH=${PRISMA_SCHEMA_PATH}
-      - PYTHONPATH=/workspace:/workspace/generated
-      - PYTHONUNBUFFERED=1
-      - NODE_ENV=development
-      - HF_HOME=/workspace/models
-      - TRANSFORMERS_CACHE=/workspace/models
-      - HUGGINGFACE_HUB_CACHE=/workspace/models
+      <<: *common-env
+      DATABASE_TYPE: MONGODB
+      DATABASE_URL: mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://redis:6379
+      PYTHONPATH: /workspace
+      PYTHONUNBUFFERED: "1"
+      NODE_ENV: development
+      HF_HOME: /workspace/models
+      TRANSFORMERS_CACHE: /workspace/models
+      HUGGINGFACE_HUB_CACHE: /workspace/models
     ports:
       - "8000:8000"
+      - "5555:5555"
+      - "5558:5558"
     volumes:
       - dev_models_data:/workspace/models
     depends_on:
-      database:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     networks:
@@ -136,57 +184,50 @@ services:
       retries: 5
       start_period: 60s
 
-  # Gateway Service - API Gateway et WebSocket
+  # ===========================================================================
+  # GATEWAY - API Service (profile: full)
+  # ===========================================================================
   gateway:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
-    platform: linux/arm64
     container_name: meeshy-dev-gateway
     restart: unless-stopped
+    profiles: ["full"]
     environment:
-      - DATABASE_TYPE=MONGODB
-      - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
-      - REDIS_URL=redis://redis:6379
-      - TRANSLATOR_URL=http://translator:8000
-      - ZMQ_PUSH_URL=tcp://translator:5555
-      - ZMQ_SUB_URL=tcp://translator:5558
-      - ZMQ_TRANSLATOR_HOST=translator
-      - ZMQ_TRANSLATOR_PUSH_PORT=5555
-      - ZMQ_TRANSLATOR_SUB_PORT=5558
-      - NODE_ENV=development
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3100}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3100}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3100}
-      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
-      # Variables d'initialisation des utilisateurs
-      - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - MEESHY_PASSWORD=${MEESHY_PASSWORD:-meeshy123}
-      - ATABETH_PASSWORD=${ATABETH_PASSWORD:-atabeth123}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@meeshy.local}
-      - MEESHY_EMAIL=${MEESHY_EMAIL:-meeshy@meeshy.local}
-      - ATABETH_EMAIL=${ATABETH_EMAIL:-atabeth@meeshy.local}
-      - ADMIN_SYSTEM_LANGUAGE=${ADMIN_SYSTEM_LANGUAGE:-fr}
-      - ADMIN_REGIONAL_LANGUAGE=${ADMIN_REGIONAL_LANGUAGE:-fr}
-      - ADMIN_CUSTOM_DESTINATION_LANGUAGE=${ADMIN_CUSTOM_DESTINATION_LANGUAGE}
-      - MEESHY_SYSTEM_LANGUAGE=${MEESHY_SYSTEM_LANGUAGE:-en}
-      - MEESHY_REGIONAL_LANGUAGE=${MEESHY_REGIONAL_LANGUAGE:-en}
-      - MEESHY_CUSTOM_DESTINATION_LANGUAGE=${MEESHY_CUSTOM_DESTINATION_LANGUAGE}
-      - ATABETH_USERNAME=${ATABETH_USERNAME:-atabeth}
-      - ATABETH_FIRST_NAME=${ATABETH_FIRST_NAME:-Atabeth}
-      - ATABETH_LAST_NAME=${ATABETH_LAST_NAME:-Meeshy}
-      - ATABETH_ROLE=${ATABETH_ROLE:-user}
-      - ATABETH_SYSTEM_LANGUAGE=${ATABETH_SYSTEM_LANGUAGE:-es}
-      - ATABETH_REGIONAL_LANGUAGE=${ATABETH_REGIONAL_LANGUAGE:-es}
-      - ATABETH_CUSTOM_DESTINATION_LANGUAGE=${ATABETH_CUSTOM_DESTINATION_LANGUAGE}
+      <<: *common-env
+      DATABASE_TYPE: MONGODB
+      DATABASE_URL: mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://redis:6379
+      TRANSLATOR_URL: http://translator:8000
+      ZMQ_PUSH_URL: tcp://translator:5555
+      ZMQ_SUB_URL: tcp://translator:5558
+      ZMQ_TRANSLATOR_HOST: translator
+      ZMQ_TRANSLATOR_PUSH_PORT: "5555"
+      ZMQ_TRANSLATOR_SUB_PORT: "5558"
+      NODE_ENV: development
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3100}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3100}
+      PUBLIC_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # User initialization
+      FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@meeshy.local}
+      MEESHY_PASSWORD: ${MEESHY_PASSWORD:-meeshy123}
+      MEESHY_EMAIL: ${MEESHY_EMAIL:-meeshy@meeshy.local}
+      ATABETH_PASSWORD: ${ATABETH_PASSWORD:-atabeth123}
+      ATABETH_EMAIL: ${ATABETH_EMAIL:-atabeth@meeshy.local}
+      ATABETH_USERNAME: ${ATABETH_USERNAME:-atabeth}
+      ATABETH_FIRST_NAME: ${ATABETH_FIRST_NAME:-Atabeth}
+      ATABETH_LAST_NAME: ${ATABETH_LAST_NAME:-Meeshy}
+      ATABETH_ROLE: ${ATABETH_ROLE:-user}
     ports:
       - "3000:3000"
     depends_on:
-      database:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       redis:
-        condition: service_healthy
-      translator:
         condition: service_healthy
     networks:
       - meeshy-dev-network
@@ -197,23 +238,26 @@ services:
       retries: 3
       start_period: 30s
 
-  # Frontend Service - Interface utilisateur Next.js
+  # ===========================================================================
+  # FRONTEND - Next.js (profile: full)
+  # ===========================================================================
   frontend:
     image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
-    platform: linux/arm64
     container_name: meeshy-dev-frontend
     restart: unless-stopped
+    profiles: ["full"]
     environment:
-      - NEXT_PUBLIC_WS_URL=ws://localhost:3000
-      - NEXT_PUBLIC_TRANSLATION_URL=http://localhost:8000/translate
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-      - NEXT_PUBLIC_BACKEND_URL=http://gateway:3000
-      - INTERNAL_BACKEND_URL=http://gateway:3000
-      - NEXT_PUBLIC_FRONTEND_URL=http://localhost:3100
-      - NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION:-true}
-      - NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY:-true}
-      - NEXT_PUBLIC_DEBUG_LOGS=${NEXT_PUBLIC_DEBUG_LOGS:-true}
-      - NODE_ENV=development
+      <<: *common-env
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+      NEXT_PUBLIC_TRANSLATION_URL: http://localhost:8000/translate
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_BACKEND_URL: http://gateway:3000
+      INTERNAL_BACKEND_URL: http://gateway:3000
+      NEXT_PUBLIC_FRONTEND_URL: http://localhost:3100
+      NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION: "true"
+      NEXT_PUBLIC_USE_API_TRANSLATION_ONLY: "true"
+      NEXT_PUBLIC_DEBUG_LOGS: "true"
+      NODE_ENV: development
     ports:
       - "3100:3100"
     depends_on:
@@ -222,7 +266,7 @@ services:
     networks:
       - meeshy-dev-network
     healthcheck:
-      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get({hostname:'127.0.0.1',port:3100,path:'/api/health',timeout:5000},(res)=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1)});"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100"]
       interval: 30s
       timeout: 10s
       retries: 3

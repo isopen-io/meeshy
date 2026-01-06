@@ -1,0 +1,64 @@
+# =============================================================================
+# Traefik TLS Configuration for Local HTTPS (mkcert)
+# =============================================================================
+# This file ONLY contains TLS certificate configuration.
+# Routes are defined via Docker labels in docker-compose files.
+#
+# Prerequisites:
+#   - mkcert installed
+#   - Certificates generated: mkcert "*.meeshy.local" meeshy.local localhost
+#   - Certificates placed in ./certs/ directory
+# =============================================================================
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/cert.pem
+      keyFile: /etc/traefik/certs/key.pem
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/cert.pem
+        keyFile: /etc/traefik/certs/key.pem
+
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
+
+# =============================================================================
+# Common Middlewares (optional, can be referenced by Docker labels)
+# =============================================================================
+http:
+  middlewares:
+    secure-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+
+    cors-local:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+          - PATCH
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+        accessControlAllowOriginList:
+          - "https://meeshy.local"
+          - "https://www.meeshy.local"
+          - "https://gate.meeshy.local"
+          - "https://api.meeshy.local"
+          - "https://ml.meeshy.local"
+        accessControlMaxAge: 100
+        addVaryHeader: true

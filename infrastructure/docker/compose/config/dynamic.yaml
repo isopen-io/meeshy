@@ -1,17 +1,12 @@
 # =============================================================================
-# Traefik Dynamic Configuration for Local HTTPS (mkcert)
+# Traefik Dynamic Configuration for Production
 # =============================================================================
 
 tls:
-  certificates:
-    - certFile: /etc/traefik/certs/cert.pem
-      keyFile: /etc/traefik/certs/key.pem
-
-  stores:
+  options:
     default:
-      defaultCertificate:
-        certFile: /etc/traefik/certs/cert.pem
-        keyFile: /etc/traefik/certs/key.pem
+      minVersion: VersionTLS12
+      sniStrict: true
 
 http:
   middlewares:
@@ -25,9 +20,18 @@ http:
         stsIncludeSubdomains: true
         stsPreload: true
         stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        referrerPolicy: "strict-origin-when-cross-origin"
 
-    # CORS for development
-    cors-dev:
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s
+
+    # CORS for production
+    cors-prod:
       headers:
         accessControlAllowMethods:
           - "GET"
@@ -40,9 +44,8 @@ http:
           - "Content-Type"
           - "Authorization"
           - "X-Requested-With"
-        accessControlAllowOriginList:
-          - "https://localhost"
-          - "https://meeshy.local"
-          - "https://127.0.0.1"
-        accessControlMaxAge: 100
+        accessControlAllowOriginListRegex:
+          - "https://.*\\.meeshy\\.me$"
+          - "https://meeshy\\.me$"
+        accessControlMaxAge: 86400
         addVaryHeader: true
