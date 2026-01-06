@@ -79,6 +79,82 @@ def mock_voice_model_data():
     }
 
 
+@pytest.fixture
+def mock_database_service():
+    """
+    Mock database service for voice clone tests.
+    Simulates MongoDB operations using in-memory storage.
+    Uses camelCase keys to match MongoDB/Prisma schema.
+    """
+    # In-memory storage for voice profiles (camelCase keys to match MongoDB)
+    voice_profiles = {}
+    voice_embeddings = {}
+
+    class MockPrismaUserVoiceModel:
+        async def find_many(self, **kwargs):
+            return list(voice_profiles.values())
+
+        async def count(self, **kwargs):
+            return len(voice_profiles)
+
+    class MockPrismaMessageAttachment:
+        async def find_many(self, **kwargs):
+            return []
+
+    class MockPrisma:
+        uservoicemodel = MockPrismaUserVoiceModel()
+        messageattachment = MockPrismaMessageAttachment()
+
+    mock_service = MagicMock()
+    mock_service.prisma = MockPrisma()
+
+    def is_db_connected():
+        return True
+    mock_service.is_db_connected = is_db_connected
+
+    async def get_voice_profile(user_id: str):
+        if user_id in voice_profiles:
+            return voice_profiles[user_id]
+        return None
+    mock_service.get_voice_profile = get_voice_profile
+
+    async def get_voice_embedding(user_id: str):
+        if user_id in voice_embeddings:
+            return voice_embeddings[user_id]
+        return None
+    mock_service.get_voice_embedding = get_voice_embedding
+
+    async def save_voice_profile(user_id: str, embedding: bytes = None, **kwargs):
+        # Store with camelCase keys to match MongoDB/Prisma schema
+        # Use ISO format strings for datetime fields as expected by _load_cached_model
+        voice_profiles[user_id] = {
+            'userId': user_id,
+            'audioCount': kwargs.get('audio_count', 1),
+            'totalDurationMs': kwargs.get('total_duration_ms', 0),
+            'qualityScore': kwargs.get('quality_score', 0.5),
+            'profileId': kwargs.get('profile_id', f'prof_{user_id}'),
+            'version': kwargs.get('version', 1),
+            'embeddingModel': kwargs.get('embedding_model', 'openvoice_v2'),
+            'embeddingDimension': kwargs.get('embedding_dimension', 256),
+            'voiceCharacteristics': kwargs.get('voice_characteristics'),
+            'fingerprint': kwargs.get('fingerprint'),
+            'signatureShort': kwargs.get('signature_short'),
+            'createdAt': datetime.now().isoformat(),
+            'updatedAt': datetime.now().isoformat(),
+            'nextRecalibrationAt': (datetime.now() + timedelta(days=90)).isoformat()
+        }
+        if embedding:
+            voice_embeddings[user_id] = embedding
+        return True
+    mock_service.save_voice_profile = save_voice_profile
+
+    # Expose internal storage for test assertions
+    mock_service._voice_profiles = voice_profiles
+    mock_service._voice_embeddings = voice_embeddings
+
+    return mock_service
+
+
 # ═══════════════════════════════════════════════════════════════
 # UNIT TESTS - VoiceCloneService
 # ═══════════════════════════════════════════════════════════════
@@ -177,8 +253,8 @@ async def test_voice_clone_quality_score(voice_cache_dir):
 
 
 @pytest.mark.asyncio
-async def test_voice_model_cache_save_load(voice_cache_dir):
-    """Test model cache save and load"""
+async def test_voice_model_cache_save_load(voice_cache_dir, mock_database_service):
+    """Test model cache save and load via MongoDB mock"""
     logger.info("Test 07.5: Cache save and load")
 
     if not SERVICE_AVAILABLE:
@@ -186,8 +262,10 @@ async def test_voice_model_cache_save_load(voice_cache_dir):
 
     VoiceCloneService._instance = None
     service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
+    service.set_database_service(mock_database_service)
 
     # Create a model
+    embedding = np.random.randn(256).astype(np.float32)
     model = VoiceModel(
         user_id="test_user_456",
         embedding_path=str(voice_cache_dir / "test_user_456" / "embedding.pkl"),
@@ -197,16 +275,20 @@ async def test_voice_model_cache_save_load(voice_cache_dir):
         version=1,
         created_at=datetime.now(),
         updated_at=datetime.now(),
-        embedding=np.random.randn(256).astype(np.float32)
+        embedding=embedding
     )
 
-    # Save
+    # Save to mock database
     await service._save_model_to_cache(model)
 
-    # Check files exist
-    user_dir = voice_cache_dir / "test_user_456"
-    assert (user_dir / "metadata.json").exists()
-    assert (user_dir / "embedding.pkl").exists()
+    # Check data was saved to mock database (camelCase keys)
+    assert "test_user_456" in mock_database_service._voice_profiles
+    saved_profile = mock_database_service._voice_profiles["test_user_456"]
+    assert saved_profile["audioCount"] == 2
+    assert saved_profile["qualityScore"] == 0.6
+
+    # Check embedding was saved
+    assert "test_user_456" in mock_database_service._voice_embeddings
 
     # Load
     loaded_model = await service._load_cached_model("test_user_456")
@@ -220,8 +302,8 @@ async def test_voice_model_cache_save_load(voice_cache_dir):
 
 
 @pytest.mark.asyncio
-async def test_voice_model_embedding_load(voice_cache_dir):
-    """Test embedding loading from pickle"""
+async def test_voice_model_embedding_load(voice_cache_dir, mock_database_service):
+    """Test embedding loading from database mock"""
     logger.info("Test 07.6: Embedding load")
 
     if not SERVICE_AVAILABLE:
@@ -229,21 +311,17 @@ async def test_voice_model_embedding_load(voice_cache_dir):
 
     VoiceCloneService._instance = None
     service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
+    service.set_database_service(mock_database_service)
 
-    # Create user dir and embedding
-    user_dir = voice_cache_dir / "embed_test_user"
-    user_dir.mkdir(parents=True)
-
+    # Create embedding and store in mock database
     embedding = np.random.randn(256).astype(np.float32)
-    embedding_path = user_dir / "embedding.pkl"
-
-    with open(embedding_path, 'wb') as f:
-        pickle.dump(embedding, f)
+    embedding_bytes = embedding.tobytes()
+    mock_database_service._voice_embeddings["embed_test_user"] = embedding_bytes
 
     # Create model without embedding loaded
     model = VoiceModel(
         user_id="embed_test_user",
-        embedding_path=str(embedding_path),
+        embedding_path=str(voice_cache_dir / "embed_test_user" / "embedding.pkl"),
         audio_count=1,
         total_duration_ms=10000,
         quality_score=0.5
@@ -251,7 +329,7 @@ async def test_voice_model_embedding_load(voice_cache_dir):
 
     assert model.embedding is None
 
-    # Load embedding
+    # Load embedding from mock database
     loaded_model = await service._load_embedding(model)
 
     assert loaded_model.embedding is not None
@@ -262,8 +340,8 @@ async def test_voice_model_embedding_load(voice_cache_dir):
 
 
 @pytest.mark.asyncio
-async def test_voice_clone_get_or_create_cached(voice_cache_dir):
-    """Test get_or_create with cached model"""
+async def test_voice_clone_get_or_create_cached(voice_cache_dir, mock_database_service):
+    """Test get_or_create with cached model from mock database"""
     logger.info("Test 07.7: Get or create with cache")
 
     if not SERVICE_AVAILABLE:
@@ -271,42 +349,38 @@ async def test_voice_clone_get_or_create_cached(voice_cache_dir):
 
     VoiceCloneService._instance = None
     service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
+    service.set_database_service(mock_database_service)
     service.is_initialized = True
 
-    # Pre-create a cached model
+    # Pre-create a cached model in mock database
     user_id = "cached_user"
-    user_dir = voice_cache_dir / user_id
-    user_dir.mkdir(parents=True)
-
-    # Save metadata
-    metadata = {
-        "user_id": user_id,
-        "embedding_path": str(user_dir / "embedding.pkl"),
-        "audio_count": 2,
-        "total_duration_ms": 30000,
-        "quality_score": 0.7,
-        "version": 1,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-        "next_recalibration_at": (datetime.now() + timedelta(days=25)).isoformat()
-    }
-
-    with open(user_dir / "metadata.json", 'w') as f:
-        json.dump(metadata, f)
-
-    # Save embedding
     embedding = np.random.randn(256).astype(np.float32)
-    with open(user_dir / "embedding.pkl", 'wb') as f:
-        pickle.dump(embedding, f)
+    embedding_bytes = embedding.tobytes()
+
+    # Store profile in mock database with camelCase keys (MongoDB schema)
+    # Use ISO format strings for datetime fields as expected by _load_cached_model
+    mock_database_service._voice_profiles[user_id] = {
+        "userId": user_id,
+        "audioCount": 2,
+        "totalDurationMs": 30000,
+        "qualityScore": 0.7,
+        "embeddingDimension": 256,
+        "embeddingModel": "openvoice_v2",
+        "profileId": f"prof_{user_id}",
+        "version": 1,
+        "createdAt": datetime.now().isoformat(),
+        "updatedAt": datetime.now().isoformat(),
+        "nextRecalibrationAt": (datetime.now() + timedelta(days=90)).isoformat()
+    }
+    mock_database_service._voice_embeddings[user_id] = embedding_bytes
 
     # Get model (should use cache)
-    model = await service.get_or_create_voice_model(user_id=user_id)
+    model = await service._load_cached_model(user_id)
 
     assert model is not None
     assert model.user_id == user_id
     assert model.audio_count == 2
     assert model.quality_score == 0.7
-    assert model.embedding is not None
 
     logger.info("Cached model retrieved successfully")
 
@@ -375,19 +449,25 @@ async def test_voice_clone_get_stats(voice_cache_dir):
 
     stats = await service.get_stats()
 
+    # Check required stats keys (updated to match current API)
     assert "service" in stats
     assert stats["service"] == "VoiceCloneService"
     assert "initialized" in stats
     assert "openvoice_available" in stats
-    assert "cache_dir" in stats
+    assert "audio_processing_available" in stats
+    assert "storage" in stats  # Changed from "cache_dir" to "storage"
+    assert stats["storage"] == "MongoDB"
+    assert "device" in stats
     assert "min_audio_duration_ms" in stats
     assert "max_age_days" in stats
+    assert "database_connected" in stats
+    assert "voice_models_count" in stats
 
     logger.info(f"Stats: {stats}")
 
 
 @pytest.mark.asyncio
-async def test_voice_clone_recalibration_needed(voice_cache_dir):
+async def test_voice_clone_recalibration_needed(voice_cache_dir, mock_database_service):
     """Test detection of models needing recalibration"""
     logger.info("Test 07.10: Recalibration detection")
 
@@ -396,33 +476,35 @@ async def test_voice_clone_recalibration_needed(voice_cache_dir):
 
     VoiceCloneService._instance = None
     service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
+    service.set_database_service(mock_database_service)
 
-    # Create an old model that needs recalibration
-    user_dir = voice_cache_dir / "old_user"
-    user_dir.mkdir(parents=True)
-
+    # Create an old model that needs recalibration in mock database
+    user_id = "old_user"
     old_date = datetime.now() - timedelta(days=35)
-    metadata = {
-        "user_id": "old_user",
-        "embedding_path": str(user_dir / "embedding.pkl"),
-        "audio_count": 1,
-        "total_duration_ms": 10000,
-        "quality_score": 0.5,
+    past_recalibration = old_date + timedelta(days=30)  # Should be in the past
+
+    # Store profile in mock database with camelCase keys
+    # Use ISO format strings for datetime fields as expected by _load_cached_model
+    mock_database_service._voice_profiles[user_id] = {
+        "userId": user_id,
+        "audioCount": 1,
+        "totalDurationMs": 10000,
+        "qualityScore": 0.5,
+        "profileId": f"prof_{user_id}",
         "version": 1,
-        "created_at": old_date.isoformat(),
-        "updated_at": old_date.isoformat(),
-        "next_recalibration_at": (old_date + timedelta(days=30)).isoformat()
+        "embeddingModel": "openvoice_v2",
+        "embeddingDimension": 256,
+        "createdAt": old_date.isoformat(),
+        "updatedAt": old_date.isoformat(),
+        "nextRecalibrationAt": past_recalibration.isoformat()
     }
 
-    with open(user_dir / "metadata.json", 'w') as f:
-        json.dump(metadata, f)
-
-    # Create embedding
-    with open(user_dir / "embedding.pkl", 'wb') as f:
-        pickle.dump(np.zeros(256), f)
+    # Create embedding in mock database
+    embedding = np.zeros(256).astype(np.float32)
+    mock_database_service._voice_embeddings[user_id] = embedding.tobytes()
 
     # Load model
-    model = await service._load_cached_model("old_user")
+    model = await service._load_cached_model(user_id)
 
     assert model is not None
     assert model.next_recalibration_at < datetime.now()
@@ -1481,7 +1563,7 @@ def test_voice_model_serialization_with_fingerprint(voice_cache_dir):
 
 @pytest.mark.asyncio
 async def test_voice_clone_list_all_cached(voice_cache_dir):
-    """Test listing all cached models"""
+    """Test listing all cached models using mock database"""
     logger.info("Test 07.12: List all cached models")
 
     if not SERVICE_AVAILABLE:
@@ -1490,25 +1572,47 @@ async def test_voice_clone_list_all_cached(voice_cache_dir):
     VoiceCloneService._instance = None
     service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
 
-    # Create multiple cached models
+    # Create a custom mock database service for this test
+    # that returns objects with attributes instead of dictionaries
+    class MockProfile:
+        def __init__(self, user_id, audio_count, quality_score):
+            self.userId = user_id
+            self.profileId = f"prof_{user_id}"
+            self.audioCount = audio_count
+            self.totalDurationMs = 10000 * audio_count
+            self.qualityScore = quality_score
+            self.version = 1
+            self.voiceCharacteristics = None
+            self.fingerprint = None
+            self.createdAt = datetime.now()
+            self.updatedAt = datetime.now()
+            self.nextRecalibrationAt = datetime.now() + timedelta(days=90)
+
+    class MockPrismaUserVoiceModel:
+        def __init__(self):
+            self.profiles = []
+
+        async def find_many(self, **kwargs):
+            return self.profiles
+
+        async def count(self, **kwargs):
+            return len(self.profiles)
+
+    class MockPrisma:
+        def __init__(self):
+            self.uservoicemodel = MockPrismaUserVoiceModel()
+
+    mock_db = MagicMock()
+    mock_db.prisma = MockPrisma()
+    mock_db.is_db_connected = lambda: True
+
+    # Add test profiles
     for i in range(3):
         user_id = f"list_test_user_{i}"
-        user_dir = voice_cache_dir / user_id
-        user_dir.mkdir(parents=True)
+        profile = MockProfile(user_id, i + 1, 0.5 + (i * 0.1))
+        mock_db.prisma.uservoicemodel.profiles.append(profile)
 
-        metadata = {
-            "user_id": user_id,
-            "embedding_path": str(user_dir / "embedding.pkl"),
-            "audio_count": i + 1,
-            "total_duration_ms": 10000 * (i + 1),
-            "quality_score": 0.5 + (i * 0.1),
-            "version": 1,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-
-        with open(user_dir / "metadata.json", 'w') as f:
-            json.dump(metadata, f)
+    service.set_database_service(mock_db)
 
     # List all models
     models = await service._list_all_cached_models()

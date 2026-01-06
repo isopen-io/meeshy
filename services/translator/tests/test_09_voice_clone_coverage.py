@@ -17,6 +17,7 @@ import pickle
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from unittest.mock import MagicMock, AsyncMock, patch
 import numpy as np
 
 # Add src to path
@@ -862,14 +863,86 @@ class TestVoiceCloneServiceHelpers:
 class TestFileOperations:
     """Test file I/O operations"""
 
+    @pytest.fixture
+    def mock_database_service(self, temp_dir):
+        """Create a mock database service that simulates MongoDB storage with camelCase keys"""
+        mock = MagicMock()
+
+        # Storage dictionaries for in-memory database simulation
+        voice_profiles = {}
+        embeddings = {}
+
+        # Mock is_db_connected to return True
+        mock.is_db_connected = MagicMock(return_value=True)
+
+        # Mock get_voice_profile - returns camelCase keys to match MongoDB schema
+        async def get_voice_profile(user_id: str):
+            return voice_profiles.get(user_id)
+
+        mock.get_voice_profile = get_voice_profile
+
+        # Mock get_voice_embedding
+        async def get_voice_embedding(user_id: str):
+            return embeddings.get(user_id)
+
+        mock.get_voice_embedding = get_voice_embedding
+
+        # Mock save_voice_profile - stores with camelCase keys
+        async def save_voice_profile(
+            user_id: str,
+            embedding: bytes = None,
+            audio_count: int = 1,
+            total_duration_ms: int = 0,
+            quality_score: float = 0.5,
+            profile_id: str = None,
+            embedding_model: str = "openvoice_v2",
+            embedding_dimension: int = 256,
+            voice_characteristics: dict = None,
+            fingerprint: dict = None,
+            signature_short: str = None,
+            **kwargs
+        ):
+            # Store embedding separately
+            if embedding:
+                embeddings[user_id] = embedding
+
+            # Store profile metadata with camelCase keys (MongoDB schema)
+            # Use ISO format strings for datetime fields as expected by _load_cached_model
+            voice_profiles[user_id] = {
+                "userId": user_id,
+                "profileId": profile_id or f"prof_{user_id}",
+                "audioCount": audio_count,
+                "totalDurationMs": total_duration_ms,
+                "qualityScore": quality_score,
+                "version": 1,
+                "embeddingModel": embedding_model,
+                "embeddingDimension": embedding_dimension,
+                "voiceCharacteristics": voice_characteristics,
+                "fingerprint": fingerprint,
+                "signatureShort": signature_short,
+                "createdAt": datetime.now().isoformat(),
+                "updatedAt": datetime.now().isoformat(),
+                "nextRecalibrationAt": (datetime.now() + timedelta(days=90)).isoformat()
+            }
+            return True
+
+        mock.save_voice_profile = save_voice_profile
+
+        # Expose internal storage for test assertions
+        mock._voice_profiles = voice_profiles
+        mock._voice_embeddings = embeddings
+
+        return mock
+
     @pytest.mark.asyncio
-    async def test_save_and_load_model(self, temp_dir):
+    async def test_save_and_load_model(self, temp_dir, mock_database_service):
         """Test saving and loading voice model"""
         if not SERVICE_AVAILABLE:
             pytest.skip("Service not available")
 
         service = VoiceCloneService()
         service.voice_cache_dir = temp_dir
+        service.set_database_service(mock_database_service)
 
         chars = VoiceCharacteristics(pitch_mean_hz=155.0)
         embedding = np.random.randn(256).astype(np.float32)
@@ -888,11 +961,6 @@ class TestFileOperations:
         # Save
         await service._save_model_to_cache(model)
 
-        # Verify files exist
-        user_dir = temp_dir / "file_test_user"
-        assert user_dir.exists()
-        assert (user_dir / "metadata.json").exists()
-
         # Load
         loaded = await service._load_cached_model("file_test_user")
         assert loaded is not None
@@ -900,13 +968,14 @@ class TestFileOperations:
         assert loaded.audio_count == 1
 
     @pytest.mark.asyncio
-    async def test_load_nonexistent_model(self, temp_dir):
+    async def test_load_nonexistent_model(self, temp_dir, mock_database_service):
         """Test loading model that doesn't exist"""
         if not SERVICE_AVAILABLE:
             pytest.skip("Service not available")
 
         service = VoiceCloneService()
         service.voice_cache_dir = temp_dir
+        service.set_database_service(mock_database_service)
 
         result = await service._load_cached_model("nonexistent_user")
         assert result is None
