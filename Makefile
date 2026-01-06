@@ -1,15 +1,20 @@
 # Makefile pour Meeshy - Développement Local et Docker
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
-.PHONY: help setup setup-python setup-certs setup-certs-network setup-env setup-network setup-dns \
+.PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-dns \
+        _generate-certs _link-certs \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert network-info \
-        dev-tmux-network dev-bg-network \
-        logs status clean reset health test urls docker-infra docker-infra-simple \
+        _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
+        dev-tmux-network dev-bg-network _generate-env-network \
+        logs status clean reset health urls docker-infra docker-infra-simple \
         docker-start docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
+        docker-test docker-test-dev docker-test-local docker-test-prod \
         build-gateway build-translator build-frontend build-all-docker \
         push-gateway push-translator push-frontend push-all release \
-        dev-tmux dev-bg dev-fg check verify
+        dev-tmux dev-bg dev-fg check verify _preflight-check \
+        test test-js test-python test-python-fast test-ios test-ios-ui \
+        test-gateway test-web test-shared test-translator lint type-check
 
 # Couleurs
 BLUE := \033[0;34m
@@ -36,19 +41,38 @@ PYTHON_OK := $(shell python3 -c "import sys; print('yes' if sys.version_info[:2]
 
 # Variables
 COMPOSE_DIR := infrastructure/docker/compose
-COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.dev.yml
-COMPOSE_LOCAL := $(COMPOSE_DIR)/docker-compose.local-https.yml
-COMPOSE_LOCAL_SIMPLE := $(COMPOSE_DIR)/docker-compose.local.yml
+COMPOSE_DEV := $(COMPOSE_DIR)/docker-compose.dev.yml
+COMPOSE_LOCAL := $(COMPOSE_DIR)/docker-compose.local.yml
+COMPOSE_PROD := $(COMPOSE_DIR)/docker-compose.prod.yml
+COMPOSE_FILE := $(COMPOSE_DEV)
+COMPOSE_SCRIPTS := $(COMPOSE_DIR)/scripts
 CERTS_DIR := $(COMPOSE_DIR)/certs
 ENV_FILE := infrastructure/envs/.env.example
 
-# Network Configuration (can be overridden: make start-network HOST=mydev.local)
-HOST_IP := $(shell ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | head -1 | awk '{print $$2}')
+# OS Detection
+UNAME_S := $(shell uname -s 2>/dev/null || echo "Windows")
+ifeq ($(UNAME_S),Darwin)
+    OS := macos
+    HOST_IP := $(shell ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | head -1 | awk '{print $$2}')
+    BREW := $(shell command -v brew 2>/dev/null)
+else ifeq ($(UNAME_S),Linux)
+    OS := linux
+    HOST_IP := $(shell ip -4 addr show scope global 2>/dev/null | grep inet | head -1 | awk '{print $$2}' | cut -d'/' -f1)
+    APT := $(shell command -v apt-get 2>/dev/null)
+    DNF := $(shell command -v dnf 2>/dev/null)
+else
+    OS := windows
+    HOST_IP := $(shell ipconfig 2>/dev/null | findstr /i "IPv4" | head -1 | awk '{print $$NF}')
+endif
+
+# Network Configuration (can be overridden: make start HOST=mydev.local)
 HOST ?= $(HOST_IP)
 LOCAL_DOMAIN ?= meeshy.local
+ENV_LOCAL := $(COMPOSE_DIR)/.env.local
 
 # Paths
 WEB_DIR := apps/web
+IOS_DIR := apps/ios
 GATEWAY_DIR := services/gateway
 TRANSLATOR_DIR := services/translator
 SHARED_DIR := packages/shared
@@ -69,15 +93,15 @@ help: ## Afficher cette aide
 	@echo "$(CYAN)║          MEESHY - Commandes de Développement                ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@echo "$(BOLD)Runtime:$(NC) $(JS_RUNTIME) | $(BOLD)Python:$(NC) $(PYTHON_VERSION) | $(BOLD)Tmux:$(NC) $(HAS_TMUX) | $(BOLD)Docker:$(NC) $(HAS_DOCKER)"
+	@echo "$(BOLD)OS:$(NC) $(OS) | $(BOLD)Runtime:$(NC) $(JS_RUNTIME) | $(BOLD)Python:$(NC) $(PYTHON_VERSION) | $(BOLD)Tmux:$(NC) $(HAS_TMUX) | $(BOLD)Docker:$(NC) $(HAS_DOCKER)"
 	@if [ "$(PYTHON_OK)" != "yes" ]; then \
 		echo "$(YELLOW)⚠️  Python 3.11 recommandé (actuel: $(PYTHON_VERSION)). Voir: pyenv install 3.11$(NC)"; \
 	fi
 	@echo ""
 	@echo "$(BLUE)🚀 DÉMARRAGE RAPIDE:$(NC)"
 	@echo "  $(YELLOW)make setup$(NC)          - Installation complète (certs + install + generate + build)"
-	@echo "  $(YELLOW)make start$(NC)          - Lancer tous les services (localhost)"
-	@echo "  $(YELLOW)make start-network$(NC)  - Lancer avec accès réseau 📱 (mobile/multi-device)"
+	@echo "  $(YELLOW)make start$(NC)          - Lancer les services natifs (https://$(LOCAL_DOMAIN))"
+	@echo "  $(YELLOW)make docker-start$(NC)   - Lancer 100% Docker (https://$(LOCAL_DOMAIN))"
 	@echo "  $(YELLOW)make stop$(NC)           - Arrêter tous les services"
 	@echo ""
 	@echo "$(BLUE)📦 INSTALLATION:$(NC)"
@@ -90,10 +114,12 @@ help: ## Afficher cette aide
 	@grep -E '^(start-network|share-cert|network-info):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🧪 TESTS & QUALITÉ:$(NC)"
-	@grep -E '^(test|test-gateway|test-web|lint|type-check|verify):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(test|test-js|test-python|test-python-fast|test-ios|test-ios-ui):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(test-gateway|test-web|test-translator|lint|type-check|verify):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🐳 DOCKER:$(NC)"
 	@grep -E '^(docker-infra|docker-infra-simple|docker-start|docker-start-network|docker-stop):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(docker-test|docker-test-dev|docker-test-local|docker-test-prod):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)📦 BUILD & PUSH IMAGES:$(NC)"
 	@grep -E '^(build-gateway|build-translator|build-frontend|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
@@ -108,13 +134,19 @@ help: ## Afficher cette aide
 # SETUP COMPLET (One-liner)
 # =============================================================================
 
-setup: ## 🚀 Installation complète: pyenv + certs + install + generate + build
+setup: ## 🚀 Installation complète: prérequis OS + certs + DNS + install + generate + build
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║          MEESHY - Installation Complète                      ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
+	@echo "$(BOLD)🖥️  Système détecté: $(GREEN)$(OS)$(NC)"
+	@echo "$(BOLD)📍 IP locale: $(GREEN)$(HOST_IP)$(NC)"
+	@echo "$(BOLD)🌐 Domaine: $(GREEN)$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@$(MAKE) setup-prerequisites
 	@$(MAKE) setup-python
 	@$(MAKE) setup-certs
+	@$(MAKE) setup-dns
 	@$(MAKE) setup-env
 	@echo ""
 	@$(MAKE) install
@@ -126,6 +158,86 @@ setup: ## 🚀 Installation complète: pyenv + certs + install + generate + buil
 	@echo "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(GREEN)║  ✅ Setup terminé ! Lancez: make start                       ║$(NC)"
 	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📱 URLs disponibles après 'make start':$(NC)"
+	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
+
+setup-prerequisites: ## 📋 Vérifier/installer les prérequis système (mkcert, Docker, etc.)
+	@echo "$(BLUE)📋 Vérification des prérequis système ($(OS))...$(NC)"
+	@echo ""
+ifeq ($(OS),macos)
+	@# macOS - Homebrew
+	@if [ -z "$(BREW)" ]; then \
+		echo "$(RED)❌ Homebrew non installé. Installez-le:$(NC)"; \
+		echo "   /bin/bash -c \"\$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""; \
+		exit 1; \
+	fi
+	@echo "  $(GREEN)✓ Homebrew disponible$(NC)"
+	@# mkcert
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "  $(YELLOW)→ Installation de mkcert...$(NC)"; \
+		brew install mkcert nss; \
+	else \
+		echo "  $(GREEN)✓ mkcert disponible$(NC)"; \
+	fi
+	@# Docker
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "$(YELLOW)⚠️  Docker non installé. Téléchargez Docker Desktop:$(NC)"; \
+		echo "   https://www.docker.com/products/docker-desktop/"; \
+	else \
+		echo "  $(GREEN)✓ Docker disponible$(NC)"; \
+	fi
+else ifeq ($(OS),linux)
+	@# Linux - apt ou dnf
+	@# mkcert
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "  $(YELLOW)→ Installation de mkcert...$(NC)"; \
+		if [ -n "$(APT)" ]; then \
+			sudo apt-get update && sudo apt-get install -y libnss3-tools; \
+			curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" && \
+			chmod +x mkcert-v*-linux-amd64 && sudo mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert; \
+		elif [ -n "$(DNF)" ]; then \
+			sudo dnf install -y nss-tools; \
+			curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" && \
+			chmod +x mkcert-v*-linux-amd64 && sudo mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert; \
+		else \
+			echo "$(RED)❌ Gestionnaire de paquets non supporté. Installez mkcert manuellement:$(NC)"; \
+			echo "   https://github.com/FiloSottile/mkcert#installation"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "  $(GREEN)✓ mkcert disponible$(NC)"; \
+	fi
+	@# Docker
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "$(YELLOW)⚠️  Docker non installé. Installez-le:$(NC)"; \
+		echo "   curl -fsSL https://get.docker.com | sh"; \
+	else \
+		echo "  $(GREEN)✓ Docker disponible$(NC)"; \
+	fi
+else
+	@# Windows
+	@echo "$(YELLOW)📋 Instructions Windows:$(NC)"
+	@echo ""
+	@echo "  1. Installez Chocolatey (gestionnaire de paquets):"
+	@echo "     https://chocolatey.org/install"
+	@echo ""
+	@echo "  2. Installez mkcert:"
+	@echo "     choco install mkcert"
+	@echo ""
+	@echo "  3. Installez Docker Desktop:"
+	@echo "     https://www.docker.com/products/docker-desktop/"
+	@echo ""
+	@echo "  4. Relancez 'make setup' après installation"
+	@echo ""
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "$(RED)❌ mkcert non trouvé$(NC)"; \
+		exit 1; \
+	fi
+endif
+	@echo ""
 
 setup-python: ## 🐍 Configurer Python 3.11 via pyenv pour le translator
 	@echo "$(BLUE)🐍 Configuration de Python 3.11 pour le translator...$(NC)"
@@ -170,35 +282,73 @@ setup-env: ## 📝 Créer les fichiers .env pour le développement local
 		$(TRANSLATOR_DIR)/models
 	@echo "  $(GREEN)✓ Dossiers locaux créés$(NC)"
 
-setup-certs: ## 🔐 Générer les certificats SSL locaux (mkcert)
-	@echo "$(BLUE)🔐 Configuration des certificats SSL locaux...$(NC)"
+setup-certs: ## 🔐 Générer les certificats SSL locaux (mkcert) si absents
+	@echo "$(BLUE)🔐 Configuration des certificats SSL pour *.$(LOCAL_DOMAIN)...$(NC)"
 	@if ! command -v mkcert >/dev/null 2>&1; then \
-		echo "$(RED)❌ mkcert non installé. Installez-le avec: brew install mkcert$(NC)"; \
+		echo "$(RED)❌ mkcert non installé. Lancez: make setup-prerequisites$(NC)"; \
 		exit 1; \
 	fi
-	@# Installer CA si pas déjà fait
-	@mkcert -install 2>/dev/null || true
-	@# Créer le dossier certs
-	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
-	@# Générer les certificats si absents
-	@if [ ! -f "$(WEB_DIR)/.cert/localhost.pem" ]; then \
-		echo "  $(YELLOW)Génération des certificats...$(NC)"; \
-		cd $(WEB_DIR)/.cert && mkcert localhost 127.0.0.1 ::1 meeshy.local; \
-		mv localhost+3.pem localhost.pem 2>/dev/null || true; \
-		mv localhost+3-key.pem localhost-key.pem 2>/dev/null || true; \
+	@# Vérifier si les certificats existent déjà
+	@if [ -f "$(WEB_DIR)/.cert/localhost.pem" ] && [ -f "$(WEB_DIR)/.cert/localhost-key.pem" ]; then \
+		echo "  $(GREEN)✓ Certificats déjà présents dans $(WEB_DIR)/.cert/$(NC)"; \
+		echo "  $(DIM)→ Pour régénérer: make setup-certs-force$(NC)"; \
 	else \
-		echo "  $(GREEN)✓ Certificats existants$(NC)"; \
+		$(MAKE) _generate-certs; \
 	fi
-	@# Créer les liens symboliques pour Docker
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
-	@echo "  $(GREEN)✓ Certificats configurés$(NC)"
+	@# S'assurer que les liens Docker existent
+	@mkdir -p $(CERTS_DIR)
+	@if [ -f "$(WEB_DIR)/.cert/localhost.pem" ] && [ ! -f "$(CERTS_DIR)/cert.pem" ]; then \
+		$(MAKE) _link-certs; \
+	fi
+
+setup-certs-force: ## 🔐 Forcer la régénération des certificats SSL
+	@echo "$(YELLOW)🔐 Régénération forcée des certificats SSL...$(NC)"
+	@if ! command -v mkcert >/dev/null 2>&1; then \
+		echo "$(RED)❌ mkcert non installé. Lancez: make setup-prerequisites$(NC)"; \
+		exit 1; \
+	fi
+	@$(MAKE) _generate-certs
+	@$(MAKE) _link-certs
+
+_generate-certs: ## (interne) Génère les certificats avec mkcert
+	@echo "  $(YELLOW)→ Installation de l'autorité de certification locale...$(NC)"
+	@mkcert -install 2>/dev/null || true
+	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
+	@echo "  $(YELLOW)→ Génération des certificats pour: *.$(LOCAL_DOMAIN), $(LOCAL_DOMAIN), localhost$(NC)"
+	@cd $(WEB_DIR)/.cert && mkcert \
+		-key-file localhost-key.pem \
+		-cert-file localhost.pem \
+		"*.$(LOCAL_DOMAIN)" \
+		"$(LOCAL_DOMAIN)" \
+		localhost \
+		127.0.0.1 \
+		::1 \
+		$(HOST_IP)
+	@echo "  $(GREEN)✓ Certificats générés$(NC)"
+
+_link-certs: ## (interne) Crée les liens/copies pour Docker
+	@mkdir -p $(CERTS_DIR)
+ifeq ($(OS),windows)
+	@copy "$(WEB_DIR)\.cert\localhost.pem" "$(CERTS_DIR)\cert.pem" 2>nul || true
+	@copy "$(WEB_DIR)\.cert\localhost-key.pem" "$(CERTS_DIR)\key.pem" 2>nul || true
+else
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || \
+		cp $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem
+	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || \
+		cp $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem
+endif
+	@echo "  $(GREEN)✓ Liens Docker créés$(NC)"
 	@echo ""
-	@echo "$(BOLD)📍 Fichiers créés:$(NC)"
+	@echo "$(BOLD)📍 Fichiers:$(NC)"
 	@echo "    $(WEB_DIR)/.cert/localhost.pem"
 	@echo "    $(WEB_DIR)/.cert/localhost-key.pem"
-	@echo "    $(CERTS_DIR)/cert.pem -> symlink"
-	@echo "    $(CERTS_DIR)/key.pem -> symlink"
+	@echo "    $(CERTS_DIR)/cert.pem → (lien)"
+	@echo "    $(CERTS_DIR)/key.pem → (lien)"
+	@echo ""
+	@echo "$(BOLD)🌐 Domaines couverts:$(NC)"
+	@echo "    *.$(LOCAL_DOMAIN) (wildcard)"
+	@echo "    $(LOCAL_DOMAIN)"
+	@echo "    localhost, 127.0.0.1, $(HOST_IP)"
 
 # =============================================================================
 # INSTALLATION
@@ -431,29 +581,131 @@ _preflight-check: ## Vérification complète des prérequis (interne)
 		echo "$(GREEN)✅ Tous les prérequis sont satisfaits$(NC)"; \
 	fi
 
-start: ## Lancer tous les services (auto-détecte tmux ou background)
+start: ## Lancer les services natifs avec HTTPS (https://meeshy.local)
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(CYAN)║          MEESHY - Démarrage des Services                     ║$(NC)"
+	@echo "$(CYAN)║      MEESHY - Démarrage Services ($(LOCAL_DOMAIN))            ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)🌐 Configuration:$(NC)"
+	@echo "   Domaine:    $(GREEN)$(LOCAL_DOMAIN)$(NC)"
+	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
+	@echo "   OS:         $(GREEN)$(OS)$(NC)"
 	@echo ""
 	@# Vérification des prérequis
 	@$(MAKE) _preflight-check
 	@echo ""
-	@# Lancer Docker infra si disponible
+	@# Lancer Docker infra (MongoDB + Redis + Traefik)
 	@if [ "$(HAS_DOCKER)" = "yes" ]; then \
 		$(MAKE) docker-infra 2>/dev/null || echo "$(YELLOW)⚠️  Docker infra non démarré$(NC)"; \
 	else \
-		echo "$(YELLOW)⚠️  Docker non disponible - services sans MongoDB/Redis$(NC)"; \
+		echo "$(RED)❌ Docker requis pour l'infrastructure$(NC)"; \
+		exit 1; \
 	fi
+	@echo ""
+	@# Générer les fichiers .env pour le domaine local
+	@$(MAKE) _generate-env-local
 	@echo ""
 	@# Choisir le mode de lancement
 	@if [ "$(HAS_TMUX)" = "yes" ]; then \
 		echo "$(GREEN)📺 Tmux détecté - lancement en mode tmux$(NC)"; \
-		$(MAKE) dev-tmux; \
+		$(MAKE) _dev-tmux-domain; \
 	else \
 		echo "$(GREEN)🔄 Pas de tmux - lancement en background$(NC)"; \
-		$(MAKE) dev-bg; \
+		$(MAKE) _dev-bg-domain; \
 	fi
+
+_generate-env-local: ## Générer les fichiers .env pour le domaine local
+	@echo "$(BLUE)📝 Génération des fichiers .env pour $(LOCAL_DOMAIN)...$(NC)"
+	@# Root .env
+	@echo "NODE_ENV=development" > .env
+	@echo "LOCAL_DOMAIN=$(LOCAL_DOMAIN)" >> .env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> .env
+	@echo "REDIS_URL=redis://localhost:6379" >> .env
+	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> .env
+	@# Frontend .env (HTTPS via domaine)
+	@echo "NODE_ENV=development" > $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_API_URL=https://gate.$(LOCAL_DOMAIN)" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_WS_URL=wss://gate.$(LOCAL_DOMAIN)" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_BACKEND_URL=https://gate.$(LOCAL_DOMAIN)" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_TRANSLATION_URL=https://ml.$(LOCAL_DOMAIN)/translate" >> $(WEB_DIR)/.env
+	@echo "NEXT_PUBLIC_FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(WEB_DIR)/.env
+	@echo "INTERNAL_BACKEND_URL=http://localhost:3000" >> $(WEB_DIR)/.env
+	@# Gateway .env (HTTPS via certificats mkcert)
+	@echo "NODE_ENV=development" > $(GATEWAY_DIR)/.env
+	@echo "USE_HTTPS=true" >> $(GATEWAY_DIR)/.env
+	@echo "SSL_CERT_PATH=../$(WEB_DIR)/.cert/localhost.pem" >> $(GATEWAY_DIR)/.env
+	@echo "SSL_KEY_PATH=../$(WEB_DIR)/.cert/localhost-key.pem" >> $(GATEWAY_DIR)/.env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(GATEWAY_DIR)/.env
+	@echo "REDIS_URL=redis://localhost:6379" >> $(GATEWAY_DIR)/.env
+	@echo "TRANSLATOR_URL=http://localhost:8000" >> $(GATEWAY_DIR)/.env
+	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> $(GATEWAY_DIR)/.env
+	@echo "PORT=3000" >> $(GATEWAY_DIR)/.env
+	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
+	@echo "PUBLIC_URL=https://gate.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@# Translator .env
+	@echo "ENVIRONMENT=development" > $(TRANSLATOR_DIR)/.env
+	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(TRANSLATOR_DIR)/.env
+	@echo "REDIS_URL=redis://localhost:6379" >> $(TRANSLATOR_DIR)/.env
+	@echo "PORT=8000" >> $(TRANSLATOR_DIR)/.env
+	@echo "HOST=0.0.0.0" >> $(TRANSLATOR_DIR)/.env
+	@echo "  $(GREEN)✓ Fichiers .env générés pour $(LOCAL_DOMAIN)$(NC)"
+
+_dev-tmux-domain: ## Lancer les services en mode tmux avec HTTPS
+	@echo "$(BLUE)🖥️  Démarrage des services dans tmux (HTTPS)...$(NC)"
+	@tmux kill-session -t meeshy 2>/dev/null || true
+	@tmux new-session -d -s meeshy -n translator \
+		"cd $(CURDIR)/$(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null; echo '🔤 Translator (ml.$(LOCAL_DOMAIN) -> :8000)'; python3 src/main.py; read"
+	@sleep 2
+	@tmux new-window -t meeshy -n gateway \
+		"cd $(CURDIR)/$(GATEWAY_DIR) && echo '🚀 Gateway HTTPS (gate.$(LOCAL_DOMAIN) -> :3000)'; $(JS_RUNTIME) run dev; read"
+	@sleep 2
+	@tmux new-window -t meeshy -n web \
+		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(LOCAL_DOMAIN) -> :3100)'; $(JS_RUNTIME) run dev:https; read"
+	@echo ""
+	@$(MAKE) _show-domain-urls
+	@echo ""
+	@read -p "$(YELLOW)Appuyez sur Entrée pour attacher à tmux...$(NC)" && tmux attach -t meeshy
+
+_dev-bg-domain: ## Lancer les services en background avec HTTPS
+	@echo "$(BLUE)🔄 Démarrage des services en background (HTTPS)...$(NC)"
+	@mkdir -p $(PID_DIR) logs
+	@# Translator
+	@echo "  $(CYAN)🔤 Translator (ml.$(LOCAL_DOMAIN))...$(NC)"
+	@cd $(TRANSLATOR_DIR) && . .venv/bin/activate 2>/dev/null && \
+		python3 src/main.py > $(CURDIR)/logs/translator.log 2>&1 & echo $$! > $(CURDIR)/$(TRANSLATOR_PID)
+	@sleep 2
+	@# Gateway HTTPS
+	@echo "  $(CYAN)🚀 Gateway HTTPS (gate.$(LOCAL_DOMAIN))...$(NC)"
+	@cd $(GATEWAY_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/gateway.log 2>&1 & echo $$! > $(CURDIR)/$(GATEWAY_PID)
+	@sleep 2
+	@# Web HTTPS
+	@echo "  $(CYAN)🎨 Web HTTPS ($(LOCAL_DOMAIN))...$(NC)"
+	@cd $(WEB_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_PID)
+	@sleep 3
+	@echo ""
+	@$(MAKE) _show-domain-urls
+
+_show-domain-urls:
+	@echo "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(GREEN)║  ✅ Services démarrés avec HTTPS                             ║$(NC)"
+	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)📱 URLs d'accès (HTTPS):$(NC)"
+	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@echo "$(BOLD)🔧 Infrastructure Docker:$(NC)"
+	@echo "   MongoDB UI:   $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Redis UI:     $(GREEN)https://redis.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Traefik:      $(GREEN)http://localhost:8080$(NC)"
+	@echo ""
+	@echo "$(BOLD)📋 Commandes:$(NC)"
+	@echo "   $(YELLOW)make status$(NC)  - Voir le statut des services"
+	@echo "   $(YELLOW)make logs$(NC)    - Voir les logs"
+	@echo "   $(YELLOW)make stop$(NC)    - Arrêter tous les services"
 
 stop: ## Arrêter tous les services
 	@echo "$(YELLOW)⏹️  Arrêt des services...$(NC)"
@@ -528,13 +780,55 @@ setup-network: ## 🔧 Configurer le réseau (DNS + certificats)
 	@$(MAKE) setup-dns HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
 	@$(MAKE) setup-certs-network HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
 
-setup-dns: ## 🌐 Générer la configuration DNS (dnsmasq)
+setup-dns: ## 🌐 Configurer /etc/hosts pour *.meeshy.local (cross-platform)
 	@echo "$(BLUE)🌐 Configuration DNS pour $(LOCAL_DOMAIN)...$(NC)"
+	@echo ""
+ifeq ($(OS),windows)
+	@echo "$(YELLOW)📋 Configuration manuelle requise sur Windows:$(NC)"
+	@echo ""
+	@echo "  1. Ouvrez Notepad en tant qu'Administrateur"
+	@echo "  2. Ouvrez le fichier: C:\\Windows\\System32\\drivers\\etc\\hosts"
+	@echo "  3. Ajoutez ces lignes à la fin:"
+	@echo ""
+	@echo "     $(CYAN)127.0.0.1    $(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    app.$(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    gate.$(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    ml.$(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    mongo.$(LOCAL_DOMAIN)$(NC)"
+	@echo "     $(CYAN)127.0.0.1    redis.$(LOCAL_DOMAIN)$(NC)"
+	@echo ""
+	@echo "  4. Sauvegardez et fermez"
+else
+	@# Unix/macOS - Configuration automatique avec sudo
+	@HOSTS_ENTRIES="$(LOCAL_DOMAIN) app.$(LOCAL_DOMAIN) gate.$(LOCAL_DOMAIN) api.$(LOCAL_DOMAIN) ml.$(LOCAL_DOMAIN) mongo.$(LOCAL_DOMAIN) redis.$(LOCAL_DOMAIN)"; \
+	if grep -q "$(LOCAL_DOMAIN)" /etc/hosts 2>/dev/null; then \
+		echo "  $(GREEN)✓ Entrées /etc/hosts déjà configurées$(NC)"; \
+	else \
+		echo "  $(YELLOW)→ Ajout des entrées dans /etc/hosts (sudo requis)...$(NC)"; \
+		echo "" | sudo tee -a /etc/hosts >/dev/null; \
+		echo "# Meeshy Local Development" | sudo tee -a /etc/hosts >/dev/null; \
+		echo "127.0.0.1    $$HOSTS_ENTRIES" | sudo tee -a /etc/hosts >/dev/null; \
+		echo "  $(GREEN)✓ Entrées /etc/hosts ajoutées$(NC)"; \
+	fi
+endif
+	@# Générer aussi la config dnsmasq pour le DNS réseau (optionnel)
 	@mkdir -p $(COMPOSE_DIR)/config
-	@sed -e 's/__HOST_IP__/$(HOST_IP)/g' \
-		 -e 's/__LOCAL_DOMAIN__/$(LOCAL_DOMAIN)/g' \
-		 $(COMPOSE_DIR)/config/dnsmasq.conf.template > $(COMPOSE_DIR)/config/dnsmasq.conf
-	@echo "  $(GREEN)✓ DNS configuré: *.$(LOCAL_DOMAIN) -> $(HOST_IP)$(NC)"
+	@if [ -f "$(COMPOSE_DIR)/config/dnsmasq.conf.template" ]; then \
+		sed -e 's/__HOST_IP__/$(HOST_IP)/g' \
+			-e 's/__LOCAL_DOMAIN__/$(LOCAL_DOMAIN)/g' \
+			$(COMPOSE_DIR)/config/dnsmasq.conf.template > $(COMPOSE_DIR)/config/dnsmasq.conf 2>/dev/null || true; \
+		echo "  $(GREEN)✓ Config dnsmasq générée (pour accès réseau)$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(BOLD)🌐 Domaines configurés:$(NC)"
+	@echo "    $(LOCAL_DOMAIN)       → 127.0.0.1"
+	@echo "    app.$(LOCAL_DOMAIN)   → 127.0.0.1"
+	@echo "    gate.$(LOCAL_DOMAIN)  → 127.0.0.1"
+	@echo "    api.$(LOCAL_DOMAIN)   → 127.0.0.1"
+	@echo "    ml.$(LOCAL_DOMAIN)    → 127.0.0.1"
+	@echo "    mongo.$(LOCAL_DOMAIN) → 127.0.0.1"
+	@echo "    redis.$(LOCAL_DOMAIN) → 127.0.0.1"
 
 setup-certs-network: ## 🔐 Générer certificats pour accès réseau (HOST=smpdev02.local)
 	@echo "$(BLUE)🔐 Configuration des certificats pour $(HOST)...$(NC)"
@@ -876,7 +1170,7 @@ docker-infra-simple: ## Démarrer infrastructure simple sans HTTPS (MongoDB + Re
 		exit 1; \
 	fi
 	@echo "$(BLUE)🐳 Démarrage de l'infrastructure simple (MongoDB + Redis)...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL_SIMPLE) up -d
+	@docker compose -f $(COMPOSE_DEV) up -d
 	@echo "$(GREEN)✅ Infrastructure démarrée$(NC)"
 	@echo ""
 	@echo "$(BLUE)📍 Services:$(NC)"
@@ -943,8 +1237,9 @@ docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès ré
 
 docker-stop: ## Arrêter tous les services Docker
 	@echo "$(YELLOW)⏹️  Arrêt des services Docker...$(NC)"
-	@docker compose -f $(COMPOSE_FILE) down 2>/dev/null || true
+	@docker compose -f $(COMPOSE_DEV) down 2>/dev/null || true
 	@docker compose -f $(COMPOSE_LOCAL) down 2>/dev/null || true
+	@docker compose -f $(COMPOSE_PROD) down 2>/dev/null || true
 	@echo "$(GREEN)✅ Services arrêtés$(NC)"
 
 docker-logs: ## Afficher les logs Docker (SERVICE=nom pour filtrer)
@@ -961,6 +1256,26 @@ docker-pull: ## Télécharger les dernières images Docker
 
 docker-build: ## Builder toutes les images Docker localement
 	@$(MAKE) build-all-docker
+
+# =============================================================================
+# DOCKER HEALTH TESTS
+# =============================================================================
+
+docker-test: ## Tester les services Docker (MODE=dev|local|prod)
+	@echo "$(BLUE)🧪 Test des services Docker...$(NC)"
+	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode $(or $(MODE),local)
+
+docker-test-dev: ## Tester les services localhost (HTTP)
+	@echo "$(BLUE)🧪 Test des services localhost...$(NC)"
+	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode dev
+
+docker-test-local: ## Tester les services *.meeshy.local (HTTPS)
+	@echo "$(BLUE)🧪 Test des services meeshy.local...$(NC)"
+	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode local
+
+docker-test-prod: ## Tester les services *.meeshy.me (HTTPS)
+	@echo "$(BLUE)🧪 Test des services meeshy.me...$(NC)"
+	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode prod
 
 # =============================================================================
 # BUILD IMAGES DOCKER
@@ -1072,18 +1387,19 @@ docker-images: ## Lister les images Meeshy locales
 # =============================================================================
 
 urls: ## Afficher les URLs d'accès
-	@echo "$(BLUE)📍 URLs d'accès (HTTPS):$(NC)"
-	@echo "   - Frontend:        $(GREEN)https://localhost:3100$(NC)"
-	@echo "   - Gateway API:     $(GREEN)https://localhost:3000$(NC)"
-	@echo "   - Translator API:  $(GREEN)http://localhost:8000$(NC)"
+	@echo "$(BLUE)📍 URLs d'accès (HTTPS via $(LOCAL_DOMAIN)):$(NC)"
+	@echo "   Frontend:        $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Gateway API:     $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Translator:      $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 	@echo ""
-	@echo "$(BLUE)📍 Via Traefik (si docker-infra):$(NC)"
-	@echo "   - Frontend:        $(GREEN)https://localhost$(NC)"
-	@echo "   - Traefik UI:      $(GREEN)http://localhost:8080$(NC)"
+	@echo "$(BLUE)📍 Administration (via Traefik):$(NC)"
+	@echo "   MongoDB UI:      $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)  (admin/admin123)"
+	@echo "   Redis UI:        $(GREEN)https://redis.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Traefik UI:      $(GREEN)http://localhost:8080$(NC)"
 	@echo ""
-	@echo "$(BLUE)📍 Infrastructure:$(NC)"
-	@echo "   - MongoDB:         $(GREEN)mongodb://localhost:27017$(NC)"
-	@echo "   - Redis:           $(GREEN)redis://localhost:6379$(NC)"
+	@echo "$(BLUE)📍 Connexion directe (debug):$(NC)"
+	@echo "   MongoDB:         $(GREEN)mongodb://localhost:27017$(NC)"
+	@echo "   Redis:           $(GREEN)redis://localhost:6379$(NC)"
 
 status: ## Afficher le statut des services
 	@echo "$(BLUE)📊 Statut des services:$(NC)"
@@ -1138,28 +1454,120 @@ kill: ## Tuer tous les processus sur les ports de dev
 # TESTS & QUALITÉ
 # =============================================================================
 
-test: ## Lancer tous les tests
-	@echo "$(BLUE)🧪 Lancement des tests...$(NC)"
+test: ## Lancer tous les tests (JS + Python + iOS)
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          MEESHY - Suite de Tests Complète                    ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@ERRORS=0; \
+	echo "$(BLUE)1/5$(NC) $(BOLD)Gateway (TypeScript):$(NC)"; \
+	cd $(GATEWAY_DIR) && $(JS_RUNTIME) run test 2>&1 || ERRORS=$$((ERRORS+1)); \
+	echo ""; \
+	echo "$(BLUE)2/5$(NC) $(BOLD)Web (TypeScript):$(NC)"; \
+	cd $(CURDIR)/$(WEB_DIR) && $(JS_RUNTIME) run test 2>&1 || ERRORS=$$((ERRORS+1)); \
+	echo ""; \
+	echo "$(BLUE)3/5$(NC) $(BOLD)Shared (TypeScript):$(NC)"; \
+	cd $(CURDIR)/$(SHARED_DIR) && $(JS_RUNTIME) run test 2>&1 || echo "  $(YELLOW)Pas de tests$(NC)"; \
+	echo ""; \
+	echo "$(BLUE)4/5$(NC) $(BOLD)Translator (Python):$(NC)"; \
+	cd $(CURDIR)/$(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && python -m pytest tests/ -v --tb=short 2>&1 || ERRORS=$$((ERRORS+1)); \
+		else \
+			echo "  $(YELLOW)⚠️  venv non trouvé, lancez: make install$(NC)"; \
+		fi; \
+	echo ""; \
+	echo "$(BLUE)5/5$(NC) $(BOLD)iOS (Swift):$(NC)"; \
+	if [ -d "$(IOS_DIR)" ] && command -v xcodebuild >/dev/null 2>&1; then \
+		cd $(CURDIR)/$(IOS_DIR) && xcodebuild test \
+			-project Meeshy.xcodeproj \
+			-scheme Meeshy \
+			-destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+			-only-testing:MeeshyTests \
+			-quiet 2>&1 || ERRORS=$$((ERRORS+1)); \
+	else \
+		echo "  $(YELLOW)⚠️  Xcode non disponible ou iOS non configuré$(NC)"; \
+	fi; \
+	echo ""; \
+	if [ $$ERRORS -gt 0 ]; then \
+		echo "$(RED)❌ $$ERRORS suite(s) de tests en échec$(NC)"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)✅ Tous les tests passés$(NC)"; \
+	fi
+
+test-js: ## Lancer uniquement les tests JavaScript (Gateway + Web + Shared)
+	@echo "$(BLUE)🧪 Tests JavaScript...$(NC)"
 	@echo ""
 	@echo "$(CYAN)Gateway:$(NC)"
-	@cd $(GATEWAY_DIR) && $(JS_RUNTIME) run test || true
+	@cd $(GATEWAY_DIR) && $(JS_RUNTIME) run test
 	@echo ""
 	@echo "$(CYAN)Web:$(NC)"
-	@cd $(WEB_DIR) && $(JS_RUNTIME) run test || true
+	@cd $(WEB_DIR) && $(JS_RUNTIME) run test
 	@echo ""
 	@echo "$(CYAN)Shared:$(NC)"
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run test 2>/dev/null || echo "  Pas de tests"
 	@echo ""
-	@echo "$(GREEN)✅ Tests terminés$(NC)"
+	@echo "$(GREEN)✅ Tests JS terminés$(NC)"
+
+test-python: ## Lancer uniquement les tests Python (Translator)
+	@echo "$(BLUE)🧪 Tests Python (Translator)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && python -m pytest tests/ -v --tb=short; \
+		else \
+			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
+			exit 1; \
+		fi
+
+test-python-fast: ## Lancer les tests Python rapides (sans modèles ML)
+	@echo "$(BLUE)🧪 Tests Python rapides (sans ML)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && python -m pytest tests/ -v --tb=short -m "not slow" -k "not model"; \
+		else \
+			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
+			exit 1; \
+		fi
+
+test-ios: ## Lancer les tests iOS (Unit Tests)
+	@echo "$(BLUE)🧪 Tests iOS (MeeshyTests)...$(NC)"
+	@if [ ! -d "$(IOS_DIR)" ]; then \
+		echo "$(RED)❌ Dossier iOS non trouvé: $(IOS_DIR)$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v xcodebuild >/dev/null 2>&1; then \
+		echo "$(RED)❌ Xcode non installé$(NC)"; \
+		exit 1; \
+	fi
+	@cd $(IOS_DIR) && xcodebuild test \
+		-project Meeshy.xcodeproj \
+		-scheme Meeshy \
+		-destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+		-only-testing:MeeshyTests \
+		-resultBundlePath TestResults
+
+test-ios-ui: ## Lancer les tests UI iOS (MeeshyUITests)
+	@echo "$(BLUE)🧪 Tests UI iOS (MeeshyUITests)...$(NC)"
+	@cd $(IOS_DIR) && xcodebuild test \
+		-project Meeshy.xcodeproj \
+		-scheme Meeshy \
+		-destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+		-only-testing:MeeshyUITests \
+		-resultBundlePath UITestResults
 
 test-gateway: ## Lancer les tests du gateway
+	@echo "$(BLUE)🧪 Tests Gateway...$(NC)"
 	@cd $(GATEWAY_DIR) && $(JS_RUNTIME) run test
 
 test-web: ## Lancer les tests du frontend
+	@echo "$(BLUE)🧪 Tests Web...$(NC)"
 	@cd $(WEB_DIR) && $(JS_RUNTIME) run test
 
 test-shared: ## Lancer les tests du shared
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run test
+
+test-translator: test-python ## Alias pour test-python
 
 lint: ## Lancer le linter sur tout le projet
 	@echo "$(BLUE)🔍 Vérification du code...$(NC)"
