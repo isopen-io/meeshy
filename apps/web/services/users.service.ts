@@ -104,19 +104,6 @@ export const usersService = {
   },
 
   /**
-   * Récupère mes statistiques
-   */
-  async getMyStats(): Promise<ApiResponse<UserStats>> {
-    try {
-      const response = await apiService.get<UserStats>('/users/me/stats');
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
-      throw error;
-    }
-  },
-
-  /**
    * Récupère les statistiques du dashboard
    */
   async getDashboardStats(): Promise<ApiResponse<{
