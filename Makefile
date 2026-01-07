@@ -1,7 +1,7 @@
 # Makefile pour Meeshy - Développement Local et Docker
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
-.PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-dns \
+.PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-hosts \
         _generate-certs _copy-certs-to-docker \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
@@ -146,7 +146,7 @@ setup: ## 🚀 Installation complète: prérequis OS + certs + DNS + install + g
 	@$(MAKE) setup-prerequisites
 	@$(MAKE) setup-python
 	@$(MAKE) setup-certs
-	@$(MAKE) setup-dns
+	@$(MAKE) setup-hosts
 	@$(MAKE) setup-env
 	@echo ""
 	@$(MAKE) install
@@ -1043,13 +1043,13 @@ start-network: ## 🌐 Lancer avec accès réseau (HOST=smpdev02.local ou IP)
 		$(MAKE) dev-bg-network; \
 	fi
 
-setup-network: ## 🔧 Configurer le réseau (DNS + certificats)
+setup-network: ## 🔧 Configurer le réseau (hosts + certificats)
 	@echo "$(BLUE)🔧 Configuration du réseau pour $(HOST)...$(NC)"
-	@$(MAKE) setup-dns HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
+	@$(MAKE) setup-hosts HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
 	@$(MAKE) setup-certs-network HOST=$(HOST) LOCAL_DOMAIN=$(LOCAL_DOMAIN)
 
-setup-dns: ## 🌐 Configurer /etc/hosts pour *.meeshy.local (cross-platform)
-	@echo "$(BLUE)🌐 Configuration DNS pour $(LOCAL_DOMAIN)...$(NC)"
+setup-hosts: ## 🌐 Configurer /etc/hosts pour *.meeshy.local (cross-platform)
+	@echo "$(BLUE)🌐 Configuration /etc/hosts pour $(LOCAL_DOMAIN)...$(NC)"
 	@echo ""
 ifeq ($(OS),windows)
 	@echo "$(YELLOW)📋 Configuration manuelle requise sur Windows:$(NC)"
@@ -1080,14 +1080,6 @@ else
 		echo "  $(GREEN)✓ Entrées /etc/hosts ajoutées$(NC)"; \
 	fi
 endif
-	@# Générer aussi la config dnsmasq pour le DNS réseau (optionnel)
-	@mkdir -p $(COMPOSE_DIR)/config
-	@if [ -f "$(COMPOSE_DIR)/config/dnsmasq.conf.template" ]; then \
-		sed -e 's/__HOST_IP__/$(HOST_IP)/g' \
-			-e 's/__LOCAL_DOMAIN__/$(LOCAL_DOMAIN)/g' \
-			$(COMPOSE_DIR)/config/dnsmasq.conf.template > $(COMPOSE_DIR)/config/dnsmasq.conf 2>/dev/null || true; \
-		echo "  $(GREEN)✓ Config dnsmasq générée (pour accès réseau)$(NC)"; \
-	fi
 	@echo ""
 	@echo "$(BOLD)🌐 Domaines configurés:$(NC)"
 	@echo "    $(LOCAL_DOMAIN)       → 127.0.0.1"
@@ -1106,7 +1098,7 @@ setup-certs-network: ## 🔐 Générer certificats pour accès réseau (HOST=smp
 	fi
 	@mkcert -install 2>/dev/null || true
 	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
-	@echo "  $(YELLOW)Génération des certificats pour: localhost, $(HOST_IP), $(HOST), *.$(LOCAL_DOMAIN)$(NC)"
+	@echo "  $(YELLOW)Génération des certificats pour: localhost, $(HOST_IP), $(HOST), *.$(LOCAL_DOMAIN), smpdev02.local, smpdev02.home, meeshy$(NC)"
 	@cd $(WEB_DIR)/.cert && mkcert \
 		-key-file localhost-key.pem \
 		-cert-file localhost.pem \
@@ -1116,9 +1108,15 @@ setup-certs-network: ## 🔐 Générer certificats pour accès réseau (HOST=smp
 		$(HOST_IP) \
 		$(HOST) \
 		"*.$(LOCAL_DOMAIN)" \
-		$(LOCAL_DOMAIN)
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
-	@ln -sf ../../../../$(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
+		$(LOCAL_DOMAIN) \
+		smpdev02.local \
+		"*.smpdev02.local" \
+		smpdev02.home \
+		"*.smpdev02.home" \
+		meeshy \
+		"*.meeshy"
+	@cp -f $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
+	@cp -f $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
 	@echo "  $(GREEN)✓ Certificats générés$(NC)"
 
 _generate-env-network:
@@ -1571,10 +1569,6 @@ docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès ré
 	@echo "   MongoDB UI:   $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)  (admin/admin)"
 	@echo "   Redis UI:     $(GREEN)https://redis.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Traefik UI:   $(GREEN)http://$(HOST):8080$(NC)"
-	@echo ""
-	@echo "$(BOLD)📡 Configuration DNS:$(NC)"
-	@echo "   Serveur DNS:  $(GREEN)$(HOST_IP):53$(NC)"
-	@echo "   Résout:       $(CYAN)*.$(LOCAL_DOMAIN) -> $(HOST_IP)$(NC)"
 	@echo ""
 	@echo "$(YELLOW)💡 Pour les mobiles: make share-cert$(NC)"
 
