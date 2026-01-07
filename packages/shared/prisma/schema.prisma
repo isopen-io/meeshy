@@ -41,6 +41,8 @@ model User {
   emailVerificationToken  String?   // Token de vérification email (hash SHA-256)
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
   phoneVerifiedAt         DateTime?
+  phoneVerificationCode   String?   // Code SMS 6 chiffres (hashé)
+  phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
   twoFactorEnabledAt      DateTime?
   twoFactorSecret         String? // TOTP secret (encrypted)
 

@@ -628,4 +628,91 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
   });
+
+  // Route pour envoyer un code de vérification SMS
+  fastify.post('/send-phone-code', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['phoneNumber'],
+        properties: {
+          phoneNumber: { type: 'string', minLength: 8 }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { phoneNumber } = request.body as { phoneNumber: string };
+
+      console.log('[AUTH] Envoi code SMS pour:', phoneNumber);
+
+      const result = await authService.sendPhoneVerificationCode(phoneNumber);
+
+      if (!result.success) {
+        console.warn('[AUTH] ❌ Échec envoi code SMS:', result.error);
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      console.log('[AUTH] ✅ Code SMS envoyé');
+
+      return reply.send({
+        success: true,
+        message: 'Code de vérification envoyé par SMS.'
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur envoi code SMS:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de l\'envoi du code'
+      });
+    }
+  });
+
+  // Route pour vérifier le numéro de téléphone avec le code SMS
+  fastify.post('/verify-phone', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['phoneNumber', 'code'],
+        properties: {
+          phoneNumber: { type: 'string', minLength: 8 },
+          code: { type: 'string', minLength: 6, maxLength: 6 }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { phoneNumber, code } = request.body as { phoneNumber: string; code: string };
+
+      console.log('[AUTH] Vérification téléphone:', phoneNumber);
+
+      const result = await authService.verifyPhone(phoneNumber, code);
+
+      if (!result.success) {
+        console.warn('[AUTH] ❌ Échec vérification téléphone:', result.error);
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      console.log('[AUTH] ✅ Téléphone vérifié');
+
+      return reply.send({
+        success: true,
+        message: 'Numéro de téléphone vérifié avec succès !'
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur vérification téléphone:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification'
+      });
+    }
+  });
 }
