@@ -230,8 +230,33 @@ export const API_ENDPOINTS = {
 // HTTP base URL for the Gateway - Gère automatiquement client/serveur
 export const getBackendUrl = (): string => {
   if (isBrowser()) {
-    // Côté client : utiliser NEXT_PUBLIC_BACKEND_URL ou config.backend.url
-    return trimSlashes(process.env.NEXT_PUBLIC_BACKEND_URL || config.backend.url);
+    // Priorité 1: Utiliser NEXT_PUBLIC_BACKEND_URL si défini (via docker-compose env)
+    const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (envBackendUrl && !envBackendUrl.includes('__RUNTIME_')) {
+      return trimSlashes(envBackendUrl);
+    }
+
+    // Priorité 2: Dériver l'URL du gateway depuis l'origine actuelle
+    const hostname = window.location.hostname;
+
+    // Si on accède via IP, utiliser HTTP direct avec port 3000 (gateway)
+    // Ex: https://192.168.1.171 -> http://192.168.1.171:3000
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return trimSlashes(`http://${hostname}:3000`);
+    }
+
+    // Si on accède via un domaine, utiliser gate.{domain}
+    // Ex: meeshy.local -> gate.meeshy.local, smpdev02.local -> gate.smpdev02.local
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const gateDomain = parts[0] === 'www'
+        ? `gate.${parts.slice(1).join('.')}`
+        : `gate.${hostname}`;
+      return trimSlashes(`${window.location.protocol}//${gateDomain}`);
+    }
+
+    // Fallback: utiliser le même protocole avec gate. prefix
+    return trimSlashes(`${window.location.protocol}//gate.${hostname}`);
   }
   // Côté serveur (SSR) : utiliser INTERNAL_BACKEND_URL ou config.backend.url
   return trimSlashes(process.env.INTERNAL_BACKEND_URL || config.backend.url);
@@ -250,14 +275,33 @@ export const getFrontendUrl = (): string => {
 // WebSocket base URL for the Gateway - Gère automatiquement client/serveur
 export const getWebSocketUrl = (): string => {
   if (isBrowser()) {
-    // Côté client : utiliser NEXT_PUBLIC_WS_URL ou dériver depuis backend URL
-    const fromEnv = process.env.NEXT_PUBLIC_WS_URL;
-    if (fromEnv) return trimSlashes(fromEnv);
+    // Priorité 1: Utiliser NEXT_PUBLIC_WS_URL si défini (via docker-compose env)
+    const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    if (envWsUrl && !envWsUrl.includes('__RUNTIME_')) {
+      return trimSlashes(envWsUrl);
+    }
 
-    // Dériver l'URL WebSocket depuis l'URL backend
-    const backendUrl = getBackendUrl();
-    const wsUrl = backendUrl.replace(/^http(s?):\/\//, (_m, s) => (s ? 'wss://' : 'ws://'));
-    return trimSlashes(wsUrl);
+    // Priorité 2: Dériver l'URL WebSocket depuis l'origine actuelle
+    const hostname = window.location.hostname;
+
+    // Si on accède via IP, utiliser WS direct avec port 3000 (gateway)
+    // Ex: https://192.168.1.171 -> ws://192.168.1.171:3000
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return trimSlashes(`ws://${hostname}:3000`);
+    }
+
+    // Si on accède via un domaine, utiliser wss://gate.{domain}
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const gateDomain = parts[0] === 'www'
+        ? `gate.${parts.slice(1).join('.')}`
+        : `gate.${hostname}`;
+      return trimSlashes(`${protocol}//${gateDomain}`);
+    }
+
+    // Fallback: utiliser le même protocole avec gate. prefix
+    return trimSlashes(`${protocol}//gate.${hostname}`);
   }
   // Côté serveur (SSR) : utiliser INTERNAL_WS_URL ou dériver depuis backend URL
   const internalWs = process.env.INTERNAL_WS_URL;
@@ -268,18 +312,17 @@ export const getWebSocketUrl = (): string => {
   return trimSlashes(wsUrl);
 };
 
-// Helper pour construire une URL complète vers l'API - Version unifiée
+// Helper pour construire une URL complète vers l'API Gateway
 export const buildApiUrl = (endpoint: string): string => {
   // Add /api prefix for all API endpoints that don't already have it
   const apiEndpoint = endpoint.startsWith('/api/') ? endpoint : `/api${ensureLeadingSlash(endpoint)}`;
-  
-  // Route directly to gateway with /api prefix since all gateway routes are prefixed with /api
+
+  // Route to gateway with /api prefix
   return `${getBackendUrl()}${apiEndpoint}`;
 };
 
-// Helper pour construire une URL directe vers le Gateway (bypass Next.js API)
+// Helper pour construire une URL directe vers le Gateway (sans /api prefix)
 export const buildGatewayUrl = (endpoint: string): string => {
-  // No /api prefix for direct gateway calls
   const cleanEndpoint = ensureLeadingSlash(endpoint);
   return `${getBackendUrl()}${cleanEndpoint}`;
 };
@@ -287,6 +330,70 @@ export const buildGatewayUrl = (endpoint: string): string => {
 // Helper pour construire une URL WebSocket complète avec path - Version unifiée
 export const buildWsUrl = (path = '/socket.io/'): string => {
   return `${getWebSocketUrl()}${ensureLeadingSlash(path)}`;
+};
+
+// Translation service URL - Gère automatiquement client/serveur
+export const getTranslationUrl = (): string => {
+  if (isBrowser()) {
+    // Priorité 1: Utiliser NEXT_PUBLIC_TRANSLATION_URL si défini
+    const envTranslationUrl = process.env.NEXT_PUBLIC_TRANSLATION_URL;
+    if (envTranslationUrl && !envTranslationUrl.includes('__RUNTIME_')) {
+      return trimSlashes(envTranslationUrl);
+    }
+
+    // Priorité 2: Dériver depuis l'origine actuelle
+    const hostname = window.location.hostname;
+
+    // Si on accède via IP, utiliser HTTP direct avec port 8000 (translator)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return trimSlashes(`http://${hostname}:8000`);
+    }
+
+    // Si on accède via un domaine, utiliser ml.{domain}
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const mlDomain = parts[0] === 'www'
+        ? `ml.${parts.slice(1).join('.')}`
+        : `ml.${hostname}`;
+      return trimSlashes(`${window.location.protocol}//${mlDomain}`);
+    }
+
+    return trimSlashes(config.translation.url);
+  }
+  // Côté serveur (SSR)
+  return trimSlashes(process.env.NEXT_PUBLIC_TRANSLATION_URL || config.translation.url);
+};
+
+// Static files URL - Gère automatiquement client/serveur
+export const getStaticUrl = (): string => {
+  if (isBrowser()) {
+    // Priorité 1: Utiliser NEXT_PUBLIC_STATIC_URL si défini
+    const envStaticUrl = process.env.NEXT_PUBLIC_STATIC_URL;
+    if (envStaticUrl && !envStaticUrl.includes('__RUNTIME_')) {
+      return trimSlashes(envStaticUrl);
+    }
+
+    // Priorité 2: Dériver depuis l'origine actuelle
+    const hostname = window.location.hostname;
+
+    // Si on accède via IP, utiliser le même host (static files servies par nginx sur port 80)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return trimSlashes(`${window.location.origin}/static`);
+    }
+
+    // Si on accède via un domaine, utiliser static.{domain}
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const staticDomain = parts[0] === 'www'
+        ? `static.${parts.slice(1).join('.')}`
+        : `static.${hostname}`;
+      return trimSlashes(`${window.location.protocol}//${staticDomain}`);
+    }
+
+    return trimSlashes(`${window.location.origin}/static`);
+  }
+  // Côté serveur (SSR)
+  return trimSlashes(process.env.NEXT_PUBLIC_STATIC_URL || 'https://static.meeshy.me');
 };
 
 // === FONCTIONS DE COMPATIBILITÉ (pour éviter les breaking changes) ===

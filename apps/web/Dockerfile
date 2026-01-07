@@ -49,13 +49,14 @@ COPY . ./
 # Recreate correct pnpm-workspace.yaml (COPY may overwrite it with wrong format)
 RUN printf 'packages:\n  - "."\n  - "shared"\n' > pnpm-workspace.yaml
 
-ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
-ARG NEXT_PUBLIC_WS_URL=wss://gate.meeshy.me
-ARG NEXT_PUBLIC_BACKEND_URL=https://gate.meeshy.me
-
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
-    NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
-    NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL} \
+# Build with PLACEHOLDER values - replaced at runtime by entrypoint script
+# This allows the same image to be used with different environment configurations
+# lib/config.ts checks env vars first, then falls back to dynamic derivation
+ENV NEXT_PUBLIC_BACKEND_URL=__RUNTIME_BACKEND_URL__ \
+    NEXT_PUBLIC_WS_URL=__RUNTIME_WS_URL__ \
+    NEXT_PUBLIC_FRONTEND_URL=__RUNTIME_FRONTEND_URL__ \
+    NEXT_PUBLIC_TRANSLATION_URL=__RUNTIME_TRANSLATION_URL__ \
+    NEXT_PUBLIC_STATIC_URL=__RUNTIME_STATIC_URL__ \
     NEXT_TELEMETRY_DISABLED=1
 
 RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate && pnpm run build
@@ -77,13 +78,17 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy entrypoint script for runtime env var injection
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 RUN mkdir -p /app/logs && chown nextjs:nodejs /app/logs
 
 USER nextjs
 
 EXPOSE 3100
 
-ENTRYPOINT ["/sbin/tini", "--"]
+# Entrypoint replaces __RUNTIME_*__ placeholders with actual env var values
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD node -e "const http=require('http');const req=http.get({hostname:'0.0.0.0',port:3100,path:'/api/health',timeout:5000},(res)=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));"
