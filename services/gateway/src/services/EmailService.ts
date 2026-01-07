@@ -1,7 +1,38 @@
 /**
- * Email Service for sending transactional emails
- * Supports Brevo (formerly Sendinblue), SendGrid and Mailgun (configurable)
+ * Multi-Provider Email Service
+ *
+ * Providers ordered by cost (cheapest first):
+ * 1. Brevo (Sendinblue) - ~€0.00008/email
+ * 2. SendGrid - ~€0.00010/email
+ * 3. Mailgun - ~€0.00080/email
+ *
+ * Automatic fallback: If one provider fails, tries the next one
  */
+
+// ============================================================================
+// INTERFACES
+// ============================================================================
+
+export interface EmailData {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export interface EmailProviderConfig {
+  name: string;
+  apiKey: string;
+  enabled: boolean;
+  priority: number; // Lower = higher priority (cheaper)
+}
+
+export interface EmailResult {
+  success: boolean;
+  provider?: string;
+  error?: string;
+  messageId?: string;
+}
 
 export interface PasswordResetEmailData {
   to: string;
@@ -32,590 +63,545 @@ export interface SecurityAlertEmailData {
   details: string;
 }
 
+// ============================================================================
+// EMAIL SERVICE CLASS
+// ============================================================================
+
 export class EmailService {
-  private provider: 'brevo' | 'sendgrid' | 'mailgun';
-  private apiKey: string;
+  private providers: EmailProviderConfig[] = [];
   private fromEmail: string;
   private fromName: string;
 
   constructor() {
-    // Default to Brevo, then SendGrid, then Mailgun
-    if (process.env.BREVO_API_KEY) {
-      this.provider = 'brevo';
-      this.apiKey = process.env.BREVO_API_KEY;
-    } else if (process.env.SENDGRID_API_KEY) {
-      this.provider = 'sendgrid';
-      this.apiKey = process.env.SENDGRID_API_KEY;
-    } else if (process.env.MAILGUN_API_KEY) {
-      this.provider = 'mailgun';
-      this.apiKey = process.env.MAILGUN_API_KEY;
-    } else {
-      this.provider = (process.env.EMAIL_PROVIDER as 'brevo' | 'sendgrid' | 'mailgun') || 'brevo';
-      this.apiKey = '';
-    }
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
+    this.initializeProviders();
   }
+
+  /**
+   * Initialize providers ordered by cost (cheapest first)
+   */
+  private initializeProviders(): void {
+    // Priority 1: Brevo (cheapest - ~€0.00008/email)
+    if (process.env.BREVO_API_KEY) {
+      this.providers.push({
+        name: 'brevo',
+        apiKey: process.env.BREVO_API_KEY,
+        enabled: true,
+        priority: 1
+      });
+    }
+
+    // Priority 2: SendGrid (~€0.00010/email)
+    if (process.env.SENDGRID_API_KEY) {
+      this.providers.push({
+        name: 'sendgrid',
+        apiKey: process.env.SENDGRID_API_KEY,
+        enabled: true,
+        priority: 2
+      });
+    }
+
+    // Priority 3: Mailgun (most expensive - ~€0.00080/email)
+    if (process.env.MAILGUN_API_KEY) {
+      this.providers.push({
+        name: 'mailgun',
+        apiKey: process.env.MAILGUN_API_KEY,
+        enabled: true,
+        priority: 3
+      });
+    }
+
+    // Sort by priority (cheapest first)
+    this.providers.sort((a, b) => a.priority - b.priority);
+
+    console.log('[EmailService] Initialized with providers:',
+      this.providers.map(p => `${p.name} (priority: ${p.priority})`).join(', ') || 'none');
+  }
+
+  /**
+   * Get list of configured providers
+   */
+  getProviders(): string[] {
+    return this.providers.map(p => p.name);
+  }
+
+  // ==========================================================================
+  // CORE SEND METHOD WITH FALLBACK
+  // ==========================================================================
+
+  /**
+   * Send email with automatic fallback to next provider on failure
+   */
+  private async sendEmail(data: EmailData): Promise<EmailResult> {
+    const { to, subject, html, text } = data;
+
+    if (this.providers.length === 0) {
+      console.warn('[EmailService] ⚠️ No email providers configured - email not sent to:', to);
+      console.log('[EmailService] Subject:', subject);
+      return { success: false, error: 'No email providers configured' };
+    }
+
+    const errors: string[] = [];
+
+    // Try each provider in order of priority (cost)
+    for (const provider of this.providers) {
+      if (!provider.enabled) continue;
+
+      try {
+        console.log(`[EmailService] Trying provider: ${provider.name}`);
+
+        let result: EmailResult;
+
+        switch (provider.name) {
+          case 'brevo':
+            result = await this.sendViaBrevo(provider.apiKey, { to, subject, html, text });
+            break;
+          case 'sendgrid':
+            result = await this.sendViaSendGrid(provider.apiKey, { to, subject, html, text });
+            break;
+          case 'mailgun':
+            result = await this.sendViaMailgun(provider.apiKey, { to, subject, html, text });
+            break;
+          default:
+            continue;
+        }
+
+        if (result.success) {
+          console.log(`[EmailService] ✅ Email sent via ${provider.name} to:`, to);
+          return { ...result, provider: provider.name };
+        } else {
+          errors.push(`${provider.name}: ${result.error}`);
+          console.warn(`[EmailService] ⚠️ ${provider.name} failed:`, result.error);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`${provider.name}: ${errorMsg}`);
+        console.error(`[EmailService] ❌ ${provider.name} exception:`, error);
+      }
+    }
+
+    // All providers failed
+    console.error('[EmailService] ❌ All providers failed for:', to);
+    return {
+      success: false,
+      error: `All providers failed: ${errors.join('; ')}`
+    };
+  }
+
+  // ==========================================================================
+  // PROVIDER IMPLEMENTATIONS
+  // ==========================================================================
+
+  /**
+   * Send via Brevo (Sendinblue) - Priority 1 (cheapest)
+   */
+  private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
+    const { to, subject, html, text } = data;
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: this.fromName, email: this.fromEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, error: `Brevo API error ${response.status}: ${error}` };
+    }
+
+    const result = await response.json();
+    return { success: true, messageId: result.messageId };
+  }
+
+  /**
+   * Send via SendGrid - Priority 2
+   */
+  private async sendViaSendGrid(apiKey: string, data: EmailData): Promise<EmailResult> {
+    const { to, subject, html, text } = data;
+
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: this.fromEmail, name: this.fromName },
+        subject,
+        content: [
+          { type: 'text/plain', value: text },
+          { type: 'text/html', value: html }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, error: `SendGrid API error ${response.status}: ${error}` };
+    }
+
+    // SendGrid returns 202 with no body on success
+    const messageId = response.headers.get('x-message-id') || undefined;
+    return { success: true, messageId };
+  }
+
+  /**
+   * Send via Mailgun - Priority 3 (most expensive)
+   */
+  private async sendViaMailgun(apiKey: string, data: EmailData): Promise<EmailResult> {
+    const { to, subject, html, text } = data;
+    const domain = process.env.MAILGUN_DOMAIN || '';
+
+    if (!domain) {
+      return { success: false, error: 'MAILGUN_DOMAIN not configured' };
+    }
+
+    const formData = new URLSearchParams({
+      from: `${this.fromName} <${this.fromEmail}>`,
+      to,
+      subject,
+      text,
+      html
+    });
+
+    const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, error: `Mailgun API error ${response.status}: ${error}` };
+    }
+
+    const result = await response.json();
+    return { success: true, messageId: result.id };
+  }
+
+  // ==========================================================================
+  // EMAIL TEMPLATES
+  // ==========================================================================
 
   /**
    * Send password reset email
    */
-  async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<void> {
+  async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {
     const { to, name, resetLink, expiryMinutes } = data;
 
-    const subject = 'Reset Your Password - Meeshy';
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reset Your Password</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #4F46E5; color: white; padding: 20px; text-align: center; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
-          .button { display: inline-block; background: #4F46E5; color: white; padding: 12px 24px;
-                    text-decoration: none; border-radius: 6px; margin: 20px 0; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;
-                    font-size: 12px; color: #6b7280; text-align: center; }
-          .warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Reset Your Password</h1>
-          </div>
+    const subject = 'Réinitialisez votre mot de passe - Meeshy';
+    const html = this.getPasswordResetTemplate(name, resetLink, expiryMinutes);
+    const text = this.getPasswordResetTextTemplate(name, resetLink, expiryMinutes);
 
-          <div class="content">
-            <p>Hello ${name},</p>
-
-            <p>We received a request to reset your password for your Meeshy account.
-            Click the button below to create a new password:</p>
-
-            <a href="${resetLink}" class="button">Reset Password</a>
-
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #4F46E5;">${resetLink}</p>
-
-            <div class="warning">
-              <strong>⚠️ Security Notice:</strong>
-              <ul style="margin: 10px 0; padding-left: 20px;">
-                <li>This link will expire in <strong>${expiryMinutes} minutes</strong></li>
-                <li>The link can only be used once</li>
-                <li>If you didn't request this, please ignore this email</li>
-                <li>Your password will not change unless you click the link above</li>
-              </ul>
-            </div>
-
-            <p>If you didn't request a password reset, you can safely ignore this email.
-            Your account remains secure.</p>
-
-            <p>Thanks,<br>The Meeshy Team</p>
-          </div>
-
-          <div class="footer">
-            <p>This is an automated email. Please do not reply to this message.</p>
-            <p>&copy; ${new Date().getFullYear()} Meeshy. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    const text = `
-Reset Your Password - Meeshy
-
-Hello ${name},
-
-We received a request to reset your password for your Meeshy account.
-Click the link below to create a new password:
-
-${resetLink}
-
-SECURITY NOTICE:
-- This link will expire in ${expiryMinutes} minutes
-- The link can only be used once
-- If you didn't request this, please ignore this email
-- Your password will not change unless you click the link above
-
-If you didn't request a password reset, you can safely ignore this email.
-
-Thanks,
-The Meeshy Team
-
----
-This is an automated email. Please do not reply to this message.
-© ${new Date().getFullYear()} Meeshy. All rights reserved.
-    `.trim();
-
-    await this.sendEmail({ to, subject, html, text });
+    return this.sendEmail({ to, subject, html, text });
   }
 
   /**
    * Send email verification email
    */
-  async sendEmailVerification(data: EmailVerificationData): Promise<void> {
+  async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const { to, name, verificationLink, expiryHours } = data;
 
     const subject = 'Vérifiez votre adresse email - Meeshy';
-    const html = `
+    const html = this.getEmailVerificationTemplate(name, verificationLink, expiryHours);
+    const text = this.getEmailVerificationTextTemplate(name, verificationLink, expiryHours);
+
+    return this.sendEmail({ to, subject, html, text });
+  }
+
+  /**
+   * Send password changed confirmation email
+   */
+  async sendPasswordChangedEmail(data: PasswordChangedEmailData): Promise<EmailResult> {
+    const { to, name, timestamp, ipAddress, location } = data;
+
+    const subject = 'Votre mot de passe a été modifié - Meeshy';
+    const html = this.getPasswordChangedTemplate(name, timestamp, ipAddress, location);
+    const text = this.getPasswordChangedTextTemplate(name, timestamp, ipAddress, location);
+
+    return this.sendEmail({ to, subject, html, text });
+  }
+
+  /**
+   * Send security alert email
+   */
+  async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
+    const { to, name, alertType, details } = data;
+
+    const subject = `Alerte de sécurité: ${alertType} - Meeshy`;
+    const html = this.getSecurityAlertTemplate(name, alertType, details);
+    const text = this.getSecurityAlertTextTemplate(name, alertType, details);
+
+    return this.sendEmail({ to, subject, html, text });
+  }
+
+  // ==========================================================================
+  // HTML TEMPLATES
+  // ==========================================================================
+
+  private getBaseStyles(): string {
+    return `
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+      .header { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+      .header h1 { margin: 0; font-size: 24px; }
+      .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+      .button { display: inline-block; background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; }
+      .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
+      .info { background: #EEF2FF; border-left: 4px solid #6366F1; padding: 12px; margin: 20px 0; border-radius: 4px; }
+      .warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin: 20px 0; border-radius: 4px; }
+      .success { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px; margin: 20px 0; border-radius: 4px; }
+    `;
+  }
+
+  private getEmailVerificationTemplate(name: string, verificationLink: string, expiryHours: number): string {
+    return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Vérification de votre email</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-          .header h1 { margin: 0; font-size: 24px; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-          .button { display: inline-block; background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 14px 32px;
-                    text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; font-size: 16px; }
-          .button:hover { opacity: 0.9; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;
-                    font-size: 12px; color: #6b7280; text-align: center; }
-          .info { background: #EEF2FF; border-left: 4px solid #6366F1; padding: 12px; margin: 20px 0; border-radius: 4px; }
-          .welcome-emoji { font-size: 48px; margin-bottom: 10px; }
-        </style>
+        <style>${this.getBaseStyles()}</style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <div class="welcome-emoji">🎉</div>
-            <h1>Bienvenue sur Meeshy !</h1>
+            <h1>🎉 Bienvenue sur Meeshy !</h1>
           </div>
-
           <div class="content">
             <p>Bonjour <strong>${name}</strong>,</p>
-
-            <p>Merci de vous être inscrit sur Meeshy ! Pour activer votre compte et commencer à discuter
-            avec le monde entier, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
-
+            <p>Merci de vous être inscrit sur Meeshy ! Pour activer votre compte, veuillez vérifier votre adresse email :</p>
             <div style="text-align: center;">
               <a href="${verificationLink}" class="button">✓ Vérifier mon email</a>
             </div>
-
-            <p>Ou copiez et collez ce lien dans votre navigateur :</p>
             <p style="word-break: break-all; color: #6366F1; font-size: 14px;">${verificationLink}</p>
-
             <div class="info">
               <strong>ℹ️ À savoir :</strong>
               <ul style="margin: 10px 0; padding-left: 20px;">
                 <li>Ce lien expire dans <strong>${expiryHours} heures</strong></li>
-                <li>Si vous n'avez pas créé de compte Meeshy, ignorez simplement cet email</li>
+                <li>Si vous n'avez pas créé de compte, ignorez cet email</li>
               </ul>
             </div>
-
-            <p>Une fois vérifié, vous pourrez profiter de toutes les fonctionnalités de Meeshy :</p>
-            <ul>
-              <li>💬 Discuter dans n'importe quelle langue</li>
-              <li>🌍 Traduction automatique en temps réel</li>
-              <li>🎤 Messages vocaux traduits</li>
-              <li>👥 Rejoindre des communautés du monde entier</li>
-            </ul>
-
-            <p>À très bientôt sur Meeshy !<br>
-            <strong>L'équipe Meeshy</strong></p>
+            <p>À très bientôt sur Meeshy !<br><strong>L'équipe Meeshy</strong></p>
           </div>
-
           <div class="footer">
-            <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-            <p>&copy; ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
+            <p>© ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
           </div>
         </div>
       </body>
       </html>
     `;
+  }
 
-    const text = `
+  private getEmailVerificationTextTemplate(name: string, verificationLink: string, expiryHours: number): string {
+    return `
 Bienvenue sur Meeshy !
 
 Bonjour ${name},
 
-Merci de vous être inscrit sur Meeshy ! Pour activer votre compte, veuillez vérifier votre adresse email en cliquant sur le lien ci-dessous :
-
+Merci de vous être inscrit ! Pour activer votre compte, cliquez sur ce lien :
 ${verificationLink}
 
-À SAVOIR :
-- Ce lien expire dans ${expiryHours} heures
-- Si vous n'avez pas créé de compte Meeshy, ignorez simplement cet email
-
-Une fois vérifié, vous pourrez profiter de toutes les fonctionnalités de Meeshy !
+Ce lien expire dans ${expiryHours} heures.
 
 À très bientôt sur Meeshy !
 L'équipe Meeshy
 
----
-Cet email a été envoyé automatiquement. Merci de ne pas y répondre.
-© ${new Date().getFullYear()} Meeshy. Tous droits réservés.
+© ${new Date().getFullYear()} Meeshy
     `.trim();
-
-    await this.sendEmail({ to, subject, html, text });
   }
 
-  /**
-   * Send password changed confirmation email
-   */
-  async sendPasswordChangedEmail(data: PasswordChangedEmailData): Promise<void> {
-    const { to, name, timestamp, ipAddress, location } = data;
-
-    const subject = 'Your Password Was Changed - Meeshy';
-    const html = `
+  private getPasswordResetTemplate(name: string, resetLink: string, expiryMinutes: number): string {
+    return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Password Changed</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #10B981; color: white; padding: 20px; text-align: center; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
-          .info-box { background: white; padding: 15px; border-radius: 6px; margin: 20px 0;
-                      border-left: 4px solid #10B981; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;
-                    font-size: 12px; color: #6b7280; text-align: center; }
-          .alert { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin: 20px 0; }
-          .support-link { color: #4F46E5; text-decoration: none; }
-        </style>
+        <title>Réinitialisation de mot de passe</title>
+        <style>${this.getBaseStyles()}</style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>✓ Password Changed Successfully</h1>
+            <h1>🔐 Réinitialisation de mot de passe</h1>
           </div>
-
           <div class="content">
-            <p>Hello ${name},</p>
-
-            <p>Your Meeshy account password was successfully changed.</p>
-
-            <div class="info-box">
-              <strong>Change Details:</strong>
+            <p>Bonjour <strong>${name}</strong>,</p>
+            <p>Vous avez demandé à réinitialiser votre mot de passe Meeshy :</p>
+            <div style="text-align: center;">
+              <a href="${resetLink}" class="button">Réinitialiser le mot de passe</a>
+            </div>
+            <div class="warning">
+              <strong>⚠️ Attention :</strong>
               <ul style="margin: 10px 0; padding-left: 20px;">
-                <li><strong>Time:</strong> ${new Date(timestamp).toLocaleString()}</li>
-                <li><strong>IP Address:</strong> ${ipAddress}</li>
-                <li><strong>Location:</strong> ${location}</li>
+                <li>Ce lien expire dans <strong>${expiryMinutes} minutes</strong></li>
+                <li>Si vous n'avez pas fait cette demande, ignorez cet email</li>
               </ul>
             </div>
-
-            <p><strong>What happens next?</strong></p>
-            <ul>
-              <li>All existing sessions have been logged out for security</li>
-              <li>You'll need to sign in again with your new password</li>
-              <li>Your account remains secure</li>
-            </ul>
-
-            <div class="alert">
-              <strong>⚠️ Didn't make this change?</strong>
-              <p style="margin: 10px 0;">If you didn't change your password, your account may be compromised.
-              Please <a href="mailto:security@meeshy.com" class="support-link">contact our security team</a> immediately.</p>
-            </div>
-
-            <p>Thanks,<br>The Meeshy Team</p>
+            <p>L'équipe Meeshy</p>
           </div>
-
           <div class="footer">
-            <p>This is an automated email. Please do not reply to this message.</p>
-            <p>&copy; ${new Date().getFullYear()} Meeshy. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
           </div>
         </div>
       </body>
       </html>
     `;
-
-    const text = `
-Password Changed Successfully - Meeshy
-
-Hello ${name},
-
-Your Meeshy account password was successfully changed.
-
-CHANGE DETAILS:
-- Time: ${new Date(timestamp).toLocaleString()}
-- IP Address: ${ipAddress}
-- Location: ${location}
-
-WHAT HAPPENS NEXT:
-- All existing sessions have been logged out for security
-- You'll need to sign in again with your new password
-- Your account remains secure
-
-⚠️ DIDN'T MAKE THIS CHANGE?
-If you didn't change your password, your account may be compromised.
-Please contact our security team immediately: security@meeshy.com
-
-Thanks,
-The Meeshy Team
-
----
-This is an automated email. Please do not reply to this message.
-© ${new Date().getFullYear()} Meeshy. All rights reserved.
-    `.trim();
-
-    await this.sendEmail({ to, subject, html, text });
   }
 
-  /**
-   * Send security alert email
-   */
-  async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<void> {
-    const { to, name, alertType, details } = data;
+  private getPasswordResetTextTemplate(name: string, resetLink: string, expiryMinutes: number): string {
+    return `
+Réinitialisation de mot de passe - Meeshy
 
-    const subject = `Security Alert: ${alertType} - Meeshy`;
-    const html = `
+Bonjour ${name},
+
+Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur ce lien :
+${resetLink}
+
+Ce lien expire dans ${expiryMinutes} minutes.
+
+Si vous n'avez pas fait cette demande, ignorez cet email.
+
+L'équipe Meeshy
+
+© ${new Date().getFullYear()} Meeshy
+    `.trim();
+  }
+
+  private getPasswordChangedTemplate(name: string, timestamp: string, ipAddress: string, location: string): string {
+    return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Security Alert</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #DC2626; color: white; padding: 20px; text-align: center; }
-          .content { background: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
-          .alert-box { background: #fef2f2; border-left: 4px solid #DC2626; padding: 15px; margin: 20px 0; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;
-                    font-size: 12px; color: #6b7280; text-align: center; }
-          .button { display: inline-block; background: #DC2626; color: white; padding: 12px 24px;
-                    text-decoration: none; border-radius: 6px; margin: 20px 0; }
-        </style>
+        <title>Mot de passe modifié</title>
+        <style>${this.getBaseStyles()}</style>
       </head>
       <body>
         <div class="container">
-          <div class="header">
-            <h1>🚨 Security Alert</h1>
+          <div class="header" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+            <h1>✓ Mot de passe modifié</h1>
           </div>
-
           <div class="content">
-            <p>Hello ${name},</p>
-
-            <div class="alert-box">
-              <strong>Alert Type:</strong> ${alertType}<br>
-              <strong>Details:</strong> ${details}
+            <p>Bonjour <strong>${name}</strong>,</p>
+            <p>Votre mot de passe Meeshy a été modifié avec succès.</p>
+            <div class="success">
+              <strong>Détails :</strong>
+              <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Date :</strong> ${new Date(timestamp).toLocaleString('fr-FR')}</li>
+                <li><strong>IP :</strong> ${ipAddress}</li>
+                <li><strong>Localisation :</strong> ${location}</li>
+              </ul>
             </div>
-
-            <p><strong>We detected suspicious activity on your account.</strong></p>
-
-            <p>Recommended Actions:</p>
-            <ul>
-              <li>Change your password immediately if you suspect unauthorized access</li>
-              <li>Review your recent account activity</li>
-              <li>Enable two-factor authentication (2FA) for extra security</li>
-              <li>Check connected devices and sessions</li>
-            </ul>
-
-            <a href="${process.env.FRONTEND_URL}/security" class="button">Review Security Settings</a>
-
-            <p>If you have any concerns, please contact our security team at
-            <a href="mailto:security@meeshy.com">security@meeshy.com</a></p>
-
-            <p>Stay safe,<br>The Meeshy Security Team</p>
+            <div class="warning">
+              <strong>⚠️ Ce n'était pas vous ?</strong>
+              <p>Contactez immédiatement notre support : security@meeshy.me</p>
+            </div>
+            <p>L'équipe Meeshy</p>
           </div>
-
           <div class="footer">
-            <p>This is an automated security alert.</p>
-            <p>&copy; ${new Date().getFullYear()} Meeshy. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
           </div>
         </div>
       </body>
       </html>
     `;
+  }
 
-    const text = `
-🚨 Security Alert - Meeshy
+  private getPasswordChangedTextTemplate(name: string, timestamp: string, ipAddress: string, location: string): string {
+    return `
+Mot de passe modifié - Meeshy
 
-Hello ${name},
+Bonjour ${name},
 
-ALERT TYPE: ${alertType}
-DETAILS: ${details}
+Votre mot de passe a été modifié avec succès.
 
-We detected suspicious activity on your account.
+Détails :
+- Date : ${new Date(timestamp).toLocaleString('fr-FR')}
+- IP : ${ipAddress}
+- Localisation : ${location}
 
-RECOMMENDED ACTIONS:
-- Change your password immediately if you suspect unauthorized access
-- Review your recent account activity
-- Enable two-factor authentication (2FA) for extra security
-- Check connected devices and sessions
+Ce n'était pas vous ? Contactez security@meeshy.me
 
-Review your security settings: ${process.env.FRONTEND_URL}/security
+L'équipe Meeshy
 
-If you have any concerns, please contact our security team:
-security@meeshy.com
-
-Stay safe,
-The Meeshy Security Team
-
----
-This is an automated security alert.
-© ${new Date().getFullYear()} Meeshy. All rights reserved.
+© ${new Date().getFullYear()} Meeshy
     `.trim();
-
-    await this.sendEmail({ to, subject, html, text });
   }
 
-  /**
-   * Generic email sending method
-   */
-  private async sendEmail(data: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<void> {
-    const { to, subject, html, text } = data;
-
-    if (!this.apiKey) {
-      console.warn('[EmailService] ⚠️ No API key configured - email not sent to:', to);
-      console.log('[EmailService] Subject:', subject);
-      return;
-    }
-
-    if (this.provider === 'brevo') {
-      await this.sendViaBrevo({ to, subject, html, text });
-    } else if (this.provider === 'sendgrid') {
-      await this.sendViaSendGrid({ to, subject, html, text });
-    } else if (this.provider === 'mailgun') {
-      await this.sendViaMailgun({ to, subject, html, text });
-    } else {
-      console.error('[EmailService] Invalid email provider:', this.provider);
-      throw new Error('Invalid email provider');
-    }
+  private getSecurityAlertTemplate(name: string, alertType: string, details: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alerte de sécurité</title>
+        <style>${this.getBaseStyles()}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+            <h1>🚨 Alerte de sécurité</h1>
+          </div>
+          <div class="content">
+            <p>Bonjour <strong>${name}</strong>,</p>
+            <div class="warning">
+              <strong>Type d'alerte :</strong> ${alertType}<br>
+              <strong>Détails :</strong> ${details}
+            </div>
+            <p><strong>Actions recommandées :</strong></p>
+            <ul>
+              <li>Changez votre mot de passe immédiatement</li>
+              <li>Vérifiez vos appareils connectés</li>
+              <li>Activez l'authentification à deux facteurs</li>
+            </ul>
+            <p>L'équipe Sécurité Meeshy</p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
-  /**
-   * Send email via Brevo (formerly Sendinblue)
-   */
-  private async sendViaBrevo(data: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<void> {
-    const { to, subject, html, text } = data;
+  private getSecurityAlertTextTemplate(name: string, alertType: string, details: string): string {
+    return `
+🚨 Alerte de sécurité - Meeshy
 
-    try {
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'api-key': this.apiKey,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: {
-            name: this.fromName,
-            email: this.fromEmail
-          },
-          to: [{ email: to }],
-          subject,
-          htmlContent: html,
-          textContent: text
-        })
-      });
+Bonjour ${name},
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('[EmailService] Brevo error:', error);
-        throw new Error(`Brevo API error: ${response.status}`);
-      }
+Type d'alerte : ${alertType}
+Détails : ${details}
 
-      console.log('[EmailService] ✅ Email sent via Brevo to:', to);
-    } catch (error) {
-      console.error('[EmailService] Failed to send email via Brevo:', error);
-      throw error;
-    }
-  }
+Actions recommandées :
+- Changez votre mot de passe immédiatement
+- Vérifiez vos appareils connectés
+- Activez l'authentification à deux facteurs
 
-  /**
-   * Send email via SendGrid
-   */
-  private async sendViaSendGrid(data: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<void> {
-    const { to, subject, html, text } = data;
+L'équipe Sécurité Meeshy
 
-    try {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: to }] }],
-          from: { email: this.fromEmail, name: this.fromName },
-          subject,
-          content: [
-            { type: 'text/plain', value: text },
-            { type: 'text/html', value: html }
-          ]
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('[EmailService] SendGrid error:', error);
-        throw new Error(`SendGrid API error: ${response.status}`);
-      }
-
-      console.log('[EmailService] ✅ Email sent via SendGrid to:', to);
-    } catch (error) {
-      console.error('[EmailService] Failed to send email via SendGrid:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send email via Mailgun
-   */
-  private async sendViaMailgun(data: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<void> {
-    const { to, subject, html, text } = data;
-
-    try {
-      const domain = process.env.MAILGUN_DOMAIN || '';
-      const formData = new URLSearchParams({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to,
-        subject,
-        text,
-        html
-      });
-
-      const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`api:${this.apiKey}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('[EmailService] Mailgun error:', error);
-        throw new Error(`Mailgun API error: ${response.status}`);
-      }
-
-      console.log('[EmailService] ✅ Email sent via Mailgun to:', to);
-    } catch (error) {
-      console.error('[EmailService] Failed to send email via Mailgun:', error);
-      throw error;
-    }
+© ${new Date().getFullYear()} Meeshy
+    `.trim();
   }
 }
