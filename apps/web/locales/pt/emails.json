@@ -1,0 +1,74 @@
+{
+  "emails": {
+    "common": {
+      "greeting": "Olá {name},",
+      "greetingNoName": "Olá,",
+      "footer": "Atenciosamente,\nEquipe Meeshy",
+      "footerNote": "Este email foi enviado automaticamente. Por favor, não responda.",
+      "unsubscribe": "Cancelar inscrição",
+      "viewInBrowser": "Ver no navegador",
+      "copyright": "© {year} Meeshy. Todos os direitos reservados.",
+      "help": "Precisa de ajuda? Entre em contato conosco em",
+      "ignoreIfNotYou": "Se você não fez esta solicitação, pode ignorar este email."
+    },
+    "verification": {
+      "subject": "Verifique seu email - Meeshy",
+      "title": "Verificação de Email",
+      "intro": "Obrigado por se cadastrar no Meeshy! Para completar seu cadastro e acessar todos os recursos, por favor verifique seu email.",
+      "action": "Clique no botão abaixo para verificar seu email:",
+      "buttonText": "Verificar meu email",
+      "expiry": "Este link expira em {hours} horas.",
+      "linkAlt": "Se o botão não funcionar, copie e cole este link no seu navegador:",
+      "ignoreNote": "Se você não criou uma conta no Meeshy, pode ignorar este email."
+    },
+    "welcome": {
+      "subject": "Bem-vindo ao Meeshy!",
+      "title": "Bem-vindo ao Meeshy!",
+      "intro": "Sua conta foi criada com sucesso. Agora você pode aproveitar todos os recursos do Meeshy.",
+      "features": {
+        "title": "Descubra o que você pode fazer:",
+        "chat": "Converse com seus contatos em qualquer idioma",
+        "translate": "Tradução automática em tempo real",
+        "groups": "Crie e participe de grupos de discussão"
+      },
+      "buttonText": "Começar a conversar",
+      "needHelp": "Precisa de ajuda para começar? Confira nosso guia de início rápido."
+    },
+    "passwordReset": {
+      "subject": "Redefinir sua senha - Meeshy",
+      "title": "Redefinição de Senha",
+      "intro": "Você solicitou a redefinição da sua senha do Meeshy.",
+      "action": "Clique no botão abaixo para criar uma nova senha:",
+      "buttonText": "Redefinir minha senha",
+      "expiry": "Este link expira em {minutes} minutos.",
+      "linkAlt": "Se o botão não funcionar, copie e cole este link no seu navegador:",
+      "securityNote": "Por razões de segurança, este link só pode ser usado uma vez.",
+      "ignoreNote": "Se você não solicitou esta redefinição, ignore este email. Sua senha permanecerá inalterada."
+    },
+    "passwordChanged": {
+      "subject": "Sua senha foi alterada - Meeshy",
+      "title": "Senha Alterada",
+      "intro": "Sua senha do Meeshy foi alterada com sucesso.",
+      "date": "Data da alteração: {date}",
+      "securityNote": "Se você não fez esta alteração, entre em contato imediatamente com nosso suporte em",
+      "buttonText": "Entrar"
+    },
+    "loginNotification": {
+      "subject": "Novo login na sua conta - Meeshy",
+      "title": "Novo Login Detectado",
+      "intro": "Um novo login na sua conta Meeshy foi detectado.",
+      "details": {
+        "title": "Detalhes do login:",
+        "date": "Data: {date}",
+        "location": "Localização: {location}",
+        "device": "Dispositivo: {device}",
+        "ip": "Endereço IP: {ip}"
+      },
+      "securityNote": "Se não foi você, recomendamos alterar sua senha imediatamente.",
+      "buttonText": "Proteger minha conta"
+    },
+    "phoneVerification": {
+      "smsMessage": "Seu código de verificação Meeshy é: {code}. Este código expira em {minutes} minutos."
+    }
+  }
+}

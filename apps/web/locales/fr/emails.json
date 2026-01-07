@@ -1,0 +1,74 @@
+{
+  "emails": {
+    "common": {
+      "greeting": "Bonjour {name},",
+      "greetingNoName": "Bonjour,",
+      "footer": "Cordialement,\nL'équipe Meeshy",
+      "footerNote": "Cet email a été envoyé automatiquement. Merci de ne pas y répondre.",
+      "unsubscribe": "Se désinscrire",
+      "viewInBrowser": "Voir dans le navigateur",
+      "copyright": "© {year} Meeshy. Tous droits réservés.",
+      "help": "Besoin d'aide ? Contactez-nous à",
+      "ignoreIfNotYou": "Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email."
+    },
+    "verification": {
+      "subject": "Vérifiez votre adresse email - Meeshy",
+      "title": "Vérification de votre email",
+      "intro": "Merci de vous être inscrit sur Meeshy ! Pour finaliser votre inscription et accéder à toutes les fonctionnalités, veuillez vérifier votre adresse email.",
+      "action": "Cliquez sur le bouton ci-dessous pour vérifier votre email :",
+      "buttonText": "Vérifier mon email",
+      "expiry": "Ce lien expire dans {hours} heures.",
+      "linkAlt": "Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :",
+      "ignoreNote": "Si vous n'avez pas créé de compte sur Meeshy, vous pouvez ignorer cet email."
+    },
+    "welcome": {
+      "subject": "Bienvenue sur Meeshy !",
+      "title": "Bienvenue sur Meeshy !",
+      "intro": "Votre compte a été créé avec succès. Vous pouvez maintenant profiter de toutes les fonctionnalités de Meeshy.",
+      "features": {
+        "title": "Découvrez ce que vous pouvez faire :",
+        "chat": "Discuter avec vos contacts dans n'importe quelle langue",
+        "translate": "Traduction automatique en temps réel",
+        "groups": "Créer et rejoindre des groupes de discussion"
+      },
+      "buttonText": "Commencer à discuter",
+      "needHelp": "Besoin d'aide pour démarrer ? Consultez notre guide de démarrage."
+    },
+    "passwordReset": {
+      "subject": "Réinitialisation de votre mot de passe - Meeshy",
+      "title": "Réinitialisation du mot de passe",
+      "intro": "Vous avez demandé la réinitialisation de votre mot de passe Meeshy.",
+      "action": "Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :",
+      "buttonText": "Réinitialiser mon mot de passe",
+      "expiry": "Ce lien expire dans {minutes} minutes.",
+      "linkAlt": "Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :",
+      "securityNote": "Pour des raisons de sécurité, ce lien ne peut être utilisé qu'une seule fois.",
+      "ignoreNote": "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe restera inchangé."
+    },
+    "passwordChanged": {
+      "subject": "Votre mot de passe a été modifié - Meeshy",
+      "title": "Mot de passe modifié",
+      "intro": "Votre mot de passe Meeshy a été modifié avec succès.",
+      "date": "Date du changement : {date}",
+      "securityNote": "Si vous n'êtes pas à l'origine de ce changement, veuillez contacter immédiatement notre support à",
+      "buttonText": "Se connecter"
+    },
+    "loginNotification": {
+      "subject": "Nouvelle connexion à votre compte - Meeshy",
+      "title": "Nouvelle connexion détectée",
+      "intro": "Une nouvelle connexion à votre compte Meeshy a été détectée.",
+      "details": {
+        "title": "Détails de la connexion :",
+        "date": "Date : {date}",
+        "location": "Localisation : {location}",
+        "device": "Appareil : {device}",
+        "ip": "Adresse IP : {ip}"
+      },
+      "securityNote": "Si ce n'était pas vous, nous vous recommandons de changer votre mot de passe immédiatement.",
+      "buttonText": "Sécuriser mon compte"
+    },
+    "phoneVerification": {
+      "smsMessage": "Votre code de vérification Meeshy est : {code}. Ce code expire dans {minutes} minutes."
+    }
+  }
+}
