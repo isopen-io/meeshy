@@ -1215,34 +1215,31 @@ share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP + alter
 		CERT_DIR=$$(dirname "$$CERT_FILE"); \
 		CERT_NAME=$$(basename "$$CERT_FILE"); \
 		CERT_PATH="$$(cd "$$CERT_DIR" && pwd)/$$CERT_NAME"; \
+		DOWNLOAD_URL="http://$(HOST_IP):8888/$$CERT_NAME"; \
 		echo "$(BOLD)📍 Certificat CA:$(NC)"; \
 		echo "   $(CYAN)$$CERT_PATH$(NC)"; \
 		echo ""; \
+		if command -v qrencode >/dev/null 2>&1; then \
+			echo "$(BOLD)📱 Scannez ce QR code avec votre téléphone:$(NC)"; \
+			qrencode -t ANSIUTF8 "$$DOWNLOAD_URL"; \
+			echo ""; \
+		fi; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
 		echo "$(BOLD)Option 1: 🌐 Serveur HTTP (recommandé)$(NC)"; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
 		pkill -f "python3 -m http.server 8888" 2>/dev/null || true; \
-		if cd "$$CERT_DIR" && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 & then \
-			HTTP_PID=$$!; \
-			sleep 1; \
-			if kill -0 $$HTTP_PID 2>/dev/null; then \
-				echo "$(GREEN)✅ Serveur HTTP démarré sur port 8888$(NC)"; \
-				echo ""; \
-				echo "$(BOLD)📥 URL de téléchargement:$(NC)"; \
-				echo "   $(GREEN)http://$(HOST_IP):8888/$$CERT_NAME$(NC)"; \
-				echo ""; \
-				if command -v qrencode >/dev/null 2>&1; then \
-					echo "$(BOLD)📱 Scannez ce QR code avec votre téléphone:$(NC)"; \
-					qrencode -t ANSIUTF8 "http://$(HOST_IP):8888/$$CERT_NAME"; \
-				else \
-					echo "$(DIM)💡 Installez qrencode pour afficher un QR code: brew install qrencode$(NC)"; \
-				fi; \
-			else \
-				echo "$(YELLOW)⚠️  Échec du démarrage du serveur HTTP$(NC)"; \
-				echo "   Utilisez les alternatives ci-dessous"; \
-			fi; \
+		sleep 0.5; \
+		cd "$$CERT_DIR" && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 & \
+		HTTP_PID=$$!; \
+		sleep 1; \
+		if kill -0 $$HTTP_PID 2>/dev/null; then \
+			echo "$(GREEN)✅ Serveur HTTP démarré sur port 8888$(NC)"; \
+			echo ""; \
+			echo "$(BOLD)📥 URL de téléchargement:$(NC)"; \
+			echo "   $(GREEN)$$DOWNLOAD_URL$(NC)"; \
 		else \
-			echo "$(YELLOW)⚠️  Python3 non disponible pour le serveur HTTP$(NC)"; \
+			echo "$(YELLOW)⚠️  Échec du démarrage du serveur HTTP$(NC)"; \
+			echo "   Port 8888 peut-être déjà utilisé. Utilisez les alternatives ci-dessous"; \
 		fi; \
 		echo ""; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
@@ -1260,7 +1257,7 @@ share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP + alter
 		echo "$(BOLD)Option 4: 🔧 Serveur HTTP manuel$(NC)"; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
 		echo "   cd $$CERT_DIR && python3 -m http.server 8888"; \
-		echo "   Puis ouvrez: http://$(HOST_IP):8888/$$CERT_NAME"; \
+		echo "   Puis ouvrez: $$DOWNLOAD_URL"; \
 		echo ""; \
 		echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"; \
 		echo "$(BOLD)📲 INSTALLATION SUR iPHONE:$(NC)"; \
