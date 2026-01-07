@@ -1219,11 +1219,6 @@ share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP + alter
 		echo "$(BOLD)📍 Certificat CA:$(NC)"; \
 		echo "   $(CYAN)$$CERT_PATH$(NC)"; \
 		echo ""; \
-		if command -v qrencode >/dev/null 2>&1; then \
-			echo "$(BOLD)📱 Scannez ce QR code avec votre téléphone:$(NC)"; \
-			qrencode -t ANSIUTF8 "$$DOWNLOAD_URL"; \
-			echo ""; \
-		fi; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
 		echo "$(BOLD)Option 1: 🌐 Serveur HTTP (recommandé)$(NC)"; \
 		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
@@ -1237,6 +1232,11 @@ share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP + alter
 			echo ""; \
 			echo "$(BOLD)📥 URL de téléchargement:$(NC)"; \
 			echo "   $(GREEN)$$DOWNLOAD_URL$(NC)"; \
+			echo ""; \
+			if command -v qrencode >/dev/null 2>&1; then \
+				echo "$(BOLD)📱 Scannez ce QR code avec votre téléphone:$(NC)"; \
+				qrencode -t ANSIUTF8 "$$DOWNLOAD_URL"; \
+			fi; \
 		else \
 			echo "$(YELLOW)⚠️  Échec du démarrage du serveur HTTP$(NC)"; \
 			echo "   Port 8888 peut-être déjà utilisé. Utilisez les alternatives ci-dessous"; \
