@@ -549,13 +549,18 @@ _generate-certs: ## (interne) Génère les certificats avec mkcert
 	@echo "  $(YELLOW)→ Installation de l'autorité de certification locale...$(NC)"
 	@mkcert -install 2>/dev/null || true
 	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
-	@echo "  $(YELLOW)→ Génération des certificats pour: *.$(LOCAL_DOMAIN), $(LOCAL_DOMAIN), localhost$(NC)"
+	@echo "  $(YELLOW)→ Génération des certificats pour tous les domaines locaux...$(NC)"
 	@# Générer pour le frontend (Next.js)
 	@cd $(WEB_DIR)/.cert && mkcert \
 		-key-file localhost-key.pem \
 		-cert-file localhost.pem \
 		"*.$(LOCAL_DOMAIN)" \
 		"$(LOCAL_DOMAIN)" \
+		"*.meeshy.home" \
+		"meeshy.home" \
+		"*.smpdev02.home" \
+		"smpdev02.home" \
+		"meeshy" \
 		localhost \
 		127.0.0.1 \
 		::1 \
@@ -563,6 +568,11 @@ _generate-certs: ## (interne) Génère les certificats avec mkcert
 	@# Copier pour Docker/Traefik
 	@cp $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem
 	@cp $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem
+	@# Copier le certificat CA pour le partage mobile
+	@CA_ROOT=$$(mkcert -CAROOT 2>/dev/null); \
+	if [ -n "$$CA_ROOT" ] && [ -f "$$CA_ROOT/rootCA.pem" ]; then \
+		cp "$$CA_ROOT/rootCA.pem" "$(CERTS_DIR)/mkcert-rootCA.pem"; \
+	fi
 	@echo "  $(GREEN)✓ Certificats générés et copiés$(NC)"
 	@echo ""
 	@echo "$(BOLD)📍 Fichiers créés:$(NC)"
@@ -572,9 +582,10 @@ _generate-certs: ## (interne) Génère les certificats avec mkcert
 	@echo "    $(CERTS_DIR)/key.pem                (Docker/Traefik)"
 	@echo ""
 	@echo "$(BOLD)🌐 Domaines couverts:$(NC)"
-	@echo "    *.$(LOCAL_DOMAIN) (wildcard)"
-	@echo "    $(LOCAL_DOMAIN)"
-	@echo "    localhost, 127.0.0.1, $(HOST_IP)"
+	@echo "    *.$(LOCAL_DOMAIN), $(LOCAL_DOMAIN)"
+	@echo "    *.meeshy.home, meeshy.home"
+	@echo "    *.smpdev02.home, smpdev02.home"
+	@echo "    meeshy, localhost, 127.0.0.1, $(HOST_IP)"
 
 _copy-certs-to-docker: ## (interne) Copie les certificats vers Docker
 	@mkdir -p $(CERTS_DIR)
