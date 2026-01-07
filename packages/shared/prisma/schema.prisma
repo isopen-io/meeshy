@@ -37,10 +37,12 @@ model User {
   deactivatedAt               DateTime?
 
   // Security & verification fields (DateTime? non-null = vérifié/activé)
-  emailVerifiedAt    DateTime?
-  phoneVerifiedAt    DateTime?
-  twoFactorEnabledAt DateTime?
-  twoFactorSecret    String? // TOTP secret (encrypted)
+  emailVerifiedAt         DateTime?
+  emailVerificationToken  String?   // Token de vérification email (hash SHA-256)
+  emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
+  phoneVerifiedAt         DateTime?
+  twoFactorEnabledAt      DateTime?
+  twoFactorSecret         String? // TOTP secret (encrypted)
 
   // Account Lockout
   failedLoginAttempts Int       @default(0)
