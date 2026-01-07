@@ -3,6 +3,8 @@
  * Prevents automated bot attacks on password reset endpoints
  */
 
+import axios from 'axios';
+
 export interface CaptchaVerificationResult {
   success: boolean;
   challengeTs?: string;
@@ -54,15 +56,14 @@ export class CaptchaService {
         params.append('remoteip', remoteIp);
       }
 
-      const response = await fetch(this.verifyUrl, {
-        method: 'POST',
+      const response = await axios.post(this.verifyUrl, params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: params
+        validateStatus: (status) => status < 500
       });
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         console.error('[CaptchaService] hCaptcha API error:', response.status);
         return {
           success: false,
@@ -70,7 +71,7 @@ export class CaptchaService {
         };
       }
 
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         // Cache the token to prevent replay attacks

@@ -3,6 +3,8 @@
  * Falls back to ip-api.com if MaxMind is not available
  */
 
+import axios from 'axios';
+
 export interface GeoLocation {
   ip: string;
   city: string;
@@ -69,22 +71,23 @@ export class GeoIPService {
       const accountId = process.env.MAXMIND_ACCOUNT_ID || '';
       const auth = Buffer.from(`${accountId}:${this.maxmindLicenseKey}`).toString('base64');
 
-      const response = await fetch(
+      const response = await axios.get(
         `https://geoip.maxmind.com/geoip/v2.1/city/${ip}`,
         {
           headers: {
             'Authorization': `Basic ${auth}`,
             'Accept': 'application/json'
-          }
+          },
+          validateStatus: (status) => status < 500
         }
       );
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         console.warn('[GeoIPService] MaxMind API error:', response.status);
         return null;
       }
 
-      const data = await response.json();
+      const data = response.data;
 
       return {
         ip,
@@ -109,21 +112,22 @@ export class GeoIPService {
   private async lookupIpApi(ip: string): Promise<GeoLocation | null> {
     try {
       // ip-api.com free tier: 45 requests/minute
-      const response = await fetch(
+      const response = await axios.get(
         `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,city,lat,lon,timezone,isp,query`,
         {
           headers: {
             'Accept': 'application/json'
-          }
+          },
+          validateStatus: (status) => status < 500
         }
       );
 
-      if (!response.ok) {
+      if (response.status !== 200) {
         console.warn('[GeoIPService] ip-api.com error:', response.status);
         return null;
       }
 
-      const data = await response.json();
+      const data = response.data;
 
       if (data.status !== 'success') {
         console.warn('[GeoIPService] ip-api.com returned error:', data.message);

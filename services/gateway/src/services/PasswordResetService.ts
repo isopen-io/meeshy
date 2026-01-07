@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
 import zxcvbn from 'zxcvbn';
+import axios from 'axios';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RedisWrapper } from './RedisWrapper';
 import { EmailService } from './EmailService';
@@ -428,18 +429,19 @@ export class PasswordResetService {
 
   private async verifyCaptcha(token: string, ipAddress: string): Promise<boolean> {
     try {
-      const response = await fetch('https://hcaptcha.com/siteverify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+      const response = await axios.post(
+        'https://hcaptcha.com/siteverify',
+        new URLSearchParams({
           secret: this.captchaSecret,
           response: token,
           remoteip: ipAddress
-        })
-      });
+        }),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }
+      );
 
-      const data = await response.json();
-      return data.success === true;
+      return response.data.success === true;
     } catch (error) {
       console.error('[PasswordResetService] CAPTCHA verification failed:', error);
       return false;
