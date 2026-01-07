@@ -38,11 +38,6 @@ export interface MessagesResponse {
   hasMore: boolean;
 }
 
-export interface MessageSearchResponse {
-  messages: Message[];
-  total: number;
-  query: string;
-}
 
 /**
  * Service pour gérer les messages
@@ -151,21 +146,6 @@ export const messagesService = {
       return response;
     } catch (error) {
       console.error('Erreur lors de la suppression du message:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Recherche dans les messages d'une conversation
-   */
-  async searchMessages(conversationId: string, query: string): Promise<ApiResponse<MessageSearchResponse>> {
-    try {
-      const response = await apiService.get<MessageSearchResponse>(
-        `/messages/search/${conversationId}?q=${encodeURIComponent(query)}`
-      );
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la recherche de messages:', error);
       throw error;
     }
   },
