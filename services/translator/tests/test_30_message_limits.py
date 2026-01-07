@@ -13,14 +13,34 @@ class TestMessageLimits:
 
     def test_default_values(self):
         """Test default configuration values (aligned with gateway)"""
-        # Import fresh to get defaults
-        from src.config.message_limits import MessageLimits
+        # Clear env vars that might override defaults
+        env_vars_to_clear = [
+            'MAX_MESSAGE_LENGTH',
+            'MAX_TEXT_ATTACHMENT_THRESHOLD',
+            'MAX_TRANSLATION_LENGTH',
+            'MAX_TEXT_LENGTH'
+        ]
 
-        # Aligned with gateway/src/config/message-limits.ts
-        assert MessageLimits.MAX_MESSAGE_LENGTH == 2000
-        assert MessageLimits.MAX_TEXT_ATTACHMENT_THRESHOLD == 2000
-        assert MessageLimits.MAX_TRANSLATION_LENGTH == 10000
-        assert MessageLimits.MAX_TEXT_LENGTH == 10000
+        # Remove env vars temporarily
+        saved_env = {}
+        for var in env_vars_to_clear:
+            if var in os.environ:
+                saved_env[var] = os.environ.pop(var)
+
+        try:
+            # Reimport to get defaults without env vars
+            import importlib
+            import src.config.message_limits as ml
+            importlib.reload(ml)
+
+            # Aligned with gateway/src/config/message-limits.ts
+            assert ml.MessageLimits.MAX_MESSAGE_LENGTH == 2000
+            assert ml.MessageLimits.MAX_TEXT_ATTACHMENT_THRESHOLD == 2000
+            assert ml.MessageLimits.MAX_TRANSLATION_LENGTH == 10000
+            assert ml.MessageLimits.MAX_TEXT_LENGTH == 10000
+        finally:
+            # Restore env vars
+            os.environ.update(saved_env)
 
     def test_env_override(self):
         """Test that environment variables override defaults"""

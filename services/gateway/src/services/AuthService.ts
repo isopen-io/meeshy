@@ -215,16 +215,17 @@ export class AuthService {
         }
       });
 
-      // Send email verification email
+      // Send email verification email (in user's preferred language)
       try {
         const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
         await this.emailService.sendEmailVerification({
           to: normalizedEmail,
           name: normalizedDisplayName,
           verificationLink,
-          expiryHours: tokenExpiryHours
+          expiryHours: tokenExpiryHours,
+          language: data.systemLanguage || 'fr'
         });
-        console.log('[AUTH_SERVICE] ✅ Email de vérification envoyé à:', normalizedEmail);
+        console.log('[AUTH_SERVICE] ✅ Email de vérification envoyé à:', normalizedEmail, '(langue:', data.systemLanguage || 'fr', ')');
       } catch (emailError) {
         console.error('[AUTH_SERVICE] ⚠️ Échec de l\'envoi de l\'email de vérification:', emailError);
         // Don't fail registration if email fails - user can request a new one
@@ -412,11 +413,20 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Find user by email
+      // Find user by email (include systemLanguage for i18n)
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
           isActive: true
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          systemLanguage: true,
+          emailVerifiedAt: true
         }
       });
 
@@ -444,16 +454,17 @@ export class AuthService {
         }
       });
 
-      // Send email
+      // Send email in user's preferred language
       const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
       await this.emailService.sendEmailVerification({
         to: normalizedEmail,
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
-        expiryHours: tokenExpiryHours
+        expiryHours: tokenExpiryHours,
+        language: user.systemLanguage || 'fr'
       });
 
-      console.log('[AUTH_SERVICE] ✅ Email de vérification renvoyé à:', normalizedEmail);
+      console.log('[AUTH_SERVICE] ✅ Email de vérification renvoyé à:', normalizedEmail, '(langue:', user.systemLanguage || 'fr', ')');
       return { success: true };
 
     } catch (error) {

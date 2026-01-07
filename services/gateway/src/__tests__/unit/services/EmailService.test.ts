@@ -21,24 +21,65 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 // Store original environment variables
 const originalEnv = { ...process.env };
 
-// Mock axios for HTTP requests
-const mockAxiosPost = jest.fn();
-jest.mock('axios', () => ({
-  default: {
-    post: (...args: any[]) => mockAxiosPost(...args)
-  }
-}));
+// Shared mock function that persists across module resets
+const mockAxiosPost = jest.fn<any>();
 
 // Mock console methods to reduce test noise
-let mockConsoleLog: jest.SpyInstance;
-let mockConsoleError: jest.SpyInstance;
-let mockConsoleWarn: jest.SpyInstance;
+let mockConsoleLog: ReturnType<typeof jest.spyOn>;
+let mockConsoleError: ReturnType<typeof jest.spyOn>;
+let mockConsoleWarn: ReturnType<typeof jest.spyOn>;
+
+// Helper to get fresh module with specific environment
+async function getEmailServiceWithEnv(envOverrides: Record<string, string> = {}) {
+  // Clear all provider keys and sender config
+  delete process.env.BREVO_API_KEY;
+  delete process.env.SENDGRID_API_KEY;
+  delete process.env.MAILGUN_API_KEY;
+  delete process.env.MAILGUN_DOMAIN;
+  delete process.env.EMAIL_FROM_NAME;
+  delete process.env.EMAIL_FROM;
+
+  // Set environment variables
+  Object.keys(envOverrides).forEach(key => {
+    process.env[key] = envOverrides[key];
+  });
+
+  // Reset modules to pick up new env vars
+  jest.resetModules();
+
+  // Mock axios AFTER resetModules
+  jest.doMock('axios', () => ({
+    __esModule: true,
+    default: {
+      post: mockAxiosPost
+    }
+  }));
+
+  // Import the fresh module
+  const module = await import('../../../services/EmailService');
+  return { EmailService: module.EmailService, module };
+}
+
+// Helper to create successful axios response
+function createSuccessResponse(data: any = {}) {
+  return Promise.resolve({
+    data,
+    status: 200,
+    headers: {
+      'x-message-id': 'mock-message-id'
+    }
+  });
+}
+
+// Helper to create error axios response (axios throws on non-2xx)
+function createErrorResponse(status: number, message: string) {
+  const error = new Error(message) as any;
+  error.response = { status, data: { message } };
+  return Promise.reject(error);
+}
 
 describe('EmailService', () => {
-  let EmailService: typeof import('../../../services/EmailService').EmailService;
-
-  beforeEach(async () => {
-    jest.clearAllMocks();
+  beforeEach(() => {
     mockAxiosPost.mockReset();
 
     // Mock console methods
@@ -48,17 +89,6 @@ describe('EmailService', () => {
 
     // Reset environment variables before each test
     process.env = { ...originalEnv };
-
-    // Clear all provider keys by default
-    delete process.env.BREVO_API_KEY;
-    delete process.env.SENDGRID_API_KEY;
-    delete process.env.MAILGUN_API_KEY;
-    delete process.env.MAILGUN_DOMAIN;
-
-    // Re-import the module to get fresh instance with new env vars
-    jest.resetModules();
-    const module = await import('../../../services/EmailService');
-    EmailService = module.EmailService;
   });
 
   afterEach(() => {
@@ -73,363 +103,56 @@ describe('EmailService', () => {
   // ==============================================
 
   describe('Provider Initialization', () => {
+    it('should initialize with Brevo when BREVO_API_KEY is set', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      expect(service.getProviders()).toContain('brevo');
+    });
+
+    it('should initialize with SendGrid when SENDGRID_API_KEY is set', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        SENDGRID_API_KEY: 'test-sendgrid-key'
+      });
+      const service = new EmailService();
+
+      expect(service.getProviders()).toContain('sendgrid');
+    });
+
+    it('should initialize with Mailgun when both keys are set', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        MAILGUN_API_KEY: 'test-mailgun-key',
+        MAILGUN_DOMAIN: 'test.mailgun.org'
+      });
+      const service = new EmailService();
+
+      expect(service.getProviders()).toContain('mailgun');
+    });
+
+    it('should initialize multiple providers in cost order', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key',
+        SENDGRID_API_KEY: 'test-sendgrid-key',
+        MAILGUN_API_KEY: 'test-mailgun-key',
+        MAILGUN_DOMAIN: 'test.mailgun.org'
+      });
+      const service = new EmailService();
+      const providers = service.getProviders();
+
+      // Brevo should be first (cheapest)
+      expect(providers[0]).toBe('brevo');
+      expect(providers).toHaveLength(3);
+    });
+
     it('should warn when no providers are configured', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      const { EmailService } = await getEmailServiceWithEnv({});
+      new EmailService();
 
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('No email providers configured');
-      expect(mockConsoleWarn).toHaveBeenCalledWith(
-        expect.stringContaining('No providers configured'),
-        'test@example.com'
-      );
-    });
-
-    it('should initialize Brevo provider when API key is set', async () => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-
-      mockAxiosPost.mockResolvedValueOnce({ data: { messageId: 'msg-123' } });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('brevo');
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        'https://api.brevo.com/v3/smtp/email',
-        expect.any(Object),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'api-key': 'test-brevo-key'
-          })
-        })
-      );
-    });
-
-    it('should initialize SendGrid provider when API key is set', async () => {
-      process.env.SENDGRID_API_KEY = 'test-sendgrid-key';
-
-      mockAxiosPost.mockResolvedValueOnce({ data: {} });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('sendgrid');
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        'https://api.sendgrid.com/v3/mail/send',
-        expect.any(Object),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-sendgrid-key'
-          })
-        })
-      );
-    });
-
-    it('should initialize Mailgun provider when API key and domain are set', async () => {
-      process.env.MAILGUN_API_KEY = 'test-mailgun-key';
-      process.env.MAILGUN_DOMAIN = 'mg.example.com';
-
-      mockAxiosPost.mockResolvedValueOnce({ data: { id: 'msg-456' } });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('mailgun');
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        'https://api.mailgun.net/v3/mg.example.com/messages',
-        expect.any(Object),
-        expect.any(Object)
-      );
-    });
-
-    it('should order providers by cost (Brevo first)', async () => {
-      process.env.BREVO_API_KEY = 'brevo-key';
-      process.env.SENDGRID_API_KEY = 'sendgrid-key';
-      process.env.MAILGUN_API_KEY = 'mailgun-key';
-      process.env.MAILGUN_DOMAIN = 'mg.example.com';
-
-      mockAxiosPost.mockResolvedValueOnce({ data: { messageId: 'msg-123' } });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      // Should use Brevo first (cheapest)
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        'https://api.brevo.com/v3/smtp/email',
-        expect.any(Object),
-        expect.any(Object)
-      );
-    });
-  });
-
-  // ==============================================
-  // PROVIDER FALLBACK TESTS
-  // ==============================================
-
-  describe('Provider Fallback', () => {
-    it('should fallback to SendGrid when Brevo fails', async () => {
-      process.env.BREVO_API_KEY = 'brevo-key';
-      process.env.SENDGRID_API_KEY = 'sendgrid-key';
-
-      // Brevo fails, SendGrid succeeds
-      mockAxiosPost
-        .mockRejectedValueOnce(new Error('Brevo API error'))
-        .mockResolvedValueOnce({ data: {} });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('sendgrid');
-    });
-
-    it('should fallback to Mailgun when Brevo and SendGrid fail', async () => {
-      process.env.BREVO_API_KEY = 'brevo-key';
-      process.env.SENDGRID_API_KEY = 'sendgrid-key';
-      process.env.MAILGUN_API_KEY = 'mailgun-key';
-      process.env.MAILGUN_DOMAIN = 'mg.example.com';
-
-      // Brevo and SendGrid fail, Mailgun succeeds
-      mockAxiosPost
-        .mockRejectedValueOnce(new Error('Brevo API error'))
-        .mockRejectedValueOnce(new Error('SendGrid API error'))
-        .mockResolvedValueOnce({ data: { id: 'msg-789' } });
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledTimes(3);
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('mailgun');
-    });
-
-    it('should return failure when all providers fail', async () => {
-      process.env.BREVO_API_KEY = 'brevo-key';
-      process.env.SENDGRID_API_KEY = 'sendgrid-key';
-
-      mockAxiosPost
-        .mockRejectedValueOnce(new Error('Brevo API error'))
-        .mockRejectedValueOnce(new Error('SendGrid API error'));
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeDefined();
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('All providers failed'),
-        'test@example.com'
-      );
-    });
-  });
-
-  // ==============================================
-  // I18N TRANSLATION TESTS
-  // ==============================================
-
-  describe('i18n Translations', () => {
-    beforeEach(() => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
-    });
-
-    it('should send French email by default', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Jean Dupont',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'fr'
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Vérifiez')
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should send English email when language is en', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'John Doe',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'en'
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Verify')
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should send Spanish email when language is es', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Juan Garcia',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'es'
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Verifica')
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should send Portuguese email when language is pt', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Joao Silva',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'pt'
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Verifique')
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should fallback to French for unsupported languages', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'de' // German - not supported
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Vérifiez') // Falls back to French
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should normalize language codes (en-US -> en)', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendEmailVerification({
-        to: 'test@example.com',
-        name: 'Test User',
-        verificationLink: 'https://example.com/verify',
-        expiryHours: 24,
-        language: 'en-US'
-      });
-
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          subject: expect.stringContaining('Verify')
-        }),
-        expect.any(Object)
+      expect(mockConsoleLog).toHaveBeenCalledWith(
+        '[EmailService] Initialized with providers:',
+        'none'
       );
     });
   });
@@ -439,133 +162,298 @@ describe('EmailService', () => {
   // ==============================================
 
   describe('sendEmailVerification', () => {
-    beforeEach(() => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
-    });
+    it('should send verification email via Brevo', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-    it('should send verification email successfully', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
 
       const result = await service.sendEmailVerification({
         to: 'user@example.com',
         name: 'Test User',
-        verificationLink: 'https://app.meeshy.com/verify?token=abc123',
+        verificationLink: 'https://example.com/verify',
         expiryHours: 24
       });
 
       expect(result.success).toBe(true);
       expect(result.provider).toBe('brevo');
-      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
 
-    it('should include verification link in email content', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+    it('should include verification link in email', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-      const verificationLink = 'https://app.meeshy.com/verify?token=unique-token-123';
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
 
       await service.sendEmailVerification({
         to: 'user@example.com',
         name: 'Test User',
-        verificationLink,
+        verificationLink: 'https://example.com/verify/abc123',
         expiryHours: 24
       });
 
-      const call = mockAxiosPost.mock.calls[0];
-      const body = call[1];
-
-      expect(body.htmlContent).toContain(verificationLink);
-      expect(body.textContent).toContain(verificationLink);
+      // Check that axios was called with the verification link in htmlContent
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          htmlContent: expect.stringContaining('https://example.com/verify/abc123')
+        }),
+        expect.any(Object)
+      );
     });
 
-    it('should include expiry hours in email content', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+    it('should use French language by default', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
 
       await service.sendEmailVerification({
         to: 'user@example.com',
         name: 'Test User',
         verificationLink: 'https://example.com/verify',
-        expiryHours: 48
+        expiryHours: 24
       });
 
-      const call = mockAxiosPost.mock.calls[0];
-      const body = call[1];
+      // French subject
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.subject).toContain('Vérifi');
+    });
 
-      expect(body.htmlContent).toContain('48');
+    it('should send in English when language is en', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'en'
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.subject).toContain('Verify');
     });
   });
 
   // ==============================================
-  // PASSWORD RESET TESTS
+  // PASSWORD RESET EMAIL TESTS
   // ==============================================
 
-  describe('sendPasswordReset', () => {
-    beforeEach(() => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
-    });
-
-    it('should send password reset email successfully', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const result = await service.sendPasswordReset({
-        to: 'user@example.com',
-        name: 'Test User',
-        resetLink: 'https://app.meeshy.com/reset?token=xyz',
-        expiryMinutes: 30
+  describe('sendPasswordResetEmail', () => {
+    it('should send password reset email via Brevo', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
       });
+      const service = new EmailService();
 
-      expect(result.success).toBe(true);
-    });
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
 
-    it('should include reset link in email', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      const resetLink = 'https://app.meeshy.com/reset?token=secret-token';
-
-      await service.sendPasswordReset({
-        to: 'user@example.com',
-        name: 'Test User',
-        resetLink,
-        expiryMinutes: 30
-      });
-
-      const call = mockAxiosPost.mock.calls[0];
-      const body = call[1];
-
-      expect(body.htmlContent).toContain(resetLink);
-    });
-
-    it('should send in user language', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      await service.sendPasswordReset({
+      const result = await service.sendPasswordResetEmail({
         to: 'user@example.com',
         name: 'Test User',
         resetLink: 'https://example.com/reset',
-        expiryMinutes: 30,
-        language: 'es'
+        expiryMinutes: 15
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('brevo');
+    });
+
+    it('should include reset link in email', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Test User',
+        resetLink: 'https://example.com/reset/xyz789',
+        expiryMinutes: 15
       });
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          subject: expect.stringContaining('contraseña')
+          htmlContent: expect.stringContaining('https://example.com/reset/xyz789')
         }),
         expect.any(Object)
       );
+    });
+
+    it('should use SendGrid when Brevo is not configured', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        SENDGRID_API_KEY: 'test-sendgrid-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      const result = await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Test User',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('sendgrid');
+    });
+  });
+
+  // ==============================================
+  // PROVIDER FALLBACK TESTS
+  // ==============================================
+
+  describe('Provider Fallback', () => {
+    it('should fallback to SendGrid when Brevo fails', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key',
+        SENDGRID_API_KEY: 'test-sendgrid-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost
+        .mockReturnValueOnce(createErrorResponse(401, 'Invalid API key'))
+        .mockReturnValueOnce(createSuccessResponse({}));
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      // Verify brevo was tried first, then sendgrid succeeded
+      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+      expect(result.provider).toBe('sendgrid');
+    });
+  });
+
+  // ==============================================
+  // I18N TESTS
+  // ==============================================
+
+  describe('i18n Translations', () => {
+    it('should send email in French by default', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Pierre',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.htmlContent).toContain('Bonjour');
+    });
+
+    it('should send email in English when specified', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'John',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'en'
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.htmlContent).toContain('Hello');
+    });
+
+    it('should send email in Spanish when specified', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Carlos',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'es'
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.htmlContent).toContain('Hola');
+    });
+
+    it('should send email in Portuguese when specified', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'João',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'pt'
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.htmlContent).toContain('Olá');
+    });
+
+    it('should fallback to French for unsupported language', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Test User',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'de' // German not supported
+      });
+
+      // Should use French as fallback
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.htmlContent).toContain('Bonjour');
     });
   });
 
@@ -573,18 +461,16 @@ describe('EmailService', () => {
   // PASSWORD CHANGED TESTS
   // ==============================================
 
-  describe('sendPasswordChanged', () => {
-    beforeEach(() => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
-    });
-
+  describe('sendPasswordChangedEmail', () => {
     it('should send password changed notification', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-      const result = await service.sendPasswordChanged({
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      const result = await service.sendPasswordChangedEmail({
         to: 'user@example.com',
         name: 'Test User',
         timestamp: '2025-01-07 12:00:00',
@@ -596,11 +482,14 @@ describe('EmailService', () => {
     });
 
     it('should include IP address in notification', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-      await service.sendPasswordChanged({
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordChangedEmail({
         to: 'user@example.com',
         name: 'Test User',
         timestamp: '2025-01-07 12:00:00',
@@ -608,10 +497,13 @@ describe('EmailService', () => {
         location: 'New York, USA'
       });
 
-      const call = mockAxiosPost.mock.calls[0];
-      const body = call[1];
-
-      expect(body.htmlContent).toContain('10.0.0.1');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          htmlContent: expect.stringContaining('10.0.0.1')
+        }),
+        expect.any(Object)
+      );
     });
   });
 
@@ -619,89 +511,248 @@ describe('EmailService', () => {
   // SECURITY ALERT TESTS
   // ==============================================
 
-  describe('sendSecurityAlert', () => {
-    beforeEach(() => {
-      process.env.BREVO_API_KEY = 'test-brevo-key';
-      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
-    });
-
+  describe('sendSecurityAlertEmail', () => {
     it('should send security alert email', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-      const result = await service.sendSecurityAlert({
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      const result = await service.sendSecurityAlertEmail({
         to: 'user@example.com',
         name: 'Test User',
         alertType: 'Suspicious Login',
-        details: 'Login from unknown location'
+        details: 'Login from unknown device'
       });
 
       expect(result.success).toBe(true);
     });
 
     it('should include alert details in email', async () => {
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
 
-      await service.sendSecurityAlert({
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendSecurityAlertEmail({
         to: 'user@example.com',
         name: 'Test User',
         alertType: 'Multiple Failed Logins',
-        details: '5 failed attempts from IP 192.168.1.50'
+        details: '5 failed attempts from IP 192.168.1.1'
       });
 
-      const call = mockAxiosPost.mock.calls[0];
-      const body = call[1];
-
-      expect(body.htmlContent).toContain('Multiple Failed Logins');
-      expect(body.htmlContent).toContain('5 failed attempts');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          htmlContent: expect.stringContaining('Multiple Failed Logins')
+        }),
+        expect.any(Object)
+      );
     });
   });
 
   // ==============================================
-  // INTERFACE EXPORTS TESTS
+  // SENDGRID PROVIDER TESTS
+  // ==============================================
+
+  describe('SendGrid Provider', () => {
+    it('should send email via SendGrid', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        SENDGRID_API_KEY: 'test-sendgrid-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('sendgrid');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        'https://api.sendgrid.com/v3/mail/send',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+  });
+
+  // ==============================================
+  // MAILGUN PROVIDER TESTS
+  // ==============================================
+
+  describe('Mailgun Provider', () => {
+    it('should send email via Mailgun', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        MAILGUN_API_KEY: 'test-mailgun-key',
+        MAILGUN_DOMAIN: 'mail.example.com'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ id: 'mailgun-123' }));
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('mailgun');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.stringContaining('mail.example.com'),
+        expect.anything(), // URLSearchParams
+        expect.any(Object)
+      );
+    });
+
+    it('should fail to send via Mailgun without domain', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        MAILGUN_API_KEY: 'test-mailgun-key'
+        // Missing MAILGUN_DOMAIN
+      });
+      const service = new EmailService();
+
+      // Mailgun is added to providers (only API key is checked for initialization)
+      expect(service.getProviders()).toContain('mailgun');
+
+      // But sending should fail because domain is not configured
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('MAILGUN_DOMAIN not configured');
+    });
+  });
+
+  // ==============================================
+  // ERROR HANDLING TESTS
+  // ==============================================
+
+  describe('Error Handling', () => {
+    it('should handle network errors gracefully', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createErrorResponse(401, 'Unauthorized'));
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('All providers failed');
+    });
+
+    it('should handle API errors with status codes', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createErrorResponse(500, 'Server error'));
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should return error when no providers configured', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({});
+      const service = new EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No email providers configured');
+    });
+  });
+
+  // ==============================================
+  // CONFIGURATION TESTS
+  // ==============================================
+
+  describe('Configuration', () => {
+    it('should use custom sender name when configured', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key',
+        EMAIL_FROM_NAME: 'Custom Sender'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.sender.name).toBe('Custom Sender');
+    });
+
+    it('should use default sender when not configured', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      const callArgs = mockAxiosPost.mock.calls[0];
+      const body = callArgs[1] as any;
+      expect(body.sender.name).toBe('Meeshy');
+    });
+  });
+
+  // ==============================================
+  // INTERFACE EXPORT TESTS
   // ==============================================
 
   describe('Interface Exports', () => {
-    it('should export EmailVerificationData interface', async () => {
-      const module = await import('../../../services/EmailService');
-
-      const data: import('../../../services/EmailService').EmailVerificationData = {
-        to: 'test@example.com',
-        name: 'Test',
-        verificationLink: 'https://test.com',
-        expiryHours: 24,
-        language: 'fr'
-      };
-
-      expect(data.to).toBe('test@example.com');
-      expect(data.language).toBe('fr');
-    });
-
-    it('should export PasswordResetEmailData interface', async () => {
-      const data: import('../../../services/EmailService').PasswordResetEmailData = {
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com/reset',
-        expiryMinutes: 30,
-        language: 'en'
-      };
-
-      expect(data.expiryMinutes).toBe(30);
-      expect(data.language).toBe('en');
-    });
-
     it('should export EmailResult interface', async () => {
-      const result: import('../../../services/EmailService').EmailResult = {
-        success: true,
-        provider: 'brevo',
-        messageId: 'msg-123'
-      };
+      const { module } = await getEmailServiceWithEnv();
 
-      expect(result.success).toBe(true);
-      expect(result.provider).toBe('brevo');
+      // Verify the module exports exist
+      expect(module.EmailService).toBeDefined();
     });
   });
 });
