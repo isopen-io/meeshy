@@ -169,8 +169,8 @@ class MeeshyTranslationServer:
             else:
                 any_workers = any_workers_default
             
-            # Récupérer l'URL de la base de données
-            database_url = os.getenv('DATABASE_URL', 'postgresql://meeshy:MeeshyP@ssword@localhost:5432/meeshy')
+            # Récupérer l'URL de la base de données (MongoDB)
+            database_url = os.getenv('DATABASE_URL', 'mongodb://localhost:27017/meeshy?directConnection=true')
             
             self.zmq_server = ZMQTranslationServer(
                 gateway_push_port=zmq_push_port,
