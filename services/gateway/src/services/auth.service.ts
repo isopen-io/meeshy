@@ -6,6 +6,7 @@ import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
 import { emailSchema } from '@meeshy/shared/types/validation';
 import { EmailService } from './EmailService';
+import { smsService } from './SmsService';
 
 export interface LoginCredentials {
   username: string;
@@ -525,17 +526,16 @@ export class AuthService {
         }
       });
 
-      // TODO: Integrate SMS provider (Twilio, Vonage, etc.)
-      // For now, log the code in development
-      console.log('[AUTH_SERVICE] 📱 Code SMS pour', cleanPhone, ':', code);
-      console.log('[AUTH_SERVICE] ⚠️ SMS provider not configured - code logged for development');
+      // Send SMS via multi-provider SmsService
+      const smsResult = await smsService.sendVerificationCode(user.phoneNumber || cleanPhone, code);
 
-      // Placeholder for SMS integration:
-      // await this.smsService.send({
-      //   to: cleanPhone,
-      //   message: `Votre code de vérification Meeshy est: ${code}. Il expire dans 10 minutes.`
-      // });
+      if (!smsResult.success) {
+        console.error('[AUTH_SERVICE] ❌ Échec envoi SMS:', smsResult.error);
+        console.log('[AUTH_SERVICE] Providers essayés:', smsResult.attemptedProviders?.join(', '));
+        return { success: false, error: 'Erreur lors de l\'envoi du SMS.' };
+      }
 
+      console.log('[AUTH_SERVICE] ✅ SMS envoyé via', smsResult.provider, '- messageId:', smsResult.messageId);
       return { success: true };
 
     } catch (error) {
