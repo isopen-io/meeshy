@@ -5,7 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import { ZMQTranslationClient } from './zmq-translation-client';
+import { ZMQTranslationClient } from './ZmqTranslationClient';
 import { logger } from '../utils/logger';
 import type {
   VoiceTranslateRequest,

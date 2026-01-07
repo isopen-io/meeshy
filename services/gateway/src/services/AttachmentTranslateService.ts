@@ -12,7 +12,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { AudioTranslateService, AudioTranslationResult } from './AudioTranslateService';
-import { ZMQTranslationClient } from './zmq-translation-client';
+import { ZMQTranslationClient } from './ZmqTranslationClient';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES

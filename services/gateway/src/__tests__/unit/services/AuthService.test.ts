@@ -50,7 +50,7 @@ jest.mock('jsonwebtoken', () => ({
   verify: (token: string, secret: string) => mockJwtVerify(token, secret)
 }));
 
-import { AuthService, LoginCredentials, RegisterData, TokenPayload } from '../../../services/auth.service';
+import { AuthService, LoginCredentials, RegisterData, TokenPayload } from '../../../services/AuthService';
 
 // Alias for UserRoleEnum for tests
 const UserRoleEnum = MockUserRoleEnum;

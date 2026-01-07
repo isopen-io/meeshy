@@ -68,7 +68,7 @@ import {
   VoiceProfileErrorEvent,
   ZMQClientStats,
   PongEvent
-} from '../../../services/zmq-translation-client';
+} from '../../../services/ZmqTranslationClient';
 
 describe('ZMQTranslationClient', () => {
   let client: ZMQTranslationClient;

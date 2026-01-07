@@ -5,8 +5,8 @@
 
 import { EventEmitter } from 'events';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './zmq-translation-client';
-import { ZMQSingleton } from './zmq-singleton';
+import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './ZmqTranslationClient';
+import { ZMQSingleton } from './ZmqSingleton';
 
 export interface MessageData {
   id?: string;

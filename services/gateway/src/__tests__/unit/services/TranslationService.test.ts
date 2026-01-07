@@ -32,7 +32,7 @@ class MockZMQClient extends EventEmitter {
 // Mock ZMQ Singleton
 const mockZmqClient = new MockZMQClient();
 
-jest.mock('../../../services/zmq-singleton', () => ({
+jest.mock('../../../services/ZmqSingleton', () => ({
   ZMQSingleton: {
     getInstance: jest.fn().mockResolvedValue(mockZmqClient)
   }
@@ -40,8 +40,8 @@ jest.mock('../../../services/zmq-singleton', () => ({
 
 // Import after mocking
 import { TranslationService, MessageData, TranslationServiceStats } from '../../../services/TranslationService';
-import { TranslationResult } from '../../../services/zmq-translation-client';
-import { ZMQSingleton } from '../../../services/zmq-singleton';
+import { TranslationResult } from '../../../services/ZmqTranslationClient';
+import { ZMQSingleton } from '../../../services/ZmqSingleton';
 
 // Mock Prisma client factory
 const createMockPrisma = () => ({
