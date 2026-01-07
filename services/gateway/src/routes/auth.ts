@@ -522,7 +522,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour forcer l'initialisation (temporaire)
   fastify.post('/force-init', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { InitService } = await import('../services/init.service');
+      const { InitService } = await import('../services/InitService');
       const initService = new InitService((fastify as any).prisma);
       await initService.initializeDatabase();
 
