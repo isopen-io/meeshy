@@ -59,7 +59,8 @@ import { attachmentRoutes } from './routes/attachments';
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
-import { InitService } from './services/init.service';
+import { passwordResetRoutes } from './routes/password-reset';
+import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 
@@ -610,7 +611,10 @@ class MeeshyServer {
     
     // Register authentication routes with /api/auth prefix
     await this.server.register(authRoutes, { prefix: '/api/auth' });
-    
+
+    // Register password reset routes with /api/auth prefix
+    await this.server.register(passwordResetRoutes, { prefix: '/api/auth' });
+
     // Register authentication test routes for Phase 3.1.1
     await this.server.register(authTestRoutes, { prefix: '/api' });
     
