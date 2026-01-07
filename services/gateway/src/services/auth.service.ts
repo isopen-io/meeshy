@@ -478,6 +478,145 @@ export class AuthService {
   }
 
   /**
+   * Generate a 6-digit verification code
+   */
+  private generatePhoneCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  /**
+   * Send phone verification code via SMS
+   * NOTE: This is a placeholder - integrate Twilio/Vonage for production
+   */
+  async sendPhoneVerificationCode(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
+
+      // Find user by phone number
+      const user = await this.prisma.user.findFirst({
+        where: {
+          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
+          isActive: true
+        }
+      });
+
+      if (!user) {
+        // Don't reveal if phone exists - but we need a user for verification
+        console.warn('[AUTH_SERVICE] ⚠️ Numéro non trouvé:', cleanPhone);
+        return { success: false, error: 'Numéro de téléphone non associé à un compte.' };
+      }
+
+      // Already verified?
+      if (user.phoneVerifiedAt) {
+        return { success: false, error: 'Ce numéro est déjà vérifié.' };
+      }
+
+      // Generate 6-digit code
+      const code = this.generatePhoneCode();
+      const hashedCode = this.hashToken(code);
+      const codeExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Update user with code
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          phoneVerificationCode: hashedCode,
+          phoneVerificationExpiry: codeExpiry
+        }
+      });
+
+      // TODO: Integrate SMS provider (Twilio, Vonage, etc.)
+      // For now, log the code in development
+      console.log('[AUTH_SERVICE] 📱 Code SMS pour', cleanPhone, ':', code);
+      console.log('[AUTH_SERVICE] ⚠️ SMS provider not configured - code logged for development');
+
+      // Placeholder for SMS integration:
+      // await this.smsService.send({
+      //   to: cleanPhone,
+      //   message: `Votre code de vérification Meeshy est: ${code}. Il expire dans 10 minutes.`
+      // });
+
+      return { success: true };
+
+    } catch (error) {
+      console.error('[AUTH_SERVICE] ❌ Erreur envoi code SMS:', error);
+      return { success: false, error: 'Erreur lors de l\'envoi du code.' };
+    }
+  }
+
+  /**
+   * Verify phone with SMS code
+   */
+  async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
+      const hashedCode = this.hashToken(code);
+
+      // Find user with matching phone and code
+      const user = await this.prisma.user.findFirst({
+        where: {
+          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
+          phoneVerificationCode: hashedCode,
+          phoneVerificationExpiry: { gt: new Date() }
+        }
+      });
+
+      if (!user) {
+        // Check if code expired
+        const expiredUser = await this.prisma.user.findFirst({
+          where: {
+            phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
+            phoneVerificationCode: hashedCode
+          }
+        });
+
+        if (expiredUser) {
+          return { success: false, error: 'Le code a expiré. Veuillez en demander un nouveau.' };
+        }
+        return { success: false, error: 'Code invalide.' };
+      }
+
+      // Already verified?
+      if (user.phoneVerifiedAt) {
+        return { success: true }; // Already verified
+      }
+
+      // Update user as phone verified
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          phoneVerifiedAt: new Date(),
+          phoneVerificationCode: null,
+          phoneVerificationExpiry: null
+        }
+      });
+
+      console.log('[AUTH_SERVICE] ✅ Téléphone vérifié pour:', user.phoneNumber);
+      return { success: true };
+
+    } catch (error) {
+      console.error('[AUTH_SERVICE] ❌ Erreur vérification téléphone:', error);
+      return { success: false, error: 'Erreur lors de la vérification.' };
+    }
+  }
+
+  /**
+   * Check if user phone is verified
+   */
+  async isPhoneVerified(userId: string): Promise<boolean> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { phoneVerifiedAt: true }
+      });
+      return !!user?.phoneVerifiedAt;
+    } catch (error) {
+      console.error('[AUTH_SERVICE] Error checking phone verification:', error);
+      return false;
+    }
+  }
+
+  /**
    * Récupérer les permissions d'un utilisateur
    */
   getUserPermissions(user: SocketIOUser) {
