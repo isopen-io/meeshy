@@ -538,4 +538,94 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
   });
+
+  // Route pour vérifier l'email avec un token
+  fastify.post('/verify-email', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token', 'email'],
+        properties: {
+          token: { type: 'string', minLength: 1 },
+          email: { type: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { token, email } = request.body as { token: string; email: string };
+
+      console.log('[AUTH] Tentative de vérification email pour:', email);
+
+      const result = await authService.verifyEmail(token, email);
+
+      if (!result.success) {
+        console.warn('[AUTH] ❌ Échec de vérification email:', result.error);
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      console.log('[AUTH] ✅ Email vérifié avec succès pour:', email);
+
+      return reply.send({
+        success: true,
+        message: 'Votre adresse email a été vérifiée avec succès !'
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur lors de la vérification email:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification'
+      });
+    }
+  });
+
+  // Route pour renvoyer l'email de vérification
+  fastify.post('/resend-verification', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { email } = request.body as { email: string };
+
+      console.log('[AUTH] Demande de renvoi de vérification pour:', email);
+
+      const result = await authService.resendVerificationEmail(email);
+
+      if (!result.success) {
+        // If already verified, return specific error
+        if (result.error?.includes('déjà vérifiée')) {
+          return reply.status(400).send({
+            success: false,
+            error: result.error
+          });
+        }
+      }
+
+      // Always return success to prevent email enumeration
+      console.log('[AUTH] ✅ Email de vérification envoyé (si compte existe)');
+
+      return reply.send({
+        success: true,
+        message: 'Si un compte existe avec cette adresse email, un email de vérification a été envoyé.'
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur lors du renvoi de vérification:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de l\'envoi de l\'email'
+      });
+    }
+  });
 }
