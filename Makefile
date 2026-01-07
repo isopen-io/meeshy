@@ -8,7 +8,7 @@
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
         dev-tmux-network dev-bg-network _generate-env-network \
         logs status clean reset health urls docker-infra docker-infra-simple \
-        docker-start docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
+        docker-start docker-start-local docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
         docker-test docker-test-dev docker-test-local docker-test-prod \
         build-gateway build-translator build-frontend build-all-docker \
         push-gateway push-translator push-frontend push-all release \
@@ -118,7 +118,7 @@ help: ## Afficher cette aide
 	@grep -E '^(test-gateway|test-web|test-translator|lint|type-check|verify):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🐳 DOCKER:$(NC)"
-	@grep -E '^(docker-infra|docker-infra-simple|docker-start|docker-start-network|docker-stop):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(docker-infra|docker-infra-simple|docker-start|docker-start-local|docker-start-network|docker-stop):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
 	@grep -E '^(docker-test|docker-test-dev|docker-test-local|docker-test-prod):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)📦 BUILD & PUSH IMAGES:$(NC)"
@@ -1422,6 +1422,16 @@ docker-start: ## Démarrer tous les services via Docker Compose (localhost)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Meeshy...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés$(NC)"
+	@$(MAKE) urls
+
+docker-start-local: docker-build ## 🔨 Builder les images localement puis démarrer
+	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
+		echo "$(RED)❌ Docker non disponible$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🐳 Démarrage avec images locales...$(NC)"
+	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
+	@echo "$(GREEN)✅ Services démarrés avec images locales$(NC)"
 	@$(MAKE) urls
 
 docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès réseau
