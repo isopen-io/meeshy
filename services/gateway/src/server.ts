@@ -24,7 +24,7 @@ import * as path from 'path';
 import { TranslationService } from './services/TranslationService';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
-import { StatusService } from './services/status.service';
+import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { authRoutes } from './routes/auth';

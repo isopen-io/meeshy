@@ -457,7 +457,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     
     // En mode développement, utiliser le service d'authentification avec les comptes de test
     if (process.env.NODE_ENV === 'development') {
-      const { AuthService } = await import('../services/auth-test.service');
+      const { AuthService } = await import('../services/AuthTestService');
       const decoded = AuthService.verifyToken(token);
       
       if (decoded) {
