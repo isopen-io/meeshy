@@ -14,7 +14,10 @@ const nextConfig: NextConfig = {
   },
   // Configuration Docker - standalone pour optimiser la taille de l'image
   output: 'standalone',
-  
+
+  // Note: URLs are derived dynamically at runtime from window.location in lib/config.ts
+  // No publicRuntimeConfig needed - lib/config.ts handles all URL derivation
+
   poweredByHeader: false,
   
   // Optimisations de performance
@@ -50,15 +53,9 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
-  // Configuration API
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://gate.meeshy.me'}/:path*`
-      }
-    ];
-  },
+  // Note: No rewrites for /api - Next.js uses /api for BFF routes
+  // Backend access via domain: gate.{domain} (e.g., gate.meeshy.local)
+  // Backend access via IP: http://{ip}:3000 directly
 
   // Headers pour PWA et Service Workers
   async headers() {
@@ -106,13 +103,8 @@ const nextConfig: NextConfig = {
   },
   
   
-  // Variables d'environnement publiques
-  env: {
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000',
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000',
-    NEXT_PUBLIC_TRANSLATION_URL: process.env.NEXT_PUBLIC_TRANSLATION_URL || 'http://localhost:8000',
-  },
-  
+  // Note: No env section needed - lib/config.ts derives URLs dynamically from window.location
+
   // Configuration WebPack pour Docker
   webpack: (config, { isServer }) => {
     if (!isServer) {

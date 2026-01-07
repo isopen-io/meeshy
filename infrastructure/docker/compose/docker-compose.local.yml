@@ -31,30 +31,6 @@ x-common-env: &common-env
 
 services:
   # ===========================================================================
-  # DNSMASQ - Local DNS Server for Network Access (optional profile)
-  # ===========================================================================
-  dns:
-    image: andyshinn/dnsmasq:latest
-    container_name: meeshy-local-dns
-    restart: unless-stopped
-    profiles: ["network"]
-    cap_add:
-      - NET_ADMIN
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-    volumes:
-      - ./config/dnsmasq.conf:/etc/dnsmasq.conf:ro
-    networks:
-      - meeshy-local-network
-    healthcheck:
-      test: ["CMD", "nslookup", "meeshy.local", "127.0.0.1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # ===========================================================================
   # TRAEFIK - Reverse Proxy with Local HTTPS (mkcert)
   # ===========================================================================
   traefik:
@@ -220,7 +196,7 @@ services:
     networks:
       - meeshy-local-network
     healthcheck:
-      test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:7843', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -272,10 +248,19 @@ services:
       start_period: 60s
     labels:
       - "traefik.enable=true"
+      # Domain-based access
       - "traefik.http.routers.translator.rule=Host(`ml.meeshy.local`)"
       - "traefik.http.routers.translator.entrypoints=websecure"
       - "traefik.http.routers.translator.tls=true"
       - "traefik.http.services.translator.loadbalancer.server.port=8000"
+      # IP-based access with /ml prefix
+      - "traefik.http.routers.translator-ip.rule=Host(`192.168.1.171`) && PathPrefix(`/ml`)"
+      - "traefik.http.routers.translator-ip.entrypoints=websecure"
+      - "traefik.http.routers.translator-ip.tls=true"
+      - "traefik.http.routers.translator-ip.service=translator"
+      - "traefik.http.routers.translator-ip.priority=15"
+      - "traefik.http.middlewares.strip-ml.stripprefix.prefixes=/ml"
+      - "traefik.http.routers.translator-ip.middlewares=strip-ml"
 
   # ===========================================================================
   # GATEWAY - API Service (gate.meeshy.local) [profile: full]
@@ -297,8 +282,9 @@ services:
       ZMQ_TRANSLATOR_PUSH_PORT: "5555"
       ZMQ_TRANSLATOR_SUB_PORT: "5558"
       NODE_ENV: development
-      CORS_ORIGINS: https://meeshy.local,https://www.meeshy.local,https://api.meeshy.local,https://gate.meeshy.local
-      ALLOWED_ORIGINS: https://meeshy.local,https://www.meeshy.local,https://api.meeshy.local,https://gate.meeshy.local
+      # CORS: Include both HTTPS (via Traefik) and HTTP (direct port) origins
+      CORS_ORIGINS: https://meeshy.local,https://www.meeshy.local,https://gate.meeshy.local,https://192.168.1.171,https://smpdev02.local,https://smpdev02.home,http://192.168.1.171:3100,http://localhost:3100
+      ALLOWED_ORIGINS: https://meeshy.local,https://www.meeshy.local,https://gate.meeshy.local,https://192.168.1.171,https://smpdev02.local,https://smpdev02.home,http://192.168.1.171:3100,http://localhost:3100
       FRONTEND_URL: https://meeshy.local
       PUBLIC_URL: https://gate.meeshy.local
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret}
@@ -332,10 +318,19 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
+      # Main router for domain-based access
       - "traefik.http.routers.gateway.rule=Host(`gate.meeshy.local`) || Host(`api.meeshy.local`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls=true"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
+      # IP-based router with path prefix for API access (mobile devices)
+      - "traefik.http.routers.gateway-ip.rule=Host(`192.168.1.171`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.gateway-ip.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ip.tls=true"
+      - "traefik.http.routers.gateway-ip.service=gateway"
+      - "traefik.http.routers.gateway-ip.priority=10"
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+      - "traefik.http.routers.gateway-ip.middlewares=strip-api"
 
   # ===========================================================================
   # STATIC FILES - Nginx (static.meeshy.local) [profile: full]
@@ -351,17 +346,26 @@ services:
     networks:
       - meeshy-local-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
     labels:
       - "traefik.enable=true"
+      # Domain-based access
       - "traefik.http.routers.static.rule=Host(`static.meeshy.local`) || Host(`statics.meeshy.local`)"
       - "traefik.http.routers.static.entrypoints=websecure"
       - "traefik.http.routers.static.tls=true"
       - "traefik.http.services.static.loadbalancer.server.port=80"
+      # IP-based access with /static prefix
+      - "traefik.http.routers.static-ip.rule=Host(`192.168.1.171`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.static-ip.entrypoints=websecure"
+      - "traefik.http.routers.static-ip.tls=true"
+      - "traefik.http.routers.static-ip.service=static"
+      - "traefik.http.routers.static-ip.priority=12"
+      - "traefik.http.middlewares.strip-static.stripprefix.prefixes=/static"
+      - "traefik.http.routers.static-ip.middlewares=strip-static"
 
   # ===========================================================================
   # FRONTEND - Next.js (meeshy.local) [profile: full]
@@ -373,13 +377,16 @@ services:
     profiles: ["full"]
     environment:
       <<: *common-env
-      NEXT_PUBLIC_WS_URL: wss://gate.meeshy.local
-      NEXT_PUBLIC_TRANSLATION_URL: https://ml.meeshy.local/translate
-      NEXT_PUBLIC_API_URL: https://gate.meeshy.local
-      NEXT_PUBLIC_BACKEND_URL: https://gate.meeshy.local
+      # Client-side URLs are derived dynamically from window.location in lib/config.ts
+      # These INTERNAL_* vars are for SSR (server-side rendering) only
       INTERNAL_BACKEND_URL: http://gateway:3000
+      INTERNAL_WS_URL: ws://gateway:3000
+      # Optional: fallback values for SSR (client-side derives from window.location)
+      NEXT_PUBLIC_BACKEND_URL: https://gate.meeshy.local
       NEXT_PUBLIC_FRONTEND_URL: https://meeshy.local
+      NEXT_PUBLIC_TRANSLATION_URL: http://translator:8000
       NEXT_PUBLIC_STATIC_URL: https://static.meeshy.local
+      # Feature flags
       NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION: "true"
       NEXT_PUBLIC_USE_API_TRANSLATION_ONLY: "true"
       NEXT_PUBLIC_DEBUG_LOGS: "true"
@@ -401,11 +408,18 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`meeshy.local`) || Host(`www.meeshy.local`)"
+      # Main router for domain-based access
+      - "traefik.http.routers.frontend.rule=Host(`meeshy.local`) || Host(`www.meeshy.local`) || Host(`smpdev02.local`) || Host(`smpdev02.home`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
       - "traefik.http.routers.frontend.priority=1"
+      # IP-based router for direct access (mobile devices)
+      - "traefik.http.routers.frontend-ip.rule=Host(`192.168.1.171`)"
+      - "traefik.http.routers.frontend-ip.entrypoints=websecure"
+      - "traefik.http.routers.frontend-ip.tls=true"
+      - "traefik.http.routers.frontend-ip.service=frontend"
+      - "traefik.http.routers.frontend-ip.priority=1"
 
 # =============================================================================
 # NETWORKS

@@ -27,9 +27,20 @@ tls:
       sniStrict: false
 
 # =============================================================================
-# Common Middlewares (optional, can be referenced by Docker labels)
+# Routers for internal services (Traefik Dashboard)
 # =============================================================================
 http:
+  routers:
+    traefik-dashboard:
+      rule: "Host(`traefik.meeshy.local`)"
+      entryPoints:
+        - websecure
+      service: api@internal
+      tls: {}
+
+# =============================================================================
+# Common Middlewares (optional, can be referenced by Docker labels)
+# =============================================================================
   middlewares:
     secure-headers:
       headers:

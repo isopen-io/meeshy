@@ -47,13 +47,13 @@ SERVICES: Dict[str, List[ServiceConfig]] = {
         ServiceConfig("Frontend", "http://localhost:3100"),
     ],
     "local": [
-        ServiceConfig("Traefik Dashboard", "https://traefik.meeshy.local:8080/dashboard/", verify_ssl=False),
+        ServiceConfig("Traefik Dashboard", "https://traefik.meeshy.local/dashboard/", verify_ssl=False),
         ServiceConfig("MongoDB UI", "https://mongo.meeshy.local", verify_ssl=False),
         ServiceConfig("Redis UI", "https://redis.meeshy.local", verify_ssl=False),
         ServiceConfig("Gateway", "https://gate.meeshy.local/health", verify_ssl=False),
         ServiceConfig("Translator", "https://ml.meeshy.local/health", verify_ssl=False),
         ServiceConfig("Frontend", "https://meeshy.local", verify_ssl=False),
-        ServiceConfig("Static Files", "https://static.meeshy.local/health", verify_ssl=False),
+        ServiceConfig("Static Files", "https://statics.meeshy.local/health", verify_ssl=False),
     ],
     "prod": [
         ServiceConfig("Traefik Dashboard", "https://traefik.meeshy.me/dashboard/"),
