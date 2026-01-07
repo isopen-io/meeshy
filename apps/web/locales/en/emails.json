@@ -1,0 +1,74 @@
+{
+  "emails": {
+    "common": {
+      "greeting": "Hello {name},",
+      "greetingNoName": "Hello,",
+      "footer": "Best regards,\nThe Meeshy Team",
+      "footerNote": "This email was sent automatically. Please do not reply.",
+      "unsubscribe": "Unsubscribe",
+      "viewInBrowser": "View in browser",
+      "copyright": "© {year} Meeshy. All rights reserved.",
+      "help": "Need help? Contact us at",
+      "ignoreIfNotYou": "If you did not make this request, you can ignore this email."
+    },
+    "verification": {
+      "subject": "Verify your email address - Meeshy",
+      "title": "Email Verification",
+      "intro": "Thank you for signing up for Meeshy! To complete your registration and access all features, please verify your email address.",
+      "action": "Click the button below to verify your email:",
+      "buttonText": "Verify my email",
+      "expiry": "This link expires in {hours} hours.",
+      "linkAlt": "If the button doesn't work, copy and paste this link into your browser:",
+      "ignoreNote": "If you did not create an account on Meeshy, you can ignore this email."
+    },
+    "welcome": {
+      "subject": "Welcome to Meeshy!",
+      "title": "Welcome to Meeshy!",
+      "intro": "Your account has been created successfully. You can now enjoy all the features of Meeshy.",
+      "features": {
+        "title": "Discover what you can do:",
+        "chat": "Chat with your contacts in any language",
+        "translate": "Real-time automatic translation",
+        "groups": "Create and join discussion groups"
+      },
+      "buttonText": "Start chatting",
+      "needHelp": "Need help getting started? Check out our getting started guide."
+    },
+    "passwordReset": {
+      "subject": "Reset your password - Meeshy",
+      "title": "Password Reset",
+      "intro": "You have requested to reset your Meeshy password.",
+      "action": "Click the button below to create a new password:",
+      "buttonText": "Reset my password",
+      "expiry": "This link expires in {minutes} minutes.",
+      "linkAlt": "If the button doesn't work, copy and paste this link into your browser:",
+      "securityNote": "For security reasons, this link can only be used once.",
+      "ignoreNote": "If you did not request this reset, please ignore this email. Your password will remain unchanged."
+    },
+    "passwordChanged": {
+      "subject": "Your password has been changed - Meeshy",
+      "title": "Password Changed",
+      "intro": "Your Meeshy password has been successfully changed.",
+      "date": "Date of change: {date}",
+      "securityNote": "If you did not make this change, please contact our support immediately at",
+      "buttonText": "Sign in"
+    },
+    "loginNotification": {
+      "subject": "New login to your account - Meeshy",
+      "title": "New Login Detected",
+      "intro": "A new login to your Meeshy account has been detected.",
+      "details": {
+        "title": "Login details:",
+        "date": "Date: {date}",
+        "location": "Location: {location}",
+        "device": "Device: {device}",
+        "ip": "IP Address: {ip}"
+      },
+      "securityNote": "If this wasn't you, we recommend changing your password immediately.",
+      "buttonText": "Secure my account"
+    },
+    "phoneVerification": {
+      "smsMessage": "Your Meeshy verification code is: {code}. This code expires in {minutes} minutes."
+    }
+  }
+}
