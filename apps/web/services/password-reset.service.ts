@@ -133,22 +133,23 @@ class PasswordResetService {
    */
   async verifyToken(request: VerifyTokenRequest): Promise<VerifyTokenResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/verify-reset-token'), {
-        method: 'POST',
+      // Use GET with query parameter as expected by backend
+      const url = new URL(buildApiUrl('/auth/reset-password/verify-token'));
+      url.searchParams.set('token', request.token);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          token: request.token,
-        }),
       });
 
       const data = await response.json();
 
-      if (response.ok && data.success) {
+      if (response.ok && data.valid) {
         return {
           success: true,
-          valid: data.valid ?? true,
+          valid: true,
           requires2FA: data.requires2FA ?? false,
         };
       } else {
