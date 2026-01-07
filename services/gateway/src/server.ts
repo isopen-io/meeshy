@@ -272,6 +272,12 @@ class MeeshyServer {
           key: fs.readFileSync(keyPath),
           cert: fs.readFileSync(certFilePath),
         },
+        ajv: {
+          customOptions: {
+            strict: 'log', // Allow unknown keywords like 'example' (for OpenAPI documentation)
+            keywords: ['example'] // Explicitly allow 'example' keyword
+          }
+        }
       });
 
       logger.info('🔒 Gateway starting in HTTPS mode');
@@ -279,7 +285,13 @@ class MeeshyServer {
       // HTTP mode (default)
       this.server = fastify({
         logger: false, // We use Winston instead
-        disableRequestLogging: !config.isDev
+        disableRequestLogging: !config.isDev,
+        ajv: {
+          customOptions: {
+            strict: 'log', // Allow unknown keywords like 'example' (for OpenAPI documentation)
+            keywords: ['example'] // Explicitly allow 'example' keyword
+          }
+        }
       });
 
       logger.info('🌐 Gateway starting in HTTP mode');
