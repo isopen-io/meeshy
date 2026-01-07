@@ -152,7 +152,7 @@ services:
   # REDIS - Cache
   # ===========================================================================
   redis:
-    image: redis:7.4-alpine
+    image: redis:8-alpine
     container_name: meeshy-local-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
