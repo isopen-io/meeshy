@@ -1,15 +1,15 @@
 /**
- * EmailService Comprehensive Unit Tests
+ * EmailService Unit Tests - Multi-Provider Architecture with i18n
  *
- * This test suite provides thorough coverage of the EmailService including:
- * - Constructor initialization with environment variables
+ * Tests:
+ * - Provider initialization with environment variables
+ * - Multi-provider fallback mechanism
+ * - i18n translations (fr, en, es, pt)
+ * - Email verification sending
  * - Password reset email sending
- * - Password changed confirmation email sending
+ * - Password changed notification
  * - Security alert email sending
- * - SendGrid provider integration
- * - Mailgun provider integration
- * - Error handling for API failures
- * - Template rendering with dynamic data
+ * - Error handling and missing configuration warnings
  *
  * Coverage target: > 65%
  *
@@ -21,30 +21,39 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 // Store original environment variables
 const originalEnv = { ...process.env };
 
-// Mock global fetch
-const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
-global.fetch = mockFetch;
+// Mock axios for HTTP requests
+const mockAxiosPost = jest.fn();
+jest.mock('axios', () => ({
+  default: {
+    post: (...args: any[]) => mockAxiosPost(...args)
+  }
+}));
 
 // Mock console methods to reduce test noise
-const mockConsoleLog = jest.spyOn(console, 'log').mockImplementation(() => {});
-const mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+let mockConsoleLog: jest.SpyInstance;
+let mockConsoleError: jest.SpyInstance;
+let mockConsoleWarn: jest.SpyInstance;
 
 describe('EmailService', () => {
   let EmailService: typeof import('../../../services/EmailService').EmailService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockFetch.mockReset();
+    mockAxiosPost.mockReset();
+
+    // Mock console methods
+    mockConsoleLog = jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockConsoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     // Reset environment variables before each test
     process.env = { ...originalEnv };
 
-    // Set default test environment
-    process.env.EMAIL_PROVIDER = 'sendgrid';
-    process.env.SENDGRID_API_KEY = 'test-sendgrid-api-key';
-    process.env.EMAIL_FROM = 'test@meeshy.com';
-    process.env.EMAIL_FROM_NAME = 'Test Meeshy';
-    process.env.FRONTEND_URL = 'https://app.meeshy.com';
+    // Clear all provider keys by default
+    delete process.env.BREVO_API_KEY;
+    delete process.env.SENDGRID_API_KEY;
+    delete process.env.MAILGUN_API_KEY;
+    delete process.env.MAILGUN_DOMAIN;
 
     // Re-import the module to get fresh instance with new env vars
     jest.resetModules();
@@ -53,1193 +62,601 @@ describe('EmailService', () => {
   });
 
   afterEach(() => {
-    // Restore original environment
-    process.env = { ...originalEnv };
+    process.env = originalEnv;
+    mockConsoleLog?.mockRestore();
+    mockConsoleError?.mockRestore();
+    mockConsoleWarn?.mockRestore();
   });
 
   // ==============================================
-  // CONSTRUCTOR / INITIALIZATION TESTS
+  // PROVIDER INITIALIZATION TESTS
   // ==============================================
 
-  describe('Constructor and Initialization', () => {
-    it('should initialize with SendGrid provider by default', async () => {
-      process.env.EMAIL_PROVIDER = 'sendgrid';
-      process.env.SENDGRID_API_KEY = 'sg-test-key';
-
+  describe('Provider Initialization', () => {
+    it('should warn when no providers are configured', async () => {
       jest.resetModules();
       const module = await import('../../../services/EmailService');
       const service = new module.EmailService();
 
-      // Test by sending an email - it should use SendGrid
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
+      const result = await service.sendEmailVerification({
         to: 'test@example.com',
         name: 'Test User',
-        resetLink: 'https://example.com/reset',
-        expiryMinutes: 30
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.sendgrid.com/v3/mail/send',
-        expect.any(Object)
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No email providers configured');
+      expect(mockConsoleWarn).toHaveBeenCalledWith(
+        expect.stringContaining('No providers configured'),
+        'test@example.com'
       );
     });
 
-    it('should initialize with Mailgun provider when configured', async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-test-key';
-      process.env.MAILGUN_DOMAIN = 'mg.meeshy.com';
+    it('should initialize Brevo provider when API key is set', async () => {
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+
+      mockAxiosPost.mockResolvedValueOnce({ data: { messageId: 'msg-123' } });
 
       jest.resetModules();
       const module = await import('../../../services/EmailService');
       const service = new module.EmailService();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
+      const result = await service.sendEmailVerification({
         to: 'test@example.com',
         name: 'Test User',
-        resetLink: 'https://example.com/reset',
-        expiryMinutes: 30
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('api.mailgun.net'),
-        expect.any(Object)
-      );
-    });
-
-    it('should use default values when environment variables are not set', async () => {
-      delete process.env.EMAIL_PROVIDER;
-      delete process.env.SENDGRID_API_KEY;
-      delete process.env.MAILGUN_API_KEY;
-      delete process.env.EMAIL_FROM;
-      delete process.env.EMAIL_FROM_NAME;
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      // It should default to SendGrid and use default from email
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test User',
-        resetLink: 'https://example.com/reset',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sendgrid.com/v3/mail/send');
-
-      const body = JSON.parse(call[1]?.body as string);
-      expect(body.from.email).toBe('noreply@meeshy.com');
-      expect(body.from.name).toBe('Meeshy');
-    });
-
-    it('should fallback to MAILGUN_API_KEY when SENDGRID_API_KEY is not set', async () => {
-      delete process.env.SENDGRID_API_KEY;
-      process.env.MAILGUN_API_KEY = 'mg-fallback-key';
-      process.env.EMAIL_PROVIDER = 'sendgrid'; // Still using SendGrid provider
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const service = new module.EmailService();
-
-      // Service should still initialize (uses Mailgun key as fallback)
-      expect(service).toBeDefined();
-    });
-  });
-
-  // ==============================================
-  // PASSWORD RESET EMAIL TESTS
-  // ==============================================
-
-  describe('sendPasswordResetEmail', () => {
-    let service: InstanceType<typeof EmailService>;
-
-    beforeEach(() => {
-      service = new EmailService();
-    });
-
-    it('should send password reset email successfully via SendGrid', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'user@example.com',
-        name: 'John Doe',
-        resetLink: 'https://app.meeshy.com/reset?token=abc123',
-        expiryMinutes: 30
-      });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.sendgrid.com/v3/mail/send',
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('brevo');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        'https://api.brevo.com/v3/smtp/email',
+        expect.any(Object),
         expect.objectContaining({
-          method: 'POST',
           headers: expect.objectContaining({
-            'Authorization': 'Bearer test-sendgrid-api-key',
-            'Content-Type': 'application/json'
+            'api-key': 'test-brevo-key'
           })
         })
       );
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body.personalizations[0].to[0].email).toBe('user@example.com');
-      expect(body.from.email).toBe('test@meeshy.com');
-      expect(body.from.name).toBe('Test Meeshy');
-      expect(body.subject).toBe('Reset Your Password - Meeshy');
-      expect(body.content).toHaveLength(2);
-      expect(body.content[0].type).toBe('text/plain');
-      expect(body.content[1].type).toBe('text/html');
     });
 
-    it('should include user name in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should initialize SendGrid provider when API key is set', async () => {
+      process.env.SENDGRID_API_KEY = 'test-sendgrid-key';
 
-      await service.sendPasswordResetEmail({
-        to: 'user@example.com',
-        name: 'Jane Smith',
-        resetLink: 'https://app.meeshy.com/reset?token=xyz',
-        expiryMinutes: 60
+      mockAxiosPost.mockResolvedValueOnce({ data: {} });
+
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
       });
 
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      // Check HTML content includes name
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('Hello Jane Smith');
-
-      // Check plain text content includes name
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('Hello Jane Smith');
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('sendgrid');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        'https://api.sendgrid.com/v3/mail/send',
+        expect.any(Object),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test-sendgrid-key'
+          })
+        })
+      );
     });
 
-    it('should include reset link in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should initialize Mailgun provider when API key and domain are set', async () => {
+      process.env.MAILGUN_API_KEY = 'test-mailgun-key';
+      process.env.MAILGUN_DOMAIN = 'mg.example.com';
 
-      const resetLink = 'https://app.meeshy.com/reset?token=unique-token-123';
+      mockAxiosPost.mockResolvedValueOnce({ data: { id: 'msg-456' } });
 
-      await service.sendPasswordResetEmail({
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('mailgun');
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        'https://api.mailgun.net/v3/mg.example.com/messages',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('should order providers by cost (Brevo first)', async () => {
+      process.env.BREVO_API_KEY = 'brevo-key';
+      process.env.SENDGRID_API_KEY = 'sendgrid-key';
+      process.env.MAILGUN_API_KEY = 'mailgun-key';
+      process.env.MAILGUN_DOMAIN = 'mg.example.com';
+
+      mockAxiosPost.mockResolvedValueOnce({ data: { messageId: 'msg-123' } });
+
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      // Should use Brevo first (cheapest)
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        'https://api.brevo.com/v3/smtp/email',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+  });
+
+  // ==============================================
+  // PROVIDER FALLBACK TESTS
+  // ==============================================
+
+  describe('Provider Fallback', () => {
+    it('should fallback to SendGrid when Brevo fails', async () => {
+      process.env.BREVO_API_KEY = 'brevo-key';
+      process.env.SENDGRID_API_KEY = 'sendgrid-key';
+
+      // Brevo fails, SendGrid succeeds
+      mockAxiosPost
+        .mockRejectedValueOnce(new Error('Brevo API error'))
+        .mockResolvedValueOnce({ data: {} });
+
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('sendgrid');
+    });
+
+    it('should fallback to Mailgun when Brevo and SendGrid fail', async () => {
+      process.env.BREVO_API_KEY = 'brevo-key';
+      process.env.SENDGRID_API_KEY = 'sendgrid-key';
+      process.env.MAILGUN_API_KEY = 'mailgun-key';
+      process.env.MAILGUN_DOMAIN = 'mg.example.com';
+
+      // Brevo and SendGrid fail, Mailgun succeeds
+      mockAxiosPost
+        .mockRejectedValueOnce(new Error('Brevo API error'))
+        .mockRejectedValueOnce(new Error('SendGrid API error'))
+        .mockResolvedValueOnce({ data: { id: 'msg-789' } });
+
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledTimes(3);
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('mailgun');
+    });
+
+    it('should return failure when all providers fail', async () => {
+      process.env.BREVO_API_KEY = 'brevo-key';
+      process.env.SENDGRID_API_KEY = 'sendgrid-key';
+
+      mockAxiosPost
+        .mockRejectedValueOnce(new Error('Brevo API error'))
+        .mockRejectedValueOnce(new Error('SendGrid API error'));
+
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        expect.stringContaining('All providers failed'),
+        'test@example.com'
+      );
+    });
+  });
+
+  // ==============================================
+  // I18N TRANSLATION TESTS
+  // ==============================================
+
+  describe('i18n Translations', () => {
+    beforeEach(() => {
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
+    });
+
+    it('should send French email by default', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Jean Dupont',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'fr'
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Vérifiez')
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should send English email when language is en', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'John Doe',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'en'
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Verify')
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should send Spanish email when language is es', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Juan Garcia',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'es'
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Verifica')
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should send Portuguese email when language is pt', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Joao Silva',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'pt'
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Verifique')
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should fallback to French for unsupported languages', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'de' // German - not supported
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Vérifiez') // Falls back to French
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should normalize language codes (en-US -> en)', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'test@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 24,
+        language: 'en-US'
+      });
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: expect.stringContaining('Verify')
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  // ==============================================
+  // EMAIL VERIFICATION TESTS
+  // ==============================================
+
+  describe('sendEmailVerification', () => {
+    beforeEach(() => {
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
+    });
+
+    it('should send verification email successfully', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://app.meeshy.com/verify?token=abc123',
+        expiryHours: 24
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('brevo');
+      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+    });
+
+    it('should include verification link in email content', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const verificationLink = 'https://app.meeshy.com/verify?token=unique-token-123';
+
+      await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink,
+        expiryHours: 24
+      });
+
+      const call = mockAxiosPost.mock.calls[0];
+      const body = call[1];
+
+      expect(body.htmlContent).toContain(verificationLink);
+      expect(body.textContent).toContain(verificationLink);
+    });
+
+    it('should include expiry hours in email content', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      await service.sendEmailVerification({
+        to: 'user@example.com',
+        name: 'Test User',
+        verificationLink: 'https://example.com/verify',
+        expiryHours: 48
+      });
+
+      const call = mockAxiosPost.mock.calls[0];
+      const body = call[1];
+
+      expect(body.htmlContent).toContain('48');
+    });
+  });
+
+  // ==============================================
+  // PASSWORD RESET TESTS
+  // ==============================================
+
+  describe('sendPasswordReset', () => {
+    beforeEach(() => {
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
+    });
+
+    it('should send password reset email successfully', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const result = await service.sendPasswordReset({
+        to: 'user@example.com',
+        name: 'Test User',
+        resetLink: 'https://app.meeshy.com/reset?token=xyz',
+        expiryMinutes: 30
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should include reset link in email', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
+
+      const resetLink = 'https://app.meeshy.com/reset?token=secret-token';
+
+      await service.sendPasswordReset({
         to: 'user@example.com',
         name: 'Test User',
         resetLink,
-        expiryMinutes: 45
+        expiryMinutes: 30
       });
 
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
+      const call = mockAxiosPost.mock.calls[0];
+      const body = call[1];
 
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain(resetLink);
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain(resetLink);
+      expect(body.htmlContent).toContain(resetLink);
     });
 
-    it('should include expiry minutes in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        resetLink: 'https://example.com/reset',
-        expiryMinutes: 15
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('15 minutes');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('15 minutes');
-    });
-
-    it('should handle SendGrid API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve('Unauthorized')
-      } as Response);
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'user@example.com',
-          name: 'Test User',
-          resetLink: 'https://example.com/reset',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('SendGrid API error: 401');
-
-      expect(mockConsoleError).toHaveBeenCalled();
-    });
-
-    it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'user@example.com',
-          name: 'Test User',
-          resetLink: 'https://example.com/reset',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('Network error');
-
-      expect(mockConsoleError).toHaveBeenCalled();
-    });
-
-    it('should send password reset email via Mailgun', async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-api-key';
-      process.env.MAILGUN_DOMAIN = 'mg.meeshy.com';
-
+    it('should send in user language', async () => {
       jest.resetModules();
       const module = await import('../../../services/EmailService');
-      const mailgunService = new module.EmailService();
+      const service = new module.EmailService();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await mailgunService.sendPasswordResetEmail({
+      await service.sendPasswordReset({
         to: 'user@example.com',
         name: 'Test User',
         resetLink: 'https://example.com/reset',
-        expiryMinutes: 30
+        expiryMinutes: 30,
+        language: 'es'
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.mailgun.net/v3/mg.meeshy.com/messages',
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.any(String),
         expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/x-www-form-urlencoded'
-          })
-        })
-      );
-    });
-
-    it('should log success message after sending email', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'success@example.com',
-        name: 'Test User',
-        resetLink: 'https://example.com/reset',
-        expiryMinutes: 30
-      });
-
-      expect(mockConsoleLog).toHaveBeenCalledWith(
-        expect.stringContaining('Email sent via SendGrid to:'),
-        'success@example.com'
+          subject: expect.stringContaining('contraseña')
+        }),
+        expect.any(Object)
       );
     });
   });
 
   // ==============================================
-  // PASSWORD CHANGED EMAIL TESTS
+  // PASSWORD CHANGED TESTS
   // ==============================================
 
-  describe('sendPasswordChangedEmail', () => {
-    let service: InstanceType<typeof EmailService>;
-
+  describe('sendPasswordChanged', () => {
     beforeEach(() => {
-      service = new EmailService();
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
     });
 
-    it('should send password changed email successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should send password changed notification', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
 
-      const timestamp = '2025-01-06T12:00:00Z';
-
-      await service.sendPasswordChangedEmail({
+      const result = await service.sendPasswordChanged({
         to: 'user@example.com',
-        name: 'John Doe',
-        timestamp,
+        name: 'Test User',
+        timestamp: '2025-01-07 12:00:00',
         ipAddress: '192.168.1.100',
         location: 'Paris, France'
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body.subject).toBe('Your Password Was Changed - Meeshy');
-      expect(body.personalizations[0].to[0].email).toBe('user@example.com');
+      expect(result.success).toBe(true);
     });
 
-    it('should include IP address in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should include IP address in notification', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
 
-      await service.sendPasswordChangedEmail({
+      await service.sendPasswordChanged({
         to: 'user@example.com',
         name: 'Test User',
-        timestamp: '2025-01-06T12:00:00Z',
+        timestamp: '2025-01-07 12:00:00',
         ipAddress: '10.0.0.1',
         location: 'New York, USA'
       });
 
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
+      const call = mockAxiosPost.mock.calls[0];
+      const body = call[1];
 
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('10.0.0.1');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('10.0.0.1');
-    });
-
-    it('should include location in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordChangedEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        timestamp: '2025-01-06T12:00:00Z',
-        ipAddress: '192.168.1.1',
-        location: 'London, UK'
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('London, UK');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('London, UK');
-    });
-
-    it('should include security contact information', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordChangedEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        timestamp: '2025-01-06T12:00:00Z',
-        ipAddress: '192.168.1.1',
-        location: 'Tokyo, Japan'
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('security@meeshy.com');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('security@meeshy.com');
-    });
-
-    it('should handle API errors gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve('Internal Server Error')
-      } as Response);
-
-      await expect(
-        service.sendPasswordChangedEmail({
-          to: 'user@example.com',
-          name: 'Test User',
-          timestamp: '2025-01-06T12:00:00Z',
-          ipAddress: '192.168.1.1',
-          location: 'Berlin, Germany'
-        })
-      ).rejects.toThrow('SendGrid API error: 500');
-    });
-
-    it('should send via Mailgun when configured', async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-key';
-      process.env.MAILGUN_DOMAIN = 'mail.meeshy.com';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const mailgunService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await mailgunService.sendPasswordChangedEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        timestamp: '2025-01-06T12:00:00Z',
-        ipAddress: '192.168.1.1',
-        location: 'Berlin, Germany'
-      });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('api.mailgun.net'),
-        expect.any(Object)
-      );
+      expect(body.htmlContent).toContain('10.0.0.1');
     });
   });
 
   // ==============================================
-  // SECURITY ALERT EMAIL TESTS
+  // SECURITY ALERT TESTS
   // ==============================================
 
-  describe('sendSecurityAlertEmail', () => {
-    let service: InstanceType<typeof EmailService>;
-
+  describe('sendSecurityAlert', () => {
     beforeEach(() => {
-      service = new EmailService();
+      process.env.BREVO_API_KEY = 'test-brevo-key';
+      mockAxiosPost.mockResolvedValue({ data: { messageId: 'msg-123' } });
     });
 
-    it('should send security alert email successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should send security alert email', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
 
-      await service.sendSecurityAlertEmail({
+      const result = await service.sendSecurityAlert({
         to: 'user@example.com',
-        name: 'John Doe',
+        name: 'Test User',
         alertType: 'Suspicious Login',
-        details: 'Login attempt from unknown device in Russia'
+        details: 'Login from unknown location'
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body.subject).toBe('Security Alert: Suspicious Login - Meeshy');
-      expect(body.personalizations[0].to[0].email).toBe('user@example.com');
+      expect(result.success).toBe(true);
     });
 
-    it('should include alert type in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
+    it('should include alert details in email', async () => {
+      jest.resetModules();
+      const module = await import('../../../services/EmailService');
+      const service = new module.EmailService();
 
-      await service.sendSecurityAlertEmail({
+      await service.sendSecurityAlert({
         to: 'user@example.com',
         name: 'Test User',
-        alertType: 'Multiple Failed Login Attempts',
-        details: '5 failed attempts in the last hour'
+        alertType: 'Multiple Failed Logins',
+        details: '5 failed attempts from IP 192.168.1.50'
       });
 
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('Multiple Failed Login Attempts');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('Multiple Failed Login Attempts');
-    });
-
-    it('should include alert details in email content', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      const alertDetails = 'Your account was accessed from a new location: Sydney, Australia';
-
-      await service.sendSecurityAlertEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        alertType: 'New Location Login',
-        details: alertDetails
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain(alertDetails);
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain(alertDetails);
-    });
-
-    it('should include security settings link with FRONTEND_URL', async () => {
-      process.env.FRONTEND_URL = 'https://custom.meeshy.com';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const customService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await customService.sendSecurityAlertEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        alertType: 'Account Settings Changed',
-        details: 'Email address was updated'
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('https://custom.meeshy.com/security');
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain('https://custom.meeshy.com/security');
-    });
-
-    it('should include recommended security actions', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendSecurityAlertEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        alertType: 'Test Alert',
-        details: 'Test details'
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain('Change your password');
-      expect(htmlContent.value).toContain('two-factor authentication');
-    });
-
-    it('should handle API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-        text: () => Promise.resolve('Forbidden')
-      } as Response);
-
-      await expect(
-        service.sendSecurityAlertEmail({
-          to: 'user@example.com',
-          name: 'Test User',
-          alertType: 'Test',
-          details: 'Test'
-        })
-      ).rejects.toThrow('SendGrid API error: 403');
-    });
-
-    it('should send via Mailgun when configured', async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-key';
-      process.env.MAILGUN_DOMAIN = 'mail.meeshy.com';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const mailgunService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await mailgunService.sendSecurityAlertEmail({
-        to: 'user@example.com',
-        name: 'Test User',
-        alertType: 'Test',
-        details: 'Test'
-      });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('api.mailgun.net'),
-        expect.any(Object)
-      );
-    });
-  });
-
-  // ==============================================
-  // SENDGRID PROVIDER TESTS
-  // ==============================================
-
-  describe('SendGrid Provider', () => {
-    let service: InstanceType<typeof EmailService>;
-
-    beforeEach(() => {
-      process.env.EMAIL_PROVIDER = 'sendgrid';
-      service = new EmailService();
-    });
-
-    it('should send correct authorization header', async () => {
-      process.env.SENDGRID_API_KEY = 'my-sendgrid-key-123';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const sgService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await sgService.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      expect(call[1]?.headers).toEqual(
-        expect.objectContaining({
-          'Authorization': 'Bearer my-sendgrid-key-123'
-        })
-      );
-    });
-
-    it('should format email body correctly for SendGrid API', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'recipient@example.com',
-        name: 'Recipient Name',
-        resetLink: 'https://reset.link',
-        expiryMinutes: 20
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body).toHaveProperty('personalizations');
-      expect(body).toHaveProperty('from');
-      expect(body).toHaveProperty('subject');
-      expect(body).toHaveProperty('content');
-
-      expect(body.personalizations).toEqual([
-        { to: [{ email: 'recipient@example.com' }] }
-      ]);
-    });
-
-    it('should handle rate limit errors (429)', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-        text: () => Promise.resolve('Rate limit exceeded')
-      } as Response);
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('SendGrid API error: 429');
-    });
-
-    it('should handle authentication errors (401)', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve('Unauthorized - Invalid API Key')
-      } as Response);
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('SendGrid API error: 401');
-    });
-  });
-
-  // ==============================================
-  // MAILGUN PROVIDER TESTS
-  // ==============================================
-
-  describe('Mailgun Provider', () => {
-    let service: InstanceType<typeof EmailService>;
-
-    beforeEach(async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-test-key';
-      process.env.MAILGUN_DOMAIN = 'mail.meeshy.com';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      service = new module.EmailService();
-    });
-
-    it('should send to correct Mailgun endpoint', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.mailgun.net/v3/mail.meeshy.com/messages',
-        expect.any(Object)
-      );
-    });
-
-    it('should use Basic auth with API key', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      // The API key used is from the beforeEach setup of this describe block
-      const authHeader = call[1]?.headers as Record<string, string>;
-
-      // Verify it's a Basic auth header with base64 encoded credentials
-      expect(authHeader['Authorization']).toMatch(/^Basic [A-Za-z0-9+/=]+$/);
-      expect(authHeader['Authorization']).toContain('Basic');
-    });
-
-    it('should use form-urlencoded content type', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      expect(call[1]?.headers).toEqual(
-        expect.objectContaining({
-          'Content-Type': 'application/x-www-form-urlencoded'
-        })
-      );
-    });
-
-    it('should format from address correctly', async () => {
-      process.env.EMAIL_FROM = 'noreply@meeshy.com';
-      process.env.EMAIL_FROM_NAME = 'Meeshy Support';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const mgService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await mgService.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = call[1]?.body as URLSearchParams;
-
-      // URLSearchParams should contain the from field
-      expect(body.toString()).toContain('from=');
-    });
-
-    it('should handle Mailgun API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: () => Promise.resolve('Bad Request - Invalid domain')
-      } as Response);
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('Mailgun API error: 400');
-
-      expect(mockConsoleError).toHaveBeenCalled();
-    });
-
-    it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('Network timeout');
-    });
-
-    it('should log success message for Mailgun', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'mailgun-test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      expect(mockConsoleLog).toHaveBeenCalledWith(
-        expect.stringContaining('Email sent via Mailgun to:'),
-        'mailgun-test@example.com'
-      );
-    });
-  });
-
-  // ==============================================
-  // INVALID PROVIDER TESTS
-  // ==============================================
-
-  describe('Invalid Provider Handling', () => {
-    it('should throw error for invalid email provider', async () => {
-      process.env.EMAIL_PROVIDER = 'invalid_provider';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const invalidService = new module.EmailService();
-
-      await expect(
-        invalidService.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('Invalid email provider');
-
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid email provider:'),
-        'invalid_provider'
-      );
-    });
-
-    it('should throw error for empty provider', async () => {
-      // Force empty provider by clearing and not setting
-      process.env.EMAIL_PROVIDER = '';
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const emptyProviderService = new module.EmailService();
-
-      // Empty string defaults to 'sendgrid' in the constructor fallback
-      // So it should work with SendGrid
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await emptyProviderService.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      // Should fallback to SendGrid
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.sendgrid.com/v3/mail/send',
-        expect.any(Object)
-      );
-    });
-  });
-
-  // ==============================================
-  // EMAIL TEMPLATE TESTS
-  // ==============================================
-
-  describe('Email Templates', () => {
-    let service: InstanceType<typeof EmailService>;
-
-    beforeEach(() => {
-      service = new EmailService();
-    });
-
-    it('should include current year in footer', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      const currentYear = new Date().getFullYear().toString();
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain(currentYear);
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      expect(textContent.value).toContain(currentYear);
-    });
-
-    it('should include both HTML and plain text versions', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body.content).toHaveLength(2);
-
-      const textContent = body.content.find((c: any) => c.type === 'text/plain');
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-
-      expect(textContent).toBeDefined();
-      expect(htmlContent).toBeDefined();
-      expect(textContent.value.length).toBeGreaterThan(0);
-      expect(htmlContent.value.length).toBeGreaterThan(0);
-    });
-
-    it('should have responsive HTML template', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-
-      // Check for responsive meta tag
-      expect(htmlContent.value).toContain('viewport');
-      expect(htmlContent.value).toContain('width=device-width');
-    });
-
-    it('should include proper HTML structure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-
-      expect(htmlContent.value).toContain('<!DOCTYPE html>');
-      expect(htmlContent.value).toContain('<html>');
-      expect(htmlContent.value).toContain('<head>');
-      expect(htmlContent.value).toContain('<body>');
-      expect(htmlContent.value).toContain('</html>');
-    });
-  });
-
-  // ==============================================
-  // EDGE CASES AND ERROR HANDLING
-  // ==============================================
-
-  describe('Edge Cases and Error Handling', () => {
-    let service: InstanceType<typeof EmailService>;
-
-    beforeEach(() => {
-      service = new EmailService();
-    });
-
-    it('should handle emails with special characters in name', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: "Jean-Pierre O'Connor",
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain("Jean-Pierre O'Connor");
-    });
-
-    it('should handle emails with unicode characters', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await service.sendSecurityAlertEmail({
-        to: 'user@example.com',
-        name: 'Francois Muller',
-        alertType: 'Test Alert',
-        details: 'Details with unicode: cafe, naive'
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      expect(body).toBeDefined();
-    });
-
-    it('should handle very long reset links', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      const longLink = 'https://app.meeshy.com/reset?token=' + 'a'.repeat(500);
-
-      await service.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: longLink,
-        expiryMinutes: 30
-      });
-
-      const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1]?.body as string);
-
-      const htmlContent = body.content.find((c: any) => c.type === 'text/html');
-      expect(htmlContent.value).toContain(longLink);
-    });
-
-    it('should handle empty MAILGUN_DOMAIN gracefully', async () => {
-      process.env.EMAIL_PROVIDER = 'mailgun';
-      process.env.MAILGUN_API_KEY = 'mg-key';
-      delete process.env.MAILGUN_DOMAIN;
-
-      jest.resetModules();
-      const module = await import('../../../services/EmailService');
-      const mgService = new module.EmailService();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('')
-      } as Response);
-
-      await mgService.sendPasswordResetEmail({
-        to: 'test@example.com',
-        name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
-      });
-
-      // Should use empty domain in URL
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.mailgun.net/v3//messages',
-        expect.any(Object)
-      );
-    });
-
-    it('should handle fetch throwing synchronously', async () => {
-      mockFetch.mockImplementationOnce(() => {
-        throw new Error('Synchronous error');
-      });
-
-      await expect(
-        service.sendPasswordResetEmail({
-          to: 'test@example.com',
-          name: 'Test',
-          resetLink: 'https://test.com',
-          expiryMinutes: 30
-        })
-      ).rejects.toThrow('Synchronous error');
+      const call = mockAxiosPost.mock.calls[0];
+      const body = call[1];
+
+      expect(body.htmlContent).toContain('Multiple Failed Logins');
+      expect(body.htmlContent).toContain('5 failed attempts');
     });
   });
 
@@ -1248,49 +665,43 @@ describe('EmailService', () => {
   // ==============================================
 
   describe('Interface Exports', () => {
-    it('should export PasswordResetEmailData interface', async () => {
+    it('should export EmailVerificationData interface', async () => {
       const module = await import('../../../services/EmailService');
 
-      // Test that we can use the interface shape
+      const data: import('../../../services/EmailService').EmailVerificationData = {
+        to: 'test@example.com',
+        name: 'Test',
+        verificationLink: 'https://test.com',
+        expiryHours: 24,
+        language: 'fr'
+      };
+
+      expect(data.to).toBe('test@example.com');
+      expect(data.language).toBe('fr');
+    });
+
+    it('should export PasswordResetEmailData interface', async () => {
       const data: import('../../../services/EmailService').PasswordResetEmailData = {
         to: 'test@example.com',
         name: 'Test',
-        resetLink: 'https://test.com',
-        expiryMinutes: 30
+        resetLink: 'https://test.com/reset',
+        expiryMinutes: 30,
+        language: 'en'
       };
 
-      expect(data.to).toBe('test@example.com');
-      expect(data.name).toBe('Test');
-      expect(data.resetLink).toBe('https://test.com');
       expect(data.expiryMinutes).toBe(30);
+      expect(data.language).toBe('en');
     });
 
-    it('should export PasswordChangedEmailData interface', async () => {
-      const data: import('../../../services/EmailService').PasswordChangedEmailData = {
-        to: 'test@example.com',
-        name: 'Test',
-        timestamp: '2025-01-06T12:00:00Z',
-        ipAddress: '192.168.1.1',
-        location: 'Paris, France'
+    it('should export EmailResult interface', async () => {
+      const result: import('../../../services/EmailService').EmailResult = {
+        success: true,
+        provider: 'brevo',
+        messageId: 'msg-123'
       };
 
-      expect(data.to).toBe('test@example.com');
-      expect(data.timestamp).toBe('2025-01-06T12:00:00Z');
-      expect(data.ipAddress).toBe('192.168.1.1');
-      expect(data.location).toBe('Paris, France');
-    });
-
-    it('should export SecurityAlertEmailData interface', async () => {
-      const data: import('../../../services/EmailService').SecurityAlertEmailData = {
-        to: 'test@example.com',
-        name: 'Test',
-        alertType: 'Suspicious Activity',
-        details: 'Multiple failed login attempts'
-      };
-
-      expect(data.to).toBe('test@example.com');
-      expect(data.alertType).toBe('Suspicious Activity');
-      expect(data.details).toBe('Multiple failed login attempts');
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('brevo');
     });
   });
 });
