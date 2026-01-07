@@ -21,7 +21,7 @@ interface SmsData {
   sender?: string;
 }
 
-interface SmsResult {
+export interface SmsResult {
   success: boolean;
   provider: string;
   messageId?: string;

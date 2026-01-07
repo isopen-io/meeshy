@@ -4,9 +4,9 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { MaintenanceService } from '../services/maintenance.service';
+import { MaintenanceService } from '../services/MaintenanceService';
 import { AttachmentService } from '../services/AttachmentService';
-import { StatusService } from '../services/status.service';
+import { StatusService } from '../services/StatusService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export async function maintenanceRoutes(fastify: FastifyInstance) {

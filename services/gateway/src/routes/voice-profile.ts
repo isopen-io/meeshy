@@ -10,9 +10,9 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { VoiceProfileService, ConsentRequest, RegisterProfileRequest, UpdateProfileRequest } from '../services/voice-profile.service';
+import { VoiceProfileService, ConsentRequest, RegisterProfileRequest, UpdateProfileRequest } from '../services/VoiceProfileService';
 import { createUnifiedAuthMiddleware, UnifiedAuthContext } from '../middleware/auth';
-import { ZMQSingleton } from '../services/zmq-singleton';
+import { ZMQSingleton } from '../services/ZmqSingleton';
 
 // Extend FastifyRequest to include auth
 declare module 'fastify' {

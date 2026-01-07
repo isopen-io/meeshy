@@ -11,7 +11,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { AuthenticationContext, AuthenticationType } from '@meeshy/shared/types';
 import jwt from 'jsonwebtoken';
-import { StatusService } from '../services/status.service';
+import { StatusService } from '../services/StatusService';
 
 // ===== TYPES UNIFIÉS =====
 

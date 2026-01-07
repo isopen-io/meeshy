@@ -41,9 +41,12 @@ const mockZxcvbn = jest.fn() as jest.Mock<any>;
 
 jest.mock('zxcvbn', () => (password: string) => mockZxcvbn(password));
 
-// Mock global fetch for CAPTCHA verification
-const mockFetch = jest.fn() as jest.Mock<any>;
-(global as any).fetch = mockFetch;
+// Mock axios for CAPTCHA verification
+const mockAxiosPost = jest.fn() as jest.Mock<any>;
+
+jest.mock('axios', () => ({
+  post: (url: string, data: any, config: any) => mockAxiosPost(url, data, config)
+}));
 
 import {
   PasswordResetService,
@@ -155,11 +158,8 @@ describe('PasswordResetService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Default mock implementations
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true })
-    });
+    // Default mock implementations - axios returns { data: ... } directly
+    mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
     mockRedis.setex.mockResolvedValue('OK');
@@ -207,10 +207,7 @@ describe('PasswordResetService', () => {
   describe('requestPasswordReset', () => {
     describe('CAPTCHA Verification', () => {
       it('should return generic response for invalid CAPTCHA', async () => {
-        mockFetch.mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve({ success: false })
-        });
+        mockAxiosPost.mockResolvedValue({ data: { success: false } });
 
         const result = await service.requestPasswordReset(validResetRequest);
 
@@ -220,7 +217,7 @@ describe('PasswordResetService', () => {
       });
 
       it('should return generic response when CAPTCHA verification fails', async () => {
-        mockFetch.mockRejectedValue(new Error('Network error'));
+        mockAxiosPost.mockRejectedValue(new Error('Network error'));
 
         const result = await service.requestPasswordReset(validResetRequest);
 
@@ -229,10 +226,7 @@ describe('PasswordResetService', () => {
       });
 
       it('should proceed when CAPTCHA is valid', async () => {
-        mockFetch.mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve({ success: true })
-        });
+        mockAxiosPost.mockResolvedValue({ data: { success: true } });
         mockPrisma.user.findFirst.mockResolvedValue(null);
 
         await service.requestPasswordReset(validResetRequest);
@@ -1200,15 +1194,9 @@ describe('PasswordResetService', () => {
         jest.clearAllMocks();
 
         if (!scenario.captchaValid) {
-          mockFetch.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve({ success: false })
-          });
+          mockAxiosPost.mockResolvedValue({ data: { success: false } });
         } else {
-          mockFetch.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve({ success: true })
-          });
+          mockAxiosPost.mockResolvedValue({ data: { success: true } });
         }
 
         if (!scenario.userExists) {
@@ -1244,10 +1232,7 @@ describe('PasswordResetService - Edge Cases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true })
-    });
+    mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
     mockRedis.setex.mockResolvedValue('OK');
@@ -1379,10 +1364,7 @@ describe('PasswordResetService - Security Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true })
-    });
+    mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
     mockRedis.setex.mockResolvedValue('OK');
@@ -1417,10 +1399,7 @@ describe('PasswordResetService - Security Tests', () => {
     })();
 
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true })
-    });
+    mockAxiosPost.mockResolvedValue({ data: { success: true } });
     mockRedis.get.mockResolvedValue(null);
 
     const nonExistingUserResult = await (async () => {

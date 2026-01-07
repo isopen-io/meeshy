@@ -10,6 +10,8 @@
  * i18n: Emails sent in user's preferred language (systemLanguage)
  */
 
+import axios from 'axios';
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -348,49 +350,51 @@ export class EmailService {
   }
 
   private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        sender: { name: this.fromName, email: this.fromEmail },
-        to: [{ email: data.to }],
-        subject: data.subject,
-        htmlContent: data.html,
-        textContent: data.text
-      })
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+      sender: { name: this.fromName, email: this.fromEmail },
+      to: [{ email: data.to }],
+      subject: data.subject,
+      htmlContent: data.html,
+      textContent: data.text
+    }, {
+      headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
     });
-    if (!response.ok) return { success: false, error: `Brevo error ${response.status}` };
-    const result = await response.json();
-    return { success: true, messageId: result.messageId };
+    return { success: true, messageId: response.data.messageId };
   }
 
   private async sendViaSendGrid(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: data.to }] }],
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: data.subject,
-        content: [{ type: 'text/plain', value: data.text }, { type: 'text/html', value: data.html }]
-      })
+    const response = await axios.post('https://api.sendgrid.com/v3/mail/send', {
+      personalizations: [{ to: [{ email: data.to }] }],
+      from: { email: this.fromEmail, name: this.fromName },
+      subject: data.subject,
+      content: [{ type: 'text/plain', value: data.text }, { type: 'text/html', value: data.html }]
+    }, {
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
     });
-    if (!response.ok) return { success: false, error: `SendGrid error ${response.status}` };
-    return { success: true, messageId: response.headers.get('x-message-id') || undefined };
+    return { success: true, messageId: response.headers['x-message-id'] || undefined };
   }
 
   private async sendViaMailgun(apiKey: string, data: EmailData): Promise<EmailResult> {
     const domain = process.env.MAILGUN_DOMAIN || '';
     if (!domain) return { success: false, error: 'MAILGUN_DOMAIN not configured' };
-    const formData = new URLSearchParams({ from: `${this.fromName} <${this.fromEmail}>`, to: data.to, subject: data.subject, text: data.text, html: data.html });
-    const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData
-    });
-    if (!response.ok) return { success: false, error: `Mailgun error ${response.status}` };
-    const result = await response.json();
-    return { success: true, messageId: result.id };
+
+    const response = await axios.post(
+      `https://api.mailgun.net/v3/${domain}/messages`,
+      new URLSearchParams({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: data.to,
+        subject: data.subject,
+        text: data.text,
+        html: data.html
+      }),
+      {
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    return { success: true, messageId: response.data.id };
   }
 
   // ==========================================================================

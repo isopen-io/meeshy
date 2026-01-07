@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { AuthService, LoginCredentials, RegisterData } from '../services/auth.service';
+import { AuthService, LoginCredentials, RegisterData } from '../services/AuthService';
 import { SocketIOUser } from '@meeshy/shared/types';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
 

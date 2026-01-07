@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MaintenanceService } from '../../services/maintenance.service';
+import { MaintenanceService } from '../../services/MaintenanceService';
 import { AttachmentService } from '../../services/AttachmentService';
 
 // Mock du logger pour éviter les logs pendant les tests
