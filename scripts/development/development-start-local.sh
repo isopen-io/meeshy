@@ -34,24 +34,25 @@ GATEWAY_PID=""
 FRONTEND_PID=""
 
 # Parse arguments
-START_CONTAINERS=true
+FORCE_CONTAINERS=false
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --no-containers)
-      START_CONTAINERS=false
+    --force-containers)
+      FORCE_CONTAINERS=true
       shift
       ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --no-containers  Ne pas demarrer MongoDB/Redis (deja en cours)"
-      echo "  -h, --help       Affiche cette aide"
+      echo "  --force-containers  Forcer le redemarrage des containers"
+      echo "  -h, --help          Affiche cette aide"
+      echo ""
+      echo "Note: Les containers sont demarres automatiquement si necessaire"
       echo ""
       echo "Prerequis:"
       echo "  - make install   (installer les dependances)"
       echo "  - make setup-env (generer les fichiers .env)"
-      echo "  - Configurer /etc/hosts: 127.0.0.1 meeshy.local"
       exit 0
       ;;
     *)
@@ -166,14 +167,39 @@ fi
 echo -e "${GREEN}  Ports disponibles${NC}"
 echo ""
 
-# Demarrer l'infrastructure Docker
-if [ "$START_CONTAINERS" = true ]; then
-    echo -e "${BLUE}Demarrage de l'infrastructure Docker...${NC}"
+# Verifier si l'infrastructure est deja en cours
+echo -e "${BLUE}Verification de l'infrastructure...${NC}"
+MONGO_OK=false
+REDIS_OK=false
+
+if nc -z localhost 27017 2>/dev/null; then
+    MONGO_OK=true
+    echo -e "${GREEN}  MongoDB deja accessible${NC}"
+fi
+
+if nc -z localhost 6379 2>/dev/null; then
+    REDIS_OK=true
+    echo -e "${GREEN}  Redis deja accessible${NC}"
+fi
+
+# Demarrer les containers si necessaire ou force
+if [ "$MONGO_OK" = false ] || [ "$REDIS_OK" = false ] || [ "$FORCE_CONTAINERS" = true ]; then
+    if [ "$FORCE_CONTAINERS" = true ]; then
+        echo -e "${YELLOW}  Redemarrage force des containers...${NC}"
+    else
+        echo -e "${YELLOW}  Demarrage de l'infrastructure Docker...${NC}"
+    fi
+
     docker compose -f "$COMPOSE_FILE" up -d
 
     # Attendre MongoDB
     echo -e "${YELLOW}  Attente de MongoDB...${NC}"
-    sleep 5
+    for i in {1..30}; do
+        if nc -z localhost 27017 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
 
     # Initialiser le replica set
     docker exec meeshy-dev-database mongosh --eval '
@@ -189,16 +215,7 @@ if [ "$START_CONTAINERS" = true ]; then
 
     echo -e "${GREEN}  Infrastructure demarree${NC}"
 else
-    echo -e "${CYAN}Verification de MongoDB et Redis...${NC}"
-    if ! nc -z localhost 27017 2>/dev/null; then
-        echo -e "${RED}  MongoDB non accessible${NC}"
-        exit 1
-    fi
-    if ! nc -z localhost 6379 2>/dev/null; then
-        echo -e "${RED}  Redis non accessible${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}  Infrastructure OK${NC}"
+    echo -e "${GREEN}  Infrastructure deja en cours${NC}"
 fi
 echo ""
 
