@@ -4,7 +4,7 @@
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-dns \
         _generate-certs _copy-certs-to-docker \
         install generate build dev dev-web dev-gateway dev-translator \
-        start stop restart start-network share-cert network-info \
+        start stop restart start-network share-cert share-cert-stop network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
         dev-tmux-network dev-bg-network _generate-env-network \
         logs status clean reset health urls docker-infra docker-infra-simple \
@@ -1181,34 +1181,56 @@ _show-network-urls:
 	@echo "$(BOLD)📋 Ou ajoutez dans /etc/hosts des autres machines:$(NC)"
 	@echo "   $(CYAN)$(HOST_IP)    $(HOST) $(LOCAL_DOMAIN)$(NC)"
 
-share-cert: ## 📱 Partager le certificat CA pour mobiles
-	@echo "$(BLUE)📱 Partage du certificat CA pour appareils mobiles...$(NC)"
+share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP)
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║     📱 Serveur de Certificat CA pour Mobiles                ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
 	@CA_ROOT=$$(mkcert -CAROOT 2>/dev/null); \
-	if [ -n "$$CA_ROOT" ] && [ -f "$$CA_ROOT/rootCA.pem" ]; then \
+	CERT_FILE="$(CERTS_DIR)/mkcert-rootCA.pem"; \
+	if [ ! -f "$$CERT_FILE" ] && [ -n "$$CA_ROOT" ] && [ -f "$$CA_ROOT/rootCA.pem" ]; then \
+		cp "$$CA_ROOT/rootCA.pem" "$$CERT_FILE"; \
+	fi; \
+	if [ -f "$$CERT_FILE" ]; then \
+		CERT_DIR=$$(dirname "$$CERT_FILE"); \
+		CERT_NAME=$$(basename "$$CERT_FILE"); \
+		pkill -f "python3 -m http.server 8888" 2>/dev/null || true; \
+		echo "$(GREEN)✅ Démarrage du serveur HTTP sur port 8888...$(NC)"; \
+		cd "$$CERT_DIR" && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 & \
+		sleep 1; \
 		echo ""; \
-		echo "$(BOLD)📍 Certificat CA:$(NC)"; \
-		echo "   $(CYAN)$$CA_ROOT/rootCA.pem$(NC)"; \
+		echo "$(BOLD)📥 Téléchargez le certificat sur votre appareil:$(NC)"; \
 		echo ""; \
-		echo "$(BOLD)🔧 Options pour installer sur mobile:$(NC)"; \
+		echo "   $(GREEN)http://$(HOST_IP):8888/$$CERT_NAME$(NC)"; \
 		echo ""; \
-		echo "  $(YELLOW)Option 1: Serveur HTTP temporaire$(NC)"; \
-		echo "   Exécutez: cd $$CA_ROOT && python3 -m http.server 8888"; \
-		echo "   Puis ouvrez: http://$(HOST_IP):8888/rootCA.pem sur votre mobile"; \
+		if command -v qrencode >/dev/null 2>&1; then \
+			echo "$(BOLD)📱 Scannez ce QR code:$(NC)"; \
+			qrencode -t ANSIUTF8 "http://$(HOST_IP):8888/$$CERT_NAME"; \
+			echo ""; \
+		fi; \
+		echo "$(BOLD)📲 Installation sur iPhone:$(NC)"; \
+		echo "   1. Ouvrez l'URL ci-dessus dans Safari"; \
+		echo "   2. $(YELLOW)Autoriser$(NC) le téléchargement du profil"; \
+		echo "   3. $(YELLOW)Réglages → Général → VPN et gestion$(NC) → Installer"; \
+		echo "   4. $(YELLOW)Réglages → Général → Informations → Certificats$(NC)"; \
+		echo "   5. $(GREEN)Activer la confiance totale$(NC) pour le certificat"; \
 		echo ""; \
-		echo "  $(YELLOW)Option 2: AirDrop (macOS -> iPhone)$(NC)"; \
-		echo "   Fichier: $$CA_ROOT/rootCA.pem"; \
+		echo "$(BOLD)📲 Installation sur Android:$(NC)"; \
+		echo "   1. Téléchargez le fichier .pem"; \
+		echo "   2. $(YELLOW)Paramètres → Sécurité → Installer certificat$(NC)"; \
 		echo ""; \
-		echo "  $(YELLOW)Option 3: Email$(NC)"; \
-		echo "   Envoyez rootCA.pem par email et ouvrez sur mobile"; \
-		echo ""; \
-		echo "$(BOLD)📲 Après transfert sur iPhone:$(NC)"; \
-		echo "   1. Ouvrez le fichier -> Profil téléchargé"; \
-		echo "   2. Réglages -> Général -> VPN et gestion -> Installer le profil"; \
-		echo "   3. Réglages -> Général -> Informations -> Réglages des certificats"; \
-		echo "   4. Activer la confiance pour le certificat"; \
+		echo "$(DIM)Serveur actif. Appuyez Ctrl+C pour arrêter.$(NC)"; \
+		echo "$(DIM)Ou exécutez: pkill -f 'python3 -m http.server 8888'$(NC)"; \
+		wait; \
 	else \
-		echo "$(RED)❌ CA root non trouvé. Exécutez d'abord: mkcert -install$(NC)"; \
+		echo "$(RED)❌ Certificat CA non trouvé.$(NC)"; \
+		echo "   Exécutez d'abord: $(YELLOW)make setup-certs$(NC)"; \
 	fi
+
+share-cert-stop: ## 🛑 Arrêter le serveur de certificat
+	@pkill -f "python3 -m http.server 8888" 2>/dev/null && \
+		echo "$(GREEN)✅ Serveur de certificat arrêté$(NC)" || \
+		echo "$(DIM)Aucun serveur actif$(NC)"
 
 network-info: ## 📡 Afficher les informations réseau
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
