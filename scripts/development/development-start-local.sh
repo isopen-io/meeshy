@@ -3,7 +3,11 @@
 # ============================================================================
 # MEESHY - Script de demarrage developpement local
 # Demarre MongoDB + Redis en Docker, services natifs avec Bun
-# Accessible sur https://meeshy.local (configurer /etc/hosts)
+#
+# Modes:
+#   HTTP:  ./development-start-local.sh
+#   HTTPS: ./development-start-local.sh --secure
+#   Network: ./development-start-local.sh --secure --domain 192.168.1.171
 # ============================================================================
 
 set -e
@@ -19,7 +23,6 @@ NC='\033[0m'
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-LOCAL_DOMAIN="${LOCAL_DOMAIN:-meeshy.local}"
 
 # Repertoires des services
 WEB_DIR="apps/web"
@@ -33,36 +36,85 @@ TRANSLATOR_PID=""
 GATEWAY_PID=""
 FRONTEND_PID=""
 
-# Parse arguments
+# Options par defaut
+SECURE_MODE=false
+DOMAIN="localhost"
 FORCE_CONTAINERS=false
+START_CONTAINERS=auto  # auto, yes, no
+
+# Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --secure|-s)
+      SECURE_MODE=true
+      shift
+      ;;
+    --domain|-d)
+      DOMAIN="$2"
+      shift 2
+      ;;
+    --with-containers)
+      START_CONTAINERS=yes
+      shift
+      ;;
+    --no-containers)
+      START_CONTAINERS=no
+      shift
+      ;;
     --force-containers)
       FORCE_CONTAINERS=true
+      START_CONTAINERS=yes
       shift
       ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --force-containers  Forcer le redemarrage des containers"
-      echo "  -h, --help          Affiche cette aide"
+      echo "  -s, --secure          Mode HTTPS (necessite certificats)"
+      echo "  -d, --domain <host>   Domaine ou IP (defaut: localhost)"
+      echo "  --with-containers     Demarrer les containers Docker"
+      echo "  --no-containers       Ne pas demarrer les containers (doit etre deja en cours)"
+      echo "  --force-containers    Forcer le redemarrage des containers"
+      echo "  -h, --help            Affiche cette aide"
       echo ""
-      echo "Note: Les containers sont demarres automatiquement si necessaire"
+      echo "Exemples:"
+      echo "  $0                                    # HTTP sur localhost"
+      echo "  $0 --secure                           # HTTPS sur localhost"
+      echo "  $0 --secure --domain meeshy.local     # HTTPS sur meeshy.local"
+      echo "  $0 --secure --domain 192.168.1.171    # HTTPS sur IP (acces reseau)"
+      echo "  $0 --with-containers                  # Forcer demarrage containers"
       echo ""
       echo "Prerequis:"
       echo "  - make install   (installer les dependances)"
       echo "  - make setup-env (generer les fichiers .env)"
+      echo "  - Pour --secure: certificats dans apps/web/.cert/"
       exit 0
       ;;
     *)
       echo -e "${RED}Option inconnue: $1${NC}"
+      echo "Utilisez -h pour l'aide"
       exit 1
       ;;
   esac
 done
 
 cd "$PROJECT_ROOT"
+
+# Determiner le protocole
+if [ "$SECURE_MODE" = true ]; then
+    PROTOCOL="https"
+    WS_PROTOCOL="wss"
+else
+    PROTOCOL="http"
+    WS_PROTOCOL="ws"
+fi
+
+# Construire les URLs
+BASE_URL="${PROTOCOL}://${DOMAIN}"
+FRONTEND_URL="${BASE_URL}:3100"
+GATEWAY_URL="${BASE_URL}:3000"
+TRANSLATOR_URL="${BASE_URL}:8000"
+WS_URL="${WS_PROTOCOL}://${DOMAIN}:3000"
 
 # Fonction de nettoyage
 cleanup() {
@@ -83,11 +135,46 @@ cleanup() {
 
 trap cleanup INT TERM
 
-# Verifier les prerequis
+# Afficher la configuration
 echo -e "${CYAN}======================================${NC}"
 echo -e "${CYAN}  MEESHY - Developpement Local${NC}"
 echo -e "${CYAN}======================================${NC}"
 echo ""
+echo -e "${BLUE}Configuration:${NC}"
+PROTOCOL_UPPER=$(echo "$PROTOCOL" | tr '[:lower:]' '[:upper:]')
+echo -e "  Mode:    ${GREEN}${PROTOCOL_UPPER}${NC}"
+echo -e "  Domain:  ${GREEN}${DOMAIN}${NC}"
+echo ""
+
+# Verifier les certificats si mode HTTPS
+if [ "$SECURE_MODE" = true ]; then
+    CERT_DIR="${WEB_DIR}/.cert"
+    CERT_OK=false
+
+    # Verifier les differentes conventions de nommage
+    if [ -f "${CERT_DIR}/cert.pem" ] && [ -f "${CERT_DIR}/key.pem" ]; then
+        CERT_OK=true
+    elif [ -f "${CERT_DIR}/localhost.pem" ] && [ -f "${CERT_DIR}/localhost-key.pem" ]; then
+        CERT_OK=true
+    elif [ -f "${CERT_DIR}/${DOMAIN}.pem" ] && [ -f "${CERT_DIR}/${DOMAIN}-key.pem" ]; then
+        CERT_OK=true
+    fi
+
+    if [ "$CERT_OK" = false ]; then
+        echo -e "${RED}Certificats SSL manquants pour le mode HTTPS!${NC}"
+        echo -e "${YELLOW}  Attendu dans: ${CERT_DIR}/${NC}"
+        echo -e "${YELLOW}    - cert.pem + key.pem${NC}"
+        echo -e "${YELLOW}    - localhost.pem + localhost-key.pem${NC}"
+        echo -e "${YELLOW}    - ${DOMAIN}.pem + ${DOMAIN}-key.pem${NC}"
+        echo ""
+        echo -e "${YELLOW}Pour generer les certificats:${NC}"
+        echo -e "  mkcert -install"
+        echo -e "  mkcert -cert-file ${CERT_DIR}/cert.pem -key-file ${CERT_DIR}/key.pem localhost ${DOMAIN} 127.0.0.1 ::1"
+        exit 1
+    fi
+    echo -e "${GREEN}  Certificats SSL OK${NC}"
+    echo ""
+fi
 
 # Verifier les fichiers .env
 echo -e "${BLUE}Verification des fichiers .env...${NC}"
@@ -167,7 +254,7 @@ fi
 echo -e "${GREEN}  Ports disponibles${NC}"
 echo ""
 
-# Verifier si l'infrastructure est deja en cours
+# Gestion des containers
 echo -e "${BLUE}Verification de l'infrastructure...${NC}"
 MONGO_OK=false
 REDIS_OK=false
@@ -182,10 +269,30 @@ if nc -z localhost 6379 2>/dev/null; then
     echo -e "${GREEN}  Redis deja accessible${NC}"
 fi
 
-# Demarrer les containers si necessaire ou force
-if [ "$MONGO_OK" = false ] || [ "$REDIS_OK" = false ] || [ "$FORCE_CONTAINERS" = true ]; then
+# Decider si on demarre les containers
+SHOULD_START_CONTAINERS=false
+
+if [ "$START_CONTAINERS" = "yes" ]; then
+    SHOULD_START_CONTAINERS=true
+elif [ "$START_CONTAINERS" = "no" ]; then
+    # Verifier qu'ils sont disponibles
+    if [ "$MONGO_OK" = false ] || [ "$REDIS_OK" = false ]; then
+        echo -e "${RED}  MongoDB ou Redis non accessible!${NC}"
+        echo -e "${YELLOW}  Utilisez --with-containers pour les demarrer${NC}"
+        exit 1
+    fi
+elif [ "$START_CONTAINERS" = "auto" ]; then
+    # Mode auto: demarrer si necessaire
+    if [ "$MONGO_OK" = false ] || [ "$REDIS_OK" = false ]; then
+        SHOULD_START_CONTAINERS=true
+    fi
+fi
+
+# Demarrer les containers si necessaire
+if [ "$SHOULD_START_CONTAINERS" = true ] || [ "$FORCE_CONTAINERS" = true ]; then
     if [ "$FORCE_CONTAINERS" = true ]; then
         echo -e "${YELLOW}  Redemarrage force des containers...${NC}"
+        docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
     else
         echo -e "${YELLOW}  Demarrage de l'infrastructure Docker...${NC}"
     fi
@@ -213,6 +320,7 @@ if [ "$MONGO_OK" = false ] || [ "$REDIS_OK" = false ] || [ "$FORCE_CONTAINERS" =
     }
     ' 2>/dev/null || true
 
+    sleep 2
     echo -e "${GREEN}  Infrastructure demarree${NC}"
 else
     echo -e "${GREEN}  Infrastructure deja en cours${NC}"
@@ -220,7 +328,7 @@ fi
 echo ""
 
 # Creer les repertoires de logs
-mkdir -p "${TRANSLATOR_DIR}/logs" "${GATEWAY_DIR}/logs"
+mkdir -p "${TRANSLATOR_DIR}/logs" "${GATEWAY_DIR}/logs" "${WEB_DIR}/.next"
 
 # Demarrer les services
 echo -e "${BLUE}Demarrage des services natifs...${NC}"
@@ -258,10 +366,13 @@ echo -e "${GREEN}======================================${NC}"
 echo -e "${GREEN}  SERVICES DEMARRES${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo ""
-echo -e "${BLUE}URLs:${NC}"
-echo -e "  Frontend:   ${GREEN}http://localhost:3100${NC}"
-echo -e "  Gateway:    ${GREEN}http://localhost:3000${NC}"
-echo -e "  Translator: ${GREEN}http://localhost:8000${NC}"
+echo -e "${BLUE}URLs (${PROTOCOL_UPPER}):${NC}"
+echo -e "  Frontend:   ${GREEN}${FRONTEND_URL}${NC}"
+echo -e "  Gateway:    ${GREEN}${GATEWAY_URL}${NC}"
+echo -e "  Translator: ${GREEN}${TRANSLATOR_URL}${NC}"
+echo -e "  WebSocket:  ${GREEN}${WS_URL}${NC}"
+echo ""
+echo -e "${BLUE}Infrastructure:${NC}"
 echo -e "  MongoDB:    ${GREEN}mongodb://localhost:27017${NC}"
 echo -e "  Redis:      ${GREEN}redis://localhost:6379${NC}"
 echo ""
@@ -270,6 +381,17 @@ echo -e "  tail -f ${TRANSLATOR_DIR}/logs/translator.log"
 echo -e "  tail -f ${GATEWAY_DIR}/logs/gateway.log"
 echo -e "  tail -f ${WEB_DIR}/.next/frontend.log"
 echo ""
+
+# Afficher les variables .env importantes
+if [ "$DOMAIN" != "localhost" ]; then
+    echo -e "${YELLOW}Note: Verifiez que vos .env utilisent le bon domaine:${NC}"
+    echo -e "  NEXT_PUBLIC_API_URL=${GATEWAY_URL}"
+    echo -e "  NEXT_PUBLIC_WS_URL=${WS_URL}"
+    echo -e "  FRONTEND_URL=${FRONTEND_URL}"
+    echo -e "  CORS_ORIGINS=...${FRONTEND_URL}..."
+    echo ""
+fi
+
 echo -e "${YELLOW}Ctrl+C pour arreter${NC}"
 echo ""
 
