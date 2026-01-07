@@ -591,10 +591,30 @@ _copy-certs-to-docker: ## (interne) Copie les certificats vers Docker
 # INSTALLATION
 # =============================================================================
 
-install: ## Installer toutes les dépendances (JS + Python)
+install: ## Installer toutes les dépendances (JS + Python + outils)
 	@echo "$(BLUE)📦 Installation des dépendances JavaScript avec $(JS_RUNTIME)...$(NC)"
 	@$(JS_RUNTIME) install
 	@echo ""
+ifeq ($(OS),macos)
+	@echo "$(BLUE)📦 Installation des outils système (macOS)...$(NC)"
+	@if command -v brew >/dev/null 2>&1; then \
+		if ! command -v qrencode >/dev/null 2>&1; then \
+			echo "  Installing qrencode (for make share-cert QR codes)..."; \
+			brew install qrencode 2>/dev/null || echo "  $(YELLOW)⚠️  qrencode installation failed (optional)$(NC)"; \
+		else \
+			echo "  $(GREEN)✓$(NC) qrencode already installed"; \
+		fi; \
+		if ! command -v mkcert >/dev/null 2>&1; then \
+			echo "  Installing mkcert (for local HTTPS certificates)..."; \
+			brew install mkcert 2>/dev/null || echo "  $(YELLOW)⚠️  mkcert installation failed$(NC)"; \
+		else \
+			echo "  $(GREEN)✓$(NC) mkcert already installed"; \
+		fi; \
+	else \
+		echo "  $(YELLOW)⚠️  Homebrew not found. Install manually: brew install qrencode mkcert$(NC)"; \
+	fi
+	@echo ""
+endif
 	@echo "$(BLUE)📦 Installation des dépendances Python (via pyenv Python 3.11)...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -f .python-version ]; then \
@@ -1181,9 +1201,9 @@ _show-network-urls:
 	@echo "$(BOLD)📋 Ou ajoutez dans /etc/hosts des autres machines:$(NC)"
 	@echo "   $(CYAN)$(HOST_IP)    $(HOST) $(LOCAL_DOMAIN)$(NC)"
 
-share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP)
+share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP + alternatives)
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(CYAN)║     📱 Serveur de Certificat CA pour Mobiles                ║$(NC)"
+	@echo "$(CYAN)║     📱 Partage du Certificat CA pour Mobiles                ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@CA_ROOT=$$(mkcert -CAROOT 2>/dev/null); \
@@ -1194,37 +1214,83 @@ share-cert: ## 📱 Partager le certificat CA pour mobiles (serveur HTTP)
 	if [ -f "$$CERT_FILE" ]; then \
 		CERT_DIR=$$(dirname "$$CERT_FILE"); \
 		CERT_NAME=$$(basename "$$CERT_FILE"); \
+		CERT_PATH="$$(cd "$$CERT_DIR" && pwd)/$$CERT_NAME"; \
+		echo "$(BOLD)📍 Certificat CA:$(NC)"; \
+		echo "   $(CYAN)$$CERT_PATH$(NC)"; \
+		echo ""; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "$(BOLD)Option 1: 🌐 Serveur HTTP (recommandé)$(NC)"; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
 		pkill -f "python3 -m http.server 8888" 2>/dev/null || true; \
-		echo "$(GREEN)✅ Démarrage du serveur HTTP sur port 8888...$(NC)"; \
-		cd "$$CERT_DIR" && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 & \
-		sleep 1; \
-		echo ""; \
-		echo "$(BOLD)📥 Téléchargez le certificat sur votre appareil:$(NC)"; \
-		echo ""; \
-		echo "   $(GREEN)http://$(HOST_IP):8888/$$CERT_NAME$(NC)"; \
-		echo ""; \
-		if command -v qrencode >/dev/null 2>&1; then \
-			echo "$(BOLD)📱 Scannez ce QR code:$(NC)"; \
-			qrencode -t ANSIUTF8 "http://$(HOST_IP):8888/$$CERT_NAME"; \
-			echo ""; \
+		if cd "$$CERT_DIR" && python3 -m http.server 8888 --bind 0.0.0.0 > /dev/null 2>&1 & then \
+			HTTP_PID=$$!; \
+			sleep 1; \
+			if kill -0 $$HTTP_PID 2>/dev/null; then \
+				echo "$(GREEN)✅ Serveur HTTP démarré sur port 8888$(NC)"; \
+				echo ""; \
+				echo "$(BOLD)📥 URL de téléchargement:$(NC)"; \
+				echo "   $(GREEN)http://$(HOST_IP):8888/$$CERT_NAME$(NC)"; \
+				echo ""; \
+				if command -v qrencode >/dev/null 2>&1; then \
+					echo "$(BOLD)📱 Scannez ce QR code avec votre téléphone:$(NC)"; \
+					qrencode -t ANSIUTF8 "http://$(HOST_IP):8888/$$CERT_NAME"; \
+				else \
+					echo "$(DIM)💡 Installez qrencode pour afficher un QR code: brew install qrencode$(NC)"; \
+				fi; \
+			else \
+				echo "$(YELLOW)⚠️  Échec du démarrage du serveur HTTP$(NC)"; \
+				echo "   Utilisez les alternatives ci-dessous"; \
+			fi; \
+		else \
+			echo "$(YELLOW)⚠️  Python3 non disponible pour le serveur HTTP$(NC)"; \
 		fi; \
-		echo "$(BOLD)📲 Installation sur iPhone:$(NC)"; \
-		echo "   1. Ouvrez l'URL ci-dessus dans Safari"; \
-		echo "   2. $(YELLOW)Autoriser$(NC) le téléchargement du profil"; \
-		echo "   3. $(YELLOW)Réglages → Général → VPN et gestion$(NC) → Installer"; \
-		echo "   4. $(YELLOW)Réglages → Général → Informations → Certificats$(NC)"; \
-		echo "   5. $(GREEN)Activer la confiance totale$(NC) pour le certificat"; \
 		echo ""; \
-		echo "$(BOLD)📲 Installation sur Android:$(NC)"; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "$(BOLD)Option 2: 📤 AirDrop (macOS → iPhone)$(NC)"; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "   Ouvrez le Finder et faites glisser le fichier vers AirDrop:"; \
+		echo "   $(CYAN)$$CERT_PATH$(NC)"; \
+		echo ""; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "$(BOLD)Option 3: 📧 Email$(NC)"; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "   Envoyez le fichier .pem par email et ouvrez-le sur mobile"; \
+		echo ""; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "$(BOLD)Option 4: 🔧 Serveur HTTP manuel$(NC)"; \
+		echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "   cd $$CERT_DIR && python3 -m http.server 8888"; \
+		echo "   Puis ouvrez: http://$(HOST_IP):8888/$$CERT_NAME"; \
+		echo ""; \
+		echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"; \
+		echo "$(BOLD)📲 INSTALLATION SUR iPHONE:$(NC)"; \
+		echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"; \
+		echo "   1. Ouvrez l'URL/fichier dans $(YELLOW)Safari$(NC) (pas Chrome!)"; \
+		echo "   2. Appuyez sur $(YELLOW)Autoriser$(NC) pour télécharger le profil"; \
+		echo "   3. Allez dans $(YELLOW)Réglages → Général → VPN et gestion$(NC)"; \
+		echo "   4. Appuyez sur le profil → $(YELLOW)Installer$(NC)"; \
+		echo "   5. Allez dans $(YELLOW)Réglages → Général → Informations$(NC)"; \
+		echo "   6. $(YELLOW)Réglages des certificats$(NC) (tout en bas)"; \
+		echo "   7. $(GREEN)Activer la confiance totale$(NC) pour le certificat"; \
+		echo ""; \
+		echo "$(BOLD)📲 INSTALLATION SUR ANDROID:$(NC)"; \
+		echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"; \
 		echo "   1. Téléchargez le fichier .pem"; \
-		echo "   2. $(YELLOW)Paramètres → Sécurité → Installer certificat$(NC)"; \
+		echo "   2. $(YELLOW)Paramètres → Sécurité → Installer certificat CA$(NC)"; \
 		echo ""; \
-		echo "$(DIM)Serveur actif. Appuyez Ctrl+C pour arrêter.$(NC)"; \
-		echo "$(DIM)Ou exécutez: pkill -f 'python3 -m http.server 8888'$(NC)"; \
+		echo "$(DIM)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+		echo "$(DIM)Serveur HTTP actif. Ctrl+C pour arrêter.$(NC)"; \
+		echo "$(DIM)Ou: make share-cert-stop$(NC)"; \
 		wait; \
 	else \
 		echo "$(RED)❌ Certificat CA non trouvé.$(NC)"; \
-		echo "   Exécutez d'abord: $(YELLOW)make setup-certs$(NC)"; \
+		echo ""; \
+		echo "$(BOLD)Pour générer les certificats:$(NC)"; \
+		echo "   $(YELLOW)make setup-certs$(NC)"; \
+		echo ""; \
+		echo "$(BOLD)Prérequis:$(NC)"; \
+		echo "   $(YELLOW)brew install mkcert$(NC)"; \
+		echo "   $(YELLOW)mkcert -install$(NC)"; \
 	fi
 
 share-cert-stop: ## 🛑 Arrêter le serveur de certificat
