@@ -26,7 +26,7 @@ services:
   # DATABASE - MongoDB with Replica Set
   # ===========================================================================
   database:
-    image: mongo:7.0
+    image: mongo:8.0
     container_name: meeshy-dev-database
     restart: unless-stopped
     command: mongod --replSet rs0 --bind_ip_all --noauth
@@ -49,7 +49,7 @@ services:
 
   # MongoDB Replica Set Init (one-shot)
   mongo-init:
-    image: mongo:7.0
+    image: mongo:8.0
     container_name: meeshy-dev-mongo-init
     depends_on:
       database:
@@ -73,7 +73,7 @@ services:
   # REDIS - Cache
   # ===========================================================================
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: meeshy-dev-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
