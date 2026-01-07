@@ -1,9 +1,11 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
 import { emailSchema } from '@meeshy/shared/types/validation';
+import { EmailService } from './EmailService';
 
 export interface LoginCredentials {
   username: string;
@@ -30,10 +32,30 @@ export interface TokenPayload {
 export class AuthService {
   private prisma: PrismaClient;
   private jwtSecret: string;
+  private emailService: EmailService;
+  private frontendUrl: string;
 
   constructor(prisma: PrismaClient, jwtSecret: string) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
+    this.emailService = new EmailService();
+    this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
+  }
+
+  /**
+   * Generate a secure random token and return both raw and hashed versions
+   */
+  private generateVerificationToken(): { raw: string; hash: string } {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    return { raw: rawToken, hash: hashedToken };
+  }
+
+  /**
+   * Hash a token for comparison
+   */
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -90,7 +112,18 @@ export class AuthService {
         }
       });
 
-      // Convertir en SocketIOUser
+      // Check email verification status
+      // If not verified, resend verification email
+      if (!user.emailVerifiedAt) {
+        console.log('[AUTH_SERVICE] ⚠️ Email non vérifié pour:', user.email);
+        try {
+          await this.resendVerificationEmail(user.email);
+        } catch (emailError) {
+          console.error('[AUTH_SERVICE] ⚠️ Échec du renvoi de l\'email de vérification:', emailError);
+        }
+      }
+
+      // Convertir en SocketIOUser (with emailVerifiedAt included)
       return this.userToSocketIOUser(user);
 
     } catch (error) {
@@ -155,6 +188,11 @@ export class AuthService {
       const BCRYPT_COST = 12;
       const hashedPassword = await bcrypt.hash(data.password, BCRYPT_COST);
 
+      // Generate email verification token (24h expiry)
+      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
+      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
+      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
+
       // Créer l'utilisateur avec les données normalisées
       const user = await this.prisma.user.create({
         data: {
@@ -169,9 +207,27 @@ export class AuthService {
           displayName: normalizedDisplayName,
           isOnline: true,
           lastSeen: new Date(),
-          lastActiveAt: new Date()
+          lastActiveAt: new Date(),
+          // Email verification fields
+          emailVerificationToken: verificationTokenHash,
+          emailVerificationExpiry: verificationExpiry
         }
       });
+
+      // Send email verification email
+      try {
+        const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+        await this.emailService.sendEmailVerification({
+          to: normalizedEmail,
+          name: normalizedDisplayName,
+          verificationLink,
+          expiryHours: tokenExpiryHours
+        });
+        console.log('[AUTH_SERVICE] ✅ Email de vérification envoyé à:', normalizedEmail);
+      } catch (emailError) {
+        console.error('[AUTH_SERVICE] ⚠️ Échec de l\'envoi de l\'email de vérification:', emailError);
+        // Don't fail registration if email fails - user can request a new one
+      }
 
       // Ajouter automatiquement l'utilisateur à la conversation globale "meeshy"
       try {
@@ -289,6 +345,135 @@ export class AuthService {
       });
     } catch (error) {
       console.error('Error updating online status:', error);
+    }
+  }
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(token: string, email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const hashedToken = this.hashToken(token);
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Find user with matching token and email
+      const user = await this.prisma.user.findFirst({
+        where: {
+          email: { equals: normalizedEmail, mode: 'insensitive' },
+          emailVerificationToken: hashedToken,
+          emailVerificationExpiry: { gt: new Date() }
+        }
+      });
+
+      if (!user) {
+        // Check if token expired
+        const expiredUser = await this.prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            emailVerificationToken: hashedToken
+          }
+        });
+
+        if (expiredUser) {
+          return { success: false, error: 'Le lien de vérification a expiré. Veuillez en demander un nouveau.' };
+        }
+        return { success: false, error: 'Lien de vérification invalide.' };
+      }
+
+      // Already verified?
+      if (user.emailVerifiedAt) {
+        return { success: true }; // Already verified, return success
+      }
+
+      // Update user as verified
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerifiedAt: new Date(),
+          emailVerificationToken: null,
+          emailVerificationExpiry: null
+        }
+      });
+
+      console.log('[AUTH_SERVICE] ✅ Email vérifié pour:', user.email);
+      return { success: true };
+
+    } catch (error) {
+      console.error('[AUTH_SERVICE] ❌ Erreur lors de la vérification email:', error);
+      return { success: false, error: 'Erreur lors de la vérification.' };
+    }
+  }
+
+  /**
+   * Resend email verification
+   */
+  async resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Find user by email
+      const user = await this.prisma.user.findFirst({
+        where: {
+          email: { equals: normalizedEmail, mode: 'insensitive' },
+          isActive: true
+        }
+      });
+
+      if (!user) {
+        // Don't reveal if user exists
+        return { success: true };
+      }
+
+      // Already verified?
+      if (user.emailVerifiedAt) {
+        return { success: false, error: 'Cette adresse email est déjà vérifiée.' };
+      }
+
+      // Generate new token
+      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
+      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600;
+      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
+
+      // Update user with new token
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerificationToken: verificationTokenHash,
+          emailVerificationExpiry: verificationExpiry
+        }
+      });
+
+      // Send email
+      const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+      await this.emailService.sendEmailVerification({
+        to: normalizedEmail,
+        name: user.displayName || `${user.firstName} ${user.lastName}`,
+        verificationLink,
+        expiryHours: tokenExpiryHours
+      });
+
+      console.log('[AUTH_SERVICE] ✅ Email de vérification renvoyé à:', normalizedEmail);
+      return { success: true };
+
+    } catch (error) {
+      console.error('[AUTH_SERVICE] ❌ Erreur lors du renvoi de l\'email:', error);
+      return { success: false, error: 'Erreur lors de l\'envoi de l\'email.' };
+    }
+  }
+
+  /**
+   * Check if user email is verified
+   */
+  async isEmailVerified(userId: string): Promise<boolean> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { emailVerifiedAt: true }
+      });
+      return !!user?.emailVerifiedAt;
+    } catch (error) {
+      console.error('[AUTH_SERVICE] Error checking email verification:', error);
+      return false;
     }
   }
 

@@ -1,6 +1,6 @@
 /**
  * Email Service for sending transactional emails
- * Supports SendGrid and Mailgun (configurable)
+ * Supports Brevo (formerly Sendinblue), SendGrid and Mailgun (configurable)
  */
 
 export interface PasswordResetEmailData {
@@ -8,6 +8,13 @@ export interface PasswordResetEmailData {
   name: string;
   resetLink: string;
   expiryMinutes: number;
+}
+
+export interface EmailVerificationData {
+  to: string;
+  name: string;
+  verificationLink: string;
+  expiryHours: number;
 }
 
 export interface PasswordChangedEmailData {
@@ -26,15 +33,27 @@ export interface SecurityAlertEmailData {
 }
 
 export class EmailService {
-  private provider: 'sendgrid' | 'mailgun';
+  private provider: 'brevo' | 'sendgrid' | 'mailgun';
   private apiKey: string;
   private fromEmail: string;
   private fromName: string;
 
   constructor() {
-    this.provider = (process.env.EMAIL_PROVIDER as 'sendgrid' | 'mailgun') || 'sendgrid';
-    this.apiKey = process.env.SENDGRID_API_KEY || process.env.MAILGUN_API_KEY || '';
-    this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.com';
+    // Default to Brevo, then SendGrid, then Mailgun
+    if (process.env.BREVO_API_KEY) {
+      this.provider = 'brevo';
+      this.apiKey = process.env.BREVO_API_KEY;
+    } else if (process.env.SENDGRID_API_KEY) {
+      this.provider = 'sendgrid';
+      this.apiKey = process.env.SENDGRID_API_KEY;
+    } else if (process.env.MAILGUN_API_KEY) {
+      this.provider = 'mailgun';
+      this.apiKey = process.env.MAILGUN_API_KEY;
+    } else {
+      this.provider = (process.env.EMAIL_PROVIDER as 'brevo' | 'sendgrid' | 'mailgun') || 'brevo';
+      this.apiKey = '';
+    }
+    this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
   }
 
@@ -130,6 +149,110 @@ The Meeshy Team
 ---
 This is an automated email. Please do not reply to this message.
 © ${new Date().getFullYear()} Meeshy. All rights reserved.
+    `.trim();
+
+    await this.sendEmail({ to, subject, html, text });
+  }
+
+  /**
+   * Send email verification email
+   */
+  async sendEmailVerification(data: EmailVerificationData): Promise<void> {
+    const { to, name, verificationLink, expiryHours } = data;
+
+    const subject = 'Vérifiez votre adresse email - Meeshy';
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vérification de votre email</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); color: white; padding: 14px 32px;
+                    text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; font-size: 16px; }
+          .button:hover { opacity: 0.9; }
+          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;
+                    font-size: 12px; color: #6b7280; text-align: center; }
+          .info { background: #EEF2FF; border-left: 4px solid #6366F1; padding: 12px; margin: 20px 0; border-radius: 4px; }
+          .welcome-emoji { font-size: 48px; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="welcome-emoji">🎉</div>
+            <h1>Bienvenue sur Meeshy !</h1>
+          </div>
+
+          <div class="content">
+            <p>Bonjour <strong>${name}</strong>,</p>
+
+            <p>Merci de vous être inscrit sur Meeshy ! Pour activer votre compte et commencer à discuter
+            avec le monde entier, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
+
+            <div style="text-align: center;">
+              <a href="${verificationLink}" class="button">✓ Vérifier mon email</a>
+            </div>
+
+            <p>Ou copiez et collez ce lien dans votre navigateur :</p>
+            <p style="word-break: break-all; color: #6366F1; font-size: 14px;">${verificationLink}</p>
+
+            <div class="info">
+              <strong>ℹ️ À savoir :</strong>
+              <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>Ce lien expire dans <strong>${expiryHours} heures</strong></li>
+                <li>Si vous n'avez pas créé de compte Meeshy, ignorez simplement cet email</li>
+              </ul>
+            </div>
+
+            <p>Une fois vérifié, vous pourrez profiter de toutes les fonctionnalités de Meeshy :</p>
+            <ul>
+              <li>💬 Discuter dans n'importe quelle langue</li>
+              <li>🌍 Traduction automatique en temps réel</li>
+              <li>🎤 Messages vocaux traduits</li>
+              <li>👥 Rejoindre des communautés du monde entier</li>
+            </ul>
+
+            <p>À très bientôt sur Meeshy !<br>
+            <strong>L'équipe Meeshy</strong></p>
+          </div>
+
+          <div class="footer">
+            <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
+            <p>&copy; ${new Date().getFullYear()} Meeshy. Tous droits réservés.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+Bienvenue sur Meeshy !
+
+Bonjour ${name},
+
+Merci de vous être inscrit sur Meeshy ! Pour activer votre compte, veuillez vérifier votre adresse email en cliquant sur le lien ci-dessous :
+
+${verificationLink}
+
+À SAVOIR :
+- Ce lien expire dans ${expiryHours} heures
+- Si vous n'avez pas créé de compte Meeshy, ignorez simplement cet email
+
+Une fois vérifié, vous pourrez profiter de toutes les fonctionnalités de Meeshy !
+
+À très bientôt sur Meeshy !
+L'équipe Meeshy
+
+---
+Cet email a été envoyé automatiquement. Merci de ne pas y répondre.
+© ${new Date().getFullYear()} Meeshy. Tous droits réservés.
     `.trim();
 
     await this.sendEmail({ to, subject, html, text });
@@ -349,13 +472,65 @@ This is an automated security alert.
   }): Promise<void> {
     const { to, subject, html, text } = data;
 
-    if (this.provider === 'sendgrid') {
+    if (!this.apiKey) {
+      console.warn('[EmailService] ⚠️ No API key configured - email not sent to:', to);
+      console.log('[EmailService] Subject:', subject);
+      return;
+    }
+
+    if (this.provider === 'brevo') {
+      await this.sendViaBrevo({ to, subject, html, text });
+    } else if (this.provider === 'sendgrid') {
       await this.sendViaSendGrid({ to, subject, html, text });
     } else if (this.provider === 'mailgun') {
       await this.sendViaMailgun({ to, subject, html, text });
     } else {
       console.error('[EmailService] Invalid email provider:', this.provider);
       throw new Error('Invalid email provider');
+    }
+  }
+
+  /**
+   * Send email via Brevo (formerly Sendinblue)
+   */
+  private async sendViaBrevo(data: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<void> {
+    const { to, subject, html, text } = data;
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': this.apiKey,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: this.fromName,
+            email: this.fromEmail
+          },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[EmailService] Brevo error:', error);
+        throw new Error(`Brevo API error: ${response.status}`);
+      }
+
+      console.log('[EmailService] ✅ Email sent via Brevo to:', to);
+    } catch (error) {
+      console.error('[EmailService] Failed to send email via Brevo:', error);
+      throw error;
     }
   }
 
