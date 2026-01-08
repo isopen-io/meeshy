@@ -3,9 +3,13 @@ Tests for config/message_limits.py
 Validates message length limits and validation functions
 """
 
-import pytest
+import sys
 import os
+import pytest
 from unittest.mock import patch
+
+# Add src to path (same as conftest.py)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 
 class TestMessageLimits:
@@ -30,7 +34,7 @@ class TestMessageLimits:
         try:
             # Reimport to get defaults without env vars
             import importlib
-            import src.config.message_limits as ml
+            import config.message_limits as ml
             importlib.reload(ml)
 
             # Aligned with gateway/src/config/message-limits.ts
@@ -52,7 +56,7 @@ class TestMessageLimits:
         }):
             # Need to reimport to pick up new env vars
             import importlib
-            import src.config.message_limits as ml
+            import config.message_limits as ml
             importlib.reload(ml)
 
             assert ml.MessageLimits.MAX_MESSAGE_LENGTH == 2048
@@ -66,7 +70,7 @@ class TestValidateMessageLength:
 
     def test_valid_message(self):
         """Test validation of valid message"""
-        from src.config.message_limits import validate_message_length
+        from config.message_limits import validate_message_length
 
         is_valid, error = validate_message_length("Hello world")
         assert is_valid is True
@@ -74,7 +78,7 @@ class TestValidateMessageLength:
 
     def test_empty_message(self):
         """Test validation rejects empty message"""
-        from src.config.message_limits import validate_message_length
+        from config.message_limits import validate_message_length
 
         is_valid, error = validate_message_length("")
         assert is_valid is False
@@ -82,7 +86,7 @@ class TestValidateMessageLength:
 
     def test_whitespace_only_message(self):
         """Test validation rejects whitespace-only message"""
-        from src.config.message_limits import validate_message_length
+        from config.message_limits import validate_message_length
 
         is_valid, error = validate_message_length("   \n\t  ")
         assert is_valid is False
@@ -90,14 +94,14 @@ class TestValidateMessageLength:
 
     def test_none_message(self):
         """Test validation handles None"""
-        from src.config.message_limits import validate_message_length
+        from config.message_limits import validate_message_length
 
         is_valid, error = validate_message_length(None)
         assert is_valid is False
 
     def test_message_too_long(self):
         """Test validation rejects message exceeding limit"""
-        from src.config.message_limits import validate_message_length, MessageLimits
+        from config.message_limits import validate_message_length, MessageLimits
 
         long_message = "x" * (MessageLimits.MAX_MESSAGE_LENGTH + 1)
         is_valid, error = validate_message_length(long_message)
@@ -108,7 +112,7 @@ class TestValidateMessageLength:
 
     def test_message_at_limit(self):
         """Test message exactly at limit is valid"""
-        from src.config.message_limits import validate_message_length, MessageLimits
+        from config.message_limits import validate_message_length, MessageLimits
 
         exact_message = "x" * MessageLimits.MAX_MESSAGE_LENGTH
         is_valid, error = validate_message_length(exact_message)
@@ -122,20 +126,20 @@ class TestCanTranslateMessage:
 
     def test_short_message_can_translate(self):
         """Test short messages can be translated"""
-        from src.config.message_limits import can_translate_message
+        from config.message_limits import can_translate_message
 
         assert can_translate_message("Bonjour") is True
 
     def test_long_message_can_translate(self):
         """Test messages within limit can be translated"""
-        from src.config.message_limits import can_translate_message, MessageLimits
+        from config.message_limits import can_translate_message, MessageLimits
 
         message = "x" * MessageLimits.MAX_TRANSLATION_LENGTH
         assert can_translate_message(message) is True
 
     def test_too_long_message_cannot_translate(self):
         """Test messages exceeding limit cannot be translated"""
-        from src.config.message_limits import can_translate_message, MessageLimits
+        from config.message_limits import can_translate_message, MessageLimits
 
         message = "x" * (MessageLimits.MAX_TRANSLATION_LENGTH + 1)
         assert can_translate_message(message) is False
@@ -146,20 +150,20 @@ class TestShouldConvertToTextAttachment:
 
     def test_short_message_no_attachment(self):
         """Test short messages don't become attachments"""
-        from src.config.message_limits import should_convert_to_text_attachment
+        from config.message_limits import should_convert_to_text_attachment
 
         assert should_convert_to_text_attachment("Short message") is False
 
     def test_long_message_becomes_attachment(self):
         """Test long messages become attachments"""
-        from src.config.message_limits import should_convert_to_text_attachment, MessageLimits
+        from config.message_limits import should_convert_to_text_attachment, MessageLimits
 
         long_message = "x" * (MessageLimits.MAX_TEXT_ATTACHMENT_THRESHOLD + 1)
         assert should_convert_to_text_attachment(long_message) is True
 
     def test_message_at_threshold_no_attachment(self):
         """Test message at threshold doesn't become attachment"""
-        from src.config.message_limits import should_convert_to_text_attachment, MessageLimits
+        from config.message_limits import should_convert_to_text_attachment, MessageLimits
 
         exact_message = "x" * MessageLimits.MAX_TEXT_ATTACHMENT_THRESHOLD
         assert should_convert_to_text_attachment(exact_message) is False
