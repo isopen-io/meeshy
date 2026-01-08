@@ -360,8 +360,8 @@ export const getTranslationUrl = (): string => {
 
     return trimSlashes(config.translation.url);
   }
-  // Côté serveur (SSR)
-  return trimSlashes(process.env.NEXT_PUBLIC_TRANSLATION_URL || config.translation.url);
+  // Côté serveur (SSR/BFF) - utiliser INTERNAL_TRANSLATION_URL pour les appels internes Docker
+  return trimSlashes(process.env.INTERNAL_TRANSLATION_URL || process.env.NEXT_PUBLIC_TRANSLATION_URL || config.translation.url);
 };
 
 // Static files URL - Gère automatiquement client/serveur
