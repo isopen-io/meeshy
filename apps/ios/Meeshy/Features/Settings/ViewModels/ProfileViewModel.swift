@@ -151,7 +151,6 @@ final class ProfileViewModel: ObservableObject {
                 phoneNumber: "+33 6 12 34 56 78",
                 displayName: "Utilisateur Demo",
                 isOnline: true,
-                lastSeen: Date(),
                 lastActiveAt: Date(),
                 systemLanguage: "fr",
                 regionalLanguage: "fr",

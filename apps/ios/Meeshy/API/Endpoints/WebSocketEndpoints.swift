@@ -156,7 +156,7 @@ enum WebSocketEndpoints {
 
         /// Generic presence update
         /// - Event: `user:presence`
-        /// - Data: `{ userId, status: "online"|"away"|"offline", lastSeen? }`
+        /// - Data: `{ userId, status: "online"|"away"|"offline", lastActiveAt? }`
         case update
     }
 

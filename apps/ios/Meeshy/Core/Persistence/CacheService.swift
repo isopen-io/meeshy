@@ -98,7 +98,7 @@ final class CacheService: @unchecked Sendable {
         cachedUser.bio = user.bio
         cachedUser.preferredLanguage = user.systemLanguage
         cachedUser.isOnline = user.isOnline
-        cachedUser.lastSeen = user.lastSeen
+        cachedUser.lastActiveAt = user.lastActiveAt
         cachedUser.createdAt = user.createdAt
         cachedUser.updatedAt = Date()
 
@@ -136,8 +136,7 @@ final class CacheService: @unchecked Sendable {
             displayName: cachedUser.displayName,
             avatar: cachedUser.avatarURL,
             isOnline: cachedUser.isOnline,
-            lastSeen: cachedUser.lastSeen,
-            lastActiveAt: cachedUser.lastSeen,
+            lastActiveAt: cachedUser.lastActiveAt,
             systemLanguage: cachedUser.preferredLanguage ?? "en",
             autoTranslateEnabled: cachedUser.autoTranslateEnabled,
             twoFactorEnabledAt: cachedUser.twoFactorEnabled ? Date() : nil,

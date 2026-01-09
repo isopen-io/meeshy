@@ -16,24 +16,19 @@ struct MockDataGenerator {
         email: String = "test@meeshy.com",
         username: String = "testuser",
         displayName: String? = "Test User",
-        avatarUrl: String? = nil,
+        avatar: String? = nil,
         language: String = "en",
-        isOnline: Bool = true,
-        biometricEnabled: Bool = false
+        isOnline: Bool = true
     ) -> User {
         return User(
             id: id,
-            email: email,
             username: username,
+            email: email,
             displayName: displayName,
-            avatarUrl: avatarUrl,
-            preferredLanguage: language,
+            avatar: avatar,
             isOnline: isOnline,
-            lastSeen: Date(),
-            biometricEnabled: biometricEnabled,
-            twoFactorEnabled: false,
-            createdAt: Date(),
-            updatedAt: Date()
+            lastActiveAt: Date(),
+            systemLanguage: language
         )
     }
 
