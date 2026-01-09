@@ -841,92 +841,112 @@ export async function userRoutes(fastify: FastifyInstance) {
           error: 'User must be authenticated to search users'
         });
       }
-      
-      const { q } = request.query as { q?: string };
+
+      const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
       if (!q || q.trim().length < 2) {
         return reply.send({
           success: true,
-          data: []
+          data: [],
+          pagination: {
+            total: 0,
+            limit: parseInt(limit, 10),
+            offset: parseInt(offset, 10),
+            hasMore: false
+          }
         });
       }
-      
+
       const searchTerm = q.trim();
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const whereClause = {
+        AND: [
+          {
+            isActive: true, // Seulement les utilisateurs actifs
+            OR: [
+              { deletedAt: null }, // Champ existe et est null
+              { deletedAt: { isSet: false } } // Champ n'existe pas (MongoDB)
+            ]
+          },
+          {
+            OR: [
+              {
+                firstName: {
+                  contains: searchTerm,
+                  mode: 'insensitive' as const
+                }
+              },
+              {
+                lastName: {
+                  contains: searchTerm,
+                  mode: 'insensitive' as const
+                }
+              },
+              {
+                username: {
+                  contains: searchTerm,
+                  mode: 'insensitive' as const
+                }
+              },
+              {
+                email: {
+                  contains: searchTerm,
+                  mode: 'insensitive' as const
+                }
+              },
+              {
+                displayName: {
+                  contains: searchTerm,
+                  mode: 'insensitive' as const
+                }
+              }
+            ]
+          }
+        ]
+      };
 
       // Rechercher les utilisateurs par nom, prénom, username ou email
-      const users = await fastify.prisma.user.findMany({
-        where: {
-          AND: [
-            {
-              isActive: true, // Seulement les utilisateurs actifs
-              OR: [
-                { deletedAt: null }, // Champ existe et est null
-                { deletedAt: { isSet: false } } // Champ n'existe pas (MongoDB)
-              ]
-            },
-            {
-              OR: [
-                {
-                  firstName: {
-                    contains: searchTerm,
-                    mode: 'insensitive'
-                  }
-                },
-                {
-                  lastName: {
-                    contains: searchTerm,
-                    mode: 'insensitive'
-                  }
-                },
-                {
-                  username: {
-                    contains: searchTerm,
-                    mode: 'insensitive'
-                  }
-                },
-                {
-                  email: {
-                    contains: searchTerm,
-                    mode: 'insensitive'
-                  }
-                },
-                {
-                  displayName: {
-                    contains: searchTerm,
-                    mode: 'insensitive'
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          email: true,
-          isOnline: true,
-          lastSeen: true,
-          lastActiveAt: true,
-          systemLanguage: true
-        },
-        orderBy: [
-          { isOnline: 'desc' },
-          { firstName: 'asc' },
-          { lastName: 'asc' }
-        ],
-        take: 20 // Limiter à 20 résultats
-      });
+      const [users, totalCount] = await Promise.all([
+        fastify.prisma.user.findMany({
+          where: whereClause,
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            email: true,
+            isOnline: true,
+            lastSeen: true,
+            lastActiveAt: true,
+            systemLanguage: true
+          },
+          orderBy: [
+            { isOnline: 'desc' },
+            { firstName: 'asc' },
+            { lastName: 'asc' }
+          ],
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.user.count({ where: whereClause })
+      ]);
 
       reply.send({
         success: true,
-        data: users
+        data: users,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + users.length < totalCount
+        }
       });
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Internal server error',
         message: 'Unable to search users'
       });
@@ -1112,50 +1132,67 @@ export async function userRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const friendRequests = await fastify.prisma.friendRequest.findMany({
-        where: {
-          OR: [
-            { senderId: userId },
-            { receiverId: userId }
-          ]
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const whereClause = {
+        OR: [
+          { senderId: userId },
+          { receiverId: userId }
+        ]
+      };
+
+      const [friendRequests, totalCount] = await Promise.all([
+        fastify.prisma.friendRequest.findMany({
+          where: whereClause,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                lastActiveAt: true,
+                lastSeen: true
+              }
+            },
+            receiver: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                lastActiveAt: true,
+                lastSeen: true
+              }
             }
           },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+          orderBy: {
+            createdAt: 'desc'
+          },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.friendRequest.count({ where: whereClause })
+      ]);
 
       return reply.send({
         success: true,
-        data: friendRequests
+        data: friendRequests,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + friendRequests.length < totalCount
+        }
       });
     } catch (error) {
       console.error('Error retrieving friend requests:', error);

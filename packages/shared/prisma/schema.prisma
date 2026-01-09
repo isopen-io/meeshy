@@ -38,10 +38,10 @@ model User {
 
   // Security & verification fields (DateTime? non-null = vérifié/activé)
   emailVerifiedAt         DateTime?
-  emailVerificationToken  String?   // Token de vérification email (hash SHA-256)
+  emailVerificationToken  String? // Token de vérification email (hash SHA-256)
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
   phoneVerifiedAt         DateTime?
-  phoneVerificationCode   String?   // Code SMS 6 chiffres (hashé)
+  phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
   twoFactorEnabledAt      DateTime?
   twoFactorSecret         String? // TOTP secret (encrypted)
@@ -112,31 +112,37 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdCommunities      Community[]                   @relation("CommunityCreator")
+  createdCommunities      Community[]              @relation("CommunityCreator")
   communityMemberships    CommunityMember[]
   conversations           ConversationMember[]
   conversationPreferences ConversationPreference[]
-  createdShareLinks       ConversationShareLink[]       @relation("ShareLinkCreator")
-  receivedFriendRequests  FriendRequest[]               @relation("FriendRequestReceiver")
-  sentFriendRequests      FriendRequest[]               @relation("FriendRequestSender")
-  messageStatus           MessageStatus[]
-  sentMessages            Message[]                     @relation("MessageSender")
-  reactions               Reaction[]                    @relation("UserReactions")
-  mentions                Mention[]                     @relation("UserMentions")
-  notifications           Notification[]
-  notificationPreference  NotificationPreference?
-  typingIndicators        TypingIndicator[]
-  preferences             UserPreference[]
-  stats                   UserStats?
-  createdAffiliateTokens  AffiliateToken[]              @relation("AffiliateTokenCreator")
-  affiliateRelations      AffiliateRelation[]           @relation("AffiliateUser")
-  referredRelations       AffiliateRelation[]           @relation("ReferredUser")
-  createdTrackingLinks    TrackingLink[]                @relation("TrackingLinkCreator")
-  trackingLinkClicks      TrackingLinkClick[]           @relation("TrackingLinkClickUser")
-  initiatedCalls          CallSession[]                 @relation("CallInitiator")
-  callParticipations      CallParticipant[]             @relation("CallParticipants")
-  conversationPrefs       UserConversationPreferences[]
-  conversationCategories  UserConversationCategory[]
+  createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
+  receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
+  sentFriendRequests      FriendRequest[]          @relation("FriendRequestSender")
+
+  // Message & Attachment status tracking
+  messageStatusEntries    MessageStatusEntry[]
+  attachmentStatusEntries AttachmentStatusEntry[]
+  readCursors             ConversationReadCursor[] @relation("UserReadCursors")
+  attachmentReactions     AttachmentReaction[]     @relation("UserAttachmentReactions")
+
+  sentMessages           Message[]                     @relation("MessageSender")
+  reactions              Reaction[]                    @relation("UserReactions")
+  mentions               Mention[]                     @relation("UserMentions")
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  typingIndicators       TypingIndicator[]
+  preferences            UserPreference[]
+  stats                  UserStats?
+  createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
+  affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
+  referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
+  trackingLinkClicks     TrackingLinkClick[]           @relation("TrackingLinkClickUser")
+  initiatedCalls         CallSession[]                 @relation("CallInitiator")
+  callParticipations     CallParticipant[]             @relation("CallParticipants")
+  conversationPrefs      UserConversationPreferences[]
+  conversationCategories UserConversationCategory[]
 
   // Password Reset Relations
   passwordResetTokens PasswordResetToken[]
@@ -147,8 +153,17 @@ model User {
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
 
+  // DMA Interoperability Relations
+  dmaSessions DMASession[]
+
   // Voice cloning relation
   voiceModel UserVoiceModel?
+
+  // E2EE key exchange relation
+  conversationPublicKeys ConversationPublicKey[]
+
+  // Per-user message deletions ("delete for me" feature)
+  messageDeletions UserMessageDeletion[]
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -194,12 +209,20 @@ model Conversation {
   members               ConversationMember[]
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
-  community             Community?                    @relation(fields: [communityId], references: [id])
+  community             Community?               @relation(fields: [communityId], references: [id])
   messages              Message[]
-  messageStatuses       MessageStatus[]
-  typingIndicators      TypingIndicator[]
-  callSessions          CallSession[]
-  userPreferences       UserConversationPreferences[]
+
+  // Status tracking relations
+  messageStatusEntries    MessageStatusEntry[]
+  attachmentStatusEntries AttachmentStatusEntry[]
+  readCursors             ConversationReadCursor[]
+
+  typingIndicators TypingIndicator[]
+  callSessions     CallSession[]
+  userPreferences  UserConversationPreferences[]
+
+  // E2EE key exchange relation
+  conversationPublicKeys ConversationPublicKey[]
 }
 
 /// Appartenance d'un utilisateur à une conversation
@@ -293,6 +316,12 @@ model AnonymousParticipant {
   sentMessages       Message[]             @relation("AnonymousMessageSender")
   reactions          Reaction[]            @relation("AnonymousReactions")
   trackingLinkClicks TrackingLinkClick[]   @relation("TrackingLinkClickAnonymous")
+
+  // Message & Attachment status tracking
+  messageStatusEntries    MessageStatusEntry[]     @relation("AnonymousMessageStatus")
+  attachmentStatusEntries AttachmentStatusEntry[]  @relation("AnonymousAttachmentStatus")
+  readCursors             ConversationReadCursor[] @relation("AnonymousReadCursors")
+  attachmentReactions     AttachmentReaction[]     @relation("AnonymousAttachmentReactions")
 }
 
 /// Message dans une conversation
@@ -315,6 +344,21 @@ model Message {
   updatedAt         DateTime  @updatedAt
 
   // ============================================
+  // COMPUTED STATUS FIELDS (denormalized for performance)
+  // Updated when all conversation participants complete each action
+  // ============================================
+  /// Date when message was delivered to ALL participants
+  deliveredToAllAt DateTime?
+  /// Date when message was received (acknowledged) by ALL participants
+  receivedByAllAt  DateTime?
+  /// Date when message was read by ALL participants
+  readByAllAt      DateTime?
+  /// Number of participants who have received this message
+  deliveredCount   Int       @default(0)
+  /// Number of participants who have read this message
+  readCount        Int       @default(0)
+
+  // ============================================
   // E2EE / ENCRYPTION FIELDS
   // ============================================
   /// Encrypted content (base64 encoded ciphertext)
@@ -329,7 +373,11 @@ model Message {
   /// Flag indicating if message is encrypted
   isEncrypted Boolean @default(false)
 
-  status          MessageStatus[]       @relation("MessageStatusMessage")
+  // Status tracking (per-user per-message)
+  statusEntries       MessageStatusEntry[]    @relation("MessageStatusEntries")
+  attachmentStatuses  AttachmentStatusEntry[] @relation("MessageAttachmentStatuses")
+  attachmentReactions AttachmentReaction[]    @relation("MessageAttachmentReactions")
+
   translations    MessageTranslation[]
   attachments     MessageAttachment[]
   reactions       Reaction[]            @relation("MessageReactions")
@@ -344,6 +392,9 @@ model Message {
   // Audio processing relations
   audioTranscriptions MessageAudioTranscription[]
   translatedAudios    MessageTranslatedAudio[]
+
+  // Per-user deletions ("delete for me" feature)
+  userDeletions UserMessageDeletion[]
 }
 
 /// Traduction d'un message
@@ -411,7 +462,78 @@ model MessageAttachment {
   /// Attachment metadata
   metadata  Json? // JSON blob for additional metadata
 
+  // =====================================================
+  // COMPUTED STATUS FIELDS (denormalized for performance)
+  // Updated when all conversation participants complete each action
+  // =====================================================
+  /// Date when attachment was delivered to ALL participants
+  deliveredToAllAt   DateTime?
+  /// Date when attachment was viewed by ALL participants
+  viewedByAllAt      DateTime?
+  /// Date when attachment was downloaded by ALL participants
+  downloadedByAllAt  DateTime?
+  /// Date when audio was listened to by ALL participants (audio only)
+  listenedByAllAt    DateTime?
+  /// Date when video was watched by ALL participants (video only)
+  watchedByAllAt     DateTime?
+  /// Number of participants who have viewed this attachment
+  viewedCount        Int       @default(0)
+  /// Number of participants who have downloaded this attachment
+  downloadedCount    Int       @default(0)
+  /// Number of participants who have listened (audio) or watched (video)
+  consumedCount      Int       @default(0)
+
+  // =====================================================
+  // ENCRYPTION FIELDS (for encrypted conversations)
+  // =====================================================
+
+  /// Whether this attachment is encrypted
+  isEncrypted Boolean @default(false)
+
+  /// Encryption mode: 'e2ee', 'server', 'hybrid'
+  encryptionMode String?
+
+  /// Base64-encoded initialization vector (12 bytes for AES-GCM)
+  encryptionIv String?
+
+  /// Base64-encoded authentication tag (16 bytes for AES-GCM)
+  encryptionAuthTag String?
+
+  /// Base64-encoded HMAC-SHA256 for integrity verification
+  encryptionHmac String?
+
+  /// SHA-256 hash of original file (for verification after decryption)
+  originalFileHash String?
+
+  /// SHA-256 hash of encrypted file
+  encryptedFileHash String?
+
+  /// Original file size before encryption (fileSize stores encrypted size when encrypted)
+  originalFileSize Int?
+
+  /// Server key ID (for server/hybrid mode decryption)
+  serverKeyId String?
+
+  /// Encrypted thumbnail IV (if thumbnail is also encrypted)
+  thumbnailEncryptionIv String?
+
+  /// Encrypted thumbnail auth tag
+  thumbnailEncryptionAuthTag String?
+
+  /// For hybrid mode: URL to server-accessible copy for translation
+  serverCopyUrl String?
+
+  /// For hybrid mode: transcription of audio (server-generated)
+  transcriptionText String?
+
+  /// For hybrid mode: translations JSON { "en": { text: "...", audioUrl: "..." }, ... }
+  translationsJson Json?
+
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Status tracking (per-user per-attachment)
+  statusEntries AttachmentStatusEntry[] @relation("AttachmentStatusEntries")
+  reactions     AttachmentReaction[]    @relation("AttachmentReactions")
 
   // Audio processing relations
   transcription    MessageAudioTranscription?
@@ -421,31 +543,197 @@ model MessageAttachment {
   @@index([uploadedBy])
 }
 
-/// Curseur de lecture/réception par utilisateur et conversation
-/// Un seul curseur par utilisateur par conversation qui se déplace au fil des messages
-///
-/// Logique de mise à jour:
-/// - Utilisateur reçoit message → messageId = dernier message, receivedAt = now, readAt = null
-/// - Utilisateur lit message → messageId = dernier message, receivedAt = now, readAt = now
-/// - Utilisateur reçoit nouveau message → messageId = nouveau message, receivedAt = now, readAt = null
-model MessageStatus {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId String    @db.ObjectId /// Conversation concernée
-  messageId      String    @db.ObjectId /// Curseur: pointe vers le dernier message reçu/lu
-  userId         String    @db.ObjectId /// Utilisateur concerné
-  receivedAt     DateTime? /// Date de réception du message pointé par messageId
-  readAt         DateTime? /// Date de lecture du message pointé par messageId (null si non lu)
-  updatedAt      DateTime  @updatedAt /// Dernière mise à jour du curseur
+// =====================================================
+// MESSAGE & ATTACHMENT STATUS TRACKING
+// Granular per-message and per-attachment status for each user
+// =====================================================
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  message      Message      @relation("MessageStatusMessage", fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+/// Per-message status entry for each user
+/// One record per user per message - detailed tracking
+model MessageStatusEntry {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  messageId      String  @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
 
-  /// Un seul curseur par utilisateur par conversation
-  @@unique([userId, conversationId], name: "userId_conversationId")
+  // ===== DELIVERY STATUS =====
+  /// When message was delivered to user's device
+  deliveredAt DateTime?
+  /// When message was received by client (acknowledged)
+  receivedAt  DateTime?
+  /// When user read/saw the message
+  readAt      DateTime?
+
+  // ===== READ DETAILS =====
+  /// How long user viewed the message (ms) - for analytics
+  readDurationMs Int?
+  /// Device type where message was read
+  readDevice     String? // 'ios', 'android', 'web', 'desktop'
+  /// Client version
+  clientVersion  String?
+
+  // ===== METADATA =====
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  message       Message               @relation("MessageStatusEntries", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousMessageStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId], name: "message_user_status")
+  @@unique([messageId, anonymousId], name: "message_anonymous_status")
   @@index([conversationId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([readAt])
+  @@index([deliveredAt])
+  @@map("message_status_entries")
+}
+
+/// Per-attachment status entry for each user
+/// Tracks viewed, downloaded, listened, watched status per attachment
+model AttachmentStatusEntry {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  attachmentId   String  @db.ObjectId
+  messageId      String  @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
+
+  // ===== UNIVERSAL STATUS =====
+  /// When attachment was delivered to device
+  deliveredAt  DateTime?
+  /// When user first viewed/opened the attachment
+  viewedAt     DateTime?
+  /// When user downloaded the attachment locally
+  downloadedAt DateTime?
+
+  // ===== AUDIO-SPECIFIC =====
+  /// When user listened to audio (first play)
+  listenedAt            DateTime?
+  /// Number of times audio was played
+  listenCount           Int       @default(0)
+  /// Last playback position (ms) - for resume
+  lastPlayPositionMs    Int?
+  /// Total listen duration (ms) - cumulative
+  totalListenDurationMs Int       @default(0)
+  /// Whether audio was played to completion
+  listenedComplete      Boolean   @default(false)
+
+  // ===== VIDEO-SPECIFIC =====
+  /// When user watched video (first play)
+  watchedAt            DateTime?
+  /// Number of times video was played
+  watchCount           Int       @default(0)
+  /// Last playback position (ms) - for resume
+  lastWatchPositionMs  Int?
+  /// Total watch duration (ms) - cumulative
+  totalWatchDurationMs Int       @default(0)
+  /// Whether video was watched to completion
+  watchedComplete      Boolean   @default(false)
+
+  // ===== IMAGE-SPECIFIC =====
+  /// Time spent viewing image (ms)
+  viewDurationMs Int?
+  /// Whether image was zoomed
+  wasZoomed      Boolean @default(false)
+
+  // ===== DOCUMENT-SPECIFIC =====
+  /// Number of pages viewed (for PDFs)
+  pagesViewed    Int  @default(0)
+  /// Last page viewed
+  lastPageViewed Int?
+
+  // ===== METADATA =====
+  /// Device where attachment was accessed
+  accessDevice String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attachment    MessageAttachment     @relation("AttachmentStatusEntries", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message       Message               @relation("MessageAttachmentStatuses", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, userId], name: "attachment_user_status")
+  @@unique([attachmentId, anonymousId], name: "attachment_anonymous_status")
   @@index([messageId])
-  @@index([updatedAt])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([viewedAt])
+  @@index([listenedAt])
+  @@index([watchedAt])
+  @@map("attachment_status_entries")
+}
+
+/// Reaction on an individual attachment (separate from message reactions)
+model AttachmentReaction {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  attachmentId String   @db.ObjectId
+  messageId    String   @db.ObjectId
+  userId       String?  @db.ObjectId
+  anonymousId  String?  @db.ObjectId
+  emoji        String // Emoji (ex: 🎉, ❤️, 🔥)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attachment    MessageAttachment     @relation("AttachmentReactions", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message       Message               @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  user          User?                 @relation("UserAttachmentReactions", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, userId, emoji], name: "attachment_user_reaction")
+  @@unique([attachmentId, anonymousId, emoji], name: "attachment_anonymous_reaction")
+  @@index([attachmentId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([emoji])
+  @@map("attachment_reactions")
+}
+
+/// Conversation-level read cursor (optimized for unread count queries)
+/// Kept for performance - aggregated view of MessageStatusEntry
+model ConversationReadCursor {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
+
+  /// Last message ID that was read
+  lastReadMessageId String?   @db.ObjectId
+  lastReadAt        DateTime?
+
+  /// Last message ID that was delivered
+  lastDeliveredMessageId String?   @db.ObjectId
+  lastDeliveredAt        DateTime?
+
+  /// Cached unread count (updated on new message or read)
+  unreadCount Int @default(0)
+
+  /// Version for optimistic locking
+  version Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation("UserReadCursors", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousReadCursors", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId], name: "conversation_user_cursor")
+  @@unique([conversationId, anonymousId], name: "conversation_anonymous_cursor")
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([unreadCount])
+  @@map("conversation_read_cursors")
 }
 
 /// Réaction emoji sur un message par un utilisateur
@@ -1007,6 +1295,15 @@ model UserConversationPreferences {
   /// Archive conversation (hide from main list)
   isArchived Boolean @default(false)
 
+  /// User has deleted this conversation from their view (soft delete)
+  isDeletedForUser Boolean @default(false)
+
+  /// When the user deleted this conversation
+  deletedForUserAt DateTime?
+
+  /// Hide all messages before this timestamp (clear history feature)
+  clearHistoryBefore DateTime?
+
   /// Personal tags for this conversation
   tags String[] @default([])
 
@@ -1201,6 +1498,10 @@ model SignalPreKeyBundle {
   /// Identity key (public part, base64 encoded, 32 bytes)
   identityKey String
 
+  /// Identity key (private part, encrypted + base64 encoded)
+  /// Encrypted using server master key (AES-256-GCM)
+  identityKeyPrivate String?
+
   /// Registration ID (14-bit random number, unique per device)
   registrationId Int
 
@@ -1216,20 +1517,257 @@ model SignalPreKeyBundle {
   signedPreKeyPublic    String // Base64 encoded
   signedPreKeySignature String // Base64 encoded signature
 
+  /// Signed pre-key private (encrypted + base64 encoded)
+  signedPreKeyPrivate String?
+
   /// Kyber post-quantum pre-key (future-proofing)
   kyberPreKeyId        Int?
   kyberPreKeyPublic    String? // Base64 encoded
   kyberPreKeySignature String? // Base64 encoded signature
 
+  /// Whether this bundle is active
+  isActive Boolean @default(true)
+
   /// Timestamps
-  createdAt      DateTime @default(now())
-  lastRotatedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  lastRotatedAt DateTime @default(now())
 
   /// Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([lastRotatedAt])
+  @@index([isActive])
   @@map("signal_pre_key_bundles")
+}
+
+/// =====================================================
+/// CONVERSATION PUBLIC KEY - E2EE KEY EXCHANGE
+/// =====================================================
+
+/// Conversation Public Key - Stores public keys for E2EE conversations
+/// Used for Signal Protocol key exchange between conversation participants
+model ConversationPublicKey {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// User who owns this key
+  userId String @db.ObjectId
+
+  /// Conversation this key is for
+  conversationId String @db.ObjectId
+
+  /// Key type (identity, preKey, signedPreKey)
+  keyType String
+
+  /// The public key (base64 encoded)
+  publicKey String
+
+  /// Key identifier (for preKey and signedPreKey)
+  keyId Int?
+
+  /// Signature (for signed pre-keys)
+  signature String?
+
+  /// Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// Unique constraint - one key per user/conversation/keyType combo
+  @@unique([userId, conversationId, keyType])
+  @@index([conversationId])
+  @@index([userId])
+  @@map("conversation_public_keys")
+}
+
+/// =====================================================
+/// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
+/// =====================================================
+
+/// Server Encryption Key - Stores encrypted data keys for server/hybrid mode attachments
+/// Keys are encrypted with a master key (envelope encryption) before storage
+/// Used for audio translation in hybrid mode where server needs to decrypt
+model ServerEncryptionKey {
+  id String @id @map("_id")
+
+  /// Encrypted data key (AES-256-GCM encrypted with master key, base64 encoded)
+  encryptedKey String
+
+  /// IV used for encrypting the data key (base64 encoded, 12 bytes)
+  iv String
+
+  /// Auth tag from encrypting the data key (base64 encoded, 16 bytes)
+  authTag String
+
+  /// Algorithm used for the data key
+  algorithm String @default("aes-256-gcm")
+
+  /// Purpose of this key (attachment, audio, etc.)
+  purpose String @default("attachment")
+
+  /// Associated conversation ID (one key per conversation)
+  conversationId String? @db.ObjectId
+
+  /// Optional: Associated user ID (owner/creator)
+  userId String? @db.ObjectId
+
+  /// Key creation timestamp
+  createdAt DateTime @default(now())
+
+  /// Key expiration timestamp (null = no expiration)
+  expiresAt DateTime?
+
+  /// When the key was last accessed (for cache management)
+  lastAccessedAt DateTime @default(now())
+
+  /// Whether the key is active (can be used for decryption)
+  isActive Boolean @default(true)
+
+  @@index([conversationId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("server_encryption_keys")
+}
+
+/// =====================================================
+/// DMA INTEROPERABILITY - SESSION & ENROLLMENT STORAGE
+/// =====================================================
+
+/// DMA Session - Stores Signal Protocol session state for DMA interoperability
+/// Each session represents an encrypted channel with a remote party (WhatsApp/Messenger user)
+model DMASession {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Remote party identifier (WhatsApp internal ID, Messenger ID, etc.)
+  remotePartyId String @unique
+
+  /// Session owner (Meeshy user)
+  userId String @db.ObjectId
+
+  /// Root key from X3DH key agreement (base64 encoded, 32 bytes)
+  rootKey String
+
+  /// Current send chain key for Double Ratchet (base64 encoded, 32 bytes)
+  chainKeySend String
+
+  /// Current receive chain key for Double Ratchet (base64 encoded, 32 bytes)
+  chainKeyReceive String
+
+  /// DH ratchet public key (base64 encoded)
+  dhRatchetPublicKey String?
+
+  /// DH ratchet private key (encrypted, base64 encoded)
+  dhRatchetPrivateKey String?
+
+  /// Remote party's last DH ratchet key (base64 encoded)
+  dhRatchetRemoteKey String?
+
+  /// Session type: 'signal_protocol_x3dh', 'mls_group', etc.
+  sessionType String @default("signal_protocol_x3dh")
+
+  /// Session state: 'pending', 'established', 'expired', 'revoked'
+  sessionState String @default("pending")
+
+  /// Message counters for Double Ratchet
+  messageNumberSend    Int @default(0)
+  messageNumberReceive Int @default(0)
+  previousChainLength  Int @default(0)
+
+  /// Epoch for MLS group sessions
+  epoch Int @default(0)
+
+  /// Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime?
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionState])
+  @@index([lastUsedAt])
+  @@map("dma_sessions")
+}
+
+/// DMA Enrollment - Stores external platform user's Signal Protocol keys
+/// Used for X3DH key agreement when initiating encrypted sessions
+model DMAEnrollment {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// External platform identifier (WhatsApp internal ID, Messenger ID)
+  whatsappInternalId String @unique
+
+  /// Platform type: 'whatsapp', 'messenger', 'imessage'
+  platform String @default("whatsapp")
+
+  /// Identity key (public part, base64 encoded, 32 bytes)
+  identityKey String
+
+  /// Signed pre-key (base64 encoded)
+  signedPreKey String
+
+  /// Signed pre-key signature (base64 encoded)
+  signedPreKeySignature String
+
+  /// Signed pre-key ID
+  signedPreKeyId Int
+
+  /// Registration ID for this enrollment
+  registrationId Int @default(0)
+
+  /// Enrollment status: 'active', 'revoked', 'expired'
+  status String @default("active")
+
+  /// Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastVerifiedAt DateTime @default(now())
+
+  /// Relations - one-time pre-keys for this enrollment
+  preKeys PreKey[]
+
+  @@index([platform])
+  @@index([status])
+  @@map("dma_enrollments")
+}
+
+/// Pre-Key - One-time pre-keys for X3DH key agreement
+/// Each pre-key can only be used once, then marked as consumed
+model PreKey {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Pre-key ID (unique within enrollment)
+  preKeyId Int
+
+  /// Public key data (base64 encoded)
+  keyData String
+
+  /// Whether this key has been used
+  isUsed Boolean @default(false)
+
+  /// When the key was used
+  usedAt DateTime?
+
+  /// Who used this key (Meeshy user ID)
+  usedBy String? @db.ObjectId
+
+  /// Timestamps
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  /// Relations
+  signalEnrollmentId String        @db.ObjectId
+  signalEnrollment   DMAEnrollment @relation(fields: [signalEnrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([signalEnrollmentId, preKeyId])
+  @@index([isUsed])
+  @@index([expiresAt])
+  @@map("dma_pre_keys")
 }
 
 /// =====================================================
@@ -1238,7 +1776,7 @@ model SignalPreKeyBundle {
 
 /// Transcription d'un message audio
 model MessageAudioTranscription {
-  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  id String @id @default(auto()) @map("_id") @db.ObjectId
 
   /// Relation vers l'attachment source (unique - 1 transcription par attachment)
   attachmentId String            @unique @db.ObjectId
@@ -1449,4 +1987,25 @@ model UserVoiceModel {
   @@index([updatedAt])
   @@index([signatureShort])
   @@map("user_voice_models")
+}
+
+/// =====================================================
+/// USER MESSAGE DELETION - Per-user "delete for me" feature
+/// =====================================================
+
+/// Tracks messages that a user has deleted from their view
+/// Other participants still see the message - only hidden for this user
+model UserMessageDeletion {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  messageId String   @db.ObjectId
+  deletedAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId])
+  @@index([messageId])
+  @@map("user_message_deletions")
 }

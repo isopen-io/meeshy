@@ -89,10 +89,11 @@ export default function AdminShareLinksPage() {
   const loadShareLinks = async () => {
     try {
       setLoading(true);
+      const offset = (currentPage - 1) * 20;
       const response = await adminService.getShareLinks(
-        currentPage, 
-        20, 
-        searchTerm || undefined, 
+        offset,
+        20,
+        searchTerm || undefined,
         statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined
       );
 

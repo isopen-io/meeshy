@@ -108,18 +108,35 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         }
 
         const userId = authContext.userId;
+        const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const preferences = await fastify.prisma.userConversationPreferences.findMany({
-          where: { userId },
-          include: {
-            category: true
-          },
-          orderBy: { updatedAt: 'desc' }
-        });
+        const offsetNum = parseInt(offset, 10);
+        const limitNum = Math.min(parseInt(limit, 10), 100);
+
+        const whereClause = { userId };
+
+        const [preferences, totalCount] = await Promise.all([
+          fastify.prisma.userConversationPreferences.findMany({
+            where: whereClause,
+            include: {
+              category: true
+            },
+            orderBy: { updatedAt: 'desc' },
+            skip: offsetNum,
+            take: limitNum
+          }),
+          fastify.prisma.userConversationPreferences.count({ where: whereClause })
+        ]);
 
         reply.send({
           success: true,
-          data: preferences
+          data: preferences,
+          pagination: {
+            total: totalCount,
+            limit: limitNum,
+            offset: offsetNum,
+            hasMore: offsetNum + preferences.length < totalCount
+          }
         });
       } catch (error) {
         logError(fastify.log, 'Error fetching all conversation preferences:', error);
@@ -313,15 +330,32 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         }
 
         const userId = authContext.userId;
+        const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const categories = await fastify.prisma.userConversationCategory.findMany({
-          where: { userId },
-          orderBy: { order: 'asc' }
-        });
+        const offsetNum = parseInt(offset, 10);
+        const limitNum = Math.min(parseInt(limit, 10), 100);
+
+        const whereClause = { userId };
+
+        const [categories, totalCount] = await Promise.all([
+          fastify.prisma.userConversationCategory.findMany({
+            where: whereClause,
+            orderBy: { order: 'asc' },
+            skip: offsetNum,
+            take: limitNum
+          }),
+          fastify.prisma.userConversationCategory.count({ where: whereClause })
+        ]);
 
         reply.send({
           success: true,
-          data: categories
+          data: categories,
+          pagination: {
+            total: totalCount,
+            limit: limitNum,
+            offset: offsetNum,
+            hasMore: offsetNum + categories.length < totalCount
+          }
         });
       } catch (error) {
         logError(fastify.log, 'Error fetching categories:', error);

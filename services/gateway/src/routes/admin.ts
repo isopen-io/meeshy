@@ -314,10 +314,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', search, role, status } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', search, role, status } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
 
       // Construire les filtres
@@ -382,7 +381,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.user.count({ where })
@@ -391,14 +390,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          users,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + users.length < totalCount
-          }
+        data: users,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + users.length < totalCount
         }
       });
 
@@ -427,14 +424,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', search, status } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', search, status } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       // Construire les filtres
       const where: any = {};
-      
+
       if (search) {
         where.OR = [
           { username: { contains: search, mode: 'insensitive' } },
@@ -494,7 +490,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { joinedAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.anonymousParticipant.count({ where })
@@ -502,14 +498,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          anonymousUsers,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + anonymousUsers.length < totalCount
-          }
+        data: anonymousUsers,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + anonymousUsers.length < totalCount
         }
       });
 
@@ -756,14 +750,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', search, type, period } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', search, type, period } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       // Construire les filtres
       const where: any = { isDeleted: false };
-      
+
       if (search) {
         where.content = { contains: search, mode: 'insensitive' };
       }
@@ -776,7 +769,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (period) {
         const now = new Date();
         let startDate = new Date();
-        
+
         switch (period) {
           case 'today':
             startDate.setHours(0, 0, 0, 0);
@@ -788,7 +781,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             startDate.setDate(startDate.getDate() - 30);
             break;
         }
-        
+
         where.createdAt = { gte: startDate };
       }
 
@@ -859,7 +852,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.message.count({ where })
@@ -867,14 +860,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          messages,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + messages.length < totalCount
-          }
+        data: messages,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + messages.length < totalCount
         }
       });
 
@@ -903,14 +894,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', search, isPrivate } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', search, isPrivate } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       // Construire les filtres
       const where: any = {};
-      
+
       if (search) {
         where.OR = [
           { name: { contains: search, mode: 'insensitive' } },
@@ -950,7 +940,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.community.count({ where })
@@ -958,14 +948,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          communities,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + communities.length < totalCount
-          }
+        data: communities,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + communities.length < totalCount
         }
       });
 
@@ -994,14 +982,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', sourceLanguage, targetLanguage, period } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       // Construire les filtres
       const where: any = {};
-      
+
       if (sourceLanguage) {
         where.sourceLanguage = sourceLanguage;
       }
@@ -1014,7 +1001,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (period) {
         const now = new Date();
         let startDate = new Date();
-        
+
         switch (period) {
           case 'today':
             startDate.setHours(0, 0, 0, 0);
@@ -1026,7 +1013,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             startDate.setDate(startDate.getDate() - 30);
             break;
         }
-        
+
         where.createdAt = { gte: startDate };
       }
 
@@ -1064,7 +1051,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.messageTranslation.count({ where })
@@ -1072,21 +1059,19 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          translations: translations.map(translation => ({
-            ...translation,
-            message: {
-              ...translation.message,
-              // S'assurer que le content est toujours le contenu original
-              originalContent: translation.message.content
-            }
-          })),
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + translations.length < totalCount
+        data: translations.map(translation => ({
+          ...translation,
+          message: {
+            ...translation.message,
+            // S'assurer que le content est toujours le contenu original
+            originalContent: translation.message.content
           }
+        })),
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + translations.length < totalCount
         }
       });
 
@@ -1115,14 +1100,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { page = '1', limit = '20', search, isActive } = request.query as any;
-      const pageNum = parseInt(page, 10);
+      const { offset = '0', limit = '20', search, isActive } = request.query as any;
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       // Construire les filtres
       const where: any = {};
-      
+
       if (search) {
         where.OR = [
           { linkId: { contains: search, mode: 'insensitive' } },
@@ -1177,7 +1161,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
+          skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.conversationShareLink.count({ where })
@@ -1185,14 +1169,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          shareLinks,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + shareLinks.length < totalCount
-          }
+        data: shareLinks,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + shareLinks.length < totalCount
         }
       });
 
