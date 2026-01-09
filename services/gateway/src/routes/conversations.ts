@@ -2744,6 +2744,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
             language: true,
             isOnline: true,
             joinedAt: true,
+            lastActiveAt: true,
             canSendMessages: true,
             canSendFiles: true,
             canSendImages: true

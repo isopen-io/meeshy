@@ -1063,6 +1063,15 @@ export class AttachmentService {
       uploadedBy: attachment.uploadedBy,
       isAnonymous: attachment.isAnonymous,
       createdAt: attachment.createdAt.toISOString(),
+      // Required fields with defaults
+      isForwarded: attachment.isForwarded ?? false,
+      isViewOnce: attachment.isViewOnce ?? false,
+      viewOnceCount: attachment.viewOnceCount ?? 0,
+      isBlurred: attachment.isBlurred ?? false,
+      viewedCount: attachment.viewedCount ?? 0,
+      downloadedCount: attachment.downloadedCount ?? 0,
+      consumedCount: attachment.consumedCount ?? 0,
+      isEncrypted: attachment.isEncrypted ?? false,
     };
   }
 
@@ -1179,6 +1188,15 @@ export class AttachmentService {
       uploadedBy: att.uploadedBy,
       isAnonymous: att.isAnonymous,
       createdAt: att.createdAt.toISOString(),
+      // Required fields with defaults
+      isForwarded: att.isForwarded ?? false,
+      isViewOnce: att.isViewOnce ?? false,
+      viewOnceCount: att.viewOnceCount ?? 0,
+      isBlurred: att.isBlurred ?? false,
+      viewedCount: att.viewedCount ?? 0,
+      downloadedCount: att.downloadedCount ?? 0,
+      consumedCount: att.consumedCount ?? 0,
+      isEncrypted: att.isEncrypted ?? false,
     }));
   }
 
