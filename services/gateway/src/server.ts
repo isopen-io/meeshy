@@ -257,7 +257,7 @@ class MeeshyServer {
 
     if (useHttps) {
       // HTTPS mode - load SSL certificates
-      const certPath = path.join(__dirname, '..', '..', 'frontend', '.cert');
+      const certPath = path.join(__dirname, '..', '..', '..', 'apps', 'web', '.cert');
       const keyPath = path.join(certPath, 'localhost-key.pem');
       const certFilePath = path.join(certPath, 'localhost.pem');
 
@@ -265,7 +265,7 @@ class MeeshyServer {
         logger.error('❌ SSL certificates not found for HTTPS mode!');
         logger.error(`   Expected certificates at: ${certPath}`);
         logger.error('   The frontend certificates will be used for the gateway.');
-        logger.error('   Ensure frontend/.cert/ contains the certificates.');
+        logger.error('   Ensure apps/web/.cert/ contains the certificates.');
         process.exit(1);
       }
 
