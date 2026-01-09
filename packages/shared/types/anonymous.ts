@@ -63,7 +63,6 @@ export interface AnonymousParticipant {
   readonly canSendFiles: boolean;
   readonly canSendImages: boolean;
   readonly joinedAt: Date;
-  readonly lastSeenAt: Date;
   readonly leftAt?: Date;
   readonly shareLink?: ConversationShareLink;
 }

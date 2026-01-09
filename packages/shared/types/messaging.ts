@@ -36,9 +36,10 @@ export interface AuthenticationContext {
 export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
 /**
- * Source d'un message
+ * Transport/source mechanism of a message request
+ * Note: Different from MessageSource in conversation.ts which represents the origin (user, system, app, etc.)
  */
-export type MessageSource = 'websocket' | 'rest' | 'api';
+export type MessageTransport = 'websocket' | 'rest' | 'api';
 
 /**
  * Type d'attachement de message
@@ -63,7 +64,7 @@ export interface MessageTranslationPreferences {
  * Métadonnées d'une requête de message
  */
 export interface MessageRequestMetadata {
-  readonly source?: MessageSource;
+  readonly source?: MessageTransport;
   readonly socketId?: string;
   readonly clientTimestamp?: number;
   readonly requestId?: string;

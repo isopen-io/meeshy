@@ -427,6 +427,10 @@ export interface UserPermissions {
   canManageTranslations: boolean;
 }
 
+/**
+ * User type for Socket.IO communications
+ * Aligned with schema.prisma User model
+ */
 export interface SocketIOUser {
   id: string;
   username: string;
@@ -436,12 +440,18 @@ export interface SocketIOUser {
   phoneNumber?: string;
   displayName?: string;
   avatar?: string;
+  banner?: string;  // Profile banner/cover image
   bio?: string;
   role: string;
-  permissions?: UserPermissions; // Optionnel pour la rétrocompatibilité
+  permissions?: UserPermissions;
   isOnline: boolean;
-  lastSeen: Date;
   lastActiveAt: Date;
+  timezone?: string;  // IANA format (e.g., "America/New_York")
+
+  // Blocked users
+  blockedUserIds?: string[];
+
+  // Language preferences
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage?: string;
@@ -449,23 +459,53 @@ export interface SocketIOUser {
   translateToSystemLanguage: boolean;
   translateToRegionalLanguage: boolean;
   useCustomDestination: boolean;
+
+  // Account status
   isActive: boolean;
   deactivatedAt?: Date;
-  // Verification statuses (exposed for UI state)
+  deletedAt?: Date;
+  deletedBy?: string;
+
+  // Verification statuses
   emailVerifiedAt?: Date;
   phoneVerifiedAt?: Date;
   twoFactorEnabledAt?: Date;
-  // Security & tracking fields (exposed to frontend)
+
+  // Security fields
+  failedLoginAttempts?: number;
+  lockedUntil?: Date;
+  lockedReason?: string;
   lastPasswordChange?: Date;
+  passwordResetAttempts?: number;
+  lastPasswordResetAttempt?: Date;
+
+  // Login tracking
   lastLoginIp?: string;
   lastLoginLocation?: string;
   lastLoginDevice?: string;
+
+  // E2EE / Signal Protocol
+  encryptionPreference?: 'disabled' | 'optional' | 'always';
+  signalIdentityKeyPublic?: string;  // Base64 encoded
+  signalRegistrationId?: number;
+  signalPreKeyBundleVersion?: number;
+  lastKeyRotation?: Date;
+
+  // Voice profile
+  voiceProfileConsentAt?: Date;
+  ageVerificationConsentAt?: Date;
+  birthDate?: Date;
+  voiceCloningEnabledAt?: Date;
+  voiceProfileUpdateNotifiedAt?: Date;
+
   // Metadata
   profileCompletionRate?: number;
   createdAt: Date;
   updatedAt: Date;
-  isAnonymous?: boolean; // Indique si c'est un utilisateur anonyme
-  isMeeshyer?: boolean; // true = membre, false = anonyme
+
+  // Compatibility flags
+  isAnonymous?: boolean;
+  isMeeshyer?: boolean;
 }
 
 export interface SocketIOResponse<T = unknown> {
@@ -504,7 +544,6 @@ export interface UserStatusEvent {
   username: string;
   isOnline: boolean;
   lastActiveAt?: Date | null;
-  lastSeen?: Date | null;
 }
 
 // ===== TYPES POUR LES STATISTIQUES DE CONVERSATION =====

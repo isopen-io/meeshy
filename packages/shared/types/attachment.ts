@@ -111,7 +111,18 @@ export type CodeMimeType =
 export type AcceptedMimeType = ImageMimeType | DocumentMimeType | AudioMimeType | VideoMimeType | TextMimeType | CodeMimeType;
 
 /**
+ * Scan status for attachments
+ */
+export type ScanStatus = 'pending' | 'clean' | 'infected' | 'error';
+
+/**
+ * Moderation status for attachments
+ */
+export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
+
+/**
  * Attachement de message
+ * Aligned with schema.prisma MessageAttachment model
  */
 export interface Attachment {
   readonly id: string;
@@ -120,33 +131,94 @@ export interface Attachment {
   readonly originalName: string;
   readonly mimeType: string;
   readonly fileSize: number;
-  readonly fileUrl: string;
-  readonly thumbnailUrl?: string;
+
+  // ===== PATHS & URLS =====
+  readonly filePath?: string;       // Relative path on server
+  readonly fileUrl: string;         // Public URL
+  readonly thumbnailPath?: string;  // Thumbnail relative path
+  readonly thumbnailUrl?: string;   // Thumbnail public URL
+
+  // ===== METADATA =====
+  readonly title?: string;          // Human-readable title
+  readonly alt?: string;            // Accessibility alt text
+  readonly caption?: string;        // Display caption
+
+  // ===== IMAGE METADATA =====
   readonly width?: number;
   readonly height?: number;
-  readonly duration?: number;
+
+  // ===== AUDIO/VIDEO METADATA =====
+  readonly duration?: number;       // Duration in milliseconds
   readonly bitrate?: number;
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
   readonly fps?: number;
   readonly videoCodec?: string;
+
+  // ===== DOCUMENT METADATA =====
   readonly pageCount?: number;
   readonly lineCount?: number;
+
+  // ===== UPLOADER =====
   readonly uploadedBy: string;
   readonly isAnonymous: boolean;
   readonly createdAt: string;
+
+  // ===== FORWARDING =====
+  readonly forwardedFromAttachmentId?: string;
+  readonly isForwarded: boolean;
+
+  // ===== VIEW-ONCE & BLUR =====
+  readonly isViewOnce: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly viewOnceCount: number;
+  readonly isBlurred: boolean;
+
+  // ===== SECURITY & MODERATION =====
+  readonly scanStatus?: ScanStatus;
+  readonly scanCompletedAt?: Date;
+  readonly moderationStatus?: ModerationStatus;
+  readonly moderationReason?: string;
+
+  // ===== DELIVERY STATUS (denormalized) =====
+  readonly deliveredToAllAt?: Date;
+  readonly viewedByAllAt?: Date;
+  readonly downloadedByAllAt?: Date;
+  readonly listenedByAllAt?: Date;   // Audio only
+  readonly watchedByAllAt?: Date;    // Video only
+  readonly viewedCount: number;
+  readonly downloadedCount: number;
+  readonly consumedCount: number;    // Listened or watched
+
+  // ===== ENCRYPTION =====
+  readonly isEncrypted: boolean;
+  readonly encryptionMode?: string;
+  readonly encryptionIv?: string;
+  readonly encryptionAuthTag?: string;
+  readonly encryptionHmac?: string;
+  readonly originalFileHash?: string;
+  readonly encryptedFileHash?: string;
+  readonly originalFileSize?: number;
+  readonly serverKeyId?: string;
+  readonly thumbnailEncryptionIv?: string;
+  readonly thumbnailEncryptionAuthTag?: string;
+
+  // ===== AUDIO PROCESSING =====
+  readonly serverCopyUrl?: string;
+  readonly transcriptionText?: string;
+  readonly translationsJson?: Record<string, unknown>;
+
   /**
-   * Metadata JSON contenant des données additionnelles (audioEffectsTimeline, etc.)
+   * Metadata JSON contenant des données additionnelles
    */
   readonly metadata?: {
     audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
-    [key: string]: any;
+    [key: string]: unknown;
   };
+
   /**
-   * Timeline des effets audio appliqués pendant l'enregistrement
-   * Uniquement pour les fichiers audio enregistrés avec des effets
-   * DEPRECATED: Utiliser metadata.audioEffectsTimeline à la place
+   * @deprecated Use metadata.audioEffectsTimeline instead
    */
   readonly audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
 }

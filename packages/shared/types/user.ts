@@ -111,7 +111,6 @@ export interface FullUser {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   twoFactorEnabledAt: Date | null;
-  lastSeen: Date;
   lastActiveAt: Date;
   systemLanguage: string;
   regionalLanguage: string;
@@ -152,7 +151,6 @@ export interface PublicUser {
   isOnline: boolean;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
-  lastSeen: Date;
   lastActiveAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -281,9 +279,9 @@ export interface UserFilters {
   twoFactorEnabled?: boolean;
   createdAfter?: Date;
   createdBefore?: Date;
-  lastSeenAfter?: Date;
-  lastSeenBefore?: Date;
-  sortBy?: 'createdAt' | 'lastSeen' | 'username' | 'email' | 'firstName' | 'lastName';
+  lastActiveAfter?: Date;
+  lastActiveBefore?: Date;
+  sortBy?: 'createdAt' | 'lastActiveAt' | 'username' | 'email' | 'firstName' | 'lastName';
   sortOrder?: 'asc' | 'desc';
 }
 
