@@ -98,8 +98,12 @@ def create_audio_router(
     router = APIRouter(prefix="/v1", tags=["Audio"])
 
     # Répertoires temporaires
-    UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', '/app/uploads'))
-    OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR', '/app/outputs/audio'))
+    # Use relative paths for local dev, /app for Docker
+    base_dir = Path(__file__).parent.parent.parent  # services/translator/
+    default_upload_dir = str(base_dir / 'uploads')
+    default_output_dir = str(base_dir / 'outputs' / 'audio')
+    UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', default_upload_dir))
+    OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR', default_output_dir))
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
