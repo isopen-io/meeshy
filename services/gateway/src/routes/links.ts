@@ -994,8 +994,8 @@ export async function linksRoutes(fastify: FastifyInstance) {
               lastName: member.user.lastName,
               displayName: member.user.displayName,
               avatar: member.user.avatar,
-              isOnline: false, // TODO: Implémenter le statut en ligne
-              lastSeen: member.joinedAt // Utiliser joinedAt comme fallback
+              isOnline: member.user.isOnline ?? false,
+              lastActiveAt: member.user.lastActiveAt ?? member.joinedAt
             }
           })),
           anonymousParticipants: shareLink.conversation.anonymousParticipants.map(participant => ({

@@ -426,8 +426,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         where: { id: participant.id },
         data: {
           lastActiveAt: new Date(),
-          isOnline: true,
-          lastSeenAt: new Date()
+          isOnline: true
         }
       });
 

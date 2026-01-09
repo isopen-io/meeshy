@@ -406,20 +406,42 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           members: {
             take: 5, // Réduit à 5 membres au lieu de 10
             select: {
+              id: true,
               userId: true,
               role: true,
+              nickname: true,
+              canSendMessage: true,
+              canSendFiles: true,
+              canSendImages: true,
+              canSendVideos: true,
+              canSendAudios: true,
+              canSendLocations: true,
+              canSendLinks: true,
+              joinedAt: true,
               isActive: true,
               user: {
                 select: {
                   id: true,
                   username: true,
                   displayName: true,
+                  firstName: true,
+                  lastName: true,
                   avatar: true,
                   isOnline: true,
-                  lastActiveAt: true,
-                  lastSeen: true
+                  lastActiveAt: true
                 }
               }
+            }
+          },
+          // User preferences (isPinned, isMuted, isArchived)
+          userPreferences: {
+            where: { userId: userId },
+            take: 1,
+            select: {
+              isPinned: true,
+              isMuted: true,
+              isArchived: true,
+              isDeletedForUser: true
             }
           },
           anonymousParticipants: {
@@ -613,14 +635,19 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                   id: true,
                   username: true,
                   displayName: true,
+                  firstName: true,
+                  lastName: true,
                   avatar: true,
                   isOnline: true,
                   lastActiveAt: true,
-                  lastSeen: true,
                   role: true
                 }
               }
             }
+          },
+          userPreferences: {
+            where: { userId: authRequest.authContext.userId },
+            take: 1
           }
         }
       });
@@ -1696,7 +1723,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                   displayName: true,
                   avatar: true,
                   isOnline: true,
-                  lastSeen: true
+                  lastActiveAt: true
                 }
               }
             },
@@ -2642,7 +2669,6 @@ export async function conversationRoutes(fastify: FastifyInstance) {
               email: true,
               role: true,
               isOnline: true,
-              lastSeen: true,
               lastActiveAt: true,
               systemLanguage: true,
               regionalLanguage: true,
@@ -2679,7 +2705,6 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         role: participant.user.role, // Rôle global de l'utilisateur
         conversationRole: participant.role, // Rôle dans cette conversation spécifique
         isOnline: participant.user.isOnline,
-        lastSeen: participant.user.lastSeen,
         lastActiveAt: participant.user.lastActiveAt,
         systemLanguage: participant.user.systemLanguage,
         regionalLanguage: participant.user.regionalLanguage,
@@ -2737,8 +2762,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         email: '',
         role: 'MEMBER',
         isOnline: participant.isOnline,
-        lastSeen: participant.joinedAt,
-        lastActiveAt: participant.joinedAt,
+        lastActiveAt: participant.lastActiveAt ?? participant.joinedAt,
         systemLanguage: participant.language,
         regionalLanguage: participant.language,
         customDestinationLanguage: participant.language,
@@ -3393,7 +3417,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                   avatar: true,
                   systemLanguage: true,
                   isOnline: true,
-                  lastSeen: true,
+                  lastActiveAt: true,
                   role: true
                 }
               }
