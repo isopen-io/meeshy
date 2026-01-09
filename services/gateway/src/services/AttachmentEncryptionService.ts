@@ -121,7 +121,14 @@ export interface DecryptAttachmentResult {
  * The master key encrypts data keys before storing in MongoDB
  */
 function getMasterKey(): Buffer {
-  const masterKeyB64 = process.env.ATTACHMENT_MASTER_KEY;
+  let masterKeyB64 = process.env.ATTACHMENT_MASTER_KEY;
+
+  // Use a deterministic test key in test environment
+  if (!masterKeyB64 && process.env.NODE_ENV === 'test') {
+    // Test key - DO NOT USE IN PRODUCTION
+    masterKeyB64 = 'dGVzdGtleWZvcmNpY2R0ZXN0aW5nb25seTMyYnl0ZXM='; // "testkeyforcicdtestingonly32bytes" in base64
+  }
+
   if (!masterKeyB64) {
     throw new Error(
       'ATTACHMENT_MASTER_KEY environment variable is required. ' +
