@@ -16,6 +16,10 @@
 **/.next/
 gateway/generated/
 
+# === ML Models (downloaded at runtime, not in image) ===
+**/models/
+services/translator/models/
+
 # === Development files ===
 **/.env.local
 **/.env.development.local
