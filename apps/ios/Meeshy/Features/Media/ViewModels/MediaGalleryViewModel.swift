@@ -4,6 +4,7 @@
 //
 //  ViewModel for conversation media gallery
 //  Handles loading, caching, and organizing attachments by type
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import SwiftUI
@@ -47,13 +48,13 @@ final class MediaGalleryViewModel: ObservableObject {
     @Published var hasMoreAudios = true
     @Published var hasMoreDocuments = true
 
-    // MARK: - Private Properties
+    // MARK: - Private Properties (Offset-based Pagination)
 
-    private var photosPage = 1
-    private var videosPage = 1
-    private var audiosPage = 1
-    private var documentsPage = 1
-    private let pageSize = 30
+    private var photosOffset = 0
+    private var videosOffset = 0
+    private var audiosOffset = 0
+    private var documentsOffset = 0
+    private let limit = 30
 
     // MARK: - Initialization
 
@@ -70,10 +71,10 @@ final class MediaGalleryViewModel: ObservableObject {
         error = nil
 
         // Reset pagination
-        photosPage = 1
-        videosPage = 1
-        audiosPage = 1
-        documentsPage = 1
+        photosOffset = 0
+        videosOffset = 0
+        audiosOffset = 0
+        documentsOffset = 0
         hasMorePhotos = true
         hasMoreVideos = true
         hasMoreAudios = true
@@ -98,13 +99,13 @@ final class MediaGalleryViewModel: ObservableObject {
 
         if reset {
             photos = []
-            photosPage = 1
+            photosOffset = 0
         }
 
         do {
-            let newItems = try await fetchAttachments(type: .image, page: photosPage, limit: pageSize)
+            let newItems = try await fetchAttachments(type: .image, offset: photosOffset, limit: limit)
 
-            if newItems.count < pageSize {
+            if newItems.count < limit {
                 hasMorePhotos = false
             }
 
@@ -113,7 +114,7 @@ final class MediaGalleryViewModel: ObservableObject {
             } else {
                 photos.append(contentsOf: newItems)
             }
-            photosPage += 1
+            photosOffset += newItems.count
 
         } catch {
             self.error = "Erreur lors du chargement des photos"
@@ -128,13 +129,13 @@ final class MediaGalleryViewModel: ObservableObject {
 
         if reset {
             videos = []
-            videosPage = 1
+            videosOffset = 0
         }
 
         do {
-            let newItems = try await fetchAttachments(type: .video, page: videosPage, limit: pageSize)
+            let newItems = try await fetchAttachments(type: .video, offset: videosOffset, limit: limit)
 
-            if newItems.count < pageSize {
+            if newItems.count < limit {
                 hasMoreVideos = false
             }
 
@@ -143,7 +144,7 @@ final class MediaGalleryViewModel: ObservableObject {
             } else {
                 videos.append(contentsOf: newItems)
             }
-            videosPage += 1
+            videosOffset += newItems.count
 
         } catch {
             self.error = "Erreur lors du chargement des vidéos"
@@ -158,13 +159,13 @@ final class MediaGalleryViewModel: ObservableObject {
 
         if reset {
             audios = []
-            audiosPage = 1
+            audiosOffset = 0
         }
 
         do {
-            let newItems = try await fetchAttachments(type: .audio, page: audiosPage, limit: pageSize)
+            let newItems = try await fetchAttachments(type: .audio, offset: audiosOffset, limit: limit)
 
-            if newItems.count < pageSize {
+            if newItems.count < limit {
                 hasMoreAudios = false
             }
 
@@ -173,7 +174,7 @@ final class MediaGalleryViewModel: ObservableObject {
             } else {
                 audios.append(contentsOf: newItems)
             }
-            audiosPage += 1
+            audiosOffset += newItems.count
 
         } catch {
             self.error = "Erreur lors du chargement des audios"
@@ -188,13 +189,13 @@ final class MediaGalleryViewModel: ObservableObject {
 
         if reset {
             documents = []
-            documentsPage = 1
+            documentsOffset = 0
         }
 
         do {
-            let newItems = try await fetchAttachments(type: .file, page: documentsPage, limit: pageSize)
+            let newItems = try await fetchAttachments(type: .file, offset: documentsOffset, limit: limit)
 
-            if newItems.count < pageSize {
+            if newItems.count < limit {
                 hasMoreDocuments = false
             }
 
@@ -203,7 +204,7 @@ final class MediaGalleryViewModel: ObservableObject {
             } else {
                 documents.append(contentsOf: newItems)
             }
-            documentsPage += 1
+            documentsOffset += newItems.count
 
         } catch {
             self.error = "Erreur lors du chargement des fichiers"
@@ -243,13 +244,13 @@ final class MediaGalleryViewModel: ObservableObject {
 
     // MARK: - Fetch Attachments
 
-    private func fetchAttachments(type: AttachmentType, page: Int, limit: Int) async throws -> [MediaItemWithContext] {
+    private func fetchAttachments(type: AttachmentType, offset: Int, limit: Int) async throws -> [MediaItemWithContext] {
         // Load from local cache (messages with attachments)
         // This is more reliable as it doesn't require a separate API endpoint
-        return try await fetchFromLocalCache(type: type, page: page, limit: limit)
+        return try await fetchFromLocalCache(type: type, offset: offset, limit: limit)
     }
 
-    private func fetchFromLocalCache(type: AttachmentType, page: Int = 1, limit: Int = 30) async throws -> [MediaItemWithContext] {
+    private func fetchFromLocalCache(type: AttachmentType, offset: Int = 0, limit: Int = 30) async throws -> [MediaItemWithContext] {
         let messages = await DataManager.shared.loadMessages(conversationId: conversationId, limit: 1000)
         var items: [MediaItemWithContext] = []
 
@@ -282,16 +283,15 @@ final class MediaGalleryViewModel: ObservableObject {
             }
         }
 
-        // Sort by date (newest first) and paginate
+        // Sort by date (newest first) and paginate using offset/limit
         let sorted = items.sorted { $0.sentAt > $1.sentAt }
-        let startIndex = (page - 1) * limit
-        let endIndex = min(startIndex + limit, sorted.count)
+        let endIndex = min(offset + limit, sorted.count)
 
-        if startIndex >= sorted.count {
+        if offset >= sorted.count {
             return []
         }
 
-        return Array(sorted[startIndex..<endIndex])
+        return Array(sorted[offset..<endIndex])
     }
 
     // MARK: - URL Extraction

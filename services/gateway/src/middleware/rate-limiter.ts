@@ -116,3 +116,73 @@ export async function messageValidationHook(
     });
   }
 }
+
+/**
+ * Rate limiter pour les endpoints Signal Protocol
+ *
+ * SECURITY: Protège contre:
+ * - Key scraping (limite la récupération de bundles de clés)
+ * - Session flooding (limite la création de sessions)
+ * - Pre-key exhaustion attacks (limite la génération de clés)
+ *
+ * Limites:
+ * - GET /keys/:userId: 30/minute (lookup keys)
+ * - POST /keys: 5/minute (generate bundle - rare operation)
+ * - POST /session/establish: 20/minute (session creation)
+ */
+export function createSignalProtocolRateLimitConfig(
+  type: 'keys_get' | 'keys_post' | 'session_establish'
+): object {
+  const configs = {
+    keys_get: {
+      max: 30,
+      timeWindow: '1 minute',
+      keyGenerator: (request: FastifyRequest) => {
+        const authContext = (request as any).authContext;
+        if (authContext && authContext.userId) {
+          return `signal:keys:get:${authContext.userId}`;
+        }
+        return `signal:keys:get:ip:${request.ip}`;
+      },
+      errorResponseBuilder: () => ({
+        success: false,
+        error: 'Too many key lookup requests. Please wait before trying again.',
+        statusCode: 429
+      })
+    },
+    keys_post: {
+      max: 5,
+      timeWindow: '1 minute',
+      keyGenerator: (request: FastifyRequest) => {
+        const authContext = (request as any).authContext;
+        if (authContext && authContext.userId) {
+          return `signal:keys:post:${authContext.userId}`;
+        }
+        return `signal:keys:post:ip:${request.ip}`;
+      },
+      errorResponseBuilder: () => ({
+        success: false,
+        error: 'Too many key generation requests. Key bundles should only be generated occasionally.',
+        statusCode: 429
+      })
+    },
+    session_establish: {
+      max: 20,
+      timeWindow: '1 minute',
+      keyGenerator: (request: FastifyRequest) => {
+        const authContext = (request as any).authContext;
+        if (authContext && authContext.userId) {
+          return `signal:session:${authContext.userId}`;
+        }
+        return `signal:session:ip:${request.ip}`;
+      },
+      errorResponseBuilder: () => ({
+        success: false,
+        error: 'Too many session establishment requests. Please wait before trying again.',
+        statusCode: 429
+      })
+    }
+  };
+
+  return configs[type];
+}

@@ -6,7 +6,7 @@ import "../styles/z-index-fix.css";
 import "../styles/custom-toast.css";
 import { Toaster } from "@/components/ui/sonner";
 import { StoreInitializer } from "@/stores";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ThemeProvider, QueryProvider } from "@/components/providers";
 import { ErrorBoundary } from "@/components/common";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
@@ -88,18 +88,20 @@ export default function RootLayout({
         {/* Firebase Initializer - Vérifie Firebase au démarrage */}
         <FirebaseInitializer />
 
-        <StoreInitializer>
-          <ThemeProvider>
-            <MessageViewProvider>
-              <ErrorBoundary>
-                <ClientOnly>
-                  {children}
-                  <CallManager />
-                </ClientOnly>
-              </ErrorBoundary>
-            </MessageViewProvider>
-          </ThemeProvider>
-        </StoreInitializer>
+        <QueryProvider>
+          <StoreInitializer>
+            <ThemeProvider>
+              <MessageViewProvider>
+                <ErrorBoundary>
+                  <ClientOnly>
+                    {children}
+                    <CallManager />
+                  </ClientOnly>
+                </ErrorBoundary>
+              </MessageViewProvider>
+            </ThemeProvider>
+          </StoreInitializer>
+        </QueryProvider>
         <Toaster
           position="top-right"
           expand={true}

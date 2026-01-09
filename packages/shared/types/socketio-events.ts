@@ -199,14 +199,14 @@ export interface ConversationUnreadUpdatedEventData {
 export interface ReactionUpdateEventData {
   readonly messageId: string;
   readonly userId?: string;
-  readonly anonymousUserId?: string;
+  readonly anonymousId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
   readonly aggregation: {
     readonly emoji: string;
     readonly count: number;
     readonly userIds: readonly string[];
-    readonly anonymousUserIds: readonly string[];
+    readonly anonymousIds: readonly string[];
     readonly hasCurrentUser: boolean;
   };
   readonly timestamp: Date;
@@ -221,7 +221,7 @@ export interface ReactionSyncEventData {
     readonly emoji: string;
     readonly count: number;
     readonly userIds: readonly string[];
-    readonly anonymousUserIds: readonly string[];
+    readonly anonymousIds: readonly string[];
     readonly hasCurrentUser: boolean;
   }[];
   readonly totalCount: number;

@@ -84,7 +84,7 @@ export class StatusService {
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
       where: { id: userId },
-      data: { lastSeen: new Date() }
+      data: { lastActiveAt: new Date() }
     })
     .then(() => {
       this.metrics.successfulUpdates++;
@@ -156,7 +156,7 @@ export class StatusService {
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.anonymousParticipant.update({
       where: { id: participantId },
-      data: { lastSeenAt: new Date() }
+      data: { lastActiveAt: new Date() }
     })
     .then(() => {
       this.metrics.successfulUpdates++;
@@ -282,12 +282,12 @@ export class StatusService {
     if (isAnonymous) {
       await this.prisma.anonymousParticipant.update({
         where: { id: userId },
-        data: { lastSeenAt: new Date() }
+        data: { lastActiveAt: new Date() }
       });
     } else {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { lastSeen: new Date() }
+        data: { lastActiveAt: new Date() }
       });
     }
   }

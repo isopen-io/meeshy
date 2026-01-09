@@ -1538,7 +1538,6 @@ export class MeeshySocketIOManager {
             firstName: true,
             lastName: true,
             lastActiveAt: true,
-            lastSeen: true,
             conversations: {
               select: {
                 conversationId: true
@@ -1556,8 +1555,7 @@ export class MeeshySocketIOManager {
               userId: user.id,
               username: displayName,
               isOnline,
-              lastActiveAt: user.lastActiveAt,
-              lastSeen: user.lastSeen
+              lastActiveAt: user.lastActiveAt
             });
           }
 
@@ -1802,13 +1800,12 @@ export class MeeshySocketIOManager {
                     targetLanguage: true,
                     translatedContent: true,
                     translationModel: true,
-                    cacheKey: true,
                     confidenceScore: true
                   }
                 }
               }
             });
-            return messageWithTranslations?.translations || [];
+            return (messageWithTranslations as any)?.translations || [];
           } catch (error) {
             console.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
             return [];
@@ -2091,7 +2088,7 @@ export class MeeshySocketIOManager {
         messageId: data.messageId,
         emoji: data.emoji,
         userId: !isAnonymous ? userId : undefined,
-        anonymousUserId: isAnonymous && sessionToken ? sessionToken : undefined
+        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
       });
 
       if (!reaction) {
@@ -2209,7 +2206,7 @@ export class MeeshySocketIOManager {
         messageId: data.messageId,
         emoji: data.emoji,
         userId: !isAnonymous ? userId : undefined,
-        anonymousUserId: isAnonymous && sessionToken ? sessionToken : undefined
+        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
       });
 
       if (!removed) {

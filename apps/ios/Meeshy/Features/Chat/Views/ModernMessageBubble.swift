@@ -621,7 +621,7 @@ struct ModernMessageBubble: View {
         if hasReactions, let reactions = message.reactions, !reactions.isEmpty {
             var groupedReactions: [String: [ReactionUserInfo]] = [:]
             for reaction in reactions {
-                let userId = reaction.userId ?? reaction.anonymousUserId ?? "anonymous"
+                let userId = reaction.userId ?? reaction.anonymousId ?? "anonymous"
                 // Get user info from member cache (fast in-memory lookup)
                 let userInfo = getUserInfo?(userId) ?? (name: "Utilisateur", avatar: nil)
                 let reactionUserInfo = ReactionUserInfo(

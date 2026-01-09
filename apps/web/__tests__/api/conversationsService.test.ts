@@ -44,7 +44,7 @@ describe('ConversationsService', () => {
           data: [mockConversationData],
           pagination: { limit: 20, offset: 0, total: 1, hasMore: false }
         },
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -62,7 +62,7 @@ describe('ConversationsService', () => {
           data: [],
           pagination: { limit: 20, offset: 0, total: 0, hasMore: false }
         },
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -92,7 +92,7 @@ describe('ConversationsService', () => {
           success: true,
           data: mockConversationData
         },
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -237,7 +237,7 @@ describe('ConversationsService', () => {
     it('should mark conversation as read', async () => {
       mockApiService.post.mockResolvedValue({
         data: {},
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -266,7 +266,7 @@ describe('ConversationsService', () => {
 
       mockApiService.get.mockResolvedValue({
         data: mockConversations,
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -279,7 +279,7 @@ describe('ConversationsService', () => {
     it('should handle empty search results', async () => {
       mockApiService.get.mockResolvedValue({
         data: [],
-        status: 200,
+        success: true,
         message: 'Success',
       });
 
@@ -310,7 +310,7 @@ describe('ConversationsService', () => {
 
       mockApiService.patch.mockResolvedValue({
         data: mockUpdatedConversation,
-        status: 200,
+        success: true,
         message: 'Updated',
       });
 

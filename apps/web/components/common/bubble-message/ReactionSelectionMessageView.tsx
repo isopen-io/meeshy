@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import type { Message } from '@meeshy/shared/types/conversation';
-import { useMessageReactions } from '@/hooks/use-message-reactions';
+import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useI18n } from '@/hooks/useI18n';
 
 interface ReactionSelectionMessageViewProps {
@@ -128,8 +128,8 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
   const [selectedCategory, setSelectedCategory] = useState('smileys');
   const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
 
-  // Hook de réactions intégré
-  const { addReaction, isLoading, userReactions } = useMessageReactions({
+  // Hook de réactions intégré (React Query)
+  const { addReaction, isLoading, userReactions } = useReactionsQuery({
     messageId: message.id,
     currentUserId: isAnonymous ? currentAnonymousUserId : currentUserId,
     isAnonymous

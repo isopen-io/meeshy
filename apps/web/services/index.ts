@@ -8,8 +8,8 @@ export { messagesService } from './messages.service';
 export { mentionsService } from './mentions.service';
 export { dashboardService } from './dashboard.service';
 
-// Export des types
-export type { ApiResponse, ApiError, ApiConfig } from './api.service';
+// Export des types - API Response types now come from shared
+export type { ApiResponse, ApiError, ApiConfig, PaginationMeta } from '@meeshy/shared/types';
 export type { ParticipantsFilters } from './conversations.service';
 export type {
   CreateGroupDto,

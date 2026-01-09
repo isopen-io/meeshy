@@ -1,8 +1,8 @@
-import { apiService, ApiResponse } from './api.service';
+import { apiService } from './api.service';
 import { User } from '@/types';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 // Importer les types partagés pour cohérence
-import type { UpdateUserRequest, UpdateUserResponse } from '@meeshy/shared/types';
+import type { ApiResponse, UpdateUserRequest, UpdateUserResponse } from '@meeshy/shared/types';
 
 export interface UserStats {
   messagesSent: number;
@@ -138,8 +138,8 @@ export const usersService = {
         throw new Error('User not found');
       }
       return {
+        success: true,
         data: response.data.data,
-        status: response.status,
         message: response.message
       };
     } catch (error) {
@@ -158,8 +158,8 @@ export const usersService = {
         throw new Error('Stats not found');
       }
       return {
+        success: true,
         data: response.data.data,
-        status: response.status,
         message: response.message
       };
     } catch (error) {
@@ -303,9 +303,9 @@ export const usersService = {
       }
       // Retourner une réponse avec data null en cas d'erreur
       return {
+        success: false,
         data: null,
-        status: 500,
-        message: error instanceof Error ? error.message : 'Failed to fetch affiliate token'
+        error: error instanceof Error ? error.message : 'Failed to fetch affiliate token'
       };
     }
   },

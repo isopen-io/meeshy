@@ -21,11 +21,11 @@ interface GroupsResponse {
   totalPages: number;
 }
 
-interface ApiResponse<T> {
-  data: T;
-  status: number;
-  message: string;
-}
+// Using shared ApiResponse type from @meeshy/shared
+import type { ApiResponse as SharedApiResponse } from '@meeshy/shared/types';
+
+// Helper type that wraps data in the format expected by tests
+type ApiResponse<T> = SharedApiResponse<T>;
 
 const mockConversationsService = conversationsService as jest.Mocked<typeof conversationsService>;
 const mockGroupsService = groupsService as jest.Mocked<typeof groupsService>;
@@ -301,7 +301,7 @@ describe('UI and API Integration Tests', () => {
           limit: 10,
           totalPages: 1,
         },
-        status: 200,
+        success: true,
         message: 'Success',
       };
 
@@ -341,7 +341,7 @@ describe('UI and API Integration Tests', () => {
           limit: 10,
           totalPages: 1,
         },
-        status: 200,
+        success: true,
         message: 'Success',
       };
 
@@ -395,7 +395,7 @@ describe('UI and API Integration Tests', () => {
           limit: 10,
           totalPages: 1,
         },
-        status: 200,
+        success: true,
         message: 'Success',
       };
 
@@ -431,7 +431,7 @@ describe('UI and API Integration Tests', () => {
           limit: 10,
           totalPages: 0,
         },
-        status: 200,
+        success: true,
         message: 'Success',
       };
 
@@ -463,7 +463,7 @@ describe('UI and API Integration Tests', () => {
           limit: 10,
           totalPages: 0,
         },
-        status: 200,
+        success: true,
         message: 'Success',
       };
 

@@ -30,7 +30,7 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
 
       const preferences = await fastify.prisma.userPreference.findMany({
@@ -109,10 +109,10 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
       // Validation spécifique pour certaines préférences
       if (key === 'font-family') {
         const validFonts = [
-          'inter', 'nunito', 'poppins', 'open-sans', 'lato', 
+          'inter', 'nunito', 'poppins', 'open-sans', 'lato',
           'comic-neue', 'lexend', 'roboto', 'geist-sans'
         ];
-        
+
         if (!validFonts.includes(value)) {
           return reply.code(400).send({
             success: false,
@@ -192,7 +192,7 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Préférence supprimée avec succès'
+        data: { message: 'Préférence supprimée avec succès' }
       });
 
     } catch (error) {
@@ -217,7 +217,7 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Toutes les préférences ont été réinitialisées'
+        data: { message: 'Toutes les préférences ont été réinitialisées' }
       });
 
     } catch (error) {

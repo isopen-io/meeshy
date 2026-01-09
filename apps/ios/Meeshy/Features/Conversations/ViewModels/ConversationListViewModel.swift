@@ -247,8 +247,8 @@ final class ConversationListViewModel: ObservableObject {
     private var currentUserId: String?
 
     // Pagination state - REMOVED LIMIT: Load all conversations without artificial limit
-    private var currentPage: Int = 1
-    private var pageSize: Int { PaginationConfig.conversationsPerPage }  // Use centralized config
+    private var currentOffset: Int = 0
+    private var limit: Int { PaginationConfig.conversationsLimit }  // Use centralized config
 
     // MARK: - Initialization
 
@@ -288,7 +288,7 @@ final class ConversationListViewModel: ObservableObject {
             // Le vrai hasMorePages sera déterminé par le refresh backend en arrière-plan
             // Cela évite le problème où l'app pense avoir tout chargé alors qu'il y a plus
             self.hasMorePages = true  // Sera mis à false après le refresh backend
-            self.currentPage = 1
+            self.currentOffset = 0
             self.hasAttemptedInitialLoad = false  // Permettre le refresh en arrière-plan
 
             // Compute derived state
@@ -364,7 +364,7 @@ final class ConversationListViewModel: ObservableObject {
             self.communitiesList = DataManager.shared.communities
             // CRITICAL FIX: Toujours supposer qu'il y a plus de pages depuis le cache
             self.hasMorePages = true
-            self.currentPage = 1
+            self.currentOffset = 0
 
             // Use optimized computation only for derived state not in DataManager
             computeAllDerivedState()
@@ -406,7 +406,7 @@ final class ConversationListViewModel: ObservableObject {
             // CRITICAL FIX: Toujours supposer qu'il y a plus de pages depuis le cache
             // Le vrai hasMorePages sera determiné par le refresh backend
             self.hasMorePages = true
-            self.currentPage = 1
+            self.currentOffset = 0
 
             // Use categories from DataManager if available
             if DataManager.shared.isFullyStructured && !DataManager.shared.conversationsByCategory.isEmpty {
@@ -474,7 +474,7 @@ final class ConversationListViewModel: ObservableObject {
             // Use centralized pagination config
             let fetchedCount = allConversations.count
             self.hasMorePages = PaginationConfig.hasMorePages(receivedCount: fetchedCount)
-            self.currentPage = PaginationConfig.currentPage(forTotalItems: fetchedCount)
+            self.currentOffset = fetchedCount
 
             // Use API categories if available, otherwise extract from conversations
             if !apiCategories.isEmpty {
@@ -658,14 +658,14 @@ final class ConversationListViewModel: ObservableObject {
             return
         }
 
-        let nextPage = currentPage + 1
-        chatLogger.info("ConversationListVM: Loading page \(nextPage) (100 conversations)")
+        let nextOffset = currentOffset
+        chatLogger.info("ConversationListVM: Loading offset \(nextOffset) (100 conversations)")
         paginationState = .loadingMore
 
         do {
             // Fetch les 100 prochaines conversations
             // BUGFIX: Utiliser ConversationEndpoints directement pour avoir acces a PaginatedAPIResponse
-            let endpoint = ConversationEndpoints.fetchConversations(page: nextPage, limit: 100)
+            let endpoint = ConversationEndpoints.fetchConversations(offset: nextOffset, limit: 100)
             let response: PaginatedAPIResponse<[Conversation]> = try await APIClient.shared.requestPaginated(endpoint)
 
             // Extraire les donnees de pagination
@@ -673,22 +673,22 @@ final class ConversationListViewModel: ObservableObject {
             let receivedCount = receivedConversations.count
 
             // Use centralized pagination config for hasMore detection
-            let backendHasMore = response.pagination?.hasMore ?? PaginationConfig.hasMorePages(receivedCount: receivedCount)
+            let backendHasMore = response.pagination?.hasMore ?? PaginationConfig.hasMore(receivedCount: receivedCount, limit: 100)
 
-            chatLogger.info("ConversationListVM: API page \(nextPage): received \(receivedCount), backend hasMore: \(backendHasMore)")
+            chatLogger.info("ConversationListVM: API offset \(nextOffset): received \(receivedCount), backend hasMore: \(backendHasMore)")
 
             // Filtrer les doublons
             let existingIds = Set(conversations.map { $0.id })
             let uniqueNewConversations = receivedConversations.filter { !existingIds.contains($0.id) }
 
-            // Mettre a jour currentPage SEULEMENT si on a reussi
-            currentPage = nextPage
+            // Mettre a jour currentOffset SEULEMENT si on a reussi
+            currentOffset += receivedCount
 
             // CRITICAL: Utiliser la valeur du backend
             hasMorePages = backendHasMore
 
             if uniqueNewConversations.isEmpty {
-                chatLogger.info("ConversationListVM: No new unique conversations on page \(nextPage) (all \(receivedCount) were duplicates)")
+                chatLogger.info("ConversationListVM: No new unique conversations at offset \(nextOffset) (all \(receivedCount) were duplicates)")
                 // Si on recoit des doublons mais le backend dit hasMore, continuer
                 // Sinon, arreter
                 if !backendHasMore {
@@ -719,8 +719,8 @@ final class ConversationListViewModel: ObservableObject {
             paginationState = .idle
 
         } catch {
-            chatLogger.error("ConversationListVM: Failed to load page \(nextPage): \(error.localizedDescription)")
-            // Ne PAS rollback currentPage car on n'a pas encore incremente
+            chatLogger.error("ConversationListVM: Failed to load page \(nextOffset): \(error.localizedDescription)")
+            // Ne PAS rollback currentOffset car on n.a pas encore incremente
             paginationState = .idle
             // Ne pas afficher d'erreur a l'utilisateur pour le chargement additionnel
         }
@@ -752,11 +752,11 @@ final class ConversationListViewModel: ObservableObject {
         do {
             // Calculate how many we already have for this community
             let existingForCommunity = conversations.filter { $0.communityId == communityId }
-            let page = (existingForCommunity.count / 100) + 1
+            let offset = existingForCommunity.count
 
             let response = try await communityService.fetchCommunityConversations(
                 communityId: communityId,
-                page: page,
+                offset: offset,
                 limit: 100
             )
 
@@ -844,7 +844,7 @@ final class ConversationListViewModel: ObservableObject {
                     // Pas de cache, charger depuis le réseau
                     let response = try await APIService.shared.fetchMessages(
                         conversationId: conversation.id,
-                        page: 1,
+                        offset: 0,
                         limit: 30
                     )
                     // Sauvegarder en cache pour un accès rapide

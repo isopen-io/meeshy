@@ -3,7 +3,7 @@
 //  Meeshy
 //
 //  Service for conversation operations with intelligent in-memory caching
-//  UPDATED: Bypasses CoreData to fix NSSet nil insertion crash
+//  UPDATED: Uses offset/limit pagination pattern instead of page/pageSize
 //  Uses new InMemoryCache for thread-safe, crash-free caching
 //  iOS 16+
 //
@@ -133,23 +133,23 @@ final class ConversationService: Sendable {
         }
 
         // Use centralized pagination config - single source of truth
-        let pageSize = PaginationConfig.conversationsPerPage
+        let limit = PaginationConfig.conversationsLimit
         var allConversations: [Conversation] = []
         allConversations.reserveCapacity(200)
         var seenIds = Set<String>()
         seenIds.reserveCapacity(200)
-        var currentPage = 1
+        var currentOffset = 0
         var hasMore = true
-        var consecutiveDuplicatePages = 0
+        var consecutiveDuplicateFetches = 0
 
-        conversationLogger.info("Starting paginated fetch of ALL conversations (pageSize: \(pageSize))")
+        conversationLogger.info("Starting paginated fetch of ALL conversations (limit: \(limit))")
 
         while hasMore {
-            let endpoint = ConversationEndpoints.fetchConversations(page: currentPage, limit: pageSize)
+            let endpoint = ConversationEndpoints.fetchConversations(offset: currentOffset, limit: limit)
 
             // DEBUG: Log the request
-            print("🔵 [API REQUEST] GET /conversations?page=\(currentPage)&limit=\(pageSize)")
-            conversationLogger.info("🔵 [API REQUEST] Fetching page \(currentPage) with limit \(pageSize)")
+            print("🔵 [API REQUEST] GET /conversations?offset=\(currentOffset)&limit=\(limit)")
+            conversationLogger.info("🔵 [API REQUEST] Fetching offset \(currentOffset) with limit \(limit)")
 
             do {
                 // Use PaginatedAPIResponse to properly detect hasMore from backend
@@ -157,7 +157,7 @@ final class ConversationService: Sendable {
                 let conversations = response.data
 
                 // DEBUG: Log the response
-                print("🟢 [API RESPONSE] Page \(currentPage): received \(conversations.count) conversations, hasMore: \(response.hasMore)")
+                print("🟢 [API RESPONSE] offset \(currentOffset): received \(conversations.count) conversations, hasMore: \(response.hasMore)")
 
                 // DEBUG: Check userPreferences, categories, and tags
                 for (index, conv) in conversations.prefix(3).enumerated() {
@@ -184,40 +184,40 @@ final class ConversationService: Sendable {
                     }
                 }
 
-                print("🟢 [API RESPONSE] Page \(currentPage): \(newConversationsCount) NEW conversations (total unique: \(allConversations.count))")
-                conversationLogger.info("Page \(currentPage): \(newConversationsCount) new conversations (total unique: \(allConversations.count))")
+                print("🟢 [API RESPONSE] offset \(currentOffset): \(newConversationsCount) NEW conversations (total unique: \(allConversations.count))")
+                conversationLogger.info("offset \(currentOffset): \(newConversationsCount) new conversations (total unique: \(allConversations.count))")
 
                 // Detect backend pagination bug: if we got 0 new conversations, backend is returning duplicates
                 if newConversationsCount == 0 {
-                    consecutiveDuplicatePages += 1
-                    conversationLogger.warn("Page \(currentPage) returned 0 new conversations (all duplicates). Count: \(consecutiveDuplicatePages)")
+                    consecutiveDuplicateFetches += 1
+                    conversationLogger.warn("offset \(currentOffset) returned 0 new conversations (all duplicates). Count: \(consecutiveDuplicateFetches)")
 
-                    // If we get 3 consecutive pages of duplicates, stop - backend is broken
-                    if consecutiveDuplicatePages >= 3 {
-                        conversationLogger.error("Backend pagination appears broken - stopping after \(consecutiveDuplicatePages) duplicate pages")
+                    // If we get 3 consecutive fetches of duplicates, stop - backend is broken
+                    if consecutiveDuplicateFetches >= PaginationConfig.maxDuplicateFetches {
+                        conversationLogger.error("Backend pagination appears broken - stopping after \(consecutiveDuplicateFetches) duplicate fetches")
                         print("🛑 [PAGINATION] Stopping - backend returning duplicate data")
                         break
                     }
                 } else {
-                    consecutiveDuplicatePages = 0 // Reset counter if we got new data
+                    consecutiveDuplicateFetches = 0 // Reset counter if we got new data
                 }
 
                 // Use backend's hasMore if available, otherwise use centralized config
-                hasMore = response.pagination?.hasMore ?? PaginationConfig.hasMorePages(receivedCount: conversations.count)
-                currentPage += 1
+                hasMore = response.pagination?.hasMore ?? PaginationConfig.hasMore(receivedCount: conversations.count, limit: limit)
+                currentOffset += conversations.count
 
                 // Safety limit to prevent infinite loops
-                if currentPage > PaginationConfig.maxPages {
-                    conversationLogger.warn("Reached max page limit (\(PaginationConfig.maxPages)), stopping pagination")
+                if currentOffset > PaginationConfig.maxOffset {
+                    conversationLogger.warn("Reached max offset limit (\(PaginationConfig.maxOffset)), stopping pagination")
                     break
                 }
 
             } catch {
-                conversationLogger.error("Failed to fetch page \(currentPage): \(error.localizedDescription)")
+                conversationLogger.error("Failed to fetch offset \(currentOffset): \(error.localizedDescription)")
                 if let decodingError = error as? DecodingError {
                     logDecodingError(decodingError)
                 }
-                // If first page fails, throw error. Otherwise, return what we have
+                // If first fetch fails, throw error. Otherwise, return what we have
                 if allConversations.isEmpty {
                     throw error
                 }
@@ -226,8 +226,8 @@ final class ConversationService: Sendable {
         }
 
         // DEBUG: Final count
-        print("🏁 [FETCH COMPLETE] Total unique conversations: \(allConversations.count) in \(currentPage - 1) page(s)")
-        conversationLogger.info("Fetched \(allConversations.count) unique conversations from network (\(currentPage - 1) pages)")
+        print("🏁 [FETCH COMPLETE] Total unique conversations: \(allConversations.count) (final offset: \(currentOffset))")
+        conversationLogger.info("Fetched \(allConversations.count) unique conversations from network (final offset: \(currentOffset))")
 
         // Already deduplicated during pagination
         var uniqueConversations = allConversations
@@ -279,25 +279,24 @@ final class ConversationService: Sendable {
         }
     }
 
-    // MARK: - Fetch Conversations with Pagination (Legacy)
+    // MARK: - Fetch Conversations with Pagination
 
     /// Fetches conversations with pagination support
-    /// NOTE: Use fetchAllConversations() for now - pagination disabled temporarily
     /// - Parameters:
     ///   - cursor: Optional cursor for cursor-based pagination (preferred)
-    ///   - page: Page number for page-based pagination (fallback)
-    ///   - limit: Number of items per page
+    ///   - offset: Offset for offset-based pagination
+    ///   - limit: Number of items per request
     /// - Returns: Paginated response with conversations
     func fetchConversations(
         cursor: String? = nil,
-        page: Int = 1,
+        offset: Int = 0,
         limit: Int = 100
     ) async throws -> PaginatedResponse<Conversation> {
-        conversationLogger.info("Fetching conversations (cursor: \(cursor ?? "nil"), page: \(page), limit: \(limit))")
+        conversationLogger.info("Fetching conversations (cursor: \(cursor ?? "nil"), offset: \(offset), limit: \(limit))")
 
-        // Check in-memory cache for first page
-        let isFirstPage = cursor == nil && page == 1
-        if isFirstPage {
+        // Check in-memory cache for first fetch
+        let isFirstFetch = cursor == nil && offset == 0
+        if isFirstFetch {
             let cached = await AppCache.conversations.getItems(forKey: "all")
             if !cached.isEmpty {
                 conversationLogger.info("Returning \(cached.count) cached conversations")
@@ -319,23 +318,23 @@ final class ConversationService: Sendable {
         }
 
         // Fetch from network
-        return try await fetchConversationsFromNetwork(cursor: cursor, page: page, limit: limit)
+        return try await fetchConversationsFromNetwork(cursor: cursor, offset: offset, limit: limit)
     }
 
     /// Force refresh from network (bypasses cache)
-    func forceRefreshConversations(page: Int = 1, limit: Int = 100) async throws -> PaginatedResponse<Conversation> {
-        return try await fetchConversationsFromNetwork(cursor: nil, page: page, limit: limit)
+    func forceRefreshConversations(offset: Int = 0, limit: Int = 100) async throws -> PaginatedResponse<Conversation> {
+        return try await fetchConversationsFromNetwork(cursor: nil, offset: offset, limit: limit)
     }
 
     // MARK: - Network Fetch
 
     private func fetchConversationsFromNetwork(
         cursor: String?,
-        page: Int,
+        offset: Int,
         limit: Int
     ) async throws -> PaginatedResponse<Conversation> {
 
-        let endpoint = ConversationEndpoints.fetchConversations(page: page, limit: limit)
+        let endpoint = ConversationEndpoints.fetchConversations(offset: offset, limit: limit)
 
         do {
             let response: APIResponse<[Conversation]> = try await apiClient.request(endpoint)
@@ -348,12 +347,11 @@ final class ConversationService: Sendable {
             conversationLogger.info("Fetched \(conversations.count) conversations from network")
 
             // Determine hasMore from response
-            // If API returns total, use it; otherwise infer from count
-            let hasMore = conversations.count >= limit
+            let hasMore = PaginationConfig.hasMore(receivedCount: conversations.count, limit: limit)
 
             // Update in-memory cache
-            let isFirstPage = cursor == nil && page == 1
-            if isFirstPage {
+            let isFirstFetch = cursor == nil && offset == 0
+            if isFirstFetch {
                 await AppCache.conversations.setInitialPage(
                     key: "all",
                     items: conversations,
@@ -392,7 +390,7 @@ final class ConversationService: Sendable {
     /// Background refresh without blocking UI
     private func refreshConversationsInBackground(limit: Int) async {
         do {
-            let response = try await fetchConversationsFromNetwork(cursor: nil, page: 1, limit: limit)
+            let response = try await fetchConversationsFromNetwork(cursor: nil, offset: 0, limit: limit)
             conversationLogger.info("Background refresh: \(response.items.count) conversations")
 
             // Post notification for UI update
@@ -594,8 +592,8 @@ final class ConversationService: Sendable {
 
     /// Fetch members from network (internal)
     private func fetchMembersFromNetwork(conversationId: String) async throws -> [ConversationMember] {
-        // Fetch all members with high limit
-        let endpoint = ConversationEndpoints.fetchMembers(conversationId: conversationId, page: 1, limit: 500)
+        // Fetch all members with high limit (offset 0 = first batch)
+        let endpoint = ConversationEndpoints.fetchMembers(conversationId: conversationId, offset: 0, limit: 500)
 
         // DEBUG: Log raw response
         conversationLogger.info("=== Fetching members from: \(endpoint.path) ===")
@@ -736,10 +734,10 @@ final class ConversationService: Sendable {
 
     // MARK: - Search
 
-    func searchConversations(query: String, page: Int = 1, limit: Int = 20) async throws -> [Conversation] {
+    func searchConversations(query: String, offset: Int = 0, limit: Int = 20) async throws -> [Conversation] {
         conversationLogger.info("Searching conversations with query: \(query)")
 
-        let endpoint = ConversationEndpoints.searchConversations(query: query, page: page, limit: limit)
+        let endpoint = ConversationEndpoints.searchConversations(query: query, offset: offset, limit: limit)
         let response: APIResponse<[Conversation]> = try await apiClient.request(endpoint)
 
         guard let conversations = response.data else {

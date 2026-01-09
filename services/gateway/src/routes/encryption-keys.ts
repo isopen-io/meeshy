@@ -47,7 +47,7 @@ interface PublishPreKeyBundleBody {
  */
 export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
-  const encryptionService = getEncryptionService(prisma);
+  const encryptionService = await getEncryptionService(prisma);
   const authMiddleware = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
     allowAnonymous: false,

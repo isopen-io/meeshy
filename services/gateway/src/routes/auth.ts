@@ -42,7 +42,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       // Générer le token
       const token = authService.generateToken(user);
-      
+
       // Retourner les informations utilisateur complètes et le token
       reply.send({
         success: true,
@@ -101,7 +101,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           expiresIn: 24 * 60 * 60 // 24 heures en secondes
         }
       });
-      
+
     } catch (error) {
       console.error('[AUTH] ❌ Erreur serveur lors de la connexion:', error);
       if (error instanceof Error) {
@@ -135,20 +135,20 @@ export async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const registerData = request.body as RegisterData;
-      
+
       // Créer l'utilisateur avec Prisma
       const user = await authService.register(registerData);
-      
+
       if (!user) {
         return reply.status(400).send({
           success: false,
           error: 'Erreur lors de la création du compte'
         });
       }
-      
+
       // Générer le token
       const token = authService.generateToken(user);
-      
+
       reply.send({
         success: true,
         data: {
@@ -206,10 +206,10 @@ export async function authRoutes(fastify: FastifyInstance) {
           expiresIn: 24 * 60 * 60
         }
       });
-      
+
     } catch (error) {
       console.error('[GATEWAY] Error in register:', error);
-      
+
       // Gestion spécifique des erreurs de validation
       if (error instanceof Error) {
         const errorMessage = error.message;
@@ -220,7 +220,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           });
         }
       }
-      
+
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la création du compte'
@@ -234,7 +234,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
-      
+
       if (!authContext.isAuthenticated) {
         return reply.status(401).send({
           success: false,
@@ -246,7 +246,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       if (authContext.type === 'jwt' && authContext.registeredUser) {
         const user = authContext.registeredUser;
         const permissions = authService.getUserPermissions(user as any);
-        
+
         return reply.send({
           success: true,
           data: {
@@ -307,7 +307,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       // Si c'est un utilisateur anonyme (Session)
       if (authContext.type === 'session' && authContext.anonymousUser) {
         const anonymousUser = authContext.anonymousUser;
-        
+
         return reply.send({
           success: true,
           data: {
@@ -343,7 +343,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         success: false,
         error: 'Utilisateur non trouvé'
       });
-      
+
     } catch (error) {
       console.error('[GATEWAY] Error in /auth/me:', error);
       reply.status(500).send({
@@ -367,30 +367,30 @@ export async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { token } = request.body as { token: string };
-      
+
       // Vérifier le token
       const decoded = authService.verifyToken(token);
-      
+
       if (!decoded) {
         return reply.status(401).send({
           success: false,
           error: 'Token invalide ou expiré'
         });
       }
-      
+
       // Récupérer l'utilisateur
       const user = await authService.getUserById(decoded.userId);
-      
+
       if (!user) {
         return reply.status(404).send({
           success: false,
           error: 'Utilisateur non trouvé'
         });
       }
-      
+
       // Générer un nouveau token
       const newToken = authService.generateToken(user);
-      
+
       reply.send({
         success: true,
         data: {
@@ -398,7 +398,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           expiresIn: 24 * 60 * 60 // 24 heures en secondes
         }
       });
-      
+
     } catch (error) {
       console.error('[GATEWAY] Error in /auth/refresh:', error);
       reply.status(500).send({
@@ -414,15 +414,15 @@ export async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
-      
+
       // Mettre à jour le statut en ligne
       await authService.updateOnlineStatus(userId, false);
-      
+
       reply.send({
         success: true,
-        message: 'Déconnexion réussie'
+        data: { message: 'Déconnexion réussie' }
       });
-      
+
     } catch (error) {
       console.error('[GATEWAY] Error in logout:', error);
       reply.status(500).send({
@@ -528,7 +528,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Database initialized successfully'
+        data: { message: 'Database initialized successfully' }
       });
     } catch (error) {
       console.error('[GATEWAY] Error during forced initialization:', error);
@@ -571,7 +571,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Votre adresse email a été vérifiée avec succès !'
+        data: { message: 'Votre adresse email a été vérifiée avec succès !' }
       });
 
     } catch (error) {
@@ -617,7 +617,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Si un compte existe avec cette adresse email, un email de vérification a été envoyé.'
+        data: { message: 'Si un compte existe avec cette adresse email, un email de vérification a été envoyé.' }
       });
 
     } catch (error) {
@@ -660,7 +660,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Code de vérification envoyé par SMS.'
+        data: { message: 'Code de vérification envoyé par SMS.' }
       });
 
     } catch (error) {
@@ -704,7 +704,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Numéro de téléphone vérifié avec succès !'
+        data: { message: 'Numéro de téléphone vérifié avec succès !' }
       });
 
     } catch (error) {

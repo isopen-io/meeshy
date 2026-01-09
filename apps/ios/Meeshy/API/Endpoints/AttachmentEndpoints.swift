@@ -4,6 +4,7 @@
 //
 //  Attachment API endpoints
 //  Aligned with webapp format (files field, metadata_0)
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -199,7 +200,7 @@ enum AttachmentEndpoints: APIEndpoint, Sendable {
 
     /// List attachments for a conversation
     /// GET /api/conversations/:conversationId/attachments
-    case getAttachments(conversationId: String, type: AttachmentType?, page: Int, limit: Int)
+    case getAttachments(conversationId: String, type: AttachmentType?, offset: Int, limit: Int)
 
     /// Stream file by path (used for generated URLs)
     /// GET /api/attachments/file/*
@@ -245,8 +246,8 @@ enum AttachmentEndpoints: APIEndpoint, Sendable {
         switch self {
         case .getThumbnail(_, let size):
             return ["size": size.rawValue]
-        case .getAttachments(_, let type, let page, let limit):
-            var params: [String: Any] = ["page": page, "limit": limit]
+        case .getAttachments(_, let type, let offset, let limit):
+            var params: [String: Any] = ["offset": offset, "limit": limit]
             if let type = type {
                 params["type"] = type.rawValue
             }

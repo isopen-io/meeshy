@@ -17,14 +17,14 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 export interface AddReactionOptions {
   messageId: string;
   userId?: string;
-  anonymousUserId?: string;
+  anonymousId?: string;
   emoji: string;
 }
 
 export interface RemoveReactionOptions {
   messageId: string;
   userId?: string;
-  anonymousUserId?: string;
+  anonymousId?: string;
   emoji: string;
 }
 
@@ -42,7 +42,7 @@ export class ReactionService {
    * Vérifie les permissions et évite les doublons
    */
   async addReaction(options: AddReactionOptions): Promise<ReactionData | null> {
-    const { messageId, userId, anonymousUserId, emoji } = options;
+    const { messageId, userId, anonymousId, emoji } = options;
 
     // Validation de l'emoji
     const sanitized = sanitizeEmoji(emoji);
@@ -51,8 +51,8 @@ export class ReactionService {
     }
 
     // Vérifier que l'utilisateur ou anonyme est fourni
-    if (!userId && !anonymousUserId) {
-      throw new Error('Either userId or anonymousUserId must be provided');
+    if (!userId && !anonymousId) {
+      throw new Error('Either userId or anonymousId must be provided');
     }
 
     // Vérifier que le message existe et permissions
@@ -78,9 +78,9 @@ export class ReactionService {
       if (!isMember) {
         throw new Error('User is not a member of this conversation');
       }
-    } else if (anonymousUserId) {
+    } else if (anonymousId) {
       const isParticipant = message.conversation.anonymousParticipants.some(
-        p => p.id === anonymousUserId
+        p => p.id === anonymousId
       );
       if (!isParticipant) {
         throw new Error('Anonymous user is not a participant of this conversation');
@@ -94,7 +94,7 @@ export class ReactionService {
     const userExistingReactions = await this.prisma.reaction.findMany({
       where: {
         messageId,
-        ...(userId ? { userId } : { anonymousUserId })
+        ...(userId ? { userId } : { anonymousId })
       },
       select: { emoji: true }
     });
@@ -111,7 +111,7 @@ export class ReactionService {
     const existingReaction = await this.prisma.reaction.findFirst({
       where: {
         messageId,
-        ...(userId ? { userId } : { anonymousUserId }),
+        ...(userId ? { userId } : { anonymousId }),
         emoji: sanitized
       }
     });
@@ -126,7 +126,7 @@ export class ReactionService {
       data: {
         messageId,
         userId,
-        anonymousUserId,
+        anonymousId,
         emoji: sanitized
       }
     });
@@ -138,7 +138,7 @@ export class ReactionService {
    * Retire une réaction d'un message
    */
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
-    const { messageId, userId, anonymousUserId, emoji } = options;
+    const { messageId, userId, anonymousId, emoji } = options;
 
     // Validation de l'emoji
     const sanitized = sanitizeEmoji(emoji);
@@ -150,7 +150,7 @@ export class ReactionService {
     const result = await this.prisma.reaction.deleteMany({
       where: {
         messageId,
-        ...(userId ? { userId } : { anonymousUserId }),
+        ...(userId ? { userId } : { anonymousId }),
         emoji: sanitized
       }
     });
@@ -179,13 +179,13 @@ export class ReactionService {
       if (existing) {
         // Ajouter à l'agrégation existante
         const userIds = [...existing.userIds];
-        const anonymousUserIds = [...existing.anonymousUserIds];
+        const anonymousIds = [...existing.anonymousIds];
 
         if (reaction.userId) {
           userIds.push(reaction.userId);
         }
-        if (reaction.anonymousUserId) {
-          anonymousUserIds.push(reaction.anonymousUserId);
+        if (reaction.anonymousId) {
+          anonymousIds.push(reaction.anonymousId);
         }
 
         // Vérifier si l'utilisateur actuel a réagi
@@ -193,7 +193,7 @@ export class ReactionService {
         if (currentUserId && reaction.userId === currentUserId) {
           hasCurrentUser = true;
         }
-        if (currentAnonymousUserId && reaction.anonymousUserId === currentAnonymousUserId) {
+        if (currentAnonymousUserId && reaction.anonymousId === currentAnonymousUserId) {
           hasCurrentUser = true;
         }
 
@@ -201,20 +201,20 @@ export class ReactionService {
           emoji: reaction.emoji,
           count: existing.count + 1,
           userIds,
-          anonymousUserIds,
+          anonymousIds,
           hasCurrentUser
         });
       } else {
         // Créer nouvelle agrégation
         const hasCurrentUser = 
           (currentUserId && reaction.userId === currentUserId) ||
-          (currentAnonymousUserId && reaction.anonymousUserId === currentAnonymousUserId);
+          (currentAnonymousUserId && reaction.anonymousId === currentAnonymousUserId);
 
         aggregationMap.set(reaction.emoji, {
           emoji: reaction.emoji,
           count: 1,
           userIds: reaction.userId ? [reaction.userId] : [],
-          anonymousUserIds: reaction.anonymousUserId ? [reaction.anonymousUserId] : [],
+          anonymousIds: reaction.anonymousId ? [reaction.anonymousId] : [],
           hasCurrentUser
         });
       }
@@ -227,7 +227,7 @@ export class ReactionService {
     const userReactions = reactions
       .filter(r => 
         (currentUserId && r.userId === currentUserId) ||
-        (currentAnonymousUserId && r.anonymousUserId === currentAnonymousUserId)
+        (currentAnonymousUserId && r.anonymousId === currentAnonymousUserId)
       )
       .map(r => r.emoji);
 
@@ -264,20 +264,20 @@ export class ReactionService {
       .filter(r => r.userId)
       .map(r => r.userId!);
 
-    const anonymousUserIds = reactions
-      .filter(r => r.anonymousUserId)
-      .map(r => r.anonymousUserId!);
+    const anonymousIds = reactions
+      .filter(r => r.anonymousId)
+      .map(r => r.anonymousId!);
 
     const hasCurrentUser = reactions.some(r =>
       (currentUserId && r.userId === currentUserId) ||
-      (currentAnonymousUserId && r.anonymousUserId === currentAnonymousUserId)
+      (currentAnonymousUserId && r.anonymousId === currentAnonymousUserId)
     );
 
     return {
       emoji: sanitized,
       count: reactions.length,
       userIds,
-      anonymousUserIds,
+      anonymousIds,
       hasCurrentUser
     };
   }
@@ -298,9 +298,9 @@ export class ReactionService {
   /**
    * Récupère toutes les réactions d'un utilisateur anonyme
    */
-  async getAnonymousUserReactions(anonymousUserId: string): Promise<ReactionData[]> {
+  async getAnonymousUserReactions(anonymousId: string): Promise<ReactionData[]> {
     const reactions = await this.prisma.reaction.findMany({
-      where: { anonymousUserId },
+      where: { anonymousId },
       orderBy: { createdAt: 'desc' },
       take: 100
     });
@@ -315,7 +315,7 @@ export class ReactionService {
     messageId: string,
     emoji: string,
     userId?: string,
-    anonymousUserId?: string
+    anonymousId?: string
   ): Promise<boolean> {
     const sanitized = sanitizeEmoji(emoji);
     if (!sanitized) return false;
@@ -324,7 +324,7 @@ export class ReactionService {
       where: {
         messageId,
         emoji: sanitized,
-        ...(userId ? { userId } : { anonymousUserId })
+        ...(userId ? { userId } : { anonymousId })
       }
     });
 
@@ -350,19 +350,19 @@ export class ReactionService {
     emoji: string,
     action: 'add' | 'remove',
     userId?: string,
-    anonymousUserId?: string
+    anonymousId?: string
   ): Promise<ReactionUpdateEvent> {
     const aggregation = await this.getEmojiAggregation(
       messageId,
       emoji,
       userId,
-      anonymousUserId
+      anonymousId
     );
 
     return {
       messageId,
       userId,
-      anonymousUserId,
+      anonymousId,
       emoji,
       action,
       aggregation,
@@ -378,7 +378,7 @@ export class ReactionService {
       id: reaction.id,
       messageId: reaction.messageId,
       userId: reaction.userId || undefined,
-      anonymousUserId: reaction.anonymousUserId || undefined,
+      anonymousId: reaction.anonymousId || undefined,
       emoji: reaction.emoji,
       createdAt: reaction.createdAt,
       updatedAt: reaction.updatedAt
@@ -393,8 +393,8 @@ export class ReactionService {
       throw new Error('messageId is required');
     }
 
-    if (!options.userId && !options.anonymousUserId) {
-      throw new Error('Either userId or anonymousUserId must be provided');
+    if (!options.userId && !options.anonymousId) {
+      throw new Error('Either userId or anonymousId must be provided');
     }
 
     if (!options.emoji) {
@@ -414,8 +414,8 @@ export class ReactionService {
       throw new Error('messageId is required');
     }
 
-    if (!options.userId && !options.anonymousUserId) {
-      throw new Error('Either userId or anonymousUserId must be provided');
+    if (!options.userId && !options.anonymousId) {
+      throw new Error('Either userId or anonymousId must be provided');
     }
 
     if (!options.emoji) {

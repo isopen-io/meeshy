@@ -3,6 +3,7 @@
 //  Meeshy
 //
 //  User API endpoints
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -12,7 +13,7 @@ enum UserEndpoints: APIEndpoint, Sendable {
     case getCurrentUser
     case updateProfile(UserProfileUpdateRequest)
     case getUser(userId: String)
-    case searchUsers(query: String, page: Int, limit: Int)
+    case searchUsers(query: String, offset: Int, limit: Int)
     case updateStatus(UserStatusUpdateRequest)
     case updatePreferences(UserPreferences)
     case blockUser(userId: String)
@@ -74,8 +75,8 @@ enum UserEndpoints: APIEndpoint, Sendable {
 
     var queryParameters: [String: Any]? {
         switch self {
-        case .searchUsers(let query, let page, let limit):
-            return ["q": query, "page": page, "limit": limit]
+        case .searchUsers(let query, let offset, let limit):
+            return ["q": query, "offset": offset, "limit": limit]
         default:
             return nil
         }

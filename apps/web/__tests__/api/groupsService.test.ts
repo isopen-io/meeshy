@@ -58,7 +58,7 @@ describe('GroupsService', () => {
           limit: 10,
           totalPages: 1,
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -80,7 +80,7 @@ describe('GroupsService', () => {
           limit: 5,
           totalPages: 1,
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -106,7 +106,7 @@ describe('GroupsService', () => {
       const groupId = 'group-1';
       const mockResponse = {
         data: mockGroups[0],
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -184,7 +184,7 @@ describe('GroupsService', () => {
           ...updateData,
           updatedAt: new Date(),
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.patch.mockResolvedValue(mockResponse);
@@ -209,7 +209,7 @@ describe('GroupsService', () => {
       const result = await groupsService.deleteGroup(groupId);
 
       expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}`);
-      expect(result.status).toBe(204);
+      expect(result.success).toBe(204);
     });
   });
 
@@ -218,7 +218,7 @@ describe('GroupsService', () => {
       const groupId = 'group-1';
       const mockResponse = {
         data: mockGroupMembers,
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -272,7 +272,7 @@ describe('GroupsService', () => {
           ...mockGroupMembers[1],
           role: UserRoleEnum.ADMIN,
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.patch.mockResolvedValue(mockResponse);
@@ -302,7 +302,7 @@ describe('GroupsService', () => {
       const result = await groupsService.removeMember(groupId, memberId);
 
       expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}/members/${memberId}`);
-      expect(result.status).toBe(204);
+      expect(result.success).toBe(204);
     });
   });
 
@@ -311,7 +311,7 @@ describe('GroupsService', () => {
       const query = 'john';
       const mockResponse = {
         data: [mockUsers[0]],
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -327,7 +327,7 @@ describe('GroupsService', () => {
       const excludeGroupId = 'group-1';
       const mockResponse = {
         data: [mockUsers[0]],
-        status: 200,
+        success: true,
       };
 
       mockedApiService.get.mockResolvedValue(mockResponse);
@@ -349,7 +349,7 @@ describe('GroupsService', () => {
           link: 'https://app.meeshy.me/join/group-1/abc123',
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.post.mockResolvedValue(mockResponse);
@@ -371,7 +371,7 @@ describe('GroupsService', () => {
           link: 'https://app.meeshy.me/join/group-1/xyz789',
           expiresAt: new Date(Date.now() + customExpiration),
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.post.mockResolvedValue(mockResponse);
@@ -392,7 +392,7 @@ describe('GroupsService', () => {
           group: mockGroups[0],
           member: mockGroupMembers[0],
         },
-        status: 200,
+        success: true,
       };
 
       mockedApiService.post.mockResolvedValue(mockResponse);
