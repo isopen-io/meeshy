@@ -69,7 +69,8 @@ struct CachedConversationData: Codable, Sendable {
         let lastName: String?
         let avatar: String?
         let isOnline: Bool
-        let lastSeen: Date?
+        /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+        let lastActiveAt: Date?
     }
 
     // MARK: - Custom Decoder for backwards compatibility
@@ -454,7 +455,7 @@ actor ConversationCache {
                     lastName: other.user?.lastName,
                     avatar: other.avatar ?? other.user?.avatar,
                     isOnline: other.isOnline,
-                    lastSeen: other.lastSeen
+                    lastActiveAt: other.lastActiveAt
                 )
             }
         }
@@ -572,8 +573,7 @@ actor ConversationCache {
                 lastName: other.lastName,
                 avatar: other.avatar,
                 isOnline: other.isOnline,
-                lastSeen: other.lastSeen,
-                lastActiveAt: other.lastSeen  // Use lastSeen as lastActiveAt
+                lastActiveAt: other.lastActiveAt
             )
 
             // Create minimal member with user info

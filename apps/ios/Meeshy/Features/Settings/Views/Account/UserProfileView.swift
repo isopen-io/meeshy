@@ -111,8 +111,8 @@ struct UserProfileView: View {
                 Text("Online")
                     .font(.subheadline)
                     .foregroundColor(.meeshySuccess)
-            } else if let lastSeen = user.lastSeen {
-                Text("Last seen \(formatLastSeen(lastSeen))")
+            } else if let lastActive = user.lastActiveAt {
+                Text("Last seen \(formatLastSeen(lastActive))")
                     .font(.subheadline)
                     .foregroundColor(.meeshyTextSecondary)
             } else {

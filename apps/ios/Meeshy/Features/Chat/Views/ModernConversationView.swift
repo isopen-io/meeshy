@@ -804,7 +804,7 @@ struct AvatarPlaceholder: View {
 // MARK: - Presence Components
 
 // Note: PresenceStatus is now an alias for MemberPresenceStatus (defined in ConversationMember.swift)
-// which computes presence based on isOnline and lastSeen date
+// which computes presence based on isOnline and lastActiveAt date
 typealias PresenceStatus = MemberPresenceStatus
 
 struct PresenceBadge: View {

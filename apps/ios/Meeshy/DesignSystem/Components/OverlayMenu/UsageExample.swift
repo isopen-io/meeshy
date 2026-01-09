@@ -29,7 +29,7 @@ struct OverlayMenuExampleView: View {
                 id: "member-1",
                 userId: "user-1",
                 role: .member,
-                user: .init(id: "user-1", username: "marie", displayName: "Marie", avatar: nil, isOnline: true, lastSeen: nil, lastActiveAt: nil),
+                user: .init(id: "user-1", username: "marie", displayName: "Marie", avatar: nil, isOnline: true, lastActiveAt: nil),
                 readCursor: ReadCursor(
                     messageId: exampleMessage.id,
                     messageCreatedAt: exampleMessage.createdAt,
@@ -42,7 +42,7 @@ struct OverlayMenuExampleView: View {
                 id: "member-2",
                 userId: "user-2",
                 role: .member,
-                user: .init(id: "user-2", username: "pierre", displayName: "Pierre", avatar: nil, isOnline: false, lastSeen: Date(), lastActiveAt: nil),
+                user: .init(id: "user-2", username: "pierre", displayName: "Pierre", avatar: nil, isOnline: false, lastActiveAt: Date()),
                 readCursor: ReadCursor(
                     messageId: exampleMessage.id,
                     messageCreatedAt: exampleMessage.createdAt,
@@ -55,7 +55,7 @@ struct OverlayMenuExampleView: View {
                 id: "member-3",
                 userId: "user-3",
                 role: .member,
-                user: .init(id: "user-3", username: "sophie", displayName: "Sophie", avatar: nil, isOnline: false, lastSeen: nil, lastActiveAt: nil),
+                user: .init(id: "user-3", username: "sophie", displayName: "Sophie", avatar: nil, isOnline: false, lastActiveAt: nil),
                 readCursor: nil
             )
         ]

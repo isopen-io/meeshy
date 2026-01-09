@@ -495,7 +495,6 @@ struct ConversationRowView: View {
                             displayName: "Alice Johnson",
                             avatar: nil,
                             isOnline: true,
-                            lastSeen: Date(),
                             lastActiveAt: Date()
                         )
                     ),
@@ -634,7 +633,6 @@ struct ConversationRowView: View {
                             displayName: "Bob Smith",
                             avatar: nil,
                             isOnline: false,
-                            lastSeen: Date().addingTimeInterval(-3600),
                             lastActiveAt: Date().addingTimeInterval(-3600)
                         )
                     ),
@@ -678,7 +676,6 @@ struct ConversationRowView: View {
                             displayName: "Favorite Contact",
                             avatar: nil,
                             isOnline: false,
-                            lastSeen: Date().addingTimeInterval(-1800),
                             lastActiveAt: Date().addingTimeInterval(-1800)
                         )
                     )

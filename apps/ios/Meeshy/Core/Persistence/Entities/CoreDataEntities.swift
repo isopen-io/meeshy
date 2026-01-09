@@ -24,7 +24,8 @@ public class CachedUser: NSManagedObject {
     @NSManaged public var phoneNumber: String?
     @NSManaged public var preferredLanguage: String?
     @NSManaged public var isOnline: Bool
-    @NSManaged public var lastSeen: Date?
+    /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+    @NSManaged public var lastActiveAt: Date?
     @NSManaged public var createdAt: Date?
     @NSManaged public var updatedAt: Date?
 
