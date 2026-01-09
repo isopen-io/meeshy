@@ -68,11 +68,12 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
     fi
 
 # === INSTALL DEPENDENCIES ===
+# Note: BUN_INSTALL_FROZEN_LOCKFILE=false is needed because CI=true causes bun to freeze lockfile by default
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing with bun ===" && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      bun install --no-save; \
+      BUN_INSTALL_FROZEN_LOCKFILE=false bun install --no-save; \
     else \
       echo "=== Installing with pnpm ===" && \
       corepack enable pnpm && \
