@@ -3,6 +3,7 @@
 //  Meeshy
 //
 //  Service for user operations
+//  UPDATED: Uses offset/limit pagination pattern
 //  iOS 16+
 //
 
@@ -28,7 +29,7 @@ final class UserService: @unchecked Sendable {
 
     func getCurrentUser() async throws -> User {
         let endpoint = UserEndpoints.getCurrentUser
-        userLogger.info("📱 Fetching current user from: \(endpoint.path)")
+        userLogger.info("Fetching current user from: \(endpoint.path)")
 
         let response: APIResponse<User> = try await apiClient.request(endpoint)
 
@@ -36,7 +37,7 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Successfully fetched current user: \(user.username)")
+        userLogger.info("Successfully fetched current user: \(user.username)")
         return user
     }
 
@@ -44,7 +45,7 @@ final class UserService: @unchecked Sendable {
 
     func getUser(userId: String) async throws -> User {
         let endpoint = UserEndpoints.getUser(userId: userId)
-        userLogger.info("👤 Fetching user \(userId) from: \(endpoint.path)")
+        userLogger.info("Fetching user \(userId) from: \(endpoint.path)")
 
         let response: APIResponse<User> = try await apiClient.request(endpoint)
 
@@ -52,15 +53,15 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Successfully fetched user: \(user.username)")
+        userLogger.info("Successfully fetched user: \(user.username)")
         return user
     }
 
     // MARK: - Search Users
 
-    func searchUsers(query: String, page: Int = 1, limit: Int = 20) async throws -> [User] {
-        let endpoint = UserEndpoints.searchUsers(query: query, page: page, limit: limit)
-        userLogger.info("🔍 Searching users with query '\(query)' at: \(endpoint.path)")
+    func searchUsers(query: String, offset: Int = 0, limit: Int = 20) async throws -> [User] {
+        let endpoint = UserEndpoints.searchUsers(query: query, offset: offset, limit: limit)
+        userLogger.info("Searching users with query '\(query)' at: \(endpoint.path)")
 
         let response: APIResponse<[User]> = try await apiClient.request(endpoint)
 
@@ -68,7 +69,7 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Found \(users.count) users matching '\(query)'")
+        userLogger.info("Found \(users.count) users matching '\(query)'")
         return users
     }
 
@@ -76,7 +77,7 @@ final class UserService: @unchecked Sendable {
 
     func updateProfile(request: UserProfileUpdateRequest) async throws -> User {
         let endpoint = UserEndpoints.updateProfile(request)
-        userLogger.info("💾 Updating user profile at: \(endpoint.path)")
+        userLogger.info("Updating user profile at: \(endpoint.path)")
 
         let response: APIResponse<User> = try await apiClient.request(endpoint)
 
@@ -84,14 +85,14 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Successfully updated profile for: \(user.username)")
+        userLogger.info("Successfully updated profile for: \(user.username)")
         return user
     }
 
     // MARK: - Upload Avatar
 
     func uploadAvatar(imageData: Data) async throws -> User {
-        userLogger.info("📸 Uploading avatar (\(imageData.count) bytes)")
+        userLogger.info("Uploading avatar (\(imageData.count) bytes)")
 
         let endpoint = UserEndpoints.uploadAvatar
         let response: APIResponse<User> = try await apiClient.upload(
@@ -105,7 +106,7 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Successfully uploaded avatar for: \(user.username)")
+        userLogger.info("Successfully uploaded avatar for: \(user.username)")
         return user
     }
 
@@ -118,7 +119,7 @@ final class UserService: @unchecked Sendable {
         let endpoint = UserEndpoints.updateStatus(request)
         let _: APIResponse<EmptyResponse> = try await apiClient.request(endpoint)
 
-        userLogger.info("✅ Successfully updated status to: \(presence.rawValue)")
+        userLogger.info("Successfully updated status to: \(presence.rawValue)")
     }
 
     // MARK: - Update Preferences
@@ -133,41 +134,41 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Successfully updated preferences")
+        userLogger.info("Successfully updated preferences")
         return updatedPreferences
     }
 
     // MARK: - Block User
 
     func blockUser(userId: String) async throws {
-        userLogger.info("🚫 Blocking user: \(userId)")
+        userLogger.info("Blocking user: \(userId)")
 
         let endpoint = UserEndpoints.blockUser(userId: userId)
         let _: APIResponse<EmptyResponse> = try await apiClient.request(endpoint)
 
-        userLogger.info("✅ Successfully blocked user: \(userId)")
+        userLogger.info("Successfully blocked user: \(userId)")
     }
 
     // MARK: - Unblock User
 
     func unblockUser(userId: String) async throws {
-        userLogger.info("✅ Unblocking user: \(userId)")
+        userLogger.info("Unblocking user: \(userId)")
 
         let endpoint = UserEndpoints.unblockUser(userId: userId)
         let _: APIResponse<EmptyResponse> = try await apiClient.request(endpoint)
 
-        userLogger.info("✅ Successfully unblocked user: \(userId)")
+        userLogger.info("Successfully unblocked user: \(userId)")
     }
 
     // MARK: - Report User
 
     func reportUser(userId: String, reason: String, details: String? = nil) async throws {
-        userLogger.info("⚠️ Reporting user: \(userId)")
+        userLogger.info("Reporting user: \(userId)")
 
         let endpoint = UserEndpoints.reportUser(userId: userId, reason: reason)
         let _: APIResponse<EmptyResponse> = try await apiClient.request(endpoint)
 
-        userLogger.info("✅ Successfully reported user: \(userId)")
+        userLogger.info("Successfully reported user: \(userId)")
     }
 
     // MARK: - Get Blocked Users
@@ -182,18 +183,18 @@ final class UserService: @unchecked Sendable {
             throw MeeshyError.network(.invalidResponse)
         }
 
-        userLogger.info("✅ Found \(users.count) blocked users")
+        userLogger.info("Found \(users.count) blocked users")
         return users
     }
 
     // MARK: - Delete Account
 
     func deleteAccount() async throws {
-        userLogger.info("🗑️ Deleting user account")
+        userLogger.info("Deleting user account")
 
         let endpoint = UserEndpoints.deleteAccount
         let _: APIResponse<EmptyResponse> = try await apiClient.request(endpoint)
 
-        userLogger.info("✅ Successfully deleted account")
+        userLogger.info("Successfully deleted account")
     }
 }

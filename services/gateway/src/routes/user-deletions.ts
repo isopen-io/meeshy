@@ -80,7 +80,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Conversation deleted from your view',
+          data: { message: 'Conversation deleted from your view' },
         });
       } catch (error) {
         console.error('[UserDeletions] Error deleting conversation for user:', error);
@@ -133,7 +133,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Conversation restored',
+          data: { message: 'Conversation restored' },
         });
       } catch (error) {
         console.error('[UserDeletions] Error restoring conversation for user:', error);
@@ -209,8 +209,10 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: `Chat history cleared before ${clearDate.toISOString()}`,
-          data: { clearHistoryBefore: clearDate },
+          data: {
+            message: `Chat history cleared before ${clearDate.toISOString()}`,
+            clearHistoryBefore: clearDate,
+          },
         });
       } catch (error) {
         console.error('[UserDeletions] Error clearing history:', error);
@@ -281,7 +283,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Message deleted from your view',
+          data: { message: 'Message deleted from your view' },
         });
       } catch (error) {
         console.error('[UserDeletions] Error deleting message for user:', error);
@@ -331,7 +333,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Message restored',
+          data: { message: 'Message restored' },
         });
       } catch (error) {
         console.error('[UserDeletions] Error restoring message for user:', error);
@@ -408,8 +410,8 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: `${validMessageIds.length} messages deleted from your view`,
           data: {
+            message: `${validMessageIds.length} messages deleted from your view`,
             deletedCount: validMessageIds.length,
             requestedCount: messageIds.length,
           },
@@ -448,7 +450,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
                 identifier: true,
                 title: true,
                 type: true,
-                image: true,
+                avatar: true,
                 lastMessageAt: true,
               },
             },

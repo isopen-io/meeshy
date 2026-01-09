@@ -389,10 +389,9 @@ export function batchValidateNotifications(notifications: unknown[]): Notificati
 export function validateNotificationResponse(response: unknown): ValidationResult<{
   notifications: NotificationV2[];
   pagination: {
-    page: number;
+    offset: number;
     limit: number;
     total: number;
-    totalPages: number;
     hasMore: boolean;
   };
   unreadCount: number;
@@ -401,10 +400,9 @@ export function validateNotificationResponse(response: unknown): ValidationResul
     const schema = z.object({
       notifications: z.array(z.unknown()),
       pagination: z.object({
-        page: z.number().int().positive(),
+        offset: z.number().int().nonnegative(),
         limit: z.number().int().positive(),
         total: z.number().int().nonnegative(),
-        totalPages: z.number().int().nonnegative(),
         hasMore: z.boolean()
       }),
       unreadCount: z.number().int().nonnegative()

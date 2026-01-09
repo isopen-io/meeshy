@@ -105,7 +105,7 @@ import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
 import { messageService } from '@/services/message.service';
 import { TypingIndicator } from '@/components/conversations/typing-indicator';
-import { useConversationMessages } from '@/hooks/use-conversation-messages';
+import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { ConversationMessages } from '@/components/conversations/ConversationMessages';
 import { authManager } from '@/services/auth-manager.service';
 
@@ -131,7 +131,7 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
   // Hook pour le système de notifications v2
   const { setActiveConversationId } = useNotificationActionsV2();
 
-  // Hook pour la pagination infinie des messages (scroll vers le haut pour charger plus anciens)
+  // Hook pour la pagination infinie des messages (React Query)
   const {
     messages,
     isLoading: isLoadingMessages,
@@ -144,7 +144,7 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
     addMessage,
     updateMessage: updateMessageTranslations,
     removeMessage
-  } = useConversationMessages(conversationId, user, {
+  } = useConversationMessagesRQ(conversationId, user, {
     limit: 20,
     enabled: true,
     threshold: 200, // Scroll infini activé: charge automatiquement à 200px du bas

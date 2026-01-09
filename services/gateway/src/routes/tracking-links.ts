@@ -634,7 +634,7 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Lien supprimé avec succès'
+        data: { message: 'Lien supprimé avec succès' }
       });
 
     } catch (error) {

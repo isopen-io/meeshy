@@ -40,7 +40,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = await maintenanceService.getMaintenanceStats();
-      
+
       if (!stats) {
         return reply.status(500).send({
           success: false,
@@ -69,7 +69,12 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            message: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' }
+              }
+            }
           }
         }
       }
@@ -77,10 +82,10 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await maintenanceService.cleanupExpiredData();
-      
+
       return reply.send({
         success: true,
-        message: 'Nettoyage des données expirées terminé'
+        data: { message: 'Nettoyage des données expirées terminé' }
       });
     } catch (error) {
       console.error('[GATEWAY] Error in /maintenance/cleanup:', error);
@@ -107,7 +112,12 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            message: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' }
+              }
+            }
           }
         }
       }
@@ -115,12 +125,12 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId, isOnline } = request.body as { userId: string; isOnline: boolean };
-      
+
       await maintenanceService.updateUserOnlineStatus(userId, isOnline);
-      
+
       return reply.send({
         success: true,
-        message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}`
+        data: { message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}` }
       });
     } catch (error) {
       console.error('[GATEWAY] Error in /maintenance/user-status:', error);
@@ -185,7 +195,12 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            message: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' }
+              }
+            }
           }
         }
       }
@@ -196,7 +211,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Métriques de statut réinitialisées avec succès'
+        data: { message: 'Métriques de statut réinitialisées avec succès' }
       });
     } catch (error) {
       console.error('[GATEWAY] Error in /maintenance/status-metrics/reset:', error);

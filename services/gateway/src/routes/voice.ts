@@ -51,21 +51,21 @@ interface StatsQuery {
   period?: VoiceStatsPeriod;
 }
 
-// Error response helper
+// Error response helper - returns standardized error format
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
   if (error instanceof VoiceAPIError) {
     return reply.status(statusCode).send({
-      error: error.message,
-      code: error.code,
-      timestamp: new Date().toISOString()
+      success: false,
+      error: error.code,
+      message: error.message
     });
   }
 
   const message = error instanceof Error ? error.message : 'Internal server error';
   return reply.status(statusCode).send({
-    error: message,
-    code: 'INTERNAL_ERROR',
-    timestamp: new Date().toISOString()
+    success: false,
+    error: 'INTERNAL_ERROR',
+    message: message
   });
 }
 
@@ -109,7 +109,7 @@ export function registerVoiceRoutes(
   fastify.post(`${prefix}/translate`, async (request: FastifyRequest<{ Body: TranslateBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -117,8 +117,9 @@ export function registerVoiceRoutes(
 
       if (!audioBase64 && !targetLanguages?.length) {
         return reply.status(400).send({
-          error: 'audioBase64 and targetLanguages are required',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'audioBase64 and targetLanguages are required'
         });
       }
 
@@ -129,7 +130,7 @@ export function registerVoiceRoutes(
         generateVoiceClone
       });
 
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate error:', error);
       return errorResponse(reply, error);
@@ -143,7 +144,7 @@ export function registerVoiceRoutes(
   fastify.post(`${prefix}/translate/async`, async (request: FastifyRequest<{ Body: TranslateAsyncBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -159,8 +160,9 @@ export function registerVoiceRoutes(
 
       if (!audioBase64 && !targetLanguages?.length) {
         return reply.status(400).send({
-          error: 'audioBase64 and targetLanguages are required',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'audioBase64 and targetLanguages are required'
         });
       }
 
@@ -174,7 +176,7 @@ export function registerVoiceRoutes(
         callbackMetadata
       });
 
-      return reply.status(202).send(result);
+      return reply.status(202).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate async error:', error);
       return errorResponse(reply, error);
@@ -188,13 +190,13 @@ export function registerVoiceRoutes(
   fastify.get(`${prefix}/job/:jobId`, async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
       const { jobId } = request.params;
       const result = await voiceAPIService.getJobStatus(userId, jobId);
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get job status error:', error);
       return errorResponse(reply, error);
@@ -208,13 +210,13 @@ export function registerVoiceRoutes(
   fastify.delete(`${prefix}/job/:jobId`, async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
       const { jobId } = request.params;
       const result = await voiceAPIService.cancelJob(userId, jobId);
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Cancel job error:', error);
       return errorResponse(reply, error);
@@ -232,7 +234,7 @@ export function registerVoiceRoutes(
   fastify.post(`${prefix}/analyze`, async (request: FastifyRequest<{ Body: AnalyzeBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -240,8 +242,9 @@ export function registerVoiceRoutes(
 
       if (!audioBase64) {
         return reply.status(400).send({
-          error: 'audioBase64 is required',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'audioBase64 is required'
         });
       }
 
@@ -250,7 +253,7 @@ export function registerVoiceRoutes(
         analysisTypes
       });
 
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Analyze voice error:', error);
       return errorResponse(reply, error);
@@ -264,7 +267,7 @@ export function registerVoiceRoutes(
   fastify.post(`${prefix}/compare`, async (request: FastifyRequest<{ Body: CompareBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -272,8 +275,9 @@ export function registerVoiceRoutes(
 
       if (!audioBase64_1 || !audioBase64_2) {
         return reply.status(400).send({
-          error: 'Both audioBase64_1 and audioBase64_2 are required',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'Both audioBase64_1 and audioBase64_2 are required'
         });
       }
 
@@ -282,7 +286,7 @@ export function registerVoiceRoutes(
         audioBase64_2
       });
 
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Compare voices error:', error);
       return errorResponse(reply, error);
@@ -303,7 +307,7 @@ export function registerVoiceRoutes(
   fastify.post(`${prefix}/feedback`, async (request: FastifyRequest<{ Body: FeedbackBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -311,15 +315,17 @@ export function registerVoiceRoutes(
 
       if (!translationId || rating === undefined) {
         return reply.status(400).send({
-          error: 'translationId and rating are required',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'translationId and rating are required'
         });
       }
 
       if (rating < 1 || rating > 5) {
         return reply.status(400).send({
-          error: 'rating must be between 1 and 5',
-          code: 'INVALID_REQUEST'
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'rating must be between 1 and 5'
         });
       }
 
@@ -331,7 +337,7 @@ export function registerVoiceRoutes(
         metadata
       });
 
-      return reply.status(201).send(result);
+      return reply.status(201).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Submit feedback error:', error);
       return errorResponse(reply, error);
@@ -345,7 +351,7 @@ export function registerVoiceRoutes(
   fastify.get(`${prefix}/history`, async (request: FastifyRequest<{ Querystring: HistoryQuery }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
@@ -357,7 +363,7 @@ export function registerVoiceRoutes(
         endDate
       });
 
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get history error:', error);
       return errorResponse(reply, error);
@@ -371,13 +377,13 @@ export function registerVoiceRoutes(
   fastify.get(`${prefix}/stats`, async (request: FastifyRequest<{ Querystring: StatsQuery }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
       const { period } = request.query;
       const result = await voiceAPIService.getUserStats(userId, period);
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get stats error:', error);
       return errorResponse(reply, error);
@@ -395,16 +401,16 @@ export function registerVoiceRoutes(
   fastify.get(`${prefix}/admin/metrics`, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     if (!isAdmin(request)) {
-      return reply.status(403).send({ error: 'Admin access required', code: 'FORBIDDEN' });
+      return reply.status(403).send({ success: false, error: 'FORBIDDEN', message: 'Admin access required' });
     }
 
     try {
       const result = await voiceAPIService.getSystemMetrics(userId);
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get metrics error:', error);
       return errorResponse(reply, error);
@@ -419,13 +425,13 @@ export function registerVoiceRoutes(
     try {
       const result = await voiceAPIService.getHealthStatus();
       const statusCode = result.status === 'healthy' ? 200 : result.status === 'degraded' ? 200 : 503;
-      return reply.status(statusCode).send(result);
+      return reply.status(statusCode).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get health error:', error);
       return reply.status(503).send({
-        status: 'unhealthy',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        success: false,
+        error: 'HEALTH_CHECK_FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
@@ -437,7 +443,7 @@ export function registerVoiceRoutes(
   fastify.get(`${prefix}/languages`, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const result = await voiceAPIService.getSupportedLanguages();
-      return reply.status(200).send(result);
+      return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get languages error:', error);
       return errorResponse(reply, error);

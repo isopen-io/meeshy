@@ -1,10 +1,12 @@
 /**
- * Types unifiés pour les utilisateurs Meeshy
- * Harmonisation Gateway ↔ Frontend
+ * Types unifies pour les utilisateurs Meeshy
+ * Harmonisation Gateway - Frontend
  */
 
+import type { PaginationMeta } from './api-responses';
+
 /**
- * Rôles utilisateur
+ * Roles utilisateur
  */
 export type UserRole = 'USER' | 'ADMIN' | 'MODERATOR' | 'BIGBOSS' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'MEMBER';
 
@@ -24,14 +26,14 @@ export interface UserPermissions {
 }
 
 /**
- * DÉPRÉCIÉ : L'interface User a été supprimée
- * Utilisez SocketIOUser depuis socketio-events.ts à la place
- * @deprecated Utilisez SocketIOUser pour éviter la redondance
+ * DEPRECIE : L'interface User a ete supprimee
+ * Utilisez SocketIOUser depuis socketio-events.ts a la place
+ * @deprecated Utilisez SocketIOUser pour eviter la redondance
  */
 
 /**
- * Alias pour SocketIOUser - Type principal recommandé
- * Utilisez ce type pour tous les nouveaux développements
+ * Alias pour SocketIOUser - Type principal recommande
+ * Utilisez ce type pour tous les nouveaux developpements
  */
 export type { SocketIOUser as UserUnified, SocketIOUser as User } from './socketio-events';
 
@@ -74,7 +76,7 @@ export interface UserStats {
 }
 
 /**
- * Préférences utilisateur
+ * Preferences utilisateur
  */
 export interface UserPreference {
   id: string;
@@ -90,8 +92,8 @@ export interface UserPreference {
 // ===== ADMIN USER MANAGEMENT TYPES =====
 
 /**
- * Type strict pour les données utilisateur complètes (BACKEND ONLY)
- * Ne doit JAMAIS être exposé directement via l'API
+ * Type strict pour les donnees utilisateur completes (BACKEND ONLY)
+ * Ne doit JAMAIS etre expose directement via l'API
  */
 export interface FullUser {
   id: string;
@@ -134,8 +136,8 @@ export interface FullUser {
 }
 
 /**
- * Type pour les données publiques (visibles par tous les admins)
- * Exclut les données sensibles
+ * Type pour les donnees publiques (visibles par tous les admins)
+ * Exclut les donnees sensibles
  */
 export interface PublicUser {
   id: string;
@@ -163,7 +165,7 @@ export interface PublicUser {
 }
 
 /**
- * Type pour les données sensibles (BIGBOSS & ADMIN uniquement)
+ * Type pour les donnees sensibles (BIGBOSS & ADMIN uniquement)
  * Extension de PublicUser avec les champs sensibles
  */
 export interface AdminUser extends PublicUser {
@@ -189,8 +191,8 @@ export interface AdminUser extends PublicUser {
 }
 
 /**
- * Type pour les données masquées (MODO, AUDIT)
- * Comme PublicUser mais avec email/phone masqués
+ * Type pour les donnees masquees (MODO, AUDIT)
+ * Comme PublicUser mais avec email/phone masques
  */
 export interface MaskedUser extends PublicUser {
   email: string;  // Format: j***@domain.com
@@ -198,12 +200,12 @@ export interface MaskedUser extends PublicUser {
 }
 
 /**
- * Type union pour les réponses API selon le rôle
+ * Type union pour les reponses API selon le role
  */
 export type UserResponse = PublicUser | AdminUser | MaskedUser;
 
 /**
- * DTO pour mise à jour profil
+ * DTO pour mise a jour profil
  */
 export interface UpdateUserProfileDTO {
   username?: string;
@@ -219,7 +221,7 @@ export interface UpdateUserProfileDTO {
 }
 
 /**
- * DTO pour création utilisateur
+ * DTO pour creation utilisateur
  */
 export interface CreateUserDTO {
   username: string;
@@ -244,7 +246,7 @@ export interface UpdateEmailDTO {
 }
 
 /**
- * DTO pour changement de rôle (BIGBOSS & ADMIN uniquement)
+ * DTO pour changement de role (BIGBOSS & ADMIN uniquement)
  */
 export interface UpdateRoleDTO {
   role: string;
@@ -252,7 +254,7 @@ export interface UpdateRoleDTO {
 }
 
 /**
- * DTO pour activation/désactivation
+ * DTO pour activation/desactivation
  */
 export interface UpdateStatusDTO {
   isActive: boolean;
@@ -260,7 +262,7 @@ export interface UpdateStatusDTO {
 }
 
 /**
- * DTO pour réinitialisation mot de passe
+ * DTO pour reinitialisation mot de passe
  */
 export interface ResetPasswordDTO {
   newPassword: string;
@@ -271,7 +273,7 @@ export interface ResetPasswordDTO {
  * Filtres de recherche utilisateurs
  */
 export interface UserFilters {
-  search?: string;  // username, email, nom, prénom
+  search?: string;  // username, email, nom, prenom
   role?: string;
   isActive?: boolean;
   emailVerified?: boolean;
@@ -286,31 +288,28 @@ export interface UserFilters {
 }
 
 /**
- * Pagination
+ * Pagination parameters
  */
 export interface PaginationParams {
-  page: number;
-  pageSize: number;
+  offset: number;
+  limit: number;
 }
 
 /**
- * Métadonnées de pagination pour utilisateurs
+ * @deprecated Use PaginationMeta from api-responses.ts instead
+ * Kept for backwards compatibility
  */
-export interface UserPaginationMeta {
-  page: number;
-  pageSize: number;
-  totalUsers: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
+export interface UserPaginationMeta extends PaginationMeta {
+  /** @deprecated Use 'total' instead */
+  totalUsers?: number;
 }
 
 /**
- * Réponse paginée
+ * Reponse paginee
  */
 export interface PaginatedUsersResponse<T = UserResponse> {
   users: T[];
-  pagination: UserPaginationMeta;
+  pagination: PaginationMeta;
 }
 
 /**
@@ -322,7 +321,7 @@ export enum UserAuditAction {
   VIEW_USER_LIST = 'VIEW_USER_LIST',
   VIEW_AUDIT_LOG = 'VIEW_AUDIT_LOG',
 
-  // Actions de création/modification
+  // Actions de creation/modification
   CREATE_USER = 'CREATE_USER',
   UPDATE_PROFILE = 'UPDATE_PROFILE',
   UPDATE_EMAIL = 'UPDATE_EMAIL',
@@ -330,7 +329,7 @@ export enum UserAuditAction {
   UPDATE_ROLE = 'UPDATE_ROLE',
   UPDATE_STATUS = 'UPDATE_STATUS',
 
-  // Actions de sécurité
+  // Actions de securite
   CHANGE_PASSWORD = 'CHANGE_PASSWORD',
   RESET_PASSWORD = 'RESET_PASSWORD',
   ENABLE_2FA = 'ENABLE_2FA',
@@ -347,13 +346,13 @@ export enum UserAuditAction {
   DELETE_USER = 'DELETE_USER',
   RESTORE_USER = 'RESTORE_USER',
 
-  // Actions de vérification
+  // Actions de verification
   VERIFY_EMAIL = 'VERIFY_EMAIL',
   VERIFY_PHONE = 'VERIFY_PHONE'
 }
 
 /**
- * Log d'audit (typé strictement)
+ * Log d'audit (type strictement)
  */
 export interface UserAuditLog {
   id: string;
@@ -370,7 +369,7 @@ export interface UserAuditLog {
 }
 
 /**
- * Détail d'un changement dans l'audit
+ * Detail d'un changement dans l'audit
  */
 export interface AuditChange {
   before: unknown;
@@ -378,7 +377,7 @@ export interface AuditChange {
 }
 
 /**
- * Métadonnées d'audit
+ * Metadonnees d'audit
  */
 export interface AuditMetadata {
   reason?: string;

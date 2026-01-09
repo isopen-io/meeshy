@@ -2,7 +2,7 @@
  * Signal Protocol Key Manager for DMA Interoperability
  *
  * Phase 2, Week 1-2: Key Management Implementation
- * Status: IN PROGRESS
+ * Status: IMPLEMENTED
  *
  * Responsibilities:
  * - Identity key generation and storage (EC-P256)
@@ -14,6 +14,10 @@
 
 import * as crypto from 'crypto';
 import { PrismaClient } from '../../../shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+// Create a child logger for Signal Key Manager operations
+const logger = enhancedLogger.child({ module: 'SignalKeyManager' });
 
 /**
  * Pre-key entry in the pre-key table
@@ -102,19 +106,19 @@ export class SignalKeyManager {
    * 4. Setup key rotation scheduler
    */
   async initialize(): Promise<void> {
-    console.log('🔑 Initializing Signal Key Manager');
+    logger.info('Initializing Signal Key Manager');
 
     try {
       // Step 1: Load or generate identity key pair
       const existingIdentity = await this.loadIdentityKey();
       if (existingIdentity) {
         this.identityKeyPair = existingIdentity;
-        console.log('✅ Loaded existing identity key pair');
+        logger.debug('Loaded existing identity key pair');
       } else {
         this.identityKeyPair = this.generateIdentityKeyPair();
         await this.storeIdentityKey(this.identityKeyPair);
         this.stats.identityKeysGenerated++;
-        console.log('✅ Generated and stored new identity key pair');
+        logger.debug('Generated and stored new identity key pair');
       }
 
       // Step 2: Load or generate pre-keys
@@ -123,23 +127,23 @@ export class SignalKeyManager {
         // Replenish if below threshold
         const keysToGenerate = 50 - preKeyCount;
         await this.generateAndStorePreKeys(keysToGenerate);
-        console.log(`✅ Generated ${keysToGenerate} new pre-keys`);
+        logger.debug('Generated new pre-keys', { count: keysToGenerate });
       } else {
-        console.log(`✅ Pre-key pool healthy: ${preKeyCount} keys available`);
+        logger.debug('Pre-key pool healthy', { keysAvailable: preKeyCount });
       }
 
       // Step 3: Load or generate signed pre-key
       const existingSignedPreKey = await this.loadActiveSignedPreKey();
       if (!existingSignedPreKey || this.shouldRotateSignedPreKey(existingSignedPreKey)) {
-        const newSignedPreKey = await this.generateAndStoreSignedPreKey();
-        console.log('✅ Generated new signed pre-key');
+        await this.generateAndStoreSignedPreKey();
+        logger.debug('Generated new signed pre-key');
       } else {
-        console.log('✅ Loaded active signed pre-key');
+        logger.debug('Loaded active signed pre-key');
       }
 
-      console.log('🎯 Signal Key Manager initialization complete');
+      logger.info('Signal Key Manager initialization complete');
     } catch (error) {
-      console.error('❌ Failed to initialize Signal Key Manager:', error);
+      logger.error('Failed to initialize Signal Key Manager', error);
       throw error;
     }
   }
@@ -211,9 +215,21 @@ export class SignalKeyManager {
    *
    * Pre-keys are stored encrypted and marked with their ID.
    * When used, they're marked as consumed and shouldn't be reused.
+   *
+   * Storage: Uses SignalPreKeyBundle with embedded pre-key pool (JSON)
    */
   private async generateAndStorePreKeys(count: number): Promise<void> {
+    if (!this.userId) {
+      throw new Error('User ID not set - cannot store pre-keys');
+    }
+
     const batch = this.generatePreKeyBatch(count);
+    const preKeysToStore: Array<{
+      id: number;
+      publicKey: string;
+      privateKey: string;
+      createdAt: string;
+    }> = [];
 
     for (let i = 0; i < batch.length; i++) {
       const keyPair = batch[i];
@@ -221,17 +237,53 @@ export class SignalKeyManager {
 
       // Encrypt private key before storage
       const encryptedPrivateKey = this.encryptKey(keyPair.privateKey);
+      this.stats.encryptionOperations++;
 
-      try {
-        // Store in database (schema will vary - this is a placeholder)
-        // In real implementation, you'd store in a SignalPreKey table
-        console.log(`  📝 Storing pre-key ${preKeyId}`);
-        this.preKeyCounter++;
-        this.stats.preKeysGenerated++;
-      } catch (error) {
-        console.error(`  ❌ Failed to store pre-key ${preKeyId}:`, error);
-        throw error;
+      preKeysToStore.push({
+        id: preKeyId,
+        publicKey: keyPair.publicKey.toString('base64'),
+        privateKey: encryptedPrivateKey.toString('base64'),
+        createdAt: new Date().toISOString(),
+      });
+
+      this.stats.preKeysGenerated++;
+    }
+
+    try {
+      // Get existing pre-key pool
+      const existingBundle = await this.prisma.signalPreKeyBundle.findUnique({
+        where: { userId: this.userId },
+        select: { preKeyPool: true },
+      });
+
+      // Merge with existing pool (if any)
+      let existingPool: typeof preKeysToStore = [];
+      if (existingBundle?.preKeyPool) {
+        try {
+          existingPool = JSON.parse(existingBundle.preKeyPool as string);
+        } catch {
+          existingPool = [];
+        }
       }
+
+      const mergedPool = [...existingPool, ...preKeysToStore];
+
+      // Store pre-key pool in SignalPreKeyBundle
+      await this.prisma.signalPreKeyBundle.update({
+        where: { userId: this.userId },
+        data: {
+          preKeyPool: JSON.stringify(mergedPool),
+        },
+      });
+
+      logger.info('Stored pre-keys in pool', {
+        userId: this.userId,
+        newKeys: count,
+        totalPool: mergedPool.length
+      });
+    } catch (error) {
+      logger.error('Failed to store pre-keys', error);
+      throw error;
     }
   }
 
@@ -295,10 +347,10 @@ export class SignalKeyManager {
           isActive: true,
         },
       });
-      console.log(`  📝 Stored signed pre-key ${signedPreKey.id} in database`);
+      logger.debug('Stored signed pre-key in database', { signedPreKeyId });
       this.stats.signedPreKeysRotated++;
     } catch (error) {
-      console.error(`  ❌ Failed to store signed pre-key:`, error);
+      logger.error('Failed to store signed pre-key', error);
       throw error;
     }
 
@@ -348,6 +400,24 @@ export class SignalKeyManager {
   }
 
   /**
+   * Public wrapper to encrypt key for external storage (e.g., DMASession)
+   * Returns base64 encoded encrypted key
+   */
+  encryptKeyForStorage(keyMaterial: Buffer): string {
+    const encrypted = this.encryptKey(keyMaterial);
+    return encrypted.toString('base64');
+  }
+
+  /**
+   * Public wrapper to decrypt key from external storage
+   * Accepts base64 encoded encrypted key
+   */
+  decryptKeyFromStorage(encryptedBase64: string): Buffer {
+    const encryptedData = Buffer.from(encryptedBase64, 'base64');
+    return this.decryptKey(encryptedData);
+  }
+
+  /**
    * Decrypt key material from storage
    */
   private decryptKey(encryptedData: Buffer): Buffer {
@@ -381,6 +451,7 @@ export class SignalKeyManager {
   private generateMasterKey(): Buffer {
     // For development: generate random key
     // In production: load from secure storage
+    logger.warn('Using ephemeral master key - keys will be lost on restart (development only)');
     return crypto.randomBytes(32);
   }
 
@@ -413,9 +484,9 @@ export class SignalKeyManager {
           signedPreKeySignature: '',
         },
       });
-      console.log('  📝 Stored identity key in database');
+      logger.debug('Stored identity key in database');
     } catch (error) {
-      console.error('  ❌ Failed to store identity key:', error);
+      logger.error('Failed to store identity key', error);
       throw error;
     }
   }
@@ -425,7 +496,7 @@ export class SignalKeyManager {
    */
   private async loadIdentityKey(): Promise<KeyPair | null> {
     if (!this.userId) {
-      console.log('  ⚠️  No user ID set, cannot load identity key from DB');
+      logger.debug('No user ID set, cannot load identity key from DB');
       return null;
     }
 
@@ -435,7 +506,7 @@ export class SignalKeyManager {
       });
 
       if (!bundle || !bundle.identityKey || !bundle.identityKeyPrivate) {
-        console.log('  ℹ️  No identity key found in database');
+        logger.debug('No identity key found in database');
         return null;
       }
 
@@ -447,13 +518,13 @@ export class SignalKeyManager {
       // Store registration ID
       this.registrationId = bundle.registrationId;
 
-      console.log('  ✓ Loaded identity key from database');
+      logger.debug('Loaded identity key from database');
       return {
         publicKey: Buffer.from(bundle.identityKey, 'base64'),
         privateKey,
       };
     } catch (error) {
-      console.error('  ❌ Failed to load identity key:', error);
+      logger.error('Failed to load identity key', error);
       return null;
     }
   }
@@ -463,7 +534,7 @@ export class SignalKeyManager {
    */
   private async loadActiveSignedPreKey(): Promise<SignedPreKey | null> {
     if (!this.userId) {
-      console.log('  ⚠️  No user ID set, cannot load signed pre-key from DB');
+      logger.debug('No user ID set, cannot load signed pre-key from DB');
       return null;
     }
 
@@ -473,7 +544,7 @@ export class SignalKeyManager {
       });
 
       if (!bundle || !bundle.signedPreKeyPublic || !bundle.signedPreKeyPrivate) {
-        console.log('  ℹ️  No signed pre-key found in database');
+        logger.debug('No signed pre-key found in database');
         return null;
       }
 
@@ -504,24 +575,40 @@ export class SignalKeyManager {
       };
 
       this.signedPreKeyData = signedPreKey;
-      console.log('  ✓ Loaded signed pre-key from database');
+      logger.debug('Loaded signed pre-key from database');
       return signedPreKey;
     } catch (error) {
-      console.error('  ❌ Failed to load signed pre-key:', error);
+      logger.error('Failed to load signed pre-key', error);
       return null;
     }
   }
 
   /**
-   * Get count of available (unused) pre-keys
+   * Get count of available (unused) pre-keys from pool
    */
   private async getPreKeyCount(): Promise<number> {
+    if (!this.userId) {
+      return 0;
+    }
+
     try {
-      // Query database (placeholder)
-      // In real implementation: COUNT(*) FROM SignalPreKey WHERE isUsed = false
-      return 0; // Change when DB schema exists
+      const bundle = await this.prisma.signalPreKeyBundle.findUnique({
+        where: { userId: this.userId },
+        select: { preKeyPool: true },
+      });
+
+      if (!bundle?.preKeyPool) {
+        return 0;
+      }
+
+      try {
+        const pool = JSON.parse(bundle.preKeyPool as string);
+        return Array.isArray(pool) ? pool.length : 0;
+      } catch {
+        return 0;
+      }
     } catch (error) {
-      console.error('  ❌ Failed to get pre-key count:', error);
+      logger.error('Failed to get pre-key count', error);
       return 0;
     }
   }
@@ -598,13 +685,117 @@ export class SignalKeyManager {
    * Get a pre-key pair for X3DH (and mark as used)
    */
   async getPreKey(preKeyId: number): Promise<KeyPair | null> {
+    if (!this.userId) {
+      return null;
+    }
+
     try {
-      // Load pre-key from database
+      const bundle = await this.prisma.signalPreKeyBundle.findUnique({
+        where: { userId: this.userId },
+        select: { preKeyPool: true },
+      });
+
+      if (!bundle?.preKeyPool) {
+        return null;
+      }
+
+      const pool = JSON.parse(bundle.preKeyPool as string) as Array<{
+        id: number;
+        publicKey: string;
+        privateKey: string;
+      }>;
+
+      const preKey = pool.find((pk) => pk.id === preKeyId);
+      if (!preKey) {
+        return null;
+      }
+
       // Decrypt private key
-      // Mark as used
-      return null; // Placeholder
+      const encryptedPrivateKey = Buffer.from(preKey.privateKey, 'base64');
+      const privateKey = this.decryptKey(encryptedPrivateKey);
+      this.stats.encryptionOperations++;
+
+      return {
+        publicKey: Buffer.from(preKey.publicKey, 'base64'),
+        privateKey,
+      };
     } catch (error) {
-      console.error(`  ❌ Failed to get pre-key ${preKeyId}:`, error);
+      logger.error('Failed to get pre-key', error, { preKeyId });
+      return null;
+    }
+  }
+
+  /**
+   * Atomically consume a pre-key from the pool
+   * Returns the pre-key and removes it from the pool in one transaction
+   */
+  async consumePreKeyAtomically(): Promise<{
+    id: number;
+    publicKey: Buffer;
+    privateKey: Buffer;
+  } | null> {
+    if (!this.userId) {
+      return null;
+    }
+
+    try {
+      // Use transaction to ensure atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        const bundle = await tx.signalPreKeyBundle.findUnique({
+          where: { userId: this.userId },
+          select: { preKeyPool: true },
+        });
+
+        if (!bundle?.preKeyPool) {
+          return null;
+        }
+
+        const pool = JSON.parse(bundle.preKeyPool as string) as Array<{
+          id: number;
+          publicKey: string;
+          privateKey: string;
+        }>;
+
+        if (pool.length === 0) {
+          return null;
+        }
+
+        // Take the first pre-key (FIFO)
+        const preKey = pool.shift()!;
+
+        // Update pool with remaining keys
+        await tx.signalPreKeyBundle.update({
+          where: { userId: this.userId },
+          data: {
+            preKeyPool: JSON.stringify(pool),
+          },
+        });
+
+        return preKey;
+      });
+
+      if (!result) {
+        return null;
+      }
+
+      // Decrypt private key outside transaction
+      const encryptedPrivateKey = Buffer.from(result.privateKey, 'base64');
+      const privateKey = this.decryptKey(encryptedPrivateKey);
+      this.stats.encryptionOperations++;
+      this.stats.preKeysUsed++;
+
+      logger.debug('Consumed pre-key atomically', {
+        preKeyId: result.id,
+        userId: this.userId,
+      });
+
+      return {
+        id: result.id,
+        publicKey: Buffer.from(result.publicKey, 'base64'),
+        privateKey,
+      };
+    } catch (error) {
+      logger.error('Failed to consume pre-key', error);
       return null;
     }
   }
@@ -655,12 +846,12 @@ export class SignalKeyManager {
    * Rotate signed pre-key (called by scheduler)
    */
   async rotateSignedPreKey(): Promise<void> {
-    console.log('🔄 Rotating signed pre-key');
+    logger.info('Rotating signed pre-key');
     try {
       await this.generateAndStoreSignedPreKey();
-      console.log('✅ Signed pre-key rotated');
+      logger.info('Signed pre-key rotated successfully');
     } catch (error) {
-      console.error('❌ Failed to rotate signed pre-key:', error);
+      logger.error('Failed to rotate signed pre-key', error);
       throw error;
     }
   }
@@ -672,8 +863,116 @@ export class SignalKeyManager {
     const preKeyCount = await this.getPreKeyCount();
     if (preKeyCount < 25) {
       const keysToGenerate = 50 - preKeyCount;
-      console.log(`📝 Replenishing pre-keys: generating ${keysToGenerate} new keys`);
+      logger.info('Replenishing pre-keys', { keysToGenerate });
       await this.generateAndStorePreKeys(keysToGenerate);
+    }
+  }
+
+  /**
+   * Perform complete key rotation check
+   * Should be called periodically (e.g., every hour or on app startup)
+   *
+   * Checks and rotates:
+   * - Signed pre-key if past rotation date
+   * - Replenishes pre-keys if below threshold
+   *
+   * Returns rotation status for monitoring
+   */
+  async performKeyRotationCheck(): Promise<{
+    signedPreKeyRotated: boolean;
+    preKeysGenerated: number;
+    preKeyCount: number;
+  }> {
+    logger.info('Performing key rotation check');
+    const result = {
+      signedPreKeyRotated: false,
+      preKeysGenerated: 0,
+      preKeyCount: 0,
+    };
+
+    try {
+      // Check signed pre-key rotation
+      const signedPreKey = await this.loadActiveSignedPreKey();
+      if (!signedPreKey || this.shouldRotateSignedPreKey(signedPreKey)) {
+        await this.generateAndStoreSignedPreKey();
+        result.signedPreKeyRotated = true;
+        this.stats.signedPreKeysRotated++;
+        logger.info('Signed pre-key rotated during check');
+      }
+
+      // Check and replenish pre-keys
+      const preKeyCount = await this.getPreKeyCount();
+      result.preKeyCount = preKeyCount;
+
+      if (preKeyCount < 25) {
+        const keysToGenerate = 50 - preKeyCount;
+        await this.generateAndStorePreKeys(keysToGenerate);
+        result.preKeysGenerated = keysToGenerate;
+        logger.info('Pre-keys replenished during check', { keysToGenerate });
+      }
+
+      logger.info('Key rotation check complete', result);
+      return result;
+    } catch (error) {
+      logger.error('Key rotation check failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get key rotation statistics
+   */
+  getKeyRotationStats(): {
+    identityKeysGenerated: number;
+    preKeysGenerated: number;
+    preKeysUsed: number;
+    signedPreKeysRotated: number;
+    encryptionOperations: number;
+  } {
+    return { ...this.stats };
+  }
+
+  /**
+   * Securely clear all sensitive key material from memory
+   * Call this when the service is shutting down or keys are being rotated
+   */
+  clearSensitiveData(): void {
+    logger.info('Clearing sensitive key material from memory');
+
+    // Clear identity key pair
+    if (this.identityKeyPair) {
+      this.zeroizeBuffer(this.identityKeyPair.privateKey);
+      this.zeroizeBuffer(this.identityKeyPair.publicKey);
+      this.identityKeyPair = undefined;
+    }
+
+    // Clear signed pre-key pair
+    if (this.signedPreKeyPair) {
+      this.zeroizeBuffer(this.signedPreKeyPair.privateKey);
+      this.zeroizeBuffer(this.signedPreKeyPair.publicKey);
+      this.signedPreKeyPair = undefined;
+    }
+
+    // Clear signed pre-key data
+    if (this.signedPreKeyData) {
+      this.zeroizeBuffer(this.signedPreKeyData.privateKey);
+      this.zeroizeBuffer(this.signedPreKeyData.publicKey);
+      this.zeroizeBuffer(this.signedPreKeyData.signature);
+      this.signedPreKeyData = undefined;
+    }
+
+    // Clear master encryption key
+    this.zeroizeBuffer(this.masterEncryptionKey);
+
+    logger.info('Sensitive key material cleared');
+  }
+
+  /**
+   * Zeroize a buffer by filling with zeros
+   */
+  private zeroizeBuffer(buffer: Buffer | undefined): void {
+    if (buffer) {
+      buffer.fill(0);
     }
   }
 }

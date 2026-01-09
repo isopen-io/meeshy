@@ -185,8 +185,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        error: 'Internal server error'
       });
     }
   });
@@ -238,7 +237,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return reply.status(404).send({
           success: false,
-          message: 'Notification not found'
+          error: 'Notification not found'
         });
       }
 
@@ -249,7 +248,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Notification marked as read'
+        data: { message: 'Notification marked as read' }
       });
 
     } catch (error) {
@@ -257,7 +256,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -309,8 +308,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'All notifications marked as read',
-        count: result.count
+        data: {
+          message: 'All notifications marked as read',
+          count: result.count
+        }
       });
 
     } catch (error) {
@@ -318,7 +319,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -361,7 +362,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return reply.status(404).send({
           success: false,
-          message: 'Notification not found'
+          error: 'Notification not found'
         });
       }
 
@@ -372,7 +373,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Notification deleted'
+        data: { message: 'Notification deleted' }
       });
 
     } catch (error) {
@@ -380,7 +381,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -418,8 +419,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Read notifications deleted',
-        count: result.count
+        data: {
+          message: 'Read notifications deleted',
+          count: result.count
+        }
       });
 
     } catch (error) {
@@ -427,7 +430,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -481,7 +484,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -536,16 +539,18 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Preferences updated',
-        data: preferences
+        data: {
+          message: 'Preferences updated',
+          preferences
+        }
       });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Validation failed',
-          errors: error.errors.map(err => ({
+          error: 'Validation failed',
+          details: error.errors.map(err => ({
             field: err.path.join('.'),
             message: err.message,
             code: err.code
@@ -557,7 +562,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -616,7 +621,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });
@@ -660,8 +665,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: `${result.count} notifications marked as read`,
-        count: result.count
+        data: {
+          message: `${result.count} notifications marked as read`,
+          count: result.count
+        }
       });
 
     } catch (error) {
@@ -669,7 +676,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.status(500).send({
         success: false,
-        message: 'Internal server error'
+        error: 'Internal server error'
       });
     }
   });

@@ -20,6 +20,10 @@ import * as crypto from 'crypto';
 import { createHmac, createHash } from 'crypto';
 import { PrismaClient } from '../../../shared/prisma/client';
 import { SignalKeyManager } from './SignalKeyManager';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+// Create child logger for this module
+const logger = enhancedLogger.child({ module: 'X3DHKeyAgreement' });
 
 /**
  * Pre-key bundle published by a user for others to initiate sessions
@@ -144,11 +148,11 @@ export class X3DHKeyAgreement {
     initiatorPrivateKey: Buffer
   ): Promise<X3DHInitiatorResult> {
     try {
-      console.log('🤝 Starting X3DH initiator key agreement');
+      logger.debug('Starting X3DH initiator key agreement');
 
       // Step 1: Generate ephemeral key pair (ephemeral_key_pair)
       const ephemeralKeyPair = this.generateEphemeralKeyPair();
-      console.log('  ✓ Generated ephemeral key pair');
+      logger.debug('Generated ephemeral key pair');
 
       // Get initiator identity key public component
       const identityKey = this.keyManager.getIdentityPublicKey();
@@ -192,7 +196,7 @@ export class X3DHKeyAgreement {
       // Step 3: Concatenate DH results
       // Format: concat(DH1, DH2, DH3, DH4) or concat(DH1, DH2, DH3, zeros) if no pre-key
       const concatenated = Buffer.concat([dh1, dh2, dh3, dh4]);
-      console.log('  ✓ Performed 4 DH operations and concatenated results');
+      logger.debug('Performed DH operations and concatenated results', { dhOperations: recipientBundle.preKey ? 4 : 3 });
 
       // Step 4: HKDF key derivation
       const derived = this.deriveKeys(
@@ -201,7 +205,7 @@ export class X3DHKeyAgreement {
         recipientBundle.registrationId
       );
 
-      console.log('  ✓ Derived keys using HKDF');
+      logger.debug('Derived keys using HKDF');
 
       this.stats.initiatorSessions++;
 
@@ -216,10 +220,10 @@ export class X3DHKeyAgreement {
         chainKeyReceive: derived.chainKeyReceive
       };
 
-      console.log('✅ X3DH initiator key agreement complete');
+      logger.info('X3DH initiator key agreement complete', { signedPreKeyId: recipientBundle.signedPreKey.id, preKeyUsed });
       return result;
     } catch (error) {
-      console.error('❌ X3DH initiator agreement failed:', error);
+      logger.error('X3DH initiator agreement failed', { err: error });
       this.stats.agreementErrors++;
       throw error;
     }
@@ -245,10 +249,11 @@ export class X3DHKeyAgreement {
     ephemeralPublicKey: Buffer,
     initiatorIdentityKey: Buffer,
     signedPreKeyId: number,
-    preKeyId?: number
+    preKeyId?: number,
+    initiatorRegistrationId?: number
   ): Promise<X3DHResponderResult> {
     try {
-      console.log('🤝 Starting X3DH responder key agreement');
+      logger.debug('Starting X3DH responder key agreement', { signedPreKeyId, preKeyId, initiatorRegistrationId });
 
       // Get responder's identity key pair (need private key for DH)
       const responderIdentityKeyPair = await this.keyManager.getIdentityKeyPair();
@@ -308,18 +313,18 @@ export class X3DHKeyAgreement {
 
       // Concatenate (same order as initiator for correctness)
       const concatenated = Buffer.concat([dh1, dh2, dh3, dh4]);
-      console.log('  ✓ Performed 4 DH operations and concatenated results');
+      logger.debug('Performed DH operations and concatenated results', { dhOperations: preKey ? 4 : 3 });
 
       // HKDF key derivation
-      // Note: initiation uses sender's registration ID, but responder
-      // uses initiator's registration ID for consistency
+      // Note: both parties must use the same registration ID (initiator's)
+      // to derive identical shared secrets
       const derived = this.deriveKeys(
         concatenated,
         'WhatsApp DMA Interoperability',
-        0 // Placeholder - should be initiator's registration ID
+        initiatorRegistrationId ?? 0
       );
 
-      console.log('  ✓ Derived keys using HKDF');
+      logger.debug('Derived keys using HKDF');
 
       this.stats.responderSessions++;
 
@@ -334,10 +339,10 @@ export class X3DHKeyAgreement {
         preKeyUsed: preKeyId
       };
 
-      console.log('✅ X3DH responder key agreement complete');
+      logger.info('X3DH responder key agreement complete', { signedPreKeyId, preKeyUsed: preKeyId });
       return result;
     } catch (error) {
-      console.error('❌ X3DH responder agreement failed:', error);
+      logger.error('X3DH responder agreement failed', { err: error });
       this.stats.agreementErrors++;
       throw error;
     }
@@ -405,10 +410,10 @@ export class X3DHKeyAgreement {
         publicKey: publicKeyObject
       });
 
-      console.log(`  ✓ ${label}: Generated 32-byte shared secret`);
+      logger.debug('Generated 32-byte shared secret', { label });
       return sharedSecret;
     } catch (error) {
-      console.error(`  ❌ ${label} failed:`, error);
+      logger.error('DH operation failed', { err: error, label });
       throw new Error(`DH operation failed: ${label}`);
     }
   }
@@ -451,7 +456,7 @@ export class X3DHKeyAgreement {
     const chainKeySend = okm.subarray(32, 64);
     const chainKeyReceive = okm.subarray(64, 96);
 
-    console.log('  ✓ HKDF-SHA256 derived 3 keys: rootKey, chainKeySend, chainKeyReceive');
+    logger.debug('HKDF-SHA256 derived 3 keys: rootKey, chainKeySend, chainKeyReceive');
 
     return {
       rootKey: Buffer.from(rootKey),
@@ -495,7 +500,7 @@ export class X3DHKeyAgreement {
     failed: number;
     errors: string[];
   }> {
-    console.log(`📋 Validating X3DH test vectors from: ${testVectorsPath}`);
+    logger.info('Validating X3DH test vectors', { path: testVectorsPath });
 
     // TODO (Phase 3):
     // 1. Load test vectors from file

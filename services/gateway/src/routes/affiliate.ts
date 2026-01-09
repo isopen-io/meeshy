@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
+import { validatePagination } from '../utils/pagination';
 
 // Schémas de validation Zod
 const createAffiliateTokenSchema = z.object({
@@ -119,10 +120,9 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
-      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const { offset, limit } = request.query as { offset?: string; limit?: string };
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const pagination = validatePagination(offset, limit, 100);
 
       const whereClause = { createdBy: userId };
 
@@ -139,8 +139,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           orderBy: {
             createdAt: 'desc'
           },
-          skip: offsetNum,
-          take: limitNum
+          skip: pagination.offset,
+          take: pagination.limit
         }),
         fastify.prisma.affiliateToken.count({ where: whereClause })
       ]);
@@ -177,9 +177,9 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         data: tokensWithLinks,
         pagination: {
           total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + tokens.length < totalCount
+          limit: pagination.limit,
+          offset: pagination.offset,
+          hasMore: pagination.offset + tokens.length < totalCount
         }
       });
     } catch (error) {

@@ -85,6 +85,7 @@ export default function AdminMessagesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   const messageTypeIcons = {
     text: <FileText className="h-4 w-4" />,
@@ -108,15 +109,15 @@ export default function AdminMessagesPage() {
 
   useEffect(() => {
     loadMessages();
-  }, [currentPage, searchTerm, messageType, period]);
+  }, [currentPage, searchTerm, messageType, period, pageSize]);
 
   const loadMessages = async () => {
     try {
       setLoading(true);
-      const offset = (currentPage - 1) * 20;
+      const offset = (currentPage - 1) * pageSize;
       const response = await adminService.getMessages(
         offset,
-        20,
+        pageSize,
         searchTerm || undefined,
         messageType || undefined,
         period || undefined
@@ -125,7 +126,7 @@ export default function AdminMessagesPage() {
       if (response.data) {
         setMessages(response.data.messages || []);
         setTotalCount(response.data.pagination?.total || 0);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / 20));
+        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
       } else {
         setMessages([]);
         setTotalCount(0);
@@ -151,6 +152,11 @@ export default function AdminMessagesPage() {
       setPeriod(value === 'all' ? '' : value);
     }
     setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setCurrentPage(1);
+    setPageSize(newSize);
   };
 
   const formatDate = (dateString: string) => {
@@ -217,7 +223,7 @@ export default function AdminMessagesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Recherche</label>
                 <div className="relative">
@@ -266,9 +272,23 @@ export default function AdminMessagesPage() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium">Par page</label>
+                <Select value={String(pageSize)} onValueChange={(val) => handlePageSizeChange(Number(val))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20">20 par page</SelectItem>
+                    <SelectItem value="50">50 par page</SelectItem>
+                    <SelectItem value="100">100 par page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Actions</label>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={loadMessages}
                   className="w-full"
                 >

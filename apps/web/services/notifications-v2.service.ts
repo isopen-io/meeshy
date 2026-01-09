@@ -3,7 +3,8 @@
  * Gère les appels API avec retry logic et gestion d'erreurs
  */
 
-import { apiService, ApiResponse } from './api.service';
+import { apiService } from './api.service';
+import type { ApiResponse } from '@meeshy/shared/types';
 import type {
   NotificationV2,
   NotificationFilters,
@@ -61,7 +62,7 @@ export const notificationServiceV2 = {
     options: Partial<NotificationFilters & NotificationPaginationOptions> = {}
   ): Promise<ApiResponse<NotificationPaginatedResponse>> {
     const {
-      page = 1,
+      offset = 0,
       limit = 50,
       type,
       isRead,
@@ -75,7 +76,7 @@ export const notificationServiceV2 = {
 
     return withRetry(async () => {
       const params = new URLSearchParams();
-      params.set('page', page.toString());
+      params.set('offset', offset.toString());
       params.set('limit', limit.toString());
       params.set('sortBy', sortBy);
       params.set('sortOrder', sortOrder);
@@ -134,7 +135,7 @@ export const notificationServiceV2 = {
         data: {
           notifications: [],
           pagination: {
-            page: 1,
+            offset: 0,
             limit: 50,
             total: 0,
             hasMore: false

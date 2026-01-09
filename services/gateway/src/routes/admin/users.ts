@@ -4,7 +4,6 @@ import {
   UserRoleEnum,
   PaginatedUsersResponse,
   UserFilters,
-  PaginationParams,
   CreateUserDTO,
   UpdateUserProfileDTO,
   UpdateEmailDTO,
@@ -31,8 +30,9 @@ import {
   requireUserModifyAccess,
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
+import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 
-// Utilisation des schémas de validation renforcés
+// Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
 const updateUserProfileSchema = updateUserProfileValidationSchema;
 const updateEmailSchema = updateEmailValidationSchema;
@@ -49,7 +49,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    * GET /admin/user-management - Liste tous les utilisateurs (avec sanitization)
    */
   fastify.get<{
-    Querystring: UserFilters & PaginationParams;
+    Querystring: UserFilters & { offset?: string; limit?: string };
   }>('/admin/user-management', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
@@ -72,23 +72,27 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         sortOrder: request.query.sortOrder || 'desc'
       };
 
-      const pagination: PaginationParams = {
-        page: Number(request.query.page) || 1,
-        pageSize: Math.min(Number(request.query.pageSize) || 20, 100)
-      };
+      const pagination = validatePagination(request.query.offset, request.query.limit, 100);
 
-      // Récupérer les utilisateurs (données complètes)
+      // Recuperer les utilisateurs (donnees completes)
       const result = await userManagementService.getUsers(filters, pagination);
 
-      // Sanitize selon le rôle du viewer
+      // Sanitize selon le role du viewer
       const sanitizedUsers = sanitizationService.sanitizeUsers(
         result.users,
         viewerRole
       );
 
+      const paginationMeta = buildPaginationMeta(
+        result.total,
+        pagination.offset,
+        pagination.limit,
+        result.users.length
+      );
+
       const response: PaginatedUsersResponse = {
         users: sanitizedUsers,
-        pagination: result.pagination
+        pagination: paginationMeta
       };
 
       // Log d'audit
@@ -109,13 +113,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error fetching users');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to fetch users'
       });
     }
   });
 
   /**
-   * GET /admin/users/:userId - Détails d'un utilisateur (avec sanitization)
+   * GET /admin/users/:userId - Details d'un utilisateur (avec sanitization)
    */
   fastify.get<{
     Params: { userId: string };
@@ -131,12 +136,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       if (!user) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Sanitize selon le rôle
+      // Sanitize selon le role
       const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole);
 
       // Log d'audit
@@ -155,13 +161,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error fetching user');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to fetch user details'
       });
     }
   });
 
   /**
-   * POST /admin/users - Créer un nouvel utilisateur
+   * POST /admin/users - Creer un nouvel utilisateur
    * (BIGBOSS & ADMIN uniquement)
    */
   fastify.post<{
@@ -173,21 +180,22 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Valider les données
+      // Valider les donnees
       const validatedData = createUserSchema.parse(request.body);
 
-      // Vérifier si l'admin peut créer un utilisateur avec ce rôle
+      // Verifier si l'admin peut creer un utilisateur avec ce role
       if (validatedData.role) {
         if (!permissionsService.canManageUser(adminRole, validatedData.role as UserRoleEnum)) {
           reply.status(403).send({
             success: false,
-            error: 'Insufficient permissions to create user with this role'
+            error: 'Insufficient permissions to create user with this role',
+            message: 'Access denied'
           });
           return;
         }
       }
 
-      // Créer l'utilisateur
+      // Creer l'utilisateur
       const newUser = await userManagementService.createUser(
         validatedData as CreateUserDTO,
         authContext.registeredUser!.id
@@ -202,7 +210,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la réponse
+      // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(newUser, adminRole);
 
       reply.status(201).send({
@@ -215,6 +223,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         reply.status(400).send({
           success: false,
           error: 'Validation error',
+          message: 'Invalid input data',
           details: error.errors
         });
         return;
@@ -223,7 +232,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error creating user');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to create user'
       });
     }
   });
@@ -242,25 +252,27 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Valider les données
+      // Valider les donnees
       const validatedData = updateUserProfileSchema.parse(request.body);
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Vérifier si l'admin peut modifier cet utilisateur
+      // Verifier si l'admin peut modifier cet utilisateur
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         reply.status(403).send({
           success: false,
-          error: 'Insufficient permissions to modify this user'
+          error: 'Insufficient permissions to modify this user',
+          message: 'Access denied'
         });
         return;
       }
@@ -277,7 +289,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }
       });
 
-      // Mise à jour
+      // Mise a jour
       const updatedUser = await userManagementService.updateUser(
         request.params.userId,
         validatedData,
@@ -294,7 +306,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la réponse
+      // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
       reply.send({
@@ -307,6 +319,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         reply.status(400).send({
           success: false,
           error: 'Validation error',
+          message: 'Invalid input data',
           details: error.errors
         });
         return;
@@ -315,13 +328,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error updating user');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to update user'
       });
     }
   });
 
   /**
-   * PATCH /admin/users/:userId/role - Changer le rôle d'un utilisateur
+   * PATCH /admin/users/:userId/role - Changer le role d'un utilisateur
    * (BIGBOSS & ADMIN uniquement)
    */
   fastify.patch<{
@@ -334,21 +348,22 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Valider les données
+      // Valider les donnees
       const validatedData = updateRoleSchema.parse(request.body);
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Vérifier si l'admin peut changer le rôle
+      // Verifier si l'admin peut changer le role
       if (!permissionsService.canChangeRole(
         adminRole,
         targetUser.role as UserRoleEnum,
@@ -356,14 +371,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       )) {
         reply.status(403).send({
           success: false,
-          error: 'Insufficient permissions to change user role'
+          error: 'Insufficient permissions to change user role',
+          message: 'Access denied'
         });
         return;
       }
 
       const oldRole = targetUser.role;
 
-      // Mettre à jour le rôle
+      // Mettre a jour le role
       const updatedUser = await userManagementService.updateRole(
         request.params.userId,
         validatedData as UpdateRoleDTO,
@@ -381,7 +397,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la réponse
+      // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
       reply.send({
@@ -394,6 +410,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         reply.status(400).send({
           success: false,
           error: 'Validation error',
+          message: 'Invalid input data',
           details: error.errors
         });
         return;
@@ -402,13 +419,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error updating user role');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to update user role'
       });
     }
   });
 
   /**
-   * PATCH /admin/users/:userId/status - Activer/désactiver un utilisateur
+   * PATCH /admin/users/:userId/status - Activer/desactiver un utilisateur
    * (BIGBOSS & ADMIN uniquement)
    */
   fastify.patch<{
@@ -421,32 +439,34 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Valider les données
+      // Valider les donnees
       const validatedData = updateStatusSchema.parse(request.body);
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Vérifier si l'admin peut modifier le statut
+      // Verifier si l'admin peut modifier le statut
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         reply.status(403).send({
           success: false,
-          error: 'Insufficient permissions to modify user status'
+          error: 'Insufficient permissions to modify user status',
+          message: 'Access denied'
         });
         return;
       }
 
       const oldStatus = targetUser.isActive;
 
-      // Mettre à jour le statut
+      // Mettre a jour le statut
       const updatedUser = await userManagementService.updateStatus(
         request.params.userId,
         validatedData as UpdateStatusDTO,
@@ -464,7 +484,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la réponse
+      // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
       reply.send({
@@ -477,6 +497,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         reply.status(400).send({
           success: false,
           error: 'Validation error',
+          message: 'Invalid input data',
           details: error.errors
         });
         return;
@@ -485,13 +506,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error updating user status');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to update user status'
       });
     }
   });
 
   /**
-   * POST /admin/users/:userId/reset-password - Réinitialiser le mot de passe
+   * POST /admin/users/:userId/reset-password - Reinitialiser le mot de passe
    * (BIGBOSS & ADMIN uniquement)
    */
   fastify.post<{
@@ -504,30 +526,32 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Valider les données
+      // Valider les donnees
       const validatedData = resetPasswordSchema.parse(request.body);
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Vérifier les permissions
+      // Verifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         reply.status(403).send({
           success: false,
-          error: 'Insufficient permissions to reset password'
+          error: 'Insufficient permissions to reset password',
+          message: 'Access denied'
         });
         return;
       }
 
-      // Réinitialiser le mot de passe
+      // Reinitialiser le mot de passe
       const updatedUser = await userManagementService.resetPassword(
         request.params.userId,
         validatedData as ResetPasswordDTO,
@@ -544,13 +568,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       reply.send({
         success: true,
-        message: 'Password reset successfully'
+        data: { message: 'Password reset successfully' }
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
           success: false,
           error: 'Validation error',
+          message: 'Invalid input data',
           details: error.errors
         });
         return;
@@ -559,7 +584,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.error({ err: error }, 'Error resetting password');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to reset password'
       });
     }
   });
@@ -577,22 +603,24 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as any).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
         reply.status(404).send({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
+          message: 'The requested user does not exist'
         });
         return;
       }
 
-      // Vérifier les permissions
+      // Verifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         reply.status(403).send({
           success: false,
-          error: 'Insufficient permissions to delete this user'
+          error: 'Insufficient permissions to delete this user',
+          message: 'Access denied'
         });
         return;
       }
@@ -614,13 +642,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       reply.send({
         success: true,
-        message: 'User deleted successfully'
+        data: { message: 'User deleted successfully' }
       });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error deleting user');
       reply.status(500).send({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: 'Failed to delete user'
       });
     }
   });

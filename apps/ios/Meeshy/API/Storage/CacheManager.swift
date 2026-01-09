@@ -3,6 +3,7 @@
 //  Meeshy
 //
 //  Complete caching strategy with TTL and invalidation
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -250,14 +251,14 @@ extension CacheManager {
         return "conversation:\(conversationId)"
     }
 
-    /// Generate cache key for conversation list
-    static func conversationListKey(page: Int, limit: Int) -> String {
-        return "conversations:page:\(page):limit:\(limit)"
+    /// Generate cache key for conversation list (offset-based)
+    static func conversationListKey(offset: Int, limit: Int) -> String {
+        return "conversations:offset:\(offset):limit:\(limit)"
     }
 
-    /// Generate cache key for messages
-    static func messagesKey(conversationId: String, page: Int, limit: Int) -> String {
-        return "messages:\(conversationId):page:\(page):limit:\(limit)"
+    /// Generate cache key for messages (offset-based)
+    static func messagesKey(conversationId: String, offset: Int, limit: Int) -> String {
+        return "messages:\(conversationId):offset:\(offset):limit:\(limit)"
     }
 
     /// Generate cache key for message
@@ -280,9 +281,9 @@ extension CacheManager {
         return "attachment:\(attachmentId)"
     }
 
-    /// Generate cache key for notifications
-    static func notificationsKey(page: Int, limit: Int) -> String {
-        return "notifications:page:\(page):limit:\(limit)"
+    /// Generate cache key for notifications (offset-based)
+    static func notificationsKey(offset: Int, limit: Int) -> String {
+        return "notifications:offset:\(offset):limit:\(limit)"
     }
 }
 
@@ -297,7 +298,7 @@ extension CacheManager {
 
     /// Invalidate messages cache for conversation
     func invalidateMessages(conversationId: String) {
-        // Remove all message pages for this conversation
+        // Remove all message batches for this conversation
         cacheQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
 
@@ -394,5 +395,22 @@ extension CacheManager {
             self?.cachedMessageIds.removeValue(forKey: conversationId)
             self?.messageCacheBridged.removeValue(forKey: conversationId)
         }
+    }
+}
+
+// MARK: - Attachment URL Storage
+
+extension CacheManager {
+    /// Load attachment URL from cache
+    func loadAttachmentURL(forKey key: String) -> URL? {
+        guard let urlString = load(forKey: key, as: String.self) else {
+            return nil
+        }
+        return URL(string: urlString)
+    }
+
+    /// Save attachment URL to cache
+    func saveAttachmentURL(_ url: URL, forKey key: String) {
+        save(url.absoluteString, forKey: key, policy: .attachments)
     }
 }

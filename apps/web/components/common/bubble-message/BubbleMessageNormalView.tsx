@@ -58,7 +58,7 @@ import { MessageReactions } from '@/components/common/message-reactions';
 import { EmojiPicker } from '@/components/common/emoji-picker';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { useMessageReactions } from '@/hooks/use-message-reactions';
+import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useAuth } from '@/hooks/use-auth';
 import type { BubbleMessage, MessageTranslation, MessageVersion, MessageSender, AnonymousSender } from './types';
 import { MessageActionsBar } from './MessageActionsBar';
@@ -141,8 +141,8 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   // État pour le lightbox de l'avatar
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
 
-  // Hook centralisé pour gérer les réactions - sera partagé avec MessageReactions via props
-  const messageReactionsHook = useMessageReactions({
+  // Hook centralisé pour gérer les réactions (React Query) - sera partagé avec MessageReactions via props
+  const messageReactionsHook = useReactionsQuery({
     messageId: message.id,
     currentUserId: isAnonymous ? currentAnonymousUserId : (currentUser?.id || ''),
     isAnonymous,

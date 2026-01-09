@@ -1,4 +1,5 @@
-import { apiService, ApiResponse } from './api.service';
+import { apiService } from './api.service';
+import type { ApiResponse } from '@meeshy/shared/types';
 
 export interface Message {
   id: string;
@@ -72,6 +73,7 @@ export const messagesService = {
       
       // Adapter la réponse au format attendu
       return {
+        success: true,
         data: {
           messages: response.data.messages,
           total: response.data.messages.length, // Approximation
@@ -79,7 +81,6 @@ export const messagesService = {
           limit: limit,
           hasMore: response.data.hasMore
         },
-        status: response.status,
         message: response.message
       };
     } catch (error) {

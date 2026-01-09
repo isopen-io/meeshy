@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
+import { validatePagination } from '../utils/pagination';
 
 // Schémas de validation
 const createNotificationSchema = z.object({
@@ -30,10 +31,9 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
-      const { offset = '0', limit = '20', unread = 'false', type } = request.query as any;
+      const { offset, limit, unread = 'false', type } = request.query as any;
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const pagination = validatePagination(offset, limit, 100);
 
       const whereClause: any = { userId };
       if (unread === 'true') {
@@ -59,8 +59,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         fastify.prisma.notification.findMany({
           where: whereClause,
           orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum,
+          skip: pagination.offset,
+          take: pagination.limit,
           include: {
             message: {
               include: {
@@ -99,7 +99,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         fastify.prisma.notification.count({ where: { userId, isRead: false } })
       ]);
 
-      fastify.log.info(`📥 [BACKEND] Chargement notifications: userId=${userId}, total=${totalCount}, unread=${unreadCount}, returned=${notifications.length}`);
+      fastify.log.info(`[BACKEND] Chargement notifications: userId=${userId}, total=${totalCount}, unread=${unreadCount}, returned=${notifications.length}`);
 
       // Log détaillé des états isRead
       const readStats = notifications.reduce((acc, n) => {
@@ -107,16 +107,16 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         return acc;
       }, { read: 0, unread: 0 });
 
-      fastify.log.info(`📥 [BACKEND] États des notifications retournées: lues=${readStats.read}, non lues=${readStats.unread}`);
+      fastify.log.info(`[BACKEND] États des notifications retournées: lues=${readStats.read}, non lues=${readStats.unread}`);
 
       return reply.send({
         success: true,
         data: notifications,
         pagination: {
           total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + notifications.length < totalCount
+          limit: pagination.limit,
+          offset: pagination.offset,
+          hasMore: pagination.offset + notifications.length < totalCount
         },
         unreadCount
       });
@@ -136,8 +136,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get notifications error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur',
-        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -150,39 +149,39 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const { userId } = request.user as any;
 
-      fastify.log.info(`📖 [BACKEND] Requête marquage notification comme lue: notificationId=${id}, userId=${userId}`);
+      fastify.log.info(`[BACKEND] Requête marquage notification comme lue: notificationId=${id}, userId=${userId}`);
 
       const notification = await fastify.prisma.notification.findFirst({
         where: { id, userId }
       });
 
       if (!notification) {
-        fastify.log.warn(`⚠️ [BACKEND] Notification non trouvée: notificationId=${id}, userId=${userId}`);
+        fastify.log.warn(`[BACKEND] Notification non trouvée: notificationId=${id}, userId=${userId}`);
         return reply.status(404).send({
           success: false,
-          message: 'Notification non trouvée'
+          error: 'Notification non trouvée'
         });
       }
 
-      fastify.log.info(`📖 [BACKEND] Notification trouvée, isRead actuel: ${notification.isRead}`);
+      fastify.log.info(`[BACKEND] Notification trouvée, isRead actuel: ${notification.isRead}`);
 
       await fastify.prisma.notification.update({
         where: { id },
         data: { isRead: true }
       });
 
-      fastify.log.info(`✅ [BACKEND] Notification ${id} marquée comme lue dans MongoDB`);
+      fastify.log.info(`[BACKEND] Notification ${id} marquée comme lue dans MongoDB`);
 
       return reply.send({
         success: true,
-        message: 'Notification marquée comme lue'
+        data: { message: 'Notification marquée comme lue' }
       });
 
     } catch (error) {
       logError(fastify.log, 'Mark notification as read error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -194,7 +193,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     try {
       const { userId } = request.user as any;
 
-      fastify.log.info(`📖 [BACKEND] Requête marquage de TOUTES les notifications comme lues: userId=${userId}`);
+      fastify.log.info(`[BACKEND] Requête marquage de TOUTES les notifications comme lues: userId=${userId}`);
 
       // Compter d'abord le nombre de notifications non lues
       const unreadCount = await fastify.prisma.notification.count({
@@ -204,7 +203,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         }
       });
 
-      fastify.log.info(`📖 [BACKEND] Nombre de notifications non lues à marquer: ${unreadCount}`);
+      fastify.log.info(`[BACKEND] Nombre de notifications non lues à marquer: ${unreadCount}`);
 
       const result = await fastify.prisma.notification.updateMany({
         where: {
@@ -214,18 +213,18 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         data: { isRead: true }
       });
 
-      fastify.log.info(`✅ [BACKEND] ${result.count} notifications marquées comme lues dans MongoDB`);
+      fastify.log.info(`[BACKEND] ${result.count} notifications marquées comme lues dans MongoDB`);
 
       return reply.send({
         success: true,
-        message: 'Toutes les notifications marquées comme lues'
+        data: { message: 'Toutes les notifications marquées comme lues' }
       });
 
     } catch (error) {
       logError(fastify.log, 'Mark all notifications as read error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -245,7 +244,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       if (!notification) {
         return reply.status(404).send({
           success: false,
-          message: 'Notification non trouvée'
+          error: 'Notification non trouvée'
         });
       }
 
@@ -255,14 +254,14 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Notification supprimée'
+        data: { message: 'Notification supprimée' }
       });
 
     } catch (error) {
       logError(fastify.log, 'Delete notification error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -283,14 +282,14 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Notifications lues supprimées'
+        data: { message: 'Notifications lues supprimées' }
       });
 
     } catch (error) {
       logError(fastify.log, 'Delete read notifications error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -333,7 +332,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get notification preferences error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -370,23 +369,25 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Préférences mises à jour',
-        data: preferences
+        data: {
+          message: 'Préférences mises à jour',
+          preferences
+        }
       });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
-          errors: error.errors
+          error: 'Données invalides',
+          details: error.errors
         });
       }
 
       logError(fastify.log, 'Update notification preferences error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -418,15 +419,15 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
-          errors: error.errors
+          error: 'Données invalides',
+          details: error.errors
         });
       }
 
       logError(fastify.log, 'Create test notification error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });
@@ -473,7 +474,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get notification stats error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur'
+        error: 'Erreur interne du serveur'
       });
     }
   });

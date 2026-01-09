@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser, useIsAuthChecking } from '@/stores';
 import { useI18n } from '@/hooks/useI18n';
-import { useConversationMessages } from '@/hooks/use-conversation-messages';
+import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
-import { useConversationsPagination } from '@/hooks/use-conversations-pagination';
+import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
 import { useNotifications } from '@/hooks/use-notifications';
 import { useNotificationActionsV2 } from '@/stores/notification-store-v2';
 import { useVirtualKeyboard } from '@/hooks/use-virtual-keyboard';
@@ -36,6 +36,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { logger } from '@/utils/logger';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
+import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 
 interface ConversationLayoutProps {
   selectedConversationId?: string;
@@ -59,7 +60,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     return user ? getUserLanguageChoices(user) : [];
   }, [user?.systemLanguage, user?.regionalLanguage, user?.customDestinationLanguage]);
 
-  // Hook de pagination pour les conversations
+  // Hook de pagination pour les conversations (React Query)
   const {
     conversations: paginatedConversations,
     isLoading: isLoadingConversations,
@@ -68,7 +69,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     loadMore: loadMoreConversations,
     refresh: refreshConversations,
     setConversations
-  } = useConversationsPagination({
+  } = useConversationsPaginationRQ({
     limit: 50,
     enabled: !!user
   });
@@ -109,6 +110,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Activer les mises à jour de statut utilisateur en temps réel (via WebSocket)
   useUserStatusRealtime();
+
+  // Sync Socket.IO events avec le cache React Query (pour migration progressive)
+  useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: !!effectiveSelectedId });
+  useInvalidateOnReconnect();
 
   // Store global des utilisateurs (mis à jour en temps réel)
   const userStore = useUserStore();
@@ -290,7 +295,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const [typingUsers, setTypingUsers] = useState<{id: string, displayName: string}[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Hook pour les messages (doit être déclaré avant useSocketIOMessaging)
+  // Hook pour les messages (React Query)
   const {
     messages,
     isLoading: isLoadingMessages,
@@ -302,7 +307,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addMessage,
     updateMessage,
     removeMessage
-  } = useConversationMessages(selectedConversation?.id || null, user!, {
+  } = useConversationMessagesRQ(selectedConversation?.id || null, user!, {
     limit: 20,
     enabled: !!selectedConversation?.id,
     containerRef: messagesScrollRef // Pass container ref to hook to avoid warnings

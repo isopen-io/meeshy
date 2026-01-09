@@ -3,13 +3,14 @@
 //  Meeshy
 //
 //  Notification API endpoints
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
 
 enum NotificationEndpoints: APIEndpoint, Sendable {
 
-    case fetchNotifications(page: Int, limit: Int)
+    case fetchNotifications(offset: Int, limit: Int)
     case markAsRead(notificationId: String)
     case markAllAsRead
     case deleteNotification(notificationId: String)
@@ -56,8 +57,8 @@ enum NotificationEndpoints: APIEndpoint, Sendable {
 
     var queryParameters: [String: Any]? {
         switch self {
-        case .fetchNotifications(let page, let limit):
-            return ["page": page, "limit": limit]
+        case .fetchNotifications(let offset, let limit):
+            return ["offset": offset, "limit": limit]
         default:
             return nil
         }

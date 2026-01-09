@@ -3,7 +3,8 @@
 //  Meeshy
 //
 //  Generic, production-ready pagination manager for infinite scroll
-//  Supports both cursor-based and page-based pagination
+//  Supports both cursor-based and offset-based pagination
+//  UPDATED: Uses offset/limit pattern instead of page/pageSize
 //  iOS 16+
 //
 //  FEATURES:
@@ -52,15 +53,12 @@ public enum PaginationState: Equatable, Sendable {
 /// Type of pagination the API supports
 public enum PaginationType: Sendable {
     case cursor(String?)   // Cursor-based (preferred)
-    case page(Int)         // Page-based (fallback)
-    case offset(Int)       // Offset-based
+    case offset(Int)       // Offset-based (new standard)
 
     var description: String {
         switch self {
         case .cursor(let cursor):
             return "cursor=\(cursor ?? "nil")"
-        case .page(let page):
-            return "page=\(page)"
         case .offset(let offset):
             return "offset=\(offset)"
         }
@@ -88,14 +86,14 @@ public struct PaginatedResponse<T: Sendable>: Sendable {
         self.totalCount = totalCount
     }
 
-    /// Create from API response with page-based pagination
-    public static func fromPageBased(
+    /// Create from API response with offset-based pagination
+    public static func fromOffsetBased(
         items: [T],
-        page: Int,
+        offset: Int,
         limit: Int,
         total: Int
     ) -> PaginatedResponse {
-        let hasMore = page * limit < total
+        let hasMore = offset + items.count < total
         return PaginatedResponse(
             items: items,
             nextCursor: nil,
@@ -108,8 +106,8 @@ public struct PaginatedResponse<T: Sendable>: Sendable {
 // MARK: - Pagination Configuration
 
 public struct PaginationConfiguration: Sendable {
-    /// Number of items per page
-    public let pageSize: Int
+    /// Number of items per request (limit)
+    public let limit: Int
 
     /// Number of items from the end to trigger prefetch
     public let prefetchThreshold: Int
@@ -127,14 +125,14 @@ public struct PaginationConfiguration: Sendable {
     public let retryDelay: TimeInterval
 
     public init(
-        pageSize: Int = 20,
+        limit: Int = 20,
         prefetchThreshold: Int = 5,
         enableCache: Bool = true,
         cacheKeyPrefix: String = "",
         maxRetries: Int = 2,
         retryDelay: TimeInterval = 1.0
     ) {
-        self.pageSize = pageSize
+        self.limit = limit
         self.prefetchThreshold = prefetchThreshold
         self.enableCache = enableCache
         self.cacheKeyPrefix = cacheKeyPrefix
@@ -142,15 +140,18 @@ public struct PaginationConfiguration: Sendable {
         self.retryDelay = retryDelay
     }
 
+    /// Legacy compatibility: pageSize maps to limit
+    public var pageSize: Int { limit }
+
     public static let conversations = PaginationConfiguration(
-        pageSize: 100,
+        limit: 100,
         prefetchThreshold: 10,
         enableCache: true,
         cacheKeyPrefix: "conversations"
     )
 
     public static let messages = PaginationConfiguration(
-        pageSize: 50,
+        limit: 50,
         prefetchThreshold: 10,
         enableCache: true,
         cacheKeyPrefix: "messages"
@@ -176,7 +177,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
     private let fetchFunction: (PaginationType, Int) async throws -> PaginatedResponse<T>
 
     private var currentCursor: String?
-    private var currentPage: Int = 1
+    private var currentOffset: Int = 0
     private var retryCount: Int = 0
 
     /// Cache key for this pagination context
@@ -189,7 +190,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
     /// Initialize with a fetch function
     /// - Parameters:
     ///   - configuration: Pagination configuration
-    ///   - fetch: Async function to fetch items. Receives pagination type and page size.
+    ///   - fetch: Async function to fetch items. Receives pagination type and limit.
     public init(
         configuration: PaginationConfiguration = PaginationConfiguration(),
         fetch: @escaping (PaginationType, Int) async throws -> PaginatedResponse<T>
@@ -200,7 +201,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
 
     // MARK: - Public API
 
-    /// Load initial data (first page)
+    /// Load initial data (first batch)
     /// Call this when the view appears or needs fresh data
     public func loadInitial() async {
         guard state != .loading else {
@@ -209,7 +210,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
         }
 
         state = .loading
-        currentPage = 1
+        currentOffset = 0
         currentCursor = nil
         retryCount = 0
 
@@ -217,7 +218,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
     }
 
     /// Refresh data (pull-to-refresh)
-    /// Fetches first page and replaces all items
+    /// Fetches first batch and replaces all items
     public func refresh() async {
         guard state != .refreshing else {
             cacheLogger.debug("PaginationManager: Already refreshing, skipping")
@@ -225,14 +226,14 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
         }
 
         state = .refreshing
-        currentPage = 1
+        currentOffset = 0
         currentCursor = nil
         retryCount = 0
 
         await performFetch(isInitial: true)
     }
 
-    /// Load next page
+    /// Load next batch
     /// Call this when user scrolls near the bottom
     public func loadMore() async {
         guard state.canLoadMore && hasMorePages else {
@@ -305,7 +306,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
         hasMorePages = true
         totalCount = nil
         currentCursor = nil
-        currentPage = 1
+        currentOffset = 0
         retryCount = 0
     }
 
@@ -333,13 +334,13 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
             if let cursor = currentCursor, !isInitial {
                 paginationType = .cursor(cursor)
             } else {
-                paginationType = .page(currentPage)
+                paginationType = .offset(currentOffset)
             }
 
-            cacheLogger.debug("PaginationManager: Fetching \(paginationType.description), pageSize: \(configuration.pageSize)")
+            cacheLogger.debug("PaginationManager: Fetching \(paginationType.description), limit: \(configuration.limit)")
 
             // Fetch data
-            let response = try await fetchFunction(paginationType, configuration.pageSize)
+            let response = try await fetchFunction(paginationType, configuration.limit)
 
             // Update state
             if isInitial {
@@ -353,7 +354,7 @@ public final class PaginationManager<T: Identifiable & Equatable & Sendable>: Ob
 
             // Update pagination state
             currentCursor = response.nextCursor
-            currentPage += 1
+            currentOffset += response.items.count
             hasMorePages = response.hasMore
             totalCount = response.totalCount
 

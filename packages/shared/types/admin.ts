@@ -3,18 +3,18 @@
  * Centralized type definitions for all admin endpoints
  */
 
+import type { PaginationMeta, ApiResponse } from './api-responses';
+
 // ===== PAGINATION =====
 
-export interface AdminPagination {
-  currentPage: number;
-  totalPages: number;
-  totalCount: number;
-  hasNext: boolean;
-  hasPrevious: boolean;
-}
+/**
+ * @deprecated Use PaginationMeta from api-responses.ts instead
+ * Kept for backwards compatibility
+ */
+export interface AdminPagination extends PaginationMeta {}
 
 export interface AdminFilters {
-  page?: number;
+  offset?: number;
   limit?: number;
   search?: string;
   sortBy?: string;
@@ -88,17 +88,7 @@ export interface GetCommunitiesRequest extends AdminFilters {
 
 export interface GetCommunitiesResponse {
   communities: AdminCommunity[];
-  pagination: AdminPagination;
-}
-
-export interface CommunityStats {
-  totalCommunities: number;
-  activeCommunities: number;
-  totalMembers: number;
-  avgMembersPerCommunity: number;
-  publicCommunities: number;
-  privateCommunities: number;
-  globalCommunities: number;
+  pagination: PaginationMeta;
 }
 
 // ===== LINKS =====
@@ -138,7 +128,7 @@ export interface GetLinksRequest extends AdminFilters {
 
 export interface GetLinksResponse {
   links: AdminLink[];
-  pagination: AdminPagination;
+  pagination: PaginationMeta;
 }
 
 // ===== MESSAGES =====
@@ -174,14 +164,13 @@ export interface GetMessagesRequest extends AdminFilters {
 
 export interface GetMessagesResponse {
   messages: AdminMessage[];
-  pagination: AdminPagination;
+  pagination: PaginationMeta;
 }
 
 // ===== API RESPONSE WRAPPER =====
 
-export interface AdminApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  pagination?: AdminPagination;
-}
+/**
+ * @deprecated Use ApiResponse from api-responses.ts instead
+ * Kept for backwards compatibility
+ */
+export interface AdminApiResponse<T = any> extends ApiResponse<T> {}

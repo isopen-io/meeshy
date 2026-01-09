@@ -1,12 +1,19 @@
 /**
  * Service de traduction haute performance pour Meeshy
  * Utilise l'architecture ZMQ PUB/SUB + REQ/REP avec pool de connexions
+ *
+ * SECURITY: Translations are encrypted for server/hybrid mode conversations
+ * to prevent plaintext exposure in the database.
  */
 
 import { EventEmitter } from 'events';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './ZmqTranslationClient';
 import { ZMQSingleton } from './ZmqSingleton';
+import * as crypto from 'crypto';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'TranslationService' });
 
 export interface MessageData {
   id?: string;
@@ -18,6 +25,19 @@ export interface MessageData {
   messageType?: string;
   replyToId?: string;
   targetLanguage?: string; // Langue cible spécifique pour la traduction
+  // Encryption fields from parent message
+  isEncrypted?: boolean;
+  encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
+}
+
+/**
+ * Encryption metadata for translated content
+ */
+interface TranslationEncryptionData {
+  isEncrypted: boolean;
+  encryptionKeyId: string | null;
+  encryptionIv: string | null;
+  encryptionAuthTag: string | null;
 }
 
 export interface TranslationServiceStats {
@@ -64,6 +84,184 @@ export class TranslationService extends EventEmitter {
     super(); // Appel au constructeur EventEmitter
     this.prisma = prisma;
   }
+
+  // ============================================================================
+  // ENCRYPTION HELPERS FOR TRANSLATION STORAGE
+  // ============================================================================
+
+  /**
+   * Get the encryption key for a conversation from ServerEncryptionKey table
+   * Returns the decrypted key for use in translation encryption
+   */
+  private async _getConversationEncryptionKey(conversationId: string): Promise<{ keyId: string; key: Buffer } | null> {
+    try {
+      // First get the conversation to find its serverEncryptionKeyId
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { serverEncryptionKeyId: true, encryptionMode: true }
+      });
+
+      if (!conversation?.serverEncryptionKeyId) {
+        return null;
+      }
+
+      // Get the encrypted key from database
+      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
+        where: { id: conversation.serverEncryptionKeyId }
+      });
+
+      if (!keyRecord) {
+        logger.warn('Server encryption key not found', { keyId: conversation.serverEncryptionKeyId });
+        return null;
+      }
+
+      // Decrypt the key using master key
+      const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;
+      if (!masterKeyB64) {
+        logger.warn('ENCRYPTION_MASTER_KEY not set, cannot decrypt conversation key');
+        return null;
+      }
+
+      const masterKey = Buffer.from(masterKeyB64, 'base64');
+      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
+      const iv = Buffer.from(keyRecord.iv, 'base64');
+      const authTag = Buffer.from(keyRecord.authTag, 'base64');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+      decipher.setAuthTag(authTag);
+      const key = Buffer.concat([decipher.update(encryptedKey), decipher.final()]);
+
+      return { keyId: conversation.serverEncryptionKeyId, key };
+    } catch (error) {
+      logger.error('Failed to get conversation encryption key', { conversationId, error });
+      return null;
+    }
+  }
+
+  /**
+   * Encrypt translation content using conversation's encryption key
+   */
+  private async _encryptTranslation(
+    plaintext: string,
+    conversationId: string
+  ): Promise<TranslationEncryptionData & { encryptedContent: string }> {
+    const keyData = await this._getConversationEncryptionKey(conversationId);
+
+    if (!keyData) {
+      // No encryption key available, store unencrypted
+      return {
+        encryptedContent: plaintext,
+        isEncrypted: false,
+        encryptionKeyId: null,
+        encryptionIv: null,
+        encryptionAuthTag: null
+      };
+    }
+
+    // Generate IV (12 bytes for AES-GCM)
+    const iv = crypto.randomBytes(12);
+
+    // Encrypt using AES-256-GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', keyData.key, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(plaintext, 'utf8'),
+      cipher.final()
+    ]);
+    const authTag = cipher.getAuthTag();
+
+    logger.debug('Translation encrypted', { conversationId, keyId: keyData.keyId });
+
+    return {
+      encryptedContent: ciphertext.toString('base64'),
+      isEncrypted: true,
+      encryptionKeyId: keyData.keyId,
+      encryptionIv: iv.toString('base64'),
+      encryptionAuthTag: authTag.toString('base64')
+    };
+  }
+
+  /**
+   * Decrypt translation content
+   */
+  private async _decryptTranslation(
+    encryptedContent: string,
+    encryptionKeyId: string,
+    encryptionIv: string,
+    encryptionAuthTag: string
+  ): Promise<string> {
+    try {
+      // Get the encryption key
+      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
+        where: { id: encryptionKeyId }
+      });
+
+      if (!keyRecord) {
+        throw new Error(`Encryption key not found: ${encryptionKeyId}`);
+      }
+
+      // Decrypt the key using master key
+      const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;
+      if (!masterKeyB64) {
+        throw new Error('ENCRYPTION_MASTER_KEY not set');
+      }
+
+      const masterKey = Buffer.from(masterKeyB64, 'base64');
+      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
+      const keyIv = Buffer.from(keyRecord.iv, 'base64');
+      const keyAuthTag = Buffer.from(keyRecord.authTag, 'base64');
+
+      const keyDecipher = crypto.createDecipheriv('aes-256-gcm', masterKey, keyIv);
+      keyDecipher.setAuthTag(keyAuthTag);
+      const key = Buffer.concat([keyDecipher.update(encryptedKey), keyDecipher.final()]);
+
+      // Decrypt the translation
+      const iv = Buffer.from(encryptionIv, 'base64');
+      const authTag = Buffer.from(encryptionAuthTag, 'base64');
+      const ciphertext = Buffer.from(encryptedContent, 'base64');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+      return plaintext.toString('utf8');
+    } catch (error) {
+      logger.error('Failed to decrypt translation', { encryptionKeyId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a message requires encrypted translation storage
+   */
+  private async _shouldEncryptTranslation(messageId: string): Promise<{ shouldEncrypt: boolean; conversationId: string | null }> {
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: {
+          conversationId: true,
+          encryptionMode: true,
+          isEncrypted: true
+        }
+      });
+
+      if (!message) {
+        return { shouldEncrypt: false, conversationId: null };
+      }
+
+      // E2EE messages should NOT have translations (they should be skipped entirely)
+      // Server and Hybrid mode messages should have encrypted translations
+      const shouldEncrypt = message.encryptionMode === 'server' || message.encryptionMode === 'hybrid';
+
+      return { shouldEncrypt, conversationId: message.conversationId };
+    } catch (error) {
+      logger.error('Failed to check encryption requirement', { messageId, error });
+      return { shouldEncrypt: false, conversationId: null };
+    }
+  }
+
+  // ============================================================================
+  // END ENCRYPTION HELPERS
+  // ============================================================================
 
   /**
    * Génère un identifiant unique pour une conversation
@@ -142,10 +340,34 @@ export class TranslationService extends EventEmitter {
   async handleNewMessage(messageData: MessageData): Promise<{ messageId: string; status: string }> {
     try {
       const startTime = Date.now();
-      
+
+      // SECURITY: Skip translation for E2EE messages
+      // E2EE messages have encrypted content that the server cannot read
+      // Translating "[Encrypted]" placeholder is useless and wastes resources
+      if (messageData.encryptionMode === 'e2ee') {
+        logger.debug('Skipping translation for E2EE message', {
+          conversationId: messageData.conversationId,
+          encryptionMode: messageData.encryptionMode
+        });
+
+        // Still save the message if it's new, but skip translation
+        if (!messageData.id) {
+          const savedMessage = await this._saveMessageToDatabase(messageData);
+          this.stats.messages_saved++;
+          return {
+            messageId: savedMessage.id,
+            status: 'e2ee_skipped'
+          };
+        }
+        return {
+          messageId: messageData.id,
+          status: 'e2ee_skipped'
+        };
+      }
+
       let messageId: string;
       let isRetranslation = false;
-      
+
       // Vérifier si c'est une retraduction (message avec ID existant)
       if (messageData.id) {
         messageId = messageData.id;
@@ -664,17 +886,44 @@ export class TranslationService extends EventEmitter {
    * OPTIMISATION: Sauvegarde une traduction avec upsert simple
    * Au lieu de findMany + deleteMany + update/create (3-5 requêtes),
    * on utilise directement upsert (1 requête)
+   *
+   * SECURITY: Encrypts translation content for server/hybrid mode conversations
+   * using the same encryption key as the parent message
    */
   private async _saveTranslationToDatabase(result: TranslationResult, metadata?: any): Promise<string> {
     try {
       const startTime = Date.now();
-      
-      // Créer la clé de cache unique
-      const cacheKey = `${result.messageId}_${result.sourceLanguage}_${result.targetLanguage}`;
-      
+
       // Extraire les informations techniques du modèle
       const modelInfo = result.translatorModel || result.modelType || 'basic';
       const confidenceScore = result.confidenceScore || 0.9;
+
+      // SECURITY: Check if translation should be encrypted
+      const { shouldEncrypt, conversationId } = await this._shouldEncryptTranslation(result.messageId);
+
+      let contentToStore = result.translatedText;
+      let encryptionData: TranslationEncryptionData = {
+        isEncrypted: false,
+        encryptionKeyId: null,
+        encryptionIv: null,
+        encryptionAuthTag: null
+      };
+
+      if (shouldEncrypt && conversationId) {
+        const encrypted = await this._encryptTranslation(result.translatedText, conversationId);
+        contentToStore = encrypted.encryptedContent;
+        encryptionData = {
+          isEncrypted: encrypted.isEncrypted,
+          encryptionKeyId: encrypted.encryptionKeyId,
+          encryptionIv: encrypted.encryptionIv,
+          encryptionAuthTag: encrypted.encryptionAuthTag
+        };
+        logger.debug('Translation encrypted before storage', {
+          messageId: result.messageId,
+          targetLanguage: result.targetLanguage,
+          isEncrypted: encryptionData.isEncrypted
+        });
+      }
 
       // OPTIMISATION: Nettoyer les doublons existants d'abord (si présents)
       // Ceci évite les conflits de contrainte unique
@@ -708,48 +957,76 @@ export class TranslationService extends EventEmitter {
           }
         },
         update: {
-          sourceLanguage: result.sourceLanguage,
-          translatedContent: result.translatedText,
+          translatedContent: contentToStore,
           translationModel: modelInfo,
           confidenceScore: confidenceScore,
-          cacheKey: cacheKey
+          // Encryption fields
+          isEncrypted: encryptionData.isEncrypted,
+          encryptionKeyId: encryptionData.encryptionKeyId,
+          encryptionIv: encryptionData.encryptionIv,
+          encryptionAuthTag: encryptionData.encryptionAuthTag
         },
         create: {
           messageId: result.messageId,
-          sourceLanguage: result.sourceLanguage,
           targetLanguage: result.targetLanguage,
-          translatedContent: result.translatedText,
+          translatedContent: contentToStore,
           translationModel: modelInfo,
           confidenceScore: confidenceScore,
-          cacheKey: cacheKey
+          // Encryption fields
+          isEncrypted: encryptionData.isEncrypted,
+          encryptionKeyId: encryptionData.encryptionKeyId,
+          encryptionIv: encryptionData.encryptionIv,
+          encryptionAuthTag: encryptionData.encryptionAuthTag
         }
       });
-      
+
       const queryTime = Date.now() - startTime;
-      
+
       return translation.id;
 
     } catch (error: any) {
       console.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error.message}`);
-      
+
       // Fallback: Si l'erreur est due à une contrainte manquante, utiliser l'ancienne méthode
       if (error.code === 'P2025' || error.message?.includes('messageId_targetLanguage')) {
         console.warn(`⚠️ [TranslationService] Contrainte unique manquante, fallback vers méthode legacy`);
         return await this._saveTranslationToDatabase_Legacy(result, metadata);
       }
-      
+
       throw error; // Remonter l'erreur pour la gestion dans _handleTranslationCompleted
     }
   }
 
   /**
    * Méthode legacy de sauvegarde (fallback si upsert échoue)
+   * SECURITY: Also supports encrypted translation storage
    */
   private async _saveTranslationToDatabase_Legacy(result: TranslationResult, metadata?: any): Promise<string> {
     try {
-      const cacheKey = `${result.messageId}_${result.sourceLanguage}_${result.targetLanguage}`;
       const modelInfo = result.translatorModel || result.modelType || 'basic';
       const confidenceScore = result.confidenceScore || 0.9;
+
+      // SECURITY: Check if translation should be encrypted
+      const { shouldEncrypt, conversationId } = await this._shouldEncryptTranslation(result.messageId);
+
+      let contentToStore = result.translatedText;
+      let encryptionData: TranslationEncryptionData = {
+        isEncrypted: false,
+        encryptionKeyId: null,
+        encryptionIv: null,
+        encryptionAuthTag: null
+      };
+
+      if (shouldEncrypt && conversationId) {
+        const encrypted = await this._encryptTranslation(result.translatedText, conversationId);
+        contentToStore = encrypted.encryptedContent;
+        encryptionData = {
+          isEncrypted: encrypted.isEncrypted,
+          encryptionKeyId: encrypted.encryptionKeyId,
+          encryptionIv: encrypted.encryptionIv,
+          encryptionAuthTag: encrypted.encryptionAuthTag
+        };
+      }
 
       // Chercher une traduction existante
       const existing = await this.prisma.messageTranslation.findFirst({
@@ -764,11 +1041,14 @@ export class TranslationService extends EventEmitter {
         const updated = await this.prisma.messageTranslation.update({
           where: { id: existing.id },
           data: {
-            sourceLanguage: result.sourceLanguage,
-            translatedContent: result.translatedText,
+            translatedContent: contentToStore,
             translationModel: modelInfo,
             confidenceScore: confidenceScore,
-            cacheKey: cacheKey
+            // Encryption fields
+            isEncrypted: encryptionData.isEncrypted,
+            encryptionKeyId: encryptionData.encryptionKeyId,
+            encryptionIv: encryptionData.encryptionIv,
+            encryptionAuthTag: encryptionData.encryptionAuthTag
           }
         });
         return updated.id;
@@ -777,12 +1057,15 @@ export class TranslationService extends EventEmitter {
         const created = await this.prisma.messageTranslation.create({
           data: {
             messageId: result.messageId,
-            sourceLanguage: result.sourceLanguage,
             targetLanguage: result.targetLanguage,
-            translatedContent: result.translatedText,
+            translatedContent: contentToStore,
             translationModel: modelInfo,
             confidenceScore: confidenceScore,
-            cacheKey: cacheKey
+            // Encryption fields
+            isEncrypted: encryptionData.isEncrypted,
+            encryptionKeyId: encryptionData.encryptionKeyId,
+            encryptionIv: encryptionData.encryptionIv,
+            encryptionAuthTag: encryptionData.encryptionAuthTag
           }
         });
         return created.id;
@@ -794,48 +1077,87 @@ export class TranslationService extends EventEmitter {
   }
 
 
+  /**
+   * Get a translation from cache or database
+   * SECURITY: Automatically decrypts encrypted translations
+   */
   async getTranslation(messageId: string, targetLanguage: string, sourceLanguage?: string): Promise<TranslationResult | null> {
     try {
       // Vérifier d'abord le cache mémoire
-      const cacheKey = sourceLanguage 
+      const cacheKey = sourceLanguage
         ? `${messageId}_${sourceLanguage}_${targetLanguage}`
         : `${messageId}_${targetLanguage}`;
       const cachedResult = this.memoryCache.get(cacheKey);
-      
+
       if (cachedResult) {
         return cachedResult;
       }
-      
+
       // Si pas en cache, chercher dans la base de données
-      
+      // Include message relation to get sourceLanguage
       const dbTranslation = await this.prisma.messageTranslation.findFirst({
         where: {
           messageId: messageId,
           targetLanguage: targetLanguage
+        },
+        include: {
+          message: {
+            select: { originalLanguage: true }
+          }
         }
       });
-      
+
       if (dbTranslation) {
+        // SECURITY: Decrypt translation if encrypted
+        let translatedText = dbTranslation.translatedContent;
+
+        if (dbTranslation.isEncrypted &&
+            dbTranslation.encryptionKeyId &&
+            dbTranslation.encryptionIv &&
+            dbTranslation.encryptionAuthTag) {
+          try {
+            translatedText = await this._decryptTranslation(
+              dbTranslation.translatedContent,
+              dbTranslation.encryptionKeyId,
+              dbTranslation.encryptionIv,
+              dbTranslation.encryptionAuthTag
+            );
+            logger.debug('Translation decrypted successfully', {
+              messageId,
+              targetLanguage
+            });
+          } catch (decryptError) {
+            logger.error('Failed to decrypt translation, returning encrypted content', {
+              messageId,
+              targetLanguage,
+              error: decryptError
+            });
+            // Return null if decryption fails for security
+            return null;
+          }
+        }
+
         // Convertir la traduction de la base en format TranslationResult
+        // sourceLanguage is derived from message.originalLanguage
         const result: TranslationResult = {
           messageId: dbTranslation.messageId,
-          sourceLanguage: dbTranslation.sourceLanguage,
+          sourceLanguage: dbTranslation.message.originalLanguage,
           targetLanguage: dbTranslation.targetLanguage,
-          translatedText: dbTranslation.translatedContent,
+          translatedText: translatedText,
           translatorModel: dbTranslation.translationModel,
           confidenceScore: dbTranslation.confidenceScore || 0.9,
           processingTime: 0, // Pas disponible depuis la base
           modelType: dbTranslation.translationModel || 'basic'
         };
-        
+
         // Mettre en cache pour les prochaines requêtes
         this._addToCache(cacheKey, result);
-        
+
         return result;
       }
-      
+
       return null;
-      
+
     } catch (error) {
       console.error(`❌ Erreur récupération traduction: ${error}`);
       return null;
