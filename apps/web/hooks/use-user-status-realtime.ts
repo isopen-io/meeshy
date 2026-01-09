@@ -38,8 +38,7 @@ export function useUserStatusRealtime() {
       // IMPORTANT: Ne jamais mettre lastActiveAt à undefined, toujours garder la valeur reçue
       updateUserStatus(event.userId, {
         isOnline: event.isOnline,
-        lastActiveAt: event.lastActiveAt ? new Date(event.lastActiveAt) : undefined,
-        lastSeen: event.lastSeen ? new Date(event.lastSeen) : undefined
+        lastActiveAt: event.lastActiveAt ? new Date(event.lastActiveAt) : undefined
       });
     });
 

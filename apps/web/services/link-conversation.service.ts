@@ -88,7 +88,7 @@ export interface LinkConversationData {
       displayName: string;
       avatar: string;
       isOnline: boolean;
-      lastSeen: string;
+      lastActiveAt: string;
     };
   }>;
   anonymousParticipants: Array<{

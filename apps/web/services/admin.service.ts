@@ -78,7 +78,6 @@ export interface AnonymousUser {
   isOnline: boolean;
   lastActiveAt: Date;
   joinedAt: Date;
-  lastSeenAt: Date;
   leftAt?: Date;
   canSendMessages: boolean;
   canSendFiles: boolean;

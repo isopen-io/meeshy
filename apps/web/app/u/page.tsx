@@ -114,8 +114,8 @@ function ProfilePageContent() {
 
   if (isLoading) {
     return (
-      <DashboardLayout title={t('title')}>
-        <div className="max-w-4xl mx-auto">
+      <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        <div className="w-full px-4 md:px-8">
           <div className="animate-pulse">
             <div className="h-48 bg-gray-200 rounded-lg mb-6"></div>
             <div className="space-y-4">
@@ -134,8 +134,8 @@ function ProfilePageContent() {
   }
 
   return (
-    <DashboardLayout title={t('title')}>
-      <div className="max-w-4xl mx-auto space-y-6">
+    <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+      <div className="w-full px-4 md:px-8 space-y-6">
         {/* Header du profil */}
         <Card>
           <CardContent className="p-6">
