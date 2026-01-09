@@ -9,17 +9,32 @@ import { ISignalProtocolAdapter } from '../../adapters/LibraryAdapters';
 import { SignalKeyManager } from '../SignalKeyManager';
 import { X3DHKeyAgreement } from '../X3DHKeyAgreement';
 import { DoubleRatchet } from '../DoubleRatchet';
+import { PrismaClient } from '../../../../shared/prisma/client';
 import * as crypto from 'crypto';
 
 export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   private keyManager: SignalKeyManager;
   private x3dh: X3DHKeyAgreement;
   private doubleRatchet: DoubleRatchet;
+  private prisma: PrismaClient;
 
-  constructor() {
-    this.keyManager = new SignalKeyManager();
+  /**
+   * Create a Signal Protocol adapter
+   * @param prisma - PrismaClient for database operations
+   * @param masterKey - Optional master encryption key for key storage
+   */
+  constructor(prisma: PrismaClient, masterKey?: Buffer) {
+    this.prisma = prisma;
+    this.keyManager = new SignalKeyManager(prisma, masterKey);
     this.x3dh = new X3DHKeyAgreement();
     this.doubleRatchet = new DoubleRatchet();
+  }
+
+  /**
+   * Set the user ID for this adapter's key manager
+   */
+  setUserId(userId: string): void {
+    this.keyManager.setUserId(userId);
   }
 
   async generateIdentityKeyPair(): Promise<{ publicKey: Buffer; privateKey: Buffer }> {

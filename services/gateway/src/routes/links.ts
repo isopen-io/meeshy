@@ -270,8 +270,10 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        available: !existingLink,
-        identifier
+        data: {
+          available: !existingLink,
+          identifier
+        }
       });
     } catch (error) {
       console.error('[LINKS] Error checking identifier availability:', error);
@@ -849,8 +851,6 @@ export async function linksRoutes(fastify: FastifyInstance) {
               targetLanguage: true,
               translatedContent: true,
               translationModel: true,
-              sourceLanguage: true,
-              cacheKey: true,
               confidenceScore: true,
               createdAt: true
             }
@@ -860,7 +860,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
       // Compter le total de messages
       const totalMessages = await fastify.prisma.message.count({
-        where: { 
+        where: {
           conversationId: shareLink.conversationId,
           isDeleted: false
         }
@@ -1204,7 +1204,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
                   id: true,
                   emoji: true,
                   userId: true,
-                  anonymousUserId: true,
+                  anonymousId: true,
                   createdAt: true
                 }
               }
@@ -1221,7 +1221,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
               id: true,
               emoji: true,
               userId: true,
-              anonymousUserId: true,
+              anonymousId: true,
               createdAt: true
             }
           },
@@ -1231,8 +1231,6 @@ export async function linksRoutes(fastify: FastifyInstance) {
               targetLanguage: true,
               translatedContent: true,
               translationModel: true,
-              sourceLanguage: true,
-              cacheKey: true,
               confidenceScore: true,
               createdAt: true
             }
@@ -1242,7 +1240,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
       // Compter le total de messages
       const totalMessages = await fastify.prisma.message.count({
-        where: { 
+        where: {
           conversationId: shareLink.conversationId,
           isDeleted: false
         }
@@ -2287,7 +2285,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Lien supprimé avec succès'
+        data: { message: 'Lien supprimé avec succès' }
       });
 
     } catch (error) {

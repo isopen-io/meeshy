@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { NotificationList } from './NotificationList';
-import { useNotificationsManager } from '@/hooks/use-notifications-v2';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import type { NotificationBellProps } from '@/types/notification-v2';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -39,7 +39,7 @@ export function NotificationBell({
     hasMore,
     fetchMore,
     markAllAsRead
-  } = useNotificationsManager();
+  } = useNotificationsManagerRQ();
 
   const displayCount = count ?? unreadCount;
 

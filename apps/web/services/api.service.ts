@@ -1,22 +1,11 @@
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
+import type { ApiResponse, ApiError } from '@meeshy/shared/types';
 
 interface ApiConfig {
   timeout: number;
   headers: Record<string, string>;
-}
-
-interface ApiResponse<T> {
-  data: T;
-  status: number;
-  message?: string;
-}
-
-interface ApiError {
-  message: string;
-  status: number;
-  code?: string;
 }
 
 class ApiServiceError extends Error {
@@ -200,9 +189,10 @@ class ApiService {
         );
       }
 
+      // Return shared ApiResponse format
       return {
+        success: true,
         data,
-        status: response.status,
         message: data.message,
       };
     } catch (error) {
@@ -404,3 +394,6 @@ class ApiService {
 export const apiService = new ApiService();
 export { ApiService, ApiServiceError };
 export type { ApiResponse, ApiError, ApiConfig };
+
+// Re-export shared types for convenience
+export type { PaginationMeta } from '@meeshy/shared/types';

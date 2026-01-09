@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
 
-// ===== SCHÉMAS DE VALIDATION =====
+// ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
   text: z.string().min(1).max(1000).optional(),
   source_language: z.string().min(2).max(5).optional(),
@@ -28,14 +28,14 @@ interface TranslateRequest {
 
 // ===== ROUTE NON-BLOQUANTE =====
 export async function translationRoutes(fastify: FastifyInstance, options: any) {
-  // Récupérer les services depuis l'instance fastify (comme dans translation.ts)
+  // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = (fastify as any).translationService;
   const messagingService = (fastify as any).messagingService;
-  
+
   if (!translationService) {
     throw new Error('TranslationService not provided to translation routes');
   }
-  
+
   if (!messagingService) {
     throw new Error('MessagingService not provided to translation routes');
   }
@@ -45,12 +45,12 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
   fastify.post<{ Body: TranslateRequest }>('/translate', async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
       const validatedData = TranslateRequestSchema.parse(request.body);
-      
+
 
       // ===== CAS 1: RETRADUCTION D'UN MESSAGE EXISTANT =====
       if (validatedData.message_id) {
-        
-        // Récupérer le message depuis la base de données
+
+        // Recuperer le message depuis la base de donnees
         const existingMessage = await fastify.prisma.message.findUnique({
           where: { id: validatedData.message_id },
           include: {
@@ -68,7 +68,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         }
 
 
-        // Préparer les données de traduction
+        // Preparer les donnees de traduction
         const messageData = {
           id: validatedData.message_id,
           conversationId: existingMessage.conversationId,
@@ -79,24 +79,26 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         };
 
 
-        // DÉCLENCHEMENT NON-BLOQUANT - pas d'await !
+        // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         translationService.handleNewMessage(messageData).catch((error: any) => {
           logger.error(`[Translation] Async retranslation error: ${error.message}`);
         });
 
-        // RÉPONSE IMMÉDIATE - pas d'attente
+        // REPONSE IMMEDIATE - pas d'attente
         return reply.send({
           success: true,
-          message: 'Translation request submitted successfully',
-          messageId: validatedData.message_id,
-          targetLanguage: validatedData.target_language,
-          status: 'processing'
+          data: {
+            message: 'Translation request submitted successfully',
+            messageId: validatedData.message_id,
+            targetLanguage: validatedData.target_language,
+            status: 'processing'
+          }
         });
       }
 
       // ===== CAS 2: NOUVEAU MESSAGE =====
       else {
-        
+
         if (!validatedData.conversation_id) {
           return reply.status(400).send({
             success: false,
@@ -104,40 +106,40 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           });
         }
 
-        // Résoudre l'ID de conversation réel
+        // Resoudre l'ID de conversation reel
         let resolvedConversationId = validatedData.conversation_id;
-        
+
         // Si ce n'est pas un ObjectId MongoDB, chercher par identifier
         if (!/^[0-9a-fA-F]{24}$/.test(validatedData.conversation_id)) {
           const conversation = await fastify.prisma.conversation.findFirst({
             where: { identifier: validatedData.conversation_id }
           });
-          
+
           if (!conversation) {
             return reply.status(404).send({
               success: false,
               error: `Conversation with identifier '${validatedData.conversation_id}' not found`
             });
           }
-          
+
           resolvedConversationId = conversation.id;
         }
 
-        // Utiliser le MessagingService pour sauvegarder le message (même pipeline que WebSocket)
+        // Utiliser le MessagingService pour sauvegarder le message (meme pipeline que WebSocket)
         const messageRequest = {
           conversationId: resolvedConversationId,
           content: validatedData.text,
           originalLanguage: validatedData.source_language || 'auto',
           messageType: 'text',
-          isAnonymous: false, // TODO: Détecter depuis l'auth
+          isAnonymous: false, // TODO: Detecter depuis l'auth
           anonymousDisplayName: undefined
         };
 
 
-        // DÉCLENCHEMENT NON-BLOQUANT - pas d'await !
+        // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system', // TODO: Récupérer l'ID utilisateur depuis l'auth
+          'system', // TODO: Recuperer l'ID utilisateur depuis l'auth
           true,
           undefined, // JWT token
           undefined  // Session token
@@ -145,13 +147,15 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
 
-        // RÉPONSE IMMÉDIATE - pas d'attente
+        // REPONSE IMMEDIATE - pas d'attente
         return reply.send({
           success: true,
-          message: 'New message submitted for processing',
-          conversationId: validatedData.conversation_id,
-          targetLanguage: validatedData.target_language,
-          status: 'processing'
+          data: {
+            message: 'New message submitted for processing',
+            conversationId: validatedData.conversation_id,
+            targetLanguage: validatedData.target_language,
+            status: 'processing'
+          }
         });
       }
 
@@ -176,23 +180,27 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
     }
   });
 
-  // ===== ROUTE UTILITAIRE POUR RÉCUPÉRER LE STATUT =====
+  // ===== ROUTE UTILITAIRE POUR RECUPERER LE STATUT =====
   fastify.get('/status/:messageId/:language', async (request: any, reply: FastifyReply) => {
     try {
       const { messageId, language } = request.params;
-      
+
       const result = await translationService.getTranslation(messageId, language);
-      
+
       if (result) {
         return reply.send({
           success: true,
-          status: 'completed',
-          translation: result
+          data: {
+            status: 'completed',
+            translation: result
+          }
         });
       } else {
         return reply.send({
           success: true,
-          status: 'processing'
+          data: {
+            status: 'processing'
+          }
         });
       }
     } catch (error) {
@@ -205,12 +213,12 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
     }
   });
 
-  // ===== ROUTE POUR RÉCUPÉRER UNE CONVERSATION PAR IDENTIFIANT =====
+  // ===== ROUTE POUR RECUPERER UNE CONVERSATION PAR IDENTIFIANT =====
   fastify.get<{ Params: { identifier: string } }>('/conversation/:identifier', async (request: FastifyRequest<{ Params: { identifier: string } }>, reply: FastifyReply) => {
     try {
       const { identifier } = request.params;
-      
-      
+
+
       // Chercher la conversation par identifiant
       const conversation = await fastify.prisma.conversation.findFirst({
         where: { identifier: identifier },
@@ -229,7 +237,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           }
         }
       });
-      
+
       if (!conversation) {
         return reply.status(404).send({
           success: false,
@@ -251,7 +259,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           memberCount: conversation._count.members
         }
       });
-      
+
     } catch (error) {
       logError(logger, '[Translation] Conversation retrieval error:', error);
       return reply.status(500).send({

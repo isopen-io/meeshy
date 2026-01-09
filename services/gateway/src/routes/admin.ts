@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
-// Types pour les rôles et permissions
+// Types pour les roles et permissions
 type UserRole = UserRoleEnum;
 
 interface UserPermissions {
@@ -18,7 +18,7 @@ interface UserPermissions {
   canManageTranslations: boolean;
 }
 
-// Schémas de validation
+// Schemas de validation
 const updateUserRoleSchema = z.object({
   role: z.nativeEnum(UserRoleEnum)
 });
@@ -125,7 +125,7 @@ const permissionsService = new PermissionsService();
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  // Utiliser le nouveau système d'authentification unifié
+  // Utiliser le nouveau systeme d'authentification unifie
   const authContext = (request as any).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
@@ -138,10 +138,29 @@ const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   if (!permissions.canAccessAdmin) {
     return reply.status(403).send({
       success: false,
-      message: 'Accès administrateur requis'
+      message: 'Acces administrateur requis'
     });
   }
 };
+
+/**
+ * Validate and sanitize pagination parameters
+ * @param offset - Raw offset string from query
+ * @param limit - Raw limit string from query
+ * @param defaultLimit - Default limit if not provided (default: 20)
+ * @param maxLimit - Maximum allowed limit (default: 100)
+ * @returns Validated offset and limit numbers
+ */
+function validatePagination(
+  offset: string = '0',
+  limit: string = '20',
+  defaultLimit: number = 20,
+  maxLimit: number = 100
+): { offsetNum: number; limitNum: number } {
+  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
+  return { offsetNum, limitNum };
+}
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Tableau de bord administrateur
@@ -152,7 +171,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       const authContext = (request as any).authContext;
       const user = authContext.registeredUser;
 
-      // Statistiques générales - Toutes les métriques demandées
+      // Statistiques generales - Toutes les metriques demandees
       const [
         totalUsers,
         activeUsers,
@@ -184,11 +203,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
         fastify.prisma.conversationShareLink.count(),
         fastify.prisma.conversationShareLink.count({ where: { isActive: true } }),
         fastify.prisma.messageTranslation.count(),
-        // Signalements réels depuis la table Report
+        // Signalements reels depuis la table Report
         fastify.prisma.report.count(),
-        // Pour les invitations, on utilise les demandes d'amitié comme proxy
+        // Pour les invitations, on utilise les demandes d'amitie comme proxy
         fastify.prisma.friendRequest.count({ where: { status: 'pending' } }),
-        // Statistiques des langues les plus utilisées
+        // Statistiques des langues les plus utilisees
         fastify.prisma.message.groupBy({
           by: ['originalLanguage'],
           where: { isDeleted: false },
@@ -201,7 +220,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       // Permissions de l'utilisateur admin
       const userPermissions = permissionsService.getUserPermissions(user.role);
 
-      // Statistiques d'activité récente (7 derniers jours)
+      // Statistiques d'activite recente (7 derniers jours)
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -220,7 +239,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         })
       ]);
 
-      // Statistiques par rôle
+      // Statistiques par role
       const usersByRole = await fastify.prisma.user.groupBy({
         by: ['role'],
         _count: {
@@ -252,23 +271,23 @@ export async function adminRoutes(fastify: FastifyInstance) {
             inactiveAnonymousUsers: totalAnonymousUsers - activeAnonymousUsers,
             // 3. Messages
             totalMessages,
-            // 4. Communautés
+            // 4. Communautes
             totalCommunities,
             // 5. Traductions
             totalTranslations,
-            // 6. Liens créés pour conversations
+            // 6. Liens crees pour conversations
             totalShareLinks,
             activeShareLinks,
-            // 7. Signalements (proxy avec messages supprimés)
+            // 7. Signalements (proxy avec messages supprimes)
             totalReports,
-            // 8. Invitations à rejoindre communauté (proxy avec demandes d'amitié)
+            // 8. Invitations a rejoindre communaute (proxy avec demandes d'amitie)
             totalInvitations,
-            // 9. Langues les plus utilisées
+            // 9. Langues les plus utilisees
             topLanguages: languagesStats.map(lang => ({
               language: lang.originalLanguage,
               count: lang._count.originalLanguage
             })),
-            // Métadonnées supplémentaires
+            // Metadonnees supplementaires
             usersByRole: usersByRole.reduce((acc, item) => {
               acc[item.role] = item._count.role;
               return acc;
@@ -310,18 +329,17 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canManageUsers) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les utilisateurs'
+          message: 'Permission insuffisante pour gerer les utilisateurs'
         });
       }
 
       const { offset = '0', limit = '20', search, role, status } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
 
       // Construire les filtres
       const where: any = {};
-      
+
       if (search) {
         where.OR = [
           { username: { contains: search, mode: 'insensitive' } },
@@ -359,7 +377,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             lastActiveAt: true,
             createdAt: true,
             updatedAt: true,
-            // Champs de sécurité et vérification
+            // Champs de securite et verification
             emailVerifiedAt: true,
             phoneVerifiedAt: true,
             twoFactorEnabledAt: true,
@@ -420,13 +438,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canManageUsers) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les utilisateurs'
+          message: 'Permission insuffisante pour gerer les utilisateurs'
         });
       }
 
       const { offset = '0', limit = '20', search, status } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};
@@ -516,7 +533,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Détails d'un utilisateur
+  // Details d'un utilisateur
   fastify.get('/users/:id', {
     onRequest: [fastify.authenticate, requireAdmin]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -552,7 +569,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!targetUser) {
         return reply.status(404).send({
           success: false,
-          message: 'Utilisateur non trouvé'
+          message: 'Utilisateur non trouve'
         });
       }
 
@@ -573,7 +590,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Modifier le rôle d'un utilisateur
+  // Modifier le role d'un utilisateur
   fastify.patch('/users/:id/role', {
     onRequest: [fastify.authenticate, requireAdmin]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -591,7 +608,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await fastify.prisma.user.findUnique({
         where: { id }
       });
@@ -599,26 +616,26 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!targetUser) {
         return reply.status(404).send({
           success: false,
-          message: 'Utilisateur non trouvé'
+          message: 'Utilisateur non trouve'
         });
       }
 
-      // Vérifier si l'admin peut modifier ce rôle
+      // Verifier si l'admin peut modifier ce role
       if (!permissionsService.canManageUser(user.role, targetUser.role as UserRole)) {
         return reply.status(403).send({
           success: false,
-          message: 'Vous ne pouvez pas modifier le rôle de cet utilisateur'
+          message: 'Vous ne pouvez pas modifier le role de cet utilisateur'
         });
       }
 
       if (!permissionsService.canManageUser(user.role, body.role)) {
         return reply.status(403).send({
           success: false,
-          message: 'Vous ne pouvez pas attribuer ce rôle'
+          message: 'Vous ne pouvez pas attribuer ce role'
         });
       }
 
-      // Mettre à jour le rôle
+      // Mettre a jour le role
       const updatedUser = await fastify.prisma.user.update({
         where: { id },
         data: { role: body.role },
@@ -635,14 +652,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: updatedUser,
-        message: `Rôle mis à jour vers ${body.role}`
+        message: `Role mis a jour vers ${body.role}`
       });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -655,7 +672,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Activer/désactiver un utilisateur
+  // Activer/desactiver un utilisateur
   fastify.patch('/users/:id/status', {
     onRequest: [fastify.authenticate, requireAdmin]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -673,7 +690,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Récupérer l'utilisateur cible
+      // Recuperer l'utilisateur cible
       const targetUser = await fastify.prisma.user.findUnique({
         where: { id }
       });
@@ -681,11 +698,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!targetUser) {
         return reply.status(404).send({
           success: false,
-          message: 'Utilisateur non trouvé'
+          message: 'Utilisateur non trouve'
         });
       }
 
-      // Vérifier les permissions
+      // Verifier les permissions
       if (!permissionsService.canManageUser(user.role, targetUser.role as UserRole)) {
         return reply.status(403).send({
           success: false,
@@ -693,7 +710,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Mettre à jour le statut
+      // Mettre a jour le statut
       const updatedUser = await fastify.prisma.user.update({
         where: { id },
         data: {
@@ -714,14 +731,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: updatedUser,
-        message: body.isActive ? 'Utilisateur activé' : 'Utilisateur désactivé'
+        message: body.isActive ? 'Utilisateur active' : 'Utilisateur desactive'
       });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -746,13 +763,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canModerateContent) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les messages'
+          message: 'Permission insuffisante pour gerer les messages'
         });
       }
 
       const { offset = '0', limit = '20', search, type, period } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = { isDeleted: false };
@@ -765,7 +781,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         where.messageType = type;
       }
 
-      // Filtre par période
+      // Filtre par periode
       if (period) {
         const now = new Date();
         let startDate = new Date();
@@ -878,7 +894,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Gestion des communautés - Liste avec pagination
+  // Gestion des communautes - Liste avec pagination
   fastify.get('/communities', {
     onRequest: [fastify.authenticate, requireAdmin]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -890,13 +906,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canManageCommunities) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les communautés'
+          message: 'Permission insuffisante pour gerer les communautes'
         });
       }
 
       const { offset = '0', limit = '20', search, isPrivate } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};
@@ -966,6 +981,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
+
   // Gestion des traductions - Liste avec pagination
   fastify.get('/translations', {
     onRequest: [fastify.authenticate, requireAdmin]
@@ -978,26 +994,28 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canManageTranslations) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les traductions'
+          message: 'Permission insuffisante pour gerer les traductions'
         });
       }
 
       const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
+      // Note: sourceLanguage is derived from message.originalLanguage, so we filter via message relation
       const where: any = {};
 
       if (sourceLanguage) {
-        where.sourceLanguage = sourceLanguage;
+        where.message = {
+          originalLanguage: sourceLanguage
+        };
       }
 
       if (targetLanguage) {
         where.targetLanguage = targetLanguage;
       }
 
-      // Filtre par période
+      // Filtre par periode
       if (period) {
         const now = new Date();
         let startDate = new Date();
@@ -1020,14 +1038,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       const [translations, totalCount] = await Promise.all([
         fastify.prisma.messageTranslation.findMany({
           where,
-          select: {
-            id: true,
-            sourceLanguage: true,
-            targetLanguage: true,
-            translatedContent: true,
-            translationModel: true,
-            confidenceScore: true,
-            createdAt: true,
+          include: {
             message: {
               select: {
                 id: true,
@@ -1060,12 +1071,21 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: translations.map(translation => ({
-          ...translation,
-          message: {
-            ...translation.message,
-            // S'assurer que le content est toujours le contenu original
-            originalContent: translation.message.content
-          }
+          id: translation.id,
+          sourceLanguage: translation.message?.originalLanguage || null,
+          targetLanguage: translation.targetLanguage,
+          translatedContent: translation.translatedContent,
+          translationModel: translation.translationModel,
+          confidenceScore: translation.confidenceScore,
+          createdAt: translation.createdAt,
+          message: translation.message ? {
+            id: translation.message.id,
+            content: translation.message.content,
+            originalLanguage: translation.message.originalLanguage,
+            originalContent: translation.message.content,
+            sender: translation.message.sender,
+            conversation: translation.message.conversation
+          } : null
         })),
         pagination: {
           total: totalCount,
@@ -1084,6 +1104,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
+
   // Gestion des liens de partage - Liste avec pagination
   fastify.get('/share-links', {
     onRequest: [fastify.authenticate, requireAdmin]
@@ -1096,13 +1117,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
       if (!permissions.canManageConversations) {
         return reply.status(403).send({
           success: false,
-          message: 'Permission insuffisante pour gérer les liens de partage'
+          message: 'Permission insuffisante pour gerer les liens de partage'
         });
       }
 
       const { offset = '0', limit = '20', search, isActive } = request.query as any;
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = parseInt(limit, 10);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};
@@ -1187,7 +1207,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Statistiques avancées
+  // Statistiques avancees
   fastify.get('/analytics', {
     onRequest: [fastify.authenticate, requireAdmin]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -1205,10 +1225,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       const { period = '7d' } = request.query as any;
 
-      // Calculer la période
+      // Calculer la periode
       const now = new Date();
       let startDate = new Date();
-      
+
       switch (period) {
         case '24h':
           startDate.setHours(startDate.getHours() - 24);
@@ -1226,7 +1246,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
           startDate.setDate(startDate.getDate() - 7);
       }
 
-      // Statistiques d'activité
+      // Statistiques d'activite
       const [
         userActivity,
         messageActivity,
@@ -1234,7 +1254,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         usersByRole,
         topActiveUsers
       ] = await Promise.all([
-        // Nouveaux utilisateurs par période
+        // Nouveaux utilisateurs par periode
         fastify.prisma.user.groupBy({
           by: ['createdAt'],
           where: {
@@ -1242,8 +1262,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
           },
           _count: { id: true }
         }),
-        
-        // Messages par période
+
+        // Messages par periode
         fastify.prisma.message.groupBy({
           by: ['createdAt'],
           where: {
@@ -1252,8 +1272,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
           },
           _count: { id: true }
         }),
-        
-        // Nouvelles conversations par période
+
+        // Nouvelles conversations par periode
         fastify.prisma.conversation.groupBy({
           by: ['createdAt'],
           where: {
@@ -1262,7 +1282,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
           _count: { id: true }
         }),
 
-        // Répartition par rôle
+        // Repartition par role
         fastify.prisma.user.groupBy({
           by: ['role'],
           _count: { id: true }
@@ -1330,12 +1350,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       const {
         entityType = 'users',  // 'users' | 'conversations' | 'messages' | 'links'
-        criterion = 'messages_sent',  // critère de classement
+        criterion = 'messages_sent',  // critere de classement
         period = '7d',  // '1d' | '7d' | '30d' | '60d' | '90d' | '180d' | '365d' | 'all'
-        limit = 50
+        limit = '50'
       } = request.query as any;
 
-      // Calculer la période
+      // Validate and cap the limit
+      const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+
+      // Calculer la periode
       const now = new Date();
       let startDate: Date | undefined = new Date();
 
@@ -1402,7 +1425,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }))
               .filter(u => u.count > 0)
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'reactions_given':
@@ -1427,7 +1450,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1437,7 +1460,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'mentions_received':
-            // Compter les mentions reçues par les utilisateurs
+            // Compter les mentions recues par les utilisateurs
             // IMPORTANT: Prisma ne supporte pas where dans _count.select
             // On doit charger les mentions et compter manuellement
             const usersWithMentions = await fastify.prisma.user.findMany({
@@ -1467,7 +1490,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }))
               .filter(u => u.count > 0)
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'conversations_joined':
@@ -1501,7 +1524,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }))
               .filter(u => u.count > 0)
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'communities_created':
@@ -1526,7 +1549,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1557,7 +1580,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1567,7 +1590,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'reactions_received':
-            // Compter les réactions reçues sur les messages de l'utilisateur
+            // Compter les reactions recues sur les messages de l'utilisateur
             const usersWithReactionsReceived = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1602,11 +1625,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 count: u.sentMessages.reduce((sum, msg) => sum + msg._count.reactions, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'replies_received':
-            // Compter les réponses reçues aux messages de l'utilisateur
+            // Compter les reponses recues aux messages de l'utilisateur
             const usersWithRepliesReceived = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1642,11 +1665,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 count: u.sentMessages.reduce((sum, msg) => sum + msg._count.replies, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'mentions_sent':
-            // Compter les mentions envoyées (dans les messages de l'utilisateur)
+            // Compter les mentions envoyees (dans les messages de l'utilisateur)
             // IMPORTANT: Prisma ne supporte pas where dans _count.select
             // On doit charger les mentions et compter manuellement
             const usersWithMentionsSent = await fastify.prisma.user.findMany({
@@ -1683,11 +1706,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }))
               .filter(u => u.count > 0)
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'reports_sent':
-            // Compter les signalements envoyés par les utilisateurs
+            // Compter les signalements envoyes par les utilisateurs
             const usersWithReportsSent = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1697,7 +1720,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }
             });
 
-            // Pour chaque utilisateur, compter les reports créés
+            // Pour chaque utilisateur, compter les reports crees
             const reportsSentCount = await Promise.all(
               usersWithReportsSent.map(async (u) => {
                 const reportCount = await fastify.prisma.report.count({
@@ -1718,11 +1741,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
             rankings = reportsSentCount
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'reports_received':
-            // Compter les signalements reçus (sur les messages de l'utilisateur)
+            // Compter les signalements recus (sur les messages de l'utilisateur)
             const usersWithReportsReceived = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1763,7 +1786,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
             rankings = reportsCount
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'friend_requests_sent':
@@ -1788,7 +1811,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1819,7 +1842,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1850,7 +1873,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1881,7 +1904,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1891,7 +1914,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'files_shared':
-            // Compter les fichiers partagés (attachments dans les messages de l'utilisateur)
+            // Compter les fichiers partages (attachments dans les messages de l'utilisateur)
             const usersWithFilesShared = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1926,11 +1949,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 count: u.sentMessages.reduce((sum, msg) => sum + msg._count.attachments, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'most_referrals_via_affiliate':
-            // Utilisateurs qui ont ramené le plus de membres via affiliation
+            // Utilisateurs qui ont ramene le plus de membres via affiliation
             rankings = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1952,7 +1975,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -1962,7 +1985,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'most_referrals_via_sharelinks':
-            // Utilisateurs qui ont ramené le plus de membres via liens de partage
+            // Utilisateurs qui ont ramene le plus de membres via liens de partage
             const usersWithShareLinkReferrals = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -1986,11 +2009,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 count: u.createdShareLinks.reduce((sum, link) => sum + link.currentUniqueSessions, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'most_contacts':
-            // Utilisateurs avec le plus de contacts (demandes d'amitié acceptées)
+            // Utilisateurs avec le plus de contacts (demandes d'amitie acceptees)
             const usersWithContacts = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -2030,11 +2053,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 ].length
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'most_tracking_links_created':
-            // Utilisateurs avec le plus de liens trackés créés
+            // Utilisateurs avec le plus de liens trackes crees
             rankings = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -2056,7 +2079,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(u => ({
               ...u,
@@ -2066,7 +2089,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'most_tracking_link_clicks':
-            // Utilisateurs dont les liens trackés sont les plus visités
+            // Utilisateurs dont les liens trackes sont les plus visites
             const usersWithTrackingLinks = await fastify.prisma.user.findMany({
               select: {
                 id: true,
@@ -2093,13 +2116,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 count: u.createdTrackingLinks.reduce((sum, link) => sum + link.totalClicks, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           default:
             return reply.status(400).send({
               success: false,
-              message: 'Critère de classement invalide pour les utilisateurs'
+              message: 'Critere de classement invalide pour les utilisateurs'
             });
         }
       }
@@ -2114,7 +2137,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 _count: {
                   select: {
                     messages: {
@@ -2135,7 +2158,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(c => ({
               ...c,
@@ -2152,7 +2175,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 _count: {
                   select: {
                     members: {
@@ -2172,7 +2195,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(c => ({
               ...c,
@@ -2182,7 +2205,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'reaction_count':
-            // Pour les réactions, on doit compter via les messages de la conversation
+            // Pour les reactions, on doit compter via les messages de la conversation
             const conversationsWithReactions = await fastify.prisma.conversation.findMany({
               select: {
                 id: true,
@@ -2190,7 +2213,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 messages: {
                   select: {
                     _count: {
@@ -2218,11 +2241,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: c.title,
                 type: c.type,
                 avatar: c.avatar,
-                image: c.image,
+                banner: c.banner,
                 count: c.messages.reduce((sum, m) => sum + m._count.reactions, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'recent_activity':
@@ -2233,7 +2256,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 lastMessageAt: true
               },
               where: {
@@ -2244,7 +2267,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               orderBy: {
                 lastMessageAt: 'desc'
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(c => ({
               ...c,
@@ -2253,7 +2276,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'files_shared':
-            // Conversations avec le plus de fichiers partagés
+            // Conversations avec le plus de fichiers partages
             const conversationsWithFiles = await fastify.prisma.conversation.findMany({
               select: {
                 id: true,
@@ -2261,7 +2284,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 messages: {
                   select: {
                     _count: {
@@ -2292,11 +2315,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: c.title,
                 type: c.type,
                 avatar: c.avatar,
-                image: c.image,
+                banner: c.banner,
                 count: c.messages.reduce((sum, m) => sum + m._count.attachments, 0)
               }))
               .sort((a, b) => b.count - a.count)
-              .slice(0, parseInt(limit));
+              .slice(0, limitNum);
             break;
 
           case 'call_count':
@@ -2307,7 +2330,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                 title: true,
                 type: true,
                 avatar: true,
-                image: true,
+                banner: true,
                 _count: {
                   select: {
                     callSessions: {
@@ -2327,7 +2350,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(c => ({
               ...c,
@@ -2339,7 +2362,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
           default:
             return reply.status(400).send({
               success: false,
-              message: 'Critère de classement invalide pour les conversations'
+              message: 'Critere de classement invalide pour les conversations'
             });
         }
       }
@@ -2347,7 +2370,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       else if (entityType === 'messages') {
         switch (criterion) {
           case 'most_reactions':
-            // Messages avec le plus de réactions
+            // Messages avec le plus de reactions
             rankings = await fastify.prisma.message.findMany({
               select: {
                 id: true,
@@ -2394,7 +2417,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(m => ({
               ...m,
@@ -2406,7 +2429,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'most_replies':
-            // Messages les plus répondus
+            // Messages les plus repondus
             rankings = await fastify.prisma.message.findMany({
               select: {
                 id: true,
@@ -2454,7 +2477,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(m => ({
               ...m,
@@ -2513,7 +2536,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   _count: 'desc'
                 }
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(m => ({
               ...m,
@@ -2527,7 +2550,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
           default:
             return reply.status(400).send({
               success: false,
-              message: 'Critère de classement invalide pour les messages'
+              message: 'Critere de classement invalide pour les messages'
             });
         }
       }
@@ -2535,7 +2558,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       else if (entityType === 'links') {
         switch (criterion) {
           case 'tracking_links_most_visited':
-            // Liens trackés les plus visités (totalClicks)
+            // Liens trackes les plus visites (totalClicks)
             rankings = await fastify.prisma.trackingLink.findMany({
               select: {
                 id: true,
@@ -2560,7 +2583,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               orderBy: {
                 totalClicks: 'desc'
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(l => ({
               ...l,
@@ -2574,7 +2597,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'tracking_links_most_unique':
-            // Liens trackés les plus visités (uniqueClicks)
+            // Liens trackes les plus visites (uniqueClicks)
             rankings = await fastify.prisma.trackingLink.findMany({
               select: {
                 id: true,
@@ -2599,7 +2622,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               orderBy: {
                 uniqueClicks: 'desc'
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(l => ({
               ...l,
@@ -2613,7 +2636,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'share_links_most_used':
-            // Liens de partage les plus utilisés (currentUses)
+            // Liens de partage les plus utilises (currentUses)
             rankings = await fastify.prisma.conversationShareLink.findMany({
               select: {
                 id: true,
@@ -2647,7 +2670,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               orderBy: {
                 currentUses: 'desc'
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(l => ({
               ...l,
@@ -2657,7 +2680,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             break;
 
           case 'share_links_most_unique_sessions':
-            // Liens de partage les plus utilisés (currentUniqueSessions)
+            // Liens de partage les plus utilises (currentUniqueSessions)
             rankings = await fastify.prisma.conversationShareLink.findMany({
               select: {
                 id: true,
@@ -2691,7 +2714,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
               orderBy: {
                 currentUniqueSessions: 'desc'
               },
-              take: parseInt(limit)
+              take: limitNum
             });
             rankings = rankings.map(l => ({
               ...l,
@@ -2703,13 +2726,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
           default:
             return reply.status(400).send({
               success: false,
-              message: 'Critère de classement invalide pour les liens'
+              message: 'Critere de classement invalide pour les liens'
             });
         }
       } else {
         return reply.status(400).send({
           success: false,
-          message: 'Type d\'entité invalide. Utilisez "users", "conversations", "messages" ou "links"'
+          message: 'Type d\'entite invalide. Utilisez "users", "conversations", "messages" ou "links"'
         });
       }
 

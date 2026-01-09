@@ -1,26 +1,26 @@
 /**
- * Routes Communautés
+ * Routes Communautes
  *
- * Ce module regroupe les endpoints liés à la gestion des communautés.
- * Une communauté est un conteneur logique permettant de rassembler des membres,
- * d'organiser des permissions et d'agréger des conversations associées.
+ * Ce module regroupe les endpoints lies a la gestion des communautes.
+ * Une communaute est un conteneur logique permettant de rassembler des membres,
+ * d'organiser des permissions et d'agreger des conversations associees.
  *
- * Points clés:
- * - Les routes sont préfixées par `/communities`.
- * - Les conversations d'une communauté sont exposées via `GET /communities/:id/conversations`.
- * - Le schéma Prisma définit une relation Community → Conversation.
+ * Points cles:
+ * - Les routes sont prefixees par `/communities`.
+ * - Les conversations d'une communaute sont exposees via `GET /communities/:id/conversations`.
+ * - Le schema Prisma definit une relation Community -> Conversation.
  */
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-// Enum des rôles de communauté (aligné avec shared/types/community.ts)
+// Enum des roles de communaute (aligne avec shared/types/community.ts)
 enum CommunityRole {
   ADMIN = 'admin',
   MODERATOR = 'moderator',
   MEMBER = 'member'
 }
 
-// Schémas de validation
+// Schemas de validation
 const CreateCommunitySchema = z.object({
   name: z.string().min(1).max(100),
   identifier: z.string().regex(/^[a-zA-Z0-9\-_@]*$/, 'Identifier can only contain letters, numbers, hyphens, underscores, and @').optional(),
@@ -37,23 +37,23 @@ const UpdateCommunitySchema = z.object({
   isPrivate: z.boolean().optional()
 });
 
-// Fonction pour générer un identifier à partir du nom
+// Fonction pour generer un identifier a partir du nom
 function generateIdentifier(name: string, customIdentifier?: string): string {
   if (customIdentifier) {
-    // Si l'identifiant personnalisé commence déjà par mshy_, ne pas le rajouter
+    // Si l'identifiant personnalise commence deja par mshy_, ne pas le rajouter
     if (customIdentifier.startsWith('mshy_')) {
       return customIdentifier;
     }
     return `mshy_${customIdentifier}`;
   }
-  
+
   // Convertir le nom en identifier valide
   const baseIdentifier = name
     .toLowerCase()
-    .replace(/[^a-zA-Z0-9\-_@]/g, '-') // Remplacer les caractères invalides par des tirets
+    .replace(/[^a-zA-Z0-9\-_@]/g, '-') // Remplacer les caracteres invalides par des tirets
     .replace(/--+/g, '-') // Remplacer les tirets multiples par un seul
-    .replace(/^-|-$/g, ''); // Supprimer les tirets en début et fin
-  
+    .replace(/^-|-$/g, ''); // Supprimer les tirets en debut et fin
+
   return `mshy_${baseIdentifier}`;
 }
 
@@ -67,25 +67,46 @@ const UpdateMemberRoleSchema = z.object({
 });
 
 /**
- * Enregistre les routes de gestion des communautés.
- * @param fastify Instance Fastify injectée par le serveur
+ * Validate and sanitize pagination parameters
+ * @param offset - Raw offset string from query
+ * @param limit - Raw limit string from query
+ * @param defaultLimit - Default limit if not provided (default: 20)
+ * @param maxLimit - Maximum allowed limit (default: 100)
+ * @returns Validated offset and limit numbers
+ */
+function validatePagination(
+  offset: string = '0',
+  limit: string = '20',
+  defaultLimit: number = 20,
+  maxLimit: number = 100
+): { offsetNum: number; limitNum: number } {
+  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
+  return { offsetNum, limitNum };
+}
+
+/**
+ * Enregistre les routes de gestion des communautes.
+ * @param fastify Instance Fastify injectee par le serveur
  */
 export async function communityRoutes(fastify: FastifyInstance) {
-  
-  // Route pour vérifier la disponibilité d'un identifiant de communauté
+
+  // Route pour verifier la disponibilite d'un identifiant de communaute
   fastify.get('/communities/check-identifier/:identifier', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { identifier } = request.params as { identifier: string };
-      
-      // Vérifier si l'identifiant existe déjà
+
+      // Verifier si l'identifiant existe deja
       const existingCommunity = await fastify.prisma.community.findUnique({
         where: { identifier }
       });
-      
+
       return reply.send({
         success: true,
-        available: !existingCommunity,
-        identifier
+        data: {
+          available: !existingCommunity,
+          identifier
+        }
       });
     } catch (error) {
       console.error('[COMMUNITIES] Error checking identifier availability:', error);
@@ -96,24 +117,22 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour obtenir toutes les communautés de l'utilisateur connecté
+  // Route pour obtenir toutes les communautes de l'utilisateur connecte
   fastify.get('/communities', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
       const { search, offset = '0', limit = '20' } = request.query as { search?: string; offset?: string; limit?: string };
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Build where clause with optional search
       const whereClause: any = {
@@ -193,7 +212,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour rechercher des communautés PUBLIQUES accessibles à tous
+  // Route pour rechercher des communautes PUBLIQUES accessibles a tous
   fastify.get('/communities/search', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
@@ -202,8 +221,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         return reply.send({ success: true, data: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } });
       }
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Build where clause for public communities
       const whereClause = {
@@ -270,7 +288,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      // Transformer les données pour le frontend
+      // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
         id: community.id,
         name: community.name,
@@ -304,24 +322,23 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour obtenir une communauté par ID ou identifier
+  // Route pour obtenir une communaute par ID ou identifier
   fastify.get('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Chercher d'abord par ID, puis par identifier si pas trouvé
+
+      // Chercher d'abord par ID, puis par identifier si pas trouve
       let community = await fastify.prisma.community.findFirst({
         where: { id },
         include: {
@@ -354,8 +371,8 @@ export async function communityRoutes(fastify: FastifyInstance) {
           }
         }
       });
-      
-      // Si pas trouvé par ID, essayer par identifier
+
+      // Si pas trouve par ID, essayer par identifier
       if (!community) {
         community = await fastify.prisma.community.findFirst({
           where: { identifier: id },
@@ -398,10 +415,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier l'accès (créateur ou membre)
-      const hasAccess = community.createdBy === userId || 
+      // Verifier l'acces (createur ou membre)
+      const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
-      
+
       if (!hasAccess && community.isPrivate) {
         return reply.status(403).send({
           success: false,
@@ -422,40 +439,38 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour créer une nouvelle communauté
+  // Route pour creer une nouvelle communaute
   fastify.post('/communities', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const validatedData = CreateCommunitySchema.parse(request.body);
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Générer l'identifier
+
+      // Generer l'identifier
       const identifier = generateIdentifier(validatedData.name, validatedData.identifier);
-      
-      // Vérifier que l'identifier est unique
+
+      // Verifier que l'identifier est unique
       const existingCommunity = await fastify.prisma.community.findUnique({
         where: { identifier }
       });
-      
+
       if (existingCommunity) {
         return reply.status(409).send({
           success: false,
-          error: 'Identifier already exists',
-          message: `A community with identifier "${identifier}" already exists`
+          error: `A community with identifier "${identifier}" already exists`
         });
       }
-      
-      // Créer la communauté ET automatiquement ajouter le créateur comme membre ADMIN
+
+      // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
       const community = await fastify.prisma.community.create({
         data: {
           name: validatedData.name,
@@ -464,7 +479,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
           avatar: validatedData.avatar,
           isPrivate: validatedData.isPrivate ?? true,
           createdBy: userId,
-          // Automatiquement ajouter le créateur comme membre avec le rôle ADMIN
+          // Automatiquement ajouter le createur comme membre avec le role ADMIN
           members: {
             create: {
               userId: userId,
@@ -515,24 +530,23 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour obtenir les membres d'une communauté
+  // Route pour obtenir les membres d'une communaute
   fastify.get('/communities/:id/members', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier l'accès à la communauté
+
+      // Verifier l'acces a la communaute
       const community = await fastify.prisma.community.findFirst({
         where: { id },
         select: {
@@ -560,8 +574,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       const [members, totalCount] = await Promise.all([
         fastify.prisma.communityMember.findMany({
@@ -604,28 +617,27 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour ajouter un membre à la communauté
+  // Route pour ajouter un membre a la communaute
   fastify.post('/communities/:id/members', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const validatedData = AddMemberSchema.parse(request.body);
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier que la communauté existe et que l'utilisateur est admin
+
+      // Verifier que la communaute existe et que l'utilisateur est admin
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { 
+        select: {
           createdBy: true,
           members: {
             where: { userId },
@@ -641,10 +653,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'utilisateur est admin (ou créateur)
+      // Verifier que l'utilisateur est admin (ou createur)
       const userMember = community.members[0];
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
-      
+
       if (!isAdmin) {
         return reply.status(403).send({
           success: false,
@@ -652,7 +664,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'utilisateur à ajouter existe
+      // Verifier que l'utilisateur a ajouter existe
       const userToAdd = await fastify.prisma.user.findFirst({
         where: { id: validatedData.userId },
         select: { id: true }
@@ -665,7 +677,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier si le membre existe déjà
+      // Verifier si le membre existe deja
       const existingMember = await fastify.prisma.communityMember.findFirst({
         where: {
           communityId: id,
@@ -677,7 +689,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       if (existingMember) {
         member = existingMember;
       } else {
-        // Ajouter le membre avec le rôle spécifié (par défaut: MEMBER)
+        // Ajouter le membre avec le role specifie (par defaut: MEMBER)
         member = await fastify.prisma.communityMember.create({
           data: {
             communityId: id,
@@ -711,28 +723,27 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour mettre à jour le rôle d'un membre
+  // Route pour mettre a jour le role d'un membre
   fastify.patch('/communities/:id/members/:memberId/role', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id, memberId } = request.params as { id: string; memberId: string };
       const validatedData = UpdateMemberRoleSchema.parse(request.body);
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier que la communauté existe et que l'utilisateur est admin
+
+      // Verifier que la communaute existe et que l'utilisateur est admin
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { 
+        select: {
           createdBy: true,
           members: {
             where: { userId },
@@ -748,10 +759,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'utilisateur est admin
+      // Verifier que l'utilisateur est admin
       const userMember = community.members[0];
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
-      
+
       if (!isAdmin) {
         return reply.status(403).send({
           success: false,
@@ -759,7 +770,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Mettre à jour le rôle du membre
+      // Mettre a jour le role du membre
       const updatedMember = await fastify.prisma.communityMember.update({
         where: { id: memberId },
         data: { role: validatedData.role as string },
@@ -788,27 +799,26 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour retirer un membre de la communauté
+  // Route pour retirer un membre de la communaute
   fastify.delete('/communities/:id/members/:memberId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id, memberId } = request.params as { id: string; memberId: string };
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier que la communauté existe et que l'utilisateur est admin
+
+      // Verifier que la communaute existe et que l'utilisateur est admin
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { 
+        select: {
           createdBy: true,
           members: {
             where: { userId },
@@ -824,10 +834,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'utilisateur est admin
+      // Verifier que l'utilisateur est admin
       const userMember = community.members[0];
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
-      
+
       if (!isAdmin) {
         return reply.status(403).send({
           success: false,
@@ -845,7 +855,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Member removed successfully'
+        data: { message: 'Member removed successfully' }
       });
     } catch (error) {
       console.error('Error removing community member:', error);
@@ -856,25 +866,24 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour mettre à jour une communauté
+  // Route pour mettre a jour une communaute
   fastify.put('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const validatedData = UpdateCommunitySchema.parse(request.body);
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier que l'utilisateur est le créateur de la communauté
+
+      // Verifier que l'utilisateur est le createur de la communaute
       const community = await fastify.prisma.community.findFirst({
         where: { id },
         select: { createdBy: true, identifier: true }
@@ -894,7 +903,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Préparer les données de mise à jour
+      // Preparer les donnees de mise a jour
       const updateData: any = {
         name: validatedData.name,
         description: validatedData.description,
@@ -902,25 +911,24 @@ export async function communityRoutes(fastify: FastifyInstance) {
         isPrivate: validatedData.isPrivate
       };
 
-      // Gérer l'identifier si fourni
+      // Gerer l'identifier si fourni
       if (validatedData.identifier !== undefined) {
         const newIdentifier = generateIdentifier(validatedData.name || '', validatedData.identifier);
-        
-        // Vérifier que le nouvel identifier est unique (sauf si c'est le même)
+
+        // Verifier que le nouvel identifier est unique (sauf si c'est le meme)
         if (newIdentifier !== community.identifier) {
           const existingCommunity = await fastify.prisma.community.findUnique({
             where: { identifier: newIdentifier }
           });
-          
+
           if (existingCommunity) {
             return reply.status(409).send({
               success: false,
-              error: 'Community identifier already exists',
-              message: `A community with identifier "${newIdentifier}" already exists`
+              error: `A community with identifier "${newIdentifier}" already exists`
             });
           }
         }
-        
+
         updateData.identifier = newIdentifier;
       }
 
@@ -958,24 +966,23 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour supprimer une communauté
+  // Route pour supprimer une communaute
   fastify.delete('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier que l'utilisateur est le créateur de la communauté
+
+      // Verifier que l'utilisateur est le createur de la communaute
       const community = await fastify.prisma.community.findFirst({
         where: { id },
         select: { createdBy: true }
@@ -1001,7 +1008,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Community deleted successfully'
+        data: { message: 'Community deleted successfully' }
       });
     } catch (error) {
       console.error('Error deleting community:', error);
@@ -1012,24 +1019,23 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Conversations d'une communauté
+  // Conversations d'une communaute
   fastify.get('/communities/:id/conversations', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      
-      // Utiliser le nouveau système d'authentification unifié
+
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
           error: 'User must be authenticated'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Vérifier l'accès à la communauté
+
+      // Verifier l'acces a la communaute
       const community = await fastify.prisma.community.findFirst({
         where: { id },
         select: {
@@ -1046,9 +1052,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const hasAccess = community.createdBy === userId || 
+      const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
-      
+
       if (!hasAccess && community.isPrivate) {
         return reply.status(403).send({
           success: false,
@@ -1056,9 +1062,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Récupérer les conversations de la communauté
+      // Recuperer les conversations de la communaute
       const conversations = await fastify.prisma.conversation.findMany({
-        where: { 
+        where: {
           communityId: id,
           // S'assurer que l'utilisateur est membre de la conversation
           members: {

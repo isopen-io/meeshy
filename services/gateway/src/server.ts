@@ -66,6 +66,7 @@ import userDeletionsRoutes from './routes/user-deletions';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
+import { shutdownEncryptionService } from './services/EncryptionService';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -894,6 +895,14 @@ class MeeshyServer {
       if (this.callCleanupService) {
         this.callCleanupService.stop();
         logger.info('✓ Call cleanup service stopped');
+      }
+
+      // SECURITY: Clear all cryptographic material from memory
+      try {
+        await shutdownEncryptionService();
+        logger.info('✓ Encryption service shutdown (sensitive data cleared)');
+      } catch (encError) {
+        logger.warn('⚠️ Encryption service shutdown error:', encError);
       }
 
       if (this.translationService) {

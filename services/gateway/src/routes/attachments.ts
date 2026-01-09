@@ -84,14 +84,14 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
             const metadataValue = await part.value;
             try {
               const metadata = JSON.parse(metadataValue as string);
-              console.log(`📋 [AttachmentRoutes] Metadata received for file ${index}:`, {
+              console.log(`[AttachmentRoutes] Metadata received for file ${index}:`, {
                 hasDuration: !!metadata.duration,
                 duration: metadata.duration,
                 fullMetadata: metadata
               });
               metadataMap.set(index, metadata);
             } catch (error) {
-              console.warn('[AttachmentRoutes] ⚠️ Impossible de parser les métadonnées:', error);
+              console.warn('[AttachmentRoutes] Impossible de parser les métadonnées:', error);
             }
           }
         }
@@ -102,7 +102,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
             error: 'No files provided',
           });
         }
-        
+
         // Vérifier les permissions pour les utilisateurs anonymes
         if (isAnonymous && authContext.anonymousParticipant) {
           const shareLink = await fastify.prisma.conversationShareLink.findUnique({
@@ -112,25 +112,25 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
               allowAnonymousImages: true,
             },
           });
-          
+
           if (!shareLink) {
             return reply.status(403).send({
               success: false,
               error: 'Share link not found',
             });
           }
-          
+
           // Vérifier chaque fichier
           for (const file of files) {
             const isImage = file.mimeType.startsWith('image/');
-            
+
             if (isImage && !shareLink.allowAnonymousImages) {
               return reply.status(403).send({
                 success: false,
                 error: 'Images are not allowed for anonymous users on this conversation',
               });
             }
-            
+
             if (!isImage && !shareLink.allowAnonymousFiles) {
               return reply.status(403).send({
                 success: false,
@@ -153,10 +153,10 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          attachments: results,
+          data: { attachments: results },
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] ❌ Error uploading files:', error);
+        console.error('[AttachmentRoutes] Error uploading files:', error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error uploading files',
@@ -212,7 +212,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          attachment: result,
+          data: { attachment: result },
         });
       } catch (error: any) {
         console.error('[AttachmentRoutes] Error creating text attachment:', error);
@@ -263,7 +263,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         // Définir les headers appropriés
         reply.header('Content-Type', attachment.mimeType);
         reply.header('Content-Disposition', `inline; filename="${attachment.originalName}"`);
-        
+
         // Headers CORS/CORP pour permettre le chargement cross-origin
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');
@@ -313,7 +313,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         // Définir les headers appropriés
         reply.header('Content-Type', 'image/jpeg');
         reply.header('Content-Disposition', 'inline');
-        
+
         // Headers CORS/CORP pour permettre le chargement cross-origin
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');
@@ -356,7 +356,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         const decodedPath = decodeURIComponent(fullPath);
 
         // Log pour debug
-        console.log('🔍 [AttachmentRoutes] GET /attachments/file/*', {
+        console.log('[AttachmentRoutes] GET /attachments/file/*', {
           fullPath,
           decodedPath,
           UPLOAD_PATH: process.env.UPLOAD_PATH,
@@ -366,7 +366,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         const uploadBasePath = process.env.UPLOAD_PATH || 'uploads/attachments';
         const filePath = require('path').join(uploadBasePath, decodedPath);
 
-        console.log('📁 [AttachmentRoutes] Resolved file path:', {
+        console.log('[AttachmentRoutes] Resolved file path:', {
           uploadBasePath,
           decodedPath,
           filePath,
@@ -375,13 +375,13 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         // Vérifier que le fichier existe
         try {
           const stats = await stat(filePath);
-          console.log('✅ [AttachmentRoutes] File found:', {
+          console.log('[AttachmentRoutes] File found:', {
             filePath,
             size: stats.size,
             isFile: stats.isFile(),
           });
         } catch (statError: any) {
-          console.error('❌ [AttachmentRoutes] File not found on disk:', {
+          console.error('[AttachmentRoutes] File not found on disk:', {
             filePath,
             error: statError.message,
             code: statError.code,
@@ -543,7 +543,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Attachment deleted successfully',
+          data: { message: 'Attachment deleted successfully' },
         });
       } catch (error: any) {
         console.error('[AttachmentRoutes] Error deleting attachment:', error);
@@ -576,11 +576,11 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        
+
         const authContext = (request as any).authContext;
-        
+
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
-          console.error('[AttachmentRoutes] ❌ Authentification requise');
+          console.error('[AttachmentRoutes] Authentification requise');
           return reply.status(401).send({
             success: false,
             error: 'Authentication required',
@@ -593,7 +593,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           limit?: number;
           offset?: number;
         };
-        
+
 
         // Vérifier que l'utilisateur a accès à cette conversation
         if (authContext.isAuthenticated) {
@@ -614,7 +614,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           }
         } else if (authContext.isAnonymous && authContext.anonymousParticipant) {
           // Utilisateur anonyme - vérifier qu'il a accès à cette conversation via son shareLink
-          
+
           const participant = await (fastify as any).prisma.anonymousParticipant.findUnique({
             where: { id: authContext.anonymousParticipant.id },
             select: {
@@ -629,7 +629,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
 
           if (!participant) {
-            console.error('[AttachmentRoutes] ❌ Participant non trouvé');
+            console.error('[AttachmentRoutes] Participant non trouvé');
             return reply.status(403).send({
               success: false,
               error: 'Participant not found',
@@ -637,7 +637,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           }
 
           if (participant.conversationId !== conversationId) {
-            console.error('[AttachmentRoutes] ❌ Mauvaise conversation:', {
+            console.error('[AttachmentRoutes] Mauvaise conversation:', {
               participantConversationId: participant.conversationId,
               requestedConversationId: conversationId
             });
@@ -648,16 +648,16 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           }
 
           if (!participant.shareLink.allowViewHistory) {
-            console.error('[AttachmentRoutes] ❌ Historique non autorisé');
+            console.error('[AttachmentRoutes] Historique non autorisé');
             return reply.status(403).send({
               success: false,
               error: 'History viewing not allowed on this link',
             });
           }
-          
+
         }
 
-        
+
         const attachments = await attachmentService.getConversationAttachments(
           conversationId,
           {
@@ -670,10 +670,10 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          attachments,
+          data: { attachments },
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] ❌ Error fetching conversation attachments:', error);
+        console.error('[AttachmentRoutes] Error fetching conversation attachments:', error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error fetching attachments',
@@ -722,8 +722,8 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         if (!translateService) {
           return reply.status(503).send({
             success: false,
-            error: 'Translation service not available',
-            code: 'SERVICE_UNAVAILABLE'
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'Translation service not available'
           });
         }
 
@@ -731,8 +731,8 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         if (!authContext?.isAuthenticated) {
           return reply.status(401).send({
             success: false,
-            error: 'Authentication required',
-            code: 'UNAUTHORIZED'
+            error: 'UNAUTHORIZED',
+            message: 'Authentication required'
           });
         }
 
@@ -764,8 +764,8 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
                             400;
           return reply.status(statusCode).send({
             success: false,
-            error: result.error,
-            code: result.errorCode
+            error: result.errorCode,
+            message: result.error
           });
         }
 
@@ -774,15 +774,14 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           data: result.data
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] ❌ Error translating attachment:', error);
+        console.error('[AttachmentRoutes] Error translating attachment:', error);
         return reply.status(500).send({
           success: false,
-          error: error.message || 'Error translating attachment',
-          code: 'TRANSLATION_FAILED'
+          error: 'TRANSLATION_FAILED',
+          message: error.message || 'Error translating attachment'
         });
       }
     }
   );
 
 }
-

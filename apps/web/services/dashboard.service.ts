@@ -1,4 +1,5 @@
-import { apiService, ApiResponse } from './api.service';
+import { apiService } from './api.service';
+import type { ApiResponse } from '@meeshy/shared/types';
 import type { User, Conversation } from '@/types';
 
 export interface DashboardStats {
@@ -77,8 +78,8 @@ export const dashboardService = {
       }
       
       return {
+        success: true,
         data: data as DashboardData,
-        status: response.status,
         message: response.message
       };
     } catch (error) {
@@ -94,8 +95,8 @@ export const dashboardService = {
     try {
       const response = await apiService.get<{ success: boolean; data: ShareLink[] }>('/share-links');
       return {
+        success: true,
         data: response.data.data,
-        status: response.status,
         message: response.message
       };
     } catch (error) {
@@ -117,8 +118,8 @@ export const dashboardService = {
     try {
       const response = await apiService.post<{ success: boolean; data: ShareLink }>('/share-links', data);
       return {
+        success: true,
         data: response.data.data,
-        status: response.status,
         message: response.message
       };
     } catch (error) {

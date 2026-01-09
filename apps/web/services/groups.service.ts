@@ -1,4 +1,5 @@
-import { apiService, ApiResponse } from './api.service';
+import { apiService } from './api.service';
+import type { ApiResponse } from '@meeshy/shared/types';
 import { Group, GroupMember, User } from '@/types';
 
 // Re-export ApiResponse for use in tests and other modules

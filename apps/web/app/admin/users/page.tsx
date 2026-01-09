@@ -320,10 +320,6 @@ export default function AdminUsersPage() {
                 <option value="20">20 par page</option>
                 <option value="50">50 par page</option>
                 <option value="100">100 par page</option>
-                <option value="200">200 par page</option>
-                <option value="400">400 par page</option>
-                <option value="500">500 par page</option>
-                <option value="1000">1000 par page</option>
               </select>
               <Button
                 variant="outline"

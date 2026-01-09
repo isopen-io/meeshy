@@ -50,26 +50,26 @@ function getPredictedModelType(textLength: number): 'basic' | 'medium' | 'premiu
 export async function translationRoutes(fastify: FastifyInstance) {
   // Récupérer le service de traduction depuis les options
   const translationService = (fastify as any).translationService;
-  
+
   if (!translationService) {
     throw new Error('TranslationService not provided to translation routes');
   }
-  
+
   // Route principale de traduction
   fastify.post<{ Body: TranslateRequest }>('/translate-blocking', async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
       const validatedData = TranslateRequestSchema.parse(request.body);
-      
-      
+
+
       const startTime = Date.now();
-      
+
       let result: any;
       let messageId: string;
-      
+
       // Gérer les deux cas : nouveau message vs retraduction
       if (validatedData.message_id) {
         // Cas 1: Retraduction d'un message existant
-        
+
         // Récupérer le message depuis la base de données
         const existingMessage = await fastify.prisma.message.findUnique({
           where: { id: validatedData.message_id },
@@ -81,15 +81,24 @@ export async function translationRoutes(fastify: FastifyInstance) {
             }
           }
         });
-        
-        
+
+
         if (!existingMessage) {
           return reply.status(404).send({
             success: false,
             error: 'Message not found'
           });
         }
-        
+
+        // SECURITY: E2EE messages cannot be translated by the server
+        if (existingMessage.encryptionMode === 'e2ee') {
+          return reply.status(400).send({
+            success: false,
+            error: 'E2EE_NOT_TRANSLATABLE',
+            message: 'End-to-end encrypted messages cannot be translated by the server'
+          });
+        }
+
         // Vérifier l'accès (optionnel, selon vos besoins)
         const userId = (request as any).user?.id;
         if (userId) {
@@ -101,13 +110,13 @@ export async function translationRoutes(fastify: FastifyInstance) {
             });
           }
         }
-        
+
         // Utiliser le texte du message existant si pas fourni
         const messageText = validatedData.text || existingMessage.content;
         const messageSourceLanguage = validatedData.source_language || existingMessage.originalLanguage;
-        
+
         // OPTIMISATION: Éviter la traduction si source = target (après récupération du message)
-        if (messageSourceLanguage && messageSourceLanguage !== 'auto' && 
+        if (messageSourceLanguage && messageSourceLanguage !== 'auto' &&
             messageSourceLanguage === validatedData.target_language) {
           return reply.send({
             success: true,
@@ -123,12 +132,12 @@ export async function translationRoutes(fastify: FastifyInstance) {
             }
           });
         }
-        
+
         // Déterminer le type de modèle pour le texte récupéré
         const finalModelType = validatedData.model_type === 'basic'
           ? getPredictedModelType(messageText.length)
           : (validatedData.model_type || 'basic');
-        
+
         // Créer les données du message pour retraduction
         const messageData: any = {
           id: validatedData.message_id,
@@ -138,24 +147,24 @@ export async function translationRoutes(fastify: FastifyInstance) {
           targetLanguage: validatedData.target_language,
           modelType: finalModelType
         };
-        
+
         // Appeler handleNewMessage qui gère la retraduction
         const handleResult = await translationService.handleNewMessage(messageData);
         messageId = handleResult.messageId;
-        
+
         // Attendre la vraie traduction avec un timeout plus long
         let translationResult = null;
         const maxWaitTime = 10000; // 10 secondes
         const checkInterval = 500; // Vérifier toutes les 500ms
         let waitedTime = 0;
-        
+
         while (!translationResult && waitedTime < maxWaitTime) {
           await new Promise(resolve => setTimeout(resolve, checkInterval));
           waitedTime += checkInterval;
-          
+
           translationResult = await translationService.getTranslation(messageId, validatedData.target_language);
         }
-        
+
         if (!translationResult) {
           // Fallback seulement si la traduction n'est pas disponible après le timeout
           result = {
@@ -169,22 +178,22 @@ export async function translationRoutes(fastify: FastifyInstance) {
         } else {
           result = translationResult;
         }
-        
+
       } else {
         // Cas 2: Nouveau message (comportement WebSocket)
-        
+
         if (!validatedData.conversation_id) {
           return reply.status(400).send({
             success: false,
             error: 'conversation_id is required when message_id is not provided'
           });
         }
-        
+
         // Déterminer le type de modèle pour le nouveau message
         const finalModelType = validatedData.model_type === 'basic'
           ? getPredictedModelType(validatedData.text.length)
           : (validatedData.model_type || 'basic');
-        
+
         // Créer les données du message
         const messageData: any = {
           conversationId: validatedData.conversation_id,
@@ -193,24 +202,24 @@ export async function translationRoutes(fastify: FastifyInstance) {
           targetLanguage: validatedData.target_language, // Passer la langue cible
           modelType: finalModelType
         };
-        
+
         // Appeler handleNewMessage qui gère le nouveau message
         const handleResult = await translationService.handleNewMessage(messageData);
         messageId = handleResult.messageId;
-        
+
         // Attendre la vraie traduction avec un timeout plus long
         let translationResult2 = null;
         const maxWaitTime2 = 10000; // 10 secondes
         const checkInterval2 = 500; // Vérifier toutes les 500ms
         let waitedTime2 = 0;
-        
+
         while (!translationResult2 && waitedTime2 < maxWaitTime2) {
           await new Promise(resolve => setTimeout(resolve, checkInterval2));
           waitedTime2 += checkInterval2;
-          
+
           translationResult2 = await translationService.getTranslation(messageId, validatedData.target_language);
         }
-        
+
         if (!translationResult2) {
           // Fallback seulement si la traduction n'est pas disponible après le timeout
           result = {
@@ -229,7 +238,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const processingTime = (Date.now() - startTime) / 1000;
 
 
-      return {
+      return reply.send({
         success: true,
         data: {
           message_id: messageId,
@@ -239,10 +248,10 @@ export async function translationRoutes(fastify: FastifyInstance) {
           target_language: result.targetLanguage,
           confidence: result.confidenceScore,
           processing_time: processingTime,
-          model: result.modelType || 'basic', // CORRECTION: Inclure le modèle utilisé
+          model: result.modelType || 'basic',
           timestamp: new Date().toISOString()
         }
-      };
+      });
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -259,41 +268,41 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
       return reply.status(statusCode).send({
         success: false,
-        error: errorMessage,
-        errorCode,
-        timestamp: new Date().toISOString()
+        error: errorCode,
+        message: errorMessage
       });
     }
   });
 
   // Route pour obtenir les langues supportées
-  fastify.get('/languages', async () => {
-    return {
+  fastify.get('/languages', async (request: FastifyRequest, reply: FastifyReply) => {
+    return reply.send({
       success: true,
       data: {
         languages: [
-          { code: 'fr', name: 'Français', flag: '🇫🇷' },
-          { code: 'en', name: 'English', flag: '🇺🇸' },
-          { code: 'es', name: 'Español', flag: '🇪🇸' },
-          { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-          { code: 'pt', name: 'Português', flag: '🇵🇹' },
-          { code: 'zh', name: '中文', flag: '🇨🇳' },
-          { code: 'ja', name: '日本語', flag: '🇯🇵' },
-          { code: 'ar', name: 'العربية', flag: '🇸🇦' }
+          { code: 'fr', name: 'Francais', flag: 'FR' },
+          { code: 'en', name: 'English', flag: 'US' },
+          { code: 'es', name: 'Espanol', flag: 'ES' },
+          { code: 'de', name: 'Deutsch', flag: 'DE' },
+          { code: 'pt', name: 'Portugues', flag: 'PT' },
+          { code: 'zh', name: 'Chinese', flag: 'CN' },
+          { code: 'ja', name: 'Japanese', flag: 'JP' },
+          { code: 'ar', name: 'Arabic', flag: 'SA' }
         ]
       }
-    };
+    });
   });
 
   // Route pour détecter la langue
   fastify.post<{ Body: { text: string } }>('/detect-language', async (request: FastifyRequest<{ Body: { text: string } }>, reply: FastifyReply) => {
     try {
       const { text } = request.body;
-      
+
       if (!text || text.length === 0) {
         return reply.status(400).send({
           success: false,
-          error: 'Text is required'
+          error: 'VALIDATION_ERROR',
+          message: 'Text is required'
         });
       }
 
@@ -313,27 +322,28 @@ export async function translationRoutes(fastify: FastifyInstance) {
         confidence = 0.7;
       }
 
-      return {
+      return reply.send({
         success: true,
         data: {
           language: detectedLanguage,
           confidence: confidence,
           text: text
         }
-      };
+      });
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown language detection error';
       logError(request.log, 'Language detection error:', error);
       return reply.status(500).send({
         success: false,
-        error: errorMessage
+        error: 'DETECTION_ERROR',
+        message: errorMessage
       });
     }
   });
 
   // Route de test pour le service de traduction
-  fastify.get('/test', async () => {
+  fastify.get('/test', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Test avec un nouveau message (comportement WebSocket)
       const messageData: any = {
@@ -341,43 +351,46 @@ export async function translationRoutes(fastify: FastifyInstance) {
         content: 'Hello world',
         originalLanguage: 'en'
       };
-      
+
       const handleResult = await translationService.handleNewMessage(messageData);
-      
+
       // Attendre un peu pour que la traduction soit traitée
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Récupérer le résultat de traduction
       const testResult = await translationService.getTranslation(handleResult.messageId, 'fr');
-      
+
       if (!testResult) {
-        return {
+        return reply.send({
           success: false,
+          error: 'TEST_FAILED',
           message: 'Translation service test failed - no result available',
-          message_id: handleResult.messageId
-        };
+          data: { message_id: handleResult.messageId }
+        });
       }
 
-      return {
+      return reply.send({
         success: true,
-        message: 'Translation service is working',
-        message_id: handleResult.messageId,
-        test_result: {
-          translated_text: testResult.translatedText,
-          source_language: testResult.sourceLanguage,
-          target_language: testResult.targetLanguage,
-          model: testResult.modelType, // CORRECTION: Utiliser 'model' au lieu de 'model_used'
-          confidence: testResult.confidenceScore
+        data: {
+          message: 'Translation service is working',
+          message_id: handleResult.messageId,
+          test_result: {
+            translated_text: testResult.translatedText,
+            source_language: testResult.sourceLanguage,
+            target_language: testResult.targetLanguage,
+            model: testResult.modelType,
+            confidence: testResult.confidenceScore
+          }
         }
-      };
+      });
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown translation test error';
-      return {
+      return reply.send({
         success: false,
-        message: 'Translation service test failed',
-        error: errorMessage
-      };
+        error: 'TEST_FAILED',
+        message: errorMessage
+      });
     }
   });
 }

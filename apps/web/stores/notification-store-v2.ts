@@ -76,7 +76,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
 
           try {
             // 1. Toujours charger les notifications depuis l'API (WebSocket)
-            await get().fetchNotifications({ page: 1, limit: STORE_CONFIG.PAGE_SIZE });
+            await get().fetchNotifications({ offset: 0, limit: STORE_CONFIG.PAGE_SIZE });
 
             // 2. Initialiser Firebase seulement si disponible
             if (firebaseChecker.isAvailable()) {
@@ -124,10 +124,11 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
         /**
          * Charge les notifications depuis l'API
          */
-        fetchNotifications: async (options?: NotificationPaginationOptions) => {
+        fetchNotifications: async (options?: Partial<NotificationPaginationOptions>) => {
           const state = get();
-          const page = options?.page || state.page;
+          const page = options?.offset !== undefined ? Math.floor(options.offset / (options.limit || STORE_CONFIG.PAGE_SIZE)) + 1 : state.page;
           const limit = options?.limit || STORE_CONFIG.PAGE_SIZE;
+          const offset = (page - 1) * limit;
 
           set({ isLoading: page === 1, isLoadingMore: page > 1, error: null });
 
@@ -137,7 +138,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
 
             const response = await notificationServiceV2.fetchNotifications({
               ...state.filters,
-              page,
+              offset,
               limit,
               sortBy: 'createdAt',
               sortOrder: 'desc'
@@ -151,7 +152,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
                 notifications: page === 1
                   ? notifications
                   : [...state.notifications, ...notifications],
-                page: pagination.page,
+                page,
                 hasMore: pagination.hasMore,
                 unreadCount: notifications.filter(n => !n.isRead).length,
                 lastSync: new Date()
@@ -193,7 +194,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
           }
 
           await get().fetchNotifications({
-            page: state.page + 1,
+            offset: state.page * STORE_CONFIG.PAGE_SIZE,
             limit: STORE_CONFIG.PAGE_SIZE
           });
         },
@@ -203,7 +204,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
          */
         refresh: async () => {
           set({ page: 1, hasMore: true });
-          await get().fetchNotifications({ page: 1, limit: STORE_CONFIG.PAGE_SIZE });
+          await get().fetchNotifications({ offset: 0, limit: STORE_CONFIG.PAGE_SIZE });
         },
 
         /**
@@ -402,7 +403,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
           }));
 
           // Recharger les notifications avec les nouveaux filtres
-          get().fetchNotifications({ page: 1, limit: STORE_CONFIG.PAGE_SIZE });
+          get().fetchNotifications({ offset: 0, limit: STORE_CONFIG.PAGE_SIZE });
         },
 
         /**
@@ -418,7 +419,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
             hasMore: true
           });
 
-          get().fetchNotifications({ page: 1, limit: STORE_CONFIG.PAGE_SIZE });
+          get().fetchNotifications({ offset: 0, limit: STORE_CONFIG.PAGE_SIZE });
         },
 
         /**

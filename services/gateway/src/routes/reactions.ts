@@ -1,6 +1,6 @@
 /**
  * Routes API REST pour les réactions emoji sur les messages
- * 
+ *
  * Routes:
  * - POST /api/reactions - Ajouter une réaction
  * - DELETE /api/reactions/:messageId/:emoji - Supprimer une réaction
@@ -40,16 +40,16 @@ interface GetUserReactionsParams {
 export default async function reactionRoutes(fastify: FastifyInstance) {
   // Récupérer prisma décoré par le serveur
   const prisma = fastify.prisma;
-  
+
   // Instancier le service de réactions
   const reactionService = new ReactionService(prisma);
-  
+
   // Récupérer le gestionnaire Socket.IO pour broadcast
   const socketIOHandler = fastify.socketIOHandler;
 
   // Middleware d'authentification requis pour les réactions
-  const requiredAuth = createUnifiedAuthMiddleware(prisma, { 
-    requireAuth: true, 
+  const requiredAuth = createUnifiedAuthMiddleware(prisma, {
+    requireAuth: true,
     allowAnonymous: true // Les anonymes peuvent aussi réagir
   });
 
@@ -85,7 +85,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         emoji,
         userId: actualUserId,
-        anonymousUserId: actualAnonymousUserId
+        anonymousId: actualAnonymousUserId
       });
 
       if (!reaction) {
@@ -128,7 +128,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       fastify.log.error({ error }, 'Error adding reaction');
-      
+
       // Gestion des erreurs spécifiques
       if (error.message === 'Invalid emoji format') {
         return reply.status(400).send({
@@ -185,7 +185,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         emoji: decodedEmoji,
         userId: actualUserId,
-        anonymousUserId: actualAnonymousUserId
+        anonymousId: actualAnonymousUserId
       });
 
       if (!removed) {
@@ -221,7 +221,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Reaction removed successfully'
+        data: { message: 'Reaction removed successfully' }
       });
     } catch (error) {
       fastify.log.error({ error }, 'Error removing reaction');

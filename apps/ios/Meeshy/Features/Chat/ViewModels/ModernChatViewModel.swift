@@ -1312,7 +1312,7 @@ final class ModernChatViewModel: ObservableObject {
             id: "temp_\(UUID().uuidString)",
             messageId: messageId,
             userId: currentUserId,
-            anonymousUserId: nil,
+            anonymousId: nil,
             emoji: emoji,
             createdAt: Date(),
             updatedAt: Date()
@@ -1647,7 +1647,7 @@ final class ModernChatViewModel: ObservableObject {
                     id: reactionId,
                     messageId: messageId,
                     userId: userId,
-                    anonymousUserId: nil,
+                    anonymousId: nil,
                     emoji: emoji,
                     createdAt: Date(),
                     updatedAt: Date()
@@ -1684,7 +1684,7 @@ final class ModernChatViewModel: ObservableObject {
                     id: id,
                     messageId: messageId,
                     userId: dict["userId"] as? String,
-                    anonymousUserId: dict["anonymousUserId"] as? String,
+                    anonymousId: dict["anonymousId"] as? String,
                     emoji: emoji,
                     createdAt: nil,
                     updatedAt: nil

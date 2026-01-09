@@ -17,6 +17,15 @@
 
 import * as crypto from 'crypto';
 import { createHmac, createHash } from 'crypto';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import {
+  SignalValidation,
+  SignalProtocolLimits,
+  zeroizeBuffer,
+} from '@meeshy/shared/utils/validation';
+
+// Create child logger for this module
+const logger = enhancedLogger.child({ module: 'DoubleRatchet' });
 
 /**
  * Skipped message key for out-of-order message handling
@@ -92,7 +101,7 @@ export class DoubleRatchet {
     chainKeyReceive: Buffer,
     dhRatchetKeyPair?: { publicKey: Buffer; privateKey: Buffer }
   ): DoubleRatchetSession {
-    console.log('🔄 Initializing Double Ratchet session');
+    logger.debug('Initializing Double Ratchet session');
 
     const session: DoubleRatchetSession = {
       rootKey,
@@ -108,7 +117,7 @@ export class DoubleRatchet {
     };
 
     this.stats.sessionsActive++;
-    console.log('✅ Double Ratchet session initialized');
+    logger.debug('Double Ratchet session initialized');
 
     return session;
   }
@@ -140,9 +149,7 @@ export class DoubleRatchet {
       session.messageNumberSend++;
       session.messagesSent++;
 
-      console.log(
-        `  ✓ Symmetric ratchet (send): message #${msgNum}, new chain key derived`
-      );
+      logger.debug('Symmetric ratchet (send): new chain key derived', { messageNumber: msgNum });
 
       return {
         key: messageKey,
@@ -154,9 +161,7 @@ export class DoubleRatchet {
       const msgNum = session.messageNumberReceive;
       session.messageNumberReceive++;
 
-      console.log(
-        `  ✓ Symmetric ratchet (receive): message #${msgNum}, new chain key derived`
-      );
+      logger.debug('Symmetric ratchet (receive): new chain key derived', { messageNumber: msgNum });
 
       return {
         key: messageKey,
@@ -185,7 +190,7 @@ export class DoubleRatchet {
     session: DoubleRatchetSession,
     remotePublicKey?: Buffer
   ): { rootKey: Buffer; chainKeySend: Buffer; chainKeyReceive: Buffer } {
-    console.log('🔄 Performing asymmetric ratchet (DHR)');
+    logger.debug('Performing asymmetric ratchet (DHR)');
 
     // Step 1: Generate new DH key pair
     const newDHKeyPair = this.generateDHKeyPair();
@@ -218,7 +223,7 @@ export class DoubleRatchet {
 
     this.stats.asymmetricRatchets++;
 
-    console.log('  ✓ Asymmetric ratchet complete: new DH key pair + KDF');
+    logger.debug('Asymmetric ratchet complete: new DH key pair + KDF');
 
     return {
       rootKey: session.rootKey,
@@ -293,7 +298,7 @@ export class DoubleRatchet {
     until: number,
     direction: 'send' | 'receive'
   ): void {
-    console.log(`⏭️  Skipping message keys up to #${until}`);
+    logger.debug('Skipping message keys', { until });
 
     const chainKey = direction === 'send' ? session.chainKeySend : session.chainKeyReceive;
     let currentMessageNumber = direction === 'send' ? session.messageNumberSend : session.messageNumberReceive;
@@ -330,7 +335,7 @@ export class DoubleRatchet {
       session.skippedMessageKeys.splice(0, toRemove);
     }
 
-    console.log(`  ✓ Stored ${session.skippedMessageKeys.length} skipped message keys`);
+    logger.debug('Stored skipped message keys', { count: session.skippedMessageKeys.length });
   }
 
   /**
@@ -341,7 +346,7 @@ export class DoubleRatchet {
     dhRatchetKey: Buffer,
     messageNumber: number
   ): MessageKey | null {
-    console.log(`🔍 Looking for skipped message key #${messageNumber}`);
+    logger.debug('Looking for skipped message key', { messageNumber });
 
     const index = session.skippedMessageKeys.findIndex(
       (sk) => sk.dhRatchetKey.equals(dhRatchetKey) && sk.messageNumber === messageNumber
@@ -352,7 +357,7 @@ export class DoubleRatchet {
       session.skippedMessageKeys.splice(index, 1);
       this.stats.skippedKeysUsed++;
 
-      console.log(`  ✓ Found and removed skipped key for message #${messageNumber}`);
+      logger.debug('Found and removed skipped key for message', { messageNumber });
 
       return {
         key: skipped.messageKey,
@@ -361,7 +366,7 @@ export class DoubleRatchet {
       };
     }
 
-    console.log(`  ❌ Skipped message key not found`);
+    logger.debug('Skipped message key not found', { messageNumber });
     return null;
   }
 
@@ -369,18 +374,36 @@ export class DoubleRatchet {
    * Get or generate message key for sending
    */
   getMessageKeySend(session: DoubleRatchetSession): MessageKey {
-    console.log('📝 Generating message key for sending');
+    logger.debug('Generating message key for sending');
     return this.symmetricRatchet(session, 'send');
   }
 
   /**
    * Get or generate message key for receiving
+   * Includes validation to prevent DoS via large message number skips
    */
   getMessageKeyReceive(
     session: DoubleRatchetSession,
     messageNumber: number
   ): MessageKey | null {
-    console.log(`📥 Getting message key for receiving (expected #${session.messageNumberReceive})`);
+    logger.debug('Getting message key for receiving', { expected: session.messageNumberReceive });
+
+    // Validate message number to prevent DoS attacks
+    const validation = SignalValidation.validateMessageNumber(
+      messageNumber,
+      session.messageNumberReceive,
+      session.maxSkippedKeys
+    );
+
+    if (!validation.valid) {
+      logger.warn('Message number validation failed', {
+        messageNumber,
+        expected: session.messageNumberReceive,
+        error: validation.error,
+        code: validation.code,
+      });
+      return null;
+    }
 
     // If this is the expected message, advance normally
     if (messageNumber === session.messageNumberReceive) {
@@ -395,7 +418,7 @@ export class DoubleRatchet {
 
     // If message is behind, it's a duplicate or out-of-order
     // This shouldn't happen in normal flow
-    console.log(`  ⚠️  Message #${messageNumber} is behind expected #${session.messageNumberReceive}`);
+    logger.warn('Message is behind expected number', { messageNumber, expected: session.messageNumberReceive });
     return null;
   }
 
@@ -457,5 +480,47 @@ export class DoubleRatchet {
    */
   getStatistics(): typeof this.stats {
     return { ...this.stats };
+  }
+
+  /**
+   * Securely clear all sensitive key material from a session
+   * Call this when a session is being terminated or needs cleanup
+   */
+  clearSession(session: DoubleRatchetSession): void {
+    logger.debug('Clearing session key material');
+
+    // Clear root key
+    zeroizeBuffer(session.rootKey);
+
+    // Clear chain keys
+    zeroizeBuffer(session.chainKeySend);
+    zeroizeBuffer(session.chainKeyReceive);
+
+    // Clear DH ratchet keys
+    if (session.dhRatchetKeyPair) {
+      zeroizeBuffer(session.dhRatchetKeyPair.publicKey);
+      zeroizeBuffer(session.dhRatchetKeyPair.privateKey);
+    }
+    if (session.dhRatchetKeyRemote) {
+      zeroizeBuffer(session.dhRatchetKeyRemote);
+    }
+
+    // Clear all skipped message keys
+    for (const skipped of session.skippedMessageKeys) {
+      zeroizeBuffer(skipped.messageKey);
+      zeroizeBuffer(skipped.dhRatchetKey);
+    }
+    session.skippedMessageKeys = [];
+
+    this.stats.sessionsActive--;
+    logger.debug('Session key material cleared');
+  }
+
+  /**
+   * Clear a single message key after use
+   * Should be called after decrypting a message
+   */
+  clearMessageKey(messageKey: MessageKey): void {
+    zeroizeBuffer(messageKey.key);
   }
 }

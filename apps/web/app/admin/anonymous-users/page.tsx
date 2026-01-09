@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ArrowLeft,
   Search,
@@ -41,16 +42,17 @@ export default function AdminAnonymousUsersPage() {
   const [hasMore, setHasMore] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AnonymousUser | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
 
   const loadAnonymousUsers = async (page: number = 1, search?: string, status?: string) => {
     try {
       setLoading(true);
-      const offset = (page - 1) * 20;
-      const response = await adminService.getAnonymousUsers(offset, 20, search, status);
-      
+      const offset = (page - 1) * pageSize;
+      const response = await adminService.getAnonymousUsers(offset, pageSize, search, status);
+
       if (response.data) {
         setAnonymousUsers(response.data.anonymousUsers || []);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / 20));
+        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
         setTotalCount(response.data.pagination?.total || 0);
         setHasMore(response.data.pagination?.hasMore || false);
         setCurrentPage(page);
@@ -71,7 +73,7 @@ export default function AdminAnonymousUsersPage() {
 
   useEffect(() => {
     loadAnonymousUsers();
-  }, []);
+  }, [pageSize]);
 
   const handleSearch = () => {
     loadAnonymousUsers(1, searchTerm || undefined, statusFilter || undefined);
@@ -80,6 +82,11 @@ export default function AdminAnonymousUsersPage() {
   const handleStatusFilter = (status: string) => {
     setStatusFilter(status);
     loadAnonymousUsers(1, searchTerm || undefined, status || undefined);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setCurrentPage(1);
+    setPageSize(newSize);
   };
 
   const formatDate = (date: Date | string) => {
@@ -216,6 +223,16 @@ export default function AdminAnonymousUsersPage() {
                   Inactifs
                 </Button>
               </div>
+              <Select value={String(pageSize)} onValueChange={(val) => handlePageSizeChange(Number(val))}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20 par page</SelectItem>
+                  <SelectItem value="50">50 par page</SelectItem>
+                  <SelectItem value="100">100 par page</SelectItem>
+                </SelectContent>
+              </Select>
               <Button onClick={handleSearch} size="sm">
                 Rechercher
               </Button>

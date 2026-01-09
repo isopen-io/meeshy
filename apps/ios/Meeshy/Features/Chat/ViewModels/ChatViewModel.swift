@@ -2,42 +2,30 @@
 //  ChatViewModel.swift
 //  Meeshy
 //
-//  Chat screen view model with real-time messaging
-//  UPDATED: Production-ready infinite scroll with proper pagination
+//  ViewModel for chat with message loading, sending, and real-time updates
+//  UPDATED: Uses offset/limit pagination pattern
 //  iOS 16+
-//
-//  FEATURES:
-//  - Proper infinite scroll with prefetching for messages
-//  - Loading states: idle, loading, loadingMore, error
-//  - Deduplication by message ID
-//  - Optimistic updates for sent messages
-//  - Real-time WebSocket integration
-//  - In-memory message caching
 //
 
 import Foundation
+import SwiftUI
 import Combine
 
-// MARK: - Sendable Wrapper for WebSocket Data
+// MARK: - Loading State
 
-/// Wrapper to safely pass non-Sendable dictionary across actor boundaries
-private struct SendableDict: @unchecked Sendable {
-    let value: [String: Any]
-}
-
-// MARK: - Message Loading State
-
-enum MessageLoadingState: Equatable {
+enum ChatLoadingState: Equatable {
     case idle
-    case loading          // Initial load
-    case loadingMore      // Loading older messages
-    case sending          // Sending a message
+    case loading
+    case loadingMore
+    case sending
     case error(String)
 
-    var isLoading: Bool {
-        switch self {
-        case .loading, .loadingMore, .sending:
+    static func == (lhs: ChatLoadingState, rhs: ChatLoadingState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.loading, .loading), (.loadingMore, .loadingMore), (.sending, .sending):
             return true
+        case (.error(let a), .error(let b)):
+            return a == b
         default:
             return false
         }
@@ -51,22 +39,12 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Published Properties
 
-    /// All messages (sorted by createdAt, newest first for display)
-    @Published private(set) var messages: [Message] = []
-
-    /// Current loading state
-    @Published private(set) var loadingState: MessageLoadingState = .idle
-
-    /// Whether there are more older messages to load
-    @Published private(set) var hasMoreMessages: Bool = true
-
-    /// Typing indicator users
-    @Published private(set) var typingUsers: Set<String> = []
-
-    /// Error message (for UI display)
+    @Published var messages: [Message] = []
+    @Published var loadingState: ChatLoadingState = .idle
+    @Published var hasMoreMessages: Bool = true
     @Published var errorMessage: String?
-
-    // MARK: - Convenience Computed Properties
+    @Published var typingUsers: [String] = []
+    @Published var lastReadMessageId: String?
 
     var isLoading: Bool { loadingState == .loading }
     var isLoadingMore: Bool { loadingState == .loadingMore }
@@ -80,9 +58,9 @@ final class ChatViewModel: ObservableObject {
     private let webSocketService: WebSocketService
     private var cancellables = Set<AnyCancellable>()
 
-    // Pagination state
-    private var currentPage: Int = 1
-    private let pageSize: Int = 50
+    // Pagination state (offset-based)
+    private var currentOffset: Int = 0
+    private let limit: Int = 50
     private let prefetchThreshold: Int = 10
 
     // Typing indicator
@@ -118,7 +96,7 @@ final class ChatViewModel: ObservableObject {
         chatLogger.info("ChatVM: Loading messages for \(conversationId)")
         loadingState = .loading
         errorMessage = nil
-        currentPage = 1
+        currentOffset = 0
 
         // Check cache first
         let cachedMessages = await AppCache.messages.getItems(forKey: cacheKey)
@@ -149,7 +127,7 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        chatLogger.info("ChatVM: Loading more messages (page \(currentPage + 1))")
+        chatLogger.info("ChatVM: Loading more messages (offset \(currentOffset + messages.count))")
         loadingState = .loadingMore
 
         await fetchMessagesFromNetwork(isInitial: false)
@@ -175,7 +153,7 @@ final class ChatViewModel: ObservableObject {
     /// Refresh messages (pull-to-refresh equivalent)
     func refreshMessages() async {
         chatLogger.info("ChatVM: Refreshing messages")
-        currentPage = 1
+        currentOffset = 0
         await fetchMessagesFromNetwork(isInitial: true)
     }
 
@@ -183,15 +161,15 @@ final class ChatViewModel: ObservableObject {
 
     private func fetchMessagesFromNetwork(isInitial: Bool) async {
         do {
-            let nextPage = isInitial ? 1 : currentPage + 1
+            let nextOffset = isInitial ? 0 : currentOffset + messages.count
             let response = try await apiService.fetchMessages(
                 conversationId: conversationId,
-                page: nextPage,
-                limit: pageSize
+                offset: nextOffset,
+                limit: limit
             )
 
             let fetchedMessages = response.messages
-            let hasMore = fetchedMessages.count >= pageSize
+            let hasMore = fetchedMessages.count >= limit
 
             if isInitial {
                 // Replace all messages
@@ -220,7 +198,7 @@ final class ChatViewModel: ObservableObject {
             }
 
             self.hasMoreMessages = hasMore
-            self.currentPage = nextPage
+            self.currentOffset = nextOffset
             self.loadingState = .idle
 
             chatLogger.info("ChatVM: Fetched \(fetchedMessages.count) messages, total: \(messages.count), hasMore: \(hasMore)")
@@ -236,8 +214,8 @@ final class ChatViewModel: ObservableObject {
         do {
             let response = try await apiService.fetchMessages(
                 conversationId: conversationId,
-                page: 1,
-                limit: pageSize
+                offset: 0,
+                limit: limit
             )
 
             // Merge with existing messages
@@ -272,284 +250,144 @@ final class ChatViewModel: ObservableObject {
         attachmentIds: [String]? = nil,
         replyToId: String? = nil,
         detectedLanguage: String? = nil,
-        sentiment: SentimentCategory? = nil
-    ) async {
-        guard !content.isEmpty || attachmentIds?.isEmpty == false else { return }
+        sentiment: MessageSentiment? = nil
+    ) async throws {
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachmentIds != nil else {
+            chatLogger.warn("ChatVM: Cannot send empty message")
+            return
+        }
 
+        chatLogger.info("ChatVM: Sending message (lang: \(detectedLanguage ?? "nil"), sentiment: \(sentiment?.rawValue ?? "nil"))")
         loadingState = .sending
 
-        // Use detected language or fall back to French (app default)
-        let messageLanguage = detectedLanguage ?? "fr"
-
-        // Log the message being sent with language and sentiment
-        chatLogger.info("ChatVM: Sending message", [
-            "conversationId": conversationId,
-            "detectedLanguage": messageLanguage,
-            "sentiment": sentiment?.rawValue ?? "unknown",
-            "hasAttachments": attachmentIds?.isEmpty == false,
-            "isReply": replyToId != nil
-        ])
-
-        // Create optimistic message
-        let localId = UUID()
-        let optimisticMessage = Message(
-            id: localId.uuidString,
-            conversationId: conversationId,
-            senderId: AuthenticationManager.shared.currentUser?.id ?? "",
-            anonymousSenderId: nil,
-            content: content,
-            originalLanguage: messageLanguage,
-            messageType: type,
-            isEdited: false,
-            editedAt: nil,
-            isDeleted: false,
-            deletedAt: nil,
-            replyToId: replyToId,
-            validatedMentions: [],
-            createdAt: Date(),
-            updatedAt: Date(),
-            sender: nil,
-            attachments: nil,
-            reactions: nil,
-            mentions: nil,
-            status: nil,
-            localId: localId,
-            isSending: true,
-            sendError: nil
-        )
-
-        // Add optimistically (at the beginning since sorted newest first)
-        messages.insert(optimisticMessage, at: 0)
-
-        // Prepare request
-        let request = MessageSendRequest(
-            conversationId: conversationId,
-            content: content,
-            messageType: type,
-            originalLanguage: messageLanguage,
-            attachmentIds: attachmentIds,
-            replyToId: replyToId,
-            localId: localId.uuidString
-        )
-
         do {
-            let sentMessage = try await apiService.sendMessage(request)
+            let request = MessageSendRequest(
+                conversationId: conversationId,
+                content: content,
+                contentType: type,
+                attachmentIds: attachmentIds,
+                replyToId: replyToId,
+                detectedLanguage: detectedLanguage,
+                sentiment: sentiment
+            )
 
-            // Replace optimistic message with server response
-            if let index = messages.firstIndex(where: { $0.id == localId.uuidString }) {
-                messages[index] = sentMessage
-            }
+            let message = try await apiService.sendMessage(request)
+
+            // Add to messages list
+            messages.insert(message, at: 0)
 
             // Update cache
-            await AppCache.messages.prependItems(key: cacheKey, items: [sentMessage])
+            await AppCache.messages.prependItems(key: cacheKey, items: [message])
 
-            chatLogger.info("Message sent successfully: \(sentMessage.id)")
             loadingState = .idle
+            chatLogger.info("ChatVM: Message sent successfully: \(message.id)")
 
         } catch {
-            // Mark optimistic message as failed
-            if let index = messages.firstIndex(where: { $0.id == localId.uuidString }) {
-                var failedMessage = messages[index]
-                failedMessage.isSending = false
-                failedMessage.sendError = error.localizedDescription
-                messages[index] = failedMessage
-            }
-
-            chatLogger.error("Failed to send message: \(error.localizedDescription)")
+            chatLogger.error("ChatVM: Failed to send message: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
-            loadingState = .idle
+            loadingState = .error(error.localizedDescription)
+            throw error
         }
     }
 
-    /// Retry sending a failed message
-    func retrySendMessage(_ messageId: String) async {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }),
-              let _ = messages[index].sendError else {
-            return
+    // MARK: - Public API: Message Actions
+
+    func editMessage(messageId: String, newContent: String) async throws {
+        chatLogger.info("ChatVM: Editing message \(messageId)")
+
+        let updatedMessage = try await apiService.editMessage(messageId: messageId, content: newContent)
+
+        // Update in list
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            messages[index] = updatedMessage
         }
 
-        let failedMessage = messages[index]
-
-        // Remove the failed message
-        messages.remove(at: index)
-
-        // Resend
-        await sendMessage(
-            content: failedMessage.content,
-            type: failedMessage.messageType,
-            attachmentIds: failedMessage.attachments?.map { $0.id },
-            replyToId: failedMessage.replyToId
-        )
+        chatLogger.info("ChatVM: Message edited successfully")
     }
 
-    // MARK: - Public API: Edit Message
+    func deleteMessage(messageId: String) async throws {
+        chatLogger.info("ChatVM: Deleting message \(messageId)")
 
-    func editMessage(messageId: String, newContent: String) async {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        try await apiService.deleteMessage(messageId: messageId)
 
-        // Store original content for rollback
-        let originalContent = messages[index].content
-        let wasEdited = messages[index].isEdited
-        let originalEditedAt = messages[index].editedAt
+        // Remove from list
+        messages.removeAll { $0.id == messageId }
 
-        // Optimistic update
-        messages[index].content = newContent
-        messages[index].isEdited = true
-        messages[index].editedAt = Date()
-
-        do {
-            let editedMessage = try await apiService.editMessage(messageId: messageId, content: newContent)
-
-            // MEMORY FIX: Find by ID again since array may have changed during await
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                messages[newIndex] = editedMessage
-            }
-
-            await AppCache.messages.updateItem(editedMessage)
-
-            chatLogger.info("Message edited successfully: \(messageId)")
-
-        } catch {
-            // MEMORY FIX: Find by ID again for rollback since array may have changed
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                messages[newIndex].content = originalContent
-                messages[newIndex].isEdited = wasEdited
-                messages[newIndex].editedAt = originalEditedAt
-            }
-
-            chatLogger.error("Failed to edit message: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
-        }
+        chatLogger.info("ChatVM: Message deleted successfully")
     }
 
-    // MARK: - Public API: Delete Message
+    func addReaction(messageId: String, emoji: String) async throws {
+        chatLogger.info("ChatVM: Adding reaction '\(emoji)' to message \(messageId)")
 
-    func deleteMessage(messageId: String) async {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let reaction = try await apiService.addReaction(messageId: messageId, emoji: emoji)
 
-        // Store for potential revert
-        let deletedMessage = messages[index]
-
-        // Optimistic removal
-        messages.remove(at: index)
-
-        do {
-            try await apiService.deleteMessage(messageId: messageId)
-            await AppCache.messages.removeItem(messageId)
-
-            chatLogger.info("Message deleted successfully: \(messageId)")
-
-        } catch {
-            // Revert on failure
-            messages.insert(deletedMessage, at: min(index, messages.count))
-            messages.sort { $0.createdAt > $1.createdAt }
-
-            chatLogger.error("Failed to delete message: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
+        // Update message in list
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            var message = messages[index]
+            var reactions = message.reactions ?? []
+            reactions.append(reaction)
+            message = Message(
+                id: message.id,
+                conversationId: message.conversationId,
+                senderId: message.senderId,
+                content: message.content,
+                contentType: message.contentType,
+                createdAt: message.createdAt,
+                updatedAt: message.updatedAt,
+                sender: message.sender,
+                attachments: message.attachments,
+                reactions: reactions,
+                replyTo: message.replyTo,
+                threadMessages: message.threadMessages,
+                isDeleted: message.isDeleted,
+                deletedAt: message.deletedAt,
+                metadata: message.metadata
+            )
+            messages[index] = message
         }
+
+        chatLogger.info("ChatVM: Reaction added successfully")
     }
 
-    // MARK: - Public API: Reactions
+    func removeReaction(reactionId: String, fromMessageId messageId: String) async throws {
+        chatLogger.info("ChatVM: Removing reaction \(reactionId) from message \(messageId)")
 
-    func addReaction(to messageId: String, emoji: String) async {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        try await apiService.removeReaction(reactionId: reactionId)
 
-        // Store original for rollback
-        let originalReactions = messages[index].reactions
-
-        // Optimistic update with temp ID
-        let tempReaction = Reaction(
-            id: "temp_\(UUID().uuidString)",
-            messageId: messageId,
-            userId: AuthenticationManager.shared.currentUser?.id,
-            anonymousUserId: nil,
-            emoji: emoji,
-            createdAt: Date(),
-            updatedAt: Date()
-        )
-        var reactions = messages[index].reactions ?? []
-        reactions.append(tempReaction)
-        messages[index].reactions = reactions
-
-        // Call the API to add reaction
-        do {
-            let newReaction = try await apiService.addReaction(messageId: messageId, emoji: emoji)
-
-            // Update optimistic reaction with server-assigned ID
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                // Replace temp reaction with actual reaction from server
-                messages[newIndex].reactions?.removeAll { $0.id == tempReaction.id }
-                messages[newIndex].reactions?.append(newReaction)
-                await AppCache.messages.updateItem(messages[newIndex])
-            }
-            chatLogger.info("Added reaction to message: \(messageId), emoji: \(emoji), reactionId: \(newReaction.id)")
-        } catch {
-            // Rollback on failure - find by ID again
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                messages[newIndex].reactions = originalReactions
-            }
-            chatLogger.error("Failed to add reaction: \(error.localizedDescription)")
+        // Update message in list
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            var message = messages[index]
+            var reactions = message.reactions ?? []
+            reactions.removeAll { $0.id == reactionId }
+            message = Message(
+                id: message.id,
+                conversationId: message.conversationId,
+                senderId: message.senderId,
+                content: message.content,
+                contentType: message.contentType,
+                createdAt: message.createdAt,
+                updatedAt: message.updatedAt,
+                sender: message.sender,
+                attachments: message.attachments,
+                reactions: reactions,
+                replyTo: message.replyTo,
+                threadMessages: message.threadMessages,
+                isDeleted: message.isDeleted,
+                deletedAt: message.deletedAt,
+                metadata: message.metadata
+            )
+            messages[index] = message
         }
+
+        chatLogger.info("ChatVM: Reaction removed successfully")
     }
 
-    func removeReaction(from messageId: String, emoji: String) async {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
-
-        let currentUserId = AuthenticationManager.shared.currentUser?.id
-
-        // FIX: Find the reaction ID to remove (API requires reactionId, not messageId+emoji)
-        guard let reactionToRemove = messages[index].reactions?.first(where: {
-            $0.emoji == emoji && $0.userId == currentUserId
-        }) else {
-            chatLogger.warn("Reaction not found to remove: \(messageId), emoji: \(emoji)")
-            return
-        }
-
-        let reactionId = reactionToRemove.id
-
-        // Store original for rollback
-        let originalReactions = messages[index].reactions
-
-        // Optimistic update
-        messages[index].reactions?.removeAll { $0.id == reactionId }
-
-        // FIX: Call API with reactionId
-        do {
-            try await apiService.removeReaction(reactionId: reactionId)
-
-            // Update cache - find by ID again
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                await AppCache.messages.updateItem(messages[newIndex])
-            }
-            chatLogger.info("Removed reaction from message: \(messageId), emoji: \(emoji), reactionId: \(reactionId)")
-        } catch {
-            // Rollback on failure - find by ID again
-            if let newIndex = messages.firstIndex(where: { $0.id == messageId }) {
-                messages[newIndex].reactions = originalReactions
-            }
-            chatLogger.error("Failed to remove reaction: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Public API: Mark as Read
-
-    func markAsRead() {
-        Task {
-            do {
-                try await apiService.markAsRead(conversationId: conversationId)
-                chatLogger.debug("Marked conversation as read")
-            } catch {
-                chatLogger.error("Failed to mark as read: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    // MARK: - Public API: Typing Indicator
+    // MARK: - Typing Indicator
 
     func startTyping() {
-        webSocketService.startTyping(conversationId: conversationId)
+        webSocketService.sendTypingStart(conversationId: conversationId)
 
-        // Auto-stop typing after 3 seconds
+        // Reset timer
         typingTimer?.invalidate()
         typingTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
             self?.stopTyping()
@@ -557,158 +395,72 @@ final class ChatViewModel: ObservableObject {
     }
 
     func stopTyping() {
-        webSocketService.stopTyping(conversationId: conversationId)
         typingTimer?.invalidate()
         typingTimer = nil
+        webSocketService.sendTypingStop(conversationId: conversationId)
     }
 
-    // MARK: - Private: WebSocket Listeners
-
-    /// Unique subscriber ID for this ViewModel instance
-    private lazy var subscriberId: String = "ChatViewModel_\(conversationId)"
+    // MARK: - Private: WebSocket Setup
 
     private func setupWebSocketListeners() {
-        let convId = conversationId
-        let cacheKeyLocal = cacheKey
+        // Listen for new messages
+        webSocketService.messagePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                guard let self = self, message.conversationId == self.conversationId else { return }
 
-        // New message received
-        webSocketService.on(EnvironmentConfig.SocketEvent.messageNew, subscriberId: subscriberId) { [weak self] data in
-            guard let messageData = data as? [String: Any],
-                  let messageConversationId = messageData["conversationId"] as? String,
-                  messageConversationId == convId else { return }
-
-            let wrapper = SendableDict(value: messageData)
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                if let message = self.parseMessage(from: wrapper.value) {
-                    // Check if message already exists (avoid duplicates)
-                    if !self.messages.contains(where: { $0.id == message.id }) {
-                        self.messages.insert(message, at: 0)
-
-                        // Update cache
-                        await AppCache.messages.prependItems(key: cacheKeyLocal, items: [message])
-
-                        chatLogger.debug("Received new message via WebSocket: \(message.id)")
-                    }
+                // Add new message if not already present
+                if !self.messages.contains(where: { $0.id == message.id }) {
+                    self.messages.insert(message, at: 0)
+                    chatLogger.info("ChatVM: Received new message via WebSocket: \(message.id)")
                 }
             }
-        }
+            .store(in: &cancellables)
 
-        // Message updated (edited)
-        webSocketService.on(EnvironmentConfig.SocketEvent.messageEdited, subscriberId: subscriberId) { [weak self] data in
-            guard let messageData = data as? [String: Any] else { return }
+        // Listen for message updates
+        webSocketService.messageUpdatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] updatedMessage in
+                guard let self = self else { return }
 
-            let wrapper = SendableDict(value: messageData)
-            Task { @MainActor [weak self] in
-                guard let self = self,
-                      let message = self.parseMessage(from: wrapper.value) else { return }
-                if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                    self.messages[index] = message
-                    await AppCache.messages.updateItem(message)
-                    chatLogger.debug("Message updated via WebSocket: \(message.id)")
+                if let index = self.messages.firstIndex(where: { $0.id == updatedMessage.id }) {
+                    self.messages[index] = updatedMessage
+                    chatLogger.info("ChatVM: Message updated via WebSocket: \(updatedMessage.id)")
                 }
             }
-        }
+            .store(in: &cancellables)
 
-        // Message deleted
-        webSocketService.on(EnvironmentConfig.SocketEvent.messageDeleted, subscriberId: subscriberId) { [weak self] data in
-            guard let deleteData = data as? [String: Any],
-                  let messageId = deleteData["messageId"] as? String else { return }
-
-            Task { @MainActor [weak self] in
+        // Listen for message deletions
+        webSocketService.messageDeletePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] messageId in
                 guard let self = self else { return }
+
                 self.messages.removeAll { $0.id == messageId }
-                await AppCache.messages.removeItem(messageId)
-                chatLogger.debug("Message deleted via WebSocket: \(messageId)")
+                chatLogger.info("ChatVM: Message deleted via WebSocket: \(messageId)")
             }
-        }
+            .store(in: &cancellables)
 
-        // Typing start (aligned with backend: typing:start)
-        webSocketService.on(EnvironmentConfig.SocketEvent.typingStart, subscriberId: subscriberId) { [weak self] data in
-            guard let typingData = data as? [String: Any],
-                  let typingConversationId = typingData["conversationId"] as? String,
-                  typingConversationId == convId,
-                  let userId = typingData["userId"] as? String else { return }
+        // Listen for typing indicators
+        webSocketService.typingPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (convId, userId, isTyping) in
+                guard let self = self, convId == self.conversationId else { return }
 
-            Task { @MainActor [weak self] in
-                self?.typingUsers.insert(userId)
+                if isTyping {
+                    if !self.typingUsers.contains(userId) {
+                        self.typingUsers.append(userId)
+                    }
+                } else {
+                    self.typingUsers.removeAll { $0 == userId }
+                }
             }
-        }
-
-        // Typing stop (aligned with backend: typing:stop)
-        webSocketService.on(EnvironmentConfig.SocketEvent.typingStop, subscriberId: subscriberId) { [weak self] data in
-            guard let typingData = data as? [String: Any],
-                  let typingConversationId = typingData["conversationId"] as? String,
-                  typingConversationId == convId,
-                  let userId = typingData["userId"] as? String else { return }
-
-            Task { @MainActor [weak self] in
-                self?.typingUsers.remove(userId)
-            }
-        }
-
-        // Reaction added
-        webSocketService.on(EnvironmentConfig.SocketEvent.reactionAdded, subscriberId: subscriberId) { [weak self] data in
-            guard let reactionData = data as? [String: Any],
-                  let messageId = reactionData["messageId"] as? String else { return }
-
-            Task { @MainActor [weak self] in
-                guard self != nil else { return }
-                chatLogger.debug("Reaction added via WebSocket: \(messageId)")
-                // Could refresh the specific message to get updated reactions
-            }
-        }
-
-        // Reaction removed
-        webSocketService.on(EnvironmentConfig.SocketEvent.reactionRemoved, subscriberId: subscriberId) { [weak self] data in
-            guard let reactionData = data as? [String: Any],
-                  let messageId = reactionData["messageId"] as? String else { return }
-
-            Task { @MainActor [weak self] in
-                guard self != nil else { return }
-                chatLogger.debug("Reaction removed via WebSocket: \(messageId)")
-            }
-        }
-    }
-
-    // MARK: - Private: Helpers
-
-    private func parseMessage(from data: [String: Any]) -> Message? {
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601WithFractionalSeconds
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let message = try decoder.decode(Message.self, from: jsonData)
-            return message
-        } catch {
-            chatLogger.error("Failed to parse message from WebSocket: \(error.localizedDescription)")
-            return nil
-        }
+            .store(in: &cancellables)
     }
 
     // MARK: - Cleanup
 
-    func cleanup() {
-        stopTyping()
-        typingTimer?.invalidate()
-        typingTimer = nil
-
-        // Unsubscribe this ViewModel from all WebSocket events (uses subscriber ID - won't affect other subscribers)
-        webSocketService.offAll(subscriberId: subscriberId)
-    }
-
     deinit {
-        // Note: cleanup() should be called manually before deinit
-        // since deinit cannot be async and cleanup involves MainActor
-    }
-}
-
-// MARK: - Message Translation Support
-
-extension ChatViewModel {
-    func translateMessage(_ messageId: String) async {
-        // Mock implementation - would call translation service
-        chatLogger.info("Translating message: \(messageId)")
+        typingTimer?.invalidate()
     }
 }

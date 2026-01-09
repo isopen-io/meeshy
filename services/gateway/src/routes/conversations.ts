@@ -339,8 +339,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        available: !existingConversation,
-        identifier
+        data: {
+          available: !existingConversation,
+          identifier
+        }
       });
     } catch (error) {
       console.error('[CONVERSATIONS] Error checking identifier availability:', error);
@@ -398,7 +400,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           isActive: true,
           createdAt: true,
           lastMessageAt: true,
-          image: true,
+          banner: true,
           avatar: true,
           communityId: true,
           members: {
@@ -1031,7 +1033,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
               id: true,
               emoji: true,
               userId: true,
-              anonymousUserId: true,
+              anonymousId: true,
               createdAt: true
             },
             orderBy: {
@@ -1235,8 +1237,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       if (unreadMessages.length === 0) {
         return reply.send({
           success: true,
-          message: 'Aucun message non lu à marquer',
-          markedCount: 0
+          data: { message: 'Aucun message non lu à marquer', markedCount: 0 }
         });
       }
 
@@ -1253,8 +1254,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`,
-        markedCount: unreadMessages.length
+        data: { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length }
       });
 
     } catch (error) {
@@ -2420,7 +2420,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Conversation supprimée avec succès'
+        data: { message: 'Conversation supprimée avec succès' }
       });
 
     } catch (error) {
@@ -2864,7 +2864,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Participant ajouté avec succès'
+        data: { message: 'Participant ajouté avec succès' }
       });
 
     } catch (error) {
@@ -2949,7 +2949,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Participant supprimé avec succès'
+        data: { message: 'Participant supprimé avec succès' }
       });
 
     } catch (error) {
@@ -3094,8 +3094,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        message: 'Rôle du participant mis à jour avec succès',
         data: {
+          message: 'Rôle du participant mis à jour avec succès',
           userId,
           role,
           participant: updatedMembership
@@ -3580,8 +3580,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       if (existingMember) {
         return reply.send({
           success: true,
-          message: 'Vous êtes déjà membre de cette conversation',
-          data: { conversationId: shareLink.conversationId }
+          data: { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId }
         });
       }
 
@@ -3662,8 +3661,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Vous avez rejoint la conversation avec succès',
-        data: { conversationId: shareLink.conversationId }
+        data: { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId }
       });
 
     } catch (error) {
@@ -3839,8 +3837,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: newMember,
-        message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
+        data: {
+          member: newMember,
+          message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
+        }
       });
 
     } catch (error) {

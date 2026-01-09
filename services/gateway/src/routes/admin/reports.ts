@@ -2,17 +2,17 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { getReportService } from '../../services/admin/report.service';
+import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import type {
   CreateReportDTO,
   UpdateReportDTO,
-  ReportFilters,
-  ReportPaginationParams
+  ReportFilters
 } from '@meeshy/shared/types';
 
-// Schémas de validation Zod
+// Schemas de validation Zod
 const createReportSchema = z.object({
   reportedType: z.enum(['message', 'user', 'conversation', 'community']),
-  reportedEntityId: z.string().min(1, 'ID de l\'entité requis'),
+  reportedEntityId: z.string().min(1, 'ID de l\'entite requis'),
   reporterId: z.string().optional(),
   reporterName: z.string().optional(),
   reportType: z.enum(['spam', 'inappropriate', 'harassment', 'violence', 'hate_speech', 'fake_profile', 'impersonation', 'other']),
@@ -25,7 +25,7 @@ const updateReportSchema = z.object({
   actionTaken: z.enum(['none', 'warning_sent', 'content_removed', 'user_suspended', 'user_banned']).optional()
 });
 
-// Middleware pour vérifier les permissions de modération
+// Middleware pour verifier les permissions de moderation
 const requireModeratorPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as any).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
@@ -41,7 +41,7 @@ const requireModeratorPermission = async (request: FastifyRequest, reply: Fastif
   if (!canModerate) {
     return reply.status(403).send({
       success: false,
-      message: 'Permission de modération requise'
+      message: 'Permission de moderation requise'
     });
   }
 };
@@ -51,7 +51,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/admin/reports
-   * Créer un nouveau signalement
+   * Creer un nouveau signalement
    */
   fastify.post('/', {
     onRequest: [fastify.authenticate]
@@ -60,7 +60,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const authContext = (request as any).authContext;
       const body = createReportSchema.parse(request.body);
 
-      // Si l'utilisateur est authentifié, utiliser son ID
+      // Si l'utilisateur est authentifie, utiliser son ID
       const reportData: CreateReportDTO = {
         reportedType: body.reportedType,
         reportedEntityId: body.reportedEntityId,
@@ -75,13 +75,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
       return reply.status(201).send({
         success: true,
         data: report,
-        message: 'Signalement créé avec succès'
+        message: 'Signalement cree avec succes'
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -89,7 +89,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Create report error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la création du signalement'
+        message: 'Erreur lors de la creation du signalement'
       });
     }
   });
@@ -121,22 +121,29 @@ export async function reportRoutes(fastify: FastifyInstance) {
         filters.createdBefore = new Date(query.createdBefore);
       }
 
-      const pagination: ReportPaginationParams = {
-        page: parseInt(query.page) || 1,
-        pageSize: parseInt(query.pageSize) || 20
-      };
+      const pagination = validatePagination(query.offset, query.limit, 100);
 
       const result = await reportService.listReports(filters, pagination);
 
+      const paginationMeta = buildPaginationMeta(
+        result.total,
+        pagination.offset,
+        pagination.limit,
+        result.reports.length
+      );
+
       return reply.send({
         success: true,
-        data: result
+        data: {
+          reports: result.reports,
+          pagination: paginationMeta
+        }
       });
     } catch (error) {
       logError(fastify.log, 'List reports error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération des signalements'
+        message: 'Erreur lors de la recuperation des signalements'
       });
     }
   });
@@ -159,14 +166,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get report stats error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération des statistiques'
+        message: 'Erreur lors de la recuperation des statistiques'
       });
     }
   });
 
   /**
    * GET /api/admin/reports/recent
-   * Obtenir les signalements récents
+   * Obtenir les signalements recents
    */
   fastify.get('/recent', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -185,7 +192,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get recent reports error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération des signalements récents'
+        message: 'Erreur lors de la recuperation des signalements recents'
       });
     }
   });
@@ -205,7 +212,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       if (!report) {
         return reply.status(404).send({
           success: false,
-          message: 'Signalement non trouvé'
+          message: 'Signalement non trouve'
         });
       }
 
@@ -217,14 +224,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get report error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération du signalement'
+        message: 'Erreur lors de la recuperation du signalement'
       });
     }
   });
 
   /**
    * PATCH /api/admin/reports/:id
-   * Mettre à jour un signalement (modérateur uniquement)
+   * Mettre a jour un signalement (moderateur uniquement)
    */
   fastify.patch('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -240,13 +247,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: report,
-        message: 'Signalement mis à jour'
+        message: 'Signalement mis a jour'
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -254,7 +261,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Update report error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la mise à jour du signalement'
+        message: 'Erreur lors de la mise a jour du signalement'
       });
     }
   });
@@ -273,7 +280,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Signalement supprimé'
+        data: { message: 'Signalement supprime' }
       });
     } catch (error) {
       logError(fastify.log, 'Delete report error:', error);
@@ -286,7 +293,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/admin/reports/entity/:type/:id
-   * Obtenir tous les signalements pour une entité spécifique
+   * Obtenir tous les signalements pour une entite specifique
    */
   fastify.get('/entity/:type/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -304,14 +311,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get entity reports error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération des signalements'
+        message: 'Erreur lors de la recuperation des signalements'
       });
     }
   });
 
   /**
    * POST /api/admin/reports/:id/assign
-   * Assigner un modérateur à un signalement
+   * Assigner un moderateur a un signalement
    */
   fastify.post('/:id/assign', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -326,20 +333,20 @@ export async function reportRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: report,
-        message: 'Modérateur assigné au signalement'
+        message: 'Moderateur assigne au signalement'
       });
     } catch (error) {
       logError(fastify.log, 'Assign moderator error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de l\'assignation du modérateur'
+        message: 'Erreur lors de l\'assignation du moderateur'
       });
     }
   });
 
   /**
    * GET /api/admin/reports/moderator/mine
-   * Obtenir les signalements assignés au modérateur connecté
+   * Obtenir les signalements assignes au moderateur connecte
    */
   fastify.get('/moderator/mine', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -358,7 +365,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get moderator reports error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur lors de la récupération des signalements'
+        message: 'Erreur lors de la recuperation des signalements'
       });
     }
   });

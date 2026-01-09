@@ -13,19 +13,66 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { EncryptionService } from '../../../services/EncryptionService';
 import * as crypto from 'crypto';
 
-// Mock PrismaClient
+// In-memory key storage for tests
+const keyStorage = new Map<string, {
+  id: string;
+  encryptedKey: string;
+  iv: string;
+  authTag: string;
+  algorithm: string;
+  purpose: string;
+  conversationId: string | null;
+  createdAt: Date;
+  lastAccessedAt: Date | null;
+}>();
+
+// Mock PrismaClient with serverEncryptionKey support
 const mockPrisma = {
   conversation: { findUnique: jest.fn(), update: jest.fn() },
   user: { findUnique: jest.fn(), update: jest.fn() },
   signalPreKeyBundle: { findUnique: jest.fn(), upsert: jest.fn() },
+  serverEncryptionKey: {
+    create: jest.fn((args: any) => {
+      const data = args.data;
+      keyStorage.set(data.id, { ...data, lastAccessedAt: null });
+      return Promise.resolve(data);
+    }),
+    findUnique: jest.fn((args: any) => {
+      const key = keyStorage.get(args.where.id);
+      return Promise.resolve(key || null);
+    }),
+    findMany: jest.fn((args: any) => {
+      const results: any[] = [];
+      keyStorage.forEach((value) => {
+        if (!args?.where?.purpose || args.where.purpose === value.purpose) {
+          results.push(value);
+        }
+      });
+      return Promise.resolve(results);
+    }),
+    update: jest.fn((args: any) => {
+      const key = keyStorage.get(args.where.id);
+      if (key) {
+        Object.assign(key, args.data);
+        keyStorage.set(args.where.id, key);
+      }
+      return Promise.resolve(key);
+    }),
+  },
 } as any;
 
 describe('Encryption Edge Cases', () => {
   let encryptionService: EncryptionService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    keyStorage.clear();
+
+    // Set test environment variable for master key (exactly 32 bytes)
+    process.env.ENCRYPTION_MASTER_KEY = Buffer.from('0123456789abcdef0123456789abcdef').toString('base64');
+
     encryptionService = new EncryptionService(mockPrisma);
+    await encryptionService.initialize();
   });
 
   describe('Boundary Conditions', () => {

@@ -115,7 +115,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       // Return generic success response even on error (security)
       return reply.status(200).send({
         success: true,
-        message: 'If an account exists with this email, a password reset link has been sent.'
+        data: { message: 'If an account exists with this email, a password reset link has been sent.' }
       });
     }
   });
@@ -204,7 +204,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (result.success) {
         return reply.status(200).send({
           success: true,
-          message: result.message
+          data: { message: result.message }
         });
       } else {
         return reply.status(400).send({

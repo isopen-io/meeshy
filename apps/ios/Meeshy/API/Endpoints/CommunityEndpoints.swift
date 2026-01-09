@@ -3,6 +3,7 @@
 //  Meeshy
 //
 //  Community API endpoints
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -13,7 +14,7 @@ enum CommunityEndpoints: APIEndpoint, Sendable {
     case getCommunity(id: String)
     case joinCommunity(id: String)
     case leaveCommunity(id: String)
-    case getCommunityConversations(communityId: String, page: Int, limit: Int)
+    case getCommunityConversations(communityId: String, offset: Int, limit: Int)
 
     var path: String {
         switch self {
@@ -41,8 +42,8 @@ enum CommunityEndpoints: APIEndpoint, Sendable {
 
     var queryParameters: [String: Any]? {
         switch self {
-        case .getCommunityConversations(_, let page, let limit):
-            return ["page": page, "limit": limit]
+        case .getCommunityConversations(_, let offset, let limit):
+            return ["offset": offset, "limit": limit]
         default:
             return nil
         }

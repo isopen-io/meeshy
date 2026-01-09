@@ -210,7 +210,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
 
       return reply.send({
         success: true,
-        message: 'Messages marqués comme lus'
+        data: { message: 'Messages marqués comme lus' }
       });
 
     } catch (error) {
@@ -275,7 +275,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
 
       return reply.send({
         success: true,
-        message: 'Messages marqués comme reçus'
+        data: { message: 'Messages marqués comme reçus' }
       });
 
     } catch (error) {

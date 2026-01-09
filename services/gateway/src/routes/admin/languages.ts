@@ -107,33 +107,53 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       );
 
       // Paires de langues les plus traduites (source -> target)
-      const languagePairs = await fastify.prisma.messageTranslation.groupBy({
-        by: ['sourceLanguage', 'targetLanguage'],
+      // Since sourceLanguage is derived from message.originalLanguage, we need to aggregate manually
+      const translations = await fastify.prisma.messageTranslation.findMany({
         where: {
           createdAt: { gte: startDate }
         },
-        _count: {
-          id: true
-        },
-        _avg: {
-          confidenceScore: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
+        select: {
+          targetLanguage: true,
+          confidenceScore: true,
+          message: {
+            select: {
+              originalLanguage: true
+            }
           }
-        },
-        take: 10
+        }
       });
 
-      const formattedPairs = languagePairs.map(pair => ({
-        from: pair.sourceLanguage,
-        to: pair.targetLanguage,
-        translationCount: pair._count.id,
-        avgConfidence: pair._avg.confidenceScore
-          ? Math.round(pair._avg.confidenceScore * 100) / 100
-          : 0
-      }));
+      // Aggregate language pairs manually
+      const pairCounts: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
+
+      translations.forEach(t => {
+        const sourceLanguage = t.message?.originalLanguage || 'unknown';
+        const key = `${sourceLanguage}|${t.targetLanguage}`;
+
+        if (!pairCounts[key]) {
+          pairCounts[key] = { count: 0, totalScore: 0, scoreCount: 0 };
+        }
+        pairCounts[key].count++;
+        if (t.confidenceScore != null) {
+          pairCounts[key].totalScore += t.confidenceScore;
+          pairCounts[key].scoreCount++;
+        }
+      });
+
+      const formattedPairs = Object.entries(pairCounts)
+        .map(([key, data]) => {
+          const [from, to] = key.split('|');
+          return {
+            from,
+            to,
+            translationCount: data.count,
+            avgConfidence: data.scoreCount > 0
+              ? Math.round((data.totalScore / data.scoreCount) * 100) / 100
+              : 0
+          };
+        })
+        .sort((a, b) => b.translationCount - a.translationCount)
+        .slice(0, 10);
 
       // Utilisateurs par langue préférée (langue système)
       const usersByLanguage = await fastify.prisma.user.groupBy({
@@ -316,37 +336,59 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const query = request.query as any;
       const limit = parseInt(query.limit) || 10;
 
-      const translationAccuracy = await fastify.prisma.messageTranslation.groupBy({
-        by: ['sourceLanguage', 'targetLanguage'],
-        _avg: {
-          confidenceScore: true
-        },
-        _count: {
-          id: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
+      // Fetch translations with their message's original language
+      const translations = await fastify.prisma.messageTranslation.findMany({
+        select: {
+          targetLanguage: true,
+          confidenceScore: true,
+          message: {
+            select: {
+              originalLanguage: true
+            }
           }
-        },
-        take: limit
+        }
       });
 
-      const accuracy = translationAccuracy.map(pair => ({
-        from: pair.sourceLanguage,
-        to: pair.targetLanguage,
-        avgConfidence: pair._avg.confidenceScore
-          ? Math.round(pair._avg.confidenceScore * 100)
-          : 0,
-        translationCount: pair._count.id,
-        quality: pair._avg.confidenceScore && pair._avg.confidenceScore > 0.9
-          ? 'excellent'
-          : pair._avg.confidenceScore && pair._avg.confidenceScore > 0.7
-            ? 'good'
-            : pair._avg.confidenceScore && pair._avg.confidenceScore > 0.5
-              ? 'fair'
-              : 'poor'
-      }));
+      // Aggregate by language pair manually
+      const pairStats: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
+
+      translations.forEach(t => {
+        const sourceLanguage = t.message?.originalLanguage || 'unknown';
+        const key = `${sourceLanguage}|${t.targetLanguage}`;
+
+        if (!pairStats[key]) {
+          pairStats[key] = { count: 0, totalScore: 0, scoreCount: 0 };
+        }
+        pairStats[key].count++;
+        if (t.confidenceScore != null) {
+          pairStats[key].totalScore += t.confidenceScore;
+          pairStats[key].scoreCount++;
+        }
+      });
+
+      const accuracy = Object.entries(pairStats)
+        .map(([key, data]) => {
+          const [from, to] = key.split('|');
+          const avgConfidence = data.scoreCount > 0
+            ? data.totalScore / data.scoreCount
+            : 0;
+
+          return {
+            from,
+            to,
+            avgConfidence: Math.round(avgConfidence * 100),
+            translationCount: data.count,
+            quality: avgConfidence > 0.9
+              ? 'excellent'
+              : avgConfidence > 0.7
+                ? 'good'
+                : avgConfidence > 0.5
+                  ? 'fair'
+                  : 'poor'
+          };
+        })
+        .sort((a, b) => b.translationCount - a.translationCount)
+        .slice(0, limit);
 
       return reply.send({
         success: true,

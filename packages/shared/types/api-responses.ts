@@ -1,23 +1,35 @@
 /**
- * Types unifiés pour les réponses API Meeshy
- * Harmonisation Gateway ↔ Frontend - WebSocket et REST
+ * Standard API Response Types - SINGLE SOURCE OF TRUTH
+ * Used by Gateway (REST API) and consumed by Frontend
+ *
+ * This file contains the canonical definitions for:
+ * - PaginationMeta: Standard pagination metadata
+ * - ApiResponse: Standard API response wrapper
+ * - PaginatedResponse: Helper type for paginated responses
  */
 
 import type { ConversationStats } from './conversation';
 
 /**
- * Métadonnées de pagination
+ * Standard pagination metadata - SINGLE SOURCE OF TRUTH
+ * All pagination across the application should use this interface.
+ *
+ * @example Gateway response:
+ * {
+ *   success: true,
+ *   data: [...],
+ *   pagination: { total: 100, offset: 0, limit: 20, hasMore: true }
+ * }
  */
 export interface PaginationMeta {
   total: number;
-  page: number;
+  offset: number;
   limit: number;
   hasMore: boolean;
-  hasPrevious: boolean;
 }
 
 /**
- * Métadonnées enrichies pour les réponses
+ * Extended metadata for responses (optional, for advanced use cases)
  */
 export interface ResponseMeta {
   conversationStats?: ConversationStats;
@@ -28,8 +40,17 @@ export interface ResponseMeta {
 }
 
 /**
- * Format de réponse API unifié (REST et WebSocket)
- * Base commune pour toutes les réponses du système
+ * Standard API Response format - used by Gateway and consumed by Frontend
+ * This is the ONLY ApiResponse type that should be used across the application.
+ *
+ * @example Success response:
+ * { success: true, data: { id: '123', name: 'Test' } }
+ *
+ * @example Error response:
+ * { success: false, error: 'Not found', message: 'User not found' }
+ *
+ * @example Paginated response:
+ * { success: true, data: [...], pagination: { total: 100, offset: 0, limit: 20, hasMore: true } }
  */
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -37,19 +58,27 @@ export interface ApiResponse<T = unknown> {
   error?: string;
   message?: string;
   code?: string;
+  pagination?: PaginationMeta;
   meta?: ResponseMeta;
 }
 
 /**
- * Réponse WebSocket (même format que ApiResponse)
- * Assure la cohérence entre REST et WebSocket
+ * Paginated response helper type
+ * Use this when you need a response that always includes pagination
  */
-export interface SocketResponse<T = unknown> extends ApiResponse<T> {
-  // Identique à ApiResponse pour garantir la cohérence
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: PaginationMeta;
 }
 
 /**
- * Données de réponse pour l'envoi de message
+ * WebSocket response (same format as ApiResponse for consistency)
+ */
+export interface SocketResponse<T = unknown> extends ApiResponse<T> {
+  // Identical to ApiResponse for cross-protocol consistency
+}
+
+/**
+ * Response data for sending a message
  */
 export interface SendMessageResponseData {
   readonly messageId: string;
@@ -58,14 +87,14 @@ export interface SendMessageResponseData {
 }
 
 /**
- * Réponse pour l'envoi de message
+ * Response for sending a message
  */
 export interface SendMessageResponse<TMessage = unknown> extends ApiResponse<SendMessageResponseData> {
   readonly messageData?: TMessage;
 }
 
 /**
- * Données de réponse pour la liste des messages
+ * Response data for message list
  */
 export interface GetMessagesResponseData<TMessage = unknown> {
   readonly messages: readonly TMessage[];
@@ -73,27 +102,27 @@ export interface GetMessagesResponseData<TMessage = unknown> {
 }
 
 /**
- * Réponse pour la liste des messages
+ * Response for message list
  */
 export interface GetMessagesResponse<TMessage = unknown> extends ApiResponse<GetMessagesResponseData<TMessage>> {}
 
 /**
- * Réponse pour la liste des conversations
+ * Response for conversation list
  */
 export interface GetConversationsResponse<TConversation = unknown> extends ApiResponse<readonly TConversation[]> {}
 
 /**
- * Réponse pour une conversation spécifique
+ * Response for a specific conversation
  */
 export interface GetConversationResponse<TConversation = unknown> extends ApiResponse<TConversation> {}
 
 /**
- * Réponse pour la création d'une conversation
+ * Response for creating a conversation
  */
 export interface CreateConversationResponse<TConversation = unknown> extends ApiResponse<TConversation> {}
 
 /**
- * Erreur API standardisée
+ * Standardized API error
  */
 export interface ApiError {
   readonly message: string;
@@ -103,7 +132,7 @@ export interface ApiError {
 }
 
 /**
- * Configuration API
+ * API configuration
  */
 export interface ApiConfig {
   readonly baseUrl: string;
@@ -114,7 +143,7 @@ export interface ApiConfig {
 }
 
 /**
- * Options pour les requêtes API
+ * Options for API requests
  */
 export interface ApiRequestOptions {
   readonly signal?: AbortSignal;
@@ -124,7 +153,7 @@ export interface ApiRequestOptions {
 }
 
 /**
- * Données de réponse d'authentification
+ * Authentication response data
  */
 export interface AuthResponseData<TUser = unknown> {
   readonly user: TUser;
@@ -134,12 +163,12 @@ export interface AuthResponseData<TUser = unknown> {
 }
 
 /**
- * Réponse d'authentification
+ * Authentication response
  */
 export interface AuthResponse<TUser = unknown> extends ApiResponse<AuthResponseData<TUser>> {}
 
 /**
- * Traduction individuelle
+ * Individual translation
  */
 export interface Translation {
   readonly targetLanguage: string;
@@ -150,7 +179,7 @@ export interface Translation {
 }
 
 /**
- * Données de réponse pour les traductions
+ * Response data for translations
  */
 export interface TranslationResponseData {
   readonly messageId: string;
@@ -158,38 +187,38 @@ export interface TranslationResponseData {
 }
 
 /**
- * Réponse pour les traductions
+ * Response for translations
  */
 export interface TranslationResponse extends ApiResponse<TranslationResponseData> {}
 
 /**
- * Données de réponse pour les statistiques
+ * Response data for statistics
  */
 export interface StatsResponseData {
   readonly stats: ConversationStats;
 }
 
 /**
- * Réponse pour les statistiques
+ * Response for statistics
  */
 export interface StatsResponse extends ApiResponse<StatsResponseData> {}
 
 /**
- * Type guard pour vérifier si une réponse est un succès
+ * Type guard to check if a response is successful
  */
 export function isSuccessResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { success: true; data: T } {
   return response.success === true && response.data !== undefined;
 }
 
 /**
- * Type guard pour vérifier si une réponse est une erreur
+ * Type guard to check if a response is an error
  */
 export function isErrorResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { success: false; error: string } {
   return response.success === false && response.error !== undefined;
 }
 
 /**
- * Utilitaire pour créer une réponse de succès
+ * Utility to create a success response
  */
 export function createSuccessResponse<T>(data: T, meta?: ResponseMeta): ApiResponse<T> {
   return {
@@ -200,7 +229,7 @@ export function createSuccessResponse<T>(data: T, meta?: ResponseMeta): ApiRespo
 }
 
 /**
- * Utilitaire pour créer une réponse d'erreur
+ * Utility to create an error response
  */
 export function createErrorResponse(error: string, code?: string, meta?: ResponseMeta): ApiResponse<never> {
   return {
@@ -208,5 +237,19 @@ export function createErrorResponse(error: string, code?: string, meta?: Respons
     error,
     code,
     meta
+  };
+}
+
+/**
+ * Utility to create a paginated success response
+ */
+export function createPaginatedResponse<T>(
+  data: T[],
+  pagination: PaginationMeta
+): PaginatedResponse<T> {
+  return {
+    success: true,
+    data,
+    pagination
   };
 }

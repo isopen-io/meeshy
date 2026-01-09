@@ -151,7 +151,7 @@ export function useMessageReactions({
               emoji,
               count: 1,
               userIds: currentUserId && !isAnonymous ? [currentUserId] : [],
-              anonymousUserIds: isAnonymous && currentUserId ? [currentUserId] : [],
+              anonymousIds: isAnonymous && currentUserId ? [currentUserId] : [],
               hasCurrentUser: true
             }
           ];
@@ -352,7 +352,7 @@ export function useMessageReactions({
       // Mettre à jour userReactions si c'est nous
       if (
         (event.userId && event.userId === currentUserId && !isAnonymous) ||
-        (event.anonymousUserId && event.anonymousUserId === currentUserId && isAnonymous)
+        (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
       ) {
         setUserReactions(prev => 
           prev.includes(event.emoji) ? prev : [...prev, event.emoji]
@@ -381,7 +381,7 @@ export function useMessageReactions({
       // Mettre à jour userReactions si c'est nous
       if (
         (event.userId && event.userId === currentUserId && !isAnonymous) ||
-        (event.anonymousUserId && event.anonymousUserId === currentUserId && isAnonymous)
+        (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
       ) {
         setUserReactions(prev => prev.filter(e => e !== event.emoji));
       }

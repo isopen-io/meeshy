@@ -20,16 +20,16 @@ interface MessageStatusBody {
 export default async function messageRoutes(fastify: FastifyInstance) {
   // Récupérer prisma décoré par le serveur
   const prisma = fastify.prisma;
-  
+
   // Instancier les services
   const attachmentService = new AttachmentService(prisma);
   const translationService: TranslationService = (fastify as any).translationService;
   const socketIOHandler = fastify.socketIOHandler;
-  
+
   // Middleware d'authentification requis pour les messages
-  const requiredAuth = createUnifiedAuthMiddleware(prisma, { 
-    requireAuth: true, 
-    allowAnonymous: false 
+  const requiredAuth = createUnifiedAuthMiddleware(prisma, {
+    requireAuth: true,
+    allowAnonymous: false
   });
 
   // Route pour récupérer un message spécifique
@@ -101,8 +101,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             select: {
               id: true,
               targetLanguage: true,
-              translatedContent: true,
-              sourceLanguage: true
+              translatedContent: true
             }
           }
         }
@@ -250,7 +249,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             messageId: messageId
           }
         });
-        
+
         // Créer un objet message pour la retraduction
         const messageForRetranslation = {
           id: messageId,
@@ -259,7 +258,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           conversationId: message.conversationId,
           senderId: userId
         };
-        
+
         // Déclencher la retraduction via la méthode privée existante
         if (translationService) {
           await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
@@ -289,8 +288,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: updatedMessage,
-        message: 'Message modifié avec succès'
+        data: {
+          ...updatedMessage,
+          message: 'Message modifié avec succès'
+        }
       });
 
     } catch (error) {
@@ -351,7 +352,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Vérifier les permissions de suppression
       const userMembership = message.conversation.members[0];
-      const canDelete = 
+      const canDelete =
         // L'auteur du message peut le supprimer
         message.senderId === userId ||
         // Les administrateurs et modérateurs peuvent supprimer
@@ -375,7 +376,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           try {
             await attachmentService.deleteAttachment(attachment.id);
           } catch (error) {
-            console.error(`❌ [MESSAGES] Erreur lors de la suppression de l'attachment ${attachment.id}:`, error);
+            console.error(`[MESSAGES] Erreur lors de la suppression de l'attachment ${attachment.id}:`, error);
             // Continuer même en cas d'erreur pour supprimer les autres
           }
         }
@@ -393,7 +394,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // Marquer le message comme supprimé (soft delete)
       const deletedMessage = await prisma.message.update({
         where: { id: messageId },
-        data: { 
+        data: {
           isDeleted: true,
           deletedAt: new Date()
           // Note: deletedBy n'existe pas dans le schéma Prisma actuel
@@ -412,7 +413,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       await prisma.conversation.update({
         where: { id: message.conversationId },
-        data: { 
+        data: {
           lastMessageAt: lastNonDeletedMessage?.createdAt || message.conversation.createdAt
         }
       });
@@ -434,7 +435,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Message supprimé avec succès'
+        data: { message: 'Message supprimé avec succès' }
       });
 
     } catch (error) {
@@ -533,7 +534,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Message marqué comme lu'
+          data: { message: 'Message marqué comme lu' }
         });
       }
 
@@ -583,7 +584,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Seuls les modérateurs/admins ou l'auteur peuvent voir l'historique
       const userMembership = message.conversation.members[0];
-      const canViewHistory = 
+      const canViewHistory =
         message.senderId === userId ||
         userMembership?.role === 'admin' ||
         userMembership?.role === 'moderator' ||
@@ -654,7 +655,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           translations: {
             select: {
               id: true,
-              sourceLanguage: true,
               targetLanguage: true,
               translatedContent: true,
               translationModel: true,
@@ -934,7 +934,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: `Attachment marqué comme ${action}`
+        data: { message: `Attachment marqué comme ${action}` }
       });
 
     } catch (error) {

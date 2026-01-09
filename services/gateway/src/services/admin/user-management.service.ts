@@ -2,9 +2,6 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   FullUser,
   UserFilters,
-  PaginationParams,
-  UserPaginationMeta,
-  PaginatedUsersResponse,
   CreateUserDTO,
   UpdateUserProfileDTO,
   UpdateEmailDTO,
@@ -22,10 +19,9 @@ export class UserManagementService {
    */
   async getUsers(
     filters: UserFilters,
-    pagination: PaginationParams
-  ): Promise<PaginatedUsersResponse<FullUser>> {
-    const { page, pageSize } = pagination;
-    const skip = (page - 1) * pageSize;
+    pagination: { offset: number; limit: number }
+  ): Promise<{ users: FullUser[]; total: number }> {
+    const { offset, limit } = pagination;
 
     // Construction des filtres Prisma
     const where: Record<string, unknown> = {};
@@ -92,26 +88,15 @@ export class UserManagementService {
       this.prisma.user.findMany({
         where,
         orderBy,
-        skip,
-        take: pageSize
+        skip: offset,
+        take: limit
       }),
       this.prisma.user.count({ where })
     ]);
 
-    const totalPages = Math.ceil(totalUsers / pageSize);
-
-    const paginationMeta: UserPaginationMeta = {
-      page,
-      pageSize,
-      totalUsers,
-      totalPages,
-      hasNextPage: page < totalPages,
-      hasPreviousPage: page > 1
-    };
-
     return {
       users: users as FullUser[],
-      pagination: paginationMeta
+      total: totalUsers
     };
   }
 

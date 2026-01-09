@@ -33,6 +33,22 @@ interface CategoryIdParams {
   categoryId: string;
 }
 
+/**
+ * Validate and sanitize pagination parameters
+ * - Ensures offset is never negative
+ * - Ensures limit is between 1 and maxLimit (default 100)
+ */
+function validatePagination(
+  offset: string = '0',
+  limit: string = '50',
+  defaultLimit: number = 50,
+  maxLimit: number = 100
+): { offsetNum: number; limitNum: number } {
+  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
+  return { offsetNum, limitNum };
+}
+
 export default async function conversationPreferencesRoutes(fastify: FastifyInstance) {
 
   // ========== CONVERSATION PREFERENCES ==========
@@ -110,8 +126,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const offsetNum = parseInt(offset, 10);
-        const limitNum = Math.min(parseInt(limit, 10), 100);
+        const { offsetNum, limitNum } = validatePagination(offset, limit);
 
         const whereClause = { userId };
 
@@ -243,7 +258,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         reply.send({
           success: true,
-          message: 'Preferences deleted successfully'
+          data: { message: 'Preferences deleted successfully' }
         });
       } catch (error: any) {
         if (error.code === 'P2025') {
@@ -298,7 +313,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         reply.send({
           success: true,
-          message: 'Conversations reordered successfully'
+          data: { message: 'Conversations reordered successfully' }
         });
       } catch (error) {
         logError(fastify.log, 'Error reordering conversations:', error);
@@ -332,8 +347,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const offsetNum = parseInt(offset, 10);
-        const limitNum = Math.min(parseInt(limit, 10), 100);
+        const { offsetNum, limitNum } = validatePagination(offset, limit);
 
         const whereClause = { userId };
 
@@ -582,7 +596,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         reply.send({
           success: true,
-          message: 'Category deleted successfully'
+          data: { message: 'Category deleted successfully' }
         });
       } catch (error) {
         logError(fastify.log, 'Error deleting category:', error);
@@ -631,7 +645,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         reply.send({
           success: true,
-          message: 'Categories reordered successfully'
+          data: { message: 'Categories reordered successfully' }
         });
       } catch (error) {
         logError(fastify.log, 'Error reordering categories:', error);

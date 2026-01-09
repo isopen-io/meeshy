@@ -1,5 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "remoteCache": {
+    "enabled": true,
+    "signature": true
+  },
   "globalDependencies": [
     ".env",
     ".env.local",
@@ -15,6 +19,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!**/*.spec.ts",
+        "!**/*.spec.tsx",
+        "!**/__tests__/**",
+        "!**/coverage/**"
+      ],
       "outputs": [
         "dist/**",
         ".next/**",
@@ -55,6 +68,15 @@
     },
     "lint": {
       "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx",
+        ".eslintrc*",
+        "eslint.config.*"
+      ],
       "outputs": []
     },
     "type-check": {

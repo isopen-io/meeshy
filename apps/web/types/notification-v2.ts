@@ -154,7 +154,7 @@ export interface NotificationFilters {
  * Options de pagination
  */
 export interface NotificationPaginationOptions {
-  page: number;
+  offset: number;
   limit: number;
   sortBy?: 'createdAt' | 'priority' | 'readAt';
   sortOrder?: 'asc' | 'desc';
@@ -166,10 +166,9 @@ export interface NotificationPaginationOptions {
 export interface NotificationPaginatedResponse {
   notifications: NotificationV2[];
   pagination: {
-    page: number;
+    offset: number;
     limit: number;
     total: number;
-    totalPages: number;
     hasMore: boolean;
   };
 }

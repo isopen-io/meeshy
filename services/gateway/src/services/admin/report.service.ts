@@ -4,8 +4,6 @@ import type {
   CreateReportDTO,
   UpdateReportDTO,
   ReportFilters,
-  ReportPaginationParams,
-  PaginatedReportsResponse,
   ReportStats,
   ReportStatus,
   ReportType,
@@ -53,10 +51,9 @@ export class ReportService {
    */
   async listReports(
     filters: ReportFilters = {},
-    pagination: ReportPaginationParams = { page: 1, pageSize: 20 }
-  ): Promise<PaginatedReportsResponse> {
-    const { page, pageSize } = pagination;
-    const skip = (page - 1) * pageSize;
+    pagination: { offset: number; limit: number } = { offset: 0, limit: 20 }
+  ): Promise<{ reports: Report[]; total: number }> {
+    const { offset, limit } = pagination;
 
     // Construire les filtres WHERE
     const where: any = {};
@@ -102,24 +99,15 @@ export class ReportService {
       this.prisma.report.findMany({
         where,
         orderBy,
-        skip,
-        take: pageSize
+        skip: offset,
+        take: limit
       }),
       this.prisma.report.count({ where })
     ]);
 
-    const totalPages = Math.ceil(totalCount / pageSize);
-
     return {
       reports: reports as Report[],
-      pagination: {
-        page,
-        pageSize,
-        totalReports: totalCount,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1
-      }
+      total: totalCount
     };
   }
 

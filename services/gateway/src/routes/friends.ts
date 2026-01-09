@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { logError } from '../utils/logger';
 import type { NotificationService } from '../services/NotificationService';
 
-// Schémas de validation
+// Schemas de validation
 const createFriendRequestSchema = z.object({
   receiverId: z.string(),
   message: z.string().optional()
@@ -12,6 +12,22 @@ const createFriendRequestSchema = z.object({
 const updateFriendRequestSchema = z.object({
   status: z.enum(['accepted', 'rejected'])
 });
+
+/**
+ * Validate and sanitize pagination parameters
+ * - Ensures offset is never negative
+ * - Ensures limit is between 1 and maxLimit (default 100)
+ */
+function validatePagination(
+  offset: string = '0',
+  limit: string = '20',
+  defaultLimit: number = 20,
+  maxLimit: number = 100
+): { offsetNum: number; limitNum: number } {
+  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
+  return { offsetNum, limitNum };
+}
 
 export async function friendRequestRoutes(fastify: FastifyInstance) {
   // Envoyer une demande d'ami
@@ -22,7 +38,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       const body = createFriendRequestSchema.parse(request.body);
       const { userId } = request.user as any;
 
-      // Vérifier que l'utilisateur cible existe
+      // Verifier que l'utilisateur cible existe
       const targetUser = await fastify.prisma.user.findUnique({
         where: { id: body.receiverId }
       });
@@ -30,11 +46,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (!targetUser) {
         return reply.status(404).send({
           success: false,
-          message: 'Utilisateur non trouvé'
+          message: 'Utilisateur non trouve'
         });
       }
 
-      // Vérifier qu'il n'y a pas déjà une demande
+      // Verifier qu'il n'y a pas deja une demande
       const existingRequest = await fastify.prisma.friendRequest.findFirst({
         where: {
           OR: [
@@ -47,11 +63,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (existingRequest) {
         return reply.status(409).send({
           success: false,
-          message: 'Une demande d\'ami existe déjà entre vous'
+          message: 'Une demande d\'ami existe deja entre vous'
         });
       }
 
-      // Créer la demande d'ami
+      // Creer la demande d'ami
       const friendRequest = await fastify.prisma.friendRequest.create({
         data: {
           senderId: userId,
@@ -88,21 +104,21 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Créer une notification pour le destinataire avec actions
+      // Creer une notification pour le destinataire avec actions
       const notificationService = (fastify as any).notificationService as NotificationService;
       if (notificationService) {
         const senderName = friendRequest.sender.displayName ||
                           friendRequest.sender.username ||
                           `${friendRequest.sender.firstName} ${friendRequest.sender.lastName}`.trim();
 
-        const title = 'Nouvelle demande d\'amitié';
+        const title = 'Nouvelle demande d\'amitie';
         const content = body.message
-          ? `${senderName} vous a envoyé une demande d'amitié : "${body.message}"`
-          : `${senderName} vous a envoyé une demande d'amitié`;
+          ? `${senderName} vous a envoye une demande d'amitie : "${body.message}"`
+          : `${senderName} vous a envoye une demande d'amitie`;
 
         await notificationService.createNotification({
           userId: body.receiverId,
-          type: 'friend_request' as any, // TypeScript: on étendra le type plus tard
+          type: 'friend_request' as any, // TypeScript: on etendra le type plus tard
           title,
           content,
           priority: 'normal',
@@ -141,7 +157,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -154,7 +170,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Récupérer les demandes d'ami reçues
+  // Recuperer les demandes d'ami recues
   fastify.get('/friend-requests/received', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -162,8 +178,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       const { userId } = request.user as any;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       const whereClause = { receiverId: userId, status: 'pending' as const };
 
@@ -212,7 +227,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Récupérer les demandes d'ami envoyées
+  // Recuperer les demandes d'ami envoyees
   fastify.get('/friend-requests/sent', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -220,8 +235,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       const { userId } = request.user as any;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       const whereClause = { senderId: userId };
 
@@ -270,7 +284,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Répondre à une demande d'ami
+  // Repondre a une demande d'ami
   fastify.patch('/friend-requests/:id', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -279,7 +293,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       const body = updateFriendRequestSchema.parse(request.body);
       const { userId } = request.user as any;
 
-      // Vérifier que la demande existe et appartient à l'utilisateur
+      // Verifier que la demande existe et appartient a l'utilisateur
       const friendRequest = await fastify.prisma.friendRequest.findFirst({
         where: {
           id,
@@ -291,11 +305,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (!friendRequest) {
         return reply.status(404).send({
           success: false,
-          message: 'Demande d\'ami non trouvée ou déjà traitée'
+          message: 'Demande d\'ami non trouvee ou deja traitee'
         });
       }
 
-      // Mettre à jour le statut
+      // Mettre a jour le statut
       const updatedRequest = await fastify.prisma.friendRequest.update({
         where: { id },
         data: { status: body.status },
@@ -329,7 +343,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Marquer la notification de requête d'amitié comme lue
+      // Marquer la notification de requete d'amitie comme lue
       const notificationService = (fastify as any).notificationService as NotificationService;
       try {
         await fastify.prisma.notification.updateMany({
@@ -349,7 +363,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         logError(fastify.log, 'Error marking friend request notification as read:', error);
       }
 
-      // Envoyer une notification à l'expéditeur selon la réponse
+      // Envoyer une notification a l'expediteur selon la reponse
       if (notificationService) {
         const receiverName = updatedRequest.receiver.displayName ||
                             updatedRequest.receiver.username ||
@@ -359,8 +373,8 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           await notificationService.createNotification({
             userId: updatedRequest.senderId,
             type: 'friend_request' as any,
-            title: 'Demande d\'amitié acceptée',
-            content: `${receiverName} a accepté votre demande d'amitié`,
+            title: 'Demande d\'amitie acceptee',
+            content: `${receiverName} a accepte votre demande d'amitie`,
             priority: 'normal',
             senderId: userId,
             senderUsername: updatedRequest.receiver.username,
@@ -374,8 +388,8 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           await notificationService.createNotification({
             userId: updatedRequest.senderId,
             type: 'friend_request' as any,
-            title: 'Demande d\'amitié refusée',
-            content: `${receiverName} a refusé votre demande d'amitié`,
+            title: 'Demande d\'amitie refusee',
+            content: `${receiverName} a refuse votre demande d'amitie`,
             priority: 'low',
             senderId: userId,
             senderUsername: updatedRequest.receiver.username,
@@ -388,7 +402,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Si acceptée, créer une conversation directe entre les utilisateurs
+      // Si acceptee, creer une conversation directe entre les utilisateurs
       if (body.status === 'accepted') {
         const existingConversation = await fastify.prisma.conversation.findFirst({
           where: {
@@ -404,9 +418,9 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         });
 
         if (!existingConversation) {
-          // Générer un identifier unique pour la conversation directe
+          // Generer un identifier unique pour la conversation directe
           const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
-          
+
           const conversation = await fastify.prisma.conversation.create({
             data: {
               identifier,
@@ -420,7 +434,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             }
           });
 
-          // Ajouter la conversation à la réponse
+          // Ajouter la conversation a la reponse
           (updatedRequest as any).conversation = conversation;
         }
       }
@@ -434,7 +448,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          message: 'Données invalides',
+          message: 'Donnees invalides',
           errors: error.errors
         });
       }
@@ -455,7 +469,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const { userId } = request.user as any;
 
-      // Vérifier que la demande existe et appartient à l'utilisateur (envoyée ou reçue)
+      // Verifier que la demande existe et appartient a l'utilisateur (envoyee ou recue)
       const friendRequest = await fastify.prisma.friendRequest.findFirst({
         where: {
           id,
@@ -469,7 +483,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       if (!friendRequest) {
         return reply.status(404).send({
           success: false,
-          message: 'Demande d\'ami non trouvée'
+          message: 'Demande d\'ami non trouvee'
         });
       }
 
@@ -480,7 +494,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Demande d\'ami supprimée'
+        data: { message: 'Demande d\'ami supprimee' }
       });
 
     } catch (error) {

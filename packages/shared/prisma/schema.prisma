@@ -20,10 +20,18 @@ model User {
   phoneNumber                 String?
   password                    String
   displayName                 String?
+  /// User profile picture
   avatar                      String?
+  /// User profile banner/cover image
+  banner                      String?
   isOnline                    Boolean   @default(false)
-  lastSeen                    DateTime  @default(now())
   lastActiveAt                DateTime  @default(now())
+  /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+  lastSeen                    DateTime  @default(now())
+  /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
+  timezone                    String?
+  /// Array of blocked user IDs for quick access
+  blockedUserIds              String[]  @default([]) @db.ObjectId
   systemLanguage              String    @default("en")
   regionalLanguage            String    @default("fr")
   customDestinationLanguage   String?
@@ -131,7 +139,6 @@ model User {
   mentions               Mention[]                     @relation("UserMentions")
   notifications          Notification[]
   notificationPreference NotificationPreference?
-  typingIndicators       TypingIndicator[]
   preferences            UserPreference[]
   stats                  UserStats?
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
@@ -164,6 +171,13 @@ model User {
 
   // Per-user message deletions ("delete for me" feature)
   messageDeletions UserMessageDeletion[]
+
+  // Report relations
+  reportsMade      Report[] @relation("ReportReporter")
+  reportsModerated Report[] @relation("ReportModerator")
+
+  // Conversation sharing
+  sharedConversations ConversationShare[] @relation("ConversationSharer")
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -175,14 +189,27 @@ model Conversation {
   type          String
   title         String?
   description   String?
-  image         String?
+  /// Conversation profile picture
   avatar        String?
+  /// Conversation banner/cover image
+  banner        String?
   communityId   String?  @db.ObjectId
   isActive      Boolean  @default(true)
-  isArchived    Boolean  @default(false)
+  /// Denormalized member count for performance
+  memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+
+  // ============================================
+  // WRITE PERMISSIONS
+  // ============================================
+  /// Minimum role required to send messages: everyone, member, moderator, admin, creator
+  defaultWriteRole      String   @default("everyone")
+  /// Announcement-only mode (only creator/admins can write, overrides defaultWriteRole)
+  isAnnouncementChannel Boolean  @default(false)
+  /// Slow mode - minimum seconds between messages per user (0 = disabled)
+  slowModeSeconds       Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   // ============================================
   // E2EE / ENCRYPTION FIELDS
@@ -217,12 +244,47 @@ model Conversation {
   attachmentStatusEntries AttachmentStatusEntry[]
   readCursors             ConversationReadCursor[]
 
-  typingIndicators TypingIndicator[]
-  callSessions     CallSession[]
-  userPreferences  UserConversationPreferences[]
+  callSessions    CallSession[]
+  userPreferences UserConversationPreferences[]
 
   // E2EE key exchange relation
   conversationPublicKeys ConversationPublicKey[]
+
+  // Shares of this conversation to communities
+  shares ConversationShare[] @relation("SharedConversation")
+}
+
+/// Share/forward a conversation to a community or another context
+/// Allows conversations to be featured/linked within communities
+model ConversationShare {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// The conversation being shared
+  conversationId String   @db.ObjectId
+  /// Target community where the conversation is shared
+  communityId    String   @db.ObjectId
+  /// User who shared the conversation
+  sharedBy       String   @db.ObjectId
+  /// Optional title/label for the share
+  title          String?
+  /// Optional description for why it's shared
+  description    String?
+  /// Whether the share is pinned/featured in the community
+  isPinned       Boolean  @default(false)
+  /// Display order when pinned
+  pinOrder       Int?
+  /// Whether the share is active
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation("SharedConversation", fields: [conversationId], references: [id], onDelete: Cascade)
+  community    Community    @relation("CommunityShares", fields: [communityId], references: [id], onDelete: Cascade)
+  sharer       User         @relation("ConversationSharer", fields: [sharedBy], references: [id])
+
+  @@unique([conversationId, communityId])
+  @@index([communityId])
+  @@index([sharedBy])
+  @@index([isPinned])
 }
 
 /// Appartenance d'un utilisateur à une conversation
@@ -232,6 +294,8 @@ model ConversationMember {
   userId           String    @db.ObjectId
   /// admin, moderator, member
   role             String    @default("member")
+  /// Per-conversation display name override
+  nickname         String?
   canSendMessage   Boolean   @default(true)
   canSendFiles     Boolean   @default(true)
   canSendImages    Boolean   @default(true)
@@ -304,11 +368,17 @@ model AnonymousParticipant {
   isActive          Boolean   @default(true)
   isOnline          Boolean   @default(false)
   lastActiveAt      DateTime  @default(now())
+  /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+  lastSeenAt        DateTime  @default(now())
+  /// Permissions (consistent with ConversationMember)
   canSendMessages   Boolean   @default(true)
   canSendFiles      Boolean   @default(false)
   canSendImages     Boolean   @default(true)
+  canSendVideos     Boolean   @default(false)
+  canSendAudios     Boolean   @default(true)
+  canSendLocations  Boolean   @default(false)
+  canSendLinks      Boolean   @default(true)
   joinedAt          DateTime  @default(now())
-  lastSeenAt        DateTime  @default(now())
   leftAt            DateTime?
 
   shareLink          ConversationShareLink @relation("ShareLinkParticipants", fields: [shareLinkId], references: [id])
@@ -322,26 +392,50 @@ model AnonymousParticipant {
   attachmentStatusEntries AttachmentStatusEntry[]  @relation("AnonymousAttachmentStatus")
   readCursors             ConversationReadCursor[] @relation("AnonymousReadCursors")
   attachmentReactions     AttachmentReaction[]     @relation("AnonymousAttachmentReactions")
+
+  // Call participation
+  callParticipations CallParticipant[] @relation("AnonymousCallParticipants")
 }
 
 /// Message dans une conversation
 model Message {
-  id                String    @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId    String    @db.ObjectId
-  senderId          String?   @db.ObjectId
-  anonymousSenderId String?   @db.ObjectId
-  content           String
-  originalLanguage  String    @default("fr")
-  /// text, image, file, audio, video, location, system
-  messageType       String    @default("text")
-  isEdited          Boolean   @default(false)
-  editedAt          DateTime?
-  isDeleted         Boolean   @default(false)
-  deletedAt         DateTime?
-  replyToId         String?   @db.ObjectId
-  validatedMentions String[]  @default([]) // Usernames des mentions validées (pour performance)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId              String    @db.ObjectId
+  senderId                    String?   @db.ObjectId
+  anonymousSenderId           String?   @db.ObjectId
+  content                     String
+  originalLanguage            String    @default("fr")
+  /// Content type: text, image, file, audio, video, location
+  messageType                 String    @default("text")
+  /// Message origin: user, system, ads, app, agent, authority
+  messageSource               String    @default("user")
+  isEdited                    Boolean   @default(false)
+  editedAt                    DateTime?
+  isDeleted                   Boolean   @default(false)
+  deletedAt                   DateTime?
+  replyToId                   String?   @db.ObjectId
+  /// ID of the original message if this is a forwarded message
+  forwardedFromId             String?   @db.ObjectId
+  /// ID of the original conversation (for cross-conversation/community forwarding)
+  forwardedFromConversationId String?   @db.ObjectId
+  /// Expiration timestamp for self-destructing messages
+  expiresAt                   DateTime?
+
+  // ============================================
+  // SECRET / VIEW-ONCE / BLUR FIELDS
+  // ============================================
+  /// View-once message (disappears after user views it)
+  isViewOnce       Boolean @default(false)
+  /// Max unique viewers allowed (null = all members can view once each)
+  maxViewOnceCount Int?
+  /// Number of unique users who have viewed (denormalized for performance)
+  viewOnceCount    Int     @default(0)
+  /// Content is blurred until user taps to reveal
+  isBlurred        Boolean @default(false)
+
+  validatedMentions String[] @default([]) // Usernames des mentions validées (pour performance)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // ============================================
   // COMPUTED STATUS FIELDS (denormalized for performance)
@@ -395,25 +489,35 @@ model Message {
 
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([messageSource])
+  @@index([createdAt])
 }
 
 /// Traduction d'un message
 model MessageTranslation {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   messageId         String   @db.ObjectId
-  sourceLanguage    String
   targetLanguage    String
   translatedContent String
   translationModel  String // "basic", "medium", "premium"
-  cacheKey          String   @unique
   confidenceScore   Float?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // Encryption fields for secure conversations (server/hybrid modes)
+  // Translations inherit encryption from parent message
+  isEncrypted       Boolean @default(false)
+  encryptionKeyId   String? // References server_encryption_keys.id
+  encryptionIv      String? // Base64 encoded IV (12 bytes for AES-GCM)
+  encryptionAuthTag String? // Base64 encoded auth tag (16 bytes)
+
+  // Source language is derived from message.originalLanguage
   message Message @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   // Contrainte d'unicité: une seule traduction par message et langue cible
-  // Permet de mettre à jour la traduction existante vers un niveau supérieur
   @@unique([messageId, targetLanguage], name: "messageId_targetLanguage")
   @@index([messageId])
   @@index([targetLanguage])
@@ -430,6 +534,36 @@ model MessageAttachment {
   fileSize     Int // Taille en bytes
   filePath     String // Chemin relatif: attachments/YYYY/mm/userId/filename
   fileUrl      String // URL complète pour accès
+
+  // =====================================================
+  // USER-PROVIDED METADATA
+  // =====================================================
+  /// Human-readable title for the attachment
+  title   String?
+  /// Accessibility alt text (for images/media)
+  alt     String?
+  /// Caption/legend displayed with the attachment
+  caption String?
+
+  // =====================================================
+  // FORWARDING FIELDS
+  // =====================================================
+  /// Original attachment ID if this is a forwarded attachment
+  forwardedFromAttachmentId String? @db.ObjectId
+  /// Whether this attachment is forwarded (references another)
+  isForwarded               Boolean @default(false)
+
+  // =====================================================
+  // SECRET / VIEW-ONCE / BLUR FIELDS
+  // =====================================================
+  /// View-once attachment (disappears after user views it)
+  isViewOnce       Boolean @default(false)
+  /// Max unique viewers allowed (null = all members can view once each)
+  maxViewOnceCount Int?
+  /// Number of unique users who have viewed (denormalized for performance)
+  viewOnceCount    Int     @default(0)
+  /// Content is blurred until user taps to reveal
+  isBlurred        Boolean @default(false)
 
   // Métadonnées spécifiques aux images
   width         Int?
@@ -463,25 +597,37 @@ model MessageAttachment {
   metadata  Json? // JSON blob for additional metadata
 
   // =====================================================
+  // SECURITY & MODERATION FIELDS
+  // =====================================================
+  /// Virus/malware scan status: pending, clean, infected, error
+  scanStatus       String?
+  /// When the security scan was completed
+  scanCompletedAt  DateTime?
+  /// Content moderation status: pending, approved, flagged, rejected
+  moderationStatus String?
+  /// Reason for flagging/rejection
+  moderationReason String?
+
+  // =====================================================
   // COMPUTED STATUS FIELDS (denormalized for performance)
   // Updated when all conversation participants complete each action
   // =====================================================
   /// Date when attachment was delivered to ALL participants
-  deliveredToAllAt   DateTime?
+  deliveredToAllAt  DateTime?
   /// Date when attachment was viewed by ALL participants
-  viewedByAllAt      DateTime?
+  viewedByAllAt     DateTime?
   /// Date when attachment was downloaded by ALL participants
-  downloadedByAllAt  DateTime?
+  downloadedByAllAt DateTime?
   /// Date when audio was listened to by ALL participants (audio only)
-  listenedByAllAt    DateTime?
+  listenedByAllAt   DateTime?
   /// Date when video was watched by ALL participants (video only)
-  watchedByAllAt     DateTime?
+  watchedByAllAt    DateTime?
   /// Number of participants who have viewed this attachment
-  viewedCount        Int       @default(0)
+  viewedCount       Int       @default(0)
   /// Number of participants who have downloaded this attachment
-  downloadedCount    Int       @default(0)
+  downloadedCount   Int       @default(0)
   /// Number of participants who have listened (audio) or watched (video)
-  consumedCount      Int       @default(0)
+  consumedCount     Int       @default(0)
 
   // =====================================================
   // ENCRYPTION FIELDS (for encrypted conversations)
@@ -573,6 +719,12 @@ model MessageStatusEntry {
   /// Client version
   clientVersion  String?
 
+  // ===== VIEW-ONCE STATUS =====
+  /// When user viewed view-once content (null = not yet viewed)
+  viewedOnceAt DateTime?
+  /// Whether view-once content was revealed/unblurred
+  revealedAt   DateTime?
+
   // ===== METADATA =====
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -646,6 +798,12 @@ model AttachmentStatusEntry {
   pagesViewed    Int  @default(0)
   /// Last page viewed
   lastPageViewed Int?
+
+  // ===== VIEW-ONCE STATUS =====
+  /// When user viewed view-once attachment (null = not yet viewed)
+  viewedOnceAt DateTime?
+  /// Whether view-once content was revealed/unblurred
+  revealedAt   DateTime?
 
   // ===== METADATA =====
   /// Device where attachment was accessed
@@ -738,25 +896,25 @@ model ConversationReadCursor {
 
 /// Réaction emoji sur un message par un utilisateur
 model Reaction {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  messageId       String   @db.ObjectId
-  userId          String?  @db.ObjectId // null pour utilisateurs anonymes
-  anonymousUserId String?  @db.ObjectId // ID de l'utilisateur anonyme
-  emoji           String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId   String   @db.ObjectId
+  userId      String?  @db.ObjectId // null pour utilisateurs anonymes
+  anonymousId String?  @db.ObjectId // ID de l'utilisateur anonyme (consistent naming)
+  emoji       String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   message       Message               @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
   user          User?                 @relation("UserReactions", fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousReactions", fields: [anonymousUserId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
 
   // Contrainte: un utilisateur ne peut ajouter le même emoji qu'une seule fois par message
   @@unique([messageId, userId, emoji], name: "user_reaction_unique")
   // Contrainte: un utilisateur anonyme ne peut ajouter le même emoji qu'une seule fois par message
-  @@unique([messageId, anonymousUserId, emoji], name: "anonymous_reaction_unique")
+  @@unique([messageId, anonymousId, emoji], name: "anonymous_reaction_unique")
   @@index([messageId])
   @@index([userId])
-  @@index([anonymousUserId])
+  @@index([anonymousId])
   @@index([emoji])
 }
 
@@ -779,31 +937,20 @@ model Mention {
 
 /// Demande d'amitié entre utilisateurs
 model FriendRequest {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  senderId   String   @db.ObjectId
-  receiverId String   @db.ObjectId
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  senderId    String    @db.ObjectId
+  receiverId  String    @db.ObjectId
   /// Message optionnel accompagnant la demande d'amitié
-  message    String?
+  message     String?
   /// pending, accepted, rejected, blocked
-  status     String   @default("pending")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status      String    @default("pending")
+  /// When the request was accepted/rejected
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   receiver User @relation("FriendRequestReceiver", fields: [receiverId], references: [id])
   sender   User @relation("FriendRequestSender", fields: [senderId], references: [id])
-}
-
-/// Indicateur de frappe en cours pour des tests... A supprimer après les tests
-model TypingIndicator {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId String   @db.ObjectId
-  userId         String   @db.ObjectId
-  isTyping       Boolean  @default(true)
-  startedAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  user         User         @relation(fields: [userId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
 }
 
 /// Notification pour un utilisateur
@@ -817,6 +964,8 @@ model Notification {
   data      String?
   priority  String    @default("normal")
   isRead    Boolean   @default(false)
+  /// When the notification was read (more precise than isRead boolean)
+  readAt    DateTime?
   emailSent Boolean   @default(false)
   pushSent  Boolean   @default(false)
   expiresAt DateTime?
@@ -883,30 +1032,42 @@ model NotificationPreference {
 
 /// Communauté (représente une communauté de conversation)
 model Community {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   /// Identifiant lisible par l'homme (ex: "mshy_meeshy-paris", "mshy_support-lycee-njanda")
-  identifier  String   @unique
+  identifier  String    @unique
   name        String
   description String?
+  /// Community profile picture
   avatar      String?
-  isPrivate   Boolean  @default(true)
-  createdBy   String   @db.ObjectId
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  /// Community banner/cover image
+  banner      String?
+  isPrivate   Boolean   @default(true)
+  /// Whether the community is active (soft-delete capability)
+  isActive    Boolean   @default(true)
+  /// When the community was deleted/deactivated (null if active)
+  deletedAt   DateTime?
+  createdBy   String    @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  members      CommunityMember[]
-  creator      User              @relation("CommunityCreator", fields: [createdBy], references: [id])
-  Conversation Conversation[]
+  members             CommunityMember[]
+  creator             User                @relation("CommunityCreator", fields: [createdBy], references: [id])
+  sharedConversations ConversationShare[] @relation("CommunityShares")
+  Conversation        Conversation[]
 }
 
-/// Appartenance aux communautés 
+/// Appartenance aux communautés
 model CommunityMember {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  communityId String   @db.ObjectId
-  userId      String   @db.ObjectId
-  joinedAt    DateTime @default(now())
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String    @db.ObjectId
+  userId      String    @db.ObjectId
+  joinedAt    DateTime  @default(now())
   /// admin, moderator, member
-  role        String   @default("member")
+  role        String    @default("member")
+  /// Whether member is currently active in the community
+  isActive    Boolean   @default(true)
+  /// When the member left the community (null if still active)
+  leftAt      DateTime?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
@@ -930,7 +1091,6 @@ model UserStats {
   autoTranslateTimeMinutes Int      @default(0)
   totalOnlineTimeMinutes   Int      @default(0)
   sessionCount             Int      @default(0)
-  lastActiveAt             DateTime @default(now())
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -1105,6 +1265,10 @@ model Report {
   /// Date de résolution
   resolvedAt       DateTime?
 
+  /// Relations
+  reporter  User? @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  moderator User? @relation("ReportModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
   @@index([reportedType])
   @@index([reportedEntityId])
   @@index([reporterId])
@@ -1167,7 +1331,8 @@ model CallParticipant {
   user   User?   @relation("CallParticipants", fields: [userId], references: [id])
 
   /// Anonymous participant ID (from AnonymousParticipant model)
-  anonymousId String?
+  anonymousId   String?               @db.ObjectId
+  anonymousUser AnonymousParticipant? @relation("AnonymousCallParticipants", fields: [anonymousId], references: [id])
 
   /// Participant role: initiator or participant
   role ParticipantRole @default(participant)
@@ -1186,6 +1351,7 @@ model CallParticipant {
   /// Indexes
   @@index([callSessionId])
   @@index([userId])
+  @@index([anonymousId])
   @@map("call_participants")
 }
 
@@ -1524,6 +1690,10 @@ model SignalPreKeyBundle {
   kyberPreKeyId        Int?
   kyberPreKeyPublic    String? // Base64 encoded
   kyberPreKeySignature String? // Base64 encoded signature
+
+  /// Pre-key pool (JSON array of one-time pre-keys)
+  /// Each entry: { id: number, publicKey: string, privateKey: string (encrypted), createdAt: string }
+  preKeyPool String? // JSON array
 
   /// Whether this bundle is active
   isActive Boolean @default(true)

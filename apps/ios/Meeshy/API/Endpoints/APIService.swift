@@ -4,6 +4,7 @@
 //
 //  High-level API service layer with all endpoint wrappers
 //  Converted to pure Swift concurrency (async/await)
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -101,9 +102,9 @@ final class APIService: Sendable {
         return user
     }
 
-    func searchUsers(query: String, page: Int = 1, limit: Int = 20) async throws -> UserSearchResponse {
+    func searchUsers(query: String, offset: Int = 0, limit: Int = 20) async throws -> UserSearchResponse {
         let response: APIResponse<UserSearchResponse> = try await apiClient.request(
-            UserEndpoints.searchUsers(query: query, page: page, limit: limit)
+            UserEndpoints.searchUsers(query: query, offset: offset, limit: limit)
         )
 
         guard let searchResponse = response.data else {
@@ -136,9 +137,9 @@ final class APIService: Sendable {
 
     // MARK: - Conversations
 
-    func fetchConversations(page: Int = 1, limit: Int = PaginationConfig.conversationsPerPage) async throws -> ConversationListResponse {
+    func fetchConversations(offset: Int = 0, limit: Int = PaginationConfig.conversationsLimit) async throws -> ConversationListResponse {
         // Try cache first
-        let cacheKey = CacheManager.conversationListKey(page: page, limit: limit)
+        let cacheKey = CacheManager.conversationListKey(offset: offset, limit: limit)
         if let cached = cacheManager.load(forKey: cacheKey, as: ConversationListResponse.self) {
             return cached
         }
@@ -146,16 +147,16 @@ final class APIService: Sendable {
         // API returns: {"success": true, "data": [Conversation], "pagination": {...}}
         // Use PaginatedAPIResponse to properly decode this format
         let response: PaginatedAPIResponse<[Conversation]> = try await apiClient.requestPaginated(
-            ConversationEndpoints.fetchConversations(page: page, limit: limit)
+            ConversationEndpoints.fetchConversations(offset: offset, limit: limit)
         )
 
         // Convert to ConversationListResponse for compatibility
         // Use centralized pagination config for hasMore detection
-        let hasMore = response.pagination?.hasMore ?? PaginationConfig.hasMorePages(receivedCount: response.data.count)
+        let hasMore = response.pagination?.hasMore ?? PaginationConfig.hasMore(receivedCount: response.data.count, limit: limit)
 
         let conversationList = ConversationListResponse(
             conversations: response.data,
-            page: page,
+            offset: offset,
             limit: response.pagination?.limit ?? limit,
             total: response.pagination?.total ?? response.data.count,
             hasMore: hasMore
@@ -224,20 +225,20 @@ final class APIService: Sendable {
 
     // MARK: - Messages
 
-    func fetchMessages(conversationId: String, page: Int = 1, limit: Int = 50) async throws -> MessageListResponse {
+    func fetchMessages(conversationId: String, offset: Int = 0, limit: Int = 50) async throws -> MessageListResponse {
         // Smart caching algorithm:
-        // 1. Always fetch page 1 fresh
+        // 1. Always fetch offset 0 fresh
         // 2. Check if fresh messages overlap with cached messages (bridge detection)
-        // 3. If bridged: use cache for older pages
+        // 3. If bridged: use cache for older messages
         // 4. If not bridged or cache miss: fetch fresh and cache
 
-        let cacheKey = CacheManager.messagesKey(conversationId: conversationId, page: page, limit: limit)
+        let cacheKey = CacheManager.messagesKey(conversationId: conversationId, offset: offset, limit: limit)
 
-        if page == 1 {
+        if offset == 0 {
             // Reset bridge state for new conversation load
             cacheManager.resetMessageBridgeState(conversationId: conversationId)
         } else if cacheManager.isMessageCacheBridged(conversationId: conversationId) {
-            // Bridged: try cache first for older pages
+            // Bridged: try cache first for older messages
             if let cached = cacheManager.load(forKey: cacheKey, as: MessageListResponse.self) {
                 return cached
             }
@@ -246,7 +247,7 @@ final class APIService: Sendable {
 
         // Fetch fresh from network
         let response: APIResponse<MessageListResponse> = try await apiClient.request(
-            MessageEndpoints.fetchMessages(conversationId: conversationId, page: page, limit: limit)
+            MessageEndpoints.fetchMessages(conversationId: conversationId, offset: offset, limit: limit)
         )
 
         guard let messageList = response.data else {
@@ -256,7 +257,7 @@ final class APIService: Sendable {
         // Extract message IDs for bridge detection
         let freshMessageIds = Set(messageList.messages.map { $0.id })
 
-        // Check if this page bridges with cached data
+        // Check if this batch bridges with cached data
         if cacheManager.checkMessageBridge(conversationId: conversationId, freshMessageIds: freshMessageIds) {
             // Found overlap! Fresh data has connected with cache
             cacheManager.setMessageCacheBridged(conversationId: conversationId, bridged: true)
@@ -265,7 +266,7 @@ final class APIService: Sendable {
         // Update cached message IDs for future bridge detection
         cacheManager.updateCachedMessageIds(conversationId: conversationId, messageIds: freshMessageIds)
 
-        // Cache this page
+        // Cache this batch
         cacheManager.save(messageList, forKey: cacheKey, policy: .messages)
 
         return messageList
@@ -370,9 +371,9 @@ final class APIService: Sendable {
 
     // MARK: - Notifications
 
-    func fetchNotifications(page: Int = 1, limit: Int = 50) async throws -> NotificationListResponse {
+    func fetchNotifications(offset: Int = 0, limit: Int = 50) async throws -> NotificationListResponse {
         let response: APIResponse<NotificationListResponse> = try await apiClient.request(
-            NotificationEndpoints.fetchNotifications(page: page, limit: limit)
+            NotificationEndpoints.fetchNotifications(offset: offset, limit: limit)
         )
 
         guard let notificationList = response.data else {
@@ -427,9 +428,50 @@ final class APIService: Sendable {
     func downloadFile(attachmentId: String) async throws -> URL {
         // Try cache first
         let cacheKey = CacheManager.attachmentKey(attachmentId)
-        // Implementation would check for cached file
+        if let cachedURL = cacheManager.loadAttachmentURL(forKey: cacheKey) {
+            return cachedURL
+        }
 
-        let endpoint = AttachmentEndpoints.download(attachmentId: attachmentId)
-        return try await apiClient.download(endpoint)
+        let response: APIResponse<URL> = try await apiClient.download(
+            AttachmentEndpoints.download(attachmentId: attachmentId)
+        )
+
+        guard let url = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        // Cache the URL
+        cacheManager.saveAttachmentURL(url, forKey: cacheKey)
+        return url
+    }
+
+    // MARK: - Communities
+
+    func fetchCommunities() async throws -> [Community] {
+        let response: APIResponse<[Community]> = try await apiClient.request(CommunityEndpoints.fetchCommunities)
+
+        guard let communities = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        return communities
+    }
+
+    func getCommunity(id: String) async throws -> Community {
+        let response: APIResponse<Community> = try await apiClient.request(CommunityEndpoints.getCommunity(id: id))
+
+        guard let community = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        return community
+    }
+
+    func joinCommunity(id: String) async throws {
+        let _: APIResponse<EmptyResponse> = try await apiClient.request(CommunityEndpoints.joinCommunity(id: id))
+    }
+
+    func leaveCommunity(id: String) async throws {
+        let _: APIResponse<EmptyResponse> = try await apiClient.request(CommunityEndpoints.leaveCommunity(id: id))
     }
 }

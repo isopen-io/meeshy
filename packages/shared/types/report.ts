@@ -1,9 +1,11 @@
 /**
- * Types pour le système de signalement (Report)
+ * Types pour le systeme de signalement (Report)
  */
 
+import type { PaginationMeta } from './api-responses';
+
 /**
- * Type de contenu signalé
+ * Type de contenu signale
  */
 export enum ReportedType {
   MESSAGE = 'message',
@@ -69,7 +71,7 @@ export interface Report {
 }
 
 /**
- * DTO pour créer un signalement
+ * DTO pour creer un signalement
  */
 export interface CreateReportDTO {
   reportedType: ReportedType | string;
@@ -81,7 +83,7 @@ export interface CreateReportDTO {
 }
 
 /**
- * DTO pour mettre à jour un signalement (modérateur uniquement)
+ * DTO pour mettre a jour un signalement (moderateur uniquement)
  */
 export interface UpdateReportDTO {
   status?: ReportStatus | string;
@@ -108,28 +110,25 @@ export interface ReportFilters {
  * Pagination pour les signalements
  */
 export interface ReportPaginationParams {
-  page: number;
-  pageSize: number;
+  offset: number;
+  limit: number;
 }
 
 /**
- * Métadonnées de pagination
+ * @deprecated Use PaginationMeta from api-responses.ts instead
+ * Kept for backwards compatibility
  */
-export interface ReportPaginationMeta {
-  page: number;
-  pageSize: number;
-  totalReports: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
+export interface ReportPaginationMeta extends PaginationMeta {
+  /** @deprecated Use 'total' instead */
+  totalReports?: number;
 }
 
 /**
- * Réponse paginée avec signalements
+ * Reponse paginee avec signalements
  */
 export interface PaginatedReportsResponse {
   reports: Report[];
-  pagination: ReportPaginationMeta;
+  pagination: PaginationMeta;
 }
 
 /**
@@ -148,7 +147,7 @@ export interface ReportStats {
 }
 
 /**
- * Signalement avec détails de l'entité signalée
+ * Signalement avec details de l'entite signalee
  */
 export interface ReportWithDetails extends Report {
   reportedEntity?: {

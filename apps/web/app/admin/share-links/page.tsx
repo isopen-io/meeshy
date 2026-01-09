@@ -77,6 +77,7 @@ export default function AdminShareLinksPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; linkId: string | null }>({
     open: false,
     linkId: null
@@ -84,15 +85,15 @@ export default function AdminShareLinksPage() {
 
   useEffect(() => {
     loadShareLinks();
-  }, [currentPage, searchTerm, statusFilter]);
+  }, [currentPage, searchTerm, statusFilter, pageSize]);
 
   const loadShareLinks = async () => {
     try {
       setLoading(true);
-      const offset = (currentPage - 1) * 20;
+      const offset = (currentPage - 1) * pageSize;
       const response = await adminService.getShareLinks(
         offset,
-        20,
+        pageSize,
         searchTerm || undefined,
         statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined
       );
@@ -100,7 +101,7 @@ export default function AdminShareLinksPage() {
       if (response.data) {
         setShareLinks(response.data.shareLinks || []);
         setTotalCount(response.data.pagination?.total || 0);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / 20));
+        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
       } else {
         setShareLinks([]);
         setTotalCount(0);
@@ -122,6 +123,11 @@ export default function AdminShareLinksPage() {
   const handleFilterChange = (value: string) => {
     setStatusFilter(value === 'all' ? '' : value);
     setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setCurrentPage(1);
+    setPageSize(newSize);
   };
 
   const formatDate = (dateString: string) => {
@@ -230,9 +236,23 @@ export default function AdminShareLinksPage() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium">Par page</label>
+                <Select value={String(pageSize)} onValueChange={(val) => handlePageSizeChange(Number(val))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20">20 par page</SelectItem>
+                    <SelectItem value="50">50 par page</SelectItem>
+                    <SelectItem value="100">100 par page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Actions</label>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={loadShareLinks}
                   className="w-full"
                 >

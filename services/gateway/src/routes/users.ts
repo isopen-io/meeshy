@@ -1,26 +1,28 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { ApiResponse, PaginationMeta } from '@meeshy/shared/types';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import bcrypt from 'bcryptjs';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
+import { buildPaginationMeta } from '../utils/pagination';
 
-// Regex pour détecter les émojis
-// Cette regex détecte la plupart des émojis Unicode
+// Regex pour detecter les emojis
+// Cette regex detecte la plupart des emojis Unicode
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}]/u;
 
 function containsEmoji(text: string): boolean {
   return EMOJI_REGEX.test(text);
 }
 
-// Schéma de validation pour la mise à jour utilisateur
+// Schema de validation pour la mise a jour utilisateur
 const updateUserSchema = z.object({
   firstName: z.string().min(1).optional().refine((val) => !val || !containsEmoji(val), {
-    message: 'Le prénom ne peut pas contenir d\'émojis'
+    message: 'Le prenom ne peut pas contenir d\'emojis'
   }),
   lastName: z.string().min(1).optional().refine((val) => !val || !containsEmoji(val), {
-    message: 'Le nom ne peut pas contenir d\'émojis'
+    message: 'Le nom ne peut pas contenir d\'emojis'
   }),
-  displayName: z.string().optional(), // Autorise les émojis dans displayName
+  displayName: z.string().optional(), // Autorise les emojis dans displayName
   email: z.string().email().optional(),
   phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
@@ -31,22 +33,22 @@ const updateUserSchema = z.object({
   translateToSystemLanguage: z.boolean().optional(),
   translateToRegionalLanguage: z.boolean().optional(),
   useCustomDestination: z.boolean().optional(),
-}).strict(); // Rejeter explicitement les champs inconnus pour éviter les erreurs silencieuses
+}).strict(); // Rejeter explicitement les champs inconnus pour eviter les erreurs silencieuses
 
-// Schéma de validation pour l'upload d'avatar
+// Schema de validation pour l'upload d'avatar
 const updateAvatarSchema = z.object({
   avatar: z.string().refine(
     (data) => {
       // Accepter soit les URLs (http/https) soit les data URLs (base64)
-      return data.startsWith('http://') || 
-             data.startsWith('https://') || 
+      return data.startsWith('http://') ||
+             data.startsWith('https://') ||
              data.startsWith('data:image/');
     },
     'Invalid avatar format. Must be a valid URL or base64 image'
   )
 }).strict(); // Accepter uniquement le champ avatar
 
-// Schéma de validation pour le changement de mot de passe
+// Schema de validation pour le changement de mot de passe
 const updatePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string().min(1, 'New password is required'),
@@ -56,16 +58,32 @@ const updatePasswordSchema = z.object({
   path: ['confirmPassword']
 });
 
+/**
+ * Validate and sanitize pagination parameters
+ * - Ensures offset is never negative
+ * - Ensures limit is between 1 and maxLimit (default 100)
+ */
+function validatePagination(
+  offset: string = '0',
+  limit: string = '20',
+  defaultLimit: number = 20,
+  maxLimit: number = 100
+): { offsetNum: number; limitNum: number } {
+  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
+  return { offsetNum, limitNum };
+}
+
 export async function userRoutes(fastify: FastifyInstance) {
-  // Route pour vérifier la disponibilité d'un username
+  // Route pour verifier la disponibilite d'un username
   fastify.get('/users/check-username/:username', async (request, reply) => {
     try {
       const { username } = request.params as { username: string };
 
-      // Normaliser le username pour la vérification
+      // Normaliser le username pour la verification
       const normalizedUsername = normalizeUsername(username);
 
-      // Vérifier si le username existe déjà dans la table User
+      // Verifier si le username existe deja dans la table User
       const existingUser = await fastify.prisma.user.findFirst({
         where: {
           username: {
@@ -75,7 +93,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Vérifier si le username existe dans la table AnonymousParticipant
+      // Verifier si le username existe dans la table AnonymousParticipant
       const existingAnonymous = await fastify.prisma.anonymousParticipant.findFirst({
         where: {
           username: {
@@ -89,8 +107,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        available: isAvailable,
-        username: normalizedUsername
+        data: {
+          available: isAvailable,
+          username: normalizedUsername
+        }
       });
     } catch (error) {
       console.error('[USERS] Error checking username availability:', error);
@@ -106,19 +126,18 @@ export async function userRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated'
+          error: 'Authentication required'
         });
       }
-      
+
       const userId = authContext.userId;
       fastify.log.info(`[TEST] Getting test data for user ${userId}`);
-      
+
       return reply.send({
         success: true,
         data: {
@@ -131,49 +150,47 @@ export async function userRoutes(fastify: FastifyInstance) {
       fastify.log.error(`[TEST] Error: ${error instanceof Error ? error.message : String(error)}`);
       return reply.status(500).send({
         success: false,
-        message: 'Test error',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
 
-  // Route pour obtenir les statistiques du tableau de bord de l'utilisateur connecté
+  // Route pour obtenir les statistiques du tableau de bord de l'utilisateur connecte
   fastify.get('/users/me/dashboard-stats', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated to access dashboard stats'
+          error: 'Authentication required'
         });
       }
-      
+
       const userId = authContext.userId;
       fastify.log.info(`[DASHBOARD] Getting stats for user ${userId}`);
 
-      // Récupérer les statistiques en parallèle
+      // Recuperer les statistiques en parallele
       const [
-        // Conversations où l'utilisateur est membre actif
+        // Conversations ou l'utilisateur est membre actif
         totalConversations,
         activeConversations,
         recentConversations,
-        
-        // Communautés où l'utilisateur est membre actif  
+
+        // Communautes ou l'utilisateur est membre actif
         totalCommunities,
         recentCommunities,
-        
-        // Messages envoyés par l'utilisateur
+
+        // Messages envoyes par l'utilisateur
         totalMessages,
         messagesThisWeek,
-        
-        // Liens de partage créés par l'utilisateur
+
+        // Liens de partage crees par l'utilisateur
         totalLinks,
-        
-        // Traductions effectuées (estimation basée sur les messages)
+
+        // Traductions effectuees (estimation basee sur les messages)
         translationsToday
       ] = await Promise.all([
         // Total conversations
@@ -183,8 +200,8 @@ export async function userRoutes(fastify: FastifyInstance) {
             isActive: true
           }
         }),
-        
-        // Conversations actives (avec messages récents)
+
+        // Conversations actives (avec messages recents)
         fastify.prisma.conversationMember.count({
           where: {
             userId,
@@ -201,8 +218,8 @@ export async function userRoutes(fastify: FastifyInstance) {
             }
           }
         }),
-        
-        // Conversations récentes (optimisé - limiter les données)
+
+        // Conversations recentes (optimise - limiter les donnees)
         fastify.prisma.conversation.findMany({
           where: {
             members: {
@@ -235,7 +252,7 @@ export async function userRoutes(fastify: FastifyInstance) {
             },
             members: {
               where: { isActive: true },
-              take: 5, // Limiter à 5 membres max
+              take: 5, // Limiter a 5 membres max
               select: {
                 user: {
                   select: {
@@ -251,15 +268,15 @@ export async function userRoutes(fastify: FastifyInstance) {
           orderBy: { updatedAt: 'desc' },
           take: 5
         }),
-        
-        // Total communautés
+
+        // Total communautes
         fastify.prisma.communityMember.count({
           where: {
             userId
           }
         }),
-        
-        // Communautés récentes (optimisé - limiter les membres)
+
+        // Communautes recentes (optimise - limiter les membres)
         fastify.prisma.community.findMany({
           where: {
             members: {
@@ -278,7 +295,7 @@ export async function userRoutes(fastify: FastifyInstance) {
               select: { members: true }
             },
             members: {
-              take: 5, // Limiter à 5 membres
+              take: 5, // Limiter a 5 membres
               select: {
                 user: {
                   select: {
@@ -294,7 +311,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           orderBy: { updatedAt: 'desc' },
           take: 5
         }),
-        
+
         // Total messages de l'utilisateur
         fastify.prisma.message.count({
           where: {
@@ -302,7 +319,7 @@ export async function userRoutes(fastify: FastifyInstance) {
             isDeleted: false
           }
         }),
-        
+
         // Messages cette semaine
         fastify.prisma.message.count({
           where: {
@@ -313,15 +330,15 @@ export async function userRoutes(fastify: FastifyInstance) {
             }
           }
         }),
-        
-        // Total liens créés
+
+        // Total liens crees
         fastify.prisma.conversationShareLink.count({
           where: {
             createdBy: userId
           }
         }),
-        
-        // Estimation des traductions aujourd'hui (basée sur les messages multilingues)
+
+        // Estimation des traductions aujourd'hui (basee sur les messages multilingues)
         fastify.prisma.message.count({
           where: {
             senderId: userId,
@@ -329,12 +346,12 @@ export async function userRoutes(fastify: FastifyInstance) {
             createdAt: {
               gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24h
             }
-            // Simplification: compter tous les messages récents comme traductions potentielles
+            // Simplification: compter tous les messages recents comme traductions potentielles
           }
         })
       ]);
 
-      // Transformer les données pour le frontend
+      // Transformer les donnees pour le frontend
       const stats = {
         totalConversations,
         totalCommunities,
@@ -345,7 +362,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         lastUpdated: new Date()
       };
 
-      // Transformer les conversations récentes
+      // Transformer les conversations recentes
       const transformedConversations = recentConversations.map(conv => {
         // S'assurer qu'un titre existe toujours
         let displayTitle = conv.title;
@@ -378,7 +395,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         };
       });
 
-      // Transformer les communautés récentes
+      // Transformer les communautes recentes
       const transformedCommunities = recentCommunities.map((community: any) => ({
         id: community.id,
         name: community.name,
@@ -402,13 +419,12 @@ export async function userRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get user dashboard stats error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Erreur interne du serveur',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
 
-  // Route pour obtenir les statistiques d'un utilisateur spécifique (par ID ou username)
+  // Route pour obtenir les statistiques d'un utilisateur specifique (par ID ou username)
   fastify.get('/users/:userId/stats', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
@@ -417,25 +433,25 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (!authContext || !authContext.isAuthenticated) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required'
+          error: 'Authentication required'
         });
       }
 
       const { userId: userIdOrUsername } = request.params;
       fastify.log.info(`[USER_STATS] Getting stats for user ${userIdOrUsername}`);
 
-      // Déterminer si c'est un ID MongoDB (24 caractères hexadécimaux) ou un username
+      // Determiner si c'est un ID MongoDB (24 caracteres hexadecimaux) ou un username
       const isMongoId = /^[a-f\d]{24}$/i.test(userIdOrUsername);
-      
-      // Récupérer l'utilisateur pour obtenir son ID réel
+
+      // Recuperer l'utilisateur pour obtenir son ID reel
       const user = await fastify.prisma.user.findFirst({
-        where: isMongoId 
-          ? { id: userIdOrUsername } 
-          : { 
-              username: { 
+        where: isMongoId
+          ? { id: userIdOrUsername }
+          : {
+              username: {
                 equals: userIdOrUsername,
-                mode: 'insensitive'  // Recherche insensible à la casse
-              } 
+                mode: 'insensitive'  // Recherche insensible a la casse
+              }
             },
         select: {
           id: true,
@@ -449,37 +465,37 @@ export async function userRoutes(fastify: FastifyInstance) {
         fastify.log.warn(`[USER_STATS] User not found: ${userIdOrUsername}`);
         return reply.status(404).send({
           success: false,
-          message: 'User not found'
+          error: 'User not found'
         });
       }
-      
+
       fastify.log.info(`[USER_STATS] User found: ${user.id}`);
 
 
       const userId = user.id;
 
-      // Récupérer les statistiques de base de l'utilisateur
+      // Recuperer les statistiques de base de l'utilisateur
       const [
         totalConversations,
         messagesSent,
         messagesReceived,
         groupsCount
       ] = await Promise.all([
-        // Nombre de conversations où l'utilisateur est membre
+        // Nombre de conversations ou l'utilisateur est membre
         fastify.prisma.conversationMember.count({
           where: {
             userId: userId,
             isActive: true
           }
         }),
-        // Nombre de messages envoyés
+        // Nombre de messages envoyes
         fastify.prisma.message.count({
           where: {
             senderId: userId,
             isDeleted: false
           }
         }),
-        // Nombre de messages reçus (dans les conversations où l'utilisateur est membre)
+        // Nombre de messages recus (dans les conversations ou l'utilisateur est membre)
         fastify.prisma.message.count({
           where: {
             senderId: { not: userId },
@@ -525,51 +541,49 @@ export async function userRoutes(fastify: FastifyInstance) {
       fastify.log.error(`[USER_STATS] Error getting user stats: ${error instanceof Error ? error.message : String(error)}`);
       return reply.status(500).send({
         success: false,
-        message: 'Error retrieving statistics',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
 
-  // Route pour mettre à jour le profil utilisateur connecté
+  // Route pour mettre a jour le profil utilisateur connecte
   fastify.patch('/users/me', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // Utiliser le nouveau système d'authentification unifié
+    // Utiliser le nouveau systeme d'authentification unifie
     const authContext = (request as any).authContext;
-    
+
     try {
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated to update profile'
+          error: 'Authentication required'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Logger les données reçues pour debug
+
+      // Logger les donnees recues pour debug
       fastify.log.info(`[PROFILE_UPDATE] User ${userId} updating profile. Body keys: ${Object.keys(request.body || {}).join(', ')}`);
-      
+
       const body = updateUserSchema.parse(request.body);
-      
-      // Construire l'objet de mise à jour avec uniquement les champs fournis
+
+      // Construire l'objet de mise a jour avec uniquement les champs fournis
       const updateData: any = {};
-      
+
       // Champs de profil de base avec normalisation
       if (body.firstName !== undefined) updateData.firstName = capitalizeName(body.firstName);
       if (body.lastName !== undefined) updateData.lastName = capitalizeName(body.lastName);
       if (body.displayName !== undefined) updateData.displayName = normalizeDisplayName(body.displayName);
       if (body.email !== undefined) updateData.email = normalizeEmail(body.email);
       if (body.phoneNumber !== undefined) {
-        // Convertir les chaînes vides et null en null, sinon normaliser au format E.164
+        // Convertir les chaines vides et null en null, sinon normaliser au format E.164
         updateData.phoneNumber = (body.phoneNumber === '' || body.phoneNumber === null)
           ? null
           : normalizePhoneNumber(body.phoneNumber);
       }
       if (body.bio !== undefined) updateData.bio = body.bio;
-      
+
       // Champs de configuration des langues
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
       if (body.regionalLanguage !== undefined) updateData.regionalLanguage = body.regionalLanguage;
@@ -577,7 +591,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         // Convert empty string to null for "None" option
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
-      
+
       // Champs de configuration de traduction
       if (body.autoTranslateEnabled !== undefined) updateData.autoTranslateEnabled = body.autoTranslateEnabled;
       if (body.translateToSystemLanguage !== undefined) updateData.translateToSystemLanguage = body.translateToSystemLanguage;
@@ -585,7 +599,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (body.useCustomDestination !== undefined) updateData.useCustomDestination = body.useCustomDestination;
 
       // Logique exclusive pour les options de traduction
-      // Si une option de traduction est activée, désactiver les autres
+      // Si une option de traduction est activee, desactiver les autres
       if (body.translateToSystemLanguage === true) {
         updateData.translateToRegionalLanguage = false;
         updateData.useCustomDestination = false;
@@ -597,7 +611,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         updateData.translateToRegionalLanguage = false;
       }
 
-      // Vérifier si l'email est unique (si modifié) - comparaison case-insensitive
+      // Verifier si l'email est unique (si modifie) - comparaison case-insensitive
       if (body.email) {
         const normalizedEmail = normalizeEmail(body.email);
         const existingUser = await fastify.prisma.user.findFirst({
@@ -618,7 +632,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Vérifier si le numéro de téléphone est unique (si modifié et non vide)
+      // Verifier si le numero de telephone est unique (si modifie et non vide)
       if (body.phoneNumber && body.phoneNumber !== null && body.phoneNumber.trim() !== '') {
         const normalizedPhone = normalizePhoneNumber(body.phoneNumber);
         const existingUser = await fastify.prisma.user.findFirst({
@@ -636,7 +650,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Mettre à jour l'utilisateur
+      // Mettre a jour l'utilisateur
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: updateData,
@@ -668,8 +682,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: updatedUser,
-        message: 'Profile updated successfully'
+        data: {
+          user: updatedUser,
+          message: 'Profile updated successfully'
+        }
       });
 
     } catch (error: unknown) {
@@ -691,31 +707,30 @@ export async function userRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour mettre à jour l'avatar de l'utilisateur connecté
+  // Route pour mettre a jour l'avatar de l'utilisateur connecte
   fastify.patch('/users/me/avatar', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated to update avatar'
+          error: 'Authentication required'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Logger les données reçues pour debug
+
+      // Logger les donnees recues pour debug
       fastify.log.info(`[AVATAR_UPDATE] User ${userId} updating avatar. Body: ${JSON.stringify(request.body)}`);
-      
+
       const body = updateAvatarSchema.parse(request.body);
-      
+
       fastify.log.info(`[AVATAR_UPDATE] Avatar URL validated: ${body.avatar}`);
-      
-      // Mettre à jour l'avatar de l'utilisateur
+
+      // Mettre a jour l'avatar de l'utilisateur
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: { avatar: body.avatar },
@@ -730,8 +745,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: { avatar: updatedUser.avatar },
-        message: 'Avatar updated successfully'
+        data: {
+          avatar: updatedUser.avatar,
+          message: 'Avatar updated successfully'
+        }
       });
 
     } catch (error: unknown) {
@@ -739,7 +756,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         fastify.log.error(`[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.errors)}`);
         return reply.status(400).send({
           success: false,
-          error: 'Invalid image format. URL must start with http://, https:// or data:image/',
+          error: 'Invalid image format',
           details: error.errors
         });
       }
@@ -752,27 +769,26 @@ export async function userRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour changer le mot de passe de l'utilisateur connecté
+  // Route pour changer le mot de passe de l'utilisateur connecte
   fastify.patch('/users/me/password', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated to change password'
+          error: 'Authentication required'
         });
       }
-      
+
       const userId = authContext.userId;
-      
-      // Valider le body de la requête
+
+      // Valider le body de la requete
       const body = updatePasswordSchema.parse(request.body);
-      
-      // Récupérer l'utilisateur avec son mot de passe
+
+      // Recuperer l'utilisateur avec son mot de passe
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, password: true }
@@ -785,9 +801,9 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'ancien mot de passe est correct
+      // Verifier que l'ancien mot de passe est correct
       const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
-      
+
       if (!isPasswordValid) {
         return reply.status(400).send({
           success: false,
@@ -799,7 +815,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       const BCRYPT_COST = 12;
       const hashedPassword = await bcrypt.hash(body.newPassword, BCRYPT_COST);
 
-      // Mettre à jour le mot de passe
+      // Mettre a jour le mot de passe
       await fastify.prisma.user.update({
         where: { id: userId },
         data: { password: hashedPassword }
@@ -807,7 +823,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: 'Password updated successfully'
+        data: { message: 'Password updated successfully' }
       });
 
     } catch (error: unknown) {
@@ -832,34 +848,28 @@ export async function userRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Utiliser le nouveau système d'authentification unifié
+      // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required',
-          error: 'User must be authenticated to search users'
+          error: 'Authentication required'
         });
       }
 
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
+
       if (!q || q.trim().length < 2) {
         return reply.send({
           success: true,
           data: [],
-          pagination: {
-            total: 0,
-            limit: parseInt(limit, 10),
-            offset: parseInt(offset, 10),
-            hasMore: false
-          }
+          pagination: buildPaginationMeta(0, offsetNum, limitNum, 0)
         });
       }
 
       const searchTerm = q.trim();
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
 
       const whereClause = {
         AND: [
@@ -907,7 +917,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         ]
       };
 
-      // Rechercher les utilisateurs par nom, prénom, username ou email
+      // Rechercher les utilisateurs par nom, prenom, username ou email
       const [users, totalCount] = await Promise.all([
         fastify.prisma.user.findMany({
           where: whereClause,
@@ -937,25 +947,23 @@ export async function userRoutes(fastify: FastifyInstance) {
       reply.send({
         success: true,
         data: users,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + users.length < totalCount
-        }
+        pagination: buildPaginationMeta(totalCount, offsetNum, limitNum, users.length)
       });
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
       reply.status(500).send({
-        error: 'Internal server error',
-        message: 'Unable to search users'
+        success: false,
+        error: 'Internal server error'
       });
     }
   });
 
   // Route pour obtenir tous les utilisateurs
   fastify.get('/users', async (request, reply) => {
-    reply.send({ message: 'Get all users - to be implemented' });
+    reply.send({
+      success: true,
+      data: { message: 'Get all users - to be implemented' }
+    });
   });
 
   // Route pour obtenir un utilisateur par username (profil public)
@@ -965,17 +973,17 @@ export async function userRoutes(fastify: FastifyInstance) {
   }>, reply: FastifyReply) => {
     try {
       const { username } = request.params;
-      
+
       fastify.log.info(`[USER_PROFILE_U] Fetching user profile for: ${username}`);
 
-      // Récupérer l'utilisateur par username avec sélection de champs publics uniquement
-      // Recherche case-insensitive pour plus de flexibilité
+      // Recuperer l'utilisateur par username avec selection de champs publics uniquement
+      // Recherche case-insensitive pour plus de flexibilite
       const user = await fastify.prisma.user.findFirst({
-        where: { 
-          username: { 
+        where: {
+          username: {
             equals: username,
-            mode: 'insensitive'  // Recherche insensible à la casse
-          } 
+            mode: 'insensitive'  // Recherche insensible a la casse
+          }
         },
         select: {
           id: true,
@@ -997,10 +1005,10 @@ export async function userRoutes(fastify: FastifyInstance) {
         fastify.log.warn(`[USER_PROFILE_U] User not found: ${username}`);
         return reply.status(404).send({
           success: false,
-          message: 'User not found'
+          error: 'User not found'
         });
       }
-      
+
       fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
 
 
@@ -1013,7 +1021,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get user profile error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Failed to get user profile'
+        error: 'Internal server error'
       });
     }
   });
@@ -1025,21 +1033,21 @@ export async function userRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params;
 
-      // Déterminer si c'est un ID MongoDB (24 caractères hexadécimaux) ou un username
+      // Determiner si c'est un ID MongoDB (24 caracteres hexadecimaux) ou un username
       const isMongoId = /^[a-f\d]{24}$/i.test(id);
-      
+
       fastify.log.info(`[USER_PROFILE] Fetching user profile for: ${id} (isMongoId: ${isMongoId})`);
-      
-      // Récupérer l'utilisateur avec sélection de champs publics uniquement
+
+      // Recuperer l'utilisateur avec selection de champs publics uniquement
       // Chercher soit par ID MongoDB, soit par username (case-insensitive)
       const user = await fastify.prisma.user.findFirst({
-        where: isMongoId 
-          ? { id } 
-          : { 
-              username: { 
+        where: isMongoId
+          ? { id }
+          : {
+              username: {
                 equals: id,
-                mode: 'insensitive'  // Recherche insensible à la casse
-              } 
+                mode: 'insensitive'  // Recherche insensible a la casse
+              }
             },
         select: {
           id: true,
@@ -1073,21 +1081,21 @@ export async function userRoutes(fastify: FastifyInstance) {
         fastify.log.warn(`[USER_PROFILE] User not found: ${id}`);
         return reply.status(404).send({
           success: false,
-          message: 'User not found'
+          error: 'User not found'
         });
       }
-      
+
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
 
 
-      // Ajouter les champs manquants pour compléter le type SocketIOUser
+      // Ajouter les champs manquants pour completer le type SocketIOUser
       const publicUserProfile = {
         ...user,
-        email: '', // Masqué pour la sécurité
-        phoneNumber: undefined, // Masqué pour la sécurité
+        email: '', // Masque pour la securite
+        phoneNumber: undefined, // Masque pour la securite
         permissions: undefined, // Non applicable pour les profils publics
-        isAnonymous: false, // Toujours false pour les utilisateurs enregistrés
-        isMeeshyer: true, // Toujours true pour les utilisateurs enregistrés
+        isAnonymous: false, // Toujours false pour les utilisateurs enregistres
+        isMeeshyer: true, // Toujours true pour les utilisateurs enregistres
       };
 
       return reply.status(200).send({
@@ -1099,26 +1107,32 @@ export async function userRoutes(fastify: FastifyInstance) {
       logError(fastify.log, 'Get user profile error:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Failed to get user profile'
+        error: 'Internal server error'
       });
     }
   });
 
-  // Route pour mettre à jour un utilisateur
+  // Route pour mettre a jour un utilisateur
   fastify.put('/users/:id', async (request, reply) => {
-    reply.send({ message: 'Update user - to be implemented' });
+    reply.send({
+      success: true,
+      data: { message: 'Update user - to be implemented' }
+    });
   });
 
   // Route pour supprimer un utilisateur
   fastify.delete('/users/:id', async (request, reply) => {
-    reply.send({ message: 'Delete user - to be implemented' });
+    reply.send({
+      success: true,
+      data: { message: 'Delete user - to be implemented' }
+    });
   });
 
   // ============================================================================
   // FRIEND REQUESTS ROUTES
   // ============================================================================
 
-  // Récupérer les friend requests de l'utilisateur
+  // Recuperer les friend requests de l'utilisateur
   fastify.get('/users/friend-requests', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -1127,15 +1141,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required'
+          error: 'Authentication required'
         });
       }
 
       const userId = authContext.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const offsetNum = parseInt(offset, 10);
-      const limitNum = Math.min(parseInt(limit, 10), 100);
+      const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       const whereClause = {
         OR: [
@@ -1187,18 +1200,13 @@ export async function userRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: friendRequests,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + friendRequests.length < totalCount
-        }
+        pagination: buildPaginationMeta(totalCount, offsetNum, limitNum, friendRequests.length)
       });
     } catch (error) {
       console.error('Error retrieving friend requests:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Error retrieving friend requests'
+        error: 'Internal server error'
       });
     }
   });
@@ -1212,7 +1220,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required'
+          error: 'Authentication required'
         });
       }
 
@@ -1220,7 +1228,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       const body = z.object({ receiverId: z.string() }).parse(request.body);
       const { receiverId } = body;
 
-      // Vérifier que l'utilisateur n'essaie pas de s'ajouter lui-même
+      // Verifier que l'utilisateur n'essaie pas de s'ajouter lui-meme
       if (senderId === receiverId) {
         return reply.status(400).send({
           success: false,
@@ -1228,7 +1236,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier que l'utilisateur destinataire existe
+      // Verifier que l'utilisateur destinataire existe
       const receiver = await fastify.prisma.user.findUnique({
         where: { id: receiverId }
       });
@@ -1240,7 +1248,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier qu'il n'y a pas déjà une demande en cours
+      // Verifier qu'il n'y a pas deja une demande en cours
       const existingRequest = await fastify.prisma.friendRequest.findFirst({
         where: {
           OR: [
@@ -1257,7 +1265,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Créer la friend request
+      // Creer la friend request
       const friendRequest = await fastify.prisma.friendRequest.create({
         data: {
           senderId,
@@ -1290,18 +1298,21 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: friendRequest
+        data: {
+          friendRequest,
+          message: 'Friend request sent successfully'
+        }
       });
     } catch (error) {
       console.error('Error sending friend request:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Error sending friend request'
+        error: 'Internal server error'
       });
     }
   });
 
-  // Répondre à une friend request (accepter/refuser/annuler)
+  // Repondre a une friend request (accepter/refuser/annuler)
   fastify.patch('/users/friend-requests/:id', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -1310,7 +1321,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          message: 'Authentication required'
+          error: 'Authentication required'
         });
       }
 
@@ -1335,9 +1346,9 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier les permissions selon l'action
+      // Verifier les permissions selon l'action
       if (action === 'cancel') {
-        // Seul l'expéditeur peut annuler sa demande
+        // Seul l'expediteur peut annuler sa demande
         if (friendRequest.senderId !== userId) {
           return reply.status(403).send({
             success: false,
@@ -1352,7 +1363,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: 'Friend request cancelled successfully'
+          data: { message: 'Friend request cancelled successfully' }
         });
       } else {
         // Seul le destinataire peut accepter/refuser
@@ -1363,7 +1374,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // Mettre à jour le statut
+        // Mettre a jour le statut
         const updatedRequest = await fastify.prisma.friendRequest.update({
           where: { id: id },
           data: {
@@ -1395,25 +1406,28 @@ export async function userRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          data: updatedRequest
+          data: {
+            request: updatedRequest,
+            message: action === 'accept' ? 'Friend request accepted' : 'Friend request rejected'
+          }
         });
       }
     } catch (error) {
       console.error('Error updating friend request:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Error updating friend request'
+        error: 'Internal server error'
       });
     }
   });
 
-  // Route pour récupérer le token d'affiliation actif d'un utilisateur
-  // Utilisé pour l'affiliation automatique via les liens /join
+  // Route pour recuperer le token d'affiliation actif d'un utilisateur
+  // Utilise pour l'affiliation automatique via les liens /join
   fastify.get('/users/:userId/affiliate-token', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.params as { userId: string };
 
-      // Vérifier que l'utilisateur existe
+      // Verifier que l'utilisateur existe
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true }
@@ -1422,22 +1436,22 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (!user) {
         return reply.status(404).send({
           success: false,
-          message: 'User not found'
+          error: 'User not found'
         });
       }
 
-      // Récupérer le token d'affiliation actif le plus récent de l'utilisateur
+      // Recuperer le token d'affiliation actif le plus recent de l'utilisateur
       const affiliateToken = await fastify.prisma.affiliateToken.findFirst({
         where: {
           createdBy: userId,
           isActive: true,
           OR: [
             { expiresAt: null }, // Tokens sans expiration
-            { expiresAt: { gt: new Date() } } // Tokens non expirés
+            { expiresAt: { gt: new Date() } } // Tokens non expires
           ]
         },
         orderBy: {
-          createdAt: 'desc' // Le plus récent en premier
+          createdAt: 'desc' // Le plus recent en premier
         },
         select: {
           token: true
@@ -1453,7 +1467,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       console.error('[USERS] Error fetching affiliate token:', error);
       return reply.status(500).send({
         success: false,
-        message: 'Failed to fetch affiliate token'
+        error: 'Internal server error'
       });
     }
   });

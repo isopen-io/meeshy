@@ -3,18 +3,19 @@
 //  Meeshy
 //
 //  Conversation API endpoints
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
 
 enum ConversationEndpoints: APIEndpoint, Sendable {
 
-    case fetchConversations(page: Int, limit: Int)
+    case fetchConversations(offset: Int, limit: Int)
     case createConversation(ConversationCreateRequest)
     case getConversation(id: String)
     case updateConversation(id: String, ConversationUpdateRequest)
     case deleteConversation(id: String)
-    case fetchMembers(conversationId: String, page: Int, limit: Int)
+    case fetchMembers(conversationId: String, offset: Int, limit: Int)
     case addMembers(conversationId: String, ConversationMemberAddRequest)
     case removeMember(conversationId: String, userId: String)
     case updateMemberRole(conversationId: String, userId: String, role: ConversationMemberRole)
@@ -26,7 +27,7 @@ enum ConversationEndpoints: APIEndpoint, Sendable {
     case archiveConversation(conversationId: String)
     case unarchiveConversation(conversationId: String)
     case markAsRead(conversationId: String)
-    case searchConversations(query: String, page: Int, limit: Int)
+    case searchConversations(query: String, offset: Int, limit: Int)
 
     var path: String {
         switch self {
@@ -85,16 +86,11 @@ enum ConversationEndpoints: APIEndpoint, Sendable {
 
     var queryParameters: [String: Any]? {
         switch self {
-        case .fetchConversations(let page, let limit):
-            // Backend expects "offset" not "page"
-            // Convert page-based pagination to offset-based: offset = (page - 1) * limit
-            let offset = (page - 1) * limit
+        case .fetchConversations(let offset, let limit):
             return ["offset": offset, "limit": limit]
-        case .fetchMembers(_, let page, let limit):
-            let offset = (page - 1) * limit
+        case .fetchMembers(_, let offset, let limit):
             return ["offset": offset, "limit": limit]
-        case .searchConversations(let query, let page, let limit):
-            let offset = (page - 1) * limit
+        case .searchConversations(let query, let offset, let limit):
             return ["query": query, "offset": offset, "limit": limit]
         default:
             return nil
@@ -115,7 +111,7 @@ enum ConversationEndpoints: APIEndpoint, Sendable {
             return ["isPinned": true]
         case .unpinConversation:
             return ["isPinned": false]
-        case .muteConversation(_, let duration):
+        case .muteConversation(_, _):
             // Note: duration not supported in current backend, just mute
             return ["isMuted": true]
         case .unmuteConversation:

@@ -3,6 +3,7 @@
 //  Meeshy
 //
 //  Service for community operations
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
@@ -43,10 +44,10 @@ final class CommunityService: Sendable {
 
     func fetchCommunityConversations(
         communityId: String,
-        page: Int = 1,
+        offset: Int = 0,
         limit: Int = 20
     ) async throws -> PaginatedResponse<Conversation> {
-        let endpoint = CommunityEndpoints.getCommunityConversations(communityId: communityId, page: page, limit: limit)
+        let endpoint = CommunityEndpoints.getCommunityConversations(communityId: communityId, offset: offset, limit: limit)
         let response: APIResponse<[Conversation]> = try await apiClient.request(endpoint)
 
         guard let conversations = response.data else {

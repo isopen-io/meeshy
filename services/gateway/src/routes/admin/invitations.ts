@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -32,9 +33,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const page = parseInt(query.page) || 1;
-      const pageSize = parseInt(query.pageSize) || 20;
-      const offset = (page - 1) * pageSize;
+      const pagination = validatePagination(query.offset, query.limit, 100);
 
       // Construire les filtres
       const where: any = {};
@@ -78,8 +77,8 @@ export async function invitationRoutes(fastify: FastifyInstance) {
             }
           },
           orderBy: { createdAt: 'desc' },
-          skip: offset,
-          take: pageSize
+          skip: pagination.offset,
+          take: pagination.limit
         }),
         fastify.prisma.friendRequest.count({ where })
       ]);
@@ -98,16 +97,18 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         receiver: fr.receiver
       }));
 
+      const paginationMeta = buildPaginationMeta(
+        totalFriendRequests,
+        pagination.offset,
+        pagination.limit,
+        friendRequests.length
+      );
+
       return reply.send({
         success: true,
         data: {
           invitations,
-          pagination: {
-            page,
-            pageSize,
-            total: totalFriendRequests,
-            hasMore: offset + friendRequests.length < totalFriendRequests
-          }
+          pagination: paginationMeta
         }
       });
     } catch (error) {

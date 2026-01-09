@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useMessageReactions } from '@/hooks/use-message-reactions';
+import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useI18n } from '@/hooks/use-i18n';
 import type { ReactionAggregation } from '@meeshy/shared/types/reaction';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,7 +19,7 @@ interface MessageReactionsProps {
   showAddButton?: boolean;
   onAddReactionClick?: () => void;
   // Hook externe optionnel pour partager l'état entre composants
-  externalReactionsHook?: ReturnType<typeof useMessageReactions>;
+  externalReactionsHook?: ReturnType<typeof useReactionsQuery>;
 }
 
 /**
@@ -55,12 +55,12 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
   const [animatingEmojis, setAnimatingEmojis] = React.useState<Set<string>>(new Set());
   const [loadedEmojis, setLoadedEmojis] = React.useState<Set<string>>(new Set());
 
-  // Un seul hook useMessageReactions : soit externe (partagé), soit interne
+  // Un seul hook useReactionsQuery : soit externe (partagé), soit interne
   // Si externalReactionsHook est fourni, on l'utilise directement
-  // Sinon, on crée notre propre instance du hook
+  // Sinon, on crée notre propre instance du hook (React Query)
   const shouldCreateInternalHook = !externalReactionsHook;
 
-  const internalReactionsHook = useMessageReactions({
+  const internalReactionsHook = useReactionsQuery({
     messageId,
     currentUserId: isAnonymous ? currentAnonymousUserId : currentUserId,
     isAnonymous,

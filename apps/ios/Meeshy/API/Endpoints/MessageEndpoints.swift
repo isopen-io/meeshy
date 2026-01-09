@@ -3,13 +3,14 @@
 //  Meeshy
 //
 //  Message API endpoints
+//  UPDATED: Uses offset/limit pagination pattern
 //
 
 import Foundation
 
 enum MessageEndpoints: APIEndpoint, Sendable {
 
-    case fetchMessages(conversationId: String, page: Int, limit: Int)
+    case fetchMessages(conversationId: String, offset: Int, limit: Int)
     case fetchMessagesBefore(conversationId: String, beforeId: String, limit: Int)
     case fetchMessagesAfter(conversationId: String, afterId: String, limit: Int, includeMessage: Bool)
     case sendMessage(conversationId: String, MessageSendRequest)
@@ -21,7 +22,7 @@ enum MessageEndpoints: APIEndpoint, Sendable {
     case forwardMessage(messageId: String, conversationIds: [String])
     case pinMessage(messageId: String)
     case unpinMessage(messageId: String)
-    case searchMessages(conversationId: String?, query: String, page: Int, limit: Int)
+    case searchMessages(conversationId: String?, query: String, offset: Int, limit: Int)
 
     var path: String {
         switch self {
@@ -67,9 +68,7 @@ enum MessageEndpoints: APIEndpoint, Sendable {
 
     var queryParameters: [String: Any]? {
         switch self {
-        case .fetchMessages(_, let page, let limit):
-            // Backend uses 'offset' not 'page' - convert page to offset
-            let offset = (page - 1) * limit
+        case .fetchMessages(_, let offset, let limit):
             return ["offset": offset, "limit": limit]
         case .fetchMessagesBefore(_, let beforeId, let limit):
             return ["before": beforeId, "limit": limit]
@@ -79,8 +78,8 @@ enum MessageEndpoints: APIEndpoint, Sendable {
                 params["include"] = "true"
             }
             return params
-        case .searchMessages(let conversationId, let query, let page, let limit):
-            var params: [String: Any] = ["query": query, "page": page, "limit": limit]
+        case .searchMessages(let conversationId, let query, let offset, let limit):
+            var params: [String: Any] = ["query": query, "offset": offset, "limit": limit]
             if let conversationId = conversationId {
                 params["conversationId"] = conversationId
             }
