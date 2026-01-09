@@ -45,12 +45,8 @@ RUN apk add --no-cache libc6-compat tini curl bash
 
 WORKDIR /app
 
-# Copy package files from monorepo
+# Copy package files from monorepo (not lockfiles - they're for full monorepo workspace)
 COPY apps/web/package.json ./
-
-# Copy lock files (both for flexibility)
-COPY pnpm-lock.yaml* ./
-COPY bun.lock* ./
 
 # Copy shared package (full source for building)
 COPY packages/shared/ ./packages/shared/
@@ -68,12 +64,11 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
     fi
 
 # === INSTALL DEPENDENCIES ===
-# Note: CI="" unsets CI env var that causes bun to use frozen lockfile by default
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing with bun ===" && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      CI="" bun install --no-save; \
+      bun install --no-save; \
     else \
       echo "=== Installing with pnpm ===" && \
       corepack enable pnpm && \
