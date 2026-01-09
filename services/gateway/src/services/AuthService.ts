@@ -108,7 +108,6 @@ export class AuthService {
         where: { id: user.id },
         data: {
           isOnline: true,
-          lastSeen: new Date(),
           lastActiveAt: new Date()
         }
       });
@@ -207,7 +206,6 @@ export class AuthService {
           regionalLanguage: data.regionalLanguage || 'fr',
           displayName: normalizedDisplayName,
           isOnline: true,
-          lastSeen: new Date(),
           lastActiveAt: new Date(),
           // Email verification fields
           emailVerificationToken: verificationTokenHash,
@@ -337,13 +335,18 @@ export class AuthService {
    */
   async updateOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
     try {
+      const updateData: { isOnline: boolean; lastActiveAt?: Date } = {
+        isOnline
+      };
+
+      // Only update lastActiveAt when coming online
+      if (isOnline) {
+        updateData.lastActiveAt = new Date();
+      }
+
       await this.prisma.user.update({
         where: { id: userId },
-        data: {
-          isOnline,
-          lastSeen: new Date(),
-          lastActiveAt: isOnline ? new Date() : undefined
-        }
+        data: updateData
       });
     } catch (error) {
       console.error('Error updating online status:', error);
@@ -733,7 +736,6 @@ export class AuthService {
         role: user.role
       } as SocketIOUser),
       isOnline: user.isOnline,
-      lastSeen: user.lastSeen,
       lastActiveAt: user.lastActiveAt,
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,

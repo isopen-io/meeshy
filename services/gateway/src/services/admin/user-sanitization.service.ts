@@ -59,7 +59,6 @@ export class UserSanitizationService {
       isOnline: user.isOnline,
       emailVerifiedAt: user.emailVerifiedAt,
       phoneVerifiedAt: user.phoneVerifiedAt,
-      lastSeen: user.lastSeen,
       lastActiveAt: user.lastActiveAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

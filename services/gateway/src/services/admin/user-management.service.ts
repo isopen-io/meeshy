@@ -65,13 +65,13 @@ export class UserManagementService {
       }
     }
 
-    if (filters.lastSeenAfter || filters.lastSeenBefore) {
-      where.lastSeen = {};
-      if (filters.lastSeenAfter) {
-        (where.lastSeen as Record<string, unknown>).gte = filters.lastSeenAfter;
+    if (filters.lastActiveAfter || filters.lastActiveBefore) {
+      where.lastActiveAt = {};
+      if (filters.lastActiveAfter) {
+        (where.lastActiveAt as Record<string, unknown>).gte = filters.lastActiveAfter;
       }
-      if (filters.lastSeenBefore) {
-        (where.lastSeen as Record<string, unknown>).lte = filters.lastSeenBefore;
+      if (filters.lastActiveBefore) {
+        (where.lastActiveAt as Record<string, unknown>).lte = filters.lastActiveBefore;
       }
     }
 
@@ -144,7 +144,6 @@ export class UserManagementService {
         translateToSystemLanguage: true,
         translateToRegionalLanguage: false,
         useCustomDestination: false,
-        lastSeen: new Date(),
         lastActiveAt: new Date()
       }
     });
