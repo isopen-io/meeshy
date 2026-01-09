@@ -485,9 +485,9 @@ export default function LinksPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-      <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto">
-        {/* Contenu principal scrollable avec largeur limitée */}
-        <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-8 w-full py-8 px-4 sm:px-6 lg:px-8">
+      <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        {/* Contenu principal scrollable pleine largeur */}
+        <div className="relative z-10 space-y-8 pb-8 w-full py-8 px-4 md:px-8">
 
         {/* Hero Section */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 md:p-12 text-white shadow-2xl">

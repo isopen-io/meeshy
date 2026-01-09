@@ -262,8 +262,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   if (loading) {
     return (
-      <DashboardLayout title={t('title')} hideSearch>
-        <div className="max-w-4xl mx-auto">
+      <DashboardLayout title={t('title')} hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        <div className="w-full px-4 md:px-8">
           <div className="flex items-center space-x-4 mb-8">
             <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
             <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -283,8 +283,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   if (!user) {
     return (
-      <DashboardLayout title={t('title')} hideSearch>
-        <div className="max-w-4xl mx-auto">
+      <DashboardLayout title={t('title')} hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        <div className="w-full px-4 md:px-8">
           <div className="flex items-center space-x-4 mb-8">
             <Button
               variant="ghost"
@@ -296,7 +296,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
             </Button>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
           </div>
-          
+
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
@@ -316,8 +316,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   }
 
   return (
-    <DashboardLayout title={getUserDisplayName(user)} hideSearch>
-      <div className="max-w-4xl mx-auto">
+    <DashboardLayout title={getUserDisplayName(user)} hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+      <div className="w-full px-4 md:px-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <Button
