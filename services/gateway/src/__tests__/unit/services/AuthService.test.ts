@@ -123,7 +123,6 @@ const mockUser = {
   avatar: null,
   role: 'USER',
   isOnline: true,
-  lastSeen: new Date(),
   lastActiveAt: new Date(),
   systemLanguage: 'fr',
   regionalLanguage: 'fr',
@@ -160,7 +159,6 @@ const mockSocketIOUser = {
     canManageTranslations: false
   },
   isOnline: true,
-  lastSeen: expect.any(Date),
   lastActiveAt: expect.any(Date),
   systemLanguage: 'fr',
   regionalLanguage: 'fr',
@@ -268,7 +266,7 @@ describe('AuthService', () => {
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('should update lastSeen and isOnline on successful authentication', async () => {
+    it('should update lastActiveAt and isOnline on successful authentication', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       mockBcryptCompare.mockResolvedValue(true);
       mockPrisma.user.update.mockResolvedValue(mockUser);
@@ -279,7 +277,6 @@ describe('AuthService', () => {
         where: { id: mockUser.id },
         data: {
           isOnline: true,
-          lastSeen: expect.any(Date),
           lastActiveAt: expect.any(Date)
         }
       });
@@ -671,7 +668,6 @@ describe('AuthService', () => {
         where: { id: 'user-123' },
         data: {
           isOnline: true,
-          lastSeen: expect.any(Date),
           lastActiveAt: expect.any(Date)
         }
       });
@@ -685,9 +681,7 @@ describe('AuthService', () => {
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: {
-          isOnline: false,
-          lastSeen: expect.any(Date),
-          lastActiveAt: undefined
+          isOnline: false
         }
       });
     });
@@ -1060,7 +1054,7 @@ describe('AuthService - Security Tests', () => {
     expect(result).toBeNull();
   });
 
-  it('should not update lastSeen on failed authentication', async () => {
+  it('should not update lastActiveAt on failed authentication', async () => {
     mockPrisma.user.findFirst.mockResolvedValue(mockUser);
     mockBcryptCompare.mockResolvedValue(false);
 

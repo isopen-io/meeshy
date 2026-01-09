@@ -226,7 +226,7 @@ describe('Socket.IO Status Integration', () => {
 
       expect(updatedUser).toBeDefined();
       expect(updatedUser!.isOnline).toBe(false);
-      expect(updatedUser!.lastSeen).toBeDefined();
+      expect(updatedUser!.lastActiveAt).toBeDefined();
     });
   });
 
@@ -301,7 +301,7 @@ describe('Socket.IO Status Integration', () => {
 
       expect(cleanedUser).toBeDefined();
       expect(cleanedUser!.isOnline).toBe(false);
-      expect(cleanedUser!.lastSeen).toBeDefined();
+      expect(cleanedUser!.lastActiveAt).toBeDefined();
 
       // Cleanup
       await prisma.user.delete({ where: { id: zombieUser.id } });
