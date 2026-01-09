@@ -94,7 +94,7 @@ describe('StatusService - User Status Management', () => {
 
       expect(updatedUser).toBeDefined();
       expect(updatedUser!.isOnline).toBe(false);
-      expect(updatedUser!.lastSeen).toBeDefined();
+      expect(updatedUser!.lastActiveAt).toBeDefined();
 
       // Cleanup
       await prisma.user.delete({ where: { id: user.id } });
