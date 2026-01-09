@@ -314,7 +314,6 @@ final class AuthenticationManager: ObservableObject, @unchecked Sendable {
             displayName: nil,
             avatar: nil,
             isOnline: true,
-            lastSeen: Date(),
             lastActiveAt: Date(),
             systemLanguage: data.participant.language,
             regionalLanguage: data.participant.language,

@@ -146,7 +146,7 @@ final class UserRepository: BaseRepository {
         }
 
         entity.isOnline = isOnline
-        entity.lastSeen = isOnline ? nil : Date()
+        entity.lastActiveAt = isOnline ? nil : Date()
         entity.needsSync = true
 
         try save()
@@ -233,7 +233,7 @@ final class UserRepository: BaseRepository {
                 entity.phoneNumber = model.phoneNumber
                 entity.preferredLanguage = model.systemLanguage
                 entity.isOnline = model.isOnline
-                entity.lastSeen = model.lastSeen
+                entity.lastActiveAt = model.lastActiveAt
                 entity.createdAt = model.createdAt
                 entity.updatedAt = model.updatedAt
                 entity.twoFactorEnabled = model.isTwoFactorEnabled
@@ -286,8 +286,7 @@ final class UserRepository: BaseRepository {
             displayName: entity.displayName,
             avatar: entity.avatarURL,
             isOnline: entity.isOnline,
-            lastSeen: entity.lastSeen,
-            lastActiveAt: entity.lastSeen,
+            lastActiveAt: entity.lastActiveAt,
             systemLanguage: preferredLanguage,
             regionalLanguage: "fr",  // Default
             customDestinationLanguage: nil,
@@ -335,7 +334,7 @@ final class UserRepository: BaseRepository {
         entity.phoneNumber = model.phoneNumber
         entity.preferredLanguage = model.systemLanguage
         entity.isOnline = model.isOnline
-        entity.lastSeen = model.lastSeen
+        entity.lastActiveAt = model.lastActiveAt
         entity.createdAt = model.createdAt
         entity.updatedAt = model.updatedAt
         entity.twoFactorEnabled = model.isTwoFactorEnabled

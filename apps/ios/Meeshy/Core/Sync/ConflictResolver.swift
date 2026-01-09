@@ -225,7 +225,6 @@ final class ConflictResolver: @unchecked Sendable {
 
         // Always use remote for online status and activity
         merged.isOnline = remote.isOnline
-        merged.lastSeen = remote.lastSeen
         merged.lastActiveAt = remote.lastActiveAt
 
         syncLogger.debug("Users merged successfully")

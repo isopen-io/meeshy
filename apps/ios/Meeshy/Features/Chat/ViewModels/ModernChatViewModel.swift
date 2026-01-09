@@ -1429,10 +1429,10 @@ final class ModernChatViewModel: ObservableObject {
             return
         }
 
-        // Calculate presence based on isOnline and lastSeen
+        // Calculate presence based on isOnline and lastActiveAt
         otherUserPresence = otherMember.presenceStatus
 
-        // Refresh presence periodically (recalculate based on lastSeen)
+        // Refresh presence periodically (recalculate based on lastActiveAt)
         presenceTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshPresence()
@@ -1441,7 +1441,7 @@ final class ModernChatViewModel: ObservableObject {
     }
 
     private func refreshPresence() {
-        // Recalculate presence based on current time and lastSeen
+        // Recalculate presence based on current time and lastActiveAt
         guard conversation.isDirect,
               let members = conversation.members,
               let otherMember = members.first(where: { $0.userId != currentUserId }) else {

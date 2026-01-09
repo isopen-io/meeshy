@@ -102,7 +102,7 @@ Create 3 schemes in Xcode:
 - bio: String (Optional)
 - preferredLanguage: String
 - isOnline: Boolean
-- lastSeen: Date (Optional)
+- lastActiveAt: Date (Optional)
 - updatedAt: Date
 
 **CachedConversation Entity:**

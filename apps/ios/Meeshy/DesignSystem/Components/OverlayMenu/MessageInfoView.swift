@@ -549,8 +549,7 @@ private struct ParticipantStatusRowView: View {
                 displayName: name,
                 avatar: nil,
                 isOnline: index % 3 == 0,
-                lastSeen: Date().addingTimeInterval(Double(-index * 3600)),
-                lastActiveAt: nil
+                lastActiveAt: Date().addingTimeInterval(Double(-index * 3600))
             ),
             readCursor: readCursor
         )

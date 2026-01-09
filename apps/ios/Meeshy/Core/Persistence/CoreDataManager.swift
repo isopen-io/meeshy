@@ -1036,7 +1036,7 @@ extension CoreDataManager {
         cachedUser.phoneNumber = user.phoneNumber
         cachedUser.preferredLanguage = user.systemLanguage
         cachedUser.isOnline = user.isOnline
-        cachedUser.lastSeen = user.lastSeen
+        cachedUser.lastActiveAt = user.lastActiveAt
         cachedUser.createdAt = user.createdAt
         cachedUser.updatedAt = Date()
         cachedUser.syncedAt = Date()
@@ -1075,8 +1075,7 @@ extension CoreDataManager {
             displayName: cached.displayName,
             avatar: cached.avatarURL,
             isOnline: cached.isOnline,
-            lastSeen: cached.lastSeen,
-            lastActiveAt: cached.lastSeen,
+            lastActiveAt: cached.lastActiveAt,
             systemLanguage: cached.preferredLanguage ?? "en",
             autoTranslateEnabled: cached.autoTranslateEnabled,
             twoFactorEnabledAt: cached.twoFactorEnabled ? Date() : nil,
