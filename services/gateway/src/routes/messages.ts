@@ -33,6 +33,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour récupérer un message spécifique
+  // OPTIMISÉ: N'inclut plus les statusEntries - utilise les champs dénormalisés
   fastify.get<{
     Params: MessageParams;
   }>('/messages/:messageId', {
@@ -43,7 +44,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      // Récupérer le message avec ses détails
+      // Récupérer le message avec ses détails (sans statusEntries - évite N+1)
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
@@ -74,14 +75,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          status: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true
-                }
-              }
+          attachments: {
+            select: {
+              id: true,
+              fileName: true,
+              originalName: true,
+              mimeType: true,
+              fileSize: true,
+              fileUrl: true,
+              thumbnailUrl: true,
+              width: true,
+              height: true,
+              duration: true,
+              // Champs dénormalisés pour éviter N+1
+              viewedCount: true,
+              downloadedCount: true,
+              consumedCount: true,
+              viewedByAllAt: true,
+              downloadedByAllAt: true,
+              listenedByAllAt: true,
+              watchedByAllAt: true
             }
           },
           translations: {
@@ -103,16 +116,27 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
-      if (!message.conversation.members.length) {
+      if (!(message as any).conversation.members.length) {
         return reply.status(403).send({
           success: false,
           error: 'Accès non autorisé à ce message'
         });
       }
 
+      // Retourner le message avec les champs dénormalisés (deliveredCount, readCount, etc.)
+      // Les détails des statuts sont disponibles via GET /messages/:messageId/status-details
       return reply.send({
         success: true,
-        data: message
+        data: {
+          ...message,
+          // Les compteurs sont déjà dans message via les champs dénormalisés
+          statusSummary: {
+            deliveredCount: (message as any).deliveredCount || 0,
+            readCount: (message as any).readCount || 0,
+            deliveredToAllAt: (message as any).deliveredToAllAt,
+            readByAllAt: (message as any).readByAllAt
+          }
+        }
       });
 
     } catch (error) {
@@ -663,6 +687,261 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des traductions du message'
+      });
+    }
+  });
+
+  // ===========================================================================
+  // ROUTES DÉTAILS DE STATUT AVEC PAGINATION CURSOR (évite N+1)
+  // ===========================================================================
+
+  // Route pour récupérer les détails de statut d'un message avec pagination offset/limit
+  // Utiliser UNIQUEMENT quand l'utilisateur demande explicitement les détails
+  fastify.get<{
+    Params: MessageParams;
+    Querystring: {
+      offset?: string;
+      limit?: string;
+      filter?: 'all' | 'delivered' | 'read' | 'unread';
+    };
+  }>('/messages/:messageId/status-details', {
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { messageId } = request.params;
+      const { offset = '0', limit = '20', filter = 'all' } = request.query;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Vérifier que le message existe et que l'utilisateur a accès
+      const message = await prisma.message.findFirst({
+        where: {
+          id: messageId,
+          isDeleted: false
+        },
+        include: {
+          conversation: {
+            include: {
+              members: {
+                where: { userId: userId },
+                select: { userId: true }
+              }
+            }
+          }
+        }
+      });
+
+      if (!message || !message.conversation.members.length) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Message non trouvé ou accès non autorisé'
+        });
+      }
+
+      // Utiliser le service pour récupérer les détails paginés
+      const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
+        offset: parseInt(offset, 10),
+        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        filter
+      });
+
+      return reply.send({
+        success: true,
+        data: statusDetails.statuses,
+        pagination: statusDetails.pagination
+      });
+
+    } catch (error) {
+      console.error('[MESSAGES] Error fetching message status details:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la récupération des détails de statut'
+      });
+    }
+  });
+
+  // Route pour récupérer les détails de statut d'un attachment avec pagination offset/limit
+  // Utiliser UNIQUEMENT quand l'utilisateur ouvre les détails d'un attachment
+  fastify.get<{
+    Params: { attachmentId: string };
+    Querystring: {
+      offset?: string;
+      limit?: string;
+      filter?: 'all' | 'viewed' | 'downloaded' | 'listened' | 'watched';
+    };
+  }>('/attachments/:attachmentId/status-details', {
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { attachmentId } = request.params;
+      const { offset = '0', limit = '20', filter = 'all' } = request.query;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Vérifier que l'attachment existe et que l'utilisateur a accès
+      const attachment = await prisma.messageAttachment.findFirst({
+        where: { id: attachmentId },
+        include: {
+          message: {
+            include: {
+              conversation: {
+                include: {
+                  members: {
+                    where: { userId: userId },
+                    select: { userId: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!attachment || !attachment.message.conversation.members.length) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Attachment non trouvé ou accès non autorisé'
+        });
+      }
+
+      // Utiliser le service pour récupérer les détails paginés
+      const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
+        offset: parseInt(offset, 10),
+        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        filter
+      });
+
+      return reply.send({
+        success: true,
+        data: statusDetails.statuses,
+        pagination: statusDetails.pagination
+      });
+
+    } catch (error) {
+      console.error('[MESSAGES] Error fetching attachment status details:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la récupération des détails de statut de l\'attachment'
+      });
+    }
+  });
+
+  // Route pour marquer un attachment comme écouté/vu/téléchargé
+  fastify.post<{
+    Params: { attachmentId: string };
+    Body: {
+      action: 'listened' | 'watched' | 'viewed' | 'downloaded';
+      playPositionMs?: number;
+      durationMs?: number;
+      complete?: boolean;
+      wasZoomed?: boolean;
+    };
+  }>('/attachments/:attachmentId/status', {
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { attachmentId } = request.params;
+      const { action, playPositionMs, durationMs, complete, wasZoomed } = request.body;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      if (!action || !['listened', 'watched', 'viewed', 'downloaded'].includes(action)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Action invalide. Valeurs acceptées: listened, watched, viewed, downloaded'
+        });
+      }
+
+      // Vérifier que l'attachment existe et que l'utilisateur a accès
+      const attachment = await prisma.messageAttachment.findFirst({
+        where: { id: attachmentId },
+        include: {
+          message: {
+            include: {
+              conversation: {
+                include: {
+                  members: {
+                    where: { userId: userId },
+                    select: { userId: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!attachment || !attachment.message.conversation.members.length) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Attachment non trouvé ou accès non autorisé'
+        });
+      }
+
+      // Utiliser le service pour mettre à jour le statut
+      const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      switch (action) {
+        case 'listened':
+          await readStatusService.markAudioAsListened(userId, attachmentId, {
+            playPositionMs,
+            listenDurationMs: durationMs,
+            complete
+          });
+          break;
+        case 'watched':
+          await readStatusService.markVideoAsWatched(userId, attachmentId, {
+            watchPositionMs: playPositionMs,
+            watchDurationMs: durationMs,
+            complete
+          });
+          break;
+        case 'viewed':
+          await readStatusService.markImageAsViewed(userId, attachmentId, {
+            viewDurationMs: durationMs,
+            wasZoomed
+          });
+          break;
+        case 'downloaded':
+          await readStatusService.markAttachmentAsDownloaded(userId, attachmentId);
+          break;
+      }
+
+      // Diffuser le statut via Socket.IO
+      try {
+        const socketIOManager = socketIOHandler.getManager();
+        if (socketIOManager) {
+          const room = `conversation_${attachment.message.conversationId}`;
+          (socketIOManager as any).io.to(room).emit('attachment-status:updated', {
+            attachmentId,
+            messageId: attachment.messageId,
+            conversationId: attachment.message.conversationId,
+            userId,
+            action,
+            updatedAt: new Date()
+          });
+        }
+      } catch (socketError) {
+        console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
+      }
+
+      return reply.send({
+        success: true,
+        message: `Attachment marqué comme ${action}`
+      });
+
+    } catch (error) {
+      console.error('[MESSAGES] Error updating attachment status:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la mise à jour du statut de l\'attachment'
       });
     }
   });

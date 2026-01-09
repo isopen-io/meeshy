@@ -388,6 +388,7 @@ struct ConversationHeader: View {
     var isSidebarVisible: Bool = true
     var isInputFocused: Bool
     @State private var showParticipantsList = false
+    @State private var showEncryptionInfo = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -445,10 +446,21 @@ struct ConversationHeader: View {
 
                 // Title & Info
                 VStack(alignment: .leading, spacing: 2) {
-                    // Title
-                    Text(displayTitle)
-                        .font(.headline)
-                        .lineLimit(1)
+                    // Title with encryption indicator
+                    HStack(spacing: 4) {
+                        Text(displayTitle)
+                            .font(.headline)
+                            .lineLimit(1)
+
+                        // Encryption lock icon
+                        if conversation.isEncrypted {
+                            Button(action: { showEncryptionInfo = true }) {
+                                Image(systemName: conversation.encryptionMode.icon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(conversation.isE2EEncrypted ? .green : .blue)
+                            }
+                        }
+                    }
 
                     // Subtitle: typing indicator (direct only) OR original title (if renamed)
                     // Priority: typing indicator > original title
@@ -552,6 +564,150 @@ struct ConversationHeader: View {
                 members: conversation.members ?? []
             )
         }
+        .sheet(isPresented: $showEncryptionInfo) {
+            EncryptionInfoSheet(conversation: conversation)
+        }
+    }
+}
+
+// MARK: - Encryption Info Sheet
+
+/// Sheet displaying encryption status and information for a conversation
+struct EncryptionInfoSheet: View {
+    let conversation: Conversation
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Encryption status icon
+                ZStack {
+                    Circle()
+                        .fill(encryptionColor.opacity(0.15))
+                        .frame(width: 80, height: 80)
+
+                    Image(systemName: conversation.encryptionMode.icon)
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundColor(encryptionColor)
+                }
+                .padding(.top, 20)
+
+                // Encryption mode title
+                Text(conversation.encryptionMode.displayName)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+
+                // Description based on encryption mode
+                Text(encryptionDescription)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                Spacer()
+
+                // Security details section
+                VStack(alignment: .leading, spacing: 16) {
+                    SecurityDetailRow(
+                        icon: "checkmark.shield.fill",
+                        title: "Algorithm",
+                        value: "AES-256-GCM"
+                    )
+
+                    SecurityDetailRow(
+                        icon: "key.fill",
+                        title: "Key Storage",
+                        value: "iOS Keychain"
+                    )
+
+                    if conversation.isE2EEncrypted {
+                        SecurityDetailRow(
+                            icon: "lock.shield.fill",
+                            title: "Protection",
+                            value: "End-to-End"
+                        )
+                    }
+                }
+                .padding(.horizontal, 24)
+
+                Spacer()
+
+                // Learn more button
+                Button(action: {
+                    // TODO: Open help documentation about encryption
+                }) {
+                    Text("Learn more about encryption")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                }
+                .padding(.bottom, 20)
+            }
+            .navigationTitle("Encryption")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var encryptionColor: Color {
+        switch conversation.encryptionMode {
+        case .e2ee:
+            return .green
+        case .hybrid:
+            return .orange
+        case .server:
+            return .blue
+        case .none:
+            return .gray
+        }
+    }
+
+    private var encryptionDescription: String {
+        switch conversation.encryptionMode {
+        case .e2ee:
+            return "Messages in this conversation are end-to-end encrypted. Only you and the participants can read them. Even Meeshy cannot access the content."
+        case .hybrid:
+            return "Messages are end-to-end encrypted with a server backup. Your messages are secure, with an encrypted backup for recovery purposes."
+        case .server:
+            return "Messages are encrypted on our servers. Your data is protected at rest, but Meeshy can access the content for moderation and support."
+        case .none:
+            return "Messages in this conversation are not encrypted. Consider enabling encryption for sensitive communications."
+        }
+    }
+}
+
+/// Row displaying a security detail with icon
+private struct SecurityDetailRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(.blue)
+                .frame(width: 24)
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.medium)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemGray6))
+        )
     }
 }
 

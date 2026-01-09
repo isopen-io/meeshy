@@ -139,8 +139,9 @@ export default function AdminTranslationsPage() {
       if (showLoader) setRefreshing(true);
       if (loading && currentPage === 1) setLoading(true);
 
+      const offset = (currentPage - 1) * pageSize;
       const response = await adminService.getTranslations(
-        currentPage,
+        offset,
         pageSize,
         sourceLanguage || undefined,
         targetLanguage || undefined,

@@ -3,18 +3,39 @@
  *
  * Backend encryption service for server-side encryption (AES-256-GCM)
  * and Signal Protocol pre-key bundle management.
+ *
+ * Encryption Modes:
+ * - 'e2ee': End-to-end encryption only (client-side Signal Protocol) - NO translation
+ * - 'server': Server-side encryption only (AES-256-GCM) - translation supported
+ * - 'hybrid': Double encryption - E2EE + server layer - translation supported
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 
-/**
- * Encryption mode types
- * - 'e2ee': End-to-end encryption only (client-side Signal Protocol)
- * - 'server': Server-side encryption only (AES-256-GCM)
- * - 'hybrid': Double encryption - E2EE + server layer (allows server translation)
- */
+// Types defined locally to avoid build order issues with shared package
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
+
+/**
+ * Hybrid encrypted payload structure (local definition for build compatibility)
+ */
+interface HybridEncryptedPayload {
+  e2ee: {
+    ciphertext: string;
+    type: number;
+    senderRegistrationId: number;
+    recipientRegistrationId: number;
+  };
+  server: {
+    ciphertext: string;
+    iv: string;
+    authTag: string;
+    keyId: string;
+  };
+  mode: 'hybrid';
+  canTranslate: boolean;
+  timestamp: number;
+}
 
 /**
  * Encrypted payload structure
@@ -32,32 +53,6 @@ interface EncryptedPayload {
   };
 }
 
-/**
- * Hybrid encrypted payload structure
- * Double encryption: E2EE envelope + Server-accessible content
- */
-interface HybridEncryptedPayload {
-  /** E2EE layer - only sender/recipient can decrypt (client-side Signal Protocol) */
-  e2ee: {
-    ciphertext: string; // Base64-encoded Signal Protocol ciphertext
-    type: number; // Signal message type (PreKey=1, Whisper=2, SenderKey=3)
-    senderRegistrationId: number;
-    recipientRegistrationId: number;
-  };
-  /** Server layer - server can decrypt for translation (AES-256-GCM) */
-  server: {
-    ciphertext: string; // Base64-encoded AES ciphertext
-    iv: string; // Base64-encoded IV
-    authTag: string; // Base64-encoded auth tag
-    keyId: string; // Key identifier
-  };
-  /** Mode indicator */
-  mode: 'hybrid';
-  /** Whether translation is available */
-  canTranslate: boolean;
-  /** Timestamp */
-  timestamp: number;
-}
 
 /**
  * Pre-Key Bundle interface (compatible with Signal Protocol)

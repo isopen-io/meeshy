@@ -160,35 +160,47 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const friendRequests = await fastify.prisma.friendRequest.findMany({
-        where: {
-          receiverId: userId,
-          status: 'pending'
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const whereClause = { receiverId: userId, status: 'pending' as const };
+
+      const [friendRequests, totalCount] = await Promise.all([
+        fastify.prisma.friendRequest.findMany({
+          where: whereClause,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                lastActiveAt: true,
+                lastSeen: true
+              }
             }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.friendRequest.count({ where: whereClause })
+      ]);
 
       return reply.send({
         success: true,
-        data: friendRequests
+        data: friendRequests,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + friendRequests.length < totalCount
+        }
       });
 
     } catch (error) {
@@ -206,34 +218,47 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const friendRequests = await fastify.prisma.friendRequest.findMany({
-        where: {
-          senderId: userId
-        },
-        include: {
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const whereClause = { senderId: userId };
+
+      const [friendRequests, totalCount] = await Promise.all([
+        fastify.prisma.friendRequest.findMany({
+          where: whereClause,
+          include: {
+            receiver: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                lastActiveAt: true,
+                lastSeen: true
+              }
             }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.friendRequest.count({ where: whereClause })
+      ]);
 
       return reply.send({
         success: true,
-        data: friendRequests
+        data: friendRequests,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + friendRequests.length < totalCount
+        }
       });
 
     } catch (error) {

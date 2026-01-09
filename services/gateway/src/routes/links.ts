@@ -837,7 +837,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
               language: true
             }
           },
-          status: {
+          statusEntries: {
             select: {
               userId: true,
               readAt: true
@@ -1210,7 +1210,7 @@ export async function linksRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          status: {
+          statusEntries: {
             select: {
               userId: true,
               readAt: true
@@ -1261,23 +1261,23 @@ export async function linksRoutes(fastify: FastifyInstance) {
         replyToId: message.replyToId,
         createdAt: message.createdAt,
         updatedAt: message.updatedAt,
-        status: message.status || [],
+        statusEntries: (message as any).statusEntries || [],
         // Retourner sender et senderAnonymous distinctement
-        sender: message.sender ? {
-          id: message.sender.id,
-          username: message.sender.username,
-          firstName: message.sender.firstName,
-          lastName: message.sender.lastName,
-          displayName: message.sender.displayName,
-          avatar: message.sender.avatar,
-          systemLanguage: message.sender.systemLanguage
+        sender: (message as any).sender ? {
+          id: (message as any).sender.id,
+          username: (message as any).sender.username,
+          firstName: (message as any).sender.firstName,
+          lastName: (message as any).sender.lastName,
+          displayName: (message as any).sender.displayName,
+          avatar: (message as any).sender.avatar,
+          systemLanguage: (message as any).sender.systemLanguage
         } : null,
-        anonymousSender: message.anonymousSender ? {
-          id: message.anonymousSender.id,
-          username: message.anonymousSender.username,
-          firstName: message.anonymousSender.firstName,
-          lastName: message.anonymousSender.lastName,
-          language: message.anonymousSender.language
+        anonymousSender: (message as any).anonymousSender ? {
+          id: (message as any).anonymousSender.id,
+          username: (message as any).anonymousSender.username,
+          firstName: (message as any).anonymousSender.firstName,
+          lastName: (message as any).anonymousSender.lastName,
+          language: (message as any).anonymousSender.language
         } : null,
         // Inclure les attachments avec metadata brut
         attachments: (message as any).attachments || [],

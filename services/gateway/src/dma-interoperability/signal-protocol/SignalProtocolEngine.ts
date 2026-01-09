@@ -378,7 +378,7 @@ export class SignalProtocolEngine {
    *
    * Steps:
    * 1. Get ephemeral public key from sender (in encrypted message)
-   * 2. Get sender's identity key from database
+   * 2. Get sender's identity key and pre-key info from database
    * 3. Perform X3DH key agreement (RESPONDER SIDE)
    * 4. Derive root key and chain keys via HKDF
    * 5. Return session for Double Ratchet initialization
@@ -405,30 +405,28 @@ export class SignalProtocolEngine {
       const senderIdentityKey = Buffer.from(enrollment.identityKey, 'base64');
       console.log(`  ✓ Retrieved sender's identity key`);
 
-      // Step 2: Get our keys
-      const identityKeyPair = await this.keyManager.getIdentityKeyPair();
+      // Step 2: Get our signed pre-key info
       const signedPreKeyPair = await this.keyManager.getSignedPreKeyPair();
-
-      console.log(`  ✓ Using our identity and signed pre-key`);
+      console.log(`  ✓ Using our signed pre-key`);
 
       // Step 3: Perform X3DH key agreement (RESPONDER SIDE)
+      // X3DH internally uses keyManager to get private keys
       const x3dhResult = await this.x3dh.responderKeyAgreement(
-        {
-          senderEphemeralPublicKey: ephemeralPublicKey,
-          senderIdentityKey: senderIdentityKey
-        },
-        identityKeyPair.privateKey,
-        signedPreKeyPair.privateKey
+        ephemeralPublicKey,
+        senderIdentityKey,
+        enrollment.signedPreKeyId,
+        undefined // preKeyId - optional
       );
 
       console.log(`  ✓ X3DH key agreement completed (responder side)`);
 
-      // Step 4: Create session (note: chainKeySend and chainKeyReceive are swapped for responder)
+      // Step 4: Create session
+      // Note: X3DH already swaps chain keys for responder, so use them directly
       const session: SignalSession = {
         recipientId: senderId,
         rootKey: x3dhResult.rootKey,
-        chainKeySend: x3dhResult.chainKeyReceive,
-        chainKeyReceive: x3dhResult.chainKeySend,
+        chainKeySend: x3dhResult.chainKeySend,
+        chainKeyReceive: x3dhResult.chainKeyReceive,
         dhRatchetKey: signedPreKeyPair.publicKey,
         messageNumber: 0,
         previousChainLength: 0

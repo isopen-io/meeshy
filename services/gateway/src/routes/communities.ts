@@ -110,8 +110,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
       }
       
       const userId = authContext.userId;
-      const { search } = request.query as { search?: string };
-      
+      const { search, offset = '0', limit = '20' } = request.query as { search?: string; offset?: string; limit?: string };
+
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
       // Build where clause with optional search
       const whereClause: any = {
         OR: [
@@ -131,46 +134,55 @@ export async function communityRoutes(fastify: FastifyInstance) {
           }
         ];
       }
-      
-      const communities = await fastify.prisma.community.findMany({
-        where: whereClause,
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
+
+      const [communities, totalCount] = await Promise.all([
+        fastify.prisma.community.findMany({
+          where: whereClause,
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true
+              }
+            },
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    isOnline: true
+                  }
                 }
+              }
+            },
+            _count: {
+              select: {
+                members: true,
+                Conversation: true
               }
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.community.count({ where: whereClause })
+      ]);
 
       reply.send({
         success: true,
-        data: communities
+        data: communities,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + communities.length < totalCount
+        }
       });
     } catch (error) {
       console.error('Error fetching communities:', error);
@@ -184,73 +196,79 @@ export async function communityRoutes(fastify: FastifyInstance) {
   // Route pour rechercher des communautés PUBLIQUES accessibles à tous
   fastify.get('/communities/search', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
-      const { q } = request.query as { q?: string };
+      const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
       if (!q || q.trim().length === 0) {
-        return reply.send({ success: true, data: [] });
+        return reply.send({ success: true, data: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } });
       }
 
-      // Rechercher UNIQUEMENT dans les communautés PUBLIQUES
-      const communities = await fastify.prisma.community.findMany({
-        where: {
-          isPrivate: false, // Uniquement les communautés publiques
-          OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { identifier: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
-            // Rechercher aussi dans les noms/usernames des membres
-            {
-              members: {
-                some: {
-                  user: {
-                    OR: [
-                      { username: { contains: q, mode: 'insensitive' } },
-                      { displayName: { contains: q, mode: 'insensitive' } },
-                      { firstName: { contains: q, mode: 'insensitive' } },
-                      { lastName: { contains: q, mode: 'insensitive' } }
-                    ],
-                    isActive: true
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      // Build where clause for public communities
+      const whereClause = {
+        isPrivate: false,
+        OR: [
+          { name: { contains: q, mode: 'insensitive' as const } },
+          { identifier: { contains: q, mode: 'insensitive' as const } },
+          { description: { contains: q, mode: 'insensitive' as const } },
+          {
+            members: {
+              some: {
+                user: {
+                  OR: [
+                    { username: { contains: q, mode: 'insensitive' as const } },
+                    { displayName: { contains: q, mode: 'insensitive' as const } },
+                    { firstName: { contains: q, mode: 'insensitive' as const } },
+                    { lastName: { contains: q, mode: 'insensitive' as const } }
+                  ],
+                  isActive: true
+                }
+              }
+            }
+          }
+        ]
+      };
+
+      const [communities, totalCount] = await Promise.all([
+        fastify.prisma.community.findMany({
+          where: whereClause,
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true
+              }
+            },
+            members: {
+              take: 5,
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    isOnline: true
                   }
                 }
               }
-            }
-          ]
-        },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          members: {
-            take: 5, // Limiter le nombre de membres retournés
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
+            },
+            _count: {
+              select: {
+                members: true,
+                Conversation: true
               }
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: 50 // Limiter le nombre de résultats
-      });
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.community.count({ where: whereClause })
+      ]);
 
       // Transformer les données pour le frontend
       const communitiesWithCount = communities.map(community => ({
@@ -269,7 +287,13 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        data: communitiesWithCount
+        data: communitiesWithCount,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + communities.length < totalCount
+        }
       });
     } catch (error) {
       console.error('[GATEWAY] Error searching communities:', error);
@@ -525,9 +549,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const hasAccess = community.createdBy === userId || 
+      const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
-      
+
       if (!hasAccess && community.isPrivate) {
         return reply.status(403).send({
           success: false,
@@ -535,28 +559,41 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const members = await fastify.prisma.communityMember.findMany({
-        where: { communityId: id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastSeen: true
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const [members, totalCount] = await Promise.all([
+        fastify.prisma.communityMember.findMany({
+          where: { communityId: id },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                lastSeen: true
+              }
             }
-          }
-        },
-        orderBy: {
-          joinedAt: 'asc'
-        }
-      });
+          },
+          orderBy: { joinedAt: 'asc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.communityMember.count({ where: { communityId: id } })
+      ]);
 
       reply.send({
         success: true,
-        data: members
+        data: members,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + members.length < totalCount
+        }
       });
     } catch (error) {
       console.error('Error fetching community members:', error);
