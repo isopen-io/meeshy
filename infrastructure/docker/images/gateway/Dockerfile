@@ -51,14 +51,14 @@ COPY services/gateway/package.json ./
 COPY packages/shared/ ./packages/shared/
 
 # Setup workspace config and install dependencies
-# Note: BUN_INSTALL_FROZEN_LOCKFILE=false is needed because CI=true causes bun to freeze lockfile by default
+# Note: CI="" unsets CI env var that causes bun to use frozen lockfile by default
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Configuring bun workspace ===" && \
       node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      BUN_INSTALL_FROZEN_LOCKFILE=false bun install --no-save; \
+      CI="" bun install --no-save; \
     else \
       echo "=== Configuring pnpm workspace ===" && \
       printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
@@ -128,14 +128,14 @@ COPY services/gateway/package.json ./
 COPY packages/shared/package.json ./packages/shared/
 
 # Setup workspace and install production dependencies only
-# Note: BUN_INSTALL_FROZEN_LOCKFILE=false is needed because CI=true causes bun to freeze lockfile by default
+# Note: CI="" unsets CI env var that causes bun to use frozen lockfile by default
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       echo "=== Installing production deps with bun ===" && \
       node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
       printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
       curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-      BUN_INSTALL_FROZEN_LOCKFILE=false bun install --production --no-save; \
+      CI="" bun install --production --no-save; \
     else \
       echo "=== Installing production deps with pnpm ===" && \
       printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
