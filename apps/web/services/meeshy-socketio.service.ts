@@ -893,7 +893,6 @@ class MeeshySocketIOService {
           useCustomDestination: false,
           isOnline: false,
           avatar: replyToSender.avatar,
-          lastSeen: new Date(),
           createdAt: new Date(),
           lastActiveAt: new Date(),
           isActive: true,
@@ -920,7 +919,6 @@ class MeeshySocketIOService {
           useCustomDestination: false,
           isOnline: false,
           avatar: undefined,
-          lastSeen: new Date(),
           createdAt: new Date(),
           lastActiveAt: new Date(),
           isActive: true,
@@ -944,7 +942,6 @@ class MeeshySocketIOService {
           useCustomDestination: false,
           isOnline: false,
           avatar: undefined,
-          lastSeen: new Date(),
           createdAt: new Date(),
           lastActiveAt: new Date(),
           isActive: true,
@@ -993,13 +990,12 @@ class MeeshySocketIOService {
       useCustomDestination: false,
       isOnline: false,
       avatar: undefined,
-      lastSeen: new Date(),
       createdAt: new Date(),
       lastActiveAt: new Date(),
       isActive: true,
       updatedAt: new Date()
     };
-    
+
     // Construire l'objet sender en gérant les utilisateurs anonymes
     let sender;
     if (socketMessage.sender) {
@@ -1029,7 +1025,6 @@ class MeeshySocketIOService {
         useCustomDestination: false,
         isOnline: false,
         avatar: undefined,
-        lastSeen: new Date(),
         createdAt: new Date(),
         lastActiveAt: new Date(),
         isActive: true,
@@ -1123,16 +1118,29 @@ class MeeshySocketIOService {
 
   /**
    * Définit l'utilisateur actuel et initialise la connexion
-   * CORRECTION: Simplifié pour utiliser ensureConnection()
+   * CORRECTION: Force une reconnexion si l'utilisateur a changé
    */
   public setCurrentUser(user: User): void {
+    // CORRECTION CRITIQUE: Détecter si l'utilisateur a changé
+    const userChanged = this.currentUser && this.currentUser.id !== user.id;
+
+    if (userChanged) {
+      console.log('[MeeshySocketIOService] User changed, forcing reconnection', {
+        oldUser: this.currentUser?.username,
+        newUser: user.username
+      });
+
+      // Nettoyer l'ancienne connexion complètement
+      this.cleanup();
+    }
+
     this.currentUser = user;
 
     // Vérifier que le token est disponible
     const authToken = authManager.getAuthToken();
     const anonymousToken = authManager.getAnonymousSession()?.token;
     const token = authToken || anonymousToken;
-    
+
     if (!token) {
       // OPTIMISATION: Retry très rapide et limité
       let attempts = 0;
@@ -1142,20 +1150,25 @@ class MeeshySocketIOService {
         const retryAuthToken = authManager.getAuthToken();
         const retryAnonymousToken = authManager.getAnonymousSession()?.token;
         const retryToken = retryAuthToken || retryAnonymousToken;
-        
+
         if (retryToken && this.currentUser) {
           clearInterval(retryInterval);
-          this.ensureConnection();
+          this.initializeConnection();
         } else if (attempts >= maxAttempts) {
           clearInterval(retryInterval);
         }
       }, 200); // Réduit à 200ms pour être plus rapide
-      
+
       return;
     }
 
-    // CORRECTION: Utiliser ensureConnection() pour gérer intelligemment la connexion
-    this.ensureConnection();
+    // Si l'utilisateur a changé ou pas de connexion, initialiser une nouvelle connexion
+    if (userChanged || !this.isConnected) {
+      this.initializeConnection();
+    } else {
+      // CORRECTION: Utiliser ensureConnection() pour gérer intelligemment la connexion
+      this.ensureConnection();
+    }
   }
 
   /**

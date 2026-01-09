@@ -141,7 +141,6 @@ export function createDefaultUser(id?: string): User {
     avatar: '',
     role: 'USER',
     isOnline: false,
-    lastSeen: new Date(),
     lastActiveAt: new Date(),
     systemLanguage: 'fr',
     regionalLanguage: 'fr',

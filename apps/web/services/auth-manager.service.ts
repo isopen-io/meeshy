@@ -208,9 +208,22 @@ class AuthManager {
     }
 
     if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] Clearing all sessions...');
     }
 
     try {
+      // 0. CRITIQUE: Nettoyer le service Socket.IO AVANT de nettoyer les tokens
+      // Ceci déconnecte le socket et vide le currentUser du singleton
+      // Import dynamique pour éviter les dépendances circulaires
+      import('./meeshy-socketio.service').then(({ meeshySocketIOService }) => {
+        meeshySocketIOService.cleanup();
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[AUTH_MANAGER] Socket.IO service cleaned up');
+        }
+      }).catch((error) => {
+        console.warn('[AUTH_MANAGER] Could not cleanup Socket.IO service:', error);
+      });
+
       // 1. Nettoyer le store d'authentification Zustand
       useAuthStore.getState().clearAuth();
 
@@ -232,6 +245,7 @@ class AuthManager {
       this.clearAuthCookies();
 
       if (process.env.NODE_ENV === 'development') {
+        console.log('[AUTH_MANAGER] All sessions cleared successfully');
       }
     } catch (error) {
       console.error('[AUTH_MANAGER] Error clearing sessions:', error);

@@ -502,7 +502,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
   }
 
   return (
-    <DashboardLayout title={tConv('communities.title')}>
+    <DashboardLayout title={tConv('communities.title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
       {isLoading ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center">

@@ -648,7 +648,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
             email: '',
             phoneNumber: '',
             isOnline: false,
-            lastSeen: new Date(),
             lastActiveAt: new Date(),
             systemLanguage: 'fr',
             regionalLanguage: 'fr',

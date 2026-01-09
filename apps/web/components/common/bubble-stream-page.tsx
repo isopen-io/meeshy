@@ -791,7 +791,6 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
           avatar: currentUser.avatar,
           role: currentUser.role,
           isOnline: true,
-          lastSeen: new Date(),
           createdAt: currentUser.createdAt || new Date(),
           updatedAt: currentUser.updatedAt || new Date(),
           systemLanguage: currentUser.systemLanguage || 'fr',
@@ -944,7 +943,6 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
           useCustomDestination: false,
           isOnline: true,
           isActive: true,
-          lastSeen: new Date(),
           createdAt: new Date(),
           lastActiveAt: new Date(),
           updatedAt: new Date()
@@ -996,7 +994,6 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
           useCustomDestination: false,
           isOnline: true,
           isActive: true,
-          lastSeen: new Date(),
           createdAt: new Date(),
           lastActiveAt: new Date(),
           updatedAt: new Date()

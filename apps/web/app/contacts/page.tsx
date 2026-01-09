@@ -432,14 +432,11 @@ export default function ContactsPage() {
   const formatLastSeen = (user: User): string => {
     if (user.isOnline) return t('status.online');
 
-    if (!user.lastSeen && !user.lastActiveAt) {
+    if (!user.lastActiveAt) {
       return t('status.neverSeen');
     }
 
-    const lastSeenDate = user.lastSeen || user.lastActiveAt;
-    if (!lastSeenDate) return t('status.neverSeen');
-
-    const date = new Date(lastSeenDate);
+    const date = new Date(user.lastActiveAt);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -472,9 +469,9 @@ export default function ContactsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto">
-        {/* Contenu principal scrollable avec largeur limitée */}
-        <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-8 w-full py-8">
+      <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        {/* Contenu principal scrollable pleine largeur */}
+        <div className="relative z-10 space-y-8 pb-8 w-full py-8 px-4 md:px-8">
           {/* Hero Section */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 dark:from-blue-700 dark:via-indigo-700 dark:to-purple-800 p-8 md:p-12 text-white shadow-2xl">
             <div className="absolute inset-0 bg-black/10"></div>

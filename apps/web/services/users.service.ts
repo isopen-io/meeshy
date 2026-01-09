@@ -170,7 +170,7 @@ export const usersService = {
 
   /**
    * Vérifie si un utilisateur est en ligne
-   * Basé sur lastSeen pour refléter toute activité détectable (typing, API calls, etc.)
+   * Basé sur lastActiveAt pour refléter l'activité détectable
    * Un utilisateur est considéré en ligne s'il a été actif dans les 5 dernières minutes
    */
   isUserOnline(user: User): boolean {
@@ -179,8 +179,7 @@ export const usersService = {
       return false;
     }
 
-    // Utiliser lastSeen (activité détectable) avec fallback sur lastActiveAt (connexion)
-    const lastActive = new Date(user.lastSeen || user.lastActiveAt);
+    const lastActive = new Date(user.lastActiveAt);
     const now = new Date();
     const diffMs = now.getTime() - lastActive.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -191,7 +190,7 @@ export const usersService = {
 
   /**
    * Calcule le statut détaillé de l'utilisateur
-   * Basé sur lastSeen (activité détectable) avec fallback sur lastActiveAt (connexion)
+   * Basé sur lastActiveAt
    * @returns 'online' | 'away' | 'offline'
    */
   getUserStatus(user: User): 'online' | 'away' | 'offline' {
@@ -199,8 +198,7 @@ export const usersService = {
       return 'offline';
     }
 
-    // Utiliser lastSeen (activité détectable) avec fallback sur lastActiveAt (connexion)
-    const lastActive = new Date(user.lastSeen || user.lastActiveAt);
+    const lastActive = new Date(user.lastActiveAt);
     const now = new Date();
     const diffMs = now.getTime() - lastActive.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -236,10 +234,10 @@ export const usersService = {
     if (user.isOnline) {
       return 'En ligne';
     }
-    
-    const lastSeen = new Date(user.lastSeen || user.lastActiveAt);
+
+    const lastActive = new Date(user.lastActiveAt);
     const now = new Date();
-    const diffMs = now.getTime() - lastSeen.getTime();
+    const diffMs = now.getTime() - lastActive.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMinutes / 60);
     const diffDays = Math.floor(diffHours / 24);
@@ -253,7 +251,7 @@ export const usersService = {
     } else if (diffDays < 7) {
       return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
     } else {
-      return lastSeen.toLocaleDateString('fr-FR');
+      return lastActive.toLocaleDateString('fr-FR');
     }
   },
 

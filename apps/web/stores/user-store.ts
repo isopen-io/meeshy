@@ -11,7 +11,6 @@ import type { User } from '@/types';
 export interface UserStatusUpdate {
   isOnline?: boolean;
   lastActiveAt?: Date;
-  lastSeen?: Date;
 }
 
 interface UserStoreState {
@@ -69,8 +68,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
     const updatedUser: User = {
       ...user,
       ...(updates.isOnline !== undefined && { isOnline: updates.isOnline }),
-      ...(updates.lastActiveAt && { lastActiveAt: updates.lastActiveAt }),
-      ...(updates.lastSeen && { lastSeen: updates.lastSeen })
+      ...(updates.lastActiveAt && { lastActiveAt: updates.lastActiveAt })
     };
 
     // Mettre à jour la map
