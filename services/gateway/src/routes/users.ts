@@ -457,7 +457,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           id: true,
           createdAt: true,
           isOnline: true,
-          lastSeen: true
+          lastActiveAt: true
         }
       });
 
@@ -529,7 +529,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         groupsCount,
         totalConversations,
         averageResponseTime: undefined,
-        lastActivity: user.lastSeen || user.createdAt
+        lastActivity: user.lastActiveAt || user.createdAt
       };
 
       return reply.send({
@@ -929,7 +929,6 @@ export async function userRoutes(fastify: FastifyInstance) {
             displayName: true,
             email: true,
             isOnline: true,
-            lastSeen: true,
             lastActiveAt: true,
             systemLanguage: true
           },
@@ -995,7 +994,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           bio: true,
           role: true,
           isOnline: true,
-          lastSeen: true,
+          lastActiveAt: true,
           createdAt: true,
           // Exclure les champs sensibles: email, phoneNumber, password
         }
@@ -1059,7 +1058,6 @@ export async function userRoutes(fastify: FastifyInstance) {
           bio: true,
           role: true,
           isOnline: true,
-          lastSeen: true,
           lastActiveAt: true,
           systemLanguage: true,
           regionalLanguage: true,
@@ -1170,8 +1168,7 @@ export async function userRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true,
-                lastSeen: true
+                lastActiveAt: true
               }
             },
             receiver: {
@@ -1183,8 +1180,7 @@ export async function userRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true,
-                lastSeen: true
+                lastActiveAt: true
               }
             }
           },

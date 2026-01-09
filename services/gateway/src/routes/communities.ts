@@ -587,7 +587,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastSeen: true
+                lastActiveAt: true
               }
             }
           },

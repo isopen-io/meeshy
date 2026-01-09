@@ -84,8 +84,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               displayName: true,
               avatar: true,
               isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+              lastActiveAt: true
             }
           },
           receiver: {
@@ -97,8 +96,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               displayName: true,
               avatar: true,
               isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+              lastActiveAt: true
             }
           }
         }
@@ -195,8 +193,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true,
-                lastSeen: true
+                lastActiveAt: true
               }
             }
           },
@@ -252,8 +249,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true,
-                lastSeen: true
+                lastActiveAt: true
               }
             }
           },
@@ -323,8 +319,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               displayName: true,
               avatar: true,
               isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+              lastActiveAt: true
             }
           },
           receiver: {
@@ -336,8 +331,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               displayName: true,
               avatar: true,
               isOnline: true,
-              lastActiveAt: true,
-              lastSeen: true
+              lastActiveAt: true
             }
           }
         }

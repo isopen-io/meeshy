@@ -75,7 +75,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 
             // Statut de présence
             isOnline: user.isOnline,
-            lastSeen: user.lastSeen,
             lastActiveAt: user.lastActiveAt,
 
             // Sécurité visible (statuts de vérification)
@@ -180,7 +179,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 
             // Statut de présence
             isOnline: user.isOnline,
-            lastSeen: user.lastSeen,
             lastActiveAt: user.lastActiveAt,
 
             // Sécurité visible (statuts de vérification)
@@ -278,7 +276,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 
               // Statut de présence
               isOnline: user.isOnline,
-              lastSeen: user.lastActiveAt,
               lastActiveAt: user.lastActiveAt,
 
               // Sécurité visible (statuts de vérification)
@@ -328,7 +325,6 @@ export async function authRoutes(fastify: FastifyInstance) {
               translateToRegionalLanguage: false,
               useCustomDestination: false,
               isOnline: true,
-              lastSeen: new Date(),
               lastActiveAt: new Date(),
               isActive: true,
               createdAt: new Date(),

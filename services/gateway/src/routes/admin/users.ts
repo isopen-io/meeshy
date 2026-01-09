@@ -66,8 +66,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         twoFactorEnabled: request.query.twoFactorEnabled,
         createdAfter: request.query.createdAfter ? new Date(request.query.createdAfter) : undefined,
         createdBefore: request.query.createdBefore ? new Date(request.query.createdBefore) : undefined,
-        lastSeenAfter: request.query.lastSeenAfter ? new Date(request.query.lastSeenAfter) : undefined,
-        lastSeenBefore: request.query.lastSeenBefore ? new Date(request.query.lastSeenBefore) : undefined,
+        lastActiveAfter: request.query.lastActiveAfter ? new Date(request.query.lastActiveAfter) : undefined,
+        lastActiveBefore: request.query.lastActiveBefore ? new Date(request.query.lastActiveBefore) : undefined,
         sortBy: request.query.sortBy || 'createdAt',
         sortOrder: request.query.sortOrder || 'desc'
       };
