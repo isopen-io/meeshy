@@ -25,9 +25,8 @@ model User {
   /// User profile banner/cover image
   banner                      String?
   isOnline                    Boolean   @default(false)
-  lastActiveAt                DateTime  @default(now())
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
-  lastSeen                    DateTime  @default(now())
+  lastActiveAt                DateTime  @default(now())
   /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
   timezone                    String?
   /// Array of blocked user IDs for quick access
@@ -367,9 +366,8 @@ model AnonymousParticipant {
   deviceFingerprint String?
   isActive          Boolean   @default(true)
   isOnline          Boolean   @default(false)
-  lastActiveAt      DateTime  @default(now())
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
-  lastSeenAt        DateTime  @default(now())
+  lastActiveAt      DateTime  @default(now())
   /// Permissions (consistent with ConversationMember)
   canSendMessages   Boolean   @default(true)
   canSendFiles      Boolean   @default(false)

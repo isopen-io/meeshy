@@ -7,7 +7,7 @@
  * - Hybrid: Double encryption (E2EE + server layer) - translation supported
  */
 
-export type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
+export type EncryptionMode = 'e2ee' | 'server' | 'hybrid' | null;
 export type EncryptionProtocol = 'signal_v3' | 'aes-256-gcm';
 export type EncryptionPreference = 'disabled' | 'optional' | 'always';
 
