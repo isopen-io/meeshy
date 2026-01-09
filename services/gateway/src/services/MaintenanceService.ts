@@ -103,8 +103,7 @@ export class MaintenanceService {
             }
           },
           data: {
-            isOnline: false,
-            lastSeen: new Date()
+            isOnline: false
           }
         });
 
@@ -145,8 +144,7 @@ export class MaintenanceService {
             }
           },
           data: {
-            isOnline: false,
-            lastSeenAt: new Date()
+            isOnline: false
           }
         });
 
@@ -173,9 +171,8 @@ export class MaintenanceService {
     try {
       // ✅ FIX: Ne JAMAIS mettre lastActiveAt à undefined
       // Quand l'utilisateur se déconnecte, on garde sa dernière activité pour calculer "away" vs "offline"
-      const updateData: any = {
-        isOnline,
-        lastSeen: new Date()
+      const updateData: { isOnline: boolean; lastActiveAt?: Date } = {
+        isOnline
       };
 
       // Mettre à jour lastActiveAt seulement si l'utilisateur se connecte
@@ -236,9 +233,8 @@ export class MaintenanceService {
     try {
       // ✅ FIX: Ne JAMAIS mettre lastActiveAt à undefined
       // Quand l'utilisateur se déconnecte, on garde sa dernière activité pour calculer "away" vs "offline"
-      const updateData: any = {
-        isOnline,
-        lastSeenAt: new Date()
+      const updateData: { isOnline: boolean; lastActiveAt?: Date } = {
+        isOnline
       };
 
       // Mettre à jour lastActiveAt seulement si l'utilisateur se connecte

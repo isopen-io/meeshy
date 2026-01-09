@@ -1,22 +1,23 @@
 /**
  * Service de gestion des statuts utilisateurs en ligne/hors ligne
  *
- * Distinction des champs de présence:
- * - lastSeen: Mis à jour à chaque activité détectable (heartbeat, requête API, typing, envoi message, etc.)
- *   → Throttling léger (5 secondes) pour éviter surcharge DB
- *   → Utilisé par les indicateurs de présence (online/away/offline)
+ * Ce service met à jour le champ `lastActiveAt` avec deux stratégies de throttling:
  *
- * - lastActiveAt: Mis à jour UNIQUEMENT lors de la connexion (login, Socket.IO connect)
- *   → Throttling plus agressif (1 minute) car moins critique
- *   → Utilisé pour analytics et tracking d'engagement réel
+ * 1. Activity Update (5s throttle):
+ *    → Activités légères: heartbeat, requête API, typing, lecture message
+ *    → Utilisé pour indicateurs de présence (online/away/offline)
+ *
+ * 2. Connection Update (60s throttle):
+ *    → Actions significatives: login, Socket.IO connect
+ *    → Utilisé pour analytics et tracking d'engagement réel
  *
  * Fonctionnalités:
- * - Throttling différencié pour lastSeen (5s) et lastActiveAt (60s)
+ * - Throttling différencié: activité légère (5s) et connexion (60s)
  * - Gestion séparée des utilisateurs enregistrés et anonymes
  * - Cache en mémoire avec nettoyage automatique
  * - Updates asynchrones pour ne pas bloquer les requêtes
  *
- * @version 2.1.0
+ * @version 2.2.0
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -28,18 +29,18 @@ export interface StatusUpdateMetrics {
   successfulUpdates: number;
   failedUpdates: number;
   cacheSize: number;
-  lastSeenUpdates: number;
-  lastActiveUpdates: number;
+  activityUpdates: number;
+  connectionUpdates: number;
 }
 
 export class StatusService {
-  // Caches séparés pour lastSeen et lastActiveAt
-  private lastSeenCache = new Map<string, number>();
-  private lastActiveCache = new Map<string, number>();
+  // Caches séparés pour activité légère et connexion
+  private activityCache = new Map<string, number>();
+  private connectionCache = new Map<string, number>();
 
   // Throttling différencié
-  private readonly LAST_SEEN_THROTTLE_MS = 5000; // 5 secondes (activité légère)
-  private readonly LAST_ACTIVE_THROTTLE_MS = 60000; // 1 minute (actions significatives)
+  private readonly ACTIVITY_THROTTLE_MS = 5000; // 5 secondes (activité légère)
+  private readonly CONNECTION_THROTTLE_MS = 60000; // 1 minute (actions significatives)
 
   private readonly CACHE_CLEANUP_INTERVAL_MS = 300000; // 5 minutes
   private readonly CACHE_MAX_AGE_MS = 600000; // 10 minutes
@@ -52,17 +53,17 @@ export class StatusService {
     successfulUpdates: 0,
     failedUpdates: 0,
     cacheSize: 0,
-    lastSeenUpdates: 0,
-    lastActiveUpdates: 0
+    activityUpdates: 0,
+    connectionUpdates: 0
   };
 
   constructor(private prisma: PrismaClient) {
     this.startCacheCleanup();
-    logger.info('✅ StatusService initialisé (lastSeen: 5s, lastActiveAt: 60s)');
+    logger.info('✅ StatusService initialisé (activity: 5s, connection: 60s)');
   }
 
   /**
-   * Mettre à jour lastSeen d'un utilisateur (activité détectable)
+   * Mettre à jour lastActiveAt d'un utilisateur (activité détectable)
    * Throttling: 5 secondes
    * Cas d'usage: connexion Socket.IO, heartbeat, requête API, typing, lecture message
    */
@@ -70,16 +71,16 @@ export class StatusService {
     this.metrics.totalRequests++;
 
     const now = Date.now();
-    const lastUpdate = this.lastSeenCache.get(userId) || 0;
+    const lastUpdate = this.activityCache.get(userId) || 0;
 
     // Throttling: 1 update max toutes les 5 secondes
-    if (now - lastUpdate < this.LAST_SEEN_THROTTLE_MS) {
+    if (now - lastUpdate < this.ACTIVITY_THROTTLE_MS) {
       this.metrics.throttledRequests++;
       return;
     }
 
-    this.lastSeenCache.set(userId, now);
-    this.metrics.cacheSize = this.lastSeenCache.size + this.lastActiveCache.size;
+    this.activityCache.set(userId, now);
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -88,12 +89,12 @@ export class StatusService {
     })
     .then(() => {
       this.metrics.successfulUpdates++;
-      this.metrics.lastSeenUpdates++;
-      logger.debug(`✓ User ${userId} lastSeen updated`);
+      this.metrics.activityUpdates++;
+      logger.debug(`✓ User ${userId} lastActiveAt updated (activity)`);
     })
     .catch(err => {
       this.metrics.failedUpdates++;
-      logger.error(`❌ Failed to update user lastSeen (${userId}):`, err);
+      logger.error(`❌ Failed to update user lastActiveAt (${userId}):`, err);
     });
   }
 
@@ -106,16 +107,16 @@ export class StatusService {
     this.metrics.totalRequests++;
 
     const now = Date.now();
-    const lastUpdate = this.lastActiveCache.get(userId) || 0;
+    const lastUpdate = this.connectionCache.get(userId) || 0;
 
     // Throttling: 1 update max par minute
-    if (now - lastUpdate < this.LAST_ACTIVE_THROTTLE_MS) {
+    if (now - lastUpdate < this.CONNECTION_THROTTLE_MS) {
       this.metrics.throttledRequests++;
       return;
     }
 
-    this.lastActiveCache.set(userId, now);
-    this.metrics.cacheSize = this.lastSeenCache.size + this.lastActiveCache.size;
+    this.connectionCache.set(userId, now);
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -124,8 +125,8 @@ export class StatusService {
     })
     .then(() => {
       this.metrics.successfulUpdates++;
-      this.metrics.lastActiveUpdates++;
-      logger.debug(`✓ User ${userId} lastActiveAt updated`);
+      this.metrics.connectionUpdates++;
+      logger.debug(`✓ User ${userId} lastActiveAt updated (connection)`);
     })
     .catch(err => {
       this.metrics.failedUpdates++;
@@ -134,24 +135,24 @@ export class StatusService {
   }
 
   /**
-   * Mettre à jour lastSeenAt d'un participant anonyme (activité détectable)
+   * Mettre à jour lastActiveAt d'un participant anonyme (activité détectable)
    * Throttling: 5 secondes
    */
   async updateAnonymousLastSeen(participantId: string): Promise<void> {
     this.metrics.totalRequests++;
 
     const now = Date.now();
-    const cacheKey = `anon_seen_${participantId}`;
-    const lastUpdate = this.lastSeenCache.get(cacheKey) || 0;
+    const cacheKey = `anon_activity_${participantId}`;
+    const lastUpdate = this.activityCache.get(cacheKey) || 0;
 
     // Throttling: 1 update max toutes les 5 secondes
-    if (now - lastUpdate < this.LAST_SEEN_THROTTLE_MS) {
+    if (now - lastUpdate < this.ACTIVITY_THROTTLE_MS) {
       this.metrics.throttledRequests++;
       return;
     }
 
-    this.lastSeenCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.lastSeenCache.size + this.lastActiveCache.size;
+    this.activityCache.set(cacheKey, now);
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.anonymousParticipant.update({
@@ -160,12 +161,12 @@ export class StatusService {
     })
     .then(() => {
       this.metrics.successfulUpdates++;
-      this.metrics.lastSeenUpdates++;
-      logger.debug(`✓ Anonymous ${participantId} lastSeenAt updated`);
+      this.metrics.activityUpdates++;
+      logger.debug(`✓ Anonymous ${participantId} lastActiveAt updated (activity)`);
     })
     .catch(err => {
       this.metrics.failedUpdates++;
-      logger.error(`❌ Failed to update anonymous lastSeenAt (${participantId}):`, err);
+      logger.error(`❌ Failed to update anonymous lastActiveAt (${participantId}):`, err);
     });
   }
 
@@ -178,17 +179,17 @@ export class StatusService {
     this.metrics.totalRequests++;
 
     const now = Date.now();
-    const cacheKey = `anon_active_${participantId}`;
-    const lastUpdate = this.lastActiveCache.get(cacheKey) || 0;
+    const cacheKey = `anon_connection_${participantId}`;
+    const lastUpdate = this.connectionCache.get(cacheKey) || 0;
 
     // Throttling: 1 update max par minute
-    if (now - lastUpdate < this.LAST_ACTIVE_THROTTLE_MS) {
+    if (now - lastUpdate < this.CONNECTION_THROTTLE_MS) {
       this.metrics.throttledRequests++;
       return;
     }
 
-    this.lastActiveCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.lastSeenCache.size + this.lastActiveCache.size;
+    this.connectionCache.set(cacheKey, now);
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.anonymousParticipant.update({
@@ -197,8 +198,8 @@ export class StatusService {
     })
     .then(() => {
       this.metrics.successfulUpdates++;
-      this.metrics.lastActiveUpdates++;
-      logger.debug(`✓ Anonymous ${participantId} lastActiveAt updated`);
+      this.metrics.connectionUpdates++;
+      logger.debug(`✓ Anonymous ${participantId} lastActiveAt updated (connection)`);
     })
     .catch(err => {
       this.metrics.failedUpdates++;
@@ -207,7 +208,7 @@ export class StatusService {
   }
 
   /**
-   * Mettre à jour lastSeen de manière générique (activité détectable)
+   * Mettre à jour lastActiveAt de manière générique (activité détectable)
    * Cas d'usage: heartbeat, typing, lecture message, requête API
    */
   async updateLastSeen(userId: string, isAnonymous: boolean = false): Promise<void> {
@@ -248,23 +249,23 @@ export class StatusService {
     const now = Date.now();
     let deletedCount = 0;
 
-    // Nettoyer le cache lastSeen
-    for (const [key, timestamp] of this.lastSeenCache.entries()) {
+    // Nettoyer le cache d'activité
+    for (const [key, timestamp] of this.activityCache.entries()) {
       if (now - timestamp > this.CACHE_MAX_AGE_MS) {
-        this.lastSeenCache.delete(key);
+        this.activityCache.delete(key);
         deletedCount++;
       }
     }
 
-    // Nettoyer le cache lastActive
-    for (const [key, timestamp] of this.lastActiveCache.entries()) {
+    // Nettoyer le cache de connexion
+    for (const [key, timestamp] of this.connectionCache.entries()) {
       if (now - timestamp > this.CACHE_MAX_AGE_MS) {
-        this.lastActiveCache.delete(key);
+        this.connectionCache.delete(key);
         deletedCount++;
       }
     }
 
-    this.metrics.cacheSize = this.lastSeenCache.size + this.lastActiveCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
 
     if (deletedCount > 0) {
       logger.debug(`🧹 Cache cleanup: ${deletedCount} entrées supprimées (taille: ${this.metrics.cacheSize})`);
@@ -272,12 +273,12 @@ export class StatusService {
   }
 
   /**
-   * Forcer un update immédiat de lastSeen (bypass throttling)
+   * Forcer un update immédiat de lastActiveAt (bypass throttling)
    * Utile pour Socket.IO connect/disconnect
    */
   async forceUpdateLastSeen(userId: string, isAnonymous: boolean = false): Promise<void> {
-    const cacheKey = isAnonymous ? `anon_seen_${userId}` : userId;
-    this.lastSeenCache.set(cacheKey, Date.now());
+    const cacheKey = isAnonymous ? `anon_activity_${userId}` : userId;
+    this.activityCache.set(cacheKey, Date.now());
 
     if (isAnonymous) {
       await this.prisma.anonymousParticipant.update({
@@ -293,12 +294,12 @@ export class StatusService {
   }
 
   /**
-   * Forcer un update immédiat de lastActiveAt (bypass throttling)
+   * Forcer un update immédiat de lastActiveAt pour connexion (bypass throttling)
    * Utile pour connexion Socket.IO ou login
    */
   async forceUpdateLastActive(userId: string, isAnonymous: boolean = false): Promise<void> {
-    const cacheKey = isAnonymous ? `anon_active_${userId}` : userId;
-    this.lastActiveCache.set(cacheKey, Date.now());
+    const cacheKey = isAnonymous ? `anon_connection_${userId}` : userId;
+    this.connectionCache.set(cacheKey, Date.now());
 
     if (isAnonymous) {
       await this.prisma.anonymousParticipant.update({
@@ -340,9 +341,9 @@ export class StatusService {
       throttledRequests: 0,
       successfulUpdates: 0,
       failedUpdates: 0,
-      cacheSize: this.lastSeenCache.size + this.lastActiveCache.size,
-      lastSeenUpdates: 0,
-      lastActiveUpdates: 0
+      cacheSize: this.activityCache.size + this.connectionCache.size,
+      activityUpdates: 0,
+      connectionUpdates: 0
     };
     logger.info('📊 Métriques StatusService réinitialisées');
   }
@@ -356,8 +357,8 @@ export class StatusService {
       this.cleanupInterval = null;
     }
 
-    this.lastSeenCache.clear();
-    this.lastActiveCache.clear();
+    this.activityCache.clear();
+    this.connectionCache.clear();
     logger.info('🛑 StatusService arrêté');
   }
 }

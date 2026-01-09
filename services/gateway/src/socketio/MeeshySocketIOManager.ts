@@ -79,7 +79,7 @@ export class MeeshySocketIOManager {
     const attachmentService = new AttachmentService(prisma);
     this.maintenanceService = new MaintenanceService(prisma, attachmentService);
 
-    // Initialiser StatusService pour throttling des updates lastSeen/lastActiveAt
+    // Initialiser StatusService pour throttling des updates lastActiveAt
     this.statusService = new StatusService(prisma);
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
@@ -250,8 +250,7 @@ export class MeeshySocketIOManager {
           const isAnonymous = user?.isAnonymous || false;
 
           // Envoi de message = activité détectable
-          // → Mettre à jour uniquement lastSeen (throttled à 5s)
-          // lastActiveAt est réservé uniquement pour la connexion
+          // → Mettre à jour lastActiveAt (throttled à 5s)
           if (this.statusService) {
             this.statusService.updateLastSeen(userId, isAnonymous);
           }
@@ -1228,7 +1227,6 @@ export class MeeshySocketIOManager {
               lastName: '',
               email: '',
               isOnline: false,
-              lastSeen: new Date(),
               lastActiveAt: new Date(),
               systemLanguage: 'fr',
               regionalLanguage: 'fr',
@@ -1523,8 +1521,7 @@ export class MeeshySocketIOManager {
             userId: participant.id,
             username: displayName,
             isOnline,
-            lastActiveAt: participant.lastActiveAt,
-            lastSeen: undefined // Les participants anonymes n'ont pas de lastSeen
+            lastActiveAt: participant.lastActiveAt
           });
 
         }
@@ -1584,9 +1581,8 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      // Typing = activité détectable mais pas action significative
-      // → Mettre à jour uniquement lastSeen (throttled à 5s)
-      // Ne pas mettre à jour lastActiveAt (réservé aux actions importantes comme envoi message)
+      // Typing = activité détectable
+      // → Mettre à jour lastActiveAt (throttled à 5s)
       if (this.statusService) {
         this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
       }
@@ -1863,7 +1859,6 @@ export class MeeshySocketIOManager {
           avatar: (message.sender as any).avatar,
           role: (message.sender as any).role || 'USER',
           isOnline: false,
-          lastSeen: new Date(),
           lastActiveAt: new Date(),
           systemLanguage: (message.sender as any).systemLanguage || 'fr',
           regionalLanguage: (message.sender as any).regionalLanguage || 'fr',
