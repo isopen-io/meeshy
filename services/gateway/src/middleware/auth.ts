@@ -157,7 +157,7 @@ export class AuthMiddleware {
         throw new Error('User not found or inactive');
       }
 
-      // Mettre à jour lastSeen à chaque requête API (activité détectable)
+      // Mettre à jour lastActiveAt à chaque requête API (activité détectable)
       // Throttling: 5 secondes (léger pour ne pas surcharger la DB)
       if (this.statusService) {
         this.statusService.updateUserLastSeen(user.id);
@@ -235,7 +235,7 @@ export class AuthMiddleware {
         throw new Error('Anonymous participant not found or inactive');
       }
 
-      // Mettre à jour lastSeenAt à chaque requête API (activité détectable)
+      // Mettre à jour lastActiveAt à chaque requête API (activité détectable)
       // Throttling: 5 secondes (léger pour ne pas surcharger la DB)
       if (this.statusService) {
         this.statusService.updateAnonymousLastSeen(anonymousParticipant.id);
