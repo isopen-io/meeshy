@@ -24,7 +24,6 @@ export function socketIOUserToUser(socketUser: SocketIOUser): User {
     role: socketUser.role, // Déjà string, compatible directement
     permissions: socketUser.permissions,
     isOnline: socketUser.isOnline,
-    lastSeen: socketUser.lastSeen,
     lastActiveAt: socketUser.lastActiveAt,
     systemLanguage: socketUser.systemLanguage,
     regionalLanguage: socketUser.regionalLanguage,
@@ -202,6 +201,7 @@ export function normalizeMessage(rawMessage: unknown): Message {
     content: String(raw.content),
     originalLanguage: String(raw.originalLanguage || 'fr'),
     messageType: (raw.messageType as 'text' | 'image' | 'file' | 'audio' | 'video' | 'location' | 'system') || 'text',
+    messageSource: (raw.messageSource as 'user' | 'system' | 'ads' | 'app' | 'agent' | 'authority') || 'user',
     isEdited: Boolean(raw.isEdited),
     isDeleted: Boolean(raw.isDeleted),
     replyToId: raw.replyToId ? String(raw.replyToId) : undefined,
@@ -209,10 +209,24 @@ export function normalizeMessage(rawMessage: unknown): Message {
     updatedAt: toDate(raw.updatedAt || raw.createdAt || raw.timestamp),
     editedAt: raw.editedAt ? toDate(raw.editedAt) : undefined,
     deletedAt: raw.deletedAt ? toDate(raw.deletedAt) : undefined,
-    
+
+    // View-once and blur
+    isViewOnce: Boolean(raw.isViewOnce),
+    maxViewOnceCount: raw.maxViewOnceCount ? Number(raw.maxViewOnceCount) : undefined,
+    viewOnceCount: Number(raw.viewOnceCount || 0),
+    isBlurred: Boolean(raw.isBlurred),
+
+    // Delivery status
+    deliveredCount: Number(raw.deliveredCount || 0),
+    readCount: Number(raw.readCount || 0),
+
+    // Encryption
+    isEncrypted: Boolean(raw.isEncrypted),
+    encryptionMode: raw.encryptionMode as 'server' | 'e2ee' | 'hybrid' | null | undefined,
+
     // Synchroniser timestamp avec createdAt pour compatibilité
     timestamp: toDate(raw.createdAt || raw.timestamp),
-    
+
     sender: (raw.sender || raw.anonymousSender) as User | AnonymousParticipant | undefined,
     anonymousSender: raw.anonymousSender ? {
       id: String((raw.anonymousSender as any).id),
@@ -272,6 +286,8 @@ export function normalizeConversation(rawConversation: unknown): Conversation {
     description: raw.description as string | undefined,
     status: (raw.status as 'active' | 'archived' | 'deleted') || 'active',
     visibility: (raw.visibility as 'public' | 'private' | 'restricted') || 'private',
+    isActive: raw.isActive !== false,  // Default to true
+    memberCount: Number(raw.memberCount || raw.participantCount || 0),
     lastMessage: raw.lastMessage ? normalizeMessage(raw.lastMessage) : undefined,
     messageCount: Number(raw.messageCount || 0),
     unreadCount: Number(raw.unreadCount || 0),

@@ -78,18 +78,27 @@ export type TranslationModel = 'basic' | 'medium' | 'premium';
 
 /**
  * Type de base pour toutes les traductions
+ * Aligned with schema.prisma MessageTranslation
  */
 export interface MessageTranslation {
   readonly id: string;
   readonly messageId: string;
-  readonly sourceLanguage: string;
   readonly targetLanguage: string;
   readonly translatedContent: string;
   readonly translationModel: TranslationModel;
-  readonly cacheKey: string;
   readonly confidenceScore?: number;
   readonly createdAt: Date;
-  readonly cached: boolean;
+  readonly updatedAt?: Date;
+
+  // Encryption fields for secure conversations (server/hybrid modes)
+  readonly isEncrypted?: boolean;
+  readonly encryptionKeyId?: string;
+  readonly encryptionIv?: string;
+  readonly encryptionAuthTag?: string;
+
+  // Derived from message.originalLanguage (for compatibility)
+  readonly sourceLanguage?: string;
+  readonly cached?: boolean;
 }
 
 /**
@@ -105,7 +114,18 @@ export interface AnonymousSenderInfo {
 }
 
 /**
+ * Message source/origin type
+ * Aligned with schema.prisma Message.messageSource
+ */
+export type MessageSource = 'user' | 'system' | 'ads' | 'app' | 'agent' | 'authority';
+
+// Import EncryptionMode from encryption.ts to avoid duplicate exports
+import type { EncryptionMode } from './encryption';
+export type { EncryptionMode };
+
+/**
  * MESSAGE - Type principal pour toutes les communications
+ * Aligned with schema.prisma Message model
  * Utilisé par :
  * - Gateway (API, WebSocket, Socket.IO)
  * - Frontend (affichage, état)
@@ -122,6 +142,7 @@ export interface Message {
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
+  readonly messageSource: MessageSource;  // user, system, ads, app, agent, authority
 
   // ===== ÉTAT DU MESSAGE =====
   readonly isEdited: boolean;
@@ -129,13 +150,40 @@ export interface Message {
   readonly isDeleted: boolean;
   readonly deletedAt?: Date;
 
-  // ===== RÉPONSE =====
+  // ===== RÉPONSE & FORWARDING =====
   readonly replyToId?: string;
-  readonly replyTo?: Message;           // Message de réponse (récursif)
+  readonly replyTo?: Message;
+  readonly forwardedFromId?: string;              // Original message ID if forwarded
+  readonly forwardedFromConversationId?: string;  // Original conversation ID
+
+  // ===== EXPIRATION =====
+  readonly expiresAt?: Date;  // Self-destructing messages
+
+  // ===== VIEW-ONCE & BLUR =====
+  readonly isViewOnce: boolean;        // View-once message (disappears after view)
+  readonly maxViewOnceCount?: number;  // Max unique viewers allowed
+  readonly viewOnceCount: number;      // Number of unique viewers (denormalized)
+  readonly isBlurred: boolean;         // Content blurred until tap to reveal
+
+  // ===== DELIVERY STATUS (denormalized) =====
+  readonly deliveredToAllAt?: Date;
+  readonly receivedByAllAt?: Date;
+  readonly readByAllAt?: Date;
+  readonly deliveredCount: number;
+  readonly readCount: number;
+
+  // ===== E2EE / ENCRYPTION =====
+  readonly encryptedContent?: string;       // Base64 encoded ciphertext
+  readonly encryptionMode?: EncryptionMode; // 'server', 'e2ee', 'hybrid', null
+  readonly encryptionMetadata?: Record<string, unknown>;  // IV, auth tag, key version
+  readonly isEncrypted: boolean;
 
   // ===== MÉTADONNÉES =====
   readonly createdAt: Date;
   readonly updatedAt?: Date;
+
+  // ===== MENTIONS =====
+  readonly validatedMentions?: readonly string[];
 
   // ===== EXPÉDITEUR =====
   readonly sender?: User | AnonymousParticipant;
@@ -146,12 +194,8 @@ export interface Message {
   // ===== ATTACHMENTS =====
   readonly attachments?: readonly Attachment[];
 
-  // ===== MENTIONS =====
-  // Tableau de usernames validés (pas de JOIN) - scalable avec millions d'utilisateurs
-  readonly validatedMentions?: readonly string[];
-
   // ===== COMPATIBILITÉ =====
-  readonly timestamp: Date;             // Alias pour createdAt (requis pour compatibilité)
+  readonly timestamp: Date;  // Alias pour createdAt
 
   // ===== PARTICIPANT ANONYME =====
   readonly anonymousSender?: AnonymousSenderInfo;
@@ -281,6 +325,7 @@ export interface ConversationLink {
 
 /**
  * Conversation unifiée
+ * Aligned with schema.prisma Conversation model
  * Contient TOUS les champs utilisés dans Gateway et Frontend pour compatibilité totale
  */
 export interface Conversation {
@@ -294,16 +339,30 @@ export interface Conversation {
   readonly type: ConversationType;
   readonly status: ConversationStatus;
   readonly visibility: ConversationVisibility;
-  readonly image?: string;  // URL de l'image de la conversation
-  readonly avatar?: string;  // URL de l'avatar alternatif
+  readonly image?: string;   // URL de l'image de la conversation
+  readonly avatar?: string;  // URL de l'avatar
+  readonly banner?: string;  // URL du banner/cover image
+
+  // ===== COMMUNITY =====
+  readonly communityId?: string;
+  readonly isActive: boolean;
+  readonly memberCount: number;  // Denormalized for performance
 
   // ===== PARTICIPANTS =====
   readonly participants: readonly ConversationParticipantInfo[];
 
   // ===== MESSAGES =====
   readonly lastMessage?: Message;
+  readonly lastMessageAt?: Date;
   readonly messageCount?: number;
   readonly unreadCount?: number;
+
+  // ===== E2EE / ENCRYPTION =====
+  readonly encryptionMode?: EncryptionMode;       // null, 'server', 'e2ee'
+  readonly encryptionProtocol?: string;           // 'aes-256-gcm', 'signal_v3'
+  readonly encryptionEnabledAt?: Date;
+  readonly encryptionEnabledBy?: string;          // User ID who enabled
+  readonly serverEncryptionKeyId?: string;        // For server-side encryption
 
   // ===== STATISTIQUES =====
   readonly stats?: ConversationStats;
@@ -412,3 +471,107 @@ export interface ConversationParticipant {
 
 // ===== TYPE ALIASES FOR COMPATIBILITY =====
 export type BubbleStreamMessage = MessageWithTranslations;
+
+// ===== STATUS ENTRY TYPES =====
+// Aligned with schema.prisma MessageStatusEntry and AttachmentStatusEntry
+
+/**
+ * Per-user message delivery/read status
+ * Aligned with schema.prisma MessageStatusEntry
+ */
+export interface MessageStatusEntry {
+  readonly id: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+
+  // Delivery timestamps
+  readonly deliveredAt?: Date;
+  readonly receivedAt?: Date;
+  readonly readAt?: Date;
+
+  // Read details
+  readonly readDurationMs?: number;
+  readonly readDevice?: 'ios' | 'android' | 'web' | 'desktop';
+  readonly clientVersion?: string;
+
+  // View-once status
+  readonly viewedOnceAt?: Date;
+  readonly revealedAt?: Date;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * Per-user attachment consumption status
+ * Aligned with schema.prisma AttachmentStatusEntry
+ */
+export interface AttachmentStatusEntry {
+  readonly id: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+
+  // Delivery & consumption timestamps
+  readonly deliveredAt?: Date;
+  readonly viewedAt?: Date;
+  readonly downloadedAt?: Date;
+  readonly listenedAt?: Date;      // Audio
+  readonly watchedAt?: Date;       // Video
+
+  // Consumption metrics
+  readonly playbackPosition?: number;     // ms for audio/video
+  readonly playbackCompleted: boolean;
+  readonly downloadCount: number;
+
+  // Image-specific
+  readonly wasZoomed: boolean;
+
+  // Document-specific
+  readonly pagesViewed: number;
+  readonly lastPageViewed?: number;
+
+  // View-once status
+  readonly viewedOnceAt?: Date;
+  readonly revealedAt?: Date;
+
+  // Device info
+  readonly accessDevice?: string;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * Conversation read cursor for optimized unread tracking
+ * Aligned with schema.prisma ConversationReadCursor
+ */
+export interface ConversationReadCursor {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+
+  readonly lastReadMessageId?: string;
+  readonly lastReadAt?: Date;
+  readonly unreadCount: number;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * Reaction on an attachment
+ * Aligned with schema.prisma AttachmentReaction
+ */
+export interface AttachmentReaction {
+  readonly id: string;
+  readonly attachmentId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+  readonly emoji: string;
+  readonly createdAt: Date;
+}
