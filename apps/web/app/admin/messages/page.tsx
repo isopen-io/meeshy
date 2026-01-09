@@ -113,11 +113,12 @@ export default function AdminMessagesPage() {
   const loadMessages = async () => {
     try {
       setLoading(true);
+      const offset = (currentPage - 1) * 20;
       const response = await adminService.getMessages(
-        currentPage, 
-        20, 
-        searchTerm || undefined, 
-        messageType || undefined, 
+        offset,
+        20,
+        searchTerm || undefined,
+        messageType || undefined,
         period || undefined
       );
 

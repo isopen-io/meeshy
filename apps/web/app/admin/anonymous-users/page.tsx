@@ -45,7 +45,8 @@ export default function AdminAnonymousUsersPage() {
   const loadAnonymousUsers = async (page: number = 1, search?: string, status?: string) => {
     try {
       setLoading(true);
-      const response = await adminService.getAnonymousUsers(page, 20, search, status);
+      const offset = (page - 1) * 20;
+      const response = await adminService.getAnonymousUsers(offset, 20, search, status);
       
       if (response.data) {
         setAnonymousUsers(response.data.anonymousUsers || []);

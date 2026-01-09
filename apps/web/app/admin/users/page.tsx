@@ -51,9 +51,10 @@ export default function AdminUsersPage() {
       if (showLoader) {
         setLoading(true);
       }
+      const offset = (currentPage - 1) * pageSize;
       const [dashboardResponse, usersResponse] = await Promise.all([
         adminService.getDashboardStats(),
-        adminService.getUsers(currentPage, pageSize, debouncedSearch, roleFilter, statusFilter)
+        adminService.getUsers(offset, pageSize, debouncedSearch, roleFilter, statusFilter)
       ]);
 
 

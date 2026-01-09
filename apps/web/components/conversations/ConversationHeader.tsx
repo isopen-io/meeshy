@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { ArrowLeft, UserPlus, Info, MoreVertical, Link2, Video, Ghost, Share2, Image, Pin, Bell, BellOff, Archive, ArchiveRestore, Loader2 } from 'lucide-react';
+import { ArrowLeft, UserPlus, Info, MoreVertical, Link2, Video, Ghost, Share2, Image, Pin, Bell, BellOff, Archive, ArchiveRestore, Loader2, Lock, ShieldCheck, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,6 +29,7 @@ import type {
   ThreadMember
 } from '@meeshy/shared/types';
 import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import { ConversationParticipants } from './conversation-participants';
 import { ConversationParticipantsDrawer } from './conversation-participants-drawer';
 import { CreateLinkButton } from './create-link-button';
@@ -647,6 +648,54 @@ export function ConversationHeader({
                 getConversationName()
               )}
             </h2>
+            {/* Encryption indicator */}
+            {(conversation as any).encryptionMode && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        "flex-shrink-0 p-1 rounded-full",
+                        (conversation as any).encryptionMode === 'e2ee'
+                          ? "text-green-600 dark:text-green-400"
+                          : (conversation as any).encryptionMode === 'hybrid'
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-amber-600 dark:text-amber-400"
+                      )}
+                      aria-label={`${t('conversationHeader.encrypted') || 'Encrypted'}: ${(conversation as any).encryptionMode?.toUpperCase()}`}
+                    >
+                      {(conversation as any).encryptionMode === 'e2ee' ? (
+                        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                      ) : (conversation as any).encryptionMode === 'hybrid' ? (
+                        <Shield className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <Lock className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <div className="text-xs">
+                      <p className="font-medium">
+                        {(conversation as any).encryptionMode === 'e2ee'
+                          ? (t('conversationHeader.e2eeEncryption') || 'End-to-End Encrypted')
+                          : (conversation as any).encryptionMode === 'hybrid'
+                            ? (t('conversationHeader.hybridEncryption') || 'Hybrid Encryption')
+                            : (t('conversationHeader.serverEncryption') || 'Server Encrypted')
+                        }
+                      </p>
+                      <p className="text-muted-foreground">
+                        {(conversation as any).encryptionMode === 'e2ee'
+                          ? (t('conversationHeader.e2eeDescription') || 'Only you and participants can read messages')
+                          : (conversation as any).encryptionMode === 'hybrid'
+                            ? (t('conversationHeader.hybridDescription') || 'E2EE with server-side translation support')
+                            : (t('conversationHeader.serverDescription') || 'Messages encrypted on server')
+                        }
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           {/* Deuxième ligne : indicateur de frappe ou participants */}

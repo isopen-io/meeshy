@@ -875,12 +875,20 @@ final class WebSocketService: ObservableObject {
 
     /// Send a message via WebSocket with ACK confirmation (async)
     /// Returns SocketMessageResult indicating success/failure
+    /// - Parameters:
+    ///   - conversationId: The conversation ID
+    ///   - content: The message content (or placeholder if encrypted)
+    ///   - originalLanguage: Language code of the message
+    ///   - messageType: Type of message (text, image, etc.)
+    ///   - replyToId: ID of message being replied to
+    ///   - encryptedContent: JSON string of EncryptedPayload for E2E encrypted messages
     func sendMessageAsync(
         conversationId: String,
         content: String,
         originalLanguage: String? = nil,
         messageType: String = "text",
-        replyToId: String? = nil
+        replyToId: String? = nil,
+        encryptedContent: String? = nil
     ) async -> SocketMessageResult {
         var data: [String: Any] = [
             "conversationId": conversationId,
@@ -893,20 +901,32 @@ final class WebSocketService: ObservableObject {
         if let replyId = replyToId {
             data["replyToId"] = replyId
         }
+        if let encrypted = encryptedContent {
+            data["encryptedContent"] = encrypted
+        }
 
-        wsLogger.info("[WebSocket] 📤 Sending message via Socket.IO to conversation: \(conversationId)")
+        wsLogger.info("[WebSocket] 📤 Sending message via Socket.IO to conversation: \(conversationId), encrypted: \(encryptedContent != nil)")
         return await emitWithAckAsync(EnvironmentConfig.SocketEvent.messageSend, data: data, timeout: 15.0)
     }
 
     /// Send a message with attachments via WebSocket with ACK confirmation (async)
     /// Returns SocketMessageResult indicating success/failure
+    /// - Parameters:
+    ///   - conversationId: The conversation ID
+    ///   - content: The message content (or placeholder if encrypted)
+    ///   - attachmentIds: Array of uploaded attachment IDs
+    ///   - originalLanguage: Language code of the message
+    ///   - messageType: Type of message (text, image, etc.)
+    ///   - replyToId: ID of message being replied to
+    ///   - encryptedContent: JSON string of EncryptedPayload for E2E encrypted messages
     func sendMessageWithAttachmentsAsync(
         conversationId: String,
         content: String,
         attachmentIds: [String],
         originalLanguage: String? = nil,
         messageType: String = "text",
-        replyToId: String? = nil
+        replyToId: String? = nil,
+        encryptedContent: String? = nil
     ) async -> SocketMessageResult {
         var data: [String: Any] = [
             "conversationId": conversationId,
@@ -920,8 +940,11 @@ final class WebSocketService: ObservableObject {
         if let replyId = replyToId {
             data["replyToId"] = replyId
         }
+        if let encrypted = encryptedContent {
+            data["encryptedContent"] = encrypted
+        }
 
-        wsLogger.info("[WebSocket] 📤 Sending message with \(attachmentIds.count) attachment(s) via Socket.IO")
+        wsLogger.info("[WebSocket] 📤 Sending message with \(attachmentIds.count) attachment(s) via Socket.IO, encrypted: \(encryptedContent != nil)")
         return await emitWithAckAsync(EnvironmentConfig.SocketEvent.messageSendWithAttachments, data: data, timeout: 15.0)
     }
 

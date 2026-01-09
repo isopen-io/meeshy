@@ -88,8 +88,9 @@ export default function AdminCommunitiesPage() {
       if (showLoader) setRefreshing(true);
       if (loading && currentPage === 1) setLoading(true);
 
+      const offset = (currentPage - 1) * pageSize;
       const response = await adminService.getCommunities(
-        currentPage,
+        offset,
         pageSize,
         debouncedSearch || undefined,
         privacyFilter === 'private' ? true : privacyFilter === 'public' ? false : undefined

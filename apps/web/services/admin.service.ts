@@ -52,14 +52,16 @@ export interface AdminDashboardData {
 // Réexportation du type AdminUser depuis @shared pour usage dans ce module
 export type User = AdminUser;
 
+export interface PaginationParams {
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export interface AdminUsersResponse {
   users: User[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
+  pagination: PaginationParams;
 }
 
 export interface AnonymousUser {
@@ -99,12 +101,7 @@ export interface AnonymousUser {
 
 export interface AdminAnonymousUsersResponse {
   anonymousUsers: AnonymousUser[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
+  pagination: PaginationParams;
 }
 
 /**
@@ -126,10 +123,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des utilisateurs avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getUsers(page: number = 1, limit: number = 20, search?: string, role?: string, status?: string): Promise<ApiResponse<AdminUsersResponse>> {
+  async getUsers(offset: number = 0, limit: number = 20, search?: string, role?: string, status?: string): Promise<ApiResponse<AdminUsersResponse>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (search) {
         params.search = search;
       }
@@ -188,10 +187,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des utilisateurs anonymes avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getAnonymousUsers(page: number = 1, limit: number = 20, search?: string, status?: string): Promise<ApiResponse<AdminAnonymousUsersResponse>> {
+  async getAnonymousUsers(offset: number = 0, limit: number = 20, search?: string, status?: string): Promise<ApiResponse<AdminAnonymousUsersResponse>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (search) {
         params.search = search;
       }
@@ -208,10 +209,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des messages avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getMessages(page: number = 1, limit: number = 20, search?: string, type?: string, period?: string): Promise<ApiResponse<any>> {
+  async getMessages(offset: number = 0, limit: number = 20, search?: string, type?: string, period?: string): Promise<ApiResponse<any>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (search) {
         params.search = search;
       }
@@ -231,10 +234,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des communautés avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getCommunities(page: number = 1, limit: number = 20, search?: string, isPrivate?: boolean): Promise<ApiResponse<any>> {
+  async getCommunities(offset: number = 0, limit: number = 20, search?: string, isPrivate?: boolean): Promise<ApiResponse<any>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (search) {
         params.search = search;
       }
@@ -251,10 +256,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des traductions avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getTranslations(page: number = 1, limit: number = 20, sourceLanguage?: string, targetLanguage?: string, period?: string): Promise<ApiResponse<any>> {
+  async getTranslations(offset: number = 0, limit: number = 20, sourceLanguage?: string, targetLanguage?: string, period?: string): Promise<ApiResponse<any>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (sourceLanguage) {
         params.sourceLanguage = sourceLanguage;
       }
@@ -274,10 +281,12 @@ export const adminService = {
 
   /**
    * Récupère la liste des liens de partage avec pagination
+   * @param offset - Number of items to skip
+   * @param limit - Number of items to return
    */
-  async getShareLinks(page: number = 1, limit: number = 20, search?: string, isActive?: boolean): Promise<ApiResponse<any>> {
+  async getShareLinks(offset: number = 0, limit: number = 20, search?: string, isActive?: boolean): Promise<ApiResponse<any>> {
     try {
-      const params: any = { page, limit };
+      const params: any = { offset, limit };
       if (search) {
         params.search = search;
       }

@@ -119,22 +119,31 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const tokens = await fastify.prisma.affiliateToken.findMany({
-        where: {
-          createdBy: userId,
-        },
-        include: {
-          _count: {
-            select: {
-              affiliations: true
+      const offsetNum = parseInt(offset, 10);
+      const limitNum = Math.min(parseInt(limit, 10), 100);
+
+      const whereClause = { createdBy: userId };
+
+      const [tokens, totalCount] = await Promise.all([
+        fastify.prisma.affiliateToken.findMany({
+          where: whereClause,
+          include: {
+            _count: {
+              select: {
+                affiliations: true
+              }
             }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.affiliateToken.count({ where: whereClause })
+      ]);
 
       // Fallback: si _count n'est pas disponible, compter manuellement
       const tokensWithCounts = await Promise.all(tokens.map(async (token) => {
@@ -165,7 +174,13 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: tokensWithLinks
+        data: tokensWithLinks,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + tokens.length < totalCount
+        }
       });
     } catch (error) {
       console.error('Erreur récupération tokens:', error);

@@ -1,6 +1,11 @@
 /**
  * Service de gestion des attachements de messages
  * Gère l'upload, le stockage, les miniatures et la suppression de fichiers
+ *
+ * Supports encrypted attachments for DMA-compliant E2EE conversations:
+ * - 'e2ee': Full end-to-end encryption (server stores encrypted blobs only)
+ * - 'server': Server-side encryption (server can decrypt for translation)
+ * - 'hybrid': Double encryption (E2EE + server layer for audio translation)
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -20,6 +25,12 @@ import {
   UPLOAD_LIMITS,
   ACCEPTED_MIME_TYPES
 } from '@meeshy/shared/types/attachment';
+import {
+  AttachmentEncryptionService,
+  getAttachmentEncryptionService,
+  type EncryptAttachmentOptions,
+} from './AttachmentEncryptionService';
+import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -67,9 +78,11 @@ export class AttachmentService {
   private uploadBasePath: string;
   private publicUrl: string;
   private thumbnailSize = 300; // Taille des miniatures en pixels
+  private encryptionService: AttachmentEncryptionService;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    this.encryptionService = getAttachmentEncryptionService(prisma);
     this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
     
     // Détection intelligente de l'URL publique selon l'environnement
@@ -634,6 +647,336 @@ export class AttachmentService {
     });
 
     return result;
+  }
+
+  // =====================================================
+  // ENCRYPTED ATTACHMENT METHODS (DMA E2EE Support)
+  // =====================================================
+
+  /**
+   * Upload an encrypted attachment
+   *
+   * Implements the WhatsApp/Signal "encrypt-then-upload" pattern:
+   * 1. Generate per-attachment AES-256 key
+   * 2. Encrypt file with AES-256-GCM
+   * 3. Upload encrypted blob to storage
+   * 4. Return encryption key (to be sent via E2EE message channel)
+   *
+   * @param file File to upload
+   * @param userId User ID
+   * @param encryptionMode Encryption mode ('e2ee', 'server', 'hybrid')
+   * @param isAnonymous Whether user is anonymous
+   * @param messageId Optional message ID
+   * @param providedMetadata Optional metadata from frontend
+   * @returns Upload result with encryption metadata
+   */
+  async uploadEncryptedFile(
+    file: FileToUpload,
+    userId: string,
+    encryptionMode: EncryptionMode,
+    isAnonymous: boolean = false,
+    messageId?: string,
+    providedMetadata?: any
+  ): Promise<UploadResult & { encryptionMetadata: any }> {
+    console.log('🔐 [AttachmentService] uploadEncryptedFile called:', {
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+      encryptionMode,
+    });
+
+    // Validate the file
+    const validation = this.validateFile(file);
+    if (!validation.valid) {
+      console.error('[AttachmentService] ❌ Validation failed:', validation.error);
+      throw new Error(validation.error);
+    }
+
+    // Determine attachment type
+    const attachmentType = getAttachmentType(file.mimeType, file.filename);
+
+    // Generate thumbnail for images (will be encrypted too)
+    let thumbnailBuffer: Buffer | undefined;
+    if (attachmentType === 'image') {
+      try {
+        thumbnailBuffer = await sharp(file.buffer)
+          .resize(this.thumbnailSize, this.thumbnailSize, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+      } catch (error) {
+        console.warn('[AttachmentService] ⚠️ Could not generate thumbnail for encryption');
+      }
+    }
+
+    // Encrypt the attachment
+    const encryptionResult = await this.encryptionService.encryptAttachment({
+      fileBuffer: file.buffer,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      mode: encryptionMode,
+      thumbnailBuffer,
+    });
+
+    console.log('🔐 [AttachmentService] File encrypted:', {
+      originalSize: encryptionResult.metadata.originalSize,
+      encryptedSize: encryptionResult.metadata.encryptedSize,
+      mode: encryptionResult.metadata.mode,
+      hasServerCopy: !!encryptionResult.serverCopy,
+    });
+
+    // Generate file path for encrypted blob
+    const filePath = this.generateFilePath(userId, `${file.filename}.enc`);
+
+    // Save encrypted blob
+    await this.saveFile(encryptionResult.encryptedBuffer, filePath);
+
+    // Save encrypted thumbnail if generated
+    let thumbnailPath: string | undefined;
+    if (encryptionResult.encryptedThumbnail) {
+      const thumbPath = filePath.replace('.enc', '_thumb.enc');
+      await this.saveFile(encryptionResult.encryptedThumbnail.buffer, thumbPath);
+      thumbnailPath = thumbPath;
+    }
+
+    // Save server copy for hybrid mode (for audio translation)
+    let serverCopyPath: string | undefined;
+    if (encryptionResult.serverCopy && attachmentType === 'audio') {
+      serverCopyPath = this.generateFilePath(userId, `${file.filename}.server.enc`);
+      await this.saveFile(encryptionResult.serverCopy.encryptedBuffer, serverCopyPath);
+    }
+
+    // Prepare metadata (extract from original unencrypted file before encryption)
+    const metadata: AttachmentMetadata = {};
+
+    if (attachmentType === 'image') {
+      try {
+        const imageMeta = await sharp(file.buffer).metadata();
+        metadata.width = imageMeta.width || 0;
+        metadata.height = imageMeta.height || 0;
+      } catch {
+        metadata.width = 0;
+        metadata.height = 0;
+      }
+    }
+
+    if (attachmentType === 'audio' && providedMetadata) {
+      metadata.duration = Math.round(providedMetadata.duration || 0);
+      metadata.bitrate = providedMetadata.bitrate || 0;
+      metadata.sampleRate = providedMetadata.sampleRate || 0;
+      metadata.codec = providedMetadata.codec || 'unknown';
+      metadata.channels = providedMetadata.channels || 1;
+      if (providedMetadata.audioEffectsTimeline) {
+        metadata.audioEffectsTimeline = providedMetadata.audioEffectsTimeline;
+      }
+    }
+
+    // Generate URLs (relative paths for DB storage)
+    const fileUrl = this.getAttachmentPath(filePath);
+    const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
+    const serverCopyUrl = serverCopyPath ? this.getAttachmentPath(serverCopyPath) : undefined;
+
+    // Prepare messageId
+    const tempMessageId = messageId || '000000000000000000000000';
+
+    // Prepare metadata JSON
+    const metadataJson = metadata.audioEffectsTimeline
+      ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any
+      : undefined;
+
+    // Create database record with encryption fields
+    const attachment = await this.prisma.messageAttachment.create({
+      data: {
+        messageId: tempMessageId,
+        fileName: path.basename(filePath),
+        originalName: file.filename,
+        mimeType: file.mimeType,
+        fileSize: encryptionResult.metadata.encryptedSize, // Store encrypted size
+        filePath: filePath,
+        fileUrl: fileUrl,
+        thumbnailPath: thumbnailPath,
+        thumbnailUrl: thumbnailUrl,
+        width: metadata.width,
+        height: metadata.height,
+        duration: metadata.duration,
+        bitrate: metadata.bitrate,
+        sampleRate: metadata.sampleRate,
+        codec: metadata.codec,
+        channels: metadata.channels,
+        metadata: metadataJson,
+        uploadedBy: userId,
+        isAnonymous: isAnonymous,
+        // Encryption fields
+        isEncrypted: true,
+        encryptionMode: encryptionMode,
+        encryptionIv: encryptionResult.metadata.iv,
+        encryptionAuthTag: encryptionResult.metadata.authTag,
+        encryptionHmac: encryptionResult.metadata.hmac,
+        originalFileHash: encryptionResult.metadata.originalHash,
+        encryptedFileHash: encryptionResult.metadata.encryptedHash,
+        originalFileSize: encryptionResult.metadata.originalSize,
+        serverKeyId: encryptionResult.serverCopy?.keyId,
+        thumbnailEncryptionIv: encryptionResult.encryptedThumbnail?.iv,
+        thumbnailEncryptionAuthTag: encryptionResult.encryptedThumbnail?.authTag,
+        serverCopyUrl: serverCopyUrl,
+      },
+    });
+
+    console.log('✅ [AttachmentService] Encrypted attachment saved:', {
+      attachmentId: attachment.id,
+      isEncrypted: attachment.isEncrypted,
+      encryptionMode: attachment.encryptionMode,
+      hasServerCopy: !!serverCopyUrl,
+    });
+
+    // Build result
+    const result = {
+      id: attachment.id,
+      messageId: attachment.messageId,
+      fileName: attachment.fileName,
+      originalName: attachment.originalName,
+      mimeType: attachment.mimeType,
+      fileSize: attachment.fileSize,
+      fileUrl: attachment.fileUrl,
+      thumbnailUrl: attachment.thumbnailUrl || undefined,
+      width: attachment.width || undefined,
+      height: attachment.height || undefined,
+      duration: attachment.duration || undefined,
+      bitrate: attachment.bitrate || undefined,
+      sampleRate: attachment.sampleRate || undefined,
+      codec: attachment.codec || undefined,
+      channels: attachment.channels || undefined,
+      metadata: attachment.metadata || undefined,
+      uploadedBy: attachment.uploadedBy,
+      isAnonymous: attachment.isAnonymous,
+      createdAt: attachment.createdAt,
+      // Encryption metadata to be sent via E2EE message channel
+      encryptionMetadata: {
+        encryptionKey: encryptionResult.metadata.encryptionKey, // IMPORTANT: Send via E2EE only!
+        iv: encryptionResult.metadata.iv,
+        authTag: encryptionResult.metadata.authTag,
+        hmac: encryptionResult.metadata.hmac,
+        originalSize: encryptionResult.metadata.originalSize,
+        originalHash: encryptionResult.metadata.originalHash,
+        mode: encryptionResult.metadata.mode,
+        thumbnailIv: encryptionResult.encryptedThumbnail?.iv,
+        thumbnailAuthTag: encryptionResult.encryptedThumbnail?.authTag,
+      },
+    };
+
+    return result;
+  }
+
+  /**
+   * Decrypt an attachment for download
+   *
+   * @param attachmentId Attachment ID
+   * @param encryptionKey Encryption key (from E2EE message)
+   * @returns Decrypted file buffer
+   */
+  async decryptAttachment(
+    attachmentId: string,
+    encryptionKey: string
+  ): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    // Get attachment record
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) {
+      throw new Error('Attachment not found');
+    }
+
+    if (!attachment.isEncrypted) {
+      // Not encrypted, return file directly
+      const fullPath = path.join(this.uploadBasePath, attachment.filePath);
+      const buffer = await fs.readFile(fullPath);
+      return {
+        buffer,
+        mimeType: attachment.mimeType,
+        filename: attachment.originalName,
+      };
+    }
+
+    // Read encrypted file
+    const fullPath = path.join(this.uploadBasePath, attachment.filePath);
+    const encryptedBuffer = await fs.readFile(fullPath);
+
+    // Verify HMAC first
+    if (attachment.encryptionHmac) {
+      const hmacValid = this.encryptionService.verifyHmac(
+        encryptedBuffer,
+        encryptionKey,
+        attachment.encryptionHmac
+      );
+      if (!hmacValid) {
+        throw new Error('HMAC verification failed - file may be corrupted');
+      }
+    }
+
+    // Decrypt
+    const decryptResult = await this.encryptionService.decryptAttachment({
+      encryptedBuffer,
+      encryptionKey,
+      iv: attachment.encryptionIv!,
+      authTag: attachment.encryptionAuthTag!,
+      expectedHash: attachment.originalFileHash || undefined,
+    });
+
+    if (!decryptResult.hashVerified) {
+      console.warn('[AttachmentService] ⚠️ Hash verification failed for attachment:', attachmentId);
+    }
+
+    return {
+      buffer: decryptResult.decryptedBuffer,
+      mimeType: attachment.mimeType,
+      filename: attachment.originalName,
+    };
+  }
+
+  /**
+   * Decrypt server-side encrypted attachment (for audio translation in hybrid mode)
+   *
+   * @param attachmentId Attachment ID
+   * @returns Decrypted file buffer
+   */
+  async decryptServerAttachment(attachmentId: string): Promise<Buffer> {
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) {
+      throw new Error('Attachment not found');
+    }
+
+    if (!attachment.serverCopyUrl || !attachment.serverKeyId) {
+      throw new Error('No server copy available for this attachment');
+    }
+
+    // Construct path from URL
+    const serverCopyPath = attachment.serverCopyUrl.replace('/attachments/', '');
+    const fullPath = path.join(this.uploadBasePath, serverCopyPath);
+
+    // Read encrypted server copy
+    const encryptedBuffer = await fs.readFile(fullPath);
+
+    // We need to get IV and authTag from somewhere - they should be stored
+    // For now, this is a simplified implementation
+    // In production, you'd store server IV/authTag separately or derive them
+    throw new Error('Server attachment decryption requires additional implementation');
+  }
+
+  /**
+   * Check if attachment is encrypted
+   */
+  async isAttachmentEncrypted(attachmentId: string): Promise<boolean> {
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      select: { isEncrypted: true },
+    });
+    return attachment?.isEncrypted ?? false;
   }
 
   /**

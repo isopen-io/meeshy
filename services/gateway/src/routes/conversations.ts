@@ -268,6 +268,11 @@ interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  // Encryption fields
+  encryptedContent?: string;
+  encryptionMode?: 'e2ee' | 'server' | 'hybrid';
+  encryptionMetadata?: Record<string, any>;
+  isEncrypted?: boolean;
 }
 
 interface MessagesQuery {
@@ -1004,7 +1009,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
               createdAt: true
             }
           },
-          status: {
+          statusEntries: {
             where: {
               userId: userId // Charger seulement le status de l'utilisateur courant
             },
@@ -1080,7 +1085,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           _count: {
             select: {
               reactions: true,
-              status: true
+              statusEntries: true
             }
           }
         },
@@ -1215,9 +1220,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           conversationId: conversationId,
           isDeleted: false,
           senderId: { not: userId }, // Ne pas marquer ses propres messages
-          status: {
+          statusEntries: {
             none: {
-              userId: userId
+              userId: userId,
+              readAt: { not: null }
             }
           }
         },
@@ -1280,7 +1286,16 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       }
       
       const { id } = request.params;
-      const { content, originalLanguage = 'fr', messageType = 'text', replyToId } = request.body;
+      const {
+        content,
+        originalLanguage = 'fr',
+        messageType = 'text',
+        replyToId,
+        encryptedContent,
+        encryptionMode,
+        encryptionMetadata,
+        isEncrypted
+      } = request.body;
       const userId = authRequest.authContext.userId;
 
       // Résoudre l'ID de conversation réel
@@ -1324,31 +1339,71 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Validation du contenu
-      if (!content || content.trim().length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Le contenu du message ne peut pas être vide'
-        });
+      // Validation du contenu (plaintext ou encrypted)
+      if (isEncrypted) {
+        // For encrypted messages, validate encrypted content
+        if (!encryptedContent || encryptedContent.trim().length === 0) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Encrypted content cannot be empty'
+          });
+        }
+        if (!encryptionMode || !['e2ee', 'server', 'hybrid'].includes(encryptionMode)) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Invalid encryption mode. Must be e2ee, server, or hybrid'
+          });
+        }
+        if (!encryptionMetadata) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Encryption metadata is required for encrypted messages'
+          });
+        }
+      } else {
+        // For plaintext messages, validate content
+        if (!content || content.trim().length === 0) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Le contenu du message ne peut pas être vide'
+          });
+        }
       }
 
-      // ÉTAPE 1: Traiter les liens dans le message AVANT la sauvegarde
-      const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
-        content: content.trim(),
-        conversationId,
-        createdBy: userId
-      });
+      // ÉTAPE 1: Traiter les liens dans le message AVANT la sauvegarde (skip for E2EE)
+      let processedContent = content;
+      let trackingLinks: any[] = [];
+
+      if (!isEncrypted || encryptionMode !== 'e2ee') {
+        const linkResult = await trackingLinkService.processMessageLinks({
+          content: content.trim(),
+          conversationId,
+          createdBy: userId
+        });
+        processedContent = linkResult.processedContent;
+        trackingLinks = linkResult.trackingLinks;
+      }
 
       // ÉTAPE 2: Créer le message avec le contenu transformé
+      const messageData: any = {
+        conversationId: conversationId,
+        senderId: userId,
+        content: processedContent,
+        originalLanguage,
+        messageType,
+        replyToId
+      };
+
+      // Add encryption fields if message is encrypted
+      if (isEncrypted) {
+        messageData.isEncrypted = true;
+        messageData.encryptedContent = encryptedContent;
+        messageData.encryptionMode = encryptionMode;
+        messageData.encryptionMetadata = encryptionMetadata;
+      }
+
       const message = await prisma.message.create({
-        data: {
-          conversationId: conversationId, // Utiliser l'ID résolu
-          senderId: userId,
-          content: processedContent, // Utiliser le contenu avec les liens remplacés par mshy://<token>
-          originalLanguage,
-          messageType,
-          replyToId
-        },
+        data: messageData,
         include: {
           sender: {
             select: {

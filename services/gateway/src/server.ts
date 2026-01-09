@@ -45,6 +45,8 @@ import { messagesRoutes } from './routes/admin/messages';
 import { userRoutes } from './routes/users';
 import userPreferencesRoutes from './routes/user-preferences';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
+import conversationEncryptionRoutes from './routes/conversation-encryption';
+import encryptionKeysRoutes from './routes/encryption-keys';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
@@ -60,6 +62,7 @@ import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
 import { passwordResetRoutes } from './routes/password-reset';
+import userDeletionsRoutes from './routes/user-deletions';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -627,6 +630,9 @@ class MeeshyServer {
     // Register password reset routes with /api/auth prefix
     await this.server.register(passwordResetRoutes, { prefix: '/api/auth' });
 
+    // Register user deletions routes (delete for me feature)
+    await this.server.register(userDeletionsRoutes, { prefix: '' });
+
     // Register authentication test routes for Phase 3.1.1
     await this.server.register(authTestRoutes, { prefix: '/api' });
     
@@ -681,6 +687,12 @@ class MeeshyServer {
 
     // Register conversation preferences routes with /api prefix
     await this.server.register(conversationPreferencesRoutes, { prefix: '/api' });
+
+    // Register conversation encryption routes with /api prefix
+    await this.server.register(conversationEncryptionRoutes, { prefix: '' });
+
+    // Register encryption key exchange routes with /api prefix
+    await this.server.register(encryptionKeysRoutes, { prefix: '' });
 
     // Register affiliate routes
     await this.server.register(affiliateRoutes, { prefix: '/api' });

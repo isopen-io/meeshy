@@ -23,4 +23,7 @@ export { useFixRadixZIndex } from './use-fix-z-index';
 export { useAuth } from './use-auth';
 export { useAuthGuard } from './use-auth-guard';
 
+// Encryption (E2EE)
+export { useEncryption, getEncryptionService } from './use-encryption';
+
 // Hooks legacy supprimés - migration vers les nouveaux hooks unifiés terminée

@@ -31,12 +31,14 @@ export type {
   SignalKeyBundle,
   ServerEncryptionKey,
   EncryptionStatus,
+  HybridEncryptedPayload,
 } from '@meeshy/shared/types/encryption';
 
 export {
   isMessageEncrypted,
   canAutoTranslate,
   getEncryptionStatus,
+  isHybridPayload,
 } from '@meeshy/shared/types/encryption';
 
 export {
@@ -44,3 +46,21 @@ export {
   reconstructPayload,
   validateMetadata,
 } from '@meeshy/shared/encryption';
+
+// Attachment encryption utilities
+export {
+  encryptAttachment,
+  decryptAttachment,
+  decryptThumbnail,
+  downloadAndDecryptAttachment,
+  createBlobUrl,
+  revokeBlobUrl,
+  isEncryptionSupported,
+  prepareMetadataForTransmission,
+} from './attachment-encryption';
+
+export type {
+  ClientEncryptedAttachmentMetadata,
+  EncryptAttachmentResult,
+  DecryptAttachmentResult,
+} from './attachment-encryption';

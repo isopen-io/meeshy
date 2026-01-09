@@ -57,6 +57,7 @@ final class ModernChatViewModel: ObservableObject {
 
     private let apiService = APIService.shared
     private let webSocketService = WebSocketService.shared
+    private let encryptionService = E2EEncryptionService.shared
 
     private var cancellables = Set<AnyCancellable>()
     private let pageSize = 50
@@ -713,13 +714,20 @@ final class ModernChatViewModel: ObservableObject {
         // Use detected language or fall back to French (app default)
         let messageLanguage = detectedLanguage ?? "fr"
 
+        // Check if conversation has E2E encryption enabled
+        let shouldEncrypt = conversation.isE2EEncrypted
+
         let localId = UUID()
+
+        // For E2E encrypted conversations, show placeholder content in optimistic message
+        let displayContent = shouldEncrypt ? "[Encrypted message]" : content
+
         let optimisticMessage = Message(
             id: localId.uuidString,
             conversationId: conversation.id,
             senderId: currentUserId,
             anonymousSenderId: nil,
-            content: content,
+            content: displayContent,
             originalLanguage: messageLanguage,
             messageType: .text,
             isEdited: false,
@@ -736,7 +744,9 @@ final class ModernChatViewModel: ObservableObject {
             status: nil as [MessageDeliveryStatus]?,
             localId: localId,
             isSending: true,
-            sendError: nil
+            sendError: nil,
+            encryptedContent: shouldEncrypt ? content : nil,  // Store original for local display
+            encryptionMetadata: shouldEncrypt ? .e2ee() : nil
         )
 
         // Optimistic update
@@ -748,7 +758,8 @@ final class ModernChatViewModel: ObservableObject {
             "detectedLanguage": messageLanguage,
             "sentiment": sentiment?.rawValue ?? "unknown",
             "hasAttachments": attachmentIds?.isEmpty == false,
-            "isReply": replyToId != nil
+            "isReply": replyToId != nil,
+            "encrypted": shouldEncrypt
         ])
 
         Task {
@@ -756,6 +767,22 @@ final class ModernChatViewModel: ObservableObject {
 
             // STRATEGY: Try Socket.IO first, fallback to REST on failure
             // Socket.IO provides real-time delivery confirmation via ACK
+
+            // Prepare content - encrypt if E2E encryption is enabled
+            var contentToSend = content
+            var encryptedPayloadJson: String?
+
+            if shouldEncrypt {
+                do {
+                    let encryptedPayload = try await encryptionService.encrypt(content, for: conversation.id)
+                    encryptedPayloadJson = encryptedPayload.jsonString
+                    contentToSend = "[Encrypted]"  // Placeholder for server
+                    chatLogger.info("Message encrypted for E2E", ["conversationId": conversation.id])
+                } catch {
+                    chatLogger.error("E2E encryption failed, sending unencrypted", ["error": error.localizedDescription])
+                    // Fall back to unencrypted on encryption failure
+                }
+            }
 
             // Step 1: Try Socket.IO if connected
             if WebSocketService.shared.isReady {
@@ -765,19 +792,21 @@ final class ModernChatViewModel: ObservableObject {
                 if let attachIds = attachmentIds, !attachIds.isEmpty {
                     socketResult = await WebSocketService.shared.sendMessageWithAttachmentsAsync(
                         conversationId: conversation.id,
-                        content: content,
+                        content: contentToSend,
                         attachmentIds: attachIds,
                         originalLanguage: messageLanguage,
                         messageType: "text",
-                        replyToId: replyToId
+                        replyToId: replyToId,
+                        encryptedContent: encryptedPayloadJson
                     )
                 } else {
                     socketResult = await WebSocketService.shared.sendMessageAsync(
                         conversationId: conversation.id,
-                        content: content,
+                        content: contentToSend,
                         originalLanguage: messageLanguage,
                         messageType: "text",
-                        replyToId: replyToId
+                        replyToId: replyToId,
+                        encryptedContent: encryptedPayloadJson
                     )
                 }
 
@@ -839,16 +868,29 @@ final class ModernChatViewModel: ObservableObject {
 
                 let request = MessageSendRequest(
                     conversationId: conversation.id,
-                    content: content,
+                    content: contentToSend,
                     messageType: .text,
                     originalLanguage: messageLanguage,
                     attachmentIds: attachmentIds,
                     replyToId: replyToId,
-                    localId: localId.uuidString
+                    localId: localId.uuidString,
+                    encryptedContent: encryptedPayloadJson
                 )
 
                 do {
-                    let sentMessage = try await apiService.sendMessage(request)
+                    var sentMessage = try await apiService.sendMessage(request)
+
+                    // If encrypted, decrypt the message for local display
+                    if shouldEncrypt, let encPayload = sentMessage.encryptedContent,
+                       let payload = EncryptedPayload.from(jsonString: encPayload) {
+                        do {
+                            let decryptedContent = try await encryptionService.decrypt(payload, for: conversation.id)
+                            sentMessage.content = decryptedContent
+                        } catch {
+                            chatLogger.error("Failed to decrypt sent message for display", ["error": error.localizedDescription])
+                        }
+                    }
+
                     messageSent = true
 
                     if let index = self.messages.firstIndex(where: { $0.id == localId.uuidString }) {
@@ -1488,9 +1530,34 @@ final class ModernChatViewModel: ObservableObject {
         guard let msgConversationId = data["conversationId"] as? String,
               msgConversationId == conversationId else { return }
 
-        if let message = parseMessage(from: data),
+        if var message = parseMessage(from: data),
            !messages.contains(where: { $0.id == message.id }) {
-            messages.insert(message, at: 0)
+            // Decrypt if message has encrypted content
+            if message.isEncrypted, let encPayloadJson = message.encryptedContent,
+               let payload = EncryptedPayload.from(jsonString: encPayloadJson) {
+                Task {
+                    do {
+                        let decryptedContent = try await encryptionService.decrypt(payload, for: conversationId)
+                        // Update message with decrypted content
+                        if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                            var decryptedMessage = self.messages[index]
+                            decryptedMessage.content = decryptedContent
+                            self.messages[index] = decryptedMessage
+                        } else {
+                            message.content = decryptedContent
+                            self.messages.insert(message, at: 0)
+                        }
+                        chatLogger.info("Decrypted incoming message", ["messageId": message.id])
+                    } catch {
+                        chatLogger.error("Failed to decrypt incoming message", ["messageId": message.id, "error": error.localizedDescription])
+                        // Still insert the message with placeholder content
+                        message.content = "[Unable to decrypt message]"
+                        self.messages.insert(message, at: 0)
+                    }
+                }
+            } else {
+                messages.insert(message, at: 0)
+            }
         }
     }
 

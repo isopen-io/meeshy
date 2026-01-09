@@ -2,16 +2,22 @@
  * Conversation Encryption Routes
  *
  * Handles encryption settings for conversations:
- * - Enable encryption (E2EE or Server mode)
+ * - Enable encryption (E2EE, Server, or Hybrid mode)
  * - Get encryption status
  * - Encryption is immutable (cannot be disabled once enabled)
+ *
+ * Encryption Modes:
+ * - e2ee: Full end-to-end encryption (Signal Protocol) - NO translation
+ * - server: Server-side encryption (AES-256-GCM) - translation supported
+ * - hybrid: Double encryption (E2EE + server layer) - translation supported
  */
 
 import { FastifyInstance } from 'fastify';
 import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 
-type EncryptionMode = 'e2ee' | 'server';
+// EncryptionMode type - defined locally to avoid build order issues
+type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
 
 interface EnableEncryptionRequest {
   mode: EncryptionMode;
@@ -35,12 +41,14 @@ function getEncryptionStatus(conversation: {
   enabledBy: string | null;
   canTranslate: boolean;
 } {
+  const mode = conversation.encryptionMode;
   return {
     isEncrypted: !!conversation.encryptionEnabledAt,
-    mode: conversation.encryptionMode,
+    mode,
     enabledAt: conversation.encryptionEnabledAt,
     enabledBy: conversation.encryptionEnabledBy,
-    canTranslate: conversation.encryptionMode !== 'e2ee',
+    // Translation is supported in server and hybrid modes, NOT in e2ee
+    canTranslate: mode === 'server' || mode === 'hybrid',
   };
 }
 
@@ -151,18 +159,19 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         }
 
         // Validate mode
-        if (!mode || !['e2ee', 'server'].includes(mode)) {
+        if (!mode || !['e2ee', 'server', 'hybrid'].includes(mode)) {
           return reply.status(400).send({
             success: false,
-            error: 'Invalid encryption mode. Must be "e2ee" or "server"'
+            error: 'Invalid encryption mode. Must be "e2ee", "server", or "hybrid"'
           });
         }
 
-        // Get conversation with members
+        // Get conversation with members and type
         const conversation = await fastify.prisma.conversation.findUnique({
           where: { id: conversationId },
           select: {
             id: true,
+            type: true,
             encryptionEnabledAt: true,
             encryptionMode: true,
             members: {
@@ -194,21 +203,36 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // Check if user is an admin or owner
+        // Check permission to enable encryption
+        // - Direct (1:1) conversations: any participant can enable
+        // - Group conversations: only moderator, admin, or owner can enable
         const member = conversation.members.find(m => m.userId === authContext.userId);
-        if (!member || (member.role !== 'ADMIN' && member.role !== 'OWNER')) {
+        if (!member) {
           return reply.status(403).send({
             success: false,
-            error: 'Only conversation admins can enable encryption'
+            error: 'Not a member of this conversation'
+          });
+        }
+
+        const isDirectConversation = conversation.type === 'direct';
+        const hasModeratorRole = ['MODERATOR', 'ADMIN', 'OWNER', 'moderator', 'admin', 'owner'].includes(member.role);
+
+        if (!isDirectConversation && !hasModeratorRole) {
+          return reply.status(403).send({
+            success: false,
+            error: 'Only moderators and above can enable encryption in group conversations'
           });
         }
 
         // Determine encryption protocol based on mode
+        // - e2ee: Signal Protocol only
+        // - server: AES-256-GCM only
+        // - hybrid: Both (Signal + AES-256-GCM)
         const protocol = mode === 'e2ee' ? 'signal_v3' : 'aes-256-gcm';
 
-        // Get or create server encryption key (for server mode)
+        // Get or create server encryption key (for server and hybrid modes)
         let serverEncryptionKeyId: string | null = null;
-        if (mode === 'server') {
+        if (mode === 'server' || mode === 'hybrid') {
           serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey();
         }
 
@@ -232,13 +256,23 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
         // Create system message to notify members
+        const encryptionMessages: Record<EncryptionMode, string> = {
+          e2ee: '🔒 End-to-end encryption enabled. Messages are now fully encrypted.',
+          server: '🔐 Server-side encryption enabled. Messages are encrypted with translation support.',
+          hybrid: '🔐🔒 Hybrid encryption enabled. Messages are double-encrypted with E2EE + server layer. Translation is supported.',
+        };
+
+        const encryptionLabels: Record<EncryptionMode, string> = {
+          e2ee: 'End-to-end',
+          server: 'Server-side',
+          hybrid: 'Hybrid',
+        };
+
         await fastify.prisma.message.create({
           data: {
             conversationId,
             senderId: authContext.userId,
-            content: mode === 'e2ee'
-              ? '🔒 End-to-end encryption enabled. Messages are now fully encrypted.'
-              : '🔐 Server-side encryption enabled. Messages are encrypted with translation support.',
+            content: encryptionMessages[mode],
             originalLanguage: 'en',
             messageType: 'system',
           }
@@ -253,7 +287,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
             encryptionMode: updatedConversation.encryptionMode,
             encryptionEnabledBy: updatedConversation.encryptionEnabledBy,
           }),
-          message: `${mode === 'e2ee' ? 'End-to-end' : 'Server-side'} encryption enabled successfully`
+          message: `${encryptionLabels[mode]} encryption enabled successfully`
         });
 
       } catch (error) {

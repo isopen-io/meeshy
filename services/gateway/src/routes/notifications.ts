@@ -30,11 +30,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
-      const { page = '1', limit = '20', unread = 'false', type } = request.query as any;
+      const { offset = '0', limit = '20', unread = 'false', type } = request.query as any;
 
-      const pageNum = parseInt(page, 10);
+      const offsetNum = parseInt(offset, 10);
       const limitNum = parseInt(limit, 10);
-      const offset = (pageNum - 1) * limitNum;
 
       const whereClause: any = { userId };
       if (unread === 'true') {
@@ -56,56 +55,49 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const notifications = await fastify.prisma.notification.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limitNum,
-        include: {
-          message: {
-            include: {
-              attachments: {
-                select: {
-                  id: true,
-                  messageId: true,
-                  fileName: true,
-                  originalName: true,
-                  mimeType: true,
-                  fileSize: true,
-                  fileUrl: true,
-                  thumbnailUrl: true,
-                  width: true,
-                  height: true,
-                  duration: true,
-                  bitrate: true,
-                  sampleRate: true,
-                  codec: true,
-                  channels: true,
-                  fps: true,
-                  videoCodec: true,
-                  pageCount: true,
-                  lineCount: true,
-                  metadata: true, // Inclure audioEffectsTimeline et autres métadonnées JSON
-                  uploadedBy: true,
-                  isAnonymous: true,
-                  createdAt: true
+      const [notifications, totalCount, unreadCount] = await Promise.all([
+        fastify.prisma.notification.findMany({
+          where: whereClause,
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum,
+          include: {
+            message: {
+              include: {
+                attachments: {
+                  select: {
+                    id: true,
+                    messageId: true,
+                    fileName: true,
+                    originalName: true,
+                    mimeType: true,
+                    fileSize: true,
+                    fileUrl: true,
+                    thumbnailUrl: true,
+                    width: true,
+                    height: true,
+                    duration: true,
+                    bitrate: true,
+                    sampleRate: true,
+                    codec: true,
+                    channels: true,
+                    fps: true,
+                    videoCodec: true,
+                    pageCount: true,
+                    lineCount: true,
+                    metadata: true,
+                    uploadedBy: true,
+                    isAnonymous: true,
+                    createdAt: true
+                  }
                 }
               }
             }
           }
-        }
-      });
-
-      const totalCount = await fastify.prisma.notification.count({
-        where: whereClause
-      });
-
-      const unreadCount = await fastify.prisma.notification.count({
-        where: {
-          userId,
-          isRead: false
-        }
-      });
+        }),
+        fastify.prisma.notification.count({ where: whereClause }),
+        fastify.prisma.notification.count({ where: { userId, isRead: false } })
+      ]);
 
       fastify.log.info(`📥 [BACKEND] Chargement notifications: userId=${userId}, total=${totalCount}, unread=${unreadCount}, returned=${notifications.length}`);
 
@@ -119,16 +111,14 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: {
-          notifications: notifications,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalCount,
-            hasMore: offset + notifications.length < totalCount
-          },
-          unreadCount
-        }
+        data: notifications,
+        pagination: {
+          total: totalCount,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + notifications.length < totalCount
+        },
+        unreadCount
       });
 
     } catch (error) {

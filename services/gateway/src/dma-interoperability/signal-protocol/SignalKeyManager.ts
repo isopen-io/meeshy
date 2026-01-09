@@ -53,9 +53,13 @@ export interface KeyPair {
  */
 export class SignalKeyManager {
   private prisma: PrismaClient;
+  private userId: string;
   private identityKeyPair?: KeyPair;
+  private signedPreKeyPair?: KeyPair;
+  private signedPreKeyData?: SignedPreKey;
   private masterEncryptionKey: Buffer;
   private preKeyCounter = 0;
+  private registrationId: number;
   private stats = {
     identityKeysGenerated: 0,
     preKeysGenerated: 0,
@@ -64,10 +68,28 @@ export class SignalKeyManager {
     encryptionOperations: 0
   };
 
-  constructor(prisma: PrismaClient, masterEncryptionKey?: Buffer) {
+  constructor(prisma: PrismaClient, masterEncryptionKey?: Buffer, userId?: string) {
     this.prisma = prisma;
     // Use provided master key or generate one (in production, load from secure storage/HSM)
     this.masterEncryptionKey = masterEncryptionKey || this.generateMasterKey();
+    // userId is required for DB operations, can be set later via setUserId()
+    this.userId = userId || '';
+    // Generate registration ID (14-bit random number)
+    this.registrationId = crypto.randomInt(1, 16383);
+  }
+
+  /**
+   * Set the user ID for this key manager instance
+   */
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+
+  /**
+   * Get the current user ID
+   */
+  getUserId(): string {
+    return this.userId;
   }
 
   /**
@@ -221,6 +243,10 @@ export class SignalKeyManager {
    * Provides some properties of PFS even if the identity key is compromised.
    */
   private async generateAndStoreSignedPreKey(): Promise<SignedPreKey> {
+    if (!this.userId) {
+      throw new Error('User ID not set - cannot store signed pre-key');
+    }
+
     const keyPair = this.generatePreKeyPair();
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -230,29 +256,55 @@ export class SignalKeyManager {
     }
 
     // Create signature of public key using identity private key
+    // Convert DER to key object for signing
+    const identityPrivateKeyObj = crypto.createPrivateKey({
+      key: this.identityKeyPair.privateKey,
+      format: 'der',
+      type: 'pkcs8',
+    });
+
     const sign = crypto.createSign('SHA256');
     sign.update(keyPair.publicKey);
-    const signature = sign.sign(this.identityKeyPair.privateKey);
+    const signature = sign.sign(identityPrivateKeyObj);
+
+    const signedPreKeyId = await this.getNextSignedPreKeyId();
+    const encryptedPrivateKey = this.encryptKey(keyPair.privateKey);
+    this.stats.encryptionOperations++;
 
     const signedPreKey: SignedPreKey = {
-      id: await this.getNextSignedPreKeyId(),
+      id: signedPreKeyId,
       publicKey: keyPair.publicKey,
-      privateKey: this.encryptKey(keyPair.privateKey),
+      privateKey: keyPair.privateKey, // Store raw for in-memory use
       signature: signature,
       timestamp,
       rotationSchedule: 'weekly',
       nextRotationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      isActive: true
+      isActive: true,
     };
 
     // Store in database
     try {
-      console.log(`  📝 Storing signed pre-key ${signedPreKey.id}`);
+      await this.prisma.signalPreKeyBundle.update({
+        where: { userId: this.userId },
+        data: {
+          signedPreKeyId: signedPreKeyId,
+          signedPreKeyPublic: keyPair.publicKey.toString('base64'),
+          signedPreKeyPrivate: encryptedPrivateKey.toString('base64'),
+          signedPreKeySignature: signature.toString('base64'),
+          lastRotatedAt: new Date(),
+          isActive: true,
+        },
+      });
+      console.log(`  📝 Stored signed pre-key ${signedPreKey.id} in database`);
       this.stats.signedPreKeysRotated++;
     } catch (error) {
       console.error(`  ❌ Failed to store signed pre-key:`, error);
       throw error;
     }
+
+    // Store in memory for quick access
+    this.signedPreKeyPair = keyPair;
+    this.signedPreKeyData = signedPreKey;
 
     return signedPreKey;
   }
@@ -336,11 +388,32 @@ export class SignalKeyManager {
    * Store identity key in database
    */
   private async storeIdentityKey(keyPair: KeyPair): Promise<void> {
+    if (!this.userId) {
+      throw new Error('User ID not set - cannot store identity key');
+    }
+
     const encryptedPrivateKey = this.encryptKey(keyPair.privateKey);
+    this.stats.encryptionOperations++;
 
     try {
-      // Store in database (placeholder for actual schema)
-      console.log('  📝 Storing identity key');
+      // Upsert SignalPreKeyBundle with identity key
+      await this.prisma.signalPreKeyBundle.upsert({
+        where: { userId: this.userId },
+        update: {
+          identityKey: keyPair.publicKey.toString('base64'),
+          identityKeyPrivate: encryptedPrivateKey.toString('base64'),
+        },
+        create: {
+          userId: this.userId,
+          identityKey: keyPair.publicKey.toString('base64'),
+          identityKeyPrivate: encryptedPrivateKey.toString('base64'),
+          registrationId: this.registrationId,
+          signedPreKeyId: 0,
+          signedPreKeyPublic: '', // Will be set when signed pre-key is generated
+          signedPreKeySignature: '',
+        },
+      });
+      console.log('  📝 Stored identity key in database');
     } catch (error) {
       console.error('  ❌ Failed to store identity key:', error);
       throw error;
@@ -351,10 +424,34 @@ export class SignalKeyManager {
    * Load identity key from database
    */
   private async loadIdentityKey(): Promise<KeyPair | null> {
+    if (!this.userId) {
+      console.log('  ⚠️  No user ID set, cannot load identity key from DB');
+      return null;
+    }
+
     try {
-      // Load from database (placeholder)
-      // In real implementation, query SignalIdentityKey table
-      return null; // Change to return actual key when DB schema exists
+      const bundle = await this.prisma.signalPreKeyBundle.findUnique({
+        where: { userId: this.userId },
+      });
+
+      if (!bundle || !bundle.identityKey || !bundle.identityKeyPrivate) {
+        console.log('  ℹ️  No identity key found in database');
+        return null;
+      }
+
+      // Decrypt private key
+      const encryptedPrivateKey = Buffer.from(bundle.identityKeyPrivate, 'base64');
+      const privateKey = this.decryptKey(encryptedPrivateKey);
+      this.stats.encryptionOperations++;
+
+      // Store registration ID
+      this.registrationId = bundle.registrationId;
+
+      console.log('  ✓ Loaded identity key from database');
+      return {
+        publicKey: Buffer.from(bundle.identityKey, 'base64'),
+        privateKey,
+      };
     } catch (error) {
       console.error('  ❌ Failed to load identity key:', error);
       return null;
@@ -365,10 +462,50 @@ export class SignalKeyManager {
    * Load active signed pre-key from database
    */
   private async loadActiveSignedPreKey(): Promise<SignedPreKey | null> {
+    if (!this.userId) {
+      console.log('  ⚠️  No user ID set, cannot load signed pre-key from DB');
+      return null;
+    }
+
     try {
-      // Load from database (placeholder)
-      // In real implementation, query SignalSignedPreKey table WHERE isActive = true
-      return null; // Change to return actual key when DB schema exists
+      const bundle = await this.prisma.signalPreKeyBundle.findUnique({
+        where: { userId: this.userId },
+      });
+
+      if (!bundle || !bundle.signedPreKeyPublic || !bundle.signedPreKeyPrivate) {
+        console.log('  ℹ️  No signed pre-key found in database');
+        return null;
+      }
+
+      // Decrypt private key
+      const encryptedPrivateKey = Buffer.from(bundle.signedPreKeyPrivate, 'base64');
+      const privateKey = this.decryptKey(encryptedPrivateKey);
+      this.stats.encryptionOperations++;
+
+      // Calculate next rotation date (7 days from last rotation)
+      const nextRotationDate = new Date(bundle.lastRotatedAt);
+      nextRotationDate.setDate(nextRotationDate.getDate() + 7);
+
+      // Store the signed pre-key pair for getSignedPreKeyPair()
+      this.signedPreKeyPair = {
+        publicKey: Buffer.from(bundle.signedPreKeyPublic, 'base64'),
+        privateKey,
+      };
+
+      const signedPreKey: SignedPreKey = {
+        id: bundle.signedPreKeyId,
+        publicKey: Buffer.from(bundle.signedPreKeyPublic, 'base64'),
+        privateKey,
+        signature: Buffer.from(bundle.signedPreKeySignature, 'base64'),
+        timestamp: Math.floor(bundle.lastRotatedAt.getTime() / 1000),
+        rotationSchedule: 'weekly',
+        nextRotationDate,
+        isActive: bundle.isActive,
+      };
+
+      this.signedPreKeyData = signedPreKey;
+      console.log('  ✓ Loaded signed pre-key from database');
+      return signedPreKey;
     } catch (error) {
       console.error('  ❌ Failed to load signed pre-key:', error);
       return null;
@@ -411,6 +548,50 @@ export class SignalKeyManager {
    */
   getIdentityPublicKey(): Buffer | undefined {
     return this.identityKeyPair?.publicKey;
+  }
+
+  /**
+   * Get identity key pair (public + private)
+   * Required by SignalProtocolEngine for X3DH key agreement
+   */
+  async getIdentityKeyPair(): Promise<KeyPair> {
+    if (this.identityKeyPair) {
+      return this.identityKeyPair;
+    }
+
+    // Try to load from database
+    const loaded = await this.loadIdentityKey();
+    if (loaded) {
+      this.identityKeyPair = loaded;
+      return loaded;
+    }
+
+    throw new Error('Identity key pair not available - call initialize() first');
+  }
+
+  /**
+   * Get signed pre-key pair (public + private)
+   * Required by SignalProtocolEngine for X3DH responder key agreement
+   */
+  async getSignedPreKeyPair(): Promise<KeyPair> {
+    if (this.signedPreKeyPair) {
+      return this.signedPreKeyPair;
+    }
+
+    // Try to load from database
+    const signedPreKey = await this.loadActiveSignedPreKey();
+    if (signedPreKey && this.signedPreKeyPair) {
+      return this.signedPreKeyPair;
+    }
+
+    throw new Error('Signed pre-key pair not available - call initialize() first');
+  }
+
+  /**
+   * Get registration ID
+   */
+  getRegistrationId(): number {
+    return this.registrationId;
   }
 
   /**

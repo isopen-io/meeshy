@@ -45,14 +45,15 @@ export const NotificationStatusEnum = z.enum(['pending', 'delivered', 'read', 'f
 
 /**
  * Schema for GET /notifications query parameters
+ * Standardized pagination: offset/limit
  */
 export const GetNotificationsQuerySchema = z.object({
-  page: z
+  offset: z
     .string()
-    .regex(/^\d+$/, 'Page must be a positive integer')
+    .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
-    .refine(val => val >= 1, 'Page must be >= 1')
-    .default('1'),
+    .refine(val => val >= 0, 'Offset must be >= 0')
+    .default('0'),
 
   limit: z
     .string()

@@ -10,8 +10,8 @@ import { getWebSocketUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { logConversationIdDebug, getConversationIdType, getConversationApiId } from '@/utils/conversation-id-utils';
-import type { 
-  Message, 
+import type {
+  Message,
   User,
   SocketIOMessage,
   TypingEvent,
@@ -21,6 +21,7 @@ import type {
   ClientToServerEvents,
   SocketIOResponse
 } from '@/types';
+import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
 // Import des constantes d'événements depuis les types partagés
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -124,6 +125,11 @@ class MeeshySocketIOService {
   // Callback pour récupérer un message par ID (fourni par le composant qui a la liste des messages)
   private getMessageByIdCallback: ((messageId: string) => Message | undefined) | null = null;
 
+  // E2EE Encryption handlers (injected by useEncryption hook)
+  private encryptionHandler: ((content: string, conversationId: string) => Promise<EncryptedPayload | null>) | null = null;
+  private decryptionHandler: ((payload: EncryptedPayload, senderUserId?: string) => Promise<string>) | null = null;
+  private getConversationModeHandler: ((conversationId: string) => Promise<EncryptionMode | null>) | null = null;
+
   constructor() {
     // CORRECTION CRITIQUE: Le constructeur ne doit s'exécuter QU'UNE SEULE FOIS
     // Protection contre React StrictMode qui monte les composants 2 fois en dev
@@ -167,6 +173,42 @@ class MeeshySocketIOService {
    */
   public setGetMessageByIdCallback(callback: (messageId: string) => Message | undefined): void {
     this.getMessageByIdCallback = callback;
+  }
+
+  /**
+   * Set encryption handlers for E2EE support
+   * Called by components using the useEncryption hook
+   */
+  public setEncryptionHandlers(handlers: {
+    encrypt: (content: string, conversationId: string) => Promise<EncryptedPayload | null>;
+    decrypt: (payload: EncryptedPayload, senderUserId?: string) => Promise<string>;
+    getConversationMode: (conversationId: string) => Promise<EncryptionMode | null>;
+  }): void {
+    this.encryptionHandler = handlers.encrypt;
+    this.decryptionHandler = handlers.decrypt;
+    this.getConversationModeHandler = handlers.getConversationMode;
+    console.log('[MeeshySocketIOService] Encryption handlers configured');
+  }
+
+  /**
+   * Clear encryption handlers (on logout)
+   */
+  public clearEncryptionHandlers(): void {
+    this.encryptionHandler = null;
+    this.decryptionHandler = null;
+    this.getConversationModeHandler = null;
+    console.log('[MeeshySocketIOService] Encryption handlers cleared');
+  }
+
+  /**
+   * Check if conversation has encryption enabled
+   */
+  public async isConversationEncrypted(conversationId: string): Promise<boolean> {
+    if (!this.getConversationModeHandler) {
+      return false;
+    }
+    const mode = await this.getConversationModeHandler(conversationId);
+    return mode !== null;
   }
 
   /**
@@ -465,9 +507,48 @@ class MeeshySocketIOService {
     });
 
     // Événements de messages
-    this.socket.on(SERVER_EVENTS.MESSAGE_NEW, (socketMessage) => {
+    this.socket.on(SERVER_EVENTS.MESSAGE_NEW, async (socketMessage) => {
       // Convertir en format Message standard
-      const message: Message = this.convertSocketMessageToMessage(socketMessage);
+      let message: Message = this.convertSocketMessageToMessage(socketMessage);
+
+      // E2EE: Decrypt message if it has encrypted content
+      const encryptedContent = (socketMessage as any).encryptedContent;
+      const encryptionMetadata = (socketMessage as any).encryptionMetadata;
+
+      if (encryptedContent && encryptionMetadata && this.decryptionHandler) {
+        try {
+          const encryptedPayload: EncryptedPayload = {
+            ciphertext: encryptedContent,
+            metadata: encryptionMetadata
+          };
+          const senderId = socketMessage.senderId || (socketMessage as any).anonymousSenderId;
+          const decryptedContent = await this.decryptionHandler(encryptedPayload, senderId);
+
+          // Update message with decrypted content
+          message = {
+            ...message,
+            content: decryptedContent,
+            // Preserve original encrypted flag for UI
+            _isEncrypted: true,
+            _encryptionMode: encryptionMetadata.mode
+          } as Message & { _isEncrypted?: boolean; _encryptionMode?: string };
+
+          logger.debug('[SOCKETIO]', 'Message decrypted', {
+            messageId: socketMessage.id,
+            mode: encryptionMetadata.mode
+          });
+        } catch (decryptionError) {
+          console.error('[MeeshySocketIOService] Decryption failed:', decryptionError);
+          // Keep the placeholder content if decryption fails
+          message = {
+            ...message,
+            content: message.content || '[Encrypted message - Unable to decrypt]',
+            _isEncrypted: true,
+            _decryptionFailed: true
+          } as Message & { _isEncrypted?: boolean; _decryptionFailed?: boolean };
+        }
+      }
+
       this.messageListeners.forEach(listener => listener(message));
 
       // Remonter les stats si incluses dans les métadonnées du message
@@ -483,12 +564,36 @@ class MeeshySocketIOService {
       } catch {}
     });
 
-    this.socket.on(SERVER_EVENTS.MESSAGE_EDITED, (socketMessage) => {
+    this.socket.on(SERVER_EVENTS.MESSAGE_EDITED, async (socketMessage) => {
       logger.debug('[SOCKETIO]', 'Message modifié', {
         messageId: socketMessage.id
       });
 
-      const message: Message = this.convertSocketMessageToMessage(socketMessage);
+      let message: Message = this.convertSocketMessageToMessage(socketMessage);
+
+      // E2EE: Decrypt edited message if it has encrypted content
+      const encryptedContent = (socketMessage as any).encryptedContent;
+      const encryptionMetadata = (socketMessage as any).encryptionMetadata;
+
+      if (encryptedContent && encryptionMetadata && this.decryptionHandler) {
+        try {
+          const encryptedPayload: EncryptedPayload = {
+            ciphertext: encryptedContent,
+            metadata: encryptionMetadata
+          };
+          const senderId = socketMessage.senderId || (socketMessage as any).anonymousSenderId;
+          const decryptedContent = await this.decryptionHandler(encryptedPayload, senderId);
+          message = {
+            ...message,
+            content: decryptedContent,
+            _isEncrypted: true,
+            _encryptionMode: encryptionMetadata.mode
+          } as Message & { _isEncrypted?: boolean; _encryptionMode?: string };
+        } catch (decryptionError) {
+          console.error('[MeeshySocketIOService] Decryption failed for edited message:', decryptionError);
+        }
+      }
+
       this.editListeners.forEach(listener => listener(message));
     });
 
@@ -1281,6 +1386,32 @@ class MeeshySocketIOService {
           ...(replyToId && { replyToId }),
           ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds })
         };
+
+        // E2EE: Check if conversation is encrypted and encrypt content if needed
+        if (this.encryptionHandler && this.getConversationModeHandler) {
+          try {
+            const encryptionMode = await this.getConversationModeHandler(conversationId);
+            if (encryptionMode) {
+              const encryptedPayload = await this.encryptionHandler(content, conversationId);
+              if (encryptedPayload) {
+                // Add encrypted content to message data
+                messageData.encryptedContent = encryptedPayload.ciphertext;
+                messageData.encryptionMetadata = encryptedPayload.metadata;
+                // For E2EE, replace content with placeholder
+                if (encryptionMode === 'e2ee') {
+                  messageData.content = '[Encrypted]';
+                }
+                logger.debug('[SOCKETIO]', 'Message encrypted', {
+                  conversationId,
+                  mode: encryptionMode
+                });
+              }
+            }
+          } catch (encryptionError) {
+            console.error('[MeeshySocketIOService] Encryption failed:', encryptionError);
+            // Continue with plaintext if encryption fails (configurable behavior)
+          }
+        }
 
         // Si attachments, ajouter les données spécifiques
         if (hasAttachments) {

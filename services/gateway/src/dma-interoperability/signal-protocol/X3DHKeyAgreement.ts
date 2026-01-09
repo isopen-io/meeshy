@@ -250,10 +250,10 @@ export class X3DHKeyAgreement {
     try {
       console.log('🤝 Starting X3DH responder key agreement');
 
-      // Get responder's identity key
-      const responderIdentityKey = this.keyManager.getIdentityPublicKey();
-      if (!responderIdentityKey) {
-        throw new Error('Responder identity key not available');
+      // Get responder's identity key pair (need private key for DH)
+      const responderIdentityKeyPair = await this.keyManager.getIdentityKeyPair();
+      if (!responderIdentityKeyPair) {
+        throw new Error('Responder identity key pair not available');
       }
 
       // Get responder's signed pre-key
@@ -272,18 +272,21 @@ export class X3DHKeyAgreement {
       }
 
       // Perform DH operations (order is different from initiator for correctness)
+      // DH1: responder signed pre-key private × initiator identity public
       const dh1 = this.performDH(
         signedPreKey.privateKey,
         initiatorIdentityKey,
         'DH1: signed-prekey × identity'
       );
 
+      // DH2: responder identity private × initiator ephemeral public
       const dh2 = this.performDH(
-        responderIdentityKey,
+        responderIdentityKeyPair.privateKey,
         ephemeralPublicKey,
         'DH2: identity × ephemeral'
       );
 
+      // DH3: responder signed pre-key private × initiator ephemeral public
       const dh3 = this.performDH(
         signedPreKey.privateKey,
         ephemeralPublicKey,
@@ -293,6 +296,7 @@ export class X3DHKeyAgreement {
       let dh4 = Buffer.alloc(32);
 
       if (preKey) {
+        // DH4: responder pre-key private × initiator ephemeral public
         dh4 = this.performDH(
           preKey.privateKey,
           ephemeralPublicKey,

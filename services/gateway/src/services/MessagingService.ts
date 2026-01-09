@@ -1,7 +1,8 @@
 /**
  * Service de gestion des messages - Version simplifiée Phase 2.2
- * 
+ *
  * Centralise la logique de messaging avec les champs disponibles dans le schéma
+ * Includes encryption support for server, e2ee, and hybrid modes
  */
 
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
@@ -14,18 +15,34 @@ import type {
   AuthenticationContext,
   AuthenticationType
 } from '@meeshy/shared/types';
+// EncryptionMode type - defined locally to avoid build order issues
+type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
 import { TranslationService } from './TranslationService';
 import { conversationStatsService } from './ConversationStatsService';
 import { TrackingLinkService } from './TrackingLinkService';
 import { MentionService } from './MentionService';
 import { NotificationService } from './NotificationService';
 import { MessageReadStatusService } from './MessageReadStatusService';
+import { EncryptionService } from './EncryptionService';
+
+import type { Prisma } from '@meeshy/shared/prisma/client';
+
+/**
+ * Encryption context for a message
+ */
+interface MessageEncryptionContext {
+  isEncrypted: boolean;
+  mode: EncryptionMode | null;
+  encryptedContent: string | null;
+  encryptionMetadata: Prisma.InputJsonValue | null;
+}
 
 export class MessagingService {
   private trackingLinkService: TrackingLinkService;
   private mentionService: MentionService;
   private notificationService?: NotificationService;
   private readStatusService: MessageReadStatusService;
+  private encryptionService: EncryptionService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -36,6 +53,7 @@ export class MessagingService {
     this.mentionService = new MentionService(prisma);
     this.notificationService = notificationService;
     this.readStatusService = new MessageReadStatusService(prisma);
+    this.encryptionService = new EncryptionService(prisma);
   }
 
   /**
@@ -650,7 +668,122 @@ export class MessagingService {
   }
 
   /**
+   * Get encryption context for a conversation
+   * Determines if and how a message should be encrypted
+   */
+  private async getEncryptionContext(
+    conversationId: string,
+    content: string,
+    messageType: string
+  ): Promise<MessageEncryptionContext> {
+    // System messages are NEVER encrypted
+    if (messageType === 'system') {
+      return {
+        isEncrypted: false,
+        mode: null,
+        encryptedContent: null,
+        encryptionMetadata: null
+      };
+    }
+
+    // Check if conversation has encryption enabled
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        encryptionMode: true,
+        encryptionEnabledAt: true,
+        serverEncryptionKeyId: true
+      }
+    });
+
+    // No encryption enabled - return plaintext context
+    if (!conversation?.encryptionEnabledAt || !conversation.encryptionMode) {
+      return {
+        isEncrypted: false,
+        mode: null,
+        encryptedContent: null,
+        encryptionMetadata: null
+      };
+    }
+
+    const mode = conversation.encryptionMode as EncryptionMode;
+
+    // E2EE mode: encryption happens client-side
+    // The client sends already-encrypted content which we store as-is
+    // This path is for when the server receives plaintext (fallback/error case)
+    if (mode === 'e2ee') {
+      console.warn('[MessagingService] E2EE message received as plaintext - client should encrypt');
+      return {
+        isEncrypted: false,
+        mode: 'e2ee',
+        encryptedContent: null,
+        encryptionMetadata: null
+      };
+    }
+
+    try {
+      // Server mode: encrypt content server-side
+      if (mode === 'server') {
+        const encrypted = await this.encryptionService.encryptMessage(
+          content,
+          'server',
+          conversationId
+        );
+
+        return {
+          isEncrypted: true,
+          mode: 'server',
+          encryptedContent: encrypted.ciphertext,
+          encryptionMetadata: encrypted.metadata as Prisma.InputJsonValue
+        };
+      }
+
+      // Hybrid mode: encrypt the server layer (E2EE layer is client-side)
+      if (mode === 'hybrid') {
+        const serverLayer = await this.encryptionService.encryptHybridServerLayer(
+          content,
+          conversationId
+        );
+
+        return {
+          isEncrypted: true,
+          mode: 'hybrid',
+          encryptedContent: serverLayer.ciphertext,
+          encryptionMetadata: {
+            mode: 'hybrid',
+            protocol: 'aes-256-gcm',
+            keyId: serverLayer.keyId,
+            iv: serverLayer.iv,
+            authTag: serverLayer.authTag,
+            canTranslate: true,
+            timestamp: Date.now()
+          } as Prisma.InputJsonValue
+        };
+      }
+
+      // Unknown mode - fallback to plaintext
+      console.warn(`[MessagingService] Unknown encryption mode: ${mode}`);
+      return {
+        isEncrypted: false,
+        mode: null,
+        encryptedContent: null,
+        encryptionMetadata: null
+      };
+    } catch (error) {
+      console.error('[MessagingService] Encryption failed:', error);
+      // On encryption failure, store as plaintext with warning
+      return {
+        isEncrypted: false,
+        mode: null,
+        encryptedContent: null,
+        encryptionMetadata: null
+      };
+    }
+  }
+
+  /**
    * Sauvegarde du message en base avec toutes les relations
+   * Handles encryption based on conversation settings
    */
   private async saveMessage(data: {
     conversationId: string;
@@ -660,8 +793,10 @@ export class MessagingService {
     originalLanguage: string;
     messageType?: string;
     replyToId?: string;
-    encrypted?: boolean;
     mentionedUserIds?: readonly string[];  // IDs des utilisateurs mentionnés depuis le frontend
+    // Pre-encrypted content (for E2EE/hybrid client-side encryption)
+    encryptedContent?: string;
+    encryptionMetadata?: Prisma.InputJsonValue;
   }): Promise<Message> {
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
     const processedContent = await this.processLinksInContent(
@@ -671,17 +806,43 @@ export class MessagingService {
       undefined // messageId sera mis à jour après création
     );
 
-    // ÉTAPE 2: Créer le message avec le contenu traité
+    // ÉTAPE 2: Get encryption context for this message
+    let encryptionContext: MessageEncryptionContext;
+
+    // If client sent pre-encrypted content, use that (E2EE/hybrid mode)
+    if (data.encryptedContent && data.encryptionMetadata) {
+      const metadata = data.encryptionMetadata as Record<string, unknown>;
+      encryptionContext = {
+        isEncrypted: true,
+        mode: (metadata.mode as EncryptionMode) || 'e2ee',
+        encryptedContent: data.encryptedContent,
+        encryptionMetadata: data.encryptionMetadata
+      };
+    } else {
+      // Otherwise, check if server-side encryption is needed
+      encryptionContext = await this.getEncryptionContext(
+        data.conversationId,
+        processedContent.trim(),
+        data.messageType || 'text'
+      );
+    }
+
+    // ÉTAPE 3: Créer le message avec le contenu traité et encryption
     const message = await this.prisma.message.create({
       data: {
         conversationId: data.conversationId,
         senderId: data.senderId,
         anonymousSenderId: data.anonymousSenderId,
-        content: processedContent.trim(),
+        // Store plaintext only if not encrypted, otherwise store placeholder
+        content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
         originalLanguage: data.originalLanguage,
         messageType: data.messageType || 'text',
-        replyToId: data.replyToId
-        // Note: priority et encrypted ne sont pas dans le schéma actuel
+        replyToId: data.replyToId,
+        // Encryption fields
+        isEncrypted: encryptionContext.isEncrypted,
+        encryptionMode: encryptionContext.mode,
+        encryptedContent: encryptionContext.encryptedContent,
+        encryptionMetadata: encryptionContext.encryptionMetadata
       },
       include: {
         sender: {
