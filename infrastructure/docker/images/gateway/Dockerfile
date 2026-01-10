@@ -142,7 +142,8 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
     fi
 
 # ===== RUNNER STAGE (minimal runtime - NO build tools) =====
-FROM node:22-alpine AS runner
+# Using Debian-slim instead of Alpine for glibc compatibility with @signalapp/libsignal-client
+FROM node:22-slim AS runner
 
 ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
@@ -155,12 +156,13 @@ ENV NODE_ENV=production \
     PORT=${FASTIFY_PORT}
 
 # Runtime dependencies only (no build tools!)
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
-    && addgroup -g 1001 -S nodejs \
-    && adduser -u 1001 -S -G nodejs gateway \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 1001 nodejs \
+    && useradd -u 1001 -g nodejs -m gateway \
     && mkdir -p /app/logs \
     && chown -R gateway:nodejs /app
 
@@ -190,7 +192,7 @@ USER gateway
 
 EXPOSE ${FASTIFY_PORT}
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${FASTIFY_PORT}/health || exit 1

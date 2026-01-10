@@ -99,10 +99,12 @@ ENV NODE_ENV=production \
     PORT=${FASTIFY_PORT}
 
 # Runtime dependencies only (no build tools!)
+# gcompat provides glibc compatibility for @signalapp/libsignal-client
 RUN apk add --no-cache \
     tini \
     curl \
     ffmpeg \
+    gcompat \
     && addgroup -g 1001 -S nodejs \
     && adduser -u 1001 -S -G nodejs gateway \
     && mkdir -p /app/logs \
