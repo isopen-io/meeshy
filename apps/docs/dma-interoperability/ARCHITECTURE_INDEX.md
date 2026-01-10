@@ -91,10 +91,10 @@
 
 ### Frontend (Next.js)
 ```
-/frontend/services/meeshy-socketio.service.ts  <- CLIENT SOCKET.IO
-/frontend/services/messages.service.ts         <- REST API
-/frontend/hooks/use-socketio-messaging.ts      <- HOOK PRINCIPAL
-/frontend/components/common/BubbleMessage.tsx  <- AFFICHAGE
+/apps/web/services/meeshy-socketio.service.ts  <- CLIENT SOCKET.IO
+/apps/web/services/messages.service.ts         <- REST API
+/apps/web/hooks/use-socketio-messaging.ts      <- HOOK PRINCIPAL
+/apps/web/components/common/BubbleMessage.tsx  <- AFFICHAGE
 ```
 
 ---

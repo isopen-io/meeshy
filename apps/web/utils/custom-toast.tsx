@@ -2,7 +2,7 @@
  * Custom toast notifications - Toasts fonctionnels uniquement
  *
  * IMPORTANT: Les toasts métier (messages, mentions, notifications) sont gérés
- * par le système V2 dans use-notifications-v2.tsx
+ * par le système de notifications dans use-notifications.tsx
  *
  * Ce fichier contient uniquement:
  * - Toasts fonctionnels simples (success/error/info)
@@ -53,15 +53,12 @@ function showFunctionalToast(type: 'success' | 'error' | 'info', title: string, 
 }
 
 /**
- * DEPRECATED - Toast notification métier riche (avec avatar)
- * Ces fonctions sont maintenant gérées par le système de notifications V2
- * dans use-notifications-v2.tsx qui utilise NotificationV2 avec i18n
+ * Toasts métier (avec avatar) sont maintenant gérés par le système de notifications
+ * dans use-notifications.tsx qui utilise les types Notification avec i18n
  *
  * Ce fichier est conservé uniquement pour:
  * - Les toasts fonctionnels (success/error/info)
  * - La page de test /test-toasts
- *
- * À supprimer lors de la migration complète vers V2
  */
 
 /**

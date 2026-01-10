@@ -95,7 +95,7 @@ CRITICAL COMPONENTS:
   2. /shared/types/socketio-events.ts - Event definitions
   3. /gateway/src/services/MessagingService.ts - Main service
   4. /gateway/src/socketio/MeeshySocketIOManager.ts - WebSocket server
-  5. /frontend/services/meeshy-socketio.service.ts - WebSocket client
+  5. /apps/web/services/meeshy-socketio.service.ts - WebSocket client
 
 SECURITY:
   Current:
@@ -128,7 +128,7 @@ WHAT'S NEEDED FOR MLS:
 INTEGRATION POINTS IDENTIFIED:
   
   1. Frontend Encryption Service (NEW)
-     Location: /frontend/services/message-encryption.service.ts
+     Location: /apps/web/services/message-encryption.service.ts
      Integrates: Before socket.emit('message:send')
      
   2. Backend Key Management Service (NEW)
@@ -175,7 +175,7 @@ Associated source code (referenced in documents):
     • routes/conversations.ts
     • middleware/auth.ts
   
-  Frontend (/frontend/):
+  Frontend (/apps/web/):
     • services/meeshy-socketio.service.ts
     • services/messages.service.ts
     • services/conversations.service.ts

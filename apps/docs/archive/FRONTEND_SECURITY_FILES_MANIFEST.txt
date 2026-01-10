@@ -10,7 +10,7 @@ Total Lines of Code: ~4,740 LOC
 UTILITAIRES DE SÉCURITÉ (Production-Ready)
 ================================================================================
 
-1. /frontend/utils/secure-storage.ts
+1. /apps/web/utils/secure-storage.ts
    - LOC: 350
    - Purpose: Encryption AES-256-GCM, TTL auto, sanitization
    - Status: ✅ Production-ready
@@ -21,7 +21,7 @@ UTILITAIRES DE SÉCURITÉ (Production-Ready)
      * Data sanitization
      * Methods: setSecure(), getSecure(), removeSecure(), clearAll()
 
-2. /frontend/utils/xss-protection.ts
+2. /apps/web/utils/xss-protection.ts
    - LOC: 450
    - Purpose: XSS protection, sanitization, URL validation
    - Status: ✅ Production-ready
@@ -34,7 +34,7 @@ UTILITAIRES DE SÉCURITÉ (Production-Ready)
      * containsXss() - XSS detection
      * sanitizeNotification() - Notification sanitization
 
-3. /frontend/utils/socket-validator.ts
+3. /apps/web/utils/socket-validator.ts
    - LOC: 420
    - Purpose: Socket.IO message validation with Zod
    - Status: ✅ Production-ready
@@ -47,7 +47,7 @@ UTILITAIRES DE SÉCURITÉ (Production-Ready)
      * createValidatedHandler()
      * batchValidateNotifications()
 
-4. /frontend/components/notifications-v2/NotificationErrorBoundary.tsx
+4. /apps/web/components/notifications-v2/NotificationErrorBoundary.tsx
    - LOC: 220
    - Purpose: React Error Boundary for notifications
    - Status: ✅ Production-ready
@@ -63,7 +63,7 @@ UTILITAIRES DE SÉCURITÉ (Production-Ready)
 TESTS UNITAIRES (Examples with 90%+ Coverage)
 ================================================================================
 
-5. /frontend/utils/__tests__/secure-storage.test.ts
+5. /apps/web/utils/__tests__/secure-storage.test.ts
    - LOC: 300
    - Coverage Target: 90%
    - Status: ✅ Complete
@@ -75,7 +75,7 @@ TESTS UNITAIRES (Examples with 90%+ Coverage)
      * Sanitization
      * Storage size calculation
 
-6. /frontend/utils/__tests__/xss-protection.test.ts
+6. /apps/web/utils/__tests__/xss-protection.test.ts
    - LOC: 300
    - Coverage Target: 90%
    - Status: ✅ Complete
@@ -93,7 +93,7 @@ TESTS UNITAIRES (Examples with 90%+ Coverage)
 CONFIGURATION & SCRIPTS
 ================================================================================
 
-7. /frontend/next.config.security.js
+7. /apps/web/next.config.security.js
    - LOC: 80
    - Purpose: CSP headers, security headers
    - Status: ✅ Ready to integrate
@@ -106,7 +106,7 @@ CONFIGURATION & SCRIPTS
      * HSTS (production)
      * X-XSS-Protection
 
-8. /frontend/scripts/install-security-dependencies.sh
+8. /apps/web/scripts/install-security-dependencies.sh
    - LOC: 150
    - Purpose: Automated dependency installation
    - Status: ✅ Ready to execute
@@ -125,7 +125,7 @@ CONFIGURATION & SCRIPTS
      * tests/setup.ts
      * Updates package.json scripts
 
-9. /frontend/vitest.config.ts
+9. /apps/web/vitest.config.ts
    - LOC: 50
    - Purpose: Test configuration
    - Status: ✅ Auto-created by script
@@ -135,7 +135,7 @@ CONFIGURATION & SCRIPTS
      * Setup file: tests/setup.ts
      * Path aliases (@/)
 
-10. /frontend/tests/setup.ts
+10. /apps/web/tests/setup.ts
     - LOC: 70
     - Purpose: Test setup (mocks, globals)
     - Status: ✅ Auto-created by script
@@ -148,7 +148,7 @@ CONFIGURATION & SCRIPTS
 DOCUMENTATION (Comprehensive)
 ================================================================================
 
-11. /frontend/README_FRONTEND_IMPROVEMENTS.md
+11. /apps/web/README_FRONTEND_IMPROVEMENTS.md
     - Lines: ~1,500
     - Purpose: Complete documentation with examples
     - Status: ✅ Complete
@@ -166,7 +166,7 @@ DOCUMENTATION (Comprehensive)
       * Next Steps
       * Support & Contacts
 
-12. /frontend/INTEGRATION_CHECKLIST.md
+12. /apps/web/INTEGRATION_CHECKLIST.md
     - Lines: ~800
     - Purpose: Detailed 10-phase checklist
     - Status: ✅ Complete
@@ -194,7 +194,7 @@ DOCUMENTATION (Comprehensive)
       * Quick checklist
       * Recommendations
 
-14. /frontend/SECURITY_IMPROVEMENTS_INDEX.md
+14. /apps/web/SECURITY_IMPROVEMENTS_INDEX.md
     - Lines: ~250
     - Purpose: Navigation index
     - Status: ✅ Complete

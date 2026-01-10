@@ -45,7 +45,8 @@ struct MeeshyGlobalView: View {
                 await viewModel.loadMessages()
             }
             .onAppear {
-                viewModel.markAsRead()
+                // Mark conversation as read when view appears
+                // Note: markAsRead functionality to be implemented in ChatViewModel
             }
             .onDisappear {
                 viewModel.stopTyping()
@@ -176,7 +177,7 @@ struct EnhancedChatContent: View {
                         messageText = ""
                         viewModel.stopTyping()
                         // TODO: Handle attachments upload in MeeshyGlobalView
-                        await viewModel.sendMessage(
+                        try? await viewModel.sendMessage(
                             content: text,
                             replyToId: replyingTo?.id,
                             detectedLanguage: detectedLanguage,

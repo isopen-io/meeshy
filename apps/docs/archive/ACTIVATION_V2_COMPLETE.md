@@ -9,7 +9,7 @@
 
 ### 1. Remplacement dans DashboardLayout
 
-**Fichier:** `/frontend/components/layout/DashboardLayout.tsx`
+**Fichier:** `/apps/web/components/layout/DashboardLayout.tsx`
 
 **AVANT (V1) :**
 ```typescript
@@ -130,7 +130,7 @@ grep -r "from '@/components/notifications'" app/ components/ --exclude-dir=node_
 
 ```bash
 # NE PAS exécuter avant d'avoir testé la V2 !
-rm -rf /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications/
+rm -rf /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications/
 ```
 
 **Fichiers à supprimer :**

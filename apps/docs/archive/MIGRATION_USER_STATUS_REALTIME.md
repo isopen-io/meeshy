@@ -20,7 +20,7 @@ Le système de statut utilisateur a été complètement refactorisé pour utilis
 
 ## Fichiers Créés
 
-### 1. `/frontend/stores/user-store.ts`
+### 1. `/apps/web/stores/user-store.ts`
 Store Zustand global pour gérer les statuts utilisateur.
 
 **API:**
@@ -48,7 +48,7 @@ function MyComponent() {
 }
 ```
 
-### 2. `/frontend/hooks/use-user-status-realtime.ts`
+### 2. `/apps/web/hooks/use-user-status-realtime.ts`
 Hook pour activer les listeners Socket.IO USER_STATUS.
 
 **Usage:**
@@ -63,7 +63,7 @@ function MyComponent() {
 }
 ```
 
-### 3. `/frontend/hooks/use-manual-status-refresh.ts`
+### 3. `/apps/web/hooks/use-manual-status-refresh.ts`
 Hook de fallback pour rafraîchissement manuel (si WebSocket down).
 
 **Usage:**
@@ -85,14 +85,14 @@ function MyComponent({ conversationId }: { conversationId: string }) {
 
 ## Fichiers Supprimés
 
-### `/frontend/hooks/use-participants-status-polling.ts` ❌
+### `/apps/web/hooks/use-participants-status-polling.ts` ❌
 Ce hook est complètement supprimé. Remplacé par `use-user-status-realtime.ts`.
 
 ---
 
 ## Fichiers Modifiés
 
-### `/frontend/components/conversations/conversation-participants-drawer.tsx`
+### `/apps/web/components/conversations/conversation-participants-drawer.tsx`
 
 **Avant:**
 ```typescript

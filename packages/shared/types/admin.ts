@@ -3,7 +3,7 @@
  * Centralized type definitions for all admin endpoints
  */
 
-import type { PaginationMeta, ApiResponse } from './api-responses';
+import type { PaginationMeta, ApiResponse } from './api-responses.js';
 
 // ===== PAGINATION =====
 
@@ -162,7 +162,7 @@ export interface GetMessagesRequest extends AdminFilters {
   hasAttachment?: boolean;
 }
 
-export interface GetMessagesResponse {
+export interface AdminGetMessagesResponse {
   messages: AdminMessage[];
   pagination: PaginationMeta;
 }
@@ -174,3 +174,210 @@ export interface GetMessagesResponse {
  * Kept for backwards compatibility
  */
 export interface AdminApiResponse<T = any> extends ApiResponse<T> {}
+
+// ===== ADMIN AUDIT LOG =====
+
+/**
+ * Types d'actions d'audit admin
+ */
+export type AdminAuditAction =
+  // Actions de lecture
+  | 'VIEW_USER'
+  | 'VIEW_USER_LIST'
+  | 'VIEW_AUDIT_LOG'
+  | 'VIEW_CONVERSATION'
+  | 'VIEW_MESSAGE'
+  | 'VIEW_COMMUNITY'
+  | 'VIEW_REPORT'
+  | 'VIEW_STATS'
+  // Actions de création/modification
+  | 'CREATE_USER'
+  | 'UPDATE_PROFILE'
+  | 'UPDATE_EMAIL'
+  | 'UPDATE_PHONE'
+  | 'UPDATE_ROLE'
+  | 'UPDATE_STATUS'
+  | 'UPDATE_COMMUNITY'
+  | 'UPDATE_CONVERSATION'
+  // Actions de sécurité
+  | 'CHANGE_PASSWORD'
+  | 'RESET_PASSWORD'
+  | 'ENABLE_2FA'
+  | 'DISABLE_2FA'
+  | 'UNLOCK_ACCOUNT'
+  | 'LOCK_ACCOUNT'
+  | 'REVOKE_SESSION'
+  // Actions sur les ressources
+  | 'UPLOAD_AVATAR'
+  | 'DELETE_AVATAR'
+  | 'DELETE_MESSAGE'
+  | 'DELETE_ATTACHMENT'
+  // Actions de suppression
+  | 'DEACTIVATE_USER'
+  | 'ACTIVATE_USER'
+  | 'DELETE_USER'
+  | 'RESTORE_USER'
+  | 'DELETE_COMMUNITY'
+  | 'DELETE_CONVERSATION'
+  // Actions de vérification
+  | 'VERIFY_EMAIL'
+  | 'VERIFY_PHONE'
+  // Actions de modération
+  | 'RESOLVE_REPORT'
+  | 'REJECT_REPORT'
+  | 'BAN_USER'
+  | 'UNBAN_USER'
+  | 'WARN_USER'
+  | 'REMOVE_CONTENT';
+
+/**
+ * Types d'entités auditées
+ */
+export type AdminAuditEntity =
+  | 'User'
+  | 'Community'
+  | 'Conversation'
+  | 'Message'
+  | 'Report'
+  | 'Attachment'
+  | 'Session'
+  | 'TrackingLink';
+
+/**
+ * Détail d'un changement dans l'audit
+ */
+export interface AdminAuditChange {
+  readonly before: unknown;
+  readonly after: unknown;
+}
+
+/**
+ * Métadonnées d'audit admin
+ */
+export interface AdminAuditMetadata {
+  readonly reason?: string;
+  readonly requestId?: string;
+  readonly endpoint?: string;
+  readonly method?: string;
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Journal d'audit admin
+ * Aligned with schema.prisma AdminAuditLog
+ */
+export interface AdminAuditLog {
+  readonly id: string;
+
+  /** ID de l'utilisateur affecté par l'action */
+  readonly userId: string;
+
+  /** ID de l'administrateur qui a effectué l'action */
+  readonly adminId: string;
+
+  /** Type d'action (VIEW_USER, CREATE_USER, UPDATE_PROFILE, etc.) */
+  readonly action: AdminAuditAction | string;
+
+  /** Type d'entité affectée (User, Community, etc.) */
+  readonly entity: AdminAuditEntity | string;
+
+  /** ID de l'entité affectée */
+  readonly entityId: string;
+
+  /** Changements effectués (JSON stringifié) */
+  readonly changes?: string | Record<string, AdminAuditChange>;
+
+  /** Métadonnées supplémentaires (JSON stringifié) */
+  readonly metadata?: string | AdminAuditMetadata;
+
+  /** Adresse IP de l'admin */
+  readonly ipAddress?: string;
+
+  /** User agent du navigateur */
+  readonly userAgent?: string;
+
+  /** Date de création du log */
+  readonly createdAt: Date;
+}
+
+/**
+ * Log d'audit parsé avec les changements et métadonnées décodés
+ */
+export interface AdminAuditLogParsed extends Omit<AdminAuditLog, 'changes' | 'metadata'> {
+  readonly changes?: Record<string, AdminAuditChange>;
+  readonly metadata?: AdminAuditMetadata;
+}
+
+/**
+ * DTO pour créer un log d'audit
+ */
+export interface CreateAdminAuditLogDTO {
+  readonly userId: string;
+  readonly adminId: string;
+  readonly action: AdminAuditAction | string;
+  readonly entity: AdminAuditEntity | string;
+  readonly entityId: string;
+  readonly changes?: Record<string, AdminAuditChange>;
+  readonly metadata?: AdminAuditMetadata;
+  readonly ipAddress?: string;
+  readonly userAgent?: string;
+}
+
+/**
+ * Filtres pour rechercher des logs d'audit
+ */
+export interface AdminAuditLogFilters {
+  readonly userId?: string;
+  readonly adminId?: string;
+  readonly action?: AdminAuditAction | string;
+  readonly entity?: AdminAuditEntity | string;
+  readonly entityId?: string;
+  readonly startDate?: Date;
+  readonly endDate?: Date;
+  readonly ipAddress?: string;
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly sortOrder?: 'asc' | 'desc';
+}
+
+/**
+ * Réponse paginée pour les logs d'audit
+ */
+export interface AdminAuditLogResponse {
+  readonly logs: readonly AdminAuditLogParsed[];
+  readonly pagination: PaginationMeta;
+}
+
+/**
+ * Parse un AdminAuditLog brut en version parsée
+ */
+export function parseAdminAuditLog(log: AdminAuditLog): AdminAuditLogParsed {
+  let changes: Record<string, AdminAuditChange> | undefined;
+  let metadata: AdminAuditMetadata | undefined;
+
+  if (typeof log.changes === 'string') {
+    try {
+      changes = JSON.parse(log.changes);
+    } catch {
+      changes = undefined;
+    }
+  } else {
+    changes = log.changes as Record<string, AdminAuditChange> | undefined;
+  }
+
+  if (typeof log.metadata === 'string') {
+    try {
+      metadata = JSON.parse(log.metadata);
+    } catch {
+      metadata = undefined;
+    }
+  } else {
+    metadata = log.metadata as AdminAuditMetadata | undefined;
+  }
+
+  return {
+    ...log,
+    changes,
+    metadata,
+  };
+}

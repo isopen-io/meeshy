@@ -93,10 +93,10 @@ BNxK7abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ
 
 ```bash
 # Ouvrir avec votre éditeur préféré
-code /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local
+code /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local
 
 # OU avec un éditeur de texte
-open -a TextEdit /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local
+open -a TextEdit /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local
 ```
 
 ### 3.2 Aller à la fin du fichier
@@ -305,7 +305,7 @@ Si vous voyez `undefined` → Le serveur dev n'a pas redémarré. Relancez `npm 
 ### "Le test échoue toujours"
 
 **Checklist :**
-- [ ] Fichier `.env.local` est dans `/frontend/`
+- [ ] Fichier `.env.local` est dans `/apps/web/`
 - [ ] Pas d'espaces avant/après les valeurs
 - [ ] Guillemets retirés (pas de `"..."`)
 - [ ] Fichier sauvegardé (Cmd+S)

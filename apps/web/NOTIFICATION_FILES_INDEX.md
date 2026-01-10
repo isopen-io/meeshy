@@ -3,41 +3,41 @@
 ## Fichiers Créés ✨
 
 ### Services Core
-- `/frontend/utils/firebase-availability-checker.ts` - Service singleton de vérification Firebase
-- `/frontend/components/providers/FirebaseInitializer.tsx` - Provider d'initialisation Firebase
+- `/apps/web/utils/firebase-availability-checker.ts` - Service singleton de vérification Firebase
+- `/apps/web/components/providers/FirebaseInitializer.tsx` - Provider d'initialisation Firebase
 
 ### Hooks
-- `/frontend/hooks/use-firebase-init.ts` - Hook React pour vérifier Firebase au démarrage
+- `/apps/web/hooks/use-firebase-init.ts` - Hook React pour vérifier Firebase au démarrage
 
 ### Documentation
-- `/frontend/NOTIFICATION_INTEGRATION_FRONTEND.md` - Guide complet d'intégration
-- `/frontend/INTEGRATION_SUMMARY.md` - Récapitulatif de l'intégration
-- `/frontend/NOTIFICATION_FILES_INDEX.md` - Ce fichier
+- `/apps/web/NOTIFICATION_INTEGRATION_FRONTEND.md` - Guide complet d'intégration
+- `/apps/web/INTEGRATION_SUMMARY.md` - Récapitulatif de l'intégration
+- `/apps/web/NOTIFICATION_FILES_INDEX.md` - Ce fichier
 
 ---
 
 ## Fichiers Modifiés 🔧
 
 ### Managers Firebase
-- `/frontend/utils/fcm-manager.ts` - FCM Manager avec fallback gracieux
-- `/frontend/utils/pwa-badge.ts` - PWA Badge Manager avec vérification
+- `/apps/web/utils/fcm-manager.ts` - FCM Manager avec fallback gracieux
+- `/apps/web/utils/pwa-badge.ts` - PWA Badge Manager avec vérification
 
 ### Hooks
-- `/frontend/hooks/use-fcm-notifications.ts` - Hook FCM avec sortie précoce si Firebase absent
+- `/apps/web/hooks/use-fcm-notifications.ts` - Hook FCM avec sortie précoce si Firebase absent
 
 ### Stores
-- `/frontend/stores/notification-store-v2.ts` - Store Zustand avec WebSocket + Firebase optionnel
+- `/apps/web/stores/notification-store-v2.ts` - Store Zustand avec WebSocket + Firebase optionnel
 
 ### Configuration
-- `/frontend/firebase-config.ts` - Config Firebase avec fonction `getFirebaseApp()`
-- `/frontend/.env.example` - Variables d'environnement documentées
+- `/apps/web/firebase-config.ts` - Config Firebase avec fonction `getFirebaseApp()`
+- `/apps/web/.env.example` - Variables d'environnement documentées
 
 ### Composants
-- `/frontend/app/layout.tsx` - Layout principal avec FirebaseInitializer
-- `/frontend/components/notifications-v2/NotificationPermissionPrompt.tsx` - Prompt conditionnel
+- `/apps/web/app/layout.tsx` - Layout principal avec FirebaseInitializer
+- `/apps/web/components/notifications-v2/NotificationPermissionPrompt.tsx` - Prompt conditionnel
 
 ### Service Workers
-- `/frontend/public/firebase-messaging-sw.js` - Service Worker sécurisé avec try/catch
+- `/apps/web/public/firebase-messaging-sw.js` - Service Worker sécurisé avec try/catch
 
 ---
 
@@ -86,28 +86,28 @@ frontend/
 ## Fichiers par Catégorie
 
 ### 🔍 Vérification Firebase
-1. `/frontend/utils/firebase-availability-checker.ts` (service core)
-2. `/frontend/hooks/use-firebase-init.ts` (hook React)
-3. `/frontend/components/providers/FirebaseInitializer.tsx` (provider)
+1. `/apps/web/utils/firebase-availability-checker.ts` (service core)
+2. `/apps/web/hooks/use-firebase-init.ts` (hook React)
+3. `/apps/web/components/providers/FirebaseInitializer.tsx` (provider)
 
 ### 📱 Managers Notifications
-1. `/frontend/utils/fcm-manager.ts` (Firebase Cloud Messaging)
-2. `/frontend/utils/pwa-badge.ts` (PWA Badges)
-3. `/frontend/stores/notification-store-v2.ts` (Zustand store)
+1. `/apps/web/utils/fcm-manager.ts` (Firebase Cloud Messaging)
+2. `/apps/web/utils/pwa-badge.ts` (PWA Badges)
+3. `/apps/web/stores/notification-store-v2.ts` (Zustand store)
 
 ### 🎨 Composants UI
-1. `/frontend/components/notifications-v2/NotificationPermissionPrompt.tsx`
-2. `/frontend/app/layout.tsx`
+1. `/apps/web/components/notifications-v2/NotificationPermissionPrompt.tsx`
+2. `/apps/web/app/layout.tsx`
 
 ### ⚙️ Configuration
-1. `/frontend/firebase-config.ts`
-2. `/frontend/.env.example`
-3. `/frontend/public/firebase-messaging-sw.js`
+1. `/apps/web/firebase-config.ts`
+2. `/apps/web/.env.example`
+3. `/apps/web/public/firebase-messaging-sw.js`
 
 ### 📚 Documentation
-1. `/frontend/NOTIFICATION_INTEGRATION_FRONTEND.md` (guide complet)
-2. `/frontend/INTEGRATION_SUMMARY.md` (récapitulatif)
-3. `/frontend/NOTIFICATION_FILES_INDEX.md` (cet index)
+1. `/apps/web/NOTIFICATION_INTEGRATION_FRONTEND.md` (guide complet)
+2. `/apps/web/INTEGRATION_SUMMARY.md` (récapitulatif)
+3. `/apps/web/NOTIFICATION_FILES_INDEX.md` (cet index)
 
 ---
 
@@ -126,10 +126,10 @@ Pour comprendre l'intégration, lire dans cet ordre :
 
 Si problème de notifications :
 
-1. Vérifier `/frontend/.env.local` (variables Firebase)
-2. Inspecter `/frontend/utils/firebase-availability-checker.ts` (logs)
-3. Vérifier `/frontend/public/firebase-messaging-sw.js` (console SW)
-4. Checker `/frontend/stores/notification-store-v2.ts` (état)
+1. Vérifier `/apps/web/.env.local` (variables Firebase)
+2. Inspecter `/apps/web/utils/firebase-availability-checker.ts` (logs)
+3. Vérifier `/apps/web/public/firebase-messaging-sw.js` (console SW)
+4. Checker `/apps/web/stores/notification-store-v2.ts` (état)
 
 ---
 
@@ -137,9 +137,9 @@ Si problème de notifications :
 
 Ces fichiers fonctionnent ensemble et ne doivent être modifiés qu'avec précaution :
 
-- `/frontend/utils/firebase-availability-checker.ts` - Singleton critique
-- `/frontend/components/providers/FirebaseInitializer.tsx` - Initialisation unique
-- `/frontend/public/firebase-messaging-sw.js` - Service Worker sensible
+- `/apps/web/utils/firebase-availability-checker.ts` - Singleton critique
+- `/apps/web/components/providers/FirebaseInitializer.tsx` - Initialisation unique
+- `/apps/web/public/firebase-messaging-sw.js` - Service Worker sensible
 
 ---
 

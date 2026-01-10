@@ -28,7 +28,7 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Group } from '@/types/frontend';
+import type { Group } from '@meeshy/shared/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { isValidJWTFormat } from '@/utils/auth';
@@ -832,7 +832,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
                                   <h3 className="font-semibold text-foreground truncate">
                                     {conversation.title || `Conversation ${conversation.id.slice(-4)}`}
                                   </h3>
-                                  {conversation.isPrivate && (
+                                  {conversation.visibility === 'private' && (
                                     <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                   )}
                                 </div>

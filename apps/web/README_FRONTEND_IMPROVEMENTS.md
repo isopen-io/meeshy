@@ -34,7 +34,7 @@ Ce document décrit toutes les améliorations de sécurité et qualité appliqu�
 
 ### 1.1 Secure Storage avec Encryption ✅
 
-**Fichier créé:** `/frontend/utils/secure-storage.ts`
+**Fichier créé:** `/apps/web/utils/secure-storage.ts`
 
 **Fonctionnalités:**
 - ✅ Encryption AES-256-GCM avec Web Crypto API
@@ -68,7 +68,7 @@ SecureStorage.clearAll();
 
 ### 1.2 Protection XSS dans UI ✅
 
-**Fichier créé:** `/frontend/utils/xss-protection.ts`
+**Fichier créé:** `/apps/web/utils/xss-protection.ts`
 
 **Fonctionnalités:**
 - ✅ `sanitizeText()` - Strip ALL HTML (notifications, titles, usernames)
@@ -124,7 +124,7 @@ xssPayloads.forEach(payload => {
 
 ### 1.3 Content Security Policy (CSP) ⚠️
 
-**Fichier à modifier:** `/frontend/next.config.js`
+**Fichier à modifier:** `/apps/web/next.config.js`
 
 **Configuration recommandée:**
 ```javascript
@@ -194,7 +194,7 @@ module.exports = {
 
 ### 1.4 Validation Socket.IO Messages ✅
 
-**Fichier créé:** `/frontend/utils/socket-validator.ts`
+**Fichier créé:** `/apps/web/utils/socket-validator.ts`
 
 **Fonctionnalités:**
 - ✅ Validation runtime avec Zod
@@ -245,7 +245,7 @@ socket.on('notification', (data) => {
 
 ### 1.5 Error Boundaries ✅
 
-**Fichier créé:** `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx`
+**Fichier créé:** `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx`
 
 **Fonctionnalités:**
 - ✅ Catch React errors dans components notifications
@@ -285,7 +285,7 @@ const SafeNotificationList = withNotificationErrorBoundary(NotificationList);
 
 ### 2.1 Fix useEffect Dependencies ⚠️
 
-**Fichier à modifier:** `/frontend/hooks/use-notifications-v2.ts`
+**Fichier à modifier:** `/apps/web/hooks/use-notifications-v2.ts`
 
 **Problème identifié:**
 ```typescript
@@ -346,7 +346,7 @@ useEffect(() => {
 
 ### 2.2 Optimize Re-renders ⚠️
 
-**Fichier à modifier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier à modifier:** `/apps/web/stores/notification-store-v2.ts`
 
 **Optimisations recommandées:**
 
@@ -390,7 +390,7 @@ export const NotificationItem = memo(function NotificationItem({ notification }:
 
 ### 2.3 localStorage Memory Management ⚠️
 
-**Fichier à modifier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier à modifier:** `/apps/web/stores/notification-store-v2.ts`
 
 **Configuration actuelle:**
 ```typescript
@@ -460,7 +460,7 @@ persist(
 
 ### 3.1 Notification List Virtualization ⚠️
 
-**Fichier à créer:** `/frontend/components/notifications-v2/NotificationListVirtualized.tsx`
+**Fichier à créer:** `/apps/web/components/notifications-v2/NotificationListVirtualized.tsx`
 
 **Utilisation de react-window:**
 ```typescript
@@ -1149,17 +1149,17 @@ npm run test:a11y
 ## 11. Support & Contacts
 
 **Documentation:**
-- Ce README: `/frontend/README_FRONTEND_IMPROVEMENTS.md`
+- Ce README: `/apps/web/README_FRONTEND_IMPROVEMENTS.md`
 - Security Audit: `/SECURITY_AUDIT_NOTIFICATIONS_SYSTEM.md`
 - Security Patches: `/SECURITY_PATCHES.md`
 - Code Review: `/CODE_REVIEW_NOTIFICATIONS_SYSTEM.md`
 - Refactoring Guide: `/NOTIFICATION_REFACTORING_GUIDE.md`
 
 **Fichiers Créés:**
-- ✅ `/frontend/utils/secure-storage.ts` (Encryption)
-- ✅ `/frontend/utils/xss-protection.ts` (Sanitization)
-- ✅ `/frontend/utils/socket-validator.ts` (Validation)
-- ✅ `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx` (Error handling)
+- ✅ `/apps/web/utils/secure-storage.ts` (Encryption)
+- ✅ `/apps/web/utils/xss-protection.ts` (Sanitization)
+- ✅ `/apps/web/utils/socket-validator.ts` (Validation)
+- ✅ `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx` (Error handling)
 
 **Questions / Issues:**
 - Ouvrir un ticket GitHub avec label `security` ou `notifications`

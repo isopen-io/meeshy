@@ -3,7 +3,7 @@
  * Harmonisation Gateway - Frontend
  */
 
-import type { PaginationMeta } from './api-responses';
+import type { PaginationMeta } from './api-responses.js';
 
 /**
  * Roles utilisateur
@@ -35,7 +35,7 @@ export interface UserPermissions {
  * Alias pour SocketIOUser - Type principal recommande
  * Utilisez ce type pour tous les nouveaux developpements
  */
-export type { SocketIOUser as UserUnified, SocketIOUser as User } from './socketio-events';
+export type { SocketIOUser as UserUnified, SocketIOUser as User } from './socketio-events.js';
 
 /**
  * Configuration des langues utilisateur

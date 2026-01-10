@@ -30,7 +30,7 @@
 ### Core Files (URGENT - À déployer)
 
 #### 1. Parser Source Code
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/markdown-parser-v2.2-optimized.ts`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/markdown-parser-v2.2-optimized.ts`
 
 **Size:** 1052 lines (33KB)
 
@@ -50,7 +50,7 @@
 ---
 
 #### 2. Tests Suite
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/__tests__/markdown-parser-v2.2-quick-test.ts`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/__tests__/markdown-parser-v2.2-quick-test.ts`
 
 **Size:** ~450 lines
 
@@ -72,7 +72,7 @@ npm test -- markdown-parser-v2.2-quick-test
 ---
 
 #### 3. Benchmark Script
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/scripts/benchmark-parser-v2.2.js`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/scripts/benchmark-parser-v2.2.js`
 
 **Size:** ~350 lines
 
@@ -96,7 +96,7 @@ node scripts/benchmark-parser-v2.2.js
 ### Documentation Files
 
 #### 4. Executive Summary (START HERE)
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2.2_SUMMARY.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2.2_SUMMARY.md`
 
 **Size:** ~850 lines (13KB)
 
@@ -119,7 +119,7 @@ node scripts/benchmark-parser-v2.2.js
 ---
 
 #### 5. Complete Documentation
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2.2_README.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2.2_README.md`
 
 **Size:** ~850 lines (15KB)
 
@@ -144,7 +144,7 @@ node scripts/benchmark-parser-v2.2.js
 ---
 
 #### 6. Validation Checklist
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2.2_VALIDATION.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2.2_VALIDATION.md`
 
 **Size:** ~395 lines (12KB)
 
@@ -165,7 +165,7 @@ node scripts/benchmark-parser-v2.2.js
 ---
 
 #### 7. Performance Analysis
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2_PERFORMANCE_ANALYSIS.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2_PERFORMANCE_ANALYSIS.md`
 
 **Size:** ~395 lines (9.7KB)
 
@@ -188,7 +188,7 @@ node scripts/benchmark-parser-v2.2.js
 ### Historical Files (Context)
 
 #### 8. V2 Comparison
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V1_VS_V2_COMPARISON.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V1_VS_V2_COMPARISON.md`
 
 **What it is:** Comparaison détaillée V1 vs V2 (avant V2.2).
 
@@ -197,7 +197,7 @@ node scripts/benchmark-parser-v2.2.js
 ---
 
 #### 9. V2 Security Fixes
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
 
 **What it is:** Résumé des correctifs de sécurité de V2.
 
@@ -206,7 +206,7 @@ node scripts/benchmark-parser-v2.2.js
 ---
 
 #### 10. V2 Test Examples
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/PARSER_V2_TEST_EXAMPLES.md`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/PARSER_V2_TEST_EXAMPLES.md`
 
 **What it is:** Exemples de tests pour V2.
 

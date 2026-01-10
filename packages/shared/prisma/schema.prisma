@@ -1,7 +1,7 @@
 generator client {
   provider      = "prisma-client-js"
   output        = "./client"
-  binaryTargets = ["native"]
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -18,6 +18,8 @@ model User {
   bio                         String    @default("")
   email                       String    @unique
   phoneNumber                 String?
+  /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
+  phoneCountryCode            String?
   password                    String
   displayName                 String?
   /// User profile picture
@@ -63,10 +65,16 @@ model User {
   passwordResetAttempts    Int       @default(0)
   lastPasswordResetAttempt DateTime?
 
-  // Device & Location Tracking
+  // Device & Location Tracking (Login)
   lastLoginIp       String?
   lastLoginLocation String? // "City, Country"
-  lastLoginDevice   String? // Device fingerprint
+  lastLoginDevice   String? // Device fingerprint/user agent
+
+  // Registration Context (captured once at signup)
+  registrationIp       String?
+  registrationLocation String? // "City, Country" at signup
+  registrationDevice   String? // User agent at signup
+  registrationCountry  String? // ISO 3166-1 alpha-2 (e.g., "FR", "US")
 
   // Soft delete fields
   deletedAt DateTime?
@@ -1617,25 +1625,45 @@ model SecurityEvent {
   @@map("security_events")
 }
 
-/// User Session - For session invalidation after password reset
+/// User Session - Complete session tracking for security dashboard
 model UserSession {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
   userId String @db.ObjectId
 
   /// Session Data
-  sessionToken String  @unique // JWT token hash or session ID
+  sessionToken String  @unique // JWT token hash (SHA-256)
   refreshToken String? @unique // For refresh token rotation
 
-  /// Metadata
-  ipAddress         String?
-  userAgent         String?
-  deviceFingerprint String?
+  /// Device Information (parsed from User-Agent)
+  deviceType     String? // mobile, tablet, desktop, smarttv
+  deviceVendor   String? // Apple, Samsung, Huawei
+  deviceModel    String? // iPhone, Galaxy S23, Pixel 8
+  osName         String? // iOS, Android, Windows, macOS
+  osVersion      String? // 17.0, 14, 10
+  browserName    String? // Safari, Chrome, Firefox
+  browserVersion String?
+  isMobile       Boolean @default(false)
+  userAgent      String? // Raw user agent string
+
+  /// Network & Location
+  ipAddress String?
+  country   String? // ISO 3166-1 alpha-2 (FR, US)
+  city      String?
+  location  String? // "Paris, France"
+  latitude  Float?
+  longitude Float?
+  timezone  String? // IANA timezone
+
+  /// Security
+  deviceFingerprint String? // Optional browser fingerprint
+  isTrusted         Boolean @default(false) // User-marked as trusted device
+  isCurrentSession  Boolean @default(false) // Marked during response
 
   /// Lifecycle
   expiresAt         DateTime
   isValid           Boolean   @default(true)
   invalidatedAt     DateTime?
-  invalidatedReason String? // "PASSWORD_RESET" | "LOGOUT" | "ADMIN_ACTION" | "SECURITY_BREACH"
+  invalidatedReason String? // "LOGOUT" | "PASSWORD_RESET" | "USER_REVOKED" | "ADMIN_ACTION" | "EXPIRED" | "SECURITY_BREACH"
 
   createdAt      DateTime @default(now())
   lastActivityAt DateTime @default(now())

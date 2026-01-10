@@ -4,7 +4,7 @@
  */
 
 // Import pour AnonymousParticipant
-import type { AnonymousParticipant } from './anonymous';
+import type { AnonymousParticipant } from './anonymous.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -17,7 +17,7 @@ import type {
   CallEndedEvent,
   CallMediaToggleEvent,
   CallError
-} from './video-call';
+} from './video-call.js';
 
 // ===== CONSTANTES D'ÉVÉNEMENTS =====
 

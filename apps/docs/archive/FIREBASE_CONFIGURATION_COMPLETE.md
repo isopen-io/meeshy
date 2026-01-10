@@ -57,7 +57,7 @@ Maintenant :
 
 ### Étape 2 : Ajouter à .env.local (2 min)
 
-1. **Ouvrir** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local`
+1. **Ouvrir** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local`
 2. **Copier-coller** le bloc Firebase (voir template)
 3. **Remplacer** les valeurs par les vôtres
 4. **Sauvegarder**

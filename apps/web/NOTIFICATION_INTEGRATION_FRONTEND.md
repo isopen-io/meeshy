@@ -43,7 +43,7 @@ L'application **DOIT** démarrer même si Firebase n'est pas configuré. Le syst
 
 ### 1. Service de Vérification Firebase
 
-**Fichier:** `/frontend/utils/firebase-availability-checker.ts`
+**Fichier:** `/apps/web/utils/firebase-availability-checker.ts`
 
 **Responsabilité:**
 - Vérifie Firebase **UNE SEULE FOIS** au démarrage
@@ -68,7 +68,7 @@ firebaseChecker.isBadgeEnabled();  // Badges activés ?
 
 ### 2. Hook d'Initialisation
 
-**Fichier:** `/frontend/hooks/use-firebase-init.ts`
+**Fichier:** `/apps/web/hooks/use-firebase-init.ts`
 
 **Utilisation:**
 ```typescript
@@ -91,7 +91,7 @@ function MyComponent() {
 
 ### 3. Provider d'Initialisation
 
-**Fichier:** `/frontend/components/providers/FirebaseInitializer.tsx`
+**Fichier:** `/apps/web/components/providers/FirebaseInitializer.tsx`
 
 **Utilisation dans Layout:**
 ```tsx
@@ -116,7 +116,7 @@ export default function RootLayout({ children }) {
 
 ### 1. FCM Manager
 
-**Fichier:** `/frontend/utils/fcm-manager.ts`
+**Fichier:** `/apps/web/utils/fcm-manager.ts`
 
 **Modifications:**
 - Import de `firebaseChecker`
@@ -138,7 +138,7 @@ public async initialize(): Promise<boolean> {
 
 ### 2. PWA Badge Manager
 
-**Fichier:** `/frontend/utils/pwa-badge.ts`
+**Fichier:** `/apps/web/utils/pwa-badge.ts`
 
 **Modifications:**
 - Vérification `firebaseChecker.isBadgeEnabled()` avant chaque opération
@@ -157,7 +157,7 @@ public async setBadgeCount(count: number): Promise<boolean> {
 
 ### 3. Hook FCM Notifications
 
-**Fichier:** `/frontend/hooks/use-fcm-notifications.ts`
+**Fichier:** `/apps/web/hooks/use-fcm-notifications.ts`
 
 **Modifications:**
 - Sortie précoce si Firebase non disponible
@@ -180,7 +180,7 @@ useEffect(() => {
 
 ### 4. Notification Store (Zustand)
 
-**Fichier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier:** `/apps/web/stores/notification-store-v2.ts`
 
 **Modifications:**
 - Toujours initialiser WebSocket
@@ -206,7 +206,7 @@ initialize: async () => {
 
 ### 5. Firebase Config
 
-**Fichier:** `/frontend/firebase-config.ts`
+**Fichier:** `/apps/web/firebase-config.ts`
 
 **Modifications:**
 - Ajout de `getFirebaseApp()` avec vérification
@@ -225,7 +225,7 @@ export function getFirebaseApp(): FirebaseApp | null {
 
 ### 6. Service Worker
 
-**Fichier:** `/frontend/public/firebase-messaging-sw.js`
+**Fichier:** `/apps/web/public/firebase-messaging-sw.js`
 
 **Modifications:**
 - Try/catch autour de `importScripts()`
@@ -252,7 +252,7 @@ if (firebaseLoaded && config.apiKey) {
 
 ### 7. Composants UI
 
-**Fichier:** `/frontend/components/notifications-v2/NotificationPermissionPrompt.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationPermissionPrompt.tsx`
 
 **Modifications:**
 - Retourne `null` si Firebase non disponible

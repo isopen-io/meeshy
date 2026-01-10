@@ -28,10 +28,10 @@ Toutes les améliorations de sécurité et qualité frontend recommandées par l
 
 | # | Fichier | LOC | Fonctionnalités | Status |
 |---|---------|-----|----------------|--------|
-| 1 | `/frontend/utils/secure-storage.ts` | 350 | Encryption AES-256-GCM, TTL auto, sanitization | ✅ |
-| 2 | `/frontend/utils/xss-protection.ts` | 450 | Sanitization DOMPurify, validation URLs, XSS detection | ✅ |
-| 3 | `/frontend/utils/socket-validator.ts` | 420 | Validation Zod, sanitization Socket.IO events | ✅ |
-| 4 | `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx` | 220 | Error boundary React, retry, logs | ✅ |
+| 1 | `/apps/web/utils/secure-storage.ts` | 350 | Encryption AES-256-GCM, TTL auto, sanitization | ✅ |
+| 2 | `/apps/web/utils/xss-protection.ts` | 450 | Sanitization DOMPurify, validation URLs, XSS detection | ✅ |
+| 3 | `/apps/web/utils/socket-validator.ts` | 420 | Validation Zod, sanitization Socket.IO events | ✅ |
+| 4 | `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx` | 220 | Error boundary React, retry, logs | ✅ |
 
 **Total Utilitaires:** 1,440 LOC
 
@@ -39,8 +39,8 @@ Toutes les améliorations de sécurité et qualité frontend recommandées par l
 
 | # | Fichier | LOC | Coverage Target | Status |
 |---|---------|-----|----------------|--------|
-| 1 | `/frontend/utils/__tests__/secure-storage.test.ts` | 300 | 90% | ✅ |
-| 2 | `/frontend/utils/__tests__/xss-protection.test.ts` | 300 | 90% | ✅ |
+| 1 | `/apps/web/utils/__tests__/secure-storage.test.ts` | 300 | 90% | ✅ |
+| 2 | `/apps/web/utils/__tests__/xss-protection.test.ts` | 300 | 90% | ✅ |
 
 **Total Tests:** 600 LOC
 
@@ -48,10 +48,10 @@ Toutes les améliorations de sécurité et qualité frontend recommandées par l
 
 | # | Fichier | LOC | Description | Status |
 |---|---------|-----|------------|--------|
-| 1 | `/frontend/next.config.security.js` | 80 | CSP headers, security headers | ✅ |
-| 2 | `/frontend/scripts/install-security-dependencies.sh` | 150 | Installation auto dépendances | ✅ |
-| 3 | `/frontend/vitest.config.ts` | 50 | Config tests unitaires | ✅ |
-| 4 | `/frontend/tests/setup.ts` | 70 | Setup tests (mocks, globals) | ✅ |
+| 1 | `/apps/web/next.config.security.js` | 80 | CSP headers, security headers | ✅ |
+| 2 | `/apps/web/scripts/install-security-dependencies.sh` | 150 | Installation auto dépendances | ✅ |
+| 3 | `/apps/web/vitest.config.ts` | 50 | Config tests unitaires | ✅ |
+| 4 | `/apps/web/tests/setup.ts` | 70 | Setup tests (mocks, globals) | ✅ |
 
 **Total Config:** 350 LOC
 
@@ -59,10 +59,10 @@ Toutes les améliorations de sécurité et qualité frontend recommandées par l
 
 | # | Fichier | Lignes | Description | Status |
 |---|---------|--------|------------|--------|
-| 1 | `/frontend/README_FRONTEND_IMPROVEMENTS.md` | 1,500 | Documentation complète avec exemples | ✅ |
-| 2 | `/frontend/INTEGRATION_CHECKLIST.md` | 800 | Checklist 10 phases détaillée | ✅ |
+| 1 | `/apps/web/README_FRONTEND_IMPROVEMENTS.md` | 1,500 | Documentation complète avec exemples | ✅ |
+| 2 | `/apps/web/INTEGRATION_CHECKLIST.md` | 800 | Checklist 10 phases détaillée | ✅ |
 | 3 | `/FRONTEND_IMPROVEMENTS_SUMMARY.md` | 200 | Résumé exécutif | ✅ |
-| 4 | `/frontend/SECURITY_IMPROVEMENTS_INDEX.md` | 250 | Index navigation rapide | ✅ |
+| 4 | `/apps/web/SECURITY_IMPROVEMENTS_INDEX.md` | 250 | Index navigation rapide | ✅ |
 
 **Total Documentation:** 2,750 lignes
 

@@ -70,45 +70,6 @@ struct EncryptedPayload: Codable, Hashable, Sendable {
     }
 }
 
-// MARK: - Encryption Mode
-
-/// Encryption mode for a conversation
-enum EncryptionMode: String, Codable, CaseIterable, Sendable {
-    /// End-to-end encryption - content encrypted client-side, server cannot read
-    case e2ee
-
-    /// Server-side encryption - content encrypted at rest on server
-    case server
-
-    /// Hybrid mode - E2E encryption with server backup
-    case hybrid
-
-    /// No encryption (plaintext)
-    case none
-
-    var displayName: String {
-        switch self {
-        case .e2ee: return "End-to-End Encrypted"
-        case .server: return "Server Encrypted"
-        case .hybrid: return "Hybrid Encryption"
-        case .none: return "No Encryption"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .e2ee: return "lock.shield.fill"
-        case .server: return "lock.fill"
-        case .hybrid: return "lock.rotation"
-        case .none: return "lock.open"
-        }
-    }
-
-    var isEncrypted: Bool {
-        self != .none
-    }
-}
-
 // MARK: - Encryption Errors
 
 enum E2EEncryptionError: LocalizedError {

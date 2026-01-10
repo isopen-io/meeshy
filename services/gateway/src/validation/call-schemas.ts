@@ -6,20 +6,22 @@
  */
 
 import { z } from 'zod';
+import {
+  callTypeEnum,
+  CommonSchemas,
+  type VCallType,
+} from '@meeshy/shared/utils/validation';
 
 /**
  * Validates MongoDB ObjectId format (24 hex characters)
+ * Re-exported from shared CommonSchemas.mongoId
  */
-const objectIdSchema = z
-  .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid ObjectId format - must be 24 hex characters');
+const objectIdSchema = CommonSchemas.mongoId;
 
 /**
- * Call type enum
+ * Call type enum - re-exported from shared
  */
-const callTypeSchema = z.enum(['video', 'audio'], {
-  errorMap: () => ({ message: 'Call type must be either "video" or "audio"' })
-});
+const callTypeSchema = callTypeEnum;
 
 /**
  * Call settings schema

@@ -1,11 +1,23 @@
-// Import des types partagés
-import type { 
-  User, 
-  Conversation, 
-  Message, 
-  LanguageCode 
+/**
+ * Types Frontend Meeshy - Types spécifiques au frontend
+ *
+ * IMPORTANT: Ce fichier ne doit contenir QUE des types spécifiques au frontend.
+ * Tous les types partagés doivent être importés de @meeshy/shared/types
+ */
+
+// Import des types partagés nécessaires
+import type {
+  User,
+  Conversation,
+  Message,
+  LanguageCode
 } from '@meeshy/shared/types';
 
+// ===== TYPES SPÉCIFIQUES AU FRONTEND =====
+
+/**
+ * DTO pour création d'utilisateur via lien de conversation
+ */
 export interface CreateUserDto {
   firstName: string;
   lastName: string;
@@ -16,45 +28,9 @@ export interface CreateUserDto {
   conversationLinkId: string;
 }
 
-// ConversationLink est maintenant importé depuis @shared/types
-
-// Conversation est maintenant importé depuis @shared/types
-
-// Message est maintenant importé depuis @shared/types
-
-// TranslationCache est maintenant importé depuis @shared/types (MessageTranslationCache)
-
-// TranslatedMessage est maintenant importé depuis @shared/types
-
-export interface ChatRoom {
-  id: string;
-  participantIds: string[];
-  messages: Message[];
-  createdAt: Date;
-}
-
-// SocketResponse est maintenant importé depuis @shared/types
-
-export interface TranslationModel {
-  name: 'NLLB';
-  isLoaded: boolean;
-  model?: unknown;
-}
-
-// LanguageCode est maintenant importé depuis @shared/types
-
-// SUPPORTED_LANGUAGES is now imported from @shared/types to avoid conflicts
-
-// Langues d'interface supportées (avec traductions complètes dans /frontend/locales/)
-// IMPORTANT: Cette liste doit correspondre exactement aux dossiers dans /frontend/locales/
-// Ne jamais ajouter de langue ici sans avoir les fichiers de traduction complets dans locales/
-export const INTERFACE_LANGUAGES: LanguageCode[] = [
-  { code: 'en', name: 'English', flag: '🇺🇸', translateText: 'Translate to English' },
-  { code: 'es', name: 'Español', flag: '🇪🇸', translateText: 'Traducir al español' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷', translateText: 'Traduire en français' },
-  { code: 'pt', name: 'Português', flag: '🇵🇹', translateText: 'Traduzir para português' },
-];
-
+/**
+ * Réponse lors de la jointure d'une conversation
+ */
 export interface JoinConversationResponse {
   user: User;
   conversation: Conversation;
@@ -62,6 +38,9 @@ export interface JoinConversationResponse {
   existingUserFound?: boolean;
 }
 
+/**
+ * État global de l'application frontend
+ */
 export interface AppState {
   currentUser?: User;
   conversations: Conversation[];
@@ -69,40 +48,26 @@ export interface AppState {
   isAuthenticated: boolean;
 }
 
-export interface Group {
+/**
+ * Room de chat pour Socket.IO (frontend-specific)
+ */
+export interface ChatRoom {
   id: string;
-  identifier?: string;
-  name: string;
-  description?: string;
-  avatar?: string | null;
-  isPrivate: boolean;
-  maxMembers?: number;
-  createdBy: string;
-  members: any[]; // Array of member objects
-  conversations: string[];
-  isActive: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  creator?: {
-    id: string;
-    username: string;
-    displayName: string;
-    avatar?: string | null;
-  };
-  _count?: {
-    members: number;
-    Conversation: number;
-  };
+  participantIds: string[];
+  messages: Message[];
+  createdAt: Date;
 }
 
-export interface Notification {
-  id: string;
-  userId: string;
-  type: 'message' | 'group_invite' | 'conversation_invite' | 'system' | 'translation_error' | 'model_update' | 'user_joined' | 'user_left' | 'typing';
-  title: string;
-  message: string;
-  isRead: boolean;
-  data?: Record<string, unknown>;
-  createdAt: Date;
-  expiresAt?: Date;
-}
+// ===== CONSTANTES FRONTEND =====
+
+/**
+ * Langues d'interface supportées (avec traductions complètes dans /apps/web/locales/)
+ * IMPORTANT: Cette liste doit correspondre exactement aux dossiers dans /apps/web/locales/
+ * Ne jamais ajouter de langue ici sans avoir les fichiers de traduction complets dans locales/
+ */
+export const INTERFACE_LANGUAGES: LanguageCode[] = [
+  { code: 'en', name: 'English', flag: '🇺🇸', translateText: 'Translate to English' },
+  { code: 'es', name: 'Español', flag: '🇪🇸', translateText: 'Traducir al español' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷', translateText: 'Traduire en français' },
+  { code: 'pt', name: 'Português', flag: '🇵🇹', translateText: 'Traduzir para português' },
+];

@@ -34,7 +34,7 @@ Suppression de `overflow-hidden` + ajout de `min-w-0` + utilisation de `overflow
 ## CHANGEMENTS APPLIQUÉS
 
 ### Fichier Modifié
-`/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/attachments/AttachmentCarousel.tsx`
+`/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/attachments/AttachmentCarousel.tsx`
 
 ### Lignes Modifiées
 **520-587**

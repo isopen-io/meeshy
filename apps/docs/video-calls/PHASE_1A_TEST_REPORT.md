@@ -108,7 +108,7 @@ This report documents the comprehensive test suite created for Phase 1A (P2P Vid
 ### 2. Test Utilities and Mocks
 
 #### ✅ Mock Media Stream Utilities
-**File:** `/frontend/__tests__/utils/mock-media-stream.ts`
+**File:** `/apps/web/__tests__/utils/mock-media-stream.ts`
 
 **Implemented Functions:**
 - `createMockVideoStream()` - Generates mock video from canvas
@@ -127,7 +127,7 @@ This report documents the comprehensive test suite created for Phase 1A (P2P Vid
 **Usage:** These utilities enable testing WebRTC functionality without requiring actual hardware access.
 
 #### ✅ Test Data Fixtures
-**File:** `/frontend/__tests__/fixtures/calls.ts`
+**File:** `/apps/web/__tests__/fixtures/calls.ts`
 
 **Provided Data:**
 - Mock users (Alice, Bob, Charlie)
@@ -237,7 +237,7 @@ The following test files have been designed and documented but require implement
 **Recommendation:** Use socket.io-client with mock server
 
 #### 🔄 Frontend Unit Tests - Call Store
-**File:** `/frontend/__tests__/stores/call-store.test.ts` (Template provided in test plan)
+**File:** `/apps/web/__tests__/stores/call-store.test.ts` (Template provided in test plan)
 
 **Scope:**
 - Store initialization
@@ -249,7 +249,7 @@ The following test files have been designed and documented but require implement
 **Recommendation:** Use @testing-library/react hooks testing
 
 #### 🔄 Frontend E2E Tests
-**File:** `/frontend/e2e/video-calls.spec.ts` (Template provided in test plan)
+**File:** `/apps/web/e2e/video-calls.spec.ts` (Template provided in test plan)
 
 **Scope:**
 - Happy path: Initiate → Accept → Talk → Hang up
@@ -511,8 +511,8 @@ jobs:
 3. `/docs/video-calls/PHASE_1A_TEST_REPORT.md` (this file)
 
 ### Test Utilities
-4. `/frontend/__tests__/utils/mock-media-stream.ts` (300+ lines)
-5. `/frontend/__tests__/fixtures/calls.ts` (400+ lines)
+4. `/apps/web/__tests__/utils/mock-media-stream.ts` (300+ lines)
+5. `/apps/web/__tests__/fixtures/calls.ts` (400+ lines)
 
 ### Test Implementations
 6. `/gateway/src/__tests__/call-service.test.ts` (900+ lines, 25+ tests)

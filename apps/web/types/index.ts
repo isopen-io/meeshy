@@ -23,7 +23,12 @@ import type {
 export * from '@meeshy/shared/types';
 
 // Export des types spécifiques frontend
-export type { CreateUserDto, ChatRoom } from './frontend';
+export type {
+  CreateUserDto,
+  ChatRoom,
+  JoinConversationResponse,
+  AppState
+} from './frontend';
 
 // Export des constantes spécifiques frontend
 export { INTERFACE_LANGUAGES } from './frontend';
@@ -189,16 +194,8 @@ export interface I18nConfig {
   messages: Record<string, Record<string, string>>;
 }
 
-// User Language Configuration Interface
-export interface UserLanguageConfig {
-  systemLanguage: string;              // Default: "fr"
-  regionalLanguage: string;            // Default: "fr"
-  customDestinationLanguage?: string;  // Optional
-  autoTranslateEnabled: boolean;       // Default: true
-  translateToSystemLanguage: boolean;  // Default: true
-  translateToRegionalLanguage: boolean; // Default: false
-  useCustomDestination: boolean;       // Default: false
-}
+// UserLanguageConfig est importé depuis @meeshy/shared/types via le wildcard export
+// Ne pas redéfinir ici - utiliser celui de shared/types/socketio-events.ts
 
 // Types pour les erreurs frontend
 export interface FrontendError {

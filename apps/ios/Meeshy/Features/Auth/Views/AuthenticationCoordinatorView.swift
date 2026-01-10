@@ -16,6 +16,7 @@ struct AuthenticationCoordinatorView: View {
     @State private var currentView: AuthView = .login
     @State private var showTwoFactor = false
     @State private var showForgotPassword = false
+    @State private var showNewOnboarding = false
 
     // MARK: - Auth View State
 
@@ -51,6 +52,12 @@ struct AuthenticationCoordinatorView: View {
             }
             .sheet(isPresented: $showForgotPassword) {
                 ForgotPasswordView()
+            }
+            .fullScreenCover(isPresented: $showNewOnboarding) {
+                OnboardingFlowView {
+                    // Registration completed successfully
+                    showNewOnboarding = false
+                }
             }
         }
     }
@@ -103,20 +110,19 @@ struct AuthenticationCoordinatorView: View {
             }
 
             Button {
-                withAnimation {
-                    currentView = .register
-                }
+                // Open the new animated onboarding flow
+                showNewOnboarding = true
             } label: {
-                Text("Register")
+                Text("S'inscrire")
                     .font(.headline)
-                    .foregroundColor(currentView == .register ? .meeshyPrimary : .meeshyTextSecondary)
+                    .foregroundColor(.meeshyTextSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
                         VStack(spacing: 0) {
                             Spacer()
                             Rectangle()
-                                .fill(currentView == .register ? Color.meeshyPrimary : Color.clear)
+                                .fill(Color.clear)
                                 .frame(height: 2)
                         }
                     )
@@ -129,20 +135,15 @@ struct AuthenticationCoordinatorView: View {
 
     @ViewBuilder
     private var currentAuthView: some View {
-        switch currentView {
-        case .login:
-            LoginView()
-                .environmentObject(loginViewModel)
-                .onTapGesture(count: 2) {
-                    // Quick dev login on double tap
-                    #if DEBUG
-                    // loginViewModel.quickDevLogin()
-                    #endif
-                }
-        case .register:
-            RegisterView()
-                .environmentObject(registerViewModel)
-        }
+        // Now only showing LoginView since Register opens the new onboarding flow
+        LoginView()
+            .environmentObject(loginViewModel)
+            .onTapGesture(count: 2) {
+                // Quick dev login on double tap
+                #if DEBUG
+                // loginViewModel.quickDevLogin()
+                #endif
+            }
     }
 }
 

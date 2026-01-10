@@ -14,29 +14,19 @@
  */
 
 import { z } from 'zod';
+import {
+  notificationTypeEnum,
+  notificationPriorityEnum,
+  type VNotificationType,
+  type VNotificationPriority,
+} from '@meeshy/shared/utils/validation';
 
 // ============================================
-// ENUMS - Strict Whitelists
+// ENUMS - Re-exported from shared
 // ============================================
 
-export const NotificationTypeEnum = z.enum([
-  'new_message',
-  'new_conversation_direct',
-  'new_conversation_group',
-  'message_reply',
-  'member_joined',
-  'contact_request',
-  'contact_accepted',
-  'user_mentioned',
-  'message_reaction',
-  'missed_call',
-  'system',
-  'new_conversation',
-  'message_edited'
-]);
-
-export const NotificationPriorityEnum = z.enum(['low', 'normal', 'high', 'urgent']);
-
+export const NotificationTypeEnum = notificationTypeEnum;
+export const NotificationPriorityEnum = notificationPriorityEnum;
 export const NotificationStatusEnum = z.enum(['pending', 'delivered', 'read', 'failed']);
 
 // ============================================
@@ -294,8 +284,8 @@ export type MarkAsReadParam = z.infer<typeof MarkAsReadParamSchema>;
 export type DeleteNotificationParam = z.infer<typeof DeleteNotificationParamSchema>;
 export type BatchMarkAsReadInput = z.infer<typeof BatchMarkAsReadSchema>;
 export type ConversationNotificationsParam = z.infer<typeof ConversationNotificationsParamSchema>;
-export type NotificationType = z.infer<typeof NotificationTypeEnum>;
-export type NotificationPriority = z.infer<typeof NotificationPriorityEnum>;
+export type NotificationType = VNotificationType;
+export type NotificationPriority = VNotificationPriority;
 
 // ============================================
 // VALIDATION MIDDLEWARE FACTORY

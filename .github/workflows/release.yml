@@ -121,16 +121,16 @@ jobs:
       matrix:
         include:
           - service: web
-            context: ./apps/web
-            dockerfile: ./apps/web/Dockerfile
+            context: .
+            dockerfile: ./infrastructure/docker/images/web/Dockerfile
             image: meeshy-frontend
           - service: gateway
-            context: ./services/gateway
-            dockerfile: ./services/gateway/Dockerfile
+            context: .
+            dockerfile: ./infrastructure/docker/images/gateway/Dockerfile
             image: meeshy-gateway
           - service: translator
-            context: ./services/translator
-            dockerfile: ./services/translator/Dockerfile
+            context: .
+            dockerfile: ./infrastructure/docker/images/translator/Dockerfile
             image: meeshy-translator
 
     steps:
@@ -139,10 +139,8 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.tag }}
 
-      - name: Prepare shared
-        run: |
-          mkdir -p ${{ matrix.context }}/shared
-          cp -r packages/shared/* ${{ matrix.context }}/shared/ 2>/dev/null || true
+      # Note: Shared package is copied directly by Dockerfiles from packages/shared/
+      # since context is now the monorepo root
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

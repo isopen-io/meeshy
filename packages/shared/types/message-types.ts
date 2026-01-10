@@ -5,8 +5,8 @@
  * 2. UIMessage - Messages avec détails visuels pour BubbleMessage
  */
 
-import type { SocketIOUser as User, MessageType } from './socketio-events';
-import type { AnonymousParticipant } from './anonymous';
+import type { SocketIOUser as User, MessageType } from './socketio-events.js';
+import type { AnonymousParticipant } from './anonymous.js';
 
 // ===== 1. MESSAGES GATEWAY (API/Backend) =====
 

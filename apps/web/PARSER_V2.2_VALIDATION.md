@@ -435,7 +435,7 @@ const highlightCode = async (code: string, lang: string) => {
 
 ## Status
 
-**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/markdown-parser-v2.2-optimized.ts`
+**File:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/markdown-parser-v2.2-optimized.ts`
 
 **Lines of Code:** ~1150 (vs V2: ~2000, V1: ~900)
 

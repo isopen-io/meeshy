@@ -12,8 +12,8 @@
 Le parser markdown V2 a été **entièrement sécurisé et optimisé** suite aux 3 reviews expertes (Code Review, Security Review, Architecture Review).
 
 **Fichiers livrés:**
-1. ✅ `/frontend/services/markdown-parser-v2-fixed.ts` - Code production-ready (1710 lignes)
-2. ✅ `/frontend/PARSER_V2_FIXES_CHANGELOG.md` - Documentation complète des corrections
+1. ✅ `/apps/web/services/markdown-parser-v2-fixed.ts` - Code production-ready (1710 lignes)
+2. ✅ `/apps/web/PARSER_V2_FIXES_CHANGELOG.md` - Documentation complète des corrections
 3. ✅ Compilation TypeScript validée sans erreurs
 
 ---
@@ -254,20 +254,20 @@ try { ... } catch (error) {
 ## 📚 Documentation Livrée
 
 ### 1. Code Source (1710 lignes)
-- `/frontend/services/markdown-parser-v2-fixed.ts`
+- `/apps/web/services/markdown-parser-v2-fixed.ts`
 - Production-ready, commenté, TypeScript strict
 - Toutes les classes exportées
 - Gestion d'erreurs complète
 
 ### 2. Changelog Détaillé (500+ lignes)
-- `/frontend/PARSER_V2_FIXES_CHANGELOG.md`
+- `/apps/web/PARSER_V2_FIXES_CHANGELOG.md`
 - Chaque correction expliquée (avant/après)
 - 60+ exemples de tests
 - Migration guide complet
 - Métriques de qualité
 
 ### 3. Ce Résumé Exécutif
-- `/frontend/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
+- `/apps/web/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
 - Vue d'ensemble pour décideurs
 - Plan de déploiement
 - Bénéfices business

@@ -14,7 +14,7 @@ import type {
   BabyVoiceParams,
   DemonVoiceParams,
   BackSoundParams,
-} from './video-call';
+} from './video-call.js';
 
 /**
  * Action effectuée sur un effet audio

@@ -49,7 +49,7 @@ The notification system contains **CRITICAL** and **HIGH** severity vulnerabilit
 ### [CRITICAL-001] - Cross-Site Scripting (XSS) in Notification Rendering
 
 **Location**:
-- `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications-v2/NotificationItem.tsx:176`
+- `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications-v2/NotificationItem.tsx:176`
 - `/Users/smpceo/Documents/Services/Meeshy/meeshy/gateway/src/services/NotificationService.ts:232-245`
 
 **Category**: OWASP A03:2021 - Injection
@@ -1144,8 +1144,8 @@ fastify.get('/notifications', {
 ### [CRITICAL-005] - Sensitive Data Exposure in localStorage
 
 **Location**:
-- `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/stores/notification-store-v2.ts:428-449`
-- `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-notifications-v2.ts:19-20` (Socket.IO config)
+- `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/stores/notification-store-v2.ts:428-449`
+- `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-notifications-v2.ts:19-20` (Socket.IO config)
 
 **Category**: OWASP A02:2021 - Cryptographic Failures
 **CWE**: CWE-312 - Cleartext Storage of Sensitive Information
@@ -1661,7 +1661,7 @@ fastify.post('/notifications/test', {
 
 ### [HIGH-002] - Socket.IO Authentication Bypass via Token Manipulation
 
-**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-notifications-v2.ts:97-104`
+**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-notifications-v2.ts:97-104`
 
 **Description**:
 Socket.IO authentication relies on client-provided token without server-side validation of token freshness or revocation status.
@@ -1930,7 +1930,7 @@ await fastify.prisma.notification.updateMany({
 
 ### [HIGH-006] - Insufficient WebSocket Message Validation
 
-**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-notifications-v2.ts:142-185`
+**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-notifications-v2.ts:142-185`
 
 **Description**:
 Socket.IO event handlers don't validate message structure, allowing malformed/malicious payloads.
@@ -2083,7 +2083,7 @@ fetch('/notifications/123/read', {
 
 ### [HIGH-008] - Weak Socket.IO Reconnection Allows Duplicate Connections
 
-**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-notifications-v2.ts:89-117`
+**Location**: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-notifications-v2.ts:89-117`
 
 **Description**:
 No enforcement of maximum connections per user, allowing resource exhaustion.

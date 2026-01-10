@@ -160,7 +160,7 @@ UTILITAIRES
 ### 3. FRONTEND (Next.js + React)
 
 ```
-/frontend/
+/apps/web/
 
 SERVICES LAYER (Communication)
 ├── services/

@@ -264,11 +264,11 @@ final class ChatViewModel: ObservableObject {
             let request = MessageSendRequest(
                 conversationId: conversationId,
                 content: content,
-                contentType: type,
+                messageType: type,
+                originalLanguage: detectedLanguage,
                 attachmentIds: attachmentIds,
                 replyToId: replyToId,
-                detectedLanguage: detectedLanguage,
-                sentiment: sentiment
+                localId: UUID().uuidString
             )
 
             let message = try await apiService.sendMessage(request)
@@ -323,27 +323,11 @@ final class ChatViewModel: ObservableObject {
 
         // Update message in list
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            var message = messages[index]
-            var reactions = message.reactions ?? []
+            var updatedMessage = messages[index]
+            var reactions = updatedMessage.reactions ?? []
             reactions.append(reaction)
-            message = Message(
-                id: message.id,
-                conversationId: message.conversationId,
-                senderId: message.senderId,
-                content: message.content,
-                contentType: message.contentType,
-                createdAt: message.createdAt,
-                updatedAt: message.updatedAt,
-                sender: message.sender,
-                attachments: message.attachments,
-                reactions: reactions,
-                replyTo: message.replyTo,
-                threadMessages: message.threadMessages,
-                isDeleted: message.isDeleted,
-                deletedAt: message.deletedAt,
-                metadata: message.metadata
-            )
-            messages[index] = message
+            updatedMessage.reactions = reactions
+            messages[index] = updatedMessage
         }
 
         chatLogger.info("ChatVM: Reaction added successfully")
@@ -356,27 +340,11 @@ final class ChatViewModel: ObservableObject {
 
         // Update message in list
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            var message = messages[index]
-            var reactions = message.reactions ?? []
+            var updatedMessage = messages[index]
+            var reactions = updatedMessage.reactions ?? []
             reactions.removeAll { $0.id == reactionId }
-            message = Message(
-                id: message.id,
-                conversationId: message.conversationId,
-                senderId: message.senderId,
-                content: message.content,
-                contentType: message.contentType,
-                createdAt: message.createdAt,
-                updatedAt: message.updatedAt,
-                sender: message.sender,
-                attachments: message.attachments,
-                reactions: reactions,
-                replyTo: message.replyTo,
-                threadMessages: message.threadMessages,
-                isDeleted: message.isDeleted,
-                deletedAt: message.deletedAt,
-                metadata: message.metadata
-            )
-            messages[index] = message
+            updatedMessage.reactions = reactions
+            messages[index] = updatedMessage
         }
 
         chatLogger.info("ChatVM: Reaction removed successfully")
@@ -385,7 +353,7 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Typing Indicator
 
     func startTyping() {
-        webSocketService.sendTypingStart(conversationId: conversationId)
+        webSocketService.startTyping(conversationId: conversationId)
 
         // Reset timer
         typingTimer?.invalidate()
@@ -397,65 +365,20 @@ final class ChatViewModel: ObservableObject {
     func stopTyping() {
         typingTimer?.invalidate()
         typingTimer = nil
-        webSocketService.sendTypingStop(conversationId: conversationId)
+        webSocketService.stopTyping(conversationId: conversationId)
     }
 
     // MARK: - Private: WebSocket Setup
 
     private func setupWebSocketListeners() {
-        // Listen for new messages
-        webSocketService.messagePublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                guard let self = self, message.conversationId == self.conversationId else { return }
-
-                // Add new message if not already present
-                if !self.messages.contains(where: { $0.id == message.id }) {
-                    self.messages.insert(message, at: 0)
-                    chatLogger.info("ChatVM: Received new message via WebSocket: \(message.id)")
-                }
-            }
-            .store(in: &cancellables)
-
-        // Listen for message updates
-        webSocketService.messageUpdatePublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] updatedMessage in
-                guard let self = self else { return }
-
-                if let index = self.messages.firstIndex(where: { $0.id == updatedMessage.id }) {
-                    self.messages[index] = updatedMessage
-                    chatLogger.info("ChatVM: Message updated via WebSocket: \(updatedMessage.id)")
-                }
-            }
-            .store(in: &cancellables)
-
-        // Listen for message deletions
-        webSocketService.messageDeletePublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] messageId in
-                guard let self = self else { return }
-
-                self.messages.removeAll { $0.id == messageId }
-                chatLogger.info("ChatVM: Message deleted via WebSocket: \(messageId)")
-            }
-            .store(in: &cancellables)
-
-        // Listen for typing indicators
-        webSocketService.typingPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] (convId, userId, isTyping) in
-                guard let self = self, convId == self.conversationId else { return }
-
-                if isTyping {
-                    if !self.typingUsers.contains(userId) {
-                        self.typingUsers.append(userId)
-                    }
-                } else {
-                    self.typingUsers.removeAll { $0 == userId }
-                }
-            }
-            .store(in: &cancellables)
+        // TODO: Implement WebSocket event listeners using webSocketService.on() pattern
+        // Example:
+        // webSocketService.on(EnvironmentConfig.SocketEvent.newMessage) { [weak self] data in
+        //     guard let self = self, let messageData = data.first as? [String: Any] else { return }
+        //     // Parse and handle new message
+        // }
+        //
+        // For now, messages are fetched via REST API and refreshed periodically
     }
 
     // MARK: - Cleanup

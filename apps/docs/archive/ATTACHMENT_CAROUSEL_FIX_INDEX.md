@@ -257,7 +257,7 @@ ATTACHMENT_CAROUSEL_FIX/
 ## FICHIERS MODIFIÉS (Code Source)
 
 ### Fichier Principal
-`/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/attachments/AttachmentCarousel.tsx`
+`/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/attachments/AttachmentCarousel.tsx`
 
 **Lignes modifiées** : 520-587
 

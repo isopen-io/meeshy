@@ -173,9 +173,9 @@ Cette suite de documents décrit l'architecture complète du système de statut 
 
 | Fichier | Description | Lignes | Complexité |
 |---------|-------------|--------|------------|
-| `/frontend/services/usersService.ts` | Zustand store, calcul statut, listeners Socket.IO | ~300 | Moyenne |
-| `/frontend/components/users/OnlineIndicator.tsx` | Indicateur visuel statut utilisateur | ~50 | Faible |
-| `/frontend/hooks/useRealtimeStatus.ts` | Hook React pour statut temps réel | ~40 | Faible |
+| `/apps/web/services/usersService.ts` | Zustand store, calcul statut, listeners Socket.IO | ~300 | Moyenne |
+| `/apps/web/components/users/OnlineIndicator.tsx` | Indicateur visuel statut utilisateur | ~50 | Faible |
+| `/apps/web/hooks/useRealtimeStatus.ts` | Hook React pour statut temps réel | ~40 | Faible |
 
 ### Shared Types
 

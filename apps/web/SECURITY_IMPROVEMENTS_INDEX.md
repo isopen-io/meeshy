@@ -23,7 +23,7 @@ Résumé de toutes les améliorations, statistiques, et prochaines étapes.
 ---
 
 ### 2. Documentation Complète
-**Fichier:** `/frontend/README_FRONTEND_IMPROVEMENTS.md`
+**Fichier:** `/apps/web/README_FRONTEND_IMPROVEMENTS.md`
 
 Guide complet de toutes les améliorations avec exemples de code et instructions détaillées.
 
@@ -45,7 +45,7 @@ Guide complet de toutes les améliorations avec exemples de code et instructions
 ---
 
 ### 3. Checklist d'Intégration Détaillée
-**Fichier:** `/frontend/INTEGRATION_CHECKLIST.md`
+**Fichier:** `/apps/web/INTEGRATION_CHECKLIST.md`
 
 Checklist phase par phase avec validations et tests.
 
@@ -70,7 +70,7 @@ Checklist phase par phase avec validations et tests.
 ## 🔐 Utilitaires de Sécurité Créés
 
 ### 1. Secure Storage
-**Fichier:** `/frontend/utils/secure-storage.ts`
+**Fichier:** `/apps/web/utils/secure-storage.ts`
 **LOC:** 350
 **Status:** ✅ Production-ready
 
@@ -90,12 +90,12 @@ const data = await SecureStorage.getSecure('key');
 SecureStorage.clearAll(); // Au logout
 ```
 
-**Tests:** `/frontend/utils/__tests__/secure-storage.test.ts`
+**Tests:** `/apps/web/utils/__tests__/secure-storage.test.ts`
 
 ---
 
 ### 2. XSS Protection
-**Fichier:** `/frontend/utils/xss-protection.ts`
+**Fichier:** `/apps/web/utils/xss-protection.ts`
 **LOC:** 450
 **Status:** ✅ Production-ready
 
@@ -116,7 +116,7 @@ const safe = sanitizeText('<script>alert(1)</script>'); // "alert(1)"
 const url = sanitizeUrl('javascript:alert(1)'); // null
 ```
 
-**Tests:** `/frontend/utils/__tests__/xss-protection.test.ts`
+**Tests:** `/apps/web/utils/__tests__/xss-protection.test.ts`
 
 **Protection contre:**
 - XSS via script tags
@@ -129,7 +129,7 @@ const url = sanitizeUrl('javascript:alert(1)'); // null
 ---
 
 ### 3. Socket.IO Validator
-**Fichier:** `/frontend/utils/socket-validator.ts`
+**Fichier:** `/apps/web/utils/socket-validator.ts`
 **LOC:** 420
 **Status:** ✅ Production-ready
 
@@ -157,14 +157,14 @@ const handler = createValidatedHandler<NotificationV2>(
 socket.on('notification', handler);
 ```
 
-**Tests:** À créer `/frontend/utils/__tests__/socket-validator.test.ts`
+**Tests:** À créer `/apps/web/utils/__tests__/socket-validator.test.ts`
 
 ---
 
 ## 🛡️ Composants de Sécurité
 
 ### 1. Error Boundary
-**Fichier:** `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx`
 **LOC:** 220
 **Status:** ✅ Production-ready
 
@@ -186,14 +186,14 @@ import NotificationErrorBoundary from '@/components/notifications-v2/Notificatio
 </NotificationErrorBoundary>
 ```
 
-**Tests:** À créer `/frontend/components/notifications-v2/__tests__/NotificationErrorBoundary.test.tsx`
+**Tests:** À créer `/apps/web/components/notifications-v2/__tests__/NotificationErrorBoundary.test.tsx`
 
 ---
 
 ## ⚙️ Configuration & Scripts
 
 ### 1. CSP Configuration
-**Fichier:** `/frontend/next.config.security.js`
+**Fichier:** `/apps/web/next.config.security.js`
 **LOC:** 80
 **Status:** ✅ Prêt à intégrer
 
@@ -218,7 +218,7 @@ module.exports = {
 ---
 
 ### 2. Installation Script
-**Fichier:** `/frontend/scripts/install-security-dependencies.sh`
+**Fichier:** `/apps/web/scripts/install-security-dependencies.sh`
 **LOC:** 150
 **Status:** ✅ Prêt à exécuter
 
@@ -241,7 +241,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 3. Vitest Configuration
-**Fichier:** `/frontend/vitest.config.ts`
+**Fichier:** `/apps/web/vitest.config.ts`
 **LOC:** 50
 **Status:** ✅ Auto-créé par script
 
@@ -254,7 +254,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 4. Test Setup
-**Fichier:** `/frontend/tests/setup.ts`
+**Fichier:** `/apps/web/tests/setup.ts`
 **LOC:** 70
 **Status:** ✅ Auto-créé par script
 
@@ -268,7 +268,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ## 🧪 Tests Créés
 
 ### 1. Secure Storage Tests
-**Fichier:** `/frontend/utils/__tests__/secure-storage.test.ts`
+**Fichier:** `/apps/web/utils/__tests__/secure-storage.test.ts`
 **LOC:** 300
 **Coverage Target:** 90%
 **Status:** ✅ Complet
@@ -283,7 +283,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 2. XSS Protection Tests
-**Fichier:** `/frontend/utils/__tests__/xss-protection.test.ts`
+**Fichier:** `/apps/web/utils/__tests__/xss-protection.test.ts`
 **LOC:** 300
 **Coverage Target:** 90%
 **Status:** ✅ Complet
@@ -299,7 +299,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 3. Socket Validator Tests
-**Fichier:** `/frontend/utils/__tests__/socket-validator.test.ts`
+**Fichier:** `/apps/web/utils/__tests__/socket-validator.test.ts`
 **Coverage Target:** 90%
 **Status:** ⚠️ À créer
 
@@ -314,7 +314,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 4. Store Tests
-**Fichier:** `/frontend/stores/__tests__/notification-store-v2.test.ts`
+**Fichier:** `/apps/web/stores/__tests__/notification-store-v2.test.ts`
 **Coverage Target:** 85%
 **Status:** ⚠️ À créer
 
@@ -328,7 +328,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 5. Hook Tests
-**Fichier:** `/frontend/hooks/__tests__/use-notifications-v2.test.ts`
+**Fichier:** `/apps/web/hooks/__tests__/use-notifications-v2.test.ts`
 **Coverage Target:** 75%
 **Status:** ⚠️ À créer
 
@@ -342,7 +342,7 @@ chmod +x ./scripts/install-security-dependencies.sh
 ---
 
 ### 6. Component Tests
-**Fichiers:** `/frontend/components/notifications-v2/__tests__/*.test.tsx`
+**Fichiers:** `/apps/web/components/notifications-v2/__tests__/*.test.tsx`
 **Coverage Target:** 70%
 **Status:** ⚠️ À créer
 
@@ -435,8 +435,8 @@ meeshy/
 
 ### Option 1: Guide Complet (30 min lecture)
 1. Lire `/FRONTEND_IMPROVEMENTS_SUMMARY.md` (5 min)
-2. Lire `/frontend/README_FRONTEND_IMPROVEMENTS.md` (20 min)
-3. Suivre `/frontend/INTEGRATION_CHECKLIST.md` (implémentation)
+2. Lire `/apps/web/README_FRONTEND_IMPROVEMENTS.md` (20 min)
+3. Suivre `/apps/web/INTEGRATION_CHECKLIST.md` (implémentation)
 
 ### Option 2: Quick Install (30 min)
 1. Installer dépendances:

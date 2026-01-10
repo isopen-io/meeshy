@@ -171,7 +171,7 @@ fastify.register(rateLimit, {
 
 ### Issue: useEffect dependencies causant re-renders infinis
 
-**Fichier:** `/frontend/hooks/use-notifications-v2.ts`
+**Fichier:** `/apps/web/hooks/use-notifications-v2.ts`
 
 #### Avant (Buggy):
 ```typescript
@@ -421,11 +421,11 @@ LOG_SAMPLE_RATE=0.01
 
 ### Issue: Import dynamiques pour workaround
 
-**Fichier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier:** `/apps/web/stores/notification-store-v2.ts`
 
 #### Solution: Extraire API Client
 
-**Nouveau fichier:** `/frontend/lib/api-client.ts`
+**Nouveau fichier:** `/apps/web/lib/api-client.ts`
 ```typescript
 /**
  * API Client générique sans dépendances au store
@@ -550,7 +550,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
 
 ### Issue: O(n log n) à chaque insertion si > MAX
 
-**Fichier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier:** `/apps/web/stores/notification-store-v2.ts`
 
 #### Avant (Inefficace):
 ```typescript
@@ -709,7 +709,7 @@ export const useNotificationStoreV2 = create<NotificationStore>()(
 
 ### Issue: Retry sans circuit breaker
 
-**Fichier:** `/frontend/services/notifications-v2.service.ts`
+**Fichier:** `/apps/web/services/notifications-v2.service.ts`
 
 #### Solution: Implémenter Circuit Breaker avec Opossum
 
@@ -1010,7 +1010,7 @@ describe('NotificationService', () => {
 
 ### Frontend Tests
 
-**Fichier:** `/frontend/stores/__tests__/notification-store-v2.test.ts`
+**Fichier:** `/apps/web/stores/__tests__/notification-store-v2.test.ts`
 
 ```typescript
 import { describe, it, expect, beforeEach, vi } from 'vitest';

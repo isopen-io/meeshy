@@ -35,7 +35,7 @@ Zone d'attachement de fichiers **NON défilable** horizontalement après ajout d
 
 #### A. Modification de la Structure CSS (lignes 520-587)
 
-**Fichier modifié** : `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/attachments/AttachmentCarousel.tsx`
+**Fichier modifié** : `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/attachments/AttachmentCarousel.tsx`
 
 **Changements clés** :
 1. Suppression `overflow-hidden` sur le parent

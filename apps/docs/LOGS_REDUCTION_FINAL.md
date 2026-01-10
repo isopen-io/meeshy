@@ -51,14 +51,14 @@ console.warn('⚠️ Avertissement important:', warning);
 
 ## 📝 Fichiers modifiés
 
-1. ✅ `/frontend/services/meeshy-socketio.service.ts`
-2. ✅ `/frontend/components/common/bubble-stream-page.tsx`
-3. ✅ `/frontend/components/common/bubble-message.tsx`
-4. ✅ `/frontend/components/common/messages-display.tsx`
-5. ✅ `/frontend/services/conversations.service.ts`
-6. ✅ `/frontend/lib/config.ts`
-7. ✅ `/frontend/components/WebVitalsReporter.tsx`
-8. ✅ Divers fichiers dans `/frontend/app/`
+1. ✅ `/apps/web/services/meeshy-socketio.service.ts`
+2. ✅ `/apps/web/components/common/bubble-stream-page.tsx`
+3. ✅ `/apps/web/components/common/bubble-message.tsx`
+4. ✅ `/apps/web/components/common/messages-display.tsx`
+5. ✅ `/apps/web/services/conversations.service.ts`
+6. ✅ `/apps/web/lib/config.ts`
+7. ✅ `/apps/web/components/WebVitalsReporter.tsx`
+8. ✅ Divers fichiers dans `/apps/web/app/`
 
 ## 🔧 Script créé
 
@@ -138,7 +138,7 @@ cd /Users/smpceo/Documents/Services/Meeshy/meeshy
 
 ### 1. Système de debug opt-in
 
-Créer `/frontend/utils/debug.ts` :
+Créer `/apps/web/utils/debug.ts` :
 ```typescript
 const DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true';
 

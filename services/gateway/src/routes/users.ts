@@ -5,58 +5,13 @@ import { logError } from '../utils/logger';
 import bcrypt from 'bcryptjs';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
 import { buildPaginationMeta } from '../utils/pagination';
-
-// Regex pour detecter les emojis
-// Cette regex detecte la plupart des emojis Unicode
-const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}]/u;
-
-function containsEmoji(text: string): boolean {
-  return EMOJI_REGEX.test(text);
-}
-
-// Schema de validation pour la mise a jour utilisateur
-const updateUserSchema = z.object({
-  firstName: z.string().min(1).optional().refine((val) => !val || !containsEmoji(val), {
-    message: 'Le prenom ne peut pas contenir d\'emojis'
-  }),
-  lastName: z.string().min(1).optional().refine((val) => !val || !containsEmoji(val), {
-    message: 'Le nom ne peut pas contenir d\'emojis'
-  }),
-  displayName: z.string().optional(), // Autorise les emojis dans displayName
-  email: z.string().email().optional(),
-  phoneNumber: z.union([z.string(), z.null()]).optional(),
-  bio: z.string().max(500).optional(),
-  systemLanguage: z.string().min(2).max(5).optional(),
-  regionalLanguage: z.string().min(2).max(5).optional(),
-  customDestinationLanguage: z.union([z.string().min(2).max(5), z.literal(''), z.null()]).optional(), // Accept empty string for "None"
-  autoTranslateEnabled: z.boolean().optional(),
-  translateToSystemLanguage: z.boolean().optional(),
-  translateToRegionalLanguage: z.boolean().optional(),
-  useCustomDestination: z.boolean().optional(),
-}).strict(); // Rejeter explicitement les champs inconnus pour eviter les erreurs silencieuses
-
-// Schema de validation pour l'upload d'avatar
-const updateAvatarSchema = z.object({
-  avatar: z.string().refine(
-    (data) => {
-      // Accepter soit les URLs (http/https) soit les data URLs (base64)
-      return data.startsWith('http://') ||
-             data.startsWith('https://') ||
-             data.startsWith('data:image/');
-    },
-    'Invalid avatar format. Must be a valid URL or base64 image'
-  )
-}).strict(); // Accepter uniquement le champ avatar
-
-// Schema de validation pour le changement de mot de passe
-const updatePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(1, 'New password is required'),
-  confirmPassword: z.string().min(1, 'Password confirmation is required')
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword']
-});
+import {
+  updateUserProfileSchema,
+  updateAvatarSchema,
+  updatePasswordSchema,
+  containsEmoji,
+  validateSchema
+} from '@meeshy/shared/utils/validation';
 
 /**
  * Validate and sanitize pagination parameters
@@ -566,7 +521,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       // Logger les donnees recues pour debug
       fastify.log.info(`[PROFILE_UPDATE] User ${userId} updating profile. Body keys: ${Object.keys(request.body || {}).join(', ')}`);
 
-      const body = updateUserSchema.parse(request.body);
+      const body = updateUserProfileSchema.parse(request.body);
 
       // Construire l'objet de mise a jour avec uniquement les champs fournis
       const updateData: any = {};

@@ -15,10 +15,10 @@ Participants : 5 membres (dont 1 anonymes)
 ## 🔍 Analyse du problème
 
 ### 1. **Fichier de traduction manquant**
-Le fichier `/frontend/locales/fr/joinPage.json` n'existait pas, causant un fallback vers l'anglais.
+Le fichier `/apps/web/locales/fr/joinPage.json` n'existait pas, causant un fallback vers l'anglais.
 
 ### 2. **Syntaxe d'interpolation incorrecte**
-- **Hook `useI18n`** (ligne 220 de `/frontend/hooks/use-i18n.ts`) utilise la regex : `/\{(\w+)\}/g`
+- **Hook `useI18n`** (ligne 220 de `/apps/web/hooks/use-i18n.ts`) utilise la regex : `/\{(\w+)\}/g`
   - ✅ Syntaxe attendue : `{count}`, `{username}`, `{size}` (simple accolades)
   
 - **Fichiers de traduction** utilisaient la syntaxe i18next :
@@ -30,23 +30,23 @@ La regex du hook ne reconnaissait pas `{{count}}` et laissait la valeur non remp
 ## ✅ Solution appliquée
 
 ### 1. Création du fichier français manquant
-**Fichier créé** : `/frontend/locales/fr/joinPage.json`
+**Fichier créé** : `/apps/web/locales/fr/joinPage.json`
 - Traduction complète de toutes les clés
 - Utilisation de la syntaxe `{count}` conforme au hook
 
 ### 2. Correction de la syntaxe d'interpolation
 
 #### Fichiers corrigés :
-1. **`/frontend/locales/en/joinPage.json`**
+1. **`/apps/web/locales/en/joinPage.json`**
    - `{{count}}` → `{count}`
    - `{{username}}` → `{username}`
 
-2. **`/frontend/locales/fr/attachments.json`**
+2. **`/apps/web/locales/fr/attachments.json`**
    - `{{size}}` → `{size}`
    - `{{count}}` → `{count}`
    - `{{length}}` → `{length}`
 
-3. **`/frontend/locales/en/attachments.json`**
+3. **`/apps/web/locales/en/attachments.json`**
    - `{{size}}` → `{size}`
    - `{{count}}` → `{count}`
    - `{{length}}` → `{length}`
@@ -65,19 +65,19 @@ Participants : 5 membres (dont 1 anonymes)
 
 ## 🔧 Fonctionnement de l'interpolation
 
-### Code dans `/frontend/app/join/[linkId]/page.tsx` (ligne 558) :
+### Code dans `/apps/web/app/join/[linkId]/page.tsx` (ligne 558) :
 ```typescript
 {t('includingAnonymous', { count: conversationLink.stats.anonymousCount })}
 ```
 
-### Traduction dans `/frontend/locales/fr/joinPage.json` :
+### Traduction dans `/apps/web/locales/fr/joinPage.json` :
 ```json
 {
   "includingAnonymous": "(dont {count} anonymes)"
 }
 ```
 
-### Mécanisme dans `/frontend/hooks/use-i18n.ts` (ligne 220) :
+### Mécanisme dans `/apps/web/hooks/use-i18n.ts` (ligne 220) :
 ```typescript
 if (params) {
   return value.replace(/\{(\w+)\}/g, (match, paramKey) => {

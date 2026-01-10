@@ -81,7 +81,7 @@ Looking at line 1648 in `bubble-stream-page.tsx`, `conversationId` IS passed cor
 
 ### Fix 1: Ensure BubbleStreamPage uses socket service directly
 
-**File**: `/home/user/meeshy/frontend/components/common/bubble-stream-page.tsx`
+**File**: `/home/user/meeshy/apps/web/components/common/bubble-stream-page.tsx`
 
 **Issue**: BubbleStreamPage uses `useSocketIOMessaging` hook which provides `startTyping` and `stopTyping`, but the `handleTyping` function (lines 1391-1462) calls these functions correctly.
 
@@ -89,7 +89,7 @@ Looking at line 1648 in `bubble-stream-page.tsx`, `conversationId` IS passed cor
 
 ### Fix 2: Fix Mobile Input Handling
 
-**File**: `/home/user/meeshy/frontend/components/common/message-composer.tsx`
+**File**: `/home/user/meeshy/apps/web/components/common/message-composer.tsx`
 
 **Issue**: Mobile input events might not trigger the typing logic.
 

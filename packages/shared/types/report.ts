@@ -2,7 +2,7 @@
  * Types pour le systeme de signalement (Report)
  */
 
-import type { PaginationMeta } from './api-responses';
+import type { PaginationMeta } from './api-responses.js';
 
 /**
  * Type de contenu signale

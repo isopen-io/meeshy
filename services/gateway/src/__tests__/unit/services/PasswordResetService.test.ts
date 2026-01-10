@@ -845,7 +845,7 @@ describe('PasswordResetService', () => {
         expect(mockPrisma.securityEvent.create).toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
-              eventType: '2FA_FAILED',
+              eventType: 'TWO_FA_FAILED',
               severity: 'HIGH'
             })
           })

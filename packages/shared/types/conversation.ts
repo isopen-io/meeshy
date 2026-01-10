@@ -3,9 +3,9 @@
  * Harmonisation Gateway ↔ Frontend
  */
 
-import type { SocketIOUser as User, MessageType } from './socketio-events';
-import type { AnonymousParticipant } from './anonymous';
-import type { Attachment } from './attachment';
+import type { SocketIOUser as User, MessageType } from './socketio-events.js';
+import type { AnonymousParticipant } from './anonymous.js';
+import type { Attachment } from './attachment.js';
 
 /**
  * Rôle utilisateur global (aligné avec schema.prisma User.role)
@@ -120,7 +120,7 @@ export interface AnonymousSenderInfo {
 export type MessageSource = 'user' | 'system' | 'ads' | 'app' | 'agent' | 'authority';
 
 // Import EncryptionMode from encryption.ts to avoid duplicate exports
-import type { EncryptionMode } from './encryption';
+import type { EncryptionMode } from './encryption.js';
 export type { EncryptionMode };
 
 /**
@@ -274,6 +274,12 @@ export type ConversationVisibility = 'public' | 'private' | 'restricted';
 export type ConversationLinkType = 'invite' | 'share' | 'embed';
 
 /**
+ * Rôle minimum requis pour envoyer des messages dans une conversation
+ * Aligned with schema.prisma Conversation.defaultWriteRole
+ */
+export type ConversationWriteRole = 'everyone' | 'member' | 'moderator' | 'admin' | 'creator';
+
+/**
  * Permissions d'un participant
  */
 export interface ParticipantPermissions {
@@ -346,6 +352,7 @@ export interface Conversation {
   // ===== COMMUNITY =====
   readonly communityId?: string;
   readonly isActive: boolean;
+  readonly isArchived?: boolean;
   readonly memberCount: number;  // Denormalized for performance
 
   // ===== PARTICIPANTS =====
@@ -363,6 +370,15 @@ export interface Conversation {
   readonly encryptionEnabledAt?: Date;
   readonly encryptionEnabledBy?: string;          // User ID who enabled
   readonly serverEncryptionKeyId?: string;        // For server-side encryption
+  readonly autoTranslateEnabled?: boolean;        // Auto-translation (disabled for E2EE)
+
+  // ===== WRITE PERMISSIONS =====
+  /** Minimum role required to send messages: everyone, member, moderator, admin, creator */
+  readonly defaultWriteRole?: ConversationWriteRole;
+  /** Announcement-only mode (only creator/admins can write, overrides defaultWriteRole) */
+  readonly isAnnouncementChannel?: boolean;
+  /** Slow mode - minimum seconds between messages per user (0 = disabled) */
+  readonly slowModeSeconds?: number;
 
   // ===== STATISTIQUES =====
   readonly stats?: ConversationStats;
@@ -574,4 +590,216 @@ export interface AttachmentReaction {
   readonly anonymousId?: string;
   readonly emoji: string;
   readonly createdAt: Date;
+}
+
+// ===== CONVERSATION SHARE =====
+
+/**
+ * Partage d'une conversation vers une communauté
+ * Aligned with schema.prisma ConversationShare
+ */
+export interface ConversationShare {
+  readonly id: string;
+
+  /** ID de la conversation partagée */
+  readonly conversationId: string;
+
+  /** ID de la communauté cible */
+  readonly communityId: string;
+
+  /** ID de l'utilisateur qui a partagé */
+  readonly sharedBy: string;
+
+  /** Titre optionnel du partage */
+  readonly title?: string;
+
+  /** Description optionnelle */
+  readonly description?: string;
+
+  /** Si le partage est épinglé/mis en avant */
+  readonly isPinned: boolean;
+
+  /** Ordre d'affichage si épinglé */
+  readonly pinOrder?: number;
+
+  /** Si le partage est actif */
+  readonly isActive: boolean;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+
+  /** Relations populées */
+  readonly conversation?: Conversation;
+  readonly sharer?: User;
+}
+
+/**
+ * DTO pour créer un partage de conversation
+ */
+export interface CreateConversationShareDTO {
+  readonly conversationId: string;
+  readonly communityId: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly isPinned?: boolean;
+}
+
+/**
+ * DTO pour mettre à jour un partage
+ */
+export interface UpdateConversationShareDTO {
+  readonly title?: string;
+  readonly description?: string;
+  readonly isPinned?: boolean;
+  readonly pinOrder?: number;
+  readonly isActive?: boolean;
+}
+
+// ===== CONVERSATION MEMBER =====
+
+/**
+ * Rôle d'un membre de conversation
+ */
+export type ConversationMemberRole = 'admin' | 'moderator' | 'member';
+
+/**
+ * Membre d'une conversation
+ * Aligned with schema.prisma ConversationMember
+ */
+export interface ConversationMember {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly userId: string;
+
+  /** Rôle: admin, moderator, member */
+  readonly role: ConversationMemberRole | string;
+
+  /** Surnom personnalisé dans la conversation */
+  readonly nickname?: string;
+
+  /** Permissions granulaires */
+  readonly canSendMessage: boolean;
+  readonly canSendFiles: boolean;
+  readonly canSendImages: boolean;
+  readonly canSendVideos: boolean;
+  readonly canSendAudios: boolean;
+  readonly canSendLocations: boolean;
+  readonly canSendLinks: boolean;
+
+  readonly joinedAt: Date;
+  readonly leftAt?: Date;
+  readonly isActive: boolean;
+
+  /** Relations populées */
+  readonly user?: User;
+  readonly conversation?: Conversation;
+}
+
+/**
+ * Alias pour compatibilité avec ThreadMember existant
+ */
+export type ConversationMemberCompat = ConversationMember;
+
+/**
+ * DTO pour ajouter un membre à une conversation
+ */
+export interface AddConversationMemberDTO {
+  readonly userId: string;
+  readonly role?: ConversationMemberRole;
+  readonly nickname?: string;
+}
+
+/**
+ * DTO pour mettre à jour un membre
+ */
+export interface UpdateConversationMemberDTO {
+  readonly role?: ConversationMemberRole;
+  readonly nickname?: string;
+  readonly canSendMessage?: boolean;
+  readonly canSendFiles?: boolean;
+  readonly canSendImages?: boolean;
+  readonly canSendVideos?: boolean;
+  readonly canSendAudios?: boolean;
+  readonly canSendLocations?: boolean;
+  readonly canSendLinks?: boolean;
+  readonly isActive?: boolean;
+}
+
+// ===== CONVERSATION PREFERENCE =====
+
+/**
+ * Préférence de conversation (clé/valeur)
+ * Aligned with schema.prisma ConversationPreference
+ */
+export interface ConversationPreference {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly userId: string;
+
+  /** Clé de la préférence */
+  readonly key: string;
+
+  /** Valeur de la préférence */
+  readonly value: string;
+
+  /** Type de valeur (string, number, boolean, json) */
+  readonly valueType: 'string' | 'number' | 'boolean' | 'json';
+
+  /** Description optionnelle */
+  readonly description?: string;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * DTO pour créer une préférence
+ */
+export interface CreateConversationPreferenceDTO {
+  readonly conversationId: string;
+  readonly key: string;
+  readonly value: string;
+  readonly valueType?: 'string' | 'number' | 'boolean' | 'json';
+  readonly description?: string;
+}
+
+/**
+ * DTO pour mettre à jour une préférence
+ */
+export interface UpdateConversationPreferenceDTO {
+  readonly value?: string;
+  readonly valueType?: 'string' | 'number' | 'boolean' | 'json';
+  readonly description?: string;
+}
+
+/**
+ * Collection de préférences d'un utilisateur pour une conversation
+ */
+export interface UserConversationPreferencesMap {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly preferences: Record<string, ConversationPreference>;
+}
+
+// ===== TYPE GUARDS =====
+
+/**
+ * Vérifie si un membre est un admin
+ */
+export function isConversationAdmin(member: ConversationMember): boolean {
+  return member.role === 'admin';
+}
+
+/**
+ * Vérifie si un membre est un modérateur ou plus
+ */
+export function isConversationModerator(member: ConversationMember): boolean {
+  return member.role === 'admin' || member.role === 'moderator';
+}
+
+/**
+ * Vérifie si un membre peut envoyer des messages
+ */
+export function canMemberSendMessage(member: ConversationMember): boolean {
+  return member.isActive && member.canSendMessage;
 }

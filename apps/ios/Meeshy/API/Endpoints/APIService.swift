@@ -432,13 +432,9 @@ final class APIService: Sendable {
             return cachedURL
         }
 
-        let response: APIResponse<URL> = try await apiClient.download(
+        let url = try await apiClient.download(
             AttachmentEndpoints.download(attachmentId: attachmentId)
         )
-
-        guard let url = response.data else {
-            throw MeeshyError.unknown
-        }
 
         // Cache the URL
         cacheManager.saveAttachmentURL(url, forKey: cacheKey)

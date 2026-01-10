@@ -134,7 +134,7 @@ Suppression de toutes les fonctions dupliquées (`getLanguageInfo`, `getLanguage
 - ✅ Suppression des fonctions dupliquées
 - ✅ Conservation des types pour compatibilité (`LanguageCode`, `SupportedLanguage`)
 
-### 3. `/frontend/components/conversations/create-link-modal.tsx`
+### 3. `/apps/web/components/conversations/create-link-modal.tsx`
 - ✅ Import de `ScrollArea` ajouté (correction d'un bug non lié)
 - ✅ Le composant utilise déjà `SUPPORTED_LANGUAGES` importé depuis `@/types`
 - ✅ Affiche maintenant automatiquement les 41 langues

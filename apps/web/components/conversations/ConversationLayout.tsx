@@ -8,7 +8,7 @@ import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-mess
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
 import { useNotifications } from '@/hooks/use-notifications';
-import { useNotificationActionsV2 } from '@/stores/notification-store-v2';
+import { useNotificationActions } from '@/stores/notification-store';
 import { useVirtualKeyboard } from '@/hooks/use-virtual-keyboard';
 import { conversationsService } from '@/services/conversations.service';
 import { messageService } from '@/services/message.service';
@@ -49,8 +49,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const { t } = useI18n('conversations');
   const { t: tCommon } = useI18n('common');
 
-  // Hook pour le système de notifications v2
-  const { setActiveConversationId } = useNotificationActionsV2();
+  // Hook pour le système de notifications
+  const { setActiveConversationId } = useNotificationActions();
   
   // ID unique pour cette instance du composant
   const instanceId = useMemo(() => `layout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);

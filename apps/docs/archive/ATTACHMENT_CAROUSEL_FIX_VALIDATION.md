@@ -281,7 +281,7 @@ Tester sur :
 
 ## FICHIERS MODIFIÉS
 
-- `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/attachments/AttachmentCarousel.tsx`
+- `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/attachments/AttachmentCarousel.tsx`
 
 **Lignes modifiées** : 520-587
 

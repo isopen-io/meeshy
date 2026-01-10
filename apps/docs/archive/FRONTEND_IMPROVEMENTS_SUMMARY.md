@@ -25,9 +25,9 @@ Corriger toutes les vulnérabilités de sécurité CRITIQUES et problèmes de qu
 
 | Fichier | Description | LOC | Status |
 |---------|-------------|-----|--------|
-| `/frontend/utils/secure-storage.ts` | Encryption AES-256-GCM, TTL automatique | 350 | ✅ |
-| `/frontend/utils/xss-protection.ts` | Sanitization DOMPurify, validation URLs | 450 | ✅ |
-| `/frontend/utils/socket-validator.ts` | Validation Zod, sanitization Socket.IO | 420 | ✅ |
+| `/apps/web/utils/secure-storage.ts` | Encryption AES-256-GCM, TTL automatique | 350 | ✅ |
+| `/apps/web/utils/xss-protection.ts` | Sanitization DOMPurify, validation URLs | 450 | ✅ |
+| `/apps/web/utils/socket-validator.ts` | Validation Zod, sanitization Socket.IO | 420 | ✅ |
 
 **Fonctionnalités implémentées:**
 - ✅ Encryption Web Crypto API (AES-256-GCM)
@@ -41,7 +41,7 @@ Corriger toutes les vulnérabilités de sécurité CRITIQUES et problèmes de qu
 
 | Fichier | Description | LOC | Status |
 |---------|-------------|-----|--------|
-| `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx` | Error boundary React avec retry | 220 | ✅ |
+| `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx` | Error boundary React avec retry | 220 | ✅ |
 
 **Fonctionnalités:**
 - ✅ Catch errors React
@@ -54,21 +54,21 @@ Corriger toutes les vulnérabilités de sécurité CRITIQUES et problèmes de qu
 
 | Fichier | Description | Status |
 |---------|-------------|--------|
-| `/frontend/next.config.security.js` | CSP headers, security headers | ✅ |
-| `/frontend/scripts/install-security-dependencies.sh` | Installation automatique dépendances | ✅ |
-| `/frontend/vitest.config.ts` | Configuration tests unitaires | ✅ |
-| `/frontend/tests/setup.ts` | Setup tests (mocks, globals) | ✅ |
+| `/apps/web/next.config.security.js` | CSP headers, security headers | ✅ |
+| `/apps/web/scripts/install-security-dependencies.sh` | Installation automatique dépendances | ✅ |
+| `/apps/web/vitest.config.ts` | Configuration tests unitaires | ✅ |
+| `/apps/web/tests/setup.ts` | Setup tests (mocks, globals) | ✅ |
 
 ### 🧪 Tests Unitaires (Exemples Créés)
 
 | Fichier | Coverage Target | Status |
 |---------|----------------|--------|
-| `/frontend/utils/__tests__/secure-storage.test.ts` | 90% | ✅ Créé |
-| `/frontend/utils/__tests__/xss-protection.test.ts` | 90% | ✅ Créé |
-| `/frontend/utils/__tests__/socket-validator.test.ts` | 90% | ⚠️ À créer |
-| `/frontend/stores/__tests__/notification-store-v2.test.ts` | 85% | ⚠️ À créer |
-| `/frontend/hooks/__tests__/use-notifications-v2.test.ts` | 75% | ⚠️ À créer |
-| `/frontend/components/notifications-v2/__tests__/*.test.tsx` | 70% | ⚠️ À créer |
+| `/apps/web/utils/__tests__/secure-storage.test.ts` | 90% | ✅ Créé |
+| `/apps/web/utils/__tests__/xss-protection.test.ts` | 90% | ✅ Créé |
+| `/apps/web/utils/__tests__/socket-validator.test.ts` | 90% | ⚠️ À créer |
+| `/apps/web/stores/__tests__/notification-store-v2.test.ts` | 85% | ⚠️ À créer |
+| `/apps/web/hooks/__tests__/use-notifications-v2.test.ts` | 75% | ⚠️ À créer |
+| `/apps/web/components/notifications-v2/__tests__/*.test.tsx` | 70% | ⚠️ À créer |
 
 **Tests créés:** 2/6 (33%)
 **Tests à créer:** 4/6 (67%)
@@ -77,8 +77,8 @@ Corriger toutes les vulnérabilités de sécurité CRITIQUES et problèmes de qu
 
 | Fichier | Pages | Status |
 |---------|-------|--------|
-| `/frontend/README_FRONTEND_IMPROVEMENTS.md` | Comprehensive (100+ sections) | ✅ |
-| `/frontend/INTEGRATION_CHECKLIST.md` | Checklist détaillé 10 phases | ✅ |
+| `/apps/web/README_FRONTEND_IMPROVEMENTS.md` | Comprehensive (100+ sections) | ✅ |
+| `/apps/web/INTEGRATION_CHECKLIST.md` | Checklist détaillé 10 phases | ✅ |
 | `/FRONTEND_IMPROVEMENTS_SUMMARY.md` | Ce document (résumé exécutif) | ✅ |
 
 ---
@@ -122,24 +122,24 @@ chmod +x ./scripts/install-security-dependencies.sh
 ```
 
 **2. Intégration CSP Headers** (15 min)
-- Modifier `/frontend/next.config.js`
+- Modifier `/apps/web/next.config.js`
 - Importer `next.config.security.js`
 - Tester build
 
 **3. Correction Memory Leaks** (2-3h)
-- Modifier `/frontend/hooks/use-notifications-v2.ts`
+- Modifier `/apps/web/hooks/use-notifications-v2.ts`
 - Appliquer `useCallback` memoization
 - Fixer `useEffect` dependencies
 - Tester memory usage
 
 **4. Intégration Secure Storage** (1-2h)
-- Modifier `/frontend/stores/notification-store-v2.ts`
+- Modifier `/apps/web/stores/notification-store-v2.ts`
 - Remplacer localStorage → sessionStorage
 - Appliquer sanitization
 - Tester persistence
 
 **5. Intégration XSS Protection** (1-2h)
-- Modifier `/frontend/components/notifications-v2/NotificationItem.tsx`
+- Modifier `/apps/web/components/notifications-v2/NotificationItem.tsx`
 - Sanitize toutes les strings affichées
 - Valider URLs
 - Tester avec payloads XSS
@@ -315,8 +315,8 @@ frontend/
 ## 🔗 Liens Utiles
 
 ### Documentation Principale
-- **README Complet:** `/frontend/README_FRONTEND_IMPROVEMENTS.md`
-- **Checklist Intégration:** `/frontend/INTEGRATION_CHECKLIST.md`
+- **README Complet:** `/apps/web/README_FRONTEND_IMPROVEMENTS.md`
+- **Checklist Intégration:** `/apps/web/INTEGRATION_CHECKLIST.md`
 - **Ce Résumé:** `/FRONTEND_IMPROVEMENTS_SUMMARY.md`
 
 ### Audits de Référence
@@ -326,12 +326,12 @@ frontend/
 - **Refactoring Guide:** `/NOTIFICATION_REFACTORING_GUIDE.md`
 
 ### Fichiers Créés
-- **Secure Storage:** `/frontend/utils/secure-storage.ts`
-- **XSS Protection:** `/frontend/utils/xss-protection.ts`
-- **Socket Validator:** `/frontend/utils/socket-validator.ts`
-- **Error Boundary:** `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx`
-- **CSP Config:** `/frontend/next.config.security.js`
-- **Install Script:** `/frontend/scripts/install-security-dependencies.sh`
+- **Secure Storage:** `/apps/web/utils/secure-storage.ts`
+- **XSS Protection:** `/apps/web/utils/xss-protection.ts`
+- **Socket Validator:** `/apps/web/utils/socket-validator.ts`
+- **Error Boundary:** `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx`
+- **CSP Config:** `/apps/web/next.config.security.js`
+- **Install Script:** `/apps/web/scripts/install-security-dependencies.sh`
 
 ---
 

@@ -9,7 +9,7 @@ Le système de notifications v2 pour Meeshy a été entièrement implémenté av
 ## 📁 Fichiers Créés
 
 ### 1. Types TypeScript
-**Fichier:** `/frontend/types/notification-v2.ts`
+**Fichier:** `/apps/web/types/notification-v2.ts`
 
 Définit tous les types TypeScript pour le système de notifications :
 - `NotificationType` : Enum des 11 types de notifications
@@ -27,7 +27,7 @@ import type { NotificationV2, NotificationType } from '@/types/notification-v2';
 ---
 
 ### 2. Store Zustand
-**Fichier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier:** `/apps/web/stores/notification-store-v2.ts`
 
 Store Zustand avec persistence localStorage et real-time Socket.IO :
 - État global des notifications
@@ -56,7 +56,7 @@ function MyComponent() {
 ---
 
 ### 3. Service API
-**Fichier:** `/frontend/services/notifications-v2.service.ts`
+**Fichier:** `/apps/web/services/notifications-v2.service.ts`
 
 Service API avec retry logic et gestion d'erreurs :
 - `fetchNotifications()` : Récupère les notifications avec pagination
@@ -82,7 +82,7 @@ const response = await notificationServiceV2.fetchNotifications({
 ---
 
 ### 4. Hook Custom
-**Fichier:** `/frontend/hooks/use-notifications-v2.ts`
+**Fichier:** `/apps/web/hooks/use-notifications-v2.ts`
 
 Hook custom qui intègre tout :
 - Initialisation Socket.IO automatique
@@ -111,7 +111,7 @@ function MyComponent() {
 ---
 
 ### 5. Utilitaires de Formatage
-**Fichier:** `/frontend/utils/notification-formatters.ts`
+**Fichier:** `/apps/web/utils/notification-formatters.ts`
 
 Fonctions utilitaires pour formater les notifications :
 - `formatNotificationTimestamp()` : Timestamps intelligents ("just now", "5 minutes ago", etc.)
@@ -141,7 +141,7 @@ const link = getNotificationLink(notification);
 ### 6. Composants UI
 
 #### a. NotificationBell
-**Fichier:** `/frontend/components/notifications-v2/NotificationBell.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationBell.tsx`
 
 Composant cloche avec badge et dropdown :
 - Badge animé avec compteur
@@ -164,7 +164,7 @@ function Header() {
 ```
 
 #### b. NotificationList
-**Fichier:** `/frontend/components/notifications-v2/NotificationList.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationList.tsx`
 
 Liste scrollable avec infinite scroll :
 - Intersection Observer pour lazy loading
@@ -192,7 +192,7 @@ function NotificationsPage() {
 ```
 
 #### c. NotificationListWithFilters
-**Fichier:** `/frontend/components/notifications-v2/NotificationList.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationList.tsx`
 
 Liste avec barre de filtres :
 - Filtres par type, statut
@@ -220,7 +220,7 @@ function NotificationsPage() {
 ```
 
 #### d. NotificationItem
-**Fichier:** `/frontend/components/notifications-v2/NotificationItem.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationItem.tsx`
 
 Item individuel avec formatage contextuel :
 - Affichage formaté selon le type (11 types)
@@ -250,7 +250,7 @@ function MyList() {
 ```
 
 #### e. Index
-**Fichier:** `/frontend/components/notifications-v2/index.ts`
+**Fichier:** `/apps/web/components/notifications-v2/index.ts`
 
 Export centralisé pour faciliter les imports :
 ```typescript
@@ -264,16 +264,16 @@ export { NotificationItem } from './NotificationItem';
 ### 7. Fichiers i18n (Internationalisation)
 
 #### Anglais
-**Fichier:** `/frontend/locales/en/notifications.json`
+**Fichier:** `/apps/web/locales/en/notifications.json`
 
 #### Français
-**Fichier:** `/frontend/locales/fr/notifications.json`
+**Fichier:** `/apps/web/locales/fr/notifications.json`
 
 #### Espagnol
-**Fichier:** `/frontend/locales/es/notifications.json`
+**Fichier:** `/apps/web/locales/es/notifications.json`
 
 #### Portugais
-**Fichier:** `/frontend/locales/pt/notifications.json`
+**Fichier:** `/apps/web/locales/pt/notifications.json`
 
 Toutes les traductions incluent :
 - Titres de notifications par type
@@ -300,7 +300,7 @@ function MyComponent() {
 ---
 
 ### 8. Documentation
-**Fichier:** `/frontend/README_NOTIFICATIONS_V2.md`
+**Fichier:** `/apps/web/README_NOTIFICATIONS_V2.md`
 
 Documentation complète incluant :
 - Vue d'ensemble et architecture
@@ -522,7 +522,7 @@ socket.emit('notification:counts', {
 ## 📞 Support
 
 Pour toute question ou problème :
-- Consulter `/frontend/README_NOTIFICATIONS_V2.md` pour la documentation complète
+- Consulter `/apps/web/README_NOTIFICATIONS_V2.md` pour la documentation complète
 - Consulter `/NOTIFICATION_SYSTEM_ARCHITECTURE.md` pour l'architecture globale
 - Consulter `/NOTIFICATION_TYPES_REFERENCE.md` pour la référence des types
 

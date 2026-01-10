@@ -18,7 +18,7 @@ Successfully implemented a **feature flag system** to enable/disable the passwor
 
 ### 1. Feature Flag Hook (`use-feature-flags.ts`)
 
-**Location**: `/frontend/hooks/use-feature-flags.ts`
+**Location**: `/apps/web/hooks/use-feature-flags.ts`
 
 **Features**:
 - ✅ Centralized feature flag management
@@ -39,7 +39,7 @@ if (isPasswordResetConfigured()) {
 
 ### 2. Feature Gate Component (`FeatureGate.tsx`)
 
-**Location**: `/frontend/components/auth/FeatureGate.tsx`
+**Location**: `/apps/web/components/auth/FeatureGate.tsx`
 
 **Features**:
 - ✅ Protects routes and components
@@ -88,7 +88,7 @@ if (isPasswordResetConfigured()) {
 
 ### 4. Environment Configuration
 
-**New File**: `/frontend/.env.example`
+**New File**: `/apps/web/.env.example`
 
 ```bash
 # Password Reset Feature
@@ -104,7 +104,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 
 ### 5. Documentation
 
-**New File**: `/frontend/FEATURE_FLAGS_README.md` (800+ lines)
+**New File**: `/apps/web/FEATURE_FLAGS_README.md` (800+ lines)
 
 Complete guide including:
 - ✅ Overview and use cases
@@ -178,7 +178,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 | `/components/auth/login-form.tsx` | ✅ Modified | +4 | Conditional link |
 | `/app/forgot-password/page.tsx` | ✅ Modified | +3 | Wrap in gate |
 | `/app/reset-password/page.tsx` | ✅ Modified | +4 | Wrap in gate |
-| `/frontend/.env.example` | ✅ Created | 35 | Config template |
+| `/apps/web/.env.example` | ✅ Created | 35 | Config template |
 | `FEATURE_FLAGS_README.md` | ✅ Created | 800+ | Documentation |
 
 **Total**: 2 new files, 3 modified files, 1,100+ lines of code + docs

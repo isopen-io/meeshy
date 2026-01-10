@@ -64,7 +64,7 @@ This document provides a complete summary of the mobile-responsive browser-based
 ### New Components Created
 
 ```
-/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/
+/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/
 
 components/video-calls/
 ├── VideoCallInterface.tsx          # Main call UI component (11KB)

@@ -5,9 +5,9 @@
 
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
-import type { NotificationV2 } from '@/types/notification-v2';
+import type { Notification } from '@/types/notification';
 
-type NotificationCallback = (notification: NotificationV2) => void;
+type NotificationCallback = (notification: Notification) => void;
 type NotificationReadCallback = (notificationId: string) => void;
 type NotificationDeletedCallback = (notificationId: string) => void;
 type CountsCallback = (counts: any) => void;
@@ -110,7 +110,7 @@ class NotificationSocketIOSingleton {
       console.log('[NotificationSocketIO] Received notification:', data);
 
       // Parser la notification
-      const notification: NotificationV2 = {
+      const notification: Notification = {
         id: data.id,
         userId: data.userId,
         type: data.type,

@@ -2,6 +2,8 @@
  * Utilitaires de normalisation des données utilisateur
  */
 
+import { parsePhoneNumber, isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
+
 /**
  * Normalise un email en minuscules
  */
@@ -10,30 +12,95 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
- * Normalise un numéro de téléphone au format E.164
- * Exemples:
- * - "33654321987" → "+33654321987"
- * - "0033654321987" → "+33654321987"
- * - "+33654321987" → "+33654321987"
- * - "00 33 6 54 32 19 87" → "+33654321987"
+ * Résultat de la normalisation du téléphone
  */
-export function normalizePhoneNumber(phoneNumber: string): string {
-  if (!phoneNumber) return '';
+export interface PhoneNormalizationResult {
+  /** Numéro au format E.164 (ex: "+33612345678") */
+  phoneNumber: string;
+  /** Code pays ISO 3166-1 alpha-2 (ex: "FR", "US") */
+  countryCode: string;
+  /** Numéro national sans code pays (ex: "612345678") */
+  nationalNumber: string;
+  /** Valide selon libphonenumber */
+  isValid: boolean;
+}
 
-  // Supprimer tous les espaces, tirets, parenthèses, etc.
-  let cleaned = phoneNumber.replace(/[\s\-().]/g, '');
-
-  // Si commence par 00, remplacer par +
-  if (cleaned.startsWith('00')) {
-    cleaned = '+' + cleaned.substring(2);
+/**
+ * Normalise et valide un numéro de téléphone avec libphonenumber-js
+ *
+ * @param phoneNumber - Le numéro de téléphone brut
+ * @param defaultCountry - Code pays par défaut si non spécifié dans le numéro (ex: "FR")
+ * @returns PhoneNormalizationResult ou null si invalide
+ *
+ * @example
+ * normalizePhoneWithCountry("0612345678", "FR")
+ * // => { phoneNumber: "+33612345678", countryCode: "FR", nationalNumber: "612345678", isValid: true }
+ *
+ * normalizePhoneWithCountry("+1 (555) 123-4567")
+ * // => { phoneNumber: "+15551234567", countryCode: "US", nationalNumber: "5551234567", isValid: true }
+ */
+export function normalizePhoneWithCountry(
+  phoneNumber: string,
+  defaultCountry?: string
+): PhoneNormalizationResult | null {
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    return null;
   }
 
-  // Si ne commence pas par +, l'ajouter
-  if (!cleaned.startsWith('+')) {
-    cleaned = '+' + cleaned;
+  try {
+    const parsed = parsePhoneNumber(
+      phoneNumber.trim(),
+      defaultCountry as CountryCode | undefined
+    );
+
+    if (!parsed) {
+      return null;
+    }
+
+    return {
+      phoneNumber: parsed.format('E.164'),
+      countryCode: parsed.country || defaultCountry || '',
+      nationalNumber: parsed.nationalNumber,
+      isValid: parsed.isValid()
+    };
+  } catch (error) {
+    console.warn('[normalizePhoneWithCountry] Parse error:', error);
+    return null;
+  }
+}
+
+/**
+ * Valide un numéro de téléphone
+ *
+ * @param phoneNumber - Le numéro à valider
+ * @param countryCode - Code pays optionnel (ex: "FR")
+ */
+export function validatePhoneNumber(phoneNumber: string, countryCode?: string): boolean {
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    return false;
   }
 
-  return cleaned;
+  try {
+    return isValidPhoneNumber(phoneNumber, countryCode as CountryCode | undefined);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Normalise un numéro de téléphone au format E.164 (legacy - pour rétrocompatibilité)
+ * DEPRECATED: Utiliser normalizePhoneWithCountry à la place
+ *
+ * @param phoneNumber - Le numéro brut
+ * @param defaultCountry - Code pays par défaut
+ */
+export function normalizePhoneNumber(phoneNumber: string, defaultCountry: string = 'FR'): string {
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    return '';
+  }
+
+  const result = normalizePhoneWithCountry(phoneNumber, defaultCountry);
+  return result?.phoneNumber || '';
 }
 
 /**

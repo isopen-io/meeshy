@@ -34,17 +34,17 @@
    - Validation
 
 #### FRONTEND (Next.js):
-1. Service Socket.IO: `/frontend/services/meeshy-socketio.service.ts` (1ères 150 lignes)
+1. Service Socket.IO: `/apps/web/services/meeshy-socketio.service.ts` (1ères 150 lignes)
    - Singleton pattern
    - Connection/reconnection
    - Event listeners
 
-2. Hook principal: `/frontend/hooks/use-socketio-messaging.ts` (1ères 100 lignes)
+2. Hook principal: `/apps/web/hooks/use-socketio-messaging.ts` (1ères 100 lignes)
    - useEffect pour connexion
    - Listeners d'événements
    - Join/leave conversation
 
-3. Composant d'affichage: `/frontend/components/common/BubbleMessage.tsx` (1ères 80 lignes)
+3. Composant d'affichage: `/apps/web/components/common/BubbleMessage.tsx` (1ères 80 lignes)
    - Props structure
    - Gestion d'états
    - Callbacks aux parents
@@ -159,7 +159,7 @@ middleware/                 = Filtres requêtes
   └─ auth.ts                = 🔴 Authentification (JWT/session)
 ```
 
-### `/frontend/` - Frontend (Next.js + React)
+### `/apps/web/` - Frontend (Next.js + React)
 
 ```
 services/                   = Appels API/Socket.IO
@@ -191,7 +191,7 @@ app/                        = Pages Next.js (App Router)
 | `/shared/types/socketio-events.ts` | ÉVÉNEMENTS | SERVER_EVENTS (25-56) + CLIENT_EVENTS (59-81) |
 | `/gateway/src/services/MessagingService.ts` | LOGIQUE PRINCIPALE | handleMessage() (84-120) |
 | `/gateway/src/socketio/MeeshySocketIOManager.ts` | WEBSOCKET SERVEUR | initialize() + event listeners |
-| `/frontend/services/meeshy-socketio.service.ts` | WEBSOCKET CLIENT | sendMessage() + event listeners |
+| `/apps/web/services/meeshy-socketio.service.ts` | WEBSOCKET CLIENT | sendMessage() + event listeners |
 
 ---
 
@@ -278,7 +278,7 @@ app/                        = Pages Next.js (App Router)
 
 ```
 PHASE 1: Chiffrement côté client
-  ├─ Fichier: /frontend/services/message-encryption.service.ts (NOUVEAU)
+  ├─ Fichier: /apps/web/services/message-encryption.service.ts (NOUVEAU)
   └─ Appel: Avant socket.emit('message:send')
 
 PHASE 2: Gestion des clés
@@ -378,10 +378,10 @@ grep -r "AuthenticationContext" /shared/types/
 grep -r "MessagingService" /gateway/src --include="*.ts"
 
 # Voir événements Socket.IO du frontend
-grep -n "socket.emit\|socket.on" /frontend/services/meeshy-socketio.service.ts
+grep -n "socket.emit\|socket.on" /apps/web/services/meeshy-socketio.service.ts
 
 # Voir composants de messages
-find /frontend/components -name "*[Mm]essage*" -o -name "*[Bb]ubble*"
+find /apps/web/components -name "*[Mm]essage*" -o -name "*[Bb]ubble*"
 
 # Voir tests de messages
 find /gateway -name "*test*" -o -name "*spec*" | grep -i message

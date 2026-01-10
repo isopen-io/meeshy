@@ -1,55 +1,47 @@
 /**
- * Types frontend Meeshy - Utilise uniquement les types partagés
- * Ce fichier importe les types de shared/types et ajoute uniquement les types spécifiques au frontend
+ * Types Socket.IO frontend Meeshy
+ *
+ * IMPORTANT: Ce fichier ne doit contenir QUE des types spécifiques au frontend Socket.IO.
+ * Tous les types partagés sont importés de @meeshy/shared/types
  */
 
-// ===== IMPORT DES TYPES PARTAGÉS =====
+// ===== IMPORT ET RE-EXPORT DES TYPES PARTAGÉS =====
 export * from '@meeshy/shared/types';
 
-// Alias pour rétrocompatibilité  
-import type { 
-  SocketIOMessage, 
+// Import des types nécessaires pour les extensions frontend
+import type {
+  SocketIOMessage,
   SocketIOUser,
   SocketIOResponse,
   TranslationData,
   ConnectionStatus,
-  ConnectionDiagnostics
-} from '@meeshy/shared/types/socketio-events';
+  ConnectionDiagnostics,
+  UserPermissions as SharedUserPermissions,
+  UIMessage as SharedUIMessage,
+  GatewayMessage,
+  MessageWithTranslations as SharedMessageWithTranslations,
+} from '@meeshy/shared/types';
 
+// Alias pour rétrocompatibilité
 export type Message = SocketIOMessage;
 export type SocketResponse<T = unknown> = SocketIOResponse<T>;
 
-// ===== TYPES SPÉCIFIQUES AU FRONTEND =====
+// ===== TYPES SPÉCIFIQUES AU FRONTEND SOCKET.IO =====
 
-export interface UserPermissions {
-  canAccessAdmin: boolean;
-  canManageUsers: boolean;
-  canManageGroups: boolean;
-  canManageConversations: boolean;
-  canViewAnalytics: boolean;
-  canModerateContent: boolean;
-  canViewAuditLogs: boolean;
-  canManageNotifications: boolean;
-  canManageTranslations: boolean;
+/**
+ * User étendu avec permissions pour le frontend
+ */
+export interface FrontendUser extends SocketIOUser {
+  permissions: SharedUserPermissions;
 }
 
-// Type User étendu avec les permissions pour le frontend
-export interface User extends SocketIOUser {
-  permissions: UserPermissions;
-}
+// Alias pour rétrocompatibilité
+export type User = FrontendUser;
 
-export interface CreateUserDto {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber: string;
-  spokenLanguage: string;
-  receiveLanguage: string;
-  conversationLinkId: string;
-}
-
-// ConversationLink est maintenant importé depuis @shared/types
-
+/**
+ * Message avec traductions pour l'affichage frontend
+ * @deprecated Utilisez SharedUIMessage de @meeshy/shared/types à la place
+ */
 export interface TranslatedMessage extends Message {
   originalContent?: string;
   translatedContent?: string;
@@ -61,45 +53,14 @@ export interface TranslatedMessage extends Message {
   translationFailed?: boolean;
   translations?: TranslationData[];
   modelUsed?: string;
-  sender?: User; // Utilise le type User avec permissions
+  sender?: FrontendUser;
 }
 
-export interface ChatRoom {
-  id: string;
-  participantIds: string[];
-  messages: Message[];
-  createdAt: Date;
-}
+// ===== TYPES POUR LES HOOKS SOCKET.IO =====
 
-export interface TranslationModel {
-  name: 'NLLB';
-  isLoaded: boolean;
-  model?: unknown;
-}
-
-export interface LanguageCode {
-  code: string;
-  name: string;
-  flag: string;
-}
-
-// ===== TYPES POUR LES PERMISSIONS =====
-export interface UserPermissions {
-  canAccessAdmin: boolean;
-  canManageUsers: boolean;
-  canManageGroups: boolean;
-  canManageConversations: boolean;
-  canViewAnalytics: boolean;
-  canModerateContent: boolean;
-  canViewAuditLogs: boolean;
-  canManageNotifications: boolean;
-  canManageTranslations: boolean;
-}
-
-// ===== TYPES POUR LES HOOKS =====
 export interface UseSocketIOMessagingOptions {
   conversationId?: string;
-  currentUser?: User;
+  currentUser?: FrontendUser;
   onNewMessage?: (message: Message) => void;
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
@@ -115,24 +76,25 @@ export interface UseSocketIOMessagingReturn {
   sendMessage: (content: string) => Promise<boolean>;
   editMessage: (messageId: string, content: string) => Promise<boolean>;
   deleteMessage: (messageId: string) => Promise<boolean>;
-  
+
   // Navigation dans les conversations
   joinConversation: (conversationId: string) => void;
   leaveConversation: (conversationId: string) => void;
-  
+
   // Gestion de la frappe
   startTyping: () => void;
   stopTyping: () => void;
-  
+
   // Gestion de la connexion
   reconnect: () => void;
   getDiagnostics: () => ConnectionDiagnostics;
-  
+
   // État de la connexion
   connectionStatus: ConnectionStatus;
 }
 
-// ===== TYPES POUR LES SERVICES =====
+// ===== TYPES POUR LES SERVICES DE TRADUCTION =====
+
 export interface ForceTranslationRequest {
   messageId: string;
   targetLanguage: string;
@@ -157,13 +119,40 @@ export interface MessageTranslationStatus {
 }
 
 // ===== TYPES POUR L'INTERFACE UTILISATEUR =====
+
+/**
+ * UIMessage frontend - utilise le type partagé + extensions frontend
+ * Combine SharedUIMessage de shared avec les champs spécifiques au frontend
+ */
 export interface UIMessage extends TranslatedMessage {
-  // Propriétés spécifiques à l'affichage
-  isOptimistic?: boolean; // Pour l'optimistic UI
-  tempId?: string; // ID temporaire avant confirmation du serveur
-  sendingError?: string; // Erreur lors de l'envoi
-  retryCount?: number; // Nombre de tentatives d'envoi
+  // === FROM SHARED UIMessage ===
+  // uiTranslations, translatingLanguages, currentDisplayLanguage, showingOriginal
+  // originalContent, canEdit, canDelete, canTranslate, canReply sont dans SharedUIMessage
+
+  // === FRONTEND-SPECIFIC FIELDS ===
+  /** Message optimiste (pas encore confirmé par le serveur) */
+  isOptimistic?: boolean;
+
+  /** ID temporaire avant confirmation serveur */
+  tempId?: string;
+
+  /** Erreur d'envoi du message */
+  sendingError?: string;
+
+  /** Nombre de tentatives d'envoi */
+  retryCount?: number;
 }
+
+/**
+ * Alias pour utiliser le type UIMessage de shared directement
+ * @see SharedUIMessage pour le type principal
+ */
+export type UIMessageFromShared = SharedUIMessage & {
+  isOptimistic?: boolean;
+  tempId?: string;
+  sendingError?: string;
+  retryCount?: number;
+};
 
 export interface ConversationUIState {
   isLoading: boolean;
@@ -174,6 +163,7 @@ export interface ConversationUIState {
 }
 
 // ===== TYPES POUR LES COMPOSANTS =====
+
 export interface MessageComponentProps {
   message: UIMessage;
   isOwn: boolean;
@@ -185,34 +175,5 @@ export interface MessageComponentProps {
   onRetry?: (messageId: string) => void;
 }
 
-export interface ConversationComponentProps {
-  conversation: Conversation;
-  messages: UIMessage[];
-  currentUser: User;
-  uiState: ConversationUIState;
-  onSendMessage: (content: string) => Promise<boolean>;
-  onEditMessage: (messageId: string, content: string) => Promise<boolean>;
-  onDeleteMessage: (messageId: string) => Promise<boolean>;
-  onLoadMoreMessages: () => Promise<void>;
-}
-
-// ===== TYPES POUR LES CONVERSATIONS =====
-export interface Conversation {
-  id: string;
-  name?: string;
-  type: 'private' | 'group';
-  isArchived: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  members: ConversationMember[];
-  lastMessage?: Message;
-}
-
-export interface ConversationMember {
-  userId: string;
-  conversationId: string;
-  role: 'admin' | 'member';
-  joinedAt: Date;
-  leftAt?: Date;
-  user: User;
-}
+// Note: Conversation et ConversationMember sont importés depuis @meeshy/shared/types
+// via l'export * ci-dessus

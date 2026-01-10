@@ -7,77 +7,150 @@
 
 // ===== NOUVEAUX TYPES UNIFIÉS =====
 // Export des types unifiés Phase 1
-export * from './conversation';
-export * from './user';
-export * from './anonymous';
-export * from './api-responses';
-export * from './migration-utils';
+export * from './conversation.js';
+export * from './user.js';
+export * from './anonymous.js';
+export * from './api-responses.js';
+export * from './api-schemas.js';
+export * from './migration-utils.js';
 
 // Import pour usage interne
-import type { AnonymousParticipant } from './anonymous';
+import type { AnonymousParticipant } from './anonymous.js';
 
 // Message types are now consolidated - export only UIMessage and GatewayMessage to avoid conflicts with conversation.ts
-export type { UIMessage, GatewayMessage } from './message-types';
-export { gatewayToUIMessage, getDisplayContent, isTranslating, hasTranslation } from './message-types';
+export type { UIMessage, GatewayMessage } from './message-types.js';
+export { gatewayToUIMessage, getDisplayContent, isTranslating, hasTranslation } from './message-types.js';
 
 // Export des types unifiés Phase 2 - Messaging
-export * from './messaging';
+export * from './messaging.js';
 
 // Export des types unifiés Phase 3 - Affiliate
-export * from './affiliate';
+export * from './affiliate.js';
 
 // Export des types unifiés Phase 4 - Tracking Links
-export * from './tracking-link';
+export * from './tracking-link.js';
 
 // Export des types unifiés Phase 5 - Attachments
-export * from './attachment';
+export * from './attachment.js';
 
 // Export des types unifiés Phase 6 - Video Calls
-export * from './video-call';
-export * from './attachment';
+export * from './video-call.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
-export * from './audio-effects-timeline';
+export * from './audio-effects-timeline.js';
 
 // Export des types unifiés Phase 8 - Push Notifications
-export * from './push-notification';
+export * from './push-notification.js';
 
-// NOTE: Les types de notifications sont dans /frontend/types/notification-v2.ts
+// NOTE: Les types de notifications sont dans /apps/web/types/notification.ts
 // Ils ne sont pas dans /shared car ils utilisent des types frontend spécifiques
-// Le backend doit importer NotificationType depuis le frontend si nécessaire
+// Le backend doit importer NotificationType depuis le webapp si nécessaire
 
 // Export des types communauté
-export * from './community';
+export * from './community.js';
 
 // Export des types réactions
-export * from './reaction';
+export * from './reaction.js';
 
 // Export des types mentions
-export * from './mention';
+export * from './mention.js';
 
 // Export des types d'erreurs
-export * from './errors';
+export * from './errors.js';
 
 // Export des types signalement
-export * from './report';
+export * from './report.js';
 
 // Export des types encryption (E2EE / Signal Protocol)
-export * from './encryption';
+export * from './encryption.js';
+
+// Export des types admin (audit logs, analytics, etc.)
+export * from './admin.js';
+
+// Export des types de sécurité (sessions, tokens, events)
+export * from './security.js';
+
+// Export des types Signal Protocol database (pre-key bundles, conversation keys)
+export * from './signal-database.js';
+
+// Export des types DMA interopérabilité (WhatsApp, Messenger)
+export * from './dma.js';
+
+// Export des types transcription audio et clonage vocal
+export * from './audio-transcription.js';
+
+// Export des types suppression de messages
+export * from './message-deletion.js';
+
+// Export des types notifications complètes (Prisma-aligned + frontend unified)
+export {
+  // Enums
+  NotificationTypeEnum,
+  NotificationPriorityEnum,
+
+  // Type unions
+  type NotificationType,
+  type NotificationPriority,
+  type NotificationConversationType,
+  type NotificationAttachmentType,
+  type NotificationAction,
+
+  // Main interfaces
+  type NotificationSender,
+  type NotificationSenderInfo,
+  type NotificationContext,
+  type NotificationMetadata,
+  type Notification,
+
+  // DTOs
+  type CreateNotificationDTO,
+  type UpdateNotificationDTO,
+
+  // Filters and pagination
+  type NotificationFilters,
+  type NotificationPaginationOptions,
+  type NotificationCounts,
+  type NotificationStats,
+  type NotificationResponse,
+
+  // Preferences
+  type NotificationPreference,
+  type NotificationPreferences,
+  type CreateNotificationPreferenceDTO,
+  type UpdateNotificationPreferenceDTO,
+
+  // Push notifications
+  type PushNotificationPayload,
+  type PushNotificationResult,
+
+  // Utility functions
+  isNotificationExpired,
+  isNotificationUnread,
+  isDNDActive,
+  isNotificationTypeEnabled,
+  shouldSendNotification,
+  getNotificationSender,
+  getDefaultNotificationPreferences,
+} from './notification.js';
+
+// Legacy aliases for backwards compatibility
+export type { Notification as PrismaNotification } from './notification.js';
+export type { NotificationType as PrismaNotificationType } from './notification.js';
 
 // Export des types de préférences utilisateur
-export * from './user-preferences';
+export * from './user-preferences.js';
 
 // Export des types Voice API
-export * from './voice-api';
+export * from './voice-api.js';
 
 // ===== UTILITAIRES PARTAGÉS =====
-export * from '../utils';
+export * from '../utils/index.js';
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
-export * from './socketio-events';
+export * from './socketio-events.js';
 
 // Import pour éviter les conflits de noms
-import type { MessageTranslationCache, SocketIOUser, TranslationData, UserPermissions } from './socketio-events';
+import type { MessageTranslationCache, SocketIOUser, TranslationData, UserPermissions } from './socketio-events.js';
 
 // Ré-export des types essentiels
 export type { TranslationData, MessageTranslationCache, SocketIOUser };
@@ -159,7 +232,7 @@ export interface ServiceHealth {
 // Gardés pour rétrocompatibilité temporaire
 
 // Importation des types de messages consolidés
-import type { Message as ConsolidatedMessage, MessageWithTranslations as ConsolidatedMessageWithTranslations } from './conversation';
+import type { Message as ConsolidatedMessage, MessageWithTranslations as ConsolidatedMessageWithTranslations } from './conversation.js';
 
 // Alias pour rétrocompatibilité
 export type Message = ConsolidatedMessage;
@@ -175,18 +248,9 @@ export interface BubbleTranslation {
   cached?: boolean; // Indique si la traduction vient du cache
 }
 
-/**
- * Types de notification supportés
- */
-export type NotificationType = 
-  | 'message' 
-  | 'group_invite' 
-  | 'conversation_invite' 
-  | 'system' 
-  | 'translation_error' 
-  | 'user_joined' 
-  | 'user_left' 
-  | 'typing';
+// NotificationType est maintenant exporté depuis notification.ts
+// Les anciennes valeurs legacy (message, group_invite, etc.) sont maintenant
+// mappées vers les nouvelles valeurs dans NotificationTypeEnum
 
 /**
  * Message traduit (legacy, utiliser MessageWithTranslations à la place)
@@ -235,20 +299,8 @@ export interface Translation {
   readonly createdAt: Date;
 }
 
-/**
- * Notification utilisateur
- */
-export interface Notification {
-  readonly id: string;
-  readonly userId: string;
-  readonly type: NotificationType;
-  readonly title: string;
-  readonly message: string;
-  readonly isRead: boolean;
-  readonly data?: Readonly<Record<string, string | number | boolean | null>>;
-  readonly createdAt: Date;
-  readonly expiresAt?: Date;
-}
+// Notification est maintenant exporté depuis notification.ts
+// L'interface unifiée supporte à la fois la structure plate (Prisma) et imbriquée (frontend)
 
 export type UserRole = UserRoleEnum;
 
@@ -339,15 +391,16 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<string, UserPermissions>> = {
 // Gardés pour rétrocompatibilité temporaire
 
 // Importation des types unifiés depuis conversation.ts
-import type { 
-  Conversation as UnifiedConversation, 
+import type {
+  Conversation as UnifiedConversation,
   ConversationParticipant as UnifiedConversationParticipant,
   ThreadMember as UnifiedThreadMember
-} from './conversation';
+} from './conversation.js';
 
 // Export des types unifiés (plus de duplication)
+// Note: ThreadMember est le type simplifié pour Socket.IO/UI
+// ConversationMember (Prisma-aligned) est maintenant exporté depuis conversation.ts
 export type ThreadMember = UnifiedThreadMember;
-export type ConversationMember = UnifiedThreadMember; // Alias pour rétrocompatibilité
 export type Conversation = UnifiedConversation;
 export type ConversationParticipant = UnifiedConversationParticipant;
 
@@ -364,18 +417,39 @@ export interface GroupMember {
 }
 
 /**
- * Groupe de conversations
+ * Informations du créateur d'un groupe
+ */
+export interface GroupCreatorInfo {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string;
+  readonly avatar?: string | null;
+}
+
+/**
+ * Groupe de conversations (Community)
+ * Aligné avec le modèle Prisma Community et les réponses API
  */
 export interface Group {
   readonly id: string;
+  readonly identifier?: string;
   readonly name: string;
   readonly description?: string;
+  readonly avatar?: string | null;
   readonly isPrivate: boolean;
   readonly maxMembers?: number;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-  readonly members: readonly GroupMember[];
-  readonly conversations: readonly Conversation[];
+  readonly createdBy?: string;
+  readonly isActive?: boolean;
+  readonly createdAt: Date | string;
+  readonly updatedAt: Date | string;
+  readonly members: readonly GroupMember[] | unknown[];
+  readonly conversations: readonly Conversation[] | string[];
+  readonly creator?: GroupCreatorInfo;
+  readonly _count?: {
+    readonly members: number;
+    readonly Conversation?: number;
+    readonly conversations?: number;
+  };
 }
 
 /**
@@ -522,7 +596,7 @@ export {
   isSupportedLanguage,
   getSupportedLanguageCodes,
   filterSupportedLanguages
-} from '../utils/languages';
+} from '../utils/languages.js';
 
 // Maintenir la compatibilité avec l'ancien type LanguageCode
 export interface LanguageCode {
@@ -638,4 +712,4 @@ export type {
   ConnectionStatus,
   ConnectionDiagnostics,
   UserPermissions
-} from './socketio-events';
+} from './socketio-events.js';

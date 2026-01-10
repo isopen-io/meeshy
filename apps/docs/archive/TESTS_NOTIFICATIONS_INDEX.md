@@ -111,7 +111,7 @@ cd gateway
 npm test -- src/__tests__/notifications-security.test.ts
 ```
 
-### Frontend (`/frontend/__tests__/`)
+### Frontend (`/apps/web/__tests__/`)
 
 #### 5. Tests Disponibilité Firebase
 **Fichier :** `firebase-availability.test.tsx`

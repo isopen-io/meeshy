@@ -5,7 +5,7 @@ Identifier et corriger tous les textes hardcodés (principalement en français) 
 
 ## 📋 Fichiers identifiés avec textes hardcodés
 
-### 1. `/frontend/app/links/page.tsx`
+### 1. `/apps/web/app/links/page.tsx`
 
 #### Ligne 384
 ```typescript
@@ -16,11 +16,11 @@ Identifier et corriger tous les textes hardcodés (principalement en français) 
 {t('stats.activeLinks')}
 ```
 
-**Action** : Le fichier `/frontend/locales/en/links.json` contient déjà `activeLinks`, il suffit d'utiliser `t()` pour les deux cas.
+**Action** : Le fichier `/apps/web/locales/en/links.json` contient déjà `activeLinks`, il suffit d'utiliser `t()` pour les deux cas.
 
 ---
 
-### 2. `/frontend/app/profile/page.tsx`
+### 2. `/apps/web/app/profile/page.tsx`
 
 **⚠️ CE FICHIER N'UTILISE PAS DU TOUT `useI18n`**
 
@@ -48,11 +48,11 @@ Identifier et corriger tous les textes hardcodés (principalement en français) 
 - Ligne 33: Format de date en français `'fr-FR'`
 - Et beaucoup d'autres...
 
-**Action** : Créer `/frontend/locales/en/profile.json` et `/frontend/locales/fr/profile.json`, puis intégrer `useI18n('profile')`.
+**Action** : Créer `/apps/web/locales/en/profile.json` et `/apps/web/locales/fr/profile.json`, puis intégrer `useI18n('profile')`.
 
 ---
 
-### 3. `/frontend/app/contacts/page.tsx`
+### 3. `/apps/web/app/contacts/page.tsx`
 
 #### Ligne 539
 ```typescript
@@ -78,7 +78,7 @@ Identifier et corriger tous les textes hardcodés (principalement en français) 
 }
 ```
 
-**Action** : Vérifier si `/frontend/locales/en/contacts.json` contient ces clés, sinon les ajouter.
+**Action** : Vérifier si `/apps/web/locales/en/contacts.json` contient ces clés, sinon les ajouter.
 
 ---
 
@@ -86,21 +86,21 @@ Identifier et corriger tous les textes hardcodés (principalement en français) 
 
 ### Phase 1 : Vérification des fichiers de traduction existants ✅
 - [x] Vérifier que tous les fichiers `.json` utilisent `{variable}` (pas `{{variable}}`)
-- [x] Créer `/frontend/locales/fr/joinPage.json` (FAIT)
+- [x] Créer `/apps/web/locales/fr/joinPage.json` (FAIT)
 - [x] Corriger syntaxe dans `attachments.json` (FAIT)
 
 ### Phase 2 : Correction des fichiers identifiés
-1. **`/frontend/app/links/page.tsx`**
+1. **`/apps/web/app/links/page.tsx`**
    - [ ] Remplacer `'Liens actifs'` par `t('stats.activeLinks')`
 
-2. **`/frontend/app/contacts/page.tsx`**
-   - [ ] Vérifier `/frontend/locales/en/contacts.json`
+2. **`/apps/web/app/contacts/page.tsx`**
+   - [ ] Vérifier `/apps/web/locales/en/contacts.json`
    - [ ] Ajouter clés manquantes si nécessaire
    - [ ] Remplacer textes hardcodés par `t()`
 
-3. **`/frontend/app/profile/page.tsx`**
-   - [ ] Créer `/frontend/locales/en/profile.json`
-   - [ ] Créer `/frontend/locales/fr/profile.json`
+3. **`/apps/web/app/profile/page.tsx`**
+   - [ ] Créer `/apps/web/locales/en/profile.json`
+   - [ ] Créer `/apps/web/locales/fr/profile.json`
    - [ ] Ajouter `useI18n('profile')` dans le composant
    - [ ] Remplacer TOUS les textes hardcodés
 

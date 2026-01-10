@@ -81,8 +81,8 @@ Envoyez un nouveau message et vérifiez dans les logs du gateway :
 
 #### Problème résolu
 La clé `bubbleStream.connectingWebSocket` existe déjà dans :
-- ✅ `/frontend/locales/en/bubbleStream.json` (ligne 19)
-- ✅ `/frontend/locales/fr/bubbleStream.json` (ligne 19)
+- ✅ `/apps/web/locales/en/bubbleStream.json` (ligne 19)
+- ✅ `/apps/web/locales/fr/bubbleStream.json` (ligne 19)
 
 Si vous voyez encore la clé brute, c'est probablement un problème de cache navigateur.
 

@@ -109,7 +109,7 @@ The notification system contains **26 security vulnerabilities**, including **5 
 - **Risk**: Session hijacking, privacy violation
 - **Fix Required**:
   - [ ] Install `crypto-js` package
-  - [ ] Create `/frontend/utils/secure-storage.ts`
+  - [ ] Create `/apps/web/utils/secure-storage.ts`
   - [ ] Modify `notification-store-v2.ts` to use encryption
   - [ ] Implement data sanitization before storage
   - [ ] Clear localStorage on logout

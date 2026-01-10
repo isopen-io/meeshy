@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 import { sanitizeNotification } from './xss-protection';
-import type { NotificationV2 } from '@/types/notification-v2';
+import type { Notification } from '@/types/notification';
 
 /**
  * Notification Type Enum
@@ -133,7 +133,7 @@ export interface ValidationResult<T> {
  * @param data - Raw Socket.IO event data
  * @returns Validation result with sanitized notification
  */
-export function validateNotificationEvent(data: unknown): ValidationResult<NotificationV2> {
+export function validateNotificationEvent(data: unknown): ValidationResult<Notification> {
   try {
     // Validate structure
     const parsed = NotificationEventSchema.parse(data);
@@ -159,7 +159,7 @@ export function validateNotificationEvent(data: unknown): ValidationResult<Notif
 
     return {
       success: true,
-      data: sanitized as NotificationV2,
+      data: sanitized as Notification,
       sanitized: true
     };
   } catch (error) {
@@ -352,13 +352,13 @@ export function createValidatedHandler<T>(
  * @param notifications - Array of notification objects
  * @returns Array of valid notifications (invalid ones filtered out)
  */
-export function batchValidateNotifications(notifications: unknown[]): NotificationV2[] {
+export function batchValidateNotifications(notifications: unknown[]): Notification[] {
   if (!Array.isArray(notifications)) {
     console.error('[Socket Validator] Expected array of notifications');
     return [];
   }
 
-  const validated: NotificationV2[] = [];
+  const validated: Notification[] = [];
   let invalidCount = 0;
 
   for (const notification of notifications) {
@@ -387,7 +387,7 @@ export function batchValidateNotifications(notifications: unknown[]): Notificati
  * @returns Validation result with validated notifications
  */
 export function validateNotificationResponse(response: unknown): ValidationResult<{
-  notifications: NotificationV2[];
+  notifications: Notification[];
   pagination: {
     offset: number;
     limit: number;

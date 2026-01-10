@@ -154,7 +154,7 @@ import type {
 
 **Distribution Automatique:**
 ```
-/frontend/node_modules/@meeshy/shared/dist/
+/apps/web/node_modules/@meeshy/shared/dist/
 /gateway/node_modules/@meeshy/shared/dist/
 /translator/node_modules/@meeshy/shared/dist/
 ```
