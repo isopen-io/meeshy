@@ -491,6 +491,9 @@ export interface SocketIOUser {
   signalPreKeyBundleVersion?: number;
   lastKeyRotation?: Date;
 
+  // Transcription settings (on-device)
+  autoTranscriptionEnabled?: boolean;  // Auto-transcribe audio/video when no transcription exists
+
   // Voice profile
   voiceProfileConsentAt?: Date;
   ageVerificationConsentAt?: Date;

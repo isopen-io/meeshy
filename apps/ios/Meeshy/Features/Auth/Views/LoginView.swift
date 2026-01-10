@@ -14,6 +14,7 @@ struct LoginView: View {
     @StateObject private var viewModel = LoginViewModel()
     @StateObject private var environmentConfig = EnvironmentConfig.shared
     @State private var showRegisterView = false
+    @State private var showNewOnboarding = false  // v2 - Nouveau flux d'inscription
     @State private var showForgotPasswordView = false
     @State private var showBackendSelector = false
     @State private var pendingRedirectInfo: RegistrationRedirectInfo?
@@ -137,6 +138,13 @@ struct LoginView: View {
             }
             .sheet(isPresented: $showBackendSelector) {
                 BackendSelectorView(config: environmentConfig)
+            }
+            // v2 - Nouveau flux d'inscription animé
+            .fullScreenCover(isPresented: $showNewOnboarding) {
+                OnboardingFlowView {
+                    // Registration completed successfully
+                    showNewOnboarding = false
+                }
             }
             .onTapGesture {
                 hideKeyboard()
@@ -407,7 +415,8 @@ struct LoginView: View {
                     .foregroundColor(.secondary)
 
                 Button(action: {
-                    showRegisterView = true
+                    // v2 - Utiliser le nouveau flux d'inscription animé
+                    showNewOnboarding = true
 
                     // Haptic feedback
                     let generator = UIImpactFeedbackGenerator(style: .light)
