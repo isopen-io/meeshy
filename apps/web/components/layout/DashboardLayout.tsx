@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
-import { NotificationBell } from '@/components/notifications-v2';
+import { NotificationBell } from '@/components/notifications';
 import { ShareAffiliateButton } from '@/components/affiliate/share-affiliate-button';
 import {
   MessageSquare,

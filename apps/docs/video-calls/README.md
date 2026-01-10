@@ -241,8 +241,8 @@ See [SCALING_STRATEGY.md#cost-optimization](./SCALING_STRATEGY.md#cost-optimizat
 ### Internal Resources
 - **Existing Translator Service**: `/translator/`
 - **Gateway Service**: `/gateway/`
-- **Frontend App**: `/frontend/`
-- **Shared Types**: `/frontend/shared/types/`
+- **Frontend App**: `/apps/web/`
+- **Shared Types**: `/apps/web/shared/types/`
 
 ---
 

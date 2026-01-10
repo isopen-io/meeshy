@@ -210,6 +210,8 @@ services:
       PUBLIC_URL: http://localhost:3000
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Encryption keys
+      ATTACHMENT_MASTER_KEY: ${ATTACHMENT_MASTER_KEY:-ZGV2LWF0dGFjaG1lbnQta2V5LTMyLWJ5dGVzLW9ubHk=}
       # User initialization
       FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}

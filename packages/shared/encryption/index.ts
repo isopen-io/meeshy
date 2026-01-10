@@ -5,11 +5,11 @@
  */
 
 // Export core service and interfaces
-export { SharedEncryptionService } from './encryption-service';
+export { SharedEncryptionService } from './encryption-service.js';
 export type {
   EncryptionServiceConfig,
   KeyStorageAdapter,
-} from './encryption-service';
+} from './encryption-service.js';
 
 // Export crypto adapter interface
 export type {
@@ -18,7 +18,7 @@ export type {
   EncryptionResult,
   DecryptionParams,
   KeyPair,
-} from './crypto-adapter';
+} from './crypto-adapter.js';
 
 // Export utility functions
 export {
@@ -34,7 +34,7 @@ export {
   validateMetadata,
   prepareForStorage,
   reconstructPayload,
-} from './encryption-utils';
+} from './encryption-utils.js';
 
 // Export helper functions
 export {
@@ -42,7 +42,7 @@ export {
   base64ToUint8Array,
   stringToUint8Array,
   uint8ArrayToString,
-} from './crypto-adapter';
+} from './crypto-adapter.js';
 
 // Re-export types from shared types
 export type {
@@ -54,10 +54,10 @@ export type {
   SignalKeyBundle,
   ServerEncryptionKey,
   EncryptionStatus,
-} from '../types/encryption';
+} from '../types/encryption.js';
 
 export {
   isMessageEncrypted,
   canAutoTranslate,
   getEncryptionStatus,
-} from '../types/encryption';
+} from '../types/encryption.js';

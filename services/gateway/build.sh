@@ -37,7 +37,7 @@ CUSTOM_TAG=""
 VERSION=""
 IMAGE_NAME="meeshy-gateway"
 REGISTRY="isopen"
-DOCKERFILE="Dockerfile.mongodb"
+DOCKERFILE="Dockerfile"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

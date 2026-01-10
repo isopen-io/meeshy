@@ -107,7 +107,7 @@ docker-compose -f docker-compose.traefik.yml up -d
 
 ### Documentation par Service
 
-- **Frontend**: [frontend/README.md](./frontend/README.md)
+- **Frontend**: [frontend/README.md](./apps/web/README.md)
 - **Gateway**: [gateway/README.md](./gateway/README.md)
 - **Translator**: [translator/README.md](./translator/README.md)
 - **Shared**: [shared/README.md](./shared/README.md)

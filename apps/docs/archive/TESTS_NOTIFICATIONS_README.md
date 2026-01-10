@@ -21,7 +21,7 @@
 | `notifications-performance.test.ts` | Tests de performance | 100-1000 notifications |
 | `notifications-security.test.ts` | Tests de sécurité | XSS, IDOR, rate limiting |
 
-### Frontend (`/frontend/__tests__/`)
+### Frontend (`/apps/web/__tests__/`)
 
 | Fichier | Description | Scénario |
 |---------|-------------|----------|

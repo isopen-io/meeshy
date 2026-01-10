@@ -40,7 +40,7 @@ This document provides a complete overview of the production-ready password rese
 
 ### 1. Services
 
-#### `/frontend/services/password-reset.service.ts`
+#### `/apps/web/services/password-reset.service.ts`
 **Purpose**: API client for password reset operations
 
 **Key Methods**:
@@ -61,7 +61,7 @@ This document provides a complete overview of the production-ready password rese
 
 ### 2. State Management
 
-#### `/frontend/stores/password-reset-store.ts`
+#### `/apps/web/stores/password-reset-store.ts`
 **Purpose**: Zustand store for password reset state
 
 **State**:
@@ -86,7 +86,7 @@ This document provides a complete overview of the production-ready password rese
 
 ### 3. Components
 
-#### `/frontend/components/auth/PasswordStrengthMeter.tsx`
+#### `/apps/web/components/auth/PasswordStrengthMeter.tsx`
 **Purpose**: Visual password strength indicator
 
 **Features**:
@@ -103,7 +103,7 @@ This document provides a complete overview of the production-ready password rese
 
 ---
 
-#### `/frontend/components/auth/PasswordRequirementsChecklist.tsx`
+#### `/apps/web/components/auth/PasswordRequirementsChecklist.tsx`
 **Purpose**: Interactive checklist of password requirements
 
 **Requirements Checked**:
@@ -125,7 +125,7 @@ This document provides a complete overview of the production-ready password rese
 
 ---
 
-#### `/frontend/components/auth/ForgotPasswordForm.tsx`
+#### `/apps/web/components/auth/ForgotPasswordForm.tsx`
 **Purpose**: Form to request password reset
 
 **Features**:
@@ -154,7 +154,7 @@ This document provides a complete overview of the production-ready password rese
 
 ---
 
-#### `/frontend/components/auth/ResetPasswordForm.tsx`
+#### `/apps/web/components/auth/ResetPasswordForm.tsx`
 **Purpose**: Form to reset password with token
 
 **Features**:
@@ -183,7 +183,7 @@ This document provides a complete overview of the production-ready password rese
 
 ### 4. Pages
 
-#### `/frontend/app/forgot-password/page.tsx`
+#### `/apps/web/app/forgot-password/page.tsx`
 **Purpose**: Forgot password page
 
 **Layout**:
@@ -197,7 +197,7 @@ This document provides a complete overview of the production-ready password rese
 
 ---
 
-#### `/frontend/app/forgot-password/check-email/page.tsx`
+#### `/apps/web/app/forgot-password/check-email/page.tsx`
 **Purpose**: Email confirmation page
 
 **Features**:
@@ -217,7 +217,7 @@ This document provides a complete overview of the production-ready password rese
 
 ---
 
-#### `/frontend/app/reset-password/page.tsx`
+#### `/apps/web/app/reset-password/page.tsx`
 **Purpose**: Password reset page
 
 **Features**:
@@ -234,10 +234,10 @@ This document provides a complete overview of the production-ready password rese
 ### 5. Translations
 
 #### Updated Files:
-- `/frontend/locales/en/auth.json` ✅
-- `/frontend/locales/es/auth.json` ⚠️ (needs translation)
-- `/frontend/locales/fr/auth.json` ⚠️ (needs translation)
-- `/frontend/locales/pt/auth.json` ⚠️ (needs translation)
+- `/apps/web/locales/en/auth.json` ✅
+- `/apps/web/locales/es/auth.json` ⚠️ (needs translation)
+- `/apps/web/locales/fr/auth.json` ⚠️ (needs translation)
+- `/apps/web/locales/pt/auth.json` ⚠️ (needs translation)
 
 #### Translation Keys Added:
 ```json
@@ -264,7 +264,7 @@ This document provides a complete overview of the production-ready password rese
 
 ### 6. Updates to Existing Files
 
-#### `/frontend/components/auth/login-form.tsx`
+#### `/apps/web/components/auth/login-form.tsx`
 **Changes**:
 - Added "Forgot Password?" link next to password label
 - Links to `/forgot-password`
@@ -301,7 +301,7 @@ pnpm add zxcvbn @types/zxcvbn
 
 ## Environment Variables
 
-Add to `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local`:
+Add to `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local`:
 
 ```bash
 # hCaptcha
@@ -633,7 +633,7 @@ pnpm install
 
 ### 2. Add Environment Variables
 
-Create or update `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local`:
+Create or update `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local`:
 
 ```bash
 NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_site_key_here
@@ -649,11 +649,11 @@ Ensure the backend gateway has implemented:
 ### 4. Add Missing Translations
 
 Translate the new keys in:
-- `/frontend/locales/es/auth.json`
-- `/frontend/locales/fr/auth.json`
-- `/frontend/locales/pt/auth.json`
+- `/apps/web/locales/es/auth.json`
+- `/apps/web/locales/fr/auth.json`
+- `/apps/web/locales/pt/auth.json`
 
-Copy the structure from `/frontend/locales/en/auth.json` and translate:
+Copy the structure from `/apps/web/locales/en/auth.json` and translate:
 - `forgotPassword` section
 - `checkEmail` section
 - `resetPassword` section

@@ -18,7 +18,7 @@ import {
 } from './use-notifications-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
-import type { NotificationV2, NotificationFilters } from '@/types/notification-v2';
+import type { Notification, NotificationFilters } from '@/types/notification';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
 import { useI18n } from '@/hooks/useI18n';
@@ -61,7 +61,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   ) ?? [];
 
   // Afficher un toast pour une nouvelle notification
-  const showNotificationToast = useCallback((notification: NotificationV2) => {
+  const showNotificationToast = useCallback((notification: Notification) => {
     const title = buildNotificationTitle(notification, t);
     const content = buildNotificationContent(notification, t);
     const link = getNotificationLink(notification);
@@ -91,7 +91,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const handleNewNotification = (notification: NotificationV2) => {
+    const handleNewNotification = (notification: Notification) => {
       // Mettre à jour le cache React Query
       queryClient.setQueryData(
         queryKeys.notifications.lists(),
@@ -127,7 +127,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
             ...old,
             pages: old.pages.map((page: any) => ({
               ...page,
-              notifications: page.notifications?.map((n: NotificationV2) =>
+              notifications: page.notifications?.map((n: Notification) =>
                 n.id === notificationId ? { ...n, isRead: true } : n
               ),
             })),

@@ -513,7 +513,7 @@ Chaque service doit être testé individuellement avant intégration.
 #### Étape 4.1 : Créer le Store Zustand
 
 ```typescript
-// /frontend/stores/notification-store.ts
+// /apps/web/stores/notification-store.ts
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -552,7 +552,7 @@ export const useNotificationStore = create<NotificationState>()(
 #### Étape 4.2 : Créer le Hook avec Détection de Compatibilité
 
 ```typescript
-// /frontend/hooks/use-notifications.ts
+// /apps/web/hooks/use-notifications.ts
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useNotificationStore } from '@/stores/notification-store';
@@ -602,7 +602,7 @@ export function useNotifications() {
 #### Étape 5.1 : Créer les Composants de Base
 
 ```typescript
-// /frontend/components/notifications/NotificationBell.tsx
+// /apps/web/components/notifications/NotificationBell.tsx
 
 'use client';
 
@@ -646,7 +646,7 @@ export function NotificationBell() {
 #### Étape 5.2 : Feature Flag pour Activer Progressivement
 
 ```typescript
-// /frontend/lib/feature-flags.ts
+// /apps/web/lib/feature-flags.ts
 
 export const FEATURE_FLAGS = {
   NOTIFICATIONS_V2: process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS_V2 === 'true',

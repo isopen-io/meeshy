@@ -1,11 +1,11 @@
 /**
  * Hook React pour synchroniser le badge PWA avec les notifications
- * Auto-sync avec notification-store-v2
+ * Auto-sync avec notification-store
  */
 
 import { useEffect, useRef } from 'react';
 import { pwaBadge } from '@/utils/pwa-badge';
-import { useUnreadCountV2 } from '@/stores/notification-store-v2';
+import { useUnreadCount } from '@/stores/notification-store';
 
 interface UsePWABadgeOptions {
   /**
@@ -37,7 +37,7 @@ export function usePWABadge(options: UsePWABadgeOptions = {}) {
     onBadgeUpdate
   } = options;
 
-  const unreadCount = useUnreadCountV2();
+  const unreadCount = useUnreadCount();
   const previousCountRef = useRef<number>(0);
 
   // Vérifier le support au montage

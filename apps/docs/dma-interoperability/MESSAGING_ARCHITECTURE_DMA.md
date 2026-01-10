@@ -986,11 +986,11 @@ GATEWAY
 ### Frontend
 | Fichier | Description |
 |---------|-------------|
-| `/frontend/services/meeshy-socketio.service.ts` | Client Socket.IO |
-| `/frontend/services/messages.service.ts` | Service API messages |
-| `/frontend/services/conversations.service.ts` | Service API conversations |
-| `/frontend/components/common/BubbleMessage.tsx` | Composant affichage message |
-| `/frontend/hooks/use-socketio-messaging.ts` | Hook gestion temps réel |
+| `/apps/web/services/meeshy-socketio.service.ts` | Client Socket.IO |
+| `/apps/web/services/messages.service.ts` | Service API messages |
+| `/apps/web/services/conversations.service.ts` | Service API conversations |
+| `/apps/web/components/common/BubbleMessage.tsx` | Composant affichage message |
+| `/apps/web/hooks/use-socketio-messaging.ts` | Hook gestion temps réel |
 
 ### Types partagés
 | Fichier | Description |

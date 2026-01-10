@@ -213,14 +213,14 @@ export interface Attachment {
    * Metadata JSON contenant des données additionnelles
    */
   readonly metadata?: {
-    audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+    audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
     [key: string]: unknown;
   };
 
   /**
    * @deprecated Use metadata.audioEffectsTimeline instead
    */
-  readonly audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+  readonly audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
 }
 
 /**
@@ -253,7 +253,7 @@ export interface AttachmentMetadata {
    * Timeline des effets audio appliqués pendant l'enregistrement
    * Uniquement pour les fichiers audio enregistrés avec des effets
    */
-  audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+  audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
 }
 
 /**
@@ -282,7 +282,7 @@ export interface UploadedAttachmentResponse {
    * Metadata JSON contenant des données additionnelles (audioEffectsTimeline, etc.)
    */
   readonly metadata?: {
-    audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+    audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
     [key: string]: any;
   };
   /**
@@ -290,7 +290,7 @@ export interface UploadedAttachmentResponse {
    * Uniquement pour les fichiers audio enregistrés avec des effets
    * DEPRECATED: Utiliser metadata.audioEffectsTimeline à la place
    */
-  readonly audioEffectsTimeline?: import('./audio-effects-timeline').AudioEffectsTimeline;
+  readonly audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
 }
 
 /**

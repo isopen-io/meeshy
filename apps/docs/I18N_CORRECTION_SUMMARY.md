@@ -9,7 +9,7 @@ Garantir que toutes les traductions utilisent le hook `useI18n` avec la syntaxe 
 
 ### ✅ Phase 1 : Correction de la syntaxe d'interpolation
 
-#### 1. Fichier `/frontend/locales/fr/joinPage.json` - CRÉÉ
+#### 1. Fichier `/apps/web/locales/fr/joinPage.json` - CRÉÉ
 **Problème** : Fichier manquant, causait un fallback vers l'anglais avec syntaxe incorrecte
 **Solution** : Création du fichier complet avec toutes les traductions françaises
 
@@ -18,25 +18,25 @@ Garantir que toutes les traductions utilisent le hook `useI18n` avec la syntaxe 
 - Syntaxe correcte : `{count}`, `{username}` (pas `{{count}}`)
 - Traduction complète de la page `/join/[linkId]`
 
-#### 2. Fichier `/frontend/locales/en/joinPage.json` - CORRIGÉ
+#### 2. Fichier `/apps/web/locales/en/joinPage.json` - CORRIGÉ
 **Corrections** :
 - `{{count}}` → `{count}`
 - `{{username}}` → `{username}`
 
-#### 3. Fichier `/frontend/locales/fr/attachments.json` - CORRIGÉ
+#### 3. Fichier `/apps/web/locales/fr/attachments.json` - CORRIGÉ
 **Corrections** :
 - `{{size}}` → `{size}`
 - `{{count}}` → `{count}`
 - `{{length}}` → `{length}`
 
-#### 4. Fichier `/frontend/locales/en/attachments.json` - CORRIGÉ
+#### 4. Fichier `/apps/web/locales/en/attachments.json` - CORRIGÉ
 **Corrections** : Identiques à la version française
 
 ---
 
 ### ✅ Phase 2 : Suppression des textes hardcodés
 
-#### 5. Fichier `/frontend/app/links/page.tsx` - CORRIGÉ (ligne 384)
+#### 5. Fichier `/apps/web/app/links/page.tsx` - CORRIGÉ (ligne 384)
 **Avant** :
 ```typescript
 {mainTab === 'shareLinks' ? 'Liens actifs' : t('tracking.stats.activeLinks')}
@@ -49,7 +49,7 @@ Garantir que toutes les traductions utilisent le hook `useI18n` avec la syntaxe 
 
 **Résultat** : Texte maintenant traduit correctement en anglais ET en français selon la langue de l'interface.
 
-#### 6. Fichier `/frontend/app/contacts/page.tsx` - CORRIGÉ (lignes 539-544)
+#### 6. Fichier `/apps/web/app/contacts/page.tsx` - CORRIGÉ (lignes 539-544)
 **Avant** :
 ```typescript
 {searchQuery ? 'Aucun contact trouvé' : 'Aucun contact'}
@@ -68,19 +68,19 @@ Garantir que toutes les traductions utilisent le hook `useI18n` avec la syntaxe 
 }
 ```
 
-**Résultat** : Utilisation des clés existantes dans `/frontend/locales/en/contacts.json`
+**Résultat** : Utilisation des clés existantes dans `/apps/web/locales/en/contacts.json`
 
 ---
 
 ## 📊 Statistiques
 
 ### Fichiers modifiés : 6
-1. ✅ `/frontend/locales/fr/joinPage.json` - **CRÉÉ** (66 clés)
-2. ✅ `/frontend/locales/en/joinPage.json` - **CORRIGÉ** (3 interpolations)
-3. ✅ `/frontend/locales/fr/attachments.json` - **CORRIGÉ** (4 interpolations)
-4. ✅ `/frontend/locales/en/attachments.json` - **CORRIGÉ** (4 interpolations)
-5. ✅ `/frontend/app/links/page.tsx` - **CORRIGÉ** (1 texte hardcodé)
-6. ✅ `/frontend/app/contacts/page.tsx` - **CORRIGÉ** (3 textes hardcodés)
+1. ✅ `/apps/web/locales/fr/joinPage.json` - **CRÉÉ** (66 clés)
+2. ✅ `/apps/web/locales/en/joinPage.json` - **CORRIGÉ** (3 interpolations)
+3. ✅ `/apps/web/locales/fr/attachments.json` - **CORRIGÉ** (4 interpolations)
+4. ✅ `/apps/web/locales/en/attachments.json` - **CORRIGÉ** (4 interpolations)
+5. ✅ `/apps/web/app/links/page.tsx` - **CORRIGÉ** (1 texte hardcodé)
+6. ✅ `/apps/web/app/contacts/page.tsx` - **CORRIGÉ** (3 textes hardcodés)
 
 ### Documentation créée : 3
 1. ✅ `/docs/FIX_I18N_INTERPOLATION.md` - Guide de correction d'interpolation
@@ -100,8 +100,8 @@ grep -rn "{{" frontend/locales/
 ### ✅ Erreurs TypeScript
 ```bash
 # Vérification des fichiers modifiés
-- /frontend/app/links/page.tsx : ✅ Aucune erreur
-- /frontend/app/contacts/page.tsx : ✅ Aucune erreur
+- /apps/web/app/links/page.tsx : ✅ Aucune erreur
+- /apps/web/app/contacts/page.tsx : ✅ Aucune erreur
 ```
 
 ### ✅ Hook useI18n
@@ -115,14 +115,14 @@ grep -rn "{{" frontend/locales/
 
 ## ⚠️ Fichiers restants à traiter (non critique)
 
-### `/frontend/app/profile/page.tsx`
+### `/apps/web/app/profile/page.tsx`
 **Statut** : ⚠️ N'utilise PAS `useI18n` - nombreux textes hardcodés en français
 **Impact** : Page `/profile` non traduite en anglais
 **Priorité** : Moyenne (page moins consultée)
 
 **Actions nécessaires** :
-1. Créer `/frontend/locales/en/profile.json`
-2. Créer `/frontend/locales/fr/profile.json`
+1. Créer `/apps/web/locales/en/profile.json`
+2. Créer `/apps/web/locales/fr/profile.json`
 3. Ajouter `useI18n('profile')` dans le composant
 4. Remplacer ~20+ textes hardcodés
 

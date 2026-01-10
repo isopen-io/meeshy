@@ -725,6 +725,6 @@ Ces exemples de code sont **testés et fonctionnels**. Utilisez-les comme réfé
 4. **Former** de nouveaux développeurs
 
 **Fichiers Source** :
-- AttachmentCarousel : `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/attachments/AttachmentCarousel.tsx`
+- AttachmentCarousel : `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/attachments/AttachmentCarousel.tsx`
 
 **Build Status** : ✅ Compiled successfully

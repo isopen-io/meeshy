@@ -5,30 +5,16 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService } from './EmailService';
+import type {
+  VSecurityEventType,
+  VSecuritySeverity,
+  VSecurityStatus,
+} from '@meeshy/shared/utils/validation';
 
-export type SecurityEventType =
-  | 'PASSWORD_RESET_REQUEST'
-  | 'PASSWORD_RESET_SUCCESS'
-  | 'PASSWORD_RESET_FAILED'
-  | 'PASSWORD_RESET_INVALID_TOKEN'
-  | 'PASSWORD_RESET_EXPIRED_TOKEN'
-  | 'PASSWORD_RESET_TOKEN_REUSE'
-  | 'PASSWORD_RESET_REVOKED_TOKEN'
-  | 'PASSWORD_RESET_UNVERIFIED_EMAIL'
-  | 'PASSWORD_RESET_LOCKED_ACCOUNT'
-  | 'PASSWORD_RESET_ABUSE'
-  | 'ACCOUNT_LOCKED'
-  | 'RATE_LIMIT_EXCEEDED'
-  | 'SUSPICIOUS_PASSWORD_RESET'
-  | 'IMPOSSIBLE_TRAVEL'
-  | 'NEW_DEVICE_DETECTED'
-  | '2FA_FAILED'
-  | 'LOGIN_FAILED'
-  | 'LOGIN_SUCCESS'
-  | 'UNAUTHORIZED_ACCESS';
-
-export type SecuritySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type SecurityStatus = 'SUCCESS' | 'FAILED' | 'BLOCKED';
+// Types re-exported with standard naming convention
+export type SecurityEventType = VSecurityEventType;
+export type SecuritySeverity = VSecuritySeverity;
+export type SecurityStatus = VSecurityStatus;
 
 export interface SecurityEventData {
   userId?: string | null;
@@ -205,7 +191,7 @@ export class SecurityMonitor {
     this.alertThresholds.set('RATE_LIMIT_EXCEEDED', 20);
     this.alertThresholds.set('SUSPICIOUS_PASSWORD_RESET', 1);
     this.alertThresholds.set('IMPOSSIBLE_TRAVEL', 1);
-    this.alertThresholds.set('2FA_FAILED', 5);
+    this.alertThresholds.set('TWO_FA_FAILED', 5);
     this.alertThresholds.set('LOGIN_FAILED', 50);
   }
 

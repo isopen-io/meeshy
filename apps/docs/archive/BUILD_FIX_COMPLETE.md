@@ -27,7 +27,7 @@ Module not found: Can't resolve 'firebase/messaging'
 
 ### 1. Ajout des Dépendances
 
-**Fichier modifié:** `/frontend/package.json`
+**Fichier modifié:** `/apps/web/package.json`
 
 **Dépendances ajoutées:**
 ```json

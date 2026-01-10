@@ -34,7 +34,7 @@ All tasks completed successfully:
 - `DEPLOYMENT_GUIDE.md` - Deployment instructions
 - `IMPLEMENTATION_COMPLETE.md` - Backend completion summary
 
-**Frontend Documentation** (`/frontend/`):
+**Frontend Documentation** (`/apps/web/`):
 - `PASSWORD_RESET_IMPLEMENTATION.md` - Frontend implementation guide
 - `INSTALLATION_INSTRUCTIONS.md` - Frontend setup instructions
 
@@ -74,24 +74,24 @@ All tasks completed successfully:
 
 ### Frontend Code
 
-**Pages** (`/frontend/app/`):
+**Pages** (`/apps/web/app/`):
 - ✅ `/forgot-password/page.tsx` - Email input with hCaptcha
 - ✅ `/forgot-password/check-email/page.tsx` - Email confirmation
 - ✅ `/reset-password/page.tsx` - Password reset with validation
 
-**Components** (`/frontend/components/auth/`):
+**Components** (`/apps/web/components/auth/`):
 - ✅ `ForgotPasswordForm.tsx` - Email form component
 - ✅ `ResetPasswordForm.tsx` - Password reset form
 - ✅ `PasswordStrengthMeter.tsx` - Visual strength indicator
 - ✅ `PasswordRequirementsChecklist.tsx` - Interactive checklist
 
-**Services** (`/frontend/services/`):
+**Services** (`/apps/web/services/`):
 - ✅ `password-reset.service.ts` - API client and utilities
 
-**State Management** (`/frontend/stores/`):
+**State Management** (`/apps/web/stores/`):
 - ✅ `password-reset-store.ts` - Zustand store with persistence
 
-**Translations** (`/frontend/locales/`):
+**Translations** (`/apps/web/locales/`):
 - ✅ `en/auth.json` - English translations (complete)
 - ⚠️ `es/auth.json` - Spanish (needs translation)
 - ⚠️ `fr/auth.json` - French (needs translation)

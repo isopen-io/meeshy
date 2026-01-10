@@ -1,23 +1,21 @@
 #!/bin/bash
 
 # =============================================================================
-# Meeshy Translator - Unified Docker Build Script
+# Meeshy Translator - Docker Build Script
 # =============================================================================
 # Usage: ./build.sh [OPTIONS]
 #
 # Options:
-#   --db=sqlite|mongodb    Database type (default: mongodb)
 #   --push                 Push to Docker Hub (isopen/meeshy-translator)
 #   --multi                Build for multiple platforms (linux/amd64,linux/arm64)
 #   --test                 Run container tests after build
 #   --ovh                  OVHcloud AI Deploy configuration
-#   --tag=TAG              Custom tag (default: latest or mongodb)
+#   --tag=TAG              Custom tag (default: latest)
 #   --version=VERSION      Add version suffix to tags
 #   -h, --help             Show this help message
 #
 # Examples:
-#   ./build.sh                           # Local MongoDB build
-#   ./build.sh --db=sqlite               # Local SQLite build
+#   ./build.sh                           # Local build
 #   ./build.sh --push --multi            # Multi-platform build + push
 #   ./build.sh --push --multi --ovh      # OVHcloud deployment build
 #   ./build.sh --test                    # Build with tests
@@ -79,14 +77,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Determine Dockerfile and tag based on DB type
-if [ "$DB_TYPE" = "sqlite" ]; then
-    DOCKERFILE="Dockerfile"
-    DEFAULT_TAG="latest"
-else
-    DOCKERFILE="Dockerfile.mongodb"
-    DEFAULT_TAG="mongodb"
-fi
+# Dockerfile (MongoDB only - sqlite support removed)
+DOCKERFILE="Dockerfile"
+DEFAULT_TAG="latest"
 
 TAG="${CUSTOM_TAG:-$DEFAULT_TAG}"
 

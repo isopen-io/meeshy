@@ -3,7 +3,7 @@
  * Utilisables dans Gateway et Frontend
  */
 
-import { ErrorCode, ErrorMessages, ErrorStatusMap, type StandardError } from '../types/errors';
+import { ErrorCode, ErrorMessages, ErrorStatusMap, type StandardError } from '../types/errors.js';
 
 /**
  * Classe d'erreur personnalisée pour Meeshy

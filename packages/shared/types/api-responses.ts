@@ -8,7 +8,7 @@
  * - PaginatedResponse: Helper type for paginated responses
  */
 
-import type { ConversationStats } from './conversation';
+import type { ConversationStats } from './conversation.js';
 
 /**
  * Standard pagination metadata - SINGLE SOURCE OF TRUTH

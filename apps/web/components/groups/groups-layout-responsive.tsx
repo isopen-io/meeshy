@@ -26,7 +26,7 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Group } from '@/types/frontend';
+import type { Group } from '@meeshy/shared/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { generateCommunityIdentifier, validateCommunityIdentifier, sanitizeCommunityIdentifier } from '@/utils/community-identifier';

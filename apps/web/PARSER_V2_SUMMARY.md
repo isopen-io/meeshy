@@ -10,7 +10,7 @@ Le parser markdown actuel (V1) présente des problèmes critiques de conformité
 - ❌ Paragraphes fusionnés avec `<br />` au lieu d'espaces
 - ❌ Tabs/espaces traités différemment (1 tab ≠ 4 espaces)
 
-**Analyse complète** : `/frontend/MARKDOWN_PARSER_ANALYSIS.md`
+**Analyse complète** : `/apps/web/MARKDOWN_PARSER_ANALYSIS.md`
 
 ---
 
@@ -51,7 +51,7 @@ Input → Preprocessor → Lexer → Parser → Transformer → Renderer → HTM
 ## Livrables
 
 ### 1. Implémentation Complète
-**Fichier** : `/frontend/services/markdown-parser-v2.ts` (2800+ lignes)
+**Fichier** : `/apps/web/services/markdown-parser-v2.ts` (2800+ lignes)
 
 **Classes** :
 - `MarkdownPreprocessor` - Normalisation input
@@ -68,7 +68,7 @@ renderMarkdownNode(node: MarkdownNode, index: number, options?: RenderOptions): 
 ```
 
 ### 2. Documentation Technique
-**Fichier** : `/frontend/MARKDOWN_PARSER_V2_README.md`
+**Fichier** : `/apps/web/MARKDOWN_PARSER_V2_README.md`
 
 **Contenu** :
 - Architecture détaillée
@@ -78,7 +78,7 @@ renderMarkdownNode(node: MarkdownNode, index: number, options?: RenderOptions): 
 - Configuration
 
 ### 3. Comparaison Visuelle V1 vs V2
-**Fichier** : `/frontend/PARSER_V1_VS_V2_COMPARISON.md`
+**Fichier** : `/apps/web/PARSER_V1_VS_V2_COMPARISON.md`
 
 **Contenu** :
 - 10 tests visuels côte à côte
@@ -86,7 +86,7 @@ renderMarkdownNode(node: MarkdownNode, index: number, options?: RenderOptions): 
 - Métriques d'amélioration
 
 ### 4. Guide de Migration
-**Fichier** : `/frontend/MIGRATION_GUIDE_V2.md`
+**Fichier** : `/apps/web/MIGRATION_GUIDE_V2.md`
 
 **Contenu** :
 - Plan migration 5 semaines (4 phases)
@@ -96,9 +96,9 @@ renderMarkdownNode(node: MarkdownNode, index: number, options?: RenderOptions): 
 
 ### 5. Documents d'Analyse
 **Fichiers existants** :
-- `/frontend/MARKDOWN_PARSER_ANALYSIS.md` - Analyse profonde V1
-- `/frontend/PARSER_VISUAL_EXAMPLES.md` - Exemples visuels problèmes
-- `/frontend/LEXER_PARSER_IMPLEMENTATION.md` - Architecture proposée
+- `/apps/web/MARKDOWN_PARSER_ANALYSIS.md` - Analyse profonde V1
+- `/apps/web/PARSER_VISUAL_EXAMPLES.md` - Exemples visuels problèmes
+- `/apps/web/LEXER_PARSER_IMPLEMENTATION.md` - Architecture proposée
 
 ---
 
@@ -354,13 +354,13 @@ Le Markdown Parser V2 est une **réécriture complète** basée sur une **archit
 
 ## Documents de Référence
 
-1. **Implémentation** : `/frontend/services/markdown-parser-v2.ts`
-2. **Documentation** : `/frontend/MARKDOWN_PARSER_V2_README.md`
-3. **Comparaison** : `/frontend/PARSER_V1_VS_V2_COMPARISON.md`
-4. **Migration** : `/frontend/MIGRATION_GUIDE_V2.md`
-5. **Analyse V1** : `/frontend/MARKDOWN_PARSER_ANALYSIS.md`
-6. **Exemples** : `/frontend/PARSER_VISUAL_EXAMPLES.md`
-7. **Architecture** : `/frontend/LEXER_PARSER_IMPLEMENTATION.md`
+1. **Implémentation** : `/apps/web/services/markdown-parser-v2.ts`
+2. **Documentation** : `/apps/web/MARKDOWN_PARSER_V2_README.md`
+3. **Comparaison** : `/apps/web/PARSER_V1_VS_V2_COMPARISON.md`
+4. **Migration** : `/apps/web/MIGRATION_GUIDE_V2.md`
+5. **Analyse V1** : `/apps/web/MARKDOWN_PARSER_ANALYSIS.md`
+6. **Exemples** : `/apps/web/PARSER_VISUAL_EXAMPLES.md`
+7. **Architecture** : `/apps/web/LEXER_PARSER_IMPLEMENTATION.md`
 
 ---
 

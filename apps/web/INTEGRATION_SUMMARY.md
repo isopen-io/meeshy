@@ -19,20 +19,20 @@ Intégrer méticuleusement le système de notifications dans le frontend Meeshy 
 ## Fichiers Créés
 
 ### 1. Service de Vérification Firebase
-**Fichier:** `/frontend/utils/firebase-availability-checker.ts`
+**Fichier:** `/apps/web/utils/firebase-availability-checker.ts`
 - ✅ Singleton pour vérifier Firebase UNE FOIS au démarrage
 - ✅ Retourne un `FirebaseStatus` complet
 - ✅ Ne bloque jamais le rendu de l'app
 - ✅ API simple : `isAvailable()`, `isPushEnabled()`, `isBadgeEnabled()`
 
 ### 2. Hook d'Initialisation
-**Fichier:** `/frontend/hooks/use-firebase-init.ts`
+**Fichier:** `/apps/web/hooks/use-firebase-init.ts`
 - ✅ Hook React pour vérifier Firebase au montage
 - ✅ Logs colorés pour développement
 - ✅ États : `status`, `loading`, `error`
 
 ### 3. Provider d'Initialisation
-**Fichier:** `/frontend/components/providers/FirebaseInitializer.tsx`
+**Fichier:** `/apps/web/components/providers/FirebaseInitializer.tsx`
 - ✅ Composant invisible pour initialiser Firebase au démarrage
 - ✅ Intégré dans `app/layout.tsx`
 - ✅ Logs clairs selon disponibilité Firebase
@@ -42,37 +42,37 @@ Intégrer méticuleusement le système de notifications dans le frontend Meeshy 
 ## Fichiers Modifiés
 
 ### 1. FCM Manager
-**Fichier:** `/frontend/utils/fcm-manager.ts`
+**Fichier:** `/apps/web/utils/fcm-manager.ts`
 - ✅ Vérification `firebaseChecker.isAvailable()` avant toute opération
 - ✅ Méthode `initialize()` retourne `false` si Firebase non disponible
 - ✅ `requestPermission()` retourne `denied` gracieusement
 
 ### 2. PWA Badge Manager
-**Fichier:** `/frontend/utils/pwa-badge.ts`
+**Fichier:** `/apps/web/utils/pwa-badge.ts`
 - ✅ Vérification `firebaseChecker.isBadgeEnabled()` avant chaque action
 - ✅ Logs clairs "PWA Badges disabled"
 - ✅ Pas de crash si Firebase non disponible
 
 ### 3. Hook FCM Notifications
-**Fichier:** `/frontend/hooks/use-fcm-notifications.ts`
+**Fichier:** `/apps/web/hooks/use-fcm-notifications.ts`
 - ✅ Sortie précoce si Firebase non disponible
 - ✅ Initialisation FCM conditionnelle
 - ✅ WebSocket toujours initialisé
 
 ### 4. Notification Store (Zustand)
-**Fichier:** `/frontend/stores/notification-store-v2.ts`
+**Fichier:** `/apps/web/stores/notification-store-v2.ts`
 - ✅ Toujours initialiser WebSocket (toujours disponible)
 - ✅ Firebase optionnel, n'bloque pas l'initialisation
 - ✅ Try/catch autour FCM init (non-critique)
 
 ### 5. Firebase Config
-**Fichier:** `/frontend/firebase-config.ts`
+**Fichier:** `/apps/web/firebase-config.ts`
 - ✅ Nouvelle fonction `getFirebaseApp()` avec vérification
 - ✅ Retourne `null` si Firebase non disponible
 - ✅ Import du `firebaseChecker`
 
 ### 6. Service Worker
-**Fichier:** `/frontend/public/firebase-messaging-sw.js`
+**Fichier:** `/apps/web/public/firebase-messaging-sw.js`
 - ✅ Try/catch autour de `importScripts()`
 - ✅ Variable `firebaseLoaded` pour tracking
 - ✅ Initialisation conditionnelle de Firebase
@@ -80,18 +80,18 @@ Intégrer méticuleusement le système de notifications dans le frontend Meeshy 
 - ✅ **PAS DE CRASH** si scripts Firebase ne se chargent pas
 
 ### 7. Composant Permission Prompt
-**Fichier:** `/frontend/components/notifications-v2/NotificationPermissionPrompt.tsx`
+**Fichier:** `/apps/web/components/notifications-v2/NotificationPermissionPrompt.tsx`
 - ✅ Retourne `null` si Firebase non disponible
 - ✅ Pas d'affichage du prompt sans Firebase
 
 ### 8. Layout Principal
-**Fichier:** `/frontend/app/layout.tsx`
+**Fichier:** `/apps/web/app/layout.tsx`
 - ✅ Import de `FirebaseInitializer`
 - ✅ Ajout du composant dans le body
 - ✅ Vérification au démarrage de l'app
 
 ### 9. Fichier .env.example
-**Fichier:** `/frontend/.env.example`
+**Fichier:** `/apps/web/.env.example`
 - ✅ Commentaires explicatifs ajoutés
 - ✅ Indique que Firebase est OPTIONNEL
 - ✅ Documentation des feature flags
@@ -101,7 +101,7 @@ Intégrer méticuleusement le système de notifications dans le frontend Meeshy 
 ## Documentation Créée
 
 ### 1. Guide d'Intégration
-**Fichier:** `/frontend/NOTIFICATION_INTEGRATION_FRONTEND.md`
+**Fichier:** `/apps/web/NOTIFICATION_INTEGRATION_FRONTEND.md`
 - ✅ Architecture complète
 - ✅ Fichiers créés et modifiés
 - ✅ Variables d'environnement
@@ -112,7 +112,7 @@ Intégrer méticuleusement le système de notifications dans le frontend Meeshy 
 - ✅ Checklist de validation
 
 ### 2. Récapitulatif
-**Fichier:** `/frontend/INTEGRATION_SUMMARY.md` (ce fichier)
+**Fichier:** `/apps/web/INTEGRATION_SUMMARY.md` (ce fichier)
 
 ---
 
@@ -287,7 +287,7 @@ NEXT_PUBLIC_ENABLE_PWA_BADGES=true
 ## Contacts & Support
 
 Pour toute question :
-1. Consulter `/frontend/NOTIFICATION_INTEGRATION_FRONTEND.md`
+1. Consulter `/apps/web/NOTIFICATION_INTEGRATION_FRONTEND.md`
 2. Vérifier les logs navigateur
 3. Utiliser `firebaseChecker.getDebugReport()` pour diagnostic
 

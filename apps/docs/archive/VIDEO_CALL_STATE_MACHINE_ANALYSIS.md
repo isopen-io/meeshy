@@ -135,7 +135,7 @@ enum CallMode {
 
 ## 3. Frontend State Management (Zustand)
 
-### Location: `/frontend/stores/call-store.ts`
+### Location: `/apps/web/stores/call-store.ts`
 
 ```typescript
 interface CallState {
@@ -729,9 +729,9 @@ const handleParticipantLeft = (event: CallParticipantLeftEvent) => {
 **Reviewed Components**:
 - `/shared/types/video-call.ts`
 - `/shared/schema.prisma`
-- `/frontend/stores/call-store.ts`
-- `/frontend/components/video-call/CallManager.tsx`
-- `/frontend/components/video-calls/VideoCallInterface.tsx`
-- `/frontend/components/conversations/ConversationLayout.tsx`
+- `/apps/web/stores/call-store.ts`
+- `/apps/web/components/video-call/CallManager.tsx`
+- `/apps/web/components/video-calls/VideoCallInterface.tsx`
+- `/apps/web/components/conversations/ConversationLayout.tsx`
 - `/gateway/src/services/CallService.ts`
 - `/gateway/src/socketio/CallEventsHandler.ts`

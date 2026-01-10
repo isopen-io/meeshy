@@ -26,7 +26,7 @@
 ## Fichiers Créés
 
 ### 1. Parser Principal
-**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/markdown-parser-v2.2-optimized.ts`
+**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/markdown-parser-v2.2-optimized.ts`
 
 **Taille:** ~1150 lignes
 
@@ -52,7 +52,7 @@
 
 ### 3. Tests
 
-**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/__tests__/markdown-parser-v2.2-quick-test.ts`
+**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/__tests__/markdown-parser-v2.2-quick-test.ts`
 
 **Tests inclus:**
 - Performance tests (import, simple, complex, cache)
@@ -64,7 +64,7 @@
 
 ### 4. Benchmark
 
-**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/scripts/benchmark-parser-v2.2.js`
+**Fichier:** `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/scripts/benchmark-parser-v2.2.js`
 
 **Benchmarks:**
 - Simple messages (5 messages, 100 iterations)

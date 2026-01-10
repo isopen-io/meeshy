@@ -50,9 +50,9 @@ MAX_DELIMITER_STACK_SIZE = 100  // Stack limitée
 
 ## 📦 Fichiers Livrés
 
-1. `/frontend/services/markdown-parser-v2-fixed.ts` (1710 lignes)
-2. `/frontend/PARSER_V2_FIXES_CHANGELOG.md` (changelog détaillé)
-3. `/frontend/PARSER_V2_SECURITY_FIXES_SUMMARY.md` (résumé exécutif)
+1. `/apps/web/services/markdown-parser-v2-fixed.ts` (1710 lignes)
+2. `/apps/web/PARSER_V2_FIXES_CHANGELOG.md` (changelog détaillé)
+3. `/apps/web/PARSER_V2_SECURITY_FIXES_SUMMARY.md` (résumé exécutif)
 
 ---
 
