@@ -90,7 +90,7 @@ import { AttachmentGallery } from '@/components/attachments/AttachmentGallery';
 
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useNotifications } from '@/hooks/use-notifications';
-import { useNotificationActionsV2 } from '@/stores/notification-store-v2';
+import { useNotificationActions } from '@/stores/notification-store';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
@@ -128,8 +128,8 @@ export function BubbleStreamPage({ user, conversationId = 'meeshy', isAnonymousM
   // Hook pour fixer les z-index des composants Radix UI
   useFixRadixZIndex();
 
-  // Hook pour le système de notifications v2
-  const { setActiveConversationId } = useNotificationActionsV2();
+  // Hook pour le système de notifications
+  const { setActiveConversationId } = useNotificationActions();
 
   // Hook pour la pagination infinie des messages (React Query)
   const {

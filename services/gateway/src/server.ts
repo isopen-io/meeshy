@@ -17,6 +17,8 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import winston from 'winston';
 import * as fs from 'fs';
@@ -94,6 +96,10 @@ function loadConfiguration(): Config {
 }
 
 const config = loadConfiguration();
+
+// API versioning
+const API_VERSION = 'v1';
+const API_PREFIX = `/api/${API_VERSION}`;
 
 // ============================================================================
 // LOGGER SETUP
@@ -388,6 +394,95 @@ class MeeshyServer {
       credentials: true
     });
 
+    // OpenAPI/Swagger documentation
+    await this.server.register(swagger, {
+      openapi: {
+        openapi: '3.1.0',
+        info: {
+          title: 'Meeshy API',
+          description: `
+Meeshy Gateway API - Real-time multilingual messaging platform.
+
+## Authentication
+All endpoints require JWT authentication via Bearer token, unless otherwise specified.
+
+## Rate Limits
+- Global: 300 requests/minute per IP
+- Messages: 20 messages/minute per user
+- Authentication: 5 attempts/15 minutes
+
+## API Versioning
+All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced in new versions.
+          `,
+          version: '1.0.0',
+          contact: {
+            name: 'Meeshy API Support',
+            email: 'support@meeshy.me',
+            url: 'https://meeshy.me'
+          },
+          license: {
+            name: 'Proprietary',
+            url: 'https://meeshy.me/terms'
+          }
+        },
+        servers: [
+          { url: 'https://gate.meeshy.me', description: 'Production' },
+          { url: 'http://localhost:3000', description: 'Development' }
+        ],
+        tags: [
+          { name: 'auth', description: 'Authentication and registration' },
+          { name: 'users', description: 'User management' },
+          { name: 'conversations', description: 'Conversation management' },
+          { name: 'messages', description: 'Message operations' },
+          { name: 'notifications', description: 'Notification management' },
+          { name: 'calls', description: 'Video/voice calls' },
+          { name: 'communities', description: 'Community management' },
+          { name: 'friends', description: 'Friend requests and contacts' },
+          { name: 'attachments', description: 'File uploads and downloads' },
+          { name: 'translation', description: 'Translation services' },
+          { name: 'admin', description: 'Admin operations' }
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'JWT',
+              description: 'JWT token obtained from /api/v1/auth/login'
+            },
+            sessionToken: {
+              type: 'apiKey',
+              in: 'header',
+              name: 'X-Session-Token',
+              description: 'Session token for anonymous users'
+            }
+          }
+        },
+        security: [{ bearerAuth: [] }]
+      }
+    });
+
+    await this.server.register(swaggerUi, {
+      routePrefix: '/docs',
+      uiConfig: {
+        docExpansion: 'list',
+        deepLinking: true,
+        displayRequestDuration: true,
+        filter: true,
+        showExtensions: true,
+        syntaxHighlight: {
+          activate: true,
+          theme: 'monokai'
+        }
+      },
+      staticCSP: true,
+      transformStaticCSP: (header) => header,
+      transformSpecification: (swaggerObject) => swaggerObject,
+      transformSpecificationClone: true
+    });
+
+    logger.info('✅ Swagger UI configured at /docs');
+
     // JWT authentication
     await this.server.register(jwt, {
       secret: config.jwtSecret
@@ -623,56 +718,56 @@ class MeeshyServer {
 
       // Enregistrer les routes de gestion des jobs de traduction
       await fastify.register(translationJobsRoutes);
-    }, { prefix: '/api' });
+    }, { prefix: API_PREFIX });
     
     // Register authentication routes with /api/auth prefix
-    await this.server.register(authRoutes, { prefix: '/api/auth' });
+    await this.server.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
 
     // Register password reset routes with /api/auth prefix
-    await this.server.register(passwordResetRoutes, { prefix: '/api/auth' });
+    await this.server.register(passwordResetRoutes, { prefix: `${API_PREFIX}/auth` });
 
     // Register user deletions routes (delete for me feature)
     await this.server.register(userDeletionsRoutes, { prefix: '' });
 
     // Register authentication test routes for Phase 3.1.1
-    await this.server.register(authTestRoutes, { prefix: '/api' });
+    await this.server.register(authTestRoutes, { prefix: API_PREFIX });
     
     // Register conversation routes with /api prefix
     await this.server.register(async (fastify) => {
       await conversationRoutes(fastify);
-    }, { prefix: '/api' });
+    }, { prefix: API_PREFIX });
     // Register links management routes
-    await this.server.register(linksRoutes, { prefix: '/api' });
+    await this.server.register(linksRoutes, { prefix: API_PREFIX });
     
     // Register tracking links routes
-    await this.server.register(trackingLinksRoutes, { prefix: '/api' });
+    await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });
     
     // Register anonymous participation routes
-    await this.server.register(anonymousRoutes, { prefix: '/api' });
+    await this.server.register(anonymousRoutes, { prefix: API_PREFIX });
     
     // Register community routes
-    await this.server.register(communityRoutes, { prefix: '/api' });
+    await this.server.register(communityRoutes, { prefix: API_PREFIX });
     
     // Register admin routes with /api/admin prefix
-    await this.server.register(adminRoutes, { prefix: '/api/admin' });
+    await this.server.register(adminRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register enhanced admin user management routes (at /api/admin/user-management)
-    await this.server.register(userAdminRoutes, { prefix: '/api' });
+    await this.server.register(userAdminRoutes, { prefix: API_PREFIX });
 
     // Register admin report routes (at /api/admin/reports)
-    await this.server.register(reportRoutes, { prefix: '/api/admin/reports' });
+    await this.server.register(reportRoutes, { prefix: `${API_PREFIX}/admin/reports` });
 
     // Register admin invitations routes (at /api/admin/invitations)
-    await this.server.register(invitationRoutes, { prefix: '/api/admin/invitations' });
+    await this.server.register(invitationRoutes, { prefix: `${API_PREFIX}/admin/invitations` });
 
     // Register admin analytics routes (at /api/admin/analytics)
-    await this.server.register(analyticsRoutes, { prefix: '/api/admin/analytics' });
+    await this.server.register(analyticsRoutes, { prefix: `${API_PREFIX}/admin/analytics` });
 
     // Register admin languages routes (at /api/admin/languages)
-    await this.server.register(languagesRoutes, { prefix: '/api/admin/languages' });
+    await this.server.register(languagesRoutes, { prefix: `${API_PREFIX}/admin/languages` });
 
     // Register admin messages routes (at /api/admin/messages)
-    await this.server.register(messagesRoutes, { prefix: '/api/admin/messages' });
+    await this.server.register(messagesRoutes, { prefix: `${API_PREFIX}/admin/messages` });
 
     // Register admin communities routes (at /api/admin/communities)
     //     await this.server.register(communityAdminRoutes, { prefix: '/api/admin/communities' });
@@ -681,13 +776,13 @@ class MeeshyServer {
     //     await this.server.register(linksAdminRoutes, { prefix: '/api/admin/links' });
 
     // Register user routes
-    await this.server.register(userRoutes, { prefix: '/api' });
+    await this.server.register(userRoutes, { prefix: API_PREFIX });
     
     // Register user preferences routes with /api prefix
-    await this.server.register(userPreferencesRoutes, { prefix: '/api' });
+    await this.server.register(userPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation preferences routes with /api prefix
-    await this.server.register(conversationPreferencesRoutes, { prefix: '/api' });
+    await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation encryption routes with /api prefix
     await this.server.register(conversationEncryptionRoutes, { prefix: '' });
@@ -696,35 +791,35 @@ class MeeshyServer {
     await this.server.register(encryptionKeysRoutes, { prefix: '' });
 
     // Register affiliate routes
-    await this.server.register(affiliateRoutes, { prefix: '/api' });
+    await this.server.register(affiliateRoutes, { prefix: API_PREFIX });
 
 
     // Register maintenance routes with /api prefix
-    await this.server.register(maintenanceRoutes, { prefix: '/api' });
+    await this.server.register(maintenanceRoutes, { prefix: API_PREFIX });
     
     // Register message routes with /api prefix
-    await this.server.register(messageRoutes, { prefix: '/api' });
+    await this.server.register(messageRoutes, { prefix: API_PREFIX });
 
     // Register mention routes with /api prefix
-    await this.server.register(mentionRoutes, { prefix: '/api' });
+    await this.server.register(mentionRoutes, { prefix: API_PREFIX });
 
     // Register attachment routes with /api prefix
-    await this.server.register(attachmentRoutes, { prefix: '/api' });
+    await this.server.register(attachmentRoutes, { prefix: API_PREFIX });
 
     // Register reaction routes with /api prefix
-    await this.server.register(reactionRoutes, { prefix: '/api' });
+    await this.server.register(reactionRoutes, { prefix: API_PREFIX });
 
     // Register notification routes with /api prefix
-    await this.server.register(notificationRoutes, { prefix: '/api' });
+    await this.server.register(notificationRoutes, { prefix: API_PREFIX });
     
     // Register friend request routes with /api prefix
-    await this.server.register(friendRequestRoutes, { prefix: '/api' });
+    await this.server.register(friendRequestRoutes, { prefix: API_PREFIX });
 
     // Register call routes with /api prefix (Phase 1A: P2P Video Calls MVP)
-    await this.server.register(callRoutes, { prefix: '/api' });
+    await this.server.register(callRoutes, { prefix: API_PREFIX });
 
     // Register voice profile routes with /api/voice/profile prefix
-    await this.server.register(voiceProfileRoutes, { prefix: '/api/voice/profile' });
+    await this.server.register(voiceProfileRoutes, { prefix: `${API_PREFIX}/voice/profile` });
 
     logger.info('✓ REST API routes configured successfully');
   }

@@ -4,15 +4,15 @@
 
 ### ✅ Fichiers Créés (4)
 
-1. **`/frontend/stores/user-store.ts`**
+1. **`/apps/web/stores/user-store.ts`**
    - Store Zustand global pour les statuts utilisateur
    - API: `participants`, `setParticipants`, `updateUserStatus`, `getUserById`, `clearStore`
 
-2. **`/frontend/hooks/use-user-status-realtime.ts`**
+2. **`/apps/web/hooks/use-user-status-realtime.ts`**
    - Hook pour activer les listeners Socket.IO USER_STATUS
    - Écoute les événements temps réel et met à jour le store automatiquement
 
-3. **`/frontend/hooks/use-manual-status-refresh.ts`**
+3. **`/apps/web/hooks/use-manual-status-refresh.ts`**
    - Hook de fallback pour rafraîchissement manuel (si WebSocket down)
    - Retourne: `{ refresh, isRefreshing }`
 
@@ -23,13 +23,13 @@
 
 ### ❌ Fichiers Supprimés (1)
 
-1. **`/frontend/hooks/use-participants-status-polling.ts`** ❌ SUPPRIMÉ
+1. **`/apps/web/hooks/use-participants-status-polling.ts`** ❌ SUPPRIMÉ
    - Hook de polling HTTP (3 minutes)
    - Remplacé par `use-user-status-realtime.ts`
 
 ### 🔄 Fichiers Modifiés (1)
 
-1. **`/frontend/components/conversations/conversation-participants-drawer.tsx`**
+1. **`/apps/web/components/conversations/conversation-participants-drawer.tsx`**
    - Ajout de `useUserStatusRealtime()` pour temps réel
    - Ajout de `useUserStore` pour lire les statuts
    - Ajout de `useManualStatusRefresh` pour fallback

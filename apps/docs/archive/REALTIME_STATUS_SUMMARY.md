@@ -14,11 +14,11 @@ Le système de polling HTTP (3 minutes) a été **complètement supprimé** et r
 ## Fichiers Créés
 
 ### 1. Stores
-- `/frontend/stores/user-store.ts` - Store global Zustand pour les statuts utilisateur
+- `/apps/web/stores/user-store.ts` - Store global Zustand pour les statuts utilisateur
 
 ### 2. Hooks
-- `/frontend/hooks/use-user-status-realtime.ts` - Hook pour activer les listeners Socket.IO
-- `/frontend/hooks/use-manual-status-refresh.ts` - Hook de fallback pour rafraîchissement manuel
+- `/apps/web/hooks/use-user-status-realtime.ts` - Hook pour activer les listeners Socket.IO
+- `/apps/web/hooks/use-manual-status-refresh.ts` - Hook de fallback pour rafraîchissement manuel
 
 ### 3. Documentation
 - `/MIGRATION_USER_STATUS_REALTIME.md` - Guide de migration complet
@@ -29,13 +29,13 @@ Le système de polling HTTP (3 minutes) a été **complètement supprimé** et r
 
 ## Fichiers Supprimés
 
-- `/frontend/hooks/use-participants-status-polling.ts` ❌ **SUPPRIMÉ**
+- `/apps/web/hooks/use-participants-status-polling.ts` ❌ **SUPPRIMÉ**
 
 ---
 
 ## Fichiers Modifiés
 
-### `/frontend/components/conversations/conversation-participants-drawer.tsx`
+### `/apps/web/components/conversations/conversation-participants-drawer.tsx`
 - Ajout de `useUserStatusRealtime()` pour activer les listeners
 - Ajout de `useUserStore` pour lire les statuts temps réel
 - Ajout de `useManualStatusRefresh` pour fallback manuel
@@ -181,8 +181,8 @@ return () => unsubscribe();
 
 Les composants suivants pourraient bénéficier du système temps réel:
 
-1. `/frontend/app/contacts/page.tsx` - Liste des contacts avec statuts
-2. `/frontend/components/conversations/ConversationList.tsx` - Liste des conversations
+1. `/apps/web/app/contacts/page.tsx` - Liste des contacts avec statuts
+2. `/apps/web/components/conversations/ConversationList.tsx` - Liste des conversations
 3. Tout composant affichant une liste d'utilisateurs avec statuts
 
 **Migration:**
@@ -246,8 +246,8 @@ Les composants suivants pourraient bénéficier du système temps réel:
 ## Prochaines Étapes
 
 ### Court Terme
-- [ ] Migrer `/frontend/app/contacts/page.tsx`
-- [ ] Migrer `/frontend/components/conversations/ConversationList.tsx`
+- [ ] Migrer `/apps/web/app/contacts/page.tsx`
+- [ ] Migrer `/apps/web/components/conversations/ConversationList.tsx`
 - [ ] Ajouter des tests E2E pour les statuts temps réel
 
 ### Moyen Terme
@@ -285,9 +285,9 @@ Les composants suivants pourraient bénéficier du système temps réel:
 
 - [Guide de Migration](/MIGRATION_USER_STATUS_REALTIME.md)
 - [Exemple Contacts Page](/EXAMPLE_CONTACTS_PAGE_REALTIME.md)
-- [Socket.IO Service](/frontend/services/meeshy-socketio.service.ts)
-- [User Store](/frontend/stores/user-store.ts)
-- [Hook Realtime](/frontend/hooks/use-user-status-realtime.ts)
+- [Socket.IO Service](/apps/web/services/meeshy-socketio.service.ts)
+- [User Store](/apps/web/stores/user-store.ts)
+- [Hook Realtime](/apps/web/hooks/use-user-status-realtime.ts)
 
 ---
 

@@ -3,7 +3,7 @@
  * Harmonisation Gateway ↔ Frontend
  */
 
-import type { ConversationShareLink } from './conversation';
+import type { ConversationShareLink } from './conversation.js';
 
 /**
  * Branded type pour les identifiants de participants anonymes

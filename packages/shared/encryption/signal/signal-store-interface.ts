@@ -5,9 +5,9 @@
  * Implementations will use database (Node.js) or IndexedDB (Browser).
  */
 
-import type { PreKey, SignedPreKey, SignalKeyPair, Direction, DistributionId } from './signal-types';
+import type { PreKey, SignedPreKey, SignalKeyPair, Direction, DistributionId } from './signal-types.js';
 
-export { Direction } from './signal-types';
+export { Direction } from './signal-types.js';
 
 /**
  * Address for a Signal Protocol session

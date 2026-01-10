@@ -48,14 +48,15 @@ type SortOption = 'date-desc' | 'date-asc' | 'unread-first' | 'type';
  */
 function buildNotificationTitle(notification: Notification, t: (key: string, params?: Record<string, string>) => string): string {
   // Utiliser la fonction centralisée pour obtenir le nom de l'expéditeur
+  // Support both nested (sender) and flat (legacy) structures
   const senderName = getUserDisplayName({
-    displayName: notification.data?.senderDisplayName,
-    firstName: notification.data?.senderFirstName || notification.senderName?.split(' ')[0],
-    lastName: notification.data?.senderLastName || notification.senderName?.split(' ')[1],
-    username: notification.senderUsername
+    displayName: notification.sender?.displayName || (notification.data?.senderDisplayName as string | undefined),
+    firstName: notification.sender?.firstName || (notification.data?.senderFirstName as string | undefined),
+    lastName: notification.sender?.lastName || (notification.data?.senderLastName as string | undefined),
+    username: notification.sender?.username || notification.senderUsername
   }, 'Un utilisateur');
 
-  const conversationTitle = notification.conversationTitle || 'la conversation';
+  const conversationTitle = notification.context?.conversationTitle || (notification.data?.conversationTitle as string | undefined) || 'la conversation';
 
   switch (notification.type) {
     case 'new_message':
@@ -70,7 +71,7 @@ function buildNotificationTitle(notification: Notification, t: (key: string, par
       return t('titles.mentioned', { sender: senderName });
 
     case 'message_reaction':
-      const emoji = notification.data?.emoji || '❤️';
+      const emoji = (notification.data?.emoji as string) || '❤️';
       return t('titles.reaction', { sender: senderName, emoji });
 
     case 'missed_call':
@@ -81,7 +82,7 @@ function buildNotificationTitle(notification: Notification, t: (key: string, par
     case 'new_conversation_direct':
     case 'new_conversation_group':
       // Déterminer si c'est une conversation directe ou de groupe
-      if (notification.conversationType === 'direct' || notification.type === 'new_conversation_direct') {
+      if (notification.context?.conversationType === 'direct' || notification.type === 'new_conversation_direct') {
         return t('titles.newConversationDirect', { sender: senderName });
       } else {
         return t('titles.newConversationGroup', { title: conversationTitle });
@@ -158,12 +159,12 @@ function NotificationsPageContent() {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(n => {
         const title = (n.title || '').toLowerCase();
-        const message = (n.message || '').toLowerCase();
+        const content = (n.content || '').toLowerCase();
         const preview = (n.messagePreview || '').toLowerCase();
-        const senderName = (n.senderName || n.senderUsername || '').toLowerCase();
+        const senderName = (n.sender?.username || n.senderUsername || '').toLowerCase();
 
         return title.includes(query) ||
-               message.includes(query) ||
+               content.includes(query) ||
                preview.includes(query) ||
                senderName.includes(query);
       });
@@ -173,21 +174,21 @@ function NotificationsPageContent() {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortOption) {
         case 'date-asc':
-          return a.timestamp.getTime() - b.timestamp.getTime();
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'date-desc':
-          return b.timestamp.getTime() - a.timestamp.getTime();
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         case 'unread-first':
           if (a.isRead === b.isRead) {
-            return b.timestamp.getTime() - a.timestamp.getTime();
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           }
           return a.isRead ? 1 : -1;
         case 'type':
           if (a.type === b.type) {
-            return b.timestamp.getTime() - a.timestamp.getTime();
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           }
           return a.type.localeCompare(b.type);
         default:
-          return b.timestamp.getTime() - a.timestamp.getTime();
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
 
@@ -627,11 +628,11 @@ function NotificationsPageContent() {
                             )}
 
                             {/* Avatar ou icône */}
-                            {notification.senderAvatar || notification.senderId ? (
+                            {notification.sender?.avatar || notification.senderId ? (
                               <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
-                                <AvatarImage src={notification.senderAvatar} alt={notification.senderUsername || 'User'} />
+                                <AvatarImage src={notification.sender?.avatar} alt={notification.sender?.username || 'User'} />
                                 <AvatarFallback className="text-xs sm:text-sm">
-                                  {(notification.senderUsername || 'U').charAt(0).toUpperCase()}
+                                  {(notification.sender?.username || 'U').charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                             ) : (
@@ -663,9 +664,9 @@ function NotificationsPageContent() {
                               </div>
 
                               {/* Message preview or attachment details */}
-                              {notification.attachments && notification.attachments.length > 0 ? (
+                              {Array.isArray(notification.data?.attachments) && notification.data.attachments.length > 0 ? (
                                 <div className="mb-2 space-y-1">
-                                  {notification.attachments.map((attachment) => (
+                                  {(notification.data.attachments as any[]).map((attachment: any) => (
                                     <div key={attachment.id} className="flex items-center gap-2">
                                       <AttachmentDetails
                                         attachment={attachment}
@@ -691,14 +692,14 @@ function NotificationsPageContent() {
                                   "text-sm mb-2 line-clamp-2",
                                   !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
                                 )}>
-                                  {notification.messagePreview || notification.message}
+                                  {notification.messagePreview || notification.content}
                                 </p>
                               )}
 
                               {/* Actions pour les requêtes d'amitié */}
-                              {notification.type === 'friend_request' && notification.data?.actions && !notification.isRead && (
+                              {notification.type === 'friend_request' && Array.isArray(notification.data?.actions) && !notification.isRead && (
                                 <div className="flex gap-2 mt-3 mb-2">
-                                  {notification.data.actions.map((action: any) => (
+                                  {(notification.data.actions as any[]).map((action: any) => (
                                     <Button
                                       key={action.type}
                                       size="sm"
@@ -736,9 +737,9 @@ function NotificationsPageContent() {
 
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-muted-foreground">
-                                  {formatNotificationTime(notification.timestamp)}
-                                  {notification.conversationType !== 'direct' && notification.conversationTitle && (
-                                    <span> {t('conversationContext').replace('{conversationTitle}', notification.conversationTitle)}</span>
+                                  {formatNotificationTime(notification.createdAt)}
+                                  {notification.context?.conversationType !== 'direct' && notification.context?.conversationTitle && (
+                                    <span> {t('conversationContext').replace('{conversationTitle}', notification.context?.conversationTitle)}</span>
                                   )}
                                 </p>
 

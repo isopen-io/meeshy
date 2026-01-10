@@ -5,49 +5,49 @@ SYSTÈME DE NOTIFICATIONS V2 - LISTE COMPLÈTE DES FICHIERS CRÉÉS
 📁 FICHIERS CRÉÉS (14 fichiers) :
 
 1. TYPES TYPESCRIPT
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/types/notification-v2.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/types/notification-v2.ts
 
 2. STORE ZUSTAND
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/stores/notification-store-v2.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/stores/notification-store-v2.ts
 
 3. SERVICE API
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/services/notifications-v2.service.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/services/notifications-v2.service.ts
 
 4. HOOK CUSTOM
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-notifications-v2.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-notifications-v2.ts
 
 5. UTILITAIRES
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/utils/notification-formatters.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/utils/notification-formatters.ts
 
 6. COMPOSANT BELL
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications-v2/NotificationBell.tsx
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications-v2/NotificationBell.tsx
 
 7. COMPOSANT LIST
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications-v2/NotificationList.tsx
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications-v2/NotificationList.tsx
 
 8. COMPOSANT ITEM
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications-v2/NotificationItem.tsx
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications-v2/NotificationItem.tsx
 
 9. INDEX EXPORTS
-   /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/notifications-v2/index.ts
+   /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/notifications-v2/index.ts
 
 10. I18N ANGLAIS
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/locales/en/notifications.json
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/locales/en/notifications.json
 
 11. I18N FRANÇAIS
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/locales/fr/notifications.json
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/locales/fr/notifications.json
 
 12. I18N ESPAGNOL
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/locales/es/notifications.json
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/locales/es/notifications.json
 
 13. I18N PORTUGAIS
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/locales/pt/notifications.json
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/locales/pt/notifications.json
 
 14. DOCUMENTATION COMPLÈTE
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/README_NOTIFICATIONS_V2.md
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/README_NOTIFICATIONS_V2.md
 
 15. RÉSUMÉ D'IMPLÉMENTATION
-    /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/NOTIFICATION_V2_IMPLEMENTATION_SUMMARY.md
+    /Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/NOTIFICATION_V2_IMPLEMENTATION_SUMMARY.md
 
 ═══════════════════════════════════════════════════════════════════
 

@@ -5,10 +5,10 @@
  * Gateway WebSocket ↔ Frontend communication
  */
 
-import type { ApiResponse } from './api-responses';
-import type { ConversationStats } from './conversation';
-import type { SocketIOMessage } from './socketio-events';
-import type { EncryptedPayload } from './encryption';
+import type { ApiResponse } from './api-responses.js';
+import type { ConversationStats } from './conversation.js';
+import type { SocketIOMessage } from './socketio-events.js';
+import type { EncryptedPayload } from './encryption.js';
 
 // ===== TYPES D'AUTHENTIFICATION =====
 

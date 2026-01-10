@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { isValidEmail } from '../utils/email-validator';
+import { isValidEmail } from '../utils/email-validator.js';
 
 /**
  * Validation stricte du mot de passe

@@ -72,7 +72,7 @@ BNxK7xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ### 3.1 Copier le template
 
-Ouvrir `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/.env.local`
+Ouvrir `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/.env.local`
 
 ### 3.2 Ajouter ces lignes à la FIN du fichier
 
@@ -108,7 +108,7 @@ NEXT_PUBLIC_ENABLE_PWA_BADGES=true
 
 ### 4.1 Créer un fichier de test
 
-Créer `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/test-firebase-config.js`
+Créer `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/test-firebase-config.js`
 
 ```javascript
 // Test rapide de la configuration Firebase
@@ -376,9 +376,9 @@ Avant de passer à l'intégration dans l'app :
 3. Tester avec `test-firebase-config.js`
 
 **Fichiers de référence:**
-- Configuration: `/frontend/.env.local`
-- Code Firebase: `/frontend/firebase-config.ts`
-- Manager FCM: `/frontend/utils/fcm-manager.ts`
+- Configuration: `/apps/web/.env.local`
+- Code Firebase: `/apps/web/firebase-config.ts`
+- Manager FCM: `/apps/web/utils/fcm-manager.ts`
 
 ---
 

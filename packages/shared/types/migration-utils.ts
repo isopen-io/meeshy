@@ -3,10 +3,10 @@
  * Facilite la transition vers les nouveaux types Phase 1
  */
 
-import type { Message, Conversation } from './conversation';
-import type { SocketIOUser as User, SocketIOUser } from './socketio-events';
-import type { AnonymousParticipant } from './anonymous';
-import type { ApiResponse } from './api-responses';
+import type { Message, Conversation } from './conversation.js';
+import type { SocketIOUser as User, SocketIOUser } from './socketio-events.js';
+import type { AnonymousParticipant } from './anonymous.js';
+import type { ApiResponse } from './api-responses.js';
 
 /**
  * Convertit un SocketIOUser vers User unifié

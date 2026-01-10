@@ -14,7 +14,10 @@
         push-gateway push-translator push-frontend push-all release \
         dev-tmux dev-bg dev-fg check verify _preflight-check \
         test test-js test-python test-python-fast test-ios test-ios-ui \
-        test-gateway test-web test-shared test-translator lint type-check
+        test-gateway test-web test-shared test-translator lint type-check \
+        uv-install uv-sync uv-sync-cpu uv-sync-gpu uv-sync-gpu-cu121 uv-sync-gpu-cu118 \
+        uv-lock uv-add uv-add-dev uv-run uv-upgrade uv-info \
+        build-translator-cpu build-translator-gpu
 
 # Couleurs
 BLUE := \033[0;34m
@@ -38,6 +41,9 @@ HAS_DOCKER := $(shell command -v docker >/dev/null 2>&1 && echo "yes" || echo "n
 # Version Python requise (3.11.x recommandée pour les dépendances ML)
 PYTHON_VERSION := $(shell python3 --version 2>/dev/null | cut -d' ' -f2 | cut -d'.' -f1,2)
 PYTHON_OK := $(shell python3 -c "import sys; print('yes' if sys.version_info[:2] == (3, 11) else 'no')" 2>/dev/null || echo "no")
+
+# Détection uv (package manager Python ultra-rapide)
+HAS_UV := $(shell command -v uv >/dev/null 2>&1 && echo "yes" || echo "no")
 
 # Variables
 COMPOSE_DIR := infrastructure/docker/compose
@@ -674,8 +680,15 @@ install-js: ## Installer uniquement les dépendances JavaScript
 	@$(JS_RUNTIME) install
 	@echo "$(GREEN)✅ Dépendances JavaScript installées$(NC)"
 
-install-python: ## Installer uniquement les dépendances Python
-	@echo "$(BLUE)📦 Installation des dépendances Python (via pyenv Python 3.11)...$(NC)"
+install-python: ## Installer les dépendances Python (uv si disponible, sinon pip)
+ifeq ($(HAS_UV),yes)
+	@echo "$(BLUE)📦 Installation des dépendances Python via uv (ultra-rapide)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && \
+		uv sync --dev && \
+		echo "$(GREEN)✅ Dépendances Python installées via uv$(NC)"
+else
+	@echo "$(BLUE)📦 Installation des dépendances Python via pip...$(NC)"
+	@echo "$(YELLOW)💡 Conseil: Installez uv pour des installations 10-100x plus rapides: curl -LsSf https://astral.sh/uv/install.sh | sh$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -f .python-version ]; then \
 			PYENV_VERSION=$$(cat .python-version) && \
@@ -688,6 +701,127 @@ install-python: ## Installer uniquement les dépendances Python
 		pip install -q --upgrade pip && \
 		pip install -q -r requirements.txt
 	@echo "$(GREEN)✅ Dépendances Python installées$(NC)"
+endif
+
+# =============================================================================
+# UV - Package Manager Python Ultra-Rapide
+# =============================================================================
+# Configuration du backend PyTorch (cpu, gpu, gpu-cu121, gpu-cu118)
+TORCH_BACKEND ?= cpu
+
+uv-install: ## Installer uv (package manager Python)
+	@if [ "$(HAS_UV)" = "yes" ]; then \
+		echo "$(GREEN)✅ uv est déjà installé: $$(uv --version)$(NC)"; \
+	else \
+		echo "$(BLUE)📦 Installation de uv...$(NC)"; \
+		curl -LsSf https://astral.sh/uv/install.sh | sh; \
+		echo "$(GREEN)✅ uv installé. Redémarrez votre terminal ou exécutez: source ~/.bashrc$(NC)"; \
+	fi
+
+uv-sync: ## Synchroniser les dépendances Python (CPU par défaut)
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📦 Synchronisation des dépendances (backend: $(TORCH_BACKEND))...$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv sync --extra $(TORCH_BACKEND) --extra dev
+	@echo "$(GREEN)✅ Dépendances synchronisées ($(TORCH_BACKEND))$(NC)"
+
+uv-sync-cpu: ## Synchroniser avec PyTorch CPU (léger, ~2GB)
+	@$(MAKE) uv-sync TORCH_BACKEND=cpu
+
+uv-sync-gpu: ## Synchroniser avec PyTorch GPU CUDA 12.4 (~8GB)
+	@$(MAKE) uv-sync TORCH_BACKEND=gpu
+
+uv-sync-gpu-cu121: ## Synchroniser avec PyTorch GPU CUDA 12.1
+	@$(MAKE) uv-sync TORCH_BACKEND=gpu-cu121
+
+uv-sync-gpu-cu118: ## Synchroniser avec PyTorch GPU CUDA 11.8 (legacy)
+	@$(MAKE) uv-sync TORCH_BACKEND=gpu-cu118
+
+uv-lock: ## Générer/mettre à jour le fichier uv.lock
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🔒 Génération du fichier uv.lock...$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv lock
+	@echo "$(GREEN)✅ uv.lock généré$(NC)"
+
+uv-add: ## Ajouter une dépendance Python (usage: make uv-add PKG=fastapi)
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(PKG)" ]; then \
+		echo "$(RED)❌ Usage: make uv-add PKG=nom-du-package$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📦 Ajout de $(PKG)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv add $(PKG)
+	@echo "$(GREEN)✅ $(PKG) ajouté$(NC)"
+
+uv-add-dev: ## Ajouter une dépendance de dev (usage: make uv-add-dev PKG=pytest)
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(PKG)" ]; then \
+		echo "$(RED)❌ Usage: make uv-add-dev PKG=nom-du-package$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📦 Ajout de $(PKG) (dev)...$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv add --dev $(PKG)
+	@echo "$(GREEN)✅ $(PKG) ajouté (dev)$(NC)"
+
+uv-run: ## Exécuter une commande dans l'env uv (usage: make uv-run CMD="python -m pytest")
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@cd $(TRANSLATOR_DIR) && uv run $(CMD)
+
+uv-upgrade: ## Mettre à jour toutes les dépendances Python
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📦 Mise à jour des dépendances...$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv lock --upgrade
+	@cd $(TRANSLATOR_DIR) && uv sync --extra $(TORCH_BACKEND) --extra dev
+	@echo "$(GREEN)✅ Dépendances mises à jour$(NC)"
+
+uv-info: ## Afficher les informations sur l'environnement Python/uv
+	@if [ "$(HAS_UV)" != "yes" ]; then \
+		echo "$(RED)❌ uv non installé. Exécutez: make uv-install$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║              UV / PYTHON ENVIRONMENT INFO                    ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)uv version:$(NC) $$(uv --version)"
+	@echo "$(BOLD)Python:$(NC) $$(cd $(TRANSLATOR_DIR) && uv run python --version 2>/dev/null || echo 'Not installed')"
+	@echo ""
+	@echo "$(BOLD)PyTorch Info:$(NC)"
+	@cd $(TRANSLATOR_DIR) && uv run python -c "\
+import torch; \
+print(f'  Version: {torch.__version__}'); \
+print(f'  CUDA available: {torch.cuda.is_available()}'); \
+print(f'  CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}'); \
+print(f'  Device count: {torch.cuda.device_count() if torch.cuda.is_available() else 0}'); \
+" 2>/dev/null || echo "  PyTorch not installed"
+	@echo ""
+	@echo "$(BOLD)Available backends:$(NC)"
+	@echo "  $(GREEN)cpu$(NC)        - PyTorch CPU (default, léger)"
+	@echo "  $(YELLOW)gpu$(NC)        - PyTorch CUDA 12.4 (recommandé pour GPU récents)"
+	@echo "  $(YELLOW)gpu-cu121$(NC)  - PyTorch CUDA 12.1 (drivers plus anciens)"
+	@echo "  $(YELLOW)gpu-cu118$(NC)  - PyTorch CUDA 11.8 (legacy)"
+	@echo ""
+	@echo "$(BOLD)Usage:$(NC)"
+	@echo "  make uv-sync-cpu       # Install CPU version"
+	@echo "  make uv-sync-gpu       # Install GPU CUDA 12.4"
+	@echo "  make uv-sync TORCH_BACKEND=gpu-cu121  # Custom backend"
 
 generate: ## Générer les clients Prisma (JS + Python) et builder shared
 	@echo "$(BLUE)🔧 Génération du client Prisma JS...$(NC)"
@@ -1647,13 +1781,39 @@ build-gateway: _prepare-docker-build ## Builder l'image Gateway
 	fi
 	@echo "$(GREEN)✅ Image Gateway buildée$(NC)"
 
-build-translator: _prepare-docker-build ## Builder l'image Translator
-	@echo "$(BLUE)🔨 Build de l'image Translator ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG))...$(NC)"
-	@docker build -t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) -f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+build-translator: build-translator-cpu ## Builder l'image Translator (alias pour CPU)
+
+build-translator-cpu: _prepare-docker-build ## Builder l'image Translator CPU (~2GB)
+	@echo "$(BLUE)🔨 Build de l'image Translator CPU ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu)...$(NC)"
+	@docker build --load \
+		--build-arg TORCH_BACKEND=cpu \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) \
+		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
 	@if [ "$(TAG)" != "latest" ]; then \
-		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) $(DOCKER_REGISTRY)/meeshy-translator:latest; \
+		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu $(DOCKER_REGISTRY)/meeshy-translator:latest; \
+		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu $(DOCKER_REGISTRY)/meeshy-translator:cpu; \
 	fi
-	@echo "$(GREEN)✅ Image Translator buildée$(NC)"
+	@echo "$(GREEN)✅ Image Translator CPU buildée$(NC)"
+
+build-translator-gpu: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.4 (~8GB)
+	@echo "$(BLUE)🔨 Build de l'image Translator GPU ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu)...$(NC)"
+	@docker build --load \
+		--build-arg TORCH_BACKEND=gpu \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu \
+		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+	@if [ "$(TAG)" != "latest" ]; then \
+		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu $(DOCKER_REGISTRY)/meeshy-translator:gpu; \
+	fi
+	@echo "$(GREEN)✅ Image Translator GPU buildée$(NC)"
+
+build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.1
+	@echo "$(BLUE)🔨 Build de l'image Translator GPU CUDA 12.1...$(NC)"
+	@docker build \
+		--build-arg TORCH_BACKEND=gpu-cu121 \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu-cu121 \
+		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée$(NC)"
 
 build-frontend: _prepare-docker-build ## Builder l'image Frontend
 	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-frontend:$(TAG))...$(NC)"
@@ -1849,6 +2009,9 @@ test-js: ## Lancer uniquement les tests JavaScript (Gateway + Web + Shared)
 
 test-python: ## Lancer uniquement les tests Python (Translator)
 	@echo "$(BLUE)🧪 Tests Python (Translator)...$(NC)"
+ifeq ($(HAS_UV),yes)
+	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -v --tb=short
+else
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -d .venv ]; then \
 			. .venv/bin/activate && python -m pytest tests/ -v --tb=short; \
@@ -1856,9 +2019,13 @@ test-python: ## Lancer uniquement les tests Python (Translator)
 			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
 			exit 1; \
 		fi
+endif
 
 test-python-fast: ## Lancer les tests Python rapides (sans modèles ML)
 	@echo "$(BLUE)🧪 Tests Python rapides (sans ML)...$(NC)"
+ifeq ($(HAS_UV),yes)
+	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -v --tb=short -m "not slow" -k "not model"
+else
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -d .venv ]; then \
 			. .venv/bin/activate && python -m pytest tests/ -v --tb=short -m "not slow" -k "not model"; \
@@ -1866,6 +2033,7 @@ test-python-fast: ## Lancer les tests Python rapides (sans modèles ML)
 			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
 			exit 1; \
 		fi
+endif
 
 test-ios: ## Lancer les tests iOS (Unit Tests)
 	@echo "$(BLUE)🧪 Tests iOS (MeeshyTests)...$(NC)"

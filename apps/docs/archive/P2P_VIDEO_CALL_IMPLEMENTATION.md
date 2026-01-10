@@ -58,7 +58,7 @@ This document describes the complete P2P video call system with advanced audio e
 - ConnectionQualityStats
 ```
 
-### Frontend Utils (`/frontend/utils/audio-effects.ts`)
+### Frontend Utils (`/apps/web/utils/audio-effects.ts`)
 ```typescript
 // Audio Effect Processors
 - VoiceCoderProcessor
@@ -69,37 +69,37 @@ This document describes the complete P2P video call system with advanced audio e
 ```
 
 ### Frontend Hooks
-1. **`/frontend/hooks/use-audio-effects.ts`**
+1. **`/apps/web/hooks/use-audio-effects.ts`**
    - Manages Web Audio API processing
    - Effect enable/disable
    - Parameter updates
    - Audio pipeline management
 
-2. **`/frontend/hooks/use-call-quality.ts`**
+2. **`/apps/web/hooks/use-call-quality.ts`**
    - Real-time WebRTC stats monitoring
    - Quality level calculation
    - Helper functions for UI (colors, icons, labels)
 
 ### Frontend Components
-1. **`/frontend/components/video-calls/AudioEffectsPanel.tsx`**
+1. **`/apps/web/components/video-calls/AudioEffectsPanel.tsx`**
    - Grid layout with 4 effect cards
    - Real-time parameter controls
    - Switch toggles for each effect
    - Sliders and selects for parameters
 
-2. **`/frontend/components/video-calls/ConnectionQualityBadge.tsx`**
+2. **`/apps/web/components/video-calls/ConnectionQualityBadge.tsx`**
    - Quality indicator badge
    - Detailed stats tooltip
    - Compact version for mobile
    - Conditional rendering
 
 ### Modified Files
-1. **`/frontend/components/video-calls/CallControls.tsx`**
+1. **`/apps/web/components/video-calls/CallControls.tsx`**
    - Added audio effects toggle button (Sparkles icon)
    - Added stats toggle button (BarChart3 icon)
    - Color-coded active states
 
-2. **`/frontend/components/video-calls/VideoCallInterface.tsx`**
+2. **`/apps/web/components/video-calls/VideoCallInterface.tsx`**
    - Integrated useAudioEffects hook
    - Integrated useCallQuality hook
    - Added AudioEffectsPanel with slide-in animation

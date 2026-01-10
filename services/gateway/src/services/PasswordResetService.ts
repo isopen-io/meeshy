@@ -297,7 +297,7 @@ export class PasswordResetService {
 
         const is2FAValid = await this.verify2FA(user.id, twoFactorCode);
         if (!is2FAValid) {
-          await this.logSecurityEvent(user.id, '2FA_FAILED', 'HIGH', {
+          await this.logSecurityEvent(user.id, 'TWO_FA_FAILED', 'HIGH', {
             context: 'password_reset',
             ipAddress
           });

@@ -300,10 +300,10 @@ After deploying these changes:
 ## Related Files
 
 - Frontend:
-  - `/frontend/components/common/bubble-message.tsx` - Message UI component with delete button
-  - `/frontend/components/common/messages-display.tsx` - Messages container
-  - `/frontend/components/conversations/ConversationLayout.tsx` - Conversation page logic
-  - `/frontend/services/message.service.ts` - API client for message operations
+  - `/apps/web/components/common/bubble-message.tsx` - Message UI component with delete button
+  - `/apps/web/components/common/messages-display.tsx` - Messages container
+  - `/apps/web/components/conversations/ConversationLayout.tsx` - Conversation page logic
+  - `/apps/web/services/message.service.ts` - API client for message operations
 
 - Backend:
   - `/gateway/src/routes/conversations.ts` - DELETE/PUT message routes

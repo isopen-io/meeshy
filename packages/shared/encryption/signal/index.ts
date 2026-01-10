@@ -6,5 +6,5 @@
  * (apps/web for browser, services/gateway for Node.js).
  */
 
-export * from './signal-types';
-export * from './signal-store-interface';
+export * from './signal-types.js';
+export * from './signal-store-interface.js';

@@ -10,7 +10,7 @@
 ## 📦 Livrables
 
 ### 🔧 Code Production (58KB)
-**Fichier:** `/frontend/services/markdown-parser-v2-fixed.ts`
+**Fichier:** `/apps/web/services/markdown-parser-v2-fixed.ts`
 - 1710 lignes de code TypeScript production-ready
 - 3 CVE critiques éliminées (XSS, ReDoS)
 - Gestion d'erreurs robuste avec contexte complet
@@ -28,7 +28,7 @@ cd frontend && pnpm exec tsc --noEmit --skipLibCheck services/markdown-parser-v2
 ### 📚 Documentation Complète
 
 #### 1. Quick Reference (3.2KB) ⚡ **COMMENCER ICI**
-**Fichier:** `/frontend/PARSER_V2_FIXES_QUICKREF.md`
+**Fichier:** `/apps/web/PARSER_V2_FIXES_QUICKREF.md`
 **Temps de lecture:** 2 minutes
 **Contenu:**
 - Vue d'ensemble des 3 CVE éliminées
@@ -42,7 +42,7 @@ cd frontend && pnpm exec tsc --noEmit --skipLibCheck services/markdown-parser-v2
 ---
 
 #### 2. Résumé Exécutif (10KB) 📊 **POUR DÉCIDEURS**
-**Fichier:** `/frontend/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
+**Fichier:** `/apps/web/PARSER_V2_SECURITY_FIXES_SUMMARY.md`
 **Temps de lecture:** 10 minutes
 **Contenu:**
 - Executive summary avec scores
@@ -57,7 +57,7 @@ cd frontend && pnpm exec tsc --noEmit --skipLibCheck services/markdown-parser-v2
 ---
 
 #### 3. Changelog Détaillé (27KB) 🔍 **POUR DÉVELOPPEURS**
-**Fichier:** `/frontend/PARSER_V2_FIXES_CHANGELOG.md`
+**Fichier:** `/apps/web/PARSER_V2_FIXES_CHANGELOG.md`
 **Temps de lecture:** 30 minutes
 **Contenu:**
 - **Section 1:** Corrections critiques sécurité (P0)
@@ -86,7 +86,7 @@ cd frontend && pnpm exec tsc --noEmit --skipLibCheck services/markdown-parser-v2
 ---
 
 #### 4. Cet Index (Navigation)
-**Fichier:** `/frontend/PARSER_V2_DELIVERY_INDEX.md`
+**Fichier:** `/apps/web/PARSER_V2_DELIVERY_INDEX.md`
 **Contenu:** Guide de navigation dans tous les livrables
 
 ---

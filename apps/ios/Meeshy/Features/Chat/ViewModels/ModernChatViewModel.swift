@@ -446,7 +446,7 @@ final class ModernChatViewModel: ObservableObject {
     private func loadRecentMessages() async throws {
         let response = try await apiService.fetchMessages(
             conversationId: conversation.id,
-            page: 1,
+            offset: 0,
             limit: pageSize
         )
 
@@ -482,7 +482,7 @@ final class ModernChatViewModel: ObservableObject {
         do {
             let response = try await apiService.fetchMessages(
                 conversationId: conversation.id,
-                page: 1,
+                offset: 0,
                 limit: pageSize
             )
 
@@ -524,7 +524,7 @@ final class ModernChatViewModel: ObservableObject {
             // Fetch latest messages from server
             let response = try await apiService.fetchMessages(
                 conversationId: conversation.id,
-                page: 1,
+                offset: 0,
                 limit: pageSize
             )
 

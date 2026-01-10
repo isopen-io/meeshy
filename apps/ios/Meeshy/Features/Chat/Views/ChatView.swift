@@ -87,7 +87,7 @@ struct ChatView: View {
 
                         // TODO: Handle attachments upload in ChatView
                         if let reply = replyToMessage {
-                            await viewModel.sendMessage(
+                            try? await viewModel.sendMessage(
                                 content: messageContent,
                                 replyToId: reply.id,
                                 detectedLanguage: detectedLanguageCode,
@@ -95,7 +95,7 @@ struct ChatView: View {
                             )
                             replyToMessage = nil
                         } else {
-                            await viewModel.sendMessage(
+                            try? await viewModel.sendMessage(
                                 content: messageContent,
                                 detectedLanguage: detectedLanguageCode,
                                 sentiment: sentiment
@@ -343,15 +343,19 @@ struct ChatView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - v2 - Message Row with MeeshyMessageBubble
+    // Replaces legacy MessageRow with modern, animated bubble component
+
     private func messageRow(for message: Message, in messages: [Message]) -> some View {
-        MessageRow(
+        // v2 - Using MeeshyMessageBubble for modern pastel design and animations
+        MeeshyMessageBubble(
             message: message,
             isGroupChat: conversation.activeMembers.count > 1,
-            showAvatar: shouldShowAvatar(for: message, in: messages),
             showSenderName: shouldShowSenderName(for: message, in: messages),
+            participants: conversation.activeMembers,
             onReact: { emoji in
                 Task {
-                    await viewModel.addReaction(to: message.id, emoji: emoji)
+                    try? await viewModel.addReaction(messageId: message.id, emoji: emoji)
                 }
             },
             onReply: {
@@ -359,16 +363,19 @@ struct ChatView: View {
                 isInputFocused = true
             },
             onTranslate: {
-                Task {
-                    await viewModel.translateMessage(message.id)
-                }
+                // TODO: Implement translation
+                print("Translation requested for message \(message.id)")
+            },
+            onCopy: {
+                // v2 - Copy message content to clipboard
+                UIPasteboard.general.string = message.content
             },
             onEdit: {
                 messageToEdit = message
             },
             onDelete: {
                 Task {
-                    await viewModel.deleteMessage(messageId: message.id)
+                    try? await viewModel.deleteMessage(messageId: message.id)
                 }
             }
         )

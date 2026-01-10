@@ -11,17 +11,17 @@ Le système de statut utilisateur temps réel via Socket.IO a été complètemen
 ### Code Source (3 fichiers)
 
 1. **Store Zustand**
-   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/stores/user-store.ts`
+   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/stores/user-store.ts`
    - Taille: 3.0 KB
    - Fonction: Store global pour les statuts utilisateur
 
 2. **Hook Temps Réel**
-   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-user-status-realtime.ts`
+   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-user-status-realtime.ts`
    - Taille: 1.8 KB
    - Fonction: Écoute les événements Socket.IO USER_STATUS
 
 3. **Hook Fallback**
-   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-manual-status-refresh.ts`
+   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-manual-status-refresh.ts`
    - Taille: 2.0 KB
    - Fonction: Rafraîchissement manuel si WebSocket down
 
@@ -57,7 +57,7 @@ Le système de statut utilisateur temps réel via Socket.IO a été complètemen
 ## Fichiers Supprimés (1 fichier)
 
 1. **Hook de Polling (SUPPRIMÉ)**
-   - Ancien chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/hooks/use-participants-status-polling.ts`
+   - Ancien chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/hooks/use-participants-status-polling.ts`
    - Statut: ❌ SUPPRIMÉ AVEC SUCCÈS
    - Raison: Remplacé par le système temps réel
 
@@ -66,7 +66,7 @@ Le système de statut utilisateur temps réel via Socket.IO a été complètemen
 ## Fichiers Modifiés (1 fichier)
 
 1. **ConversationParticipantsDrawer**
-   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/frontend/components/conversations/conversation-participants-drawer.tsx`
+   - Chemin: `/Users/smpceo/Documents/Services/Meeshy/meeshy/apps/web/components/conversations/conversation-participants-drawer.tsx`
    - Modifications:
      - ✅ Ajout de `useUserStatusRealtime()`
      - ✅ Ajout de `useUserStore`
@@ -171,8 +171,8 @@ function MyComponent({ participants }) {
 ## Prochaines Étapes (Optionnel)
 
 ### Court Terme
-- [ ] Migrer `/frontend/app/contacts/page.tsx` vers le système temps réel
-- [ ] Migrer `/frontend/components/conversations/ConversationList.tsx`
+- [ ] Migrer `/apps/web/app/contacts/page.tsx` vers le système temps réel
+- [ ] Migrer `/apps/web/components/conversations/ConversationList.tsx`
 - [ ] Ajouter des tests E2E pour valider le temps réel
 
 ### Moyen Terme

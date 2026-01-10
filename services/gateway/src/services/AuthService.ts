@@ -3,10 +3,22 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
-import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
+import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry, normalizePhoneNumber } from '../utils/normalize';
+import { RequestContext } from './GeoIPService';
 import { emailSchema } from '@meeshy/shared/types/validation';
 import { EmailService } from './EmailService';
 import { smsService } from './SmsService';
+import {
+  createSession,
+  generateSessionToken,
+  validateSession,
+  getUserSessions,
+  invalidateSession,
+  invalidateAllSessions,
+  logout as logoutSession,
+  initSessionService,
+  SessionData
+} from './SessionService';
 
 export interface LoginCredentials {
   username: string;
@@ -20,6 +32,7 @@ export interface RegisterData {
   lastName: string;
   email: string;
   phoneNumber?: string;
+  phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
   systemLanguage?: string;
   regionalLanguage?: string;
 }
@@ -28,6 +41,12 @@ export interface TokenPayload {
   userId: string;
   username: string;
   role: string;
+}
+
+export interface AuthResult {
+  user: SocketIOUser;
+  sessionToken: string;
+  session: SessionData;
 }
 
 export class AuthService {
@@ -41,6 +60,9 @@ export class AuthService {
     this.jwtSecret = jwtSecret;
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
+
+    // Initialize SessionService with the same prisma client
+    initSessionService(prisma);
   }
 
   /**
@@ -61,8 +83,11 @@ export class AuthService {
 
   /**
    * Authentifier un utilisateur avec username/password
+   * @param credentials - Username/email/phone et password
+   * @param requestContext - Contexte de la requête (IP, user agent, géolocalisation)
+   * @returns AuthResult avec user, sessionToken et session data, ou null si échec
    */
-  async authenticate(credentials: LoginCredentials): Promise<SocketIOUser | null> {
+  async authenticate(credentials: LoginCredentials, requestContext?: RequestContext): Promise<AuthResult | null> {
     try {
       // Normaliser l'identifiant selon son type
       const normalizedIdentifier = credentials.username.trim().toLowerCase();
@@ -103,12 +128,18 @@ export class AuthService {
 
       console.log('[AUTH_SERVICE] ✅ Mot de passe valide pour:', user.username);
 
-      // Mettre à jour la dernière connexion
+      // Mettre à jour la dernière connexion avec contexte
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           isOnline: true,
-          lastActiveAt: new Date()
+          lastActiveAt: new Date(),
+          // Login tracking (updated on each login)
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          // Update timezone if detected and user hasn't set one
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
         }
       });
 
@@ -124,7 +155,30 @@ export class AuthService {
       }
 
       // Convertir en SocketIOUser (with emailVerifiedAt included)
-      return this.userToSocketIOUser(user);
+      const socketIOUser = this.userToSocketIOUser(user);
+
+      // Create session with device/geo info
+      const sessionToken = generateSessionToken();
+      const defaultContext: RequestContext = {
+        ip: '127.0.0.1',
+        userAgent: null,
+        geoData: null,
+        deviceInfo: null
+      };
+
+      const session = await createSession({
+        userId: user.id,
+        token: sessionToken,
+        requestContext: requestContext || defaultContext
+      });
+
+      console.log('[AUTH_SERVICE] ✅ Session créée pour:', user.username, '- ID:', session.id);
+
+      return {
+        user: socketIOUser,
+        sessionToken,
+        session
+      };
 
     } catch (error) {
       console.error('[AUTH_SERVICE] ❌ Erreur dans authenticate:', error);
@@ -137,8 +191,10 @@ export class AuthService {
 
   /**
    * Créer un nouveau utilisateur
+   * @param data - Données d'inscription
+   * @param requestContext - Contexte de la requête (IP, user agent, géolocalisation)
    */
-  async register(data: RegisterData): Promise<SocketIOUser | null> {
+  async register(data: RegisterData, requestContext?: RequestContext): Promise<SocketIOUser | null> {
     try {
       // Valider l'email avec Zod AVANT toute opération
       try {
@@ -155,10 +211,25 @@ export class AuthService {
       const normalizedLastName = capitalizeName(data.lastName);
       const normalizedDisplayName = normalizeDisplayName(`${normalizedFirstName} ${normalizedLastName}`);
 
-      // Normaliser le phoneNumber au format E.164 (traiter les chaînes vides comme null)
-      const cleanPhoneNumber = data.phoneNumber && data.phoneNumber.trim() !== ''
-        ? normalizePhoneNumber(data.phoneNumber)
-        : null;
+      // Normaliser le phoneNumber avec libphonenumber-js
+      // Utilise le code pays fourni, ou détecte depuis le numéro, ou utilise la géoloc
+      let cleanPhoneNumber: string | null = null;
+      let phoneCountryCode: string | null = null;
+
+      if (data.phoneNumber && data.phoneNumber.trim() !== '') {
+        // Priorité: 1) Code pays explicite, 2) Pays de la géoloc, 3) Défaut FR
+        const defaultCountry = data.phoneCountryCode
+          || requestContext?.geoData?.country
+          || 'FR';
+
+        const phoneResult = normalizePhoneWithCountry(data.phoneNumber, defaultCountry);
+        if (phoneResult && phoneResult.isValid) {
+          cleanPhoneNumber = phoneResult.phoneNumber;
+          phoneCountryCode = phoneResult.countryCode;
+        } else {
+          throw new Error('Numéro de téléphone invalide');
+        }
+      }
 
       // Vérifier si l'username, l'email ou le phoneNumber existe déjà (comparaison case-insensitive pour username et email)
       const existingUser = await this.prisma.user.findFirst({
@@ -193,7 +264,7 @@ export class AuthService {
       const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
-      // Créer l'utilisateur avec les données normalisées
+      // Créer l'utilisateur avec les données normalisées et contexte d'inscription
       const user = await this.prisma.user.create({
         data: {
           username: normalizedUsername,
@@ -202,6 +273,7 @@ export class AuthService {
           lastName: normalizedLastName,
           email: normalizedEmail,
           phoneNumber: cleanPhoneNumber,
+          phoneCountryCode: phoneCountryCode,
           systemLanguage: data.systemLanguage || 'fr',
           regionalLanguage: data.regionalLanguage || 'fr',
           displayName: normalizedDisplayName,
@@ -209,7 +281,18 @@ export class AuthService {
           lastActiveAt: new Date(),
           // Email verification fields
           emailVerificationToken: verificationTokenHash,
-          emailVerificationExpiry: verificationExpiry
+          emailVerificationExpiry: verificationExpiry,
+          // Registration context (captured once at signup)
+          registrationIp: requestContext?.ip || null,
+          registrationLocation: requestContext?.geoData?.location || null,
+          registrationDevice: requestContext?.userAgent || null,
+          registrationCountry: requestContext?.geoData?.country || null,
+          // Set timezone from geolocation if available
+          timezone: requestContext?.geoData?.timezone || null,
+          // First login tracking
+          lastLoginIp: requestContext?.ip || null,
+          lastLoginLocation: requestContext?.geoData?.location || null,
+          lastLoginDevice: requestContext?.userAgent || null
         }
       });
 
@@ -749,5 +832,53 @@ export class AuthService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };
+  }
+
+  // ==================== Session Management ====================
+
+  /**
+   * Validate a session token and return session data
+   */
+  async validateSessionToken(token: string): Promise<SessionData | null> {
+    return validateSession(token);
+  }
+
+  /**
+   * Get all active sessions for a user
+   * @param userId - User ID
+   * @param currentToken - Current session token (to mark as current)
+   */
+  async getUserActiveSessions(userId: string, currentToken?: string): Promise<SessionData[]> {
+    return getUserSessions(userId, currentToken);
+  }
+
+  /**
+   * Revoke a specific session
+   * @param sessionId - Session ID to revoke
+   * @param reason - Reason for revocation
+   */
+  async revokeSession(sessionId: string, reason: string = 'user_revoked'): Promise<boolean> {
+    return invalidateSession(sessionId, reason);
+  }
+
+  /**
+   * Revoke all sessions for a user except the current one
+   * @param userId - User ID
+   * @param currentToken - Current session token to keep active
+   */
+  async revokeAllSessionsExceptCurrent(userId: string, currentToken?: string): Promise<number> {
+    return invalidateAllSessions(userId, currentToken, 'user_revoked_all');
+  }
+
+  /**
+   * Logout - invalidate the current session
+   * @param token - Session token to invalidate
+   */
+  async logout(token: string): Promise<boolean> {
+    const result = await logoutSession(token);
+    if (result) {
+      console.log('[AUTH_SERVICE] ✅ Session invalidée (logout)');
+    }
+    return result;
   }
 }

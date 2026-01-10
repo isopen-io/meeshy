@@ -1,7 +1,30 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService, LoginCredentials, RegisterData } from '../services/AuthService';
 import { SocketIOUser } from '@meeshy/shared/types';
+import {
+  userSchema,
+  sessionSchema,
+  sessionMinimalSchema,
+  loginRequestSchema,
+  registerRequestSchema,
+  registerResponseSchema,
+  errorResponseSchema,
+  validationErrorResponseSchema,
+  sessionsListResponseSchema,
+  refreshTokenRequestSchema,
+  verifyEmailRequestSchema,
+  resendVerificationRequestSchema,
+  sendPhoneCodeRequestSchema,
+  verifyPhoneRequestSchema,
+  validateSessionRequestSchema
+} from '@meeshy/shared/types';
+import {
+  AuthSchemas,
+  SessionSchemas,
+  validateSchema
+} from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
+import { getRequestContext } from '../services/GeoIPService';
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Créer une instance du service d'authentification
@@ -10,27 +33,52 @@ export async function authRoutes(fastify: FastifyInstance) {
     process.env.JWT_SECRET || 'meeshy-secret-key-dev'
   );
 
-  // Route de connexion
+  // Route de connexion - using shared schemas from @meeshy/shared/types
   fastify.post('/login', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['username', 'password'],
-        properties: {
-          username: { type: 'string', minLength: 2, maxLength: 16 },
-          password: { type: 'string', minLength: 1 }
-        }
-      }
+      description: 'Authenticate a user with username/email/phone and password. Returns user profile, JWT token, and session token for device management.',
+      tags: ['auth'],
+      summary: 'User login',
+      body: loginRequestSchema,
+      response: {
+        200: {
+          description: 'Successful login - returns user data, tokens, and session info',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                token: { type: 'string', description: 'JWT access token for API authentication' },
+                sessionToken: { type: 'string', description: 'Session token for device management (store securely)' },
+                session: sessionMinimalSchema,
+                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { username, password } = request.body as LoginCredentials;
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.login, request.body, 'login');
+      const { username, password } = validatedData;
       console.log('[AUTH] Tentative de connexion pour:', username);
 
-      // Authentifier l'utilisateur avec Prisma
-      const user = await authService.authenticate({ username, password });
+      // Capturer le contexte de la requête (IP, géolocalisation, user agent)
+      const requestContext = await getRequestContext(request);
+      console.log('[AUTH] Contexte:', requestContext.ip, requestContext.geoData?.location || 'Local');
 
-      if (!user) {
+      // Authentifier l'utilisateur avec Prisma et contexte
+      // Retourne AuthResult avec user, sessionToken et session
+      const authResult = await authService.authenticate({ username, password }, requestContext);
+
+      if (!authResult) {
         console.error('[AUTH] ❌ Échec de connexion pour:', username, '- Identifiants invalides');
         return reply.status(401).send({
           success: false,
@@ -38,12 +86,13 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ')');
+      const { user, sessionToken, session } = authResult;
+      console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
 
-      // Générer le token
-      const token = authService.generateToken(user);
+      // Générer le JWT token
+      const jwtToken = authService.generateToken(user);
 
-      // Retourner les informations utilisateur complètes et le token
+      // Retourner les informations utilisateur complètes, tokens et session
       reply.send({
         success: true,
         data: {
@@ -96,7 +145,17 @@ export async function authRoutes(fastify: FastifyInstance) {
             // Permissions calculées
             permissions: user.permissions
           },
-          token,
+          token: jwtToken,
+          sessionToken, // Token de session persistant pour la gestion des appareils
+          session: {
+            id: session.id,
+            deviceType: session.deviceType,
+            browserName: session.browserName,
+            osName: session.osName,
+            location: session.location,
+            isMobile: session.isMobile,
+            createdAt: session.createdAt
+          },
           expiresIn: 24 * 60 * 60 // 24 heures en secondes
         }
       });
@@ -113,30 +172,45 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route d'inscription
+  // Route d'inscription - using shared schemas from @meeshy/shared/types
   fastify.post('/register', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['username', 'password', 'firstName', 'lastName', 'email'],
-        properties: {
-          username: { type: 'string', minLength: 2, maxLength: 16 },
-          password: { type: 'string', minLength: 1 },
-          firstName: { type: 'string', minLength: 1 },
-          lastName: { type: 'string', minLength: 1 },
-          email: { type: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' },
-          phoneNumber: { type: 'string' },
-          systemLanguage: { type: 'string' },
-          regionalLanguage: { type: 'string' }
-        }
-      }
+      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation.',
+      tags: ['auth'],
+      summary: 'User registration',
+      body: registerRequestSchema,
+      response: {
+        200: {
+          description: 'Account created successfully - verification email sent',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                token: { type: 'string', description: 'JWT access token for API authentication' },
+                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
+              }
+            }
+          }
+        },
+        400: validationErrorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const registerData = request.body as RegisterData;
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register');
 
-      // Créer l'utilisateur avec Prisma
-      const user = await authService.register(registerData);
+      // Capturer le contexte de la requête (IP, géolocalisation, user agent)
+      const requestContext = await getRequestContext(request);
+      console.log('[AUTH] Inscription depuis:', requestContext.ip, requestContext.geoData?.location || 'Local');
+
+      // Créer l'utilisateur avec Prisma et contexte d'inscription
+      const user = await authService.register(validatedData as RegisterData, requestContext);
 
       if (!user) {
         return reply.status(400).send({
@@ -226,8 +300,31 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour récupérer les informations de l'utilisateur connecté
+  // Route pour récupérer les informations de l'utilisateur connecté - using shared schemas
   fastify.get('/me', {
+    schema: {
+      description: 'Get the current authenticated user profile. Works with both JWT tokens (registered users) and session tokens (anonymous users).',
+      tags: ['auth', 'user'],
+      summary: 'Get current user profile',
+      response: {
+        200: {
+          description: 'User profile retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        404: errorResponseSchema
+      },
+      security: [{ bearerAuth: [] }]
+    },
     preValidation: [createUnifiedAuthMiddleware((fastify as any).prisma, { requireAuth: true })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -352,17 +449,35 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour rafraîchir un token
   fastify.post('/refresh', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: { type: 'string', minLength: 1 }
-        }
-      }
+      description: 'Refresh an existing JWT token to get a new one',
+      tags: ['auth'],
+      summary: 'Refresh token',
+      body: refreshTokenRequestSchema,
+      response: {
+        200: {
+          description: 'Token refreshed successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                token: { type: 'string', description: 'New JWT token' },
+                expiresIn: { type: 'number', description: 'Token expiration in seconds' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        404: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { token } = request.body as { token: string };
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.refreshToken, request.body, 'refresh');
+      const { token } = validatedData;
 
       // Vérifier le token
       const decoded = authService.verifyToken(token);
@@ -406,13 +521,48 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Route de déconnexion
   fastify.post('/logout', {
+    schema: {
+      description: 'Logout the current user and invalidate the session',
+      tags: ['auth'],
+      summary: 'User logout',
+      headers: {
+        type: 'object',
+        properties: {
+          'x-session-token': { type: 'string', description: 'Session token to invalidate' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Logout successful',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    },
     preValidation: [(fastify as any).authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
+      const sessionToken = request.headers['x-session-token'] as string | undefined;
 
       // Mettre à jour le statut en ligne
       await authService.updateOnlineStatus(userId, false);
+
+      // Invalider la session si un token est fourni
+      if (sessionToken) {
+        const loggedOut = await authService.logout(sessionToken);
+        if (loggedOut) {
+          console.log('[AUTH] ✅ Session invalidée pour:', userId);
+        }
+      }
 
       reply.send({
         success: true,
@@ -538,18 +688,29 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour vérifier l'email avec un token
   fastify.post('/verify-email', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['token', 'email'],
-        properties: {
-          token: { type: 'string', minLength: 1 },
-          email: { type: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' }
-        }
-      }
+      description: 'Verify user email address with a token sent via email',
+      tags: ['auth'],
+      summary: 'Verify email',
+      body: verifyEmailRequestSchema,
+      response: {
+        200: {
+          description: 'Email verified successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', properties: { message: { type: 'string' } } }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { token, email } = request.body as { token: string; email: string };
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
+      const { token, email } = validatedData;
 
       console.log('[AUTH] Tentative de vérification email pour:', email);
 
@@ -582,17 +743,29 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour renvoyer l'email de vérification
   fastify.post('/resend-verification', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['email'],
-        properties: {
-          email: { type: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' }
-        }
-      }
+      description: 'Resend email verification link to user',
+      tags: ['auth'],
+      summary: 'Resend verification email',
+      body: resendVerificationRequestSchema,
+      response: {
+        200: {
+          description: 'Verification email sent (if account exists)',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', properties: { message: { type: 'string' } } }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { email } = request.body as { email: string };
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.resendVerification, request.body, 'resend-verification');
+      const { email } = validatedData;
 
       console.log('[AUTH] Demande de renvoi de vérification pour:', email);
 
@@ -628,17 +801,29 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour envoyer un code de vérification SMS
   fastify.post('/send-phone-code', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['phoneNumber'],
-        properties: {
-          phoneNumber: { type: 'string', minLength: 8 }
-        }
-      }
+      description: 'Send SMS verification code to phone number',
+      tags: ['auth'],
+      summary: 'Send phone verification code',
+      body: sendPhoneCodeRequestSchema,
+      response: {
+        200: {
+          description: 'SMS code sent successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', properties: { message: { type: 'string' } } }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { phoneNumber } = request.body as { phoneNumber: string };
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.sendPhoneCode, request.body, 'send-phone-code');
+      const { phoneNumber } = validatedData;
 
       console.log('[AUTH] Envoi code SMS pour:', phoneNumber);
 
@@ -671,18 +856,29 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Route pour vérifier le numéro de téléphone avec le code SMS
   fastify.post('/verify-phone', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['phoneNumber', 'code'],
-        properties: {
-          phoneNumber: { type: 'string', minLength: 8 },
-          code: { type: 'string', minLength: 6, maxLength: 6 }
-        }
-      }
+      description: 'Verify phone number with SMS code',
+      tags: ['auth'],
+      summary: 'Verify phone number',
+      body: verifyPhoneRequestSchema,
+      response: {
+        200: {
+          description: 'Phone number verified successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', properties: { message: { type: 'string' } } }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { phoneNumber, code } = request.body as { phoneNumber: string; code: string };
+      // Valider les données avec Zod
+      const validatedData = validateSchema(AuthSchemas.verifyPhone, request.body, 'verify-phone');
+      const { phoneNumber, code } = validatedData;
 
       console.log('[AUTH] Vérification téléphone:', phoneNumber);
 
@@ -708,6 +904,281 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'
+      });
+    }
+  });
+
+  // ==================== Session Management Routes ====================
+
+  // Route pour lister toutes les sessions actives de l'utilisateur - using shared schemas
+  fastify.get('/sessions', {
+    schema: {
+      description: 'List all active sessions for the authenticated user',
+      tags: ['auth', 'sessions'],
+      summary: 'Get active sessions',
+      headers: {
+        type: 'object',
+        properties: {
+          'x-session-token': { type: 'string', description: 'Current session token (optional, to mark current session)' }
+        }
+      },
+      response: {
+        200: sessionsListResponseSchema,
+        401: errorResponseSchema
+      }
+    },
+    preValidation: [(fastify as any).authenticate]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user.userId;
+      const currentToken = request.headers['x-session-token'] as string | undefined;
+
+      console.log('[AUTH] Récupération des sessions pour:', userId);
+
+      const sessions = await authService.getUserActiveSessions(userId, currentToken);
+
+      return reply.send({
+        success: true,
+        data: {
+          sessions: sessions.map(session => ({
+            id: session.id,
+            deviceType: session.deviceType,
+            deviceVendor: session.deviceVendor,
+            deviceModel: session.deviceModel,
+            osName: session.osName,
+            osVersion: session.osVersion,
+            browserName: session.browserName,
+            browserVersion: session.browserVersion,
+            isMobile: session.isMobile,
+            ipAddress: session.ipAddress,
+            country: session.country,
+            city: session.city,
+            location: session.location,
+            createdAt: session.createdAt,
+            lastActivityAt: session.lastActivityAt,
+            isCurrentSession: session.isCurrentSession,
+            isTrusted: session.isTrusted
+          })),
+          totalCount: sessions.length
+        }
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur récupération sessions:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la récupération des sessions'
+      });
+    }
+  });
+
+  // Route pour révoquer une session spécifique
+  fastify.delete('/sessions/:sessionId', {
+    schema: {
+      description: 'Revoke a specific session (log out from a specific device)',
+      tags: ['auth', 'sessions'],
+      summary: 'Revoke a session',
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID to revoke' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Session revoked successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' }
+              }
+            }
+          }
+        },
+        404: {
+          description: 'Session not found',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            error: { type: 'string' }
+          }
+        }
+      }
+    },
+    preValidation: [(fastify as any).authenticate]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user.userId;
+      const { sessionId } = request.params as { sessionId: string };
+
+      console.log('[AUTH] Révocation session:', sessionId, 'pour user:', userId);
+
+      // Vérifier que la session appartient à l'utilisateur avant de la révoquer
+      const sessions = await authService.getUserActiveSessions(userId);
+      const sessionBelongsToUser = sessions.some(s => s.id === sessionId);
+
+      if (!sessionBelongsToUser) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Session non trouvée'
+        });
+      }
+
+      const revoked = await authService.revokeSession(sessionId);
+
+      if (!revoked) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Impossible de révoquer cette session'
+        });
+      }
+
+      console.log('[AUTH] ✅ Session révoquée:', sessionId);
+
+      return reply.send({
+        success: true,
+        data: { message: 'Session révoquée avec succès' }
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur révocation session:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la révocation de la session'
+      });
+    }
+  });
+
+  // Route pour révoquer toutes les sessions sauf la courante
+  fastify.delete('/sessions', {
+    schema: {
+      description: 'Revoke all sessions except the current one (log out from all other devices)',
+      tags: ['auth', 'sessions'],
+      summary: 'Revoke all other sessions',
+      headers: {
+        type: 'object',
+        properties: {
+          'x-session-token': { type: 'string', description: 'Current session token to keep active' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Sessions revoked successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' },
+                revokedCount: { type: 'number' }
+              }
+            }
+          }
+        }
+      }
+    },
+    preValidation: [(fastify as any).authenticate]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user.userId;
+      const currentToken = request.headers['x-session-token'] as string | undefined;
+
+      console.log('[AUTH] Révocation de toutes les sessions pour:', userId, '(sauf courante)');
+
+      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
+
+      console.log('[AUTH] ✅', revokedCount, 'session(s) révoquée(s)');
+
+      return reply.send({
+        success: true,
+        data: {
+          message: `${revokedCount} session(s) révoquée(s) avec succès`,
+          revokedCount
+        }
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur révocation sessions:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la révocation des sessions'
+      });
+    }
+  });
+
+  // Route pour valider un token de session (sans JWT)
+  fastify.post('/validate-session', {
+    schema: {
+      description: 'Validate a session token and get session info',
+      tags: ['auth', 'sessions'],
+      summary: 'Validate session token',
+      body: validateSessionRequestSchema,
+      response: {
+        200: {
+          description: 'Session validation result',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: { type: 'boolean' },
+                session: { ...sessionSchema, nullable: true }
+              }
+            }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      // Valider les données avec Zod
+      const validatedData = validateSchema(SessionSchemas.validateToken, request.body, 'validate-session');
+      const { sessionToken } = validatedData;
+
+      const session = await authService.validateSessionToken(sessionToken);
+
+      if (!session) {
+        return reply.send({
+          success: true,
+          data: {
+            valid: false,
+            session: null
+          }
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          valid: true,
+          session: {
+            id: session.id,
+            userId: session.userId,
+            deviceType: session.deviceType,
+            browserName: session.browserName,
+            osName: session.osName,
+            location: session.location,
+            isMobile: session.isMobile,
+            createdAt: session.createdAt,
+            lastActivityAt: session.lastActivityAt,
+            isTrusted: session.isTrusted
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur validation session:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la validation de la session'
       });
     }
   });

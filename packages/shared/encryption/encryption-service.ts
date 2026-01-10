@@ -9,8 +9,8 @@ import type {
   EncryptedPayload,
   EncryptionMode,
   SignalKeyBundle,
-} from '../types/encryption';
-import type { CryptoAdapter } from './crypto-adapter';
+} from '../types/encryption.js';
+import type { CryptoAdapter } from './crypto-adapter.js';
 import {
   encryptContent,
   decryptContent,
@@ -22,9 +22,9 @@ import {
   importKeyFromString,
   prepareForStorage,
   reconstructPayload,
-} from './encryption-utils';
-import type { PreKeyBundle, SignalEncryptedMessage, ProtocolAddressLike } from './signal/signal-types';
-import { createProtocolAddress } from './signal/signal-types';
+} from './encryption-utils.js';
+import type { PreKeyBundle, SignalEncryptedMessage, ProtocolAddressLike } from './signal/signal-types.js';
+import { createProtocolAddress } from './signal/signal-types.js';
 
 /**
  * Signal Protocol Service Interface

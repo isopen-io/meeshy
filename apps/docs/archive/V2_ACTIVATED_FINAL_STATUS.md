@@ -61,7 +61,7 @@
 
 ### Fichier Modifié
 
-**`/frontend/components/layout/DashboardLayout.tsx`**
+**`/apps/web/components/layout/DashboardLayout.tsx`**
 
 **Ligne 6 - AVANT :**
 ```typescript

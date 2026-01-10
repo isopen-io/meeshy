@@ -34,11 +34,11 @@ NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_hcaptcha_site_key_here
 The English translations are complete. You need to translate to Spanish, French, and Portuguese:
 
 **Files to update**:
-- `/frontend/locales/es/auth.json`
-- `/frontend/locales/fr/auth.json`
-- `/frontend/locales/pt/auth.json`
+- `/apps/web/locales/es/auth.json`
+- `/apps/web/locales/fr/auth.json`
+- `/apps/web/locales/pt/auth.json`
 
-**What to add**: Copy the structure from `/frontend/locales/en/auth.json` lines 160-273 and translate:
+**What to add**: Copy the structure from `/apps/web/locales/en/auth.json` lines 160-273 and translate:
 - `forgotPassword` section
 - `checkEmail` section
 - `resetPassword` section
@@ -76,33 +76,33 @@ Refer to:
 ### New Files Created
 
 ✅ **Services**
-- `/frontend/services/password-reset.service.ts`
+- `/apps/web/services/password-reset.service.ts`
 
 ✅ **State Management**
-- `/frontend/stores/password-reset-store.ts`
+- `/apps/web/stores/password-reset-store.ts`
 
 ✅ **Components**
-- `/frontend/components/auth/PasswordStrengthMeter.tsx`
-- `/frontend/components/auth/PasswordRequirementsChecklist.tsx`
-- `/frontend/components/auth/ForgotPasswordForm.tsx`
-- `/frontend/components/auth/ResetPasswordForm.tsx`
+- `/apps/web/components/auth/PasswordStrengthMeter.tsx`
+- `/apps/web/components/auth/PasswordRequirementsChecklist.tsx`
+- `/apps/web/components/auth/ForgotPasswordForm.tsx`
+- `/apps/web/components/auth/ResetPasswordForm.tsx`
 
 ✅ **Pages**
-- `/frontend/app/forgot-password/page.tsx`
-- `/frontend/app/forgot-password/check-email/page.tsx`
-- `/frontend/app/reset-password/page.tsx`
+- `/apps/web/app/forgot-password/page.tsx`
+- `/apps/web/app/forgot-password/check-email/page.tsx`
+- `/apps/web/app/reset-password/page.tsx`
 
 ✅ **Documentation**
-- `/frontend/PASSWORD_RESET_IMPLEMENTATION.md`
-- `/frontend/INSTALLATION_INSTRUCTIONS.md` (this file)
+- `/apps/web/PASSWORD_RESET_IMPLEMENTATION.md`
+- `/apps/web/INSTALLATION_INSTRUCTIONS.md` (this file)
 
 ### Modified Files
 
 ✅ **Components**
-- `/frontend/components/auth/login-form.tsx` (added "Forgot Password?" link)
+- `/apps/web/components/auth/login-form.tsx` (added "Forgot Password?" link)
 
 ✅ **Translations**
-- `/frontend/locales/en/auth.json` (added password reset translations)
+- `/apps/web/locales/en/auth.json` (added password reset translations)
 
 ---
 
@@ -128,7 +128,7 @@ Before deploying to production:
 
 - **Architecture Reference**: `/gateway/SECURE_PASSWORD_RESET_ARCHITECTURE.md`
 - **Backend Guide**: `/gateway/IMPLEMENTATION_GUIDE.md`
-- **Frontend Implementation**: `/frontend/PASSWORD_RESET_IMPLEMENTATION.md`
+- **Frontend Implementation**: `/apps/web/PASSWORD_RESET_IMPLEMENTATION.md`
 
 ---
 

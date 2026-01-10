@@ -244,90 +244,90 @@ Ce document résume **l'intégralité du projet** de développement du système 
 **16 fichiers créés** (~4,740 lignes)
 
 #### State Management
-1. `/frontend/stores/notification-store-v2.ts` (491 lignes)
+1. `/apps/web/stores/notification-store-v2.ts` (491 lignes)
    - Store Zustand avec persistence
    - Optimistic updates
    - LRU eviction (max 500)
 
-2. `/frontend/hooks/use-notifications-v2.ts` (323 lignes)
+2. `/apps/web/hooks/use-notifications-v2.ts` (323 lignes)
    - Socket.IO real-time
    - Polling fallback (30s)
    - Cleanup automatique
 
 #### Services
-3. `/frontend/services/notifications-v2.service.ts` (342 lignes)
+3. `/apps/web/services/notifications-v2.service.ts` (342 lignes)
    - API client avec retry logic
    - Backoff exponentiel (3 tentatives)
    - Error handling
 
 #### Composants (4 fichiers)
-4. `/frontend/components/notifications-v2/NotificationBell.tsx` (250 lignes)
-5. `/frontend/components/notifications-v2/NotificationList.tsx` (300 lignes)
-6. `/frontend/components/notifications-v2/NotificationItem.tsx` (400 lignes)
-7. `/frontend/components/notifications-v2/index.ts` (50 lignes)
+4. `/apps/web/components/notifications-v2/NotificationBell.tsx` (250 lignes)
+5. `/apps/web/components/notifications-v2/NotificationList.tsx` (300 lignes)
+6. `/apps/web/components/notifications-v2/NotificationItem.tsx` (400 lignes)
+7. `/apps/web/components/notifications-v2/index.ts` (50 lignes)
 
 #### Utilitaires
-8. `/frontend/utils/notification-formatters.ts` (474 lignes)
+8. `/apps/web/utils/notification-formatters.ts` (474 lignes)
    - Formatage intelligent des 11 types
    - Timestamps relatifs/absolus
    - Aperçu messages avec attachments
 
-9. `/frontend/types/notification-v2.ts` (348 lignes)
+9. `/apps/web/types/notification-v2.ts` (348 lignes)
    - Types TypeScript stricts
    - Type guards
    - Interfaces complètes
 
 #### i18n (4 langues)
-10. `/frontend/locales/en/notifications.json` (200 lignes)
-11. `/frontend/locales/fr/notifications.json` (200 lignes)
-12. `/frontend/locales/es/notifications.json` (200 lignes)
-13. `/frontend/locales/pt/notifications.json` (200 lignes)
+10. `/apps/web/locales/en/notifications.json` (200 lignes)
+11. `/apps/web/locales/fr/notifications.json` (200 lignes)
+12. `/apps/web/locales/es/notifications.json` (200 lignes)
+13. `/apps/web/locales/pt/notifications.json` (200 lignes)
 
 #### Documentation (3 fichiers)
-14. `/frontend/README_NOTIFICATIONS_V2.md` (1,500 lignes)
-15. `/frontend/NOTIFICATION_V2_IMPLEMENTATION_SUMMARY.md` (800 lignes)
-16. `/frontend/notification-v2-manifest.json` (100 lignes)
+14. `/apps/web/README_NOTIFICATIONS_V2.md` (1,500 lignes)
+15. `/apps/web/NOTIFICATION_V2_IMPLEMENTATION_SUMMARY.md` (800 lignes)
+16. `/apps/web/notification-v2-manifest.json` (100 lignes)
 
 ### Phase 4B: Améliorations Sécurité/Qualité
 
 **16 fichiers créés** (~4,740 lignes)
 
 #### Sécurité (4 fichiers)
-1. `/frontend/utils/secure-storage.ts` (350 lignes)
+1. `/apps/web/utils/secure-storage.ts` (350 lignes)
    - Encryption AES-256-GCM
    - Clé session-based
    - TTL 24h automatique
 
-2. `/frontend/utils/xss-protection.ts` (450 lignes)
+2. `/apps/web/utils/xss-protection.ts` (450 lignes)
    - Protection XSS avec DOMPurify
    - Validation URLs
    - Sanitization HTML/JSON
 
-3. `/frontend/utils/socket-validator.ts` (420 lignes)
+3. `/apps/web/utils/socket-validator.ts` (420 lignes)
    - Validation Socket.IO avec Zod
    - Schemas stricts
    - Rejection malformed messages
 
-4. `/frontend/components/notifications-v2/NotificationErrorBoundary.tsx` (220 lignes)
+4. `/apps/web/components/notifications-v2/NotificationErrorBoundary.tsx` (220 lignes)
    - Error Boundary avec retry
    - Fallback UI
    - Logs production
 
 #### Tests (2 fichiers avec 90%+ coverage)
-5. `/frontend/utils/__tests__/secure-storage.test.ts` (300 lignes)
-6. `/frontend/utils/__tests__/xss-protection.test.ts` (300 lignes)
+5. `/apps/web/utils/__tests__/secure-storage.test.ts` (300 lignes)
+6. `/apps/web/utils/__tests__/xss-protection.test.ts` (300 lignes)
 
 #### Configuration (4 fichiers)
-7. `/frontend/next.config.security.js` (150 lignes)
-8. `/frontend/scripts/install-security-dependencies.sh` (100 lignes)
-9. `/frontend/vitest.config.ts` (100 lignes)
-10. `/frontend/tests/setup.ts` (80 lignes)
+7. `/apps/web/next.config.security.js` (150 lignes)
+8. `/apps/web/scripts/install-security-dependencies.sh` (100 lignes)
+9. `/apps/web/vitest.config.ts` (100 lignes)
+10. `/apps/web/tests/setup.ts` (80 lignes)
 
 #### Documentation (6 fichiers)
-11. `/frontend/README_FRONTEND_IMPROVEMENTS.md` (1,500 lignes)
-12. `/frontend/INTEGRATION_CHECKLIST.md` (800 lignes)
+11. `/apps/web/README_FRONTEND_IMPROVEMENTS.md` (1,500 lignes)
+12. `/apps/web/INTEGRATION_CHECKLIST.md` (800 lignes)
 13. `/FRONTEND_IMPROVEMENTS_SUMMARY.md` (200 lignes)
-14. `/frontend/SECURITY_IMPROVEMENTS_INDEX.md` (250 lignes)
+14. `/apps/web/SECURITY_IMPROVEMENTS_INDEX.md` (250 lignes)
 15. `/FRONTEND_SECURITY_IMPLEMENTATION_COMPLETE.md` (200 lignes)
 16. `/FRONTEND_SECURITY_FILES_MANIFEST.txt` (150 lignes)
 

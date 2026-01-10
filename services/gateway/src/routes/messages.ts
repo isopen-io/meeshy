@@ -37,6 +37,38 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: MessageParams;
   }>('/messages/:messageId', {
+    schema: {
+      description: 'Get a specific message by ID with all associated data',
+      tags: ['messages'],
+      summary: 'Get message details',
+      params: {
+        type: 'object',
+        properties: {
+          messageId: { type: 'string', description: 'Message UUID' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Message details',
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            content: { type: 'string' },
+            sender: { type: 'object' },
+            attachments: { type: 'array' },
+            translations: { type: 'array' },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        404: {
+          description: 'Message not found',
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
+        }
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {

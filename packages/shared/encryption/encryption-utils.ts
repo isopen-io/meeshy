@@ -8,14 +8,14 @@
 import type {
   EncryptedPayload,
   EncryptionMetadata,
-} from '../types/encryption';
-import type { CryptoAdapter, CryptoKey } from './crypto-adapter';
+} from '../types/encryption.js';
+import type { CryptoAdapter, CryptoKey } from './crypto-adapter.js';
 import {
   uint8ArrayToBase64,
   base64ToUint8Array,
   stringToUint8Array,
   uint8ArrayToString,
-} from './crypto-adapter';
+} from './crypto-adapter.js';
 
 const IV_LENGTH = 12; // bytes (96 bits)
 // TAG_LENGTH = 16 bytes (128 bits) - handled by crypto adapter

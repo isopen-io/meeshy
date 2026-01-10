@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { notificationServiceV2 } from '@/services/notifications-v2.service';
+import { NotificationService } from '@/services/notification.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
-import type { NotificationFilters, NotificationPaginationOptions } from '@/types/notification-v2';
+import type { NotificationFilters, NotificationPaginationOptions } from '@/types/notification';
 
 type NotificationsFiltersAndPagination = Partial<NotificationFilters & NotificationPaginationOptions>;
 
@@ -11,7 +11,7 @@ export function useNotificationsQuery(options: NotificationsFiltersAndPagination
   return useQuery({
     queryKey: queryKeys.notifications.list({ unreadOnly: filters.isRead === false }),
     queryFn: async () => {
-      const response = await notificationServiceV2.fetchNotifications({ ...filters, limit });
+      const response = await NotificationService.fetchNotifications({ ...filters, limit });
       return response.data;
     },
     // staleTime: Infinity (Socket.IO gère les mises à jour)
@@ -24,7 +24,7 @@ export function useInfiniteNotificationsQuery(options: NotificationsFiltersAndPa
   return useInfiniteQuery({
     queryKey: [...queryKeys.notifications.lists(), 'infinite', filters],
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await notificationServiceV2.fetchNotifications({
+      const response = await NotificationService.fetchNotifications({
         ...filters,
         limit,
         offset: pageParam,
@@ -44,7 +44,7 @@ export function useUnreadNotificationCountQuery() {
   return useQuery({
     queryKey: queryKeys.notifications.unreadCount(),
     queryFn: async () => {
-      const response = await notificationServiceV2.getUnreadCount();
+      const response = await NotificationService.getUnreadCount();
       return response.data?.count ?? 0;
     },
     // staleTime: Infinity (Socket.IO gère les mises à jour)
@@ -57,7 +57,7 @@ export function useNotificationCountsQuery() {
   return useQuery({
     queryKey: [...queryKeys.notifications.all, 'counts'],
     queryFn: async () => {
-      const response = await notificationServiceV2.getCounts();
+      const response = await NotificationService.getCounts();
       return response.data?.counts;
     },
     // staleTime: Infinity (Socket.IO gère les mises à jour)
@@ -69,7 +69,7 @@ export function useMarkNotificationAsReadMutation() {
 
   return useMutation({
     mutationFn: (notificationId: string) =>
-      notificationServiceV2.markAsRead(notificationId),
+      NotificationService.markAsRead(notificationId),
     onSuccess: () => {
       // Invalidate all notification queries
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
@@ -81,7 +81,7 @@ export function useMarkAllNotificationsAsReadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => notificationServiceV2.markAllAsRead(),
+    mutationFn: () => NotificationService.markAllAsRead(),
     onSuccess: () => {
       // Invalidate all notification queries
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
@@ -94,7 +94,7 @@ export function useDeleteNotificationMutation() {
 
   return useMutation({
     mutationFn: (notificationId: string) =>
-      notificationServiceV2.deleteNotification(notificationId),
+      NotificationService.deleteNotification(notificationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
@@ -106,7 +106,7 @@ export function useDeleteAllReadNotificationsMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => notificationServiceV2.deleteAllRead(),
+    mutationFn: () => NotificationService.deleteAllRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     },

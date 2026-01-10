@@ -1173,7 +1173,7 @@ private _setupNotificationEvents(socket: Socket): void {
 ### Zustand Store
 
 ```typescript
-// /frontend/stores/notification-store.ts
+// /apps/web/stores/notification-store.ts
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -1437,7 +1437,7 @@ export const useNotificationStore = create<NotificationState>()(
 ### Hook Custom pour Real-Time
 
 ```typescript
-// /frontend/hooks/use-notifications.ts
+// /apps/web/hooks/use-notifications.ts
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useNotificationStore } from '@/stores/notification-store';
@@ -1622,7 +1622,7 @@ function getNotificationIcon(type: string): string {
 #### NotificationBell (Badge avec compteur)
 
 ```typescript
-// /frontend/components/notifications/NotificationBell.tsx
+// /apps/web/components/notifications/NotificationBell.tsx
 
 'use client';
 
@@ -1678,7 +1678,7 @@ export function NotificationBell() {
 #### NotificationList (Liste scrollable)
 
 ```typescript
-// /frontend/components/notifications/NotificationList.tsx
+// /apps/web/components/notifications/NotificationList.tsx
 
 'use client';
 
@@ -1802,7 +1802,7 @@ export function NotificationList({ compact = false }: NotificationListProps) {
 #### NotificationItem (Item individuel)
 
 ```typescript
-// /frontend/components/notifications/NotificationItem.tsx
+// /apps/web/components/notifications/NotificationItem.tsx
 
 'use client';
 
@@ -2535,7 +2535,7 @@ describe('Notification Flow Integration', () => {
 ### Tests End-to-End (Playwright)
 
 ```typescript
-// /frontend/__tests__/e2e/notifications.spec.ts
+// /apps/web/__tests__/e2e/notifications.spec.ts
 
 import { test, expect } from '@playwright/test';
 
