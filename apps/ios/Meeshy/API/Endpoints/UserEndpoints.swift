@@ -27,6 +27,11 @@ enum UserEndpoints: APIEndpoint, Sendable {
     case registerDeviceToken(apnsToken: String, platform: String)
     case unregisterDeviceToken
 
+    // Availability checks for registration
+    case checkUsernameAvailability(username: String)
+    case checkEmailAvailability(email: String)
+    case checkPhoneAvailability(phone: String)
+
     var path: String {
         switch self {
         case .getCurrentUser:
@@ -55,12 +60,19 @@ enum UserEndpoints: APIEndpoint, Sendable {
             return "/api/users/me/avatar"
         case .registerDeviceToken, .unregisterDeviceToken:
             return "/api/users/register-device-token"
+        case .checkUsernameAvailability(let username):
+            return "/api/auth/check-username/\(username)"
+        case .checkEmailAvailability(let email):
+            return "/api/auth/check-email/\(email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email)"
+        case .checkPhoneAvailability(let phone):
+            return "/api/auth/check-phone/\(phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? phone)"
         }
     }
 
     var method: HTTPMethod {
         switch self {
-        case .getCurrentUser, .getUser, .searchUsers, .getBlockedUsers:
+        case .getCurrentUser, .getUser, .searchUsers, .getBlockedUsers,
+             .checkUsernameAvailability, .checkEmailAvailability, .checkPhoneAvailability:
             return .get
         case .blockUser, .reportUser, .uploadAvatar, .registerDeviceToken:
             return .post

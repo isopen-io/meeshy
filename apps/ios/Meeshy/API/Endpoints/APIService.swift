@@ -470,4 +470,52 @@ final class APIService: Sendable {
     func leaveCommunity(id: String) async throws {
         let _: APIResponse<EmptyResponse> = try await apiClient.request(CommunityEndpoints.leaveCommunity(id: id))
     }
+
+    // MARK: - Availability Checks (Registration)
+
+    /// Check if username is available
+    func checkUsernameAvailability(username: String) async throws -> AvailabilityResponse {
+        let response: APIResponse<AvailabilityResponse> = try await apiClient.request(
+            UserEndpoints.checkUsernameAvailability(username: username)
+        )
+
+        guard let result = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        return result
+    }
+
+    /// Check if email is available
+    func checkEmailAvailability(email: String) async throws -> AvailabilityResponse {
+        let response: APIResponse<AvailabilityResponse> = try await apiClient.request(
+            UserEndpoints.checkEmailAvailability(email: email)
+        )
+
+        guard let result = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        return result
+    }
+
+    /// Check if phone number is available
+    func checkPhoneAvailability(phone: String) async throws -> AvailabilityResponse {
+        let response: APIResponse<AvailabilityResponse> = try await apiClient.request(
+            UserEndpoints.checkPhoneAvailability(phone: phone)
+        )
+
+        guard let result = response.data else {
+            throw MeeshyError.unknown
+        }
+
+        return result
+    }
+}
+
+// MARK: - Availability Response
+
+struct AvailabilityResponse: Codable {
+    let available: Bool
+    let suggestions: [String]?
 }

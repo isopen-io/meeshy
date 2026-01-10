@@ -139,9 +139,9 @@ struct LoginView: View {
             .sheet(isPresented: $showBackendSelector) {
                 BackendSelectorView(config: environmentConfig)
             }
-            // v2 - Nouveau flux d'inscription animé
+            // v2 - Nouveau flux d'inscription animé avec design moderne
             .fullScreenCover(isPresented: $showNewOnboarding) {
-                OnboardingFlowView {
+                NewOnboardingFlowView {
                     // Registration completed successfully
                     showNewOnboarding = false
                 }
