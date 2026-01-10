@@ -89,6 +89,28 @@ final class SettingsManager: ObservableObject {
     @AppStorage("translation.showOriginalText") var showOriginalText: Bool = true
     @AppStorage("translation.offlineMode") var offlineTranslation: Bool = false
 
+    // MARK: - Transcription Settings (v2)
+    /// Enable automatic transcription of audio/video messages when no transcription exists
+    @AppStorage("transcription.autoTranscribe") var autoTranscribe: Bool = false
+    /// Preferred transcription language (ISO 639-1 code)
+    @AppStorage("transcription.preferredLanguage") var transcriptionPreferredLanguage: String = "fr"
+    /// Show transcription automatically below audio/video messages
+    @AppStorage("transcription.showAutomatically") var showTranscriptionAutomatically: Bool = true
+    /// Use on-device transcription only (more private, but may be less accurate)
+    @AppStorage("transcription.onDeviceOnly") var transcriptionOnDeviceOnly: Bool = true
+    /// Automatically detect language for transcription
+    @AppStorage("transcription.autoDetectLanguage") var transcriptionAutoDetectLanguage: Bool = true
+
+    // MARK: - Encryption Settings (v2)
+    /// Enable end-to-end encryption by default for new conversations
+    @AppStorage("encryption.defaultEnabled") var defaultEncryptionEnabled: Bool = true
+    /// Encryption mode for new conversations: signal, aes256, or none
+    @AppStorage("encryption.defaultMode") var defaultEncryptionMode: String = "signal"
+    /// Show encryption status indicator in conversations
+    @AppStorage("encryption.showIndicator") var showEncryptionIndicator: Bool = true
+    /// Require encryption for media attachments
+    @AppStorage("encryption.requireForMedia") var requireEncryptionForMedia: Bool = true
+
     // MARK: - iOS Specific Settings
     @AppStorage("ios.hapticFeedback") var hapticFeedbackEnabled: Bool = true
     @AppStorage("ios.hapticIntensity") var hapticIntensity: HapticIntensity = .medium

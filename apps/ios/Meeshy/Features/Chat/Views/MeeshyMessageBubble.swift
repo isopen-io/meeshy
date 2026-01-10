@@ -42,7 +42,39 @@ struct MeeshyMessageBubble: View {
     @State private var showParticles = false
     @State private var hasAppeared = false
 
+    // v2 - Transcription automatique
+    @StateObject private var transcriptionViewModel: AutoTranscriptionViewModel
+    @State private var showTranscription = false
+
     @Environment(\.colorScheme) private var colorScheme
+
+    // MARK: - Initialization
+
+    init(
+        message: Message,
+        isGroupChat: Bool,
+        showSenderName: Bool,
+        participants: [ConversationMember] = [],
+        onReact: @escaping (String) -> Void,
+        onReply: @escaping () -> Void,
+        onTranslate: @escaping () -> Void,
+        onCopy: @escaping () -> Void,
+        onEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) {
+        self.message = message
+        self.isGroupChat = isGroupChat
+        self.showSenderName = showSenderName
+        self.participants = participants
+        self.onReact = onReact
+        self.onReply = onReply
+        self.onTranslate = onTranslate
+        self.onCopy = onCopy
+        self.onEdit = onEdit
+        self.onDelete = onDelete
+        self._transcriptionViewModel = StateObject(wrappedValue: AutoTranscriptionViewModel(message: message))
+        self._showTranscription = State(initialValue: SettingsManager.shared.showTranscriptionAutomatically)
+    }
 
     // MARK: - Computed Properties
 
@@ -340,25 +372,139 @@ struct MeeshyMessageBubble: View {
         .foregroundColor(textColor.opacity(0.7))
     }
 
-    /// v2 - Voice message view with waveform visualization
+    /// v2 - Voice message view with waveform visualization and transcription
     private var voiceMessageView: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 16))
+        VStack(alignment: .leading, spacing: 8) {
+            // Waveform player
+            HStack(spacing: 8) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 16))
 
-            // Waveform bars
-            HStack(spacing: 2) {
-                ForEach(0..<15, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(textColor.opacity(0.6))
-                        .frame(width: 3, height: CGFloat.random(in: 8...24))
+                // Waveform bars
+                HStack(spacing: 2) {
+                    ForEach(0..<15, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(textColor.opacity(0.6))
+                            .frame(width: 3, height: CGFloat.random(in: 8...24))
+                    }
                 }
-            }
 
-            Text("0:15")
-                .font(.system(size: 14, weight: .medium))
+                Text("0:15")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(textColor)
+
+            // v2 - Transcription section
+            transcriptionSection
         }
-        .foregroundColor(textColor)
+    }
+
+    /// v2 - Section de transcription automatique
+    @ViewBuilder
+    private var transcriptionSection: some View {
+        // Afficher la transcription existante du message ou celle générée automatiquement
+        // Priorité: transcription serveur > transcription auto (client)
+        if let existingTranscription = message.transcribedText, !existingTranscription.isEmpty {
+            // Transcription existante (du serveur via audioTranscription)
+            transcriptionContent(text: existingTranscription, source: "Serveur")
+        } else if let autoTranscription = transcriptionViewModel.transcription {
+            // Transcription automatique générée localement
+            transcriptionContent(
+                text: autoTranscription.text,
+                source: "Auto (\(autoTranscription.confidenceLabel))"
+            )
+        } else if transcriptionViewModel.isLoading {
+            // En cours de transcription
+            transcriptionLoadingView
+        } else if SettingsManager.shared.autoTranscribe {
+            // Bouton pour demander la transcription
+            transcriptionRequestButton
+        }
+    }
+
+    /// Contenu de la transcription
+    private func transcriptionContent(text: String, source: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Toggle pour afficher/masquer
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showTranscription.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: showTranscription ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 12))
+                    Text("Transcription")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Image(systemName: showTranscription ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(textColor.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+
+            // Texte de la transcription
+            if showTranscription {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(text)
+                        .font(.system(size: 14))
+                        .foregroundColor(textColor.opacity(0.9))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(source)
+                        .font(.system(size: 10))
+                        .foregroundColor(textColor.opacity(0.5))
+                }
+                .padding(.top, 4)
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+            }
+        }
+        .padding(.top, 8)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.1))
+        )
+    }
+
+    /// Vue de chargement de la transcription
+    private var transcriptionLoadingView: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .scaleEffect(0.7)
+                .tint(textColor.opacity(0.7))
+            Text("Transcription en cours...")
+                .font(.system(size: 12))
+                .foregroundColor(textColor.opacity(0.7))
+        }
+        .padding(.top, 8)
+    }
+
+    /// Bouton pour demander une transcription manuelle
+    private var transcriptionRequestButton: some View {
+        Button(action: {
+            Task {
+                await transcriptionViewModel.requestTranscription()
+            }
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: "text.bubble")
+                    .font(.system(size: 12))
+                Text("Transcrire")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(textColor.opacity(0.7))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.15))
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
     }
 
     /// v2 - Media indicator for images/videos

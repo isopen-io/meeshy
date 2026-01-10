@@ -44,8 +44,8 @@ struct MediaItem: Identifiable, Equatable {
         self.thumbnailUrl = attachment.thumbnailUrl
         self.fileName = attachment.fileName
         self.fileSize = attachment.fileSize
-        self.width = attachment.width
-        self.height = attachment.height
+        self.width = attachment.width.map { CGFloat($0) }
+        self.height = attachment.height.map { CGFloat($0) }
         self.duration = attachment.duration
         self.createdAt = attachment.createdAt
         self.senderName = senderName

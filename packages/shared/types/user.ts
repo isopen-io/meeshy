@@ -51,6 +51,14 @@ export interface UserLanguageConfig {
 }
 
 /**
+ * Configuration de confidentialité et encryption utilisateur
+ */
+export interface UserPrivacyConfig {
+  encryptionPreference: 'disabled' | 'optional' | 'always';
+  autoTranscriptionEnabled: boolean;
+}
+
+/**
  * Statistiques utilisateur
  */
 export interface UserStats {
@@ -119,6 +127,8 @@ export interface FullUser {
   translateToSystemLanguage: boolean;
   translateToRegionalLanguage: boolean;
   useCustomDestination: boolean;
+  encryptionPreference: string;
+  autoTranscriptionEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   deactivatedAt: Date | null;
@@ -177,6 +187,8 @@ export interface AdminUser extends PublicUser {
   translateToSystemLanguage: boolean;
   translateToRegionalLanguage: boolean;
   useCustomDestination: boolean;
+  encryptionPreference: string;
+  autoTranscriptionEnabled: boolean;
   lastPasswordChange: Date | null;
   failedLoginAttempts: number | null;
   lockedUntil: Date | null;

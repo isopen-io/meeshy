@@ -105,6 +105,12 @@ model User {
   lastKeyRotation DateTime?
 
   // ============================================
+  // TRANSCRIPTION SETTINGS (ON-DEVICE)
+  // ============================================
+  /// Auto-transcribe audio/video messages when no server transcription exists
+  autoTranscriptionEnabled Boolean @default(true)
+
+  // ============================================
   // VOICE PROFILE & CONSENT FIELDS
   // ============================================
   /// Date of consent for voice profile recording (null = not consented)

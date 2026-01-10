@@ -603,13 +603,19 @@ actor ConversationCache {
             identifier: cached.identifier,  // CRITICAL: Restore identifier
             type: type,
             title: cached.title,
+            originalTitle: nil,
             description: nil,
             image: nil,
             avatar: cached.avatar,
+            banner: nil,
             communityId: cached.communityId,  // CRITICAL: Restore communityId for community filtering
             isActive: true,
             isArchived: cached.isArchived,
+            memberCount: cached.totalMemberCount,
             lastMessageAt: cached.lastMessageAt,
+            defaultWriteRole: nil,
+            isAnnouncementChannel: nil,
+            slowModeSeconds: nil,
             createdAt: cached.createdAt,
             updatedAt: cached.updatedAt,
             members: members,  // v4: Restored from cached other participant
@@ -623,7 +629,13 @@ actor ConversationCache {
             preferences: nil,  // Legacy preferences not cached
             unreadCount: cached.unreadCount,
             isMuted: cached.isMuted,
-            isPinned: cached.isPinned
+            isPinned: cached.isPinned,
+            encryptionMode: .none,
+            encryptionProtocol: nil,
+            encryptionEnabledAt: nil,
+            encryptionEnabledBy: nil,
+            serverEncryptionKeyId: nil,
+            autoTranslateEnabled: nil
         )
     }
 }

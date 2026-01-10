@@ -9,14 +9,19 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { 
+import {
   Languages,
   Bell,
   Shield,
   User,
   Palette,
   Save,
-  RotateCcw
+  RotateCcw,
+  Lock,
+  Mic,
+  FileAudio,
+  Video,
+  Info
 } from 'lucide-react';
 import { User as UserType, SUPPORTED_LANGUAGES, LanguageCode } from '@/types';
 import { FontSelector } from '@/components/settings/font-selector';
@@ -91,6 +96,9 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
       translateToSystemLanguage: currentUser.translateToSystemLanguage,
       translateToRegionalLanguage: currentUser.translateToRegionalLanguage,
       useCustomDestination: currentUser.useCustomDestination,
+      // Encryption & Transcription
+      encryptionPreference: currentUser.encryptionPreference || 'optional',
+      autoTranscriptionEnabled: (currentUser as { autoTranscriptionEnabled?: boolean }).autoTranscriptionEnabled ?? true,
     });
   }, [currentUser]);
 
@@ -132,6 +140,9 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
       translateToSystemLanguage: currentUser.translateToSystemLanguage,
       translateToRegionalLanguage: currentUser.translateToRegionalLanguage,
       useCustomDestination: currentUser.useCustomDestination,
+      // Encryption & Transcription
+      encryptionPreference: currentUser.encryptionPreference || 'optional',
+      autoTranscriptionEnabled: (currentUser as { autoTranscriptionEnabled?: boolean }).autoTranscriptionEnabled ?? true,
     });
     setHasChanges(false);
     toast.info('Paramètres réinitialisés');
@@ -348,10 +359,154 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
       case 'privacy':
         return (
           <div className="space-y-6">
+            {/* Section Encryption */}
             <div>
-              <h3 className="text-lg font-medium mb-4">Paramètres de confidentialité</h3>
-              <div className="text-center text-gray-500 py-8">
-                Paramètres de confidentialité à implémenter
+              <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                <Lock className="w-5 h-5 text-blue-600" />
+                Chiffrement des conversations
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Configurez le niveau de chiffrement par défaut pour vos nouvelles conversations
+              </p>
+
+              <div className="space-y-4">
+                <div className="p-4 border rounded-lg bg-gray-50/50">
+                  <Label className="text-sm font-medium mb-3 block">
+                    Mode de chiffrement par défaut
+                  </Label>
+                  <Select
+                    value={localSettings.encryptionPreference as string || 'optional'}
+                    onValueChange={(value) => updateSetting('encryptionPreference', value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choisir le mode de chiffrement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="disabled">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Désactivé</span>
+                          <span className="text-xs text-gray-500">Pas de chiffrement - Traduction disponible</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="optional">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Optionnel (Recommandé)</span>
+                          <span className="text-xs text-gray-500">Choisir par conversation - Équilibre sécurité/fonctionnalités</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="always">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Toujours actif</span>
+                          <span className="text-xs text-gray-500">E2EE automatique - Maximum de sécurité</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Info box about encryption modes */}
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-700">
+                        <p className="font-medium mb-1">À propos du chiffrement:</p>
+                        <ul className="space-y-1 list-disc list-inside">
+                          <li><strong>E2EE</strong>: Chiffrement de bout-en-bout (Signal Protocol) - Pas de traduction possible</li>
+                          <li><strong>Hybride</strong>: Double chiffrement - Traduction disponible</li>
+                          <li><strong>Serveur</strong>: Chiffrement côté serveur - Traduction disponible</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Section Transcription */}
+            <div>
+              <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                <Mic className="w-5 h-5 text-purple-600" />
+                Transcription automatique
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Transcrivez automatiquement les messages audio et vidéo sur votre appareil
+              </p>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                  <div className="flex items-start gap-3">
+                    <FileAudio className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <div>
+                      <Label className="text-sm font-medium">Transcrire les audios automatiquement</Label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Convertit automatiquement les messages vocaux en texte lorsqu'aucune transcription n'existe
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={localSettings.autoTranscriptionEnabled as boolean ?? true}
+                    onCheckedChange={(checked) => updateSetting('autoTranscriptionEnabled', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50 opacity-60">
+                  <div className="flex items-start gap-3">
+                    <Video className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <div>
+                      <Label className="text-sm font-medium">Transcrire les vidéos automatiquement</Label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Extrait le texte des vidéos (bientôt disponible)
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={false}
+                    disabled
+                  />
+                </div>
+
+                {/* Info about on-device transcription */}
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-purple-700">
+                      <p className="font-medium mb-1">Transcription locale:</p>
+                      <p>
+                        La transcription s'effectue directement sur votre appareil pour préserver votre confidentialité.
+                        Cela peut consommer plus de batterie et de données mobiles.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Section Translation (linked) */}
+            <div>
+              <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                <Languages className="w-5 h-5 text-green-600" />
+                Traduction automatique
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Configurez la traduction automatique dans l'onglet "Langue"
+              </p>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <Label className="text-sm font-medium">Traduction automatique activée</Label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {localSettings.autoTranslateEnabled
+                      ? 'Les messages seront traduits automatiquement'
+                      : 'Cliquez pour activer la traduction automatique'}
+                  </p>
+                </div>
+                <Switch
+                  checked={localSettings.autoTranslateEnabled as boolean ?? false}
+                  onCheckedChange={(checked) => updateSetting('autoTranslateEnabled', checked)}
+                />
               </div>
             </div>
           </div>

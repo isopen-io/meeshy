@@ -349,17 +349,7 @@ private struct ControlButton: View {
 
 #Preview {
     VideoCallInitiatorView(
-        conversation: Conversation(
-            id: "preview",
-            identifier: "preview",
-            type: .direct,
-            title: "Test User",
-            isActive: true,
-            isArchived: false,
-            lastMessageAt: Date(),
-            createdAt: Date(),
-            updatedAt: Date()
-        ),
+        conversation: .preview,
         currentUserId: "user1",
         onDismiss: {}
     )

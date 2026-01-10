@@ -35,19 +35,19 @@ struct OnboardingFlowView: View {
 
                 // Step content
                 TabView(selection: $viewModel.currentStep) {
-                    OnboardingStep1IdentityView(viewModel: viewModel)
+                    RegistrationStep1IdentityView(viewModel: viewModel)
                         .tag(RegistrationStep.identity)
 
-                    OnboardingStep2ContactView(viewModel: viewModel)
+                    RegistrationStep2ContactView(viewModel: viewModel)
                         .tag(RegistrationStep.contact)
 
-                    OnboardingStep3LanguagesView(viewModel: viewModel)
+                    RegistrationStep3LanguagesView(viewModel: viewModel)
                         .tag(RegistrationStep.languages)
 
-                    OnboardingStep4ProfileView(viewModel: viewModel)
+                    RegistrationStep4ProfileView(viewModel: viewModel)
                         .tag(RegistrationStep.profile)
 
-                    OnboardingStep5CompleteView(viewModel: viewModel)
+                    RegistrationStep5CompleteView(viewModel: viewModel)
                         .tag(RegistrationStep.complete)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
