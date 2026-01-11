@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import type { NotificationService } from '../services/NotificationService';
+import {
+  friendRequestSchema,
+  sendFriendRequestSchema,
+  respondFriendRequestSchema,
+  userMinimalSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Schemas de validation
 const createFriendRequestSchema = z.object({
@@ -32,7 +39,43 @@ function validatePagination(
 export async function friendRequestRoutes(fastify: FastifyInstance) {
   // Envoyer une demande d'ami
   fastify.post('/friend-requests', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Send a friend request to another user. Creates a pending friend request and notifies the recipient with action buttons to accept or reject the request.',
+      tags: ['friends'],
+      summary: 'Send friend request',
+      body: sendFriendRequestSchema,
+      response: {
+        201: {
+          description: 'Friend request sent successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: friendRequestSchema
+          }
+        },
+        400: {
+          description: 'Invalid request data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Target user not found',
+          ...errorResponseSchema
+        },
+        409: {
+          description: 'Friend request already exists between users',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createFriendRequestSchema.parse(request.body);
@@ -170,7 +213,57 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Recuperer les demandes d'ami recues
   fastify.get('/friend-requests/received', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Get all pending friend requests received by the authenticated user. Returns paginated list of requests with sender information.',
+      tags: ['friends'],
+      summary: 'Get received friend requests',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'string',
+            description: 'Pagination offset',
+            default: '0'
+          },
+          limit: {
+            type: 'string',
+            description: 'Number of items per page (max 100)',
+            default: '20'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'List of received friend requests',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: friendRequestSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of requests' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'Whether more items exist' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -226,7 +319,57 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Recuperer les demandes d'ami envoyees
   fastify.get('/friend-requests/sent', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Get all friend requests sent by the authenticated user. Returns paginated list of requests with receiver information, including pending, accepted, and rejected requests.',
+      tags: ['friends'],
+      summary: 'Get sent friend requests',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'string',
+            description: 'Pagination offset',
+            default: '0'
+          },
+          limit: {
+            type: 'string',
+            description: 'Number of items per page (max 100)',
+            default: '20'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'List of sent friend requests',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: friendRequestSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of requests' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'Whether more items exist' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -282,7 +425,59 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Repondre a une demande d'ami
   fastify.patch('/friend-requests/:id', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Respond to a friend request by accepting or rejecting it. When accepted, creates a direct conversation between users. Automatically marks the friend request notification as read and sends a notification to the requester.',
+      tags: ['friends'],
+      summary: 'Respond to friend request',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Friend request ID'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['status'],
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['accepted', 'rejected'],
+            description: 'Response action'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Friend request response processed successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: friendRequestSchema
+          }
+        },
+        400: {
+          description: 'Invalid request data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Friend request not found or already processed',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -457,7 +652,49 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Supprimer une demande d'ami
   fastify.delete('/friend-requests/:id', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Delete a friend request. Can be used by either the sender to cancel a sent request or the receiver to remove a received request without responding.',
+      tags: ['friends'],
+      summary: 'Delete friend request',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Friend request ID'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Friend request deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Demande d\'ami supprimee' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Friend request not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };

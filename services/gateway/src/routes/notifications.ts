@@ -2,6 +2,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { validatePagination } from '../utils/pagination';
+import {
+  notificationSchema,
+  notificationPreferenceSchema,
+  updateNotificationPreferencesRequestSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Schémas de validation
 const createNotificationSchema = z.object({
@@ -27,7 +33,73 @@ const updatePreferencesSchema = z.object({
 export async function notificationRoutes(fastify: FastifyInstance) {
   // Récupérer les notifications de l'utilisateur
   fastify.get('/notifications', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve paginated list of notifications for the authenticated user. Automatically removes expired notifications before fetching. Supports filtering by read status and notification type.',
+      tags: ['notifications'],
+      summary: 'Get user notifications',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'number',
+            description: 'Pagination offset',
+            default: 0,
+            minimum: 0
+          },
+          limit: {
+            type: 'number',
+            description: 'Number of notifications per page',
+            default: 20,
+            minimum: 1,
+            maximum: 100
+          },
+          unread: {
+            type: 'string',
+            enum: ['true', 'false'],
+            description: 'Filter by read status (true = only unread)',
+            default: 'false'
+          },
+          type: {
+            type: 'string',
+            enum: ['all', 'new_conversation', 'new_message', 'message_edited', 'friend_request', 'friend_accepted', 'missed_call', 'mention', 'reaction', 'member_joined', 'system'],
+            description: 'Filter by notification type',
+            default: 'all'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notifications retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: notificationSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of notifications' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'Whether more items exist' }
+              }
+            },
+            unreadCount: { type: 'number', description: 'Total unread notifications count' }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -143,7 +215,49 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Marquer une notification comme lue
   fastify.patch('/notifications/:id/read', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Mark a specific notification as read. Only the notification owner can mark it as read.',
+      tags: ['notifications'],
+      summary: 'Mark notification as read',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Notification unique identifier'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notification marked as read successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Notification marquée comme lue' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Notification not found or does not belong to user',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -188,7 +302,35 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Marquer toutes les notifications comme lues
   fastify.patch('/notifications/read-all', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Mark all unread notifications as read for the authenticated user. Returns the count of notifications that were updated.',
+      tags: ['notifications'],
+      summary: 'Mark all notifications as read',
+      response: {
+        200: {
+          description: 'All notifications marked as read successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Toutes les notifications marquées comme lues' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -231,7 +373,49 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Supprimer une notification
   fastify.delete('/notifications/:id', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Delete a specific notification. Only the notification owner can delete it. This action is permanent and cannot be undone.',
+      tags: ['notifications'],
+      summary: 'Delete notification',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Notification unique identifier'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notification deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Notification supprimée' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Notification not found or does not belong to user',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -268,7 +452,35 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Supprimer toutes les notifications lues
   fastify.delete('/notifications/read', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Delete all read notifications for the authenticated user. This action is permanent and cannot be undone. Unread notifications will not be affected.',
+      tags: ['notifications'],
+      summary: 'Delete all read notifications',
+      response: {
+        200: {
+          description: 'Read notifications deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Notifications lues supprimées' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -296,7 +508,30 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Récupérer les préférences de notification
   fastify.get('/notifications/preferences', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve notification preferences for the authenticated user. If no preferences exist, they will be created with default values (all notifications enabled except Do Not Disturb).',
+      tags: ['notifications'],
+      summary: 'Get notification preferences',
+      response: {
+        200: {
+          description: 'Notification preferences retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: notificationPreferenceSchema
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -339,7 +574,55 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Mettre à jour les préférences de notification
   fastify.put('/notifications/preferences', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update notification preferences for the authenticated user. All fields are optional. If preferences do not exist, they will be created. DND times should be in HH:mm format.',
+      tags: ['notifications'],
+      summary: 'Update notification preferences',
+      body: updateNotificationPreferencesRequestSchema,
+      response: {
+        200: {
+          description: 'Notification preferences updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Préférences mises à jour' },
+                preferences: notificationPreferenceSchema
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid request data',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error message' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  path: { type: 'array', items: { type: 'string' } },
+                  message: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = updatePreferencesSchema.parse(request.body);
@@ -394,7 +677,74 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Créer une notification (pour les tests)
   fastify.post('/notifications/test', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Create a test notification for the authenticated user. This endpoint is primarily for testing and development purposes.',
+      tags: ['notifications'],
+      summary: 'Create test notification',
+      body: {
+        type: 'object',
+        required: ['type', 'title', 'content'],
+        properties: {
+          type: {
+            type: 'string',
+            description: 'Notification type',
+            example: 'system'
+          },
+          title: {
+            type: 'string',
+            description: 'Notification title',
+            example: 'Test Notification'
+          },
+          content: {
+            type: 'string',
+            description: 'Notification content',
+            example: 'This is a test notification'
+          },
+          data: {
+            type: 'string',
+            description: 'Additional data as JSON string (optional)',
+            example: '{"key":"value"}'
+          }
+        }
+      },
+      response: {
+        201: {
+          description: 'Test notification created successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: notificationSchema
+          }
+        },
+        400: {
+          description: 'Invalid request data',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error message' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  path: { type: 'array', items: { type: 'string' } },
+                  message: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createNotificationSchema.parse(request.body);
@@ -434,7 +784,55 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
   // Statistiques des notifications
   fastify.get('/notifications/stats', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve notification statistics for the authenticated user, including total count, unread count, and breakdown by notification type.',
+      tags: ['notifications'],
+      summary: 'Get notification statistics',
+      response: {
+        200: {
+          description: 'Notification statistics retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                total: {
+                  type: 'number',
+                  description: 'Total number of notifications',
+                  example: 42
+                },
+                unread: {
+                  type: 'number',
+                  description: 'Number of unread notifications',
+                  example: 7
+                },
+                byType: {
+                  type: 'object',
+                  description: 'Count of notifications grouped by type',
+                  additionalProperties: { type: 'number' },
+                  example: {
+                    'new_message': 25,
+                    'friend_request': 5,
+                    'missed_call': 3,
+                    'system': 9
+                  }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;

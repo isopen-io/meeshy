@@ -12,6 +12,13 @@ import {
   containsEmoji,
   validateSchema
 } from '@meeshy/shared/utils/validation';
+import {
+  userSchema,
+  userMinimalSchema,
+  userStatsSchema,
+  updateUserRequestSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 /**
  * Validate and sanitize pagination parameters
@@ -31,7 +38,36 @@ function validatePagination(
 
 export async function userRoutes(fastify: FastifyInstance) {
   // Route pour verifier la disponibilite d'un username
-  fastify.get('/users/check-username/:username', async (request, reply) => {
+  fastify.get('/users/check-username/:username', {
+    schema: {
+      description: 'Check if a username is available for registration. Verifies uniqueness across both registered users and anonymous participants.',
+      tags: ['users'],
+      summary: 'Check username availability',
+      params: {
+        type: 'object',
+        required: ['username'],
+        properties: {
+          username: { type: 'string', minLength: 2, maxLength: 16, description: 'Username to check' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean', description: 'Whether the username is available' },
+                username: { type: 'string', description: 'Normalized username that was checked' }
+              }
+            }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { username } = request.params as { username: string };
 
@@ -78,7 +114,30 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route de test simple
   fastify.get('/users/me/test', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Test endpoint for authenticated users. Verifies authentication token and returns user ID with timestamp.',
+      tags: ['users'],
+      summary: 'Test authentication endpoint',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                userId: { type: 'string', description: 'Authenticated user ID' },
+                message: { type: 'string', example: 'Test endpoint working' },
+                timestamp: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
@@ -112,7 +171,81 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir les statistiques du tableau de bord de l'utilisateur connecte
   fastify.get('/users/me/dashboard-stats', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Get comprehensive dashboard statistics for the authenticated user. Returns conversation counts, message stats, communities, and recent activity.',
+      tags: ['users'],
+      summary: 'Get user dashboard statistics',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                stats: {
+                  type: 'object',
+                  properties: {
+                    totalConversations: { type: 'number', description: 'Total conversations user is member of' },
+                    totalCommunities: { type: 'number', description: 'Total communities joined' },
+                    totalMessages: { type: 'number', description: 'Messages sent this week' },
+                    activeConversations: { type: 'number', description: 'Conversations with activity in last 24h' },
+                    translationsToday: { type: 'number', description: 'Estimated translations today' },
+                    totalLinks: { type: 'number', description: 'Share links created' },
+                    lastUpdated: { type: 'string', format: 'date-time' }
+                  }
+                },
+                recentConversations: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      title: { type: 'string' },
+                      type: { type: 'string', enum: ['direct', 'group'] },
+                      isActive: { type: 'boolean' },
+                      lastMessage: {
+                        type: 'object',
+                        nullable: true,
+                        properties: {
+                          content: { type: 'string' },
+                          createdAt: { type: 'string', format: 'date-time' },
+                          sender: {
+                            type: 'object',
+                            properties: {
+                              username: { type: 'string' },
+                              displayName: { type: 'string' }
+                            }
+                          }
+                        }
+                      },
+                      members: { type: 'array', items: userMinimalSchema }
+                    }
+                  }
+                },
+                recentCommunities: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      name: { type: 'string' },
+                      description: { type: 'string', nullable: true },
+                      isPrivate: { type: 'boolean' },
+                      members: { type: 'array', items: userMinimalSchema },
+                      memberCount: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
@@ -381,7 +514,42 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir les statistiques d'un utilisateur specifique (par ID ou username)
   fastify.get('/users/:userId/stats', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Get activity statistics for a specific user by ID or username. Returns message counts, conversation stats, and last activity information.',
+      tags: ['users'],
+      summary: 'Get user statistics',
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'string', description: 'User ID (MongoDB ObjectId) or username' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                messagesSent: { type: 'number', description: 'Total messages sent by user' },
+                messagesReceived: { type: 'number', description: 'Total messages received' },
+                conversationsCount: { type: 'number', description: 'Total conversations (all types)' },
+                groupsCount: { type: 'number', description: 'Group conversations only' },
+                totalConversations: { type: 'number', description: 'Total conversations (duplicate of conversationsCount)' },
+                averageResponseTime: { type: 'number', nullable: true, description: 'Average response time in seconds' },
+                lastActivity: { type: 'string', format: 'date-time', description: 'Last activity timestamp' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -503,7 +671,38 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour mettre a jour le profil utilisateur connecte
   fastify.patch('/users/me', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number uniqueness is enforced.',
+      tags: ['users'],
+      summary: 'Update user profile',
+      body: updateUserRequestSchema,
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Profile updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error or duplicate email/phone' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     // Utiliser le nouveau systeme d'authentification unifie
     const authContext = (request as any).authContext;
@@ -664,7 +863,44 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour mettre a jour l'avatar de l'utilisateur connecte
   fastify.patch('/users/me/avatar', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user avatar image. Accepts a URL pointing to the avatar image.',
+      tags: ['users'],
+      summary: 'Update user avatar',
+      body: {
+        type: 'object',
+        required: ['avatar'],
+        properties: {
+          avatar: { type: 'string', format: 'uri', description: 'Avatar image URL' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                avatar: { type: 'string', description: 'Updated avatar URL' },
+                message: { type: 'string', example: 'Avatar updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Invalid image format' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
@@ -726,7 +962,45 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour changer le mot de passe de l'utilisateur connecte
   fastify.patch('/users/me/password', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Change the authenticated user password. Requires current password for verification. New password must meet security requirements.',
+      tags: ['users'],
+      summary: 'Change user password',
+      body: {
+        type: 'object',
+        required: ['currentPassword', 'newPassword'],
+        properties: {
+          currentPassword: { type: 'string', minLength: 8, description: 'Current password for verification' },
+          newPassword: { type: 'string', minLength: 8, description: 'New password (min 8 characters)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Password updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error or incorrect current password' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
@@ -800,7 +1074,56 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour rechercher des utilisateurs
   fastify.get('/users/search', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Search for users by name, username, email, or display name. Returns paginated results with active users only. Minimum query length is 2 characters.',
+      tags: ['users'],
+      summary: 'Search users',
+      querystring: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', minLength: 2, description: 'Search query (name, username, email, displayName)' },
+          offset: { type: 'string', default: '0', description: 'Pagination offset' },
+          limit: { type: 'string', default: '20', description: 'Results per page (max 100)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  username: { type: 'string' },
+                  firstName: { type: 'string' },
+                  lastName: { type: 'string' },
+                  displayName: { type: 'string' },
+                  email: { type: 'string' },
+                  isOnline: { type: 'boolean' },
+                  lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                  systemLanguage: { type: 'string' }
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                offset: { type: 'number' },
+                limit: { type: 'number' },
+                returned: { type: 'number' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
@@ -913,7 +1236,27 @@ export async function userRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir tous les utilisateurs
-  fastify.get('/users', async (request, reply) => {
+  fastify.get('/users', {
+    schema: {
+      description: 'Get all users (to be implemented). This endpoint will return a paginated list of all users in the system.',
+      tags: ['users'],
+      summary: 'Get all users',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Get all users - to be implemented' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
     reply.send({
       success: true,
       data: { message: 'Get all users - to be implemented' }
@@ -922,7 +1265,46 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir un utilisateur par username (profil public)
   // Format: /u/username (ex: meeshy.me/u/johndoe)
-  fastify.get('/u/:username', async (request: FastifyRequest<{
+  fastify.get('/u/:username', {
+    schema: {
+      description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
+      tags: ['users'],
+      summary: 'Get user profile by username',
+      params: {
+        type: 'object',
+        required: ['username'],
+        properties: {
+          username: { type: 'string', description: 'Username to lookup (case-insensitive)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                username: { type: 'string' },
+                firstName: { type: 'string' },
+                lastName: { type: 'string' },
+                displayName: { type: 'string' },
+                avatar: { type: 'string', nullable: true },
+                bio: { type: 'string', nullable: true },
+                role: { type: 'string' },
+                isOnline: { type: 'boolean' },
+                lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                createdAt: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        },
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest<{
     Params: { username: string }
   }>, reply: FastifyReply) => {
     try {
@@ -981,7 +1363,61 @@ export async function userRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir un utilisateur par ID ou username (profil public)
-  fastify.get('/users/:id', async (request: FastifyRequest<{
+  fastify.get('/users/:id', {
+    schema: {
+      description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
+      tags: ['users'],
+      summary: 'Get user profile by ID or username',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User MongoDB ID (24 hex chars) or username' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                username: { type: 'string' },
+                firstName: { type: 'string' },
+                lastName: { type: 'string' },
+                displayName: { type: 'string' },
+                avatar: { type: 'string', nullable: true },
+                bio: { type: 'string', nullable: true },
+                role: { type: 'string' },
+                isOnline: { type: 'boolean' },
+                lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                systemLanguage: { type: 'string' },
+                regionalLanguage: { type: 'string' },
+                customDestinationLanguage: { type: 'string', nullable: true },
+                autoTranslateEnabled: { type: 'boolean' },
+                translateToSystemLanguage: { type: 'boolean' },
+                translateToRegionalLanguage: { type: 'boolean' },
+                useCustomDestination: { type: 'boolean' },
+                isActive: { type: 'boolean' },
+                deactivatedAt: { type: 'string', format: 'date-time', nullable: true },
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' },
+                email: { type: 'string', description: 'Masked for security' },
+                phoneNumber: { type: 'string', nullable: true, description: 'Masked for security' },
+                permissions: { type: 'object', nullable: true },
+                isAnonymous: { type: 'boolean', example: false },
+                isMeeshyer: { type: 'boolean', example: true }
+              }
+            }
+          }
+        },
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest<{
     Params: { id: string }
   }>, reply: FastifyReply) => {
     try {
@@ -1066,7 +1502,34 @@ export async function userRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour mettre a jour un utilisateur
-  fastify.put('/users/:id', async (request, reply) => {
+  fastify.put('/users/:id', {
+    schema: {
+      description: 'Update a specific user by ID (to be implemented). Admin-only endpoint for managing user accounts.',
+      tags: ['users'],
+      summary: 'Update user by ID',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User MongoDB ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Update user - to be implemented' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
     reply.send({
       success: true,
       data: { message: 'Update user - to be implemented' }
@@ -1074,7 +1537,34 @@ export async function userRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour supprimer un utilisateur
-  fastify.delete('/users/:id', async (request, reply) => {
+  fastify.delete('/users/:id', {
+    schema: {
+      description: 'Delete a specific user by ID (to be implemented). Admin-only endpoint for removing user accounts.',
+      tags: ['users'],
+      summary: 'Delete user by ID',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User MongoDB ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Delete user - to be implemented' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
     reply.send({
       success: true,
       data: { message: 'Delete user - to be implemented' }
@@ -1087,7 +1577,53 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Recuperer les friend requests de l'utilisateur
   fastify.get('/users/friend-requests', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Get all friend requests for the authenticated user. Returns both sent and received requests with full user details.',
+      tags: ['users', 'friends'],
+      summary: 'Get friend requests',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', default: '0', description: 'Pagination offset' },
+          limit: { type: 'string', default: '20', description: 'Results per page (max 100)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  senderId: { type: 'string' },
+                  receiverId: { type: 'string' },
+                  status: { type: 'string', enum: ['pending', 'accepted', 'rejected'] },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  sender: userMinimalSchema,
+                  receiver: userMinimalSchema
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                offset: { type: 'number' },
+                limit: { type: 'number' },
+                returned: { type: 'number' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1164,7 +1700,49 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Envoyer une friend request
   fastify.post('/users/friend-requests', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Send a friend request to another user. Validates that users exist, prevents duplicate requests, and ensures users cannot add themselves.',
+      tags: ['users', 'friends'],
+      summary: 'Send friend request',
+      body: {
+        type: 'object',
+        required: ['receiverId'],
+        properties: {
+          receiverId: { type: 'string', description: 'User ID to send friend request to' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                friendRequest: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    senderId: { type: 'string' },
+                    receiverId: { type: 'string' },
+                    status: { type: 'string', example: 'pending' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    sender: userMinimalSchema,
+                    receiver: userMinimalSchema
+                  }
+                },
+                message: { type: 'string', example: 'Friend request sent successfully' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1265,7 +1843,61 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Repondre a une friend request (accepter/refuser/annuler)
   fastify.patch('/users/friend-requests/:id', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Respond to a friend request. Sender can cancel, receiver can accept or reject. Only pending requests can be modified.',
+      tags: ['users', 'friends'],
+      summary: 'Respond to friend request',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Friend request ID' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['action'],
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['accept', 'reject', 'cancel'],
+            description: 'Action to perform (accept/reject by receiver, cancel by sender)'
+          }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                request: {
+                  type: 'object',
+                  nullable: true,
+                  properties: {
+                    id: { type: 'string' },
+                    senderId: { type: 'string' },
+                    receiverId: { type: 'string' },
+                    status: { type: 'string' },
+                    sender: userMinimalSchema,
+                    receiver: userMinimalSchema
+                  }
+                },
+                message: { type: 'string' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1374,7 +2006,37 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Route pour recuperer le token d'affiliation actif d'un utilisateur
   // Utilise pour l'affiliation automatique via les liens /join
-  fastify.get('/users/:userId/affiliate-token', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/users/:userId/affiliate-token', {
+    schema: {
+      description: 'Get the active affiliate token for a user. Used for automatic affiliation via /join links. Returns the most recent active token that has not expired.',
+      tags: ['users', 'affiliate'],
+      summary: 'Get user affiliate token',
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'string', description: 'User ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                token: { type: 'string', description: 'Active affiliate token' }
+              }
+            }
+          }
+        },
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.params as { userId: string };
 

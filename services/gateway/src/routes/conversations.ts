@@ -6,14 +6,25 @@ import { conversationStatsService } from '../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import { 
-  resolveUserLanguage, 
+import {
+  resolveUserLanguage,
   generateConversationIdentifier as sharedGenerateConversationIdentifier,
   isValidMongoId,
   generateDefaultConversationTitle
 } from '@meeshy/shared/utils/conversation-helpers';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { messageValidationHook } from '../middleware/rate-limiter';
+import {
+  conversationSchema,
+  conversationMinimalSchema,
+  conversationParticipantSchema,
+  conversationSettingsSchema,
+  createConversationRequestSchema,
+  updateConversationRequestSchema,
+  conversationListResponseSchema,
+  conversationResponseSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 /**
  * Vérifie si un utilisateur peut accéder à une conversation
@@ -323,7 +334,38 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   }
 
   // Route pour vérifier la disponibilité d'un identifiant de conversation
-  fastify.get('/conversations/check-identifier/:identifier', { preValidation: [requiredAuth] }, async (request, reply) => {
+  fastify.get('/conversations/check-identifier/:identifier', {
+    schema: {
+      description: 'Check if a conversation identifier is available for use',
+      tags: ['conversations'],
+      summary: 'Check identifier availability',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: { type: 'string', description: 'Conversation identifier to check' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean', description: 'Whether the identifier is available' },
+                identifier: { type: 'string', description: 'The checked identifier' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
     try {
       const { identifier } = request.params as { identifier: string };
 
@@ -355,6 +397,25 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir toutes les conversations de l'utilisateur
   fastify.get<{ Querystring: { limit?: string; offset?: string; includeCount?: string } }>('/conversations', {
+    schema: {
+      description: 'Get all conversations for the authenticated user with pagination support',
+      tags: ['conversations'],
+      summary: 'List user conversations',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Maximum number of conversations to return (max 50, default 15)' },
+          offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
+          includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' }
+        }
+      },
+      response: {
+        200: conversationListResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; includeCount?: string } }>, reply) => {
     try {
@@ -590,6 +651,25 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir une conversation par ID
   fastify.get<{ Params: ConversationParams }>('/conversations/:id', {
+    schema: {
+      description: 'Get a specific conversation by ID including participants, settings, and last message',
+      tags: ['conversations'],
+      summary: 'Get conversation details',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: conversationResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     try {
@@ -721,6 +801,20 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour créer une nouvelle conversation
   fastify.post<{ Body: CreateConversationBody }>('/conversations', {
+    schema: {
+      description: 'Create a new conversation (direct, group, or public) with specified participants',
+      tags: ['conversations'],
+      summary: 'Create conversation',
+      body: createConversationRequestSchema,
+      response: {
+        200: conversationResponseSchema,
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     try {
@@ -927,10 +1021,48 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir les messages d'une conversation avec pagination
-  fastify.get<{ 
+  fastify.get<{
     Params: ConversationParams;
     Querystring: MessagesQuery;
   }>('/conversations/:id/messages', {
+    schema: {
+      description: 'Get paginated messages from a conversation with optional cursor-based pagination',
+      tags: ['conversations', 'messages'],
+      summary: 'Get conversation messages',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
+          offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
+          before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                messages: { type: 'array', items: { type: 'object' } },
+                hasMore: { type: 'boolean', description: 'Whether more messages are available' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     try {
@@ -1215,9 +1347,38 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour marquer tous les messages d'une conversation comme lus
-  fastify.post<{ 
+  fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:id/mark-read', {
+    schema: {
+      description: 'Mark all messages in a conversation as read for the authenticated user',
+      tags: ['conversations', 'messages'],
+      summary: 'Mark conversation as read',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                markedCount: { type: 'number', description: 'Number of messages marked as read' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -1298,6 +1459,50 @@ export async function conversationRoutes(fastify: FastifyInstance) {
     Params: ConversationParams;
     Body: SendMessageBody;
   }>('/conversations/:id/messages', {
+    schema: {
+      description: 'Send a new message to a conversation with optional encryption and attachments',
+      tags: ['conversations', 'messages'],
+      summary: 'Send message',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: {
+          content: { type: 'string', description: 'Message content', minLength: 1 },
+          originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
+          messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
+          replyToId: { type: 'string', description: 'ID of message being replied to' },
+          encryptedContent: { type: 'string', description: 'Encrypted message content' },
+          encryptionMode: { type: 'string', enum: ['e2e', 'server'], description: 'Encryption mode' },
+          encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
+          isEncrypted: { type: 'boolean', description: 'Whether message is encrypted' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'object', description: 'Created message object' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth],
     preHandler: [messageValidationHook]
   }, async (request, reply) => {
@@ -1614,6 +1819,29 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Marquer une conversation comme lue (tous les messages non lus)
   fastify.post<{ Params: ConversationParams }>('/conversations/:id/read', {
+    schema: {
+      description: 'Mark conversation as read (alias for mark-read endpoint)',
+      tags: ['conversations', 'messages'],
+      summary: 'Mark as read',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -1666,6 +1894,32 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Recherche de conversations accessibles par l'utilisateur courant
   fastify.get<{ Querystring: SearchQuery }>('/conversations/search', {
+    schema: {
+      description: 'Search conversations by title or participant names',
+      tags: ['conversations'],
+      summary: 'Search conversations',
+      querystring: {
+        type: 'object',
+        required: ['q'],
+        properties: {
+          q: { type: 'string', description: 'Search query string', minLength: 1 }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: conversationMinimalSchema
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -1775,6 +2029,46 @@ export async function conversationRoutes(fastify: FastifyInstance) {
     Params: ConversationParams & { messageId: string };
     Body: EditMessageBody;
   }>('/conversations/:id/messages/:messageId', {
+    schema: {
+      description: 'Edit an existing message in a conversation (only by message sender)',
+      tags: ['conversations', 'messages'],
+      summary: 'Edit message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to edit' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: {
+          content: { type: 'string', description: 'Updated message content', minLength: 1 },
+          originalLanguage: { type: 'string', description: 'Language code', default: 'fr' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'object', description: 'Updated message object' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth],
     preHandler: [messageValidationHook]
   }, async (request, reply) => {
@@ -2182,6 +2476,37 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   fastify.delete<{
     Params: ConversationParams & { messageId: string };
   }>('/conversations/:id/messages/:messageId', {
+    schema: {
+      description: 'Delete a message from a conversation (soft delete - marks as deleted)',
+      tags: ['conversations', 'messages'],
+      summary: 'Delete message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to delete' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Message supprimé avec succès' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -2323,10 +2648,30 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   // NOTE: ancienne route /conversations/create-link supprimée (remplacée par /links)
 
   // Route pour mettre à jour une conversation
-  fastify.put<{ 
+  fastify.put<{
     Params: ConversationParams;
     Body: Partial<CreateConversationBody>;
   }>('/conversations/:id', {
+    schema: {
+      description: 'Update conversation details (title, description) - requires admin/moderator role',
+      tags: ['conversations'],
+      summary: 'Update conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: updateConversationRequestSchema,
+      response: {
+        200: conversationResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -2398,6 +2743,36 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour supprimer une conversation
   fastify.delete<{ Params: ConversationParams }>('/conversations/:id', {
+    schema: {
+      description: 'Delete a conversation (soft delete - marks as inactive) - requires creator role',
+      tags: ['conversations'],
+      summary: 'Delete conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Conversation supprimée avec succès' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -2464,6 +2839,44 @@ export async function conversationRoutes(fastify: FastifyInstance) {
     Params: { messageId: string };
     Body: { content: string };
   }>('/messages/:messageId', {
+    schema: {
+      description: 'Edit a message by message ID (alternative to PUT /conversations/:id/messages/:messageId)',
+      tags: ['messages'],
+      summary: 'Edit message by ID',
+      params: {
+        type: 'object',
+        required: ['messageId'],
+        properties: {
+          messageId: { type: 'string', description: 'Message ID to edit' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: {
+          content: { type: 'string', description: 'Updated message content', minLength: 1 }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'object', description: 'Updated message object' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth],
     preHandler: [messageValidationHook]
   }, async (request, reply) => {
@@ -2565,13 +2978,49 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   // Route pour récupérer les participants d'une conversation
   fastify.get<{
     Params: { id: string };
-    Querystring: { 
+    Querystring: {
       onlineOnly?: string;
       role?: string;
       search?: string;
       limit?: string;
     };
   }>('/conversations/:id/participants', {
+    schema: {
+      description: 'Get participants in a conversation with optional filtering by online status, role, or search query',
+      tags: ['conversations', 'participants'],
+      summary: 'Get conversation participants',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          onlineOnly: { type: 'string', enum: ['true', 'false'], description: 'Filter to only online participants' },
+          role: { type: 'string', enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'], description: 'Filter by participant role' },
+          search: { type: 'string', description: 'Search participants by name or username' },
+          limit: { type: 'string', description: 'Maximum number of participants to return' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: conversationParticipantSchema
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     try {
@@ -2816,6 +3265,45 @@ export async function conversationRoutes(fastify: FastifyInstance) {
     Params: { id: string };
     Body: { userId: string };
   }>('/conversations/:id/participants', {
+    schema: {
+      description: 'Add a participant to a conversation - requires admin/moderator role',
+      tags: ['conversations', 'participants'],
+      summary: 'Add participant',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'string', description: 'User ID to add to conversation' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Participant ajouté avec succès' },
+                participant: conversationParticipantSchema
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -2905,6 +3393,37 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   fastify.delete<{
     Params: { id: string; userId: string };
   }>('/conversations/:id/participants/:userId', {
+    schema: {
+      description: 'Remove a participant from a conversation - requires admin/moderator role or self-removal',
+      tags: ['conversations', 'participants'],
+      summary: 'Remove participant',
+      params: {
+        type: 'object',
+        required: ['id', 'userId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          userId: { type: 'string', description: 'User ID to remove from conversation' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Participant supprimé avec succès' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -2991,6 +3510,46 @@ export async function conversationRoutes(fastify: FastifyInstance) {
     Params: { id: string; userId: string };
     Body: { role: 'ADMIN' | 'MODERATOR' | 'MEMBER' };
   }>('/conversations/:id/participants/:userId/role', {
+    schema: {
+      description: 'Update participant role in a conversation - requires creator or admin role',
+      tags: ['conversations', 'participants'],
+      summary: 'Update participant role',
+      params: {
+        type: 'object',
+        required: ['id', 'userId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          userId: { type: 'string', description: 'User ID to update role for' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['role'],
+        properties: {
+          role: { type: 'string', enum: ['ADMIN', 'MODERATOR', 'MEMBER'], description: 'New role for participant' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Rôle du participant modifié avec succès' },
+                participant: conversationParticipantSchema
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -3157,6 +3716,57 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       allowedIpRanges?: string[];
     };
   }>('/conversations/:id/new-link', {
+    schema: {
+      description: 'Create a new shareable invitation link for a conversation with configurable permissions',
+      tags: ['conversations', 'links'],
+      summary: 'Create share link',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Link name for identification' },
+          description: { type: 'string', description: 'Link description' },
+          maxUses: { type: 'number', description: 'Maximum number of times link can be used' },
+          maxConcurrentUsers: { type: 'number', description: 'Maximum concurrent users via this link' },
+          maxUniqueSessions: { type: 'number', description: 'Maximum unique sessions' },
+          expiresAt: { type: 'string', format: 'date-time', description: 'Link expiration date' },
+          allowAnonymousMessages: { type: 'boolean', description: 'Allow anonymous users to send messages' },
+          allowAnonymousFiles: { type: 'boolean', description: 'Allow anonymous users to send files' },
+          allowAnonymousImages: { type: 'boolean', description: 'Allow anonymous users to send images' },
+          allowViewHistory: { type: 'boolean', description: 'Allow viewing message history' },
+          requireNickname: { type: 'boolean', description: 'Require nickname for anonymous users' },
+          requireEmail: { type: 'boolean', description: 'Require email for anonymous users' },
+          allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes' },
+          allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
+          allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                link: { type: 'object', description: 'Created share link object' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -3334,6 +3944,34 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       type?: 'direct' | 'group' | 'public' | 'global';
     };
   }>('/conversations/:id', {
+    schema: {
+      description: 'Partially update conversation properties (alternative to PUT) - requires admin/moderator role',
+      tags: ['conversations'],
+      summary: 'Partially update conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'New conversation title', minLength: 1, maxLength: 100 },
+          description: { type: 'string', description: 'New conversation description', maxLength: 500 },
+          type: { type: 'string', enum: ['direct', 'group', 'public', 'global'], description: 'Conversation type' }
+        }
+      },
+      response: {
+        200: conversationResponseSchema,
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     const { id } = request.params;
@@ -3475,7 +4113,49 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   });
 
   // Récupérer les liens de partage d'une conversation (pour les admins)
-  fastify.get('/conversations/:conversationId/links', { preValidation: [requiredAuth] }, async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/conversations/:conversationId/links', {
+    schema: {
+      description: 'Get all shareable links for a conversation (moderators see all links, members see only their own)',
+      tags: ['conversations', 'links'],
+      summary: 'Get conversation share links',
+      params: {
+        type: 'object',
+        required: ['conversationId'],
+        properties: {
+          conversationId: { type: 'string', description: 'Conversation ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  linkId: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  maxUses: { type: 'number' },
+                  currentUses: { type: 'number' },
+                  expiresAt: { type: 'string', format: 'date-time' },
+                  isActive: { type: 'boolean' },
+                  createdAt: { type: 'string', format: 'date-time' }
+                }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
       const authRequest = request as UnifiedAuthRequest;
@@ -3551,6 +4231,38 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour rejoindre une conversation via un lien partagé (utilisateurs authentifiés)
   fastify.post('/conversations/join/:linkId', {
+    schema: {
+      description: 'Join a conversation using an invitation link - validates link permissions and adds user as member',
+      tags: ['conversations', 'links'],
+      summary: 'Join conversation via link',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: { type: 'string', description: 'Share link ID to join conversation' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                conversation: conversationSchema,
+                membership: conversationParticipantSchema
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -3700,6 +4412,45 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
   // Route pour inviter un utilisateur à une conversation
   fastify.post('/conversations/:id/invite', {
+    schema: {
+      description: 'Invite a user to join a conversation - creates membership and sends notification',
+      tags: ['conversations', 'participants'],
+      summary: 'Invite user to conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'string', description: 'ID of user to invite' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'User invited successfully' },
+                membership: conversationParticipantSchema
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
