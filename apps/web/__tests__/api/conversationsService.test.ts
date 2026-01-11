@@ -129,26 +129,26 @@ describe('ConversationsService', () => {
           success: true,
           data: mockCreatedConversation
         },
-        status: 201,
+        success: true,
         message: 'Created',
       });
 
-      const result = await conversationsService.createConversation(createData);
+      const result = await conversationsService.createConversation({ ...createData, type: 'group' });
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations', createData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations', { ...createData, type: 'group' });
       expect(result.id).toBe('2');
     });
 
     it('should create a direct conversation', async () => {
       const createData = {
         participants: ['user1'],
+        type: 'direct' as const,
       };
 
       const mockConversation = {
         id: '3',
         type: 'direct',
         title: null,
-        isGroup: false,
         isActive: true,
         members: [],
         createdAt: new Date().toISOString(),
@@ -162,14 +162,14 @@ describe('ConversationsService', () => {
           success: true,
           data: mockConversation
         },
-        status: 201,
+        success: true,
         message: 'Created',
       });
 
       const result = await conversationsService.createConversation(createData);
 
       expect(mockApiService.post).toHaveBeenCalledWith('/api/conversations', createData);
-      expect(result.isGroup).toBe(false);
+      expect(result.type).toBe('direct');
     });
   });
 
@@ -177,7 +177,7 @@ describe('ConversationsService', () => {
     it('should delete a conversation', async () => {
       mockApiService.delete.mockResolvedValue({
         data: {},
-        status: 204,
+        success: true,
         message: 'Deleted',
       });
 
@@ -222,7 +222,7 @@ describe('ConversationsService', () => {
           success: true,
           data: mockMessage
         },
-        status: 201,
+        success: true,
         message: 'Created',
       });
 
@@ -335,7 +335,7 @@ describe('ConversationsService', () => {
           success: false,
           data: null
         },
-        status: 404,
+        success: false,
         message: 'Not found',
       });
 

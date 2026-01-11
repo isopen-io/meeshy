@@ -36,6 +36,9 @@ export interface TranslationResult {
   memoryUsage?: number;     // Usage mémoire (MB)
   cpuUsage?: number;        // Usage CPU (%)
   version?: string;         // Version du Translator
+  // Structure preservation metrics (from Translator)
+  segmentsCount?: number;   // Number of segments translated
+  emojisCount?: number;     // Number of emojis preserved
 }
 
 export interface TranslationCompletedEvent {
@@ -62,6 +65,7 @@ export interface PongEvent {
   translator_status: string;
   translator_port_pub?: number;
   translator_port_pull?: number;
+  audio_pipeline_available?: boolean;  // Added for alignment
 }
 
 export type TranslationEvent = TranslationCompletedEvent | TranslationErrorEvent | PongEvent;

@@ -3,8 +3,8 @@
  */
 
 import { renderHook, act } from '@testing-library/react';
-import { useNotifications } from '@/hooks/use-notifications';
 import { buildMultilingualNotificationMessage, getNotificationTitle, getNotificationIcon } from '@/utils/notification-translations';
+import { useNotifications } from '@/hooks/use-notifications';
 
 // Mock des dépendances
 jest.mock('socket.io-client', () => ({
@@ -20,6 +20,41 @@ jest.mock('sonner', () => ({
   toast: {
     success: jest.fn(),
     info: jest.fn(),
+  },
+}));
+
+// Mock du service de notifications
+jest.mock('@/services/notification.service', () => ({
+  notificationService: {
+    initialize: jest.fn(),
+    disconnect: jest.fn(),
+    getNotifications: jest.fn().mockReturnValue([]),
+    getUnreadNotifications: jest.fn().mockReturnValue([]),
+    getCounts: jest.fn().mockReturnValue({
+      total: 0,
+      unread: 0,
+      byType: { message: 0, system: 0, user_action: 0, conversation: 0, translation: 0 }
+    }),
+    markAsRead: jest.fn().mockResolvedValue(undefined),
+    markAllAsRead: jest.fn().mockResolvedValue(undefined),
+    removeNotification: jest.fn(),
+    clearAll: jest.fn(),
+  }
+}));
+
+// Mock de useAuth
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  }),
+}));
+
+// Mock de authManager
+jest.mock('@/services/auth-manager.service', () => ({
+  authManager: {
+    getAuthToken: jest.fn().mockReturnValue(null),
   },
 }));
 
