@@ -145,7 +145,7 @@ describe('GroupsService', () => {
           members: [],
           conversations: [],
         },
-        status: 201,
+        success: true,
       };
 
       mockedApiService.post.mockResolvedValue(mockResponse);
@@ -201,7 +201,7 @@ describe('GroupsService', () => {
       const groupId = 'group-1';
       const mockResponse = {
         data: undefined,
-        status: 204,
+        success: true,
       };
 
       mockedApiService.delete.mockResolvedValue(mockResponse);
@@ -209,7 +209,7 @@ describe('GroupsService', () => {
       const result = await groupsService.deleteGroup(groupId);
 
       expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}`);
-      expect(result.success).toBe(204);
+      expect(result.success).toBe(true);
     });
   });
 
@@ -248,7 +248,7 @@ describe('GroupsService', () => {
           joinedAt: new Date(),
           user: mockUsers[1],
         },
-        status: 201,
+        success: true,
       };
 
       mockedApiService.post.mockResolvedValue(mockResponse);
@@ -294,7 +294,7 @@ describe('GroupsService', () => {
 
       const mockResponse = {
         data: undefined,
-        status: 204,
+        success: true,
       };
 
       mockedApiService.delete.mockResolvedValue(mockResponse);
@@ -302,7 +302,7 @@ describe('GroupsService', () => {
       const result = await groupsService.removeMember(groupId, memberId);
 
       expect(mockedApiService.delete).toHaveBeenCalledWith(`/communities/${groupId}/members/${memberId}`);
-      expect(result.success).toBe(204);
+      expect(result.success).toBe(true);
     });
   });
 

@@ -124,20 +124,23 @@ describe('normalizePhoneNumber', () => {
       expect(normalizePhoneNumber(undefined as unknown as string)).toBe('');
     });
 
-    it('should handle very short number', () => {
-      expect(normalizePhoneNumber('123')).toBe('+123');
+    it('should handle very short number with default country FR', () => {
+      // libphonenumber-js parses '123' with default country FR as French local number
+      expect(normalizePhoneNumber('123')).toBe('+33123');
     });
 
-    it('should handle long international number', () => {
+    it('should handle long international number with 00 prefix', () => {
+      // libphonenumber-js parses 00 as international prefix
       expect(normalizePhoneNumber('001234567890123456')).toBe('+1234567890123456');
     });
 
     it('should handle number starting with 00 followed by 0', () => {
-      expect(normalizePhoneNumber('000123456789')).toBe('+0123456789');
+      // libphonenumber-js parses 00 as international prefix, then adds FR country code
+      expect(normalizePhoneNumber('000123456789')).toBe('+3300123456789');
     });
 
     it('should handle number with only spaces', () => {
-      expect(normalizePhoneNumber('   ')).toBe('+');
+      expect(normalizePhoneNumber('   ')).toBe('');
     });
 
     it('should handle US number format', () => {

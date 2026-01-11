@@ -121,7 +121,7 @@ struct StepIllustration: View {
 // MARK: - Step 1: Pseudo (with API validation + suggestions)
 
 struct StepPseudoView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -224,7 +224,7 @@ struct StepPseudoView: View {
 // MARK: - Step 2: Phone (Mandatory)
 
 struct StepPhoneView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @FocusState private var isFocused: Bool
     @State private var showCountryPicker = false
 
@@ -371,7 +371,7 @@ struct StepPhoneView: View {
 // MARK: - Step 3: Email (with API validation)
 
 struct StepEmailView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -435,7 +435,7 @@ struct StepEmailView: View {
 // MARK: - Step 4: Identity (First Name + Last Name)
 
 struct StepIdentityView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @FocusState private var focusedField: Field?
 
     enum Field { case firstName, lastName }
@@ -512,7 +512,7 @@ struct StepIdentityView: View {
 // MARK: - Step 5: Password (Password + Confirm in same view)
 
 struct StepPasswordView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @FocusState private var focusedField: Field?
 
     enum Field { case password, confirm }
@@ -658,7 +658,7 @@ struct StepPasswordView: View {
 // MARK: - Step 6: Language (with conversation example)
 
 struct StepLanguageView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @State private var searchText = ""
 
     var filteredLanguages: [(code: String, name: String, flag: String)] {
@@ -812,7 +812,7 @@ struct StepLanguageView: View {
 // MARK: - Step 7: Profile (Optional)
 
 struct StepProfileView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @State private var showPhotoPickerProfile = false
     @State private var showPhotoPickerBanner = false
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -998,7 +998,7 @@ struct StepProfileView: View {
 // MARK: - Step 8: Complete
 
 struct StepCompleteView: View {
-    @ObservedObject var viewModel: NewRegistrationViewModel
+    @ObservedObject var viewModel: RegistrationViewModel
     @State private var showTerms = false
 
     var body: some View {
@@ -1217,13 +1217,13 @@ struct FlowLayout: Layout {
 // MARK: - Previews
 
 #Preview("Step 1 - Pseudo") {
-    StepPseudoView(viewModel: NewRegistrationViewModel())
+    StepPseudoView(viewModel: RegistrationViewModel())
 }
 
 #Preview("Step 6 - Language") {
-    StepLanguageView(viewModel: NewRegistrationViewModel())
+    StepLanguageView(viewModel: RegistrationViewModel())
 }
 
 #Preview("Step 8 - Complete") {
-    StepCompleteView(viewModel: NewRegistrationViewModel())
+    StepCompleteView(viewModel: RegistrationViewModel())
 }

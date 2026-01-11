@@ -141,7 +141,7 @@ struct LoginView: View {
             }
             // v2 - Nouveau flux d'inscription animé avec design moderne
             .fullScreenCover(isPresented: $showNewOnboarding) {
-                NewOnboardingFlowView {
+                OnboardingFlowView {
                     // Registration completed successfully
                     showNewOnboarding = false
                 }
