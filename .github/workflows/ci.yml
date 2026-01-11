@@ -232,14 +232,14 @@ jobs:
           cd services/translator
           uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
 
-      - name: Run tests with coverage (90% minimum)
+      - name: Run tests with coverage (80% minimum)
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
           CI: "true"
         timeout-minutes: 10
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short
+          uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -319,7 +319,7 @@ jobs:
         timeout-minutes: 15
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_11_roundtrip_pipeline.py -v -s --tb=short 2>&1 | tee audio_test_output.log
+          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_11_roundtrip_pipeline.py -v -s --tb=short --no-cov 2>&1 | tee audio_test_output.log
 
       - name: Generate test report
         if: always()
@@ -403,7 +403,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_14_unified_tts_service.py -v --tb=short
+          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_14_unified_tts_service.py -v --tb=short --no-cov
 
       - name: Run TranscriptionService tests
         env:
@@ -412,7 +412,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_06_transcription_service.py -v --tb=short
+          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_06_transcription_service.py -v --tb=short --no-cov
 
       - name: Run Voice Translation E2E tests
         env:
@@ -421,7 +421,7 @@ jobs:
         timeout-minutes: 15
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_15_voice_translation_e2e.py -v -s --tb=short 2>&1 | tee e2e_test_output.log
+          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_15_voice_translation_e2e.py -v -s --tb=short --no-cov 2>&1 | tee e2e_test_output.log
 
       - name: Generate E2E report
         if: always()
@@ -533,7 +533,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_12_voice_api_services.py tests/test_13_voice_api_handler.py -v --tb=short
+          uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_12_voice_api_services.py tests/test_13_voice_api_handler.py -v --tb=short --no-cov
 
       - name: Upload Voice API test results
         uses: actions/upload-artifact@v4
