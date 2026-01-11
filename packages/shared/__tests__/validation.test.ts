@@ -7,6 +7,11 @@ import {
   validateSchema,
   CommonSchemas,
   ConversationSchemas,
+  containsEmoji,
+  zeroizeBuffer,
+  copyAndZeroize,
+  ApiResponseSchemas,
+  UserSchemas,
 } from '../utils/validation';
 import { ErrorCode } from '../types/errors';
 import { MeeshyError } from '../utils/errors';
@@ -342,6 +347,220 @@ describe('ConversationSchemas', () => {
       expect(result.role).toBe('admin');
       expect(result.search).toBe('john');
       expect(result.limit).toBe(100);
+    });
+  });
+});
+
+describe('containsEmoji', () => {
+  it('should return true for text containing emojis', () => {
+    expect(containsEmoji('Hello 😀')).toBe(true);
+    expect(containsEmoji('🎉 Party!')).toBe(true);
+    expect(containsEmoji('Test 👍 approved')).toBe(true);
+  });
+
+  it('should return false for text without emojis', () => {
+    expect(containsEmoji('Hello World')).toBe(false);
+    expect(containsEmoji('Just text')).toBe(false);
+    expect(containsEmoji('')).toBe(false);
+  });
+
+  it('should detect various emoji types', () => {
+    expect(containsEmoji('Flag: 🇫🇷')).toBe(true);
+    expect(containsEmoji('Sun: ☀️')).toBe(true);
+    expect(containsEmoji('Heart: ❤️')).toBe(true);
+  });
+});
+
+describe('zeroizeBuffer', () => {
+  it('should fill Buffer with zeros', () => {
+    const buffer = Buffer.from([1, 2, 3, 4, 5]);
+    zeroizeBuffer(buffer);
+    expect(buffer.every(b => b === 0)).toBe(true);
+  });
+
+  it('should fill Uint8Array with zeros', () => {
+    const array = new Uint8Array([10, 20, 30, 40]);
+    zeroizeBuffer(array);
+    expect(array.every(b => b === 0)).toBe(true);
+  });
+
+  it('should handle null safely', () => {
+    expect(() => zeroizeBuffer(null)).not.toThrow();
+  });
+
+  it('should handle undefined safely', () => {
+    expect(() => zeroizeBuffer(undefined)).not.toThrow();
+  });
+
+  it('should handle empty buffer', () => {
+    const buffer = Buffer.alloc(0);
+    expect(() => zeroizeBuffer(buffer)).not.toThrow();
+  });
+});
+
+describe('copyAndZeroize', () => {
+  it('should return a copy of the buffer', () => {
+    const original = Buffer.from([1, 2, 3, 4, 5]);
+    const copy = copyAndZeroize(original);
+
+    expect(copy).toEqual(Buffer.from([1, 2, 3, 4, 5]));
+  });
+
+  it('should zeroize the original buffer', () => {
+    const original = Buffer.from([1, 2, 3, 4, 5]);
+    copyAndZeroize(original);
+
+    expect(original.every(b => b === 0)).toBe(true);
+  });
+
+  it('should return independent copy', () => {
+    const original = Buffer.from([10, 20, 30]);
+    const copy = copyAndZeroize(original);
+
+    // Original should be zeroed
+    expect(original.every(b => b === 0)).toBe(true);
+    // Copy should have the original values
+    expect(copy[0]).toBe(10);
+    expect(copy[1]).toBe(20);
+    expect(copy[2]).toBe(30);
+  });
+});
+
+describe('ApiResponseSchemas', () => {
+  describe('success', () => {
+    it('should create a success schema with custom data', () => {
+      const userDataSchema = z.object({
+        id: z.string(),
+        name: z.string(),
+      });
+
+      const successSchema = ApiResponseSchemas.success(userDataSchema);
+
+      const result = successSchema.parse({
+        success: true,
+        data: { id: '123', name: 'John' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data.id).toBe('123');
+      expect(result.data.name).toBe('John');
+    });
+
+    it('should reject invalid data structure', () => {
+      const dataSchema = z.object({ value: z.number() });
+      const successSchema = ApiResponseSchemas.success(dataSchema);
+
+      expect(() => successSchema.parse({
+        success: true,
+        data: { value: 'not a number' },
+      })).toThrow();
+    });
+
+    it('should reject when success is false', () => {
+      const dataSchema = z.object({ value: z.number() });
+      const successSchema = ApiResponseSchemas.success(dataSchema);
+
+      expect(() => successSchema.parse({
+        success: false,
+        data: { value: 42 },
+      })).toThrow();
+    });
+  });
+
+  describe('paginatedList', () => {
+    it('should create a paginated list schema with default items key', () => {
+      const itemSchema = z.object({
+        id: z.string(),
+        title: z.string(),
+      });
+
+      const paginatedSchema = ApiResponseSchemas.paginatedList(itemSchema);
+
+      const result = paginatedSchema.parse({
+        success: true,
+        data: {
+          items: [
+            { id: '1', title: 'First' },
+            { id: '2', title: 'Second' },
+          ],
+          totalCount: 2,
+          hasMore: false,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data.items).toHaveLength(2);
+      expect(result.data.totalCount).toBe(2);
+    });
+
+    it('should create a paginated list schema with custom items key', () => {
+      const itemSchema = z.object({ name: z.string() });
+
+      const paginatedSchema = ApiResponseSchemas.paginatedList(itemSchema, 'users');
+
+      const result = paginatedSchema.parse({
+        success: true,
+        data: {
+          users: [{ name: 'Alice' }, { name: 'Bob' }],
+          totalCount: 2,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data.users).toHaveLength(2);
+    });
+
+    it('should allow optional hasMore field', () => {
+      const itemSchema = z.object({ id: z.string() });
+      const paginatedSchema = ApiResponseSchemas.paginatedList(itemSchema);
+
+      const result = paginatedSchema.parse({
+        success: true,
+        data: {
+          items: [{ id: '1' }],
+          totalCount: 1,
+        },
+      });
+
+      expect(result.data.hasMore).toBeUndefined();
+    });
+  });
+
+  describe('error', () => {
+    it('should validate error response structure', () => {
+      const result = ApiResponseSchemas.error.parse({
+        success: false,
+        error: 'Something went wrong',
+        code: 'ERR_001',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Something went wrong');
+      expect(result.code).toBe('ERR_001');
+    });
+
+    it('should accept error without code', () => {
+      const result = ApiResponseSchemas.error.parse({
+        success: false,
+        error: 'Generic error',
+      });
+
+      expect(result.error).toBe('Generic error');
+      expect(result.code).toBeUndefined();
+    });
+
+    it('should accept error with details', () => {
+      const result = ApiResponseSchemas.error.parse({
+        success: false,
+        error: 'Validation failed',
+        details: [
+          { field: 'email', message: 'Invalid email' },
+          { field: 'password', message: 'Too short' },
+        ],
+      });
+
+      expect(result.details).toHaveLength(2);
+      expect(result.details?.[0].field).toBe('email');
     });
   });
 });
