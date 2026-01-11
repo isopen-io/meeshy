@@ -1,18 +1,20 @@
 //
-//  NewRegistrationViewModel.swift
+//  RegistrationViewModel.swift
 //  Meeshy
 //
-//  v4 - ViewModel avec 8 étapes et validation API
+//  v5 - ViewModel avec 8 étapes et validation API
 //  Style Meeshy avec humour local et icons SF Symbols
+//  Détection automatique du pays via région/SIM/locale
 //
 
 import SwiftUI
 import Combine
 import UIKit
+import CoreTelephony
 
 // MARK: - Registration Step (8 étapes)
 
-enum NewRegistrationStep: Int, CaseIterable, Identifiable {
+enum RegistrationStep: Int, CaseIterable, Identifiable {
     case pseudo = 0        // 1. Pseudo avec validation API
     case phone = 1         // 2. Téléphone (obligatoire)
     case email = 2         // 3. Email avec validation API
@@ -132,11 +134,11 @@ enum NewRegistrationStep: Int, CaseIterable, Identifiable {
 // MARK: - New Registration ViewModel
 
 @MainActor
-final class NewRegistrationViewModel: ObservableObject {
+final class RegistrationViewModel: ObservableObject {
 
     // MARK: - Published Properties
 
-    @Published var currentStep: NewRegistrationStep = .pseudo
+    @Published var currentStep: RegistrationStep = .pseudo
     @Published var isLoading = false
     @Published var isValidatingAPI = false
     @Published var errorMessage: String?
@@ -189,13 +191,99 @@ final class NewRegistrationViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var validationTask: Task<Void, Never>?
 
+    // Track si la première vérification a été faite
+    private var hasInitialUsernameCheck = false
+    private var hasInitialPhoneCheck = false
+    private var hasInitialEmailCheck = false
+
     // MARK: - Init
 
     init() {
-        setupPasswordValidation()
+        // Détecter le pays par défaut
+        phoneCountryCode = Self.detectDefaultCountryCode()
+        setupValidationDebounce()
     }
 
-    private func setupPasswordValidation() {
+    // MARK: - Country Detection
+
+    /// Détecte le code pays par défaut en utilisant:
+    /// 1. La carte SIM (CTCarrier)
+    /// 2. La région du téléphone (Locale)
+    /// 3. Fallback sur Cameroun (+237)
+    private static func detectDefaultCountryCode() -> String {
+        // 1. Essayer via la carte SIM (CTCarrier) - DEPRECATED mais fonctionne encore
+        let networkInfo = CTTelephonyNetworkInfo()
+
+        // iOS 12+: utilise serviceSubscriberCellularProviders
+        if let carriers = networkInfo.serviceSubscriberCellularProviders {
+            for (_, carrier) in carriers {
+                if let isoCode = carrier.isoCountryCode?.uppercased(),
+                   let code = countryCodeFromISO(isoCode) {
+                    return code
+                }
+            }
+        }
+
+        // 2. Utiliser la région du téléphone (Locale)
+        if let regionCode = Locale.current.region?.identifier.uppercased(),
+           let code = countryCodeFromISO(regionCode) {
+            return code
+        }
+
+        // 3. Fallback: Cameroun
+        return "+237"
+    }
+
+    /// Convertit un code ISO pays en code téléphonique
+    private static func countryCodeFromISO(_ iso: String) -> String? {
+        let isoToPhone: [String: String] = [
+            "CM": "+237",  // Cameroun
+            "FR": "+33",   // France
+            "US": "+1",    // USA
+            "CA": "+1",    // Canada
+            "GB": "+44",   // UK
+            "NG": "+234",  // Nigeria
+            "CI": "+225",  // Côte d'Ivoire
+            "SN": "+221",  // Sénégal
+            "CD": "+243",  // RD Congo
+            "CG": "+242",  // Congo
+            "GA": "+241",  // Gabon
+            "TD": "+235",  // Tchad
+            "BF": "+226",  // Burkina Faso
+            "ML": "+223",  // Mali
+            "NE": "+227",  // Niger
+            "TG": "+228",  // Togo
+            "BJ": "+229",  // Bénin
+            "BE": "+32",   // Belgique
+            "CH": "+41",   // Suisse
+            "DE": "+49",   // Allemagne
+            "ES": "+34",   // Espagne
+            "IT": "+39",   // Italie
+            "PT": "+351",  // Portugal
+            "NL": "+31",   // Pays-Bas
+            "MA": "+212",  // Maroc
+            "DZ": "+213",  // Algérie
+            "TN": "+216",  // Tunisie
+            "EG": "+20",   // Égypte
+            "KE": "+254",  // Kenya
+            "GH": "+233",  // Ghana
+            "ZA": "+27",   // Afrique du Sud
+            "AE": "+971",  // Émirats Arabes Unis
+            "SA": "+966",  // Arabie Saoudite
+            "CN": "+86",   // Chine
+            "JP": "+81",   // Japon
+            "KR": "+82",   // Corée du Sud
+            "IN": "+91",   // Inde
+            "BR": "+55",   // Brésil
+            "MX": "+52",   // Mexique
+            "AU": "+61",   // Australie
+        ]
+        return isoToPhone[iso]
+    }
+
+    // MARK: - Validation Debounce Setup
+
+    private func setupValidationDebounce() {
         // Afficher le champ de confirmation quand le mot de passe est valide
         $password
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
@@ -206,12 +294,103 @@ final class NewRegistrationViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // === USERNAME ===
+        // Vérification immédiate dès que le minimum est atteint
+        $username
+            .removeDuplicates()
+            .sink { [weak self] newValue in
+                guard let self = self else { return }
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Dès que minimum atteint (3 chars) et pas encore vérifié -> vérifier immédiatement
+                if trimmed.count >= 3 && self.isUsernameValidLocally && !self.hasInitialUsernameCheck {
+                    self.hasInitialUsernameCheck = true
+                    self.checkUsernameAvailability()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Puis debounce de 2.5s pour les changements suivants
+        $username
+            .debounce(for: .seconds(2.5), scheduler: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                if self.isUsernameValidLocally && self.usernameError == nil && self.hasInitialUsernameCheck {
+                    self.checkUsernameAvailability()
+                }
+            }
+            .store(in: &cancellables)
+
+        // === PHONE ===
+        // Vérification immédiate dès que le minimum est atteint
+        $phoneNumber
+            .removeDuplicates()
+            .sink { [weak self] newValue in
+                guard let self = self else { return }
+                let digits = newValue.filter { $0.isNumber }
+
+                // Dès que minimum atteint (8 digits) et pas encore vérifié
+                if digits.count >= 8 && self.isPhoneValid && !self.hasInitialPhoneCheck {
+                    self.hasInitialPhoneCheck = true
+                    self.checkPhoneAvailability()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Puis debounce de 2.5s pour les changements suivants
+        $phoneNumber
+            .debounce(for: .seconds(2.5), scheduler: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                if self.isPhoneValid && self.phoneError == nil && self.hasInitialPhoneCheck {
+                    self.checkPhoneAvailability()
+                }
+            }
+            .store(in: &cancellables)
+
+        // === EMAIL ===
+        // Vérification immédiate dès que le format est valide
+        $email
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+
+                // Dès que format valide et pas encore vérifié
+                if self.isEmailValid && !self.hasInitialEmailCheck {
+                    self.hasInitialEmailCheck = true
+                    self.checkEmailAvailability()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Puis debounce de 2.5s pour les changements suivants
+        $email
+            .debounce(for: .seconds(2.5), scheduler: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                if self.isEmailValid && self.emailError == nil && self.hasInitialEmailCheck {
+                    self.checkEmailAvailability()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Validation locale du pseudo (sans API)
+    var isUsernameValidLocally: Bool {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.-"))
+        let usernameCharacters = CharacterSet(charactersIn: trimmed)
+        return trimmed.count >= 3 && trimmed.count <= 30 && usernameCharacters.isSubset(of: allowedCharacters)
     }
 
     // MARK: - Computed Properties
 
     var progress: Double {
-        Double(currentStep.rawValue) / Double(NewRegistrationStep.allCases.count - 1)
+        Double(currentStep.rawValue) / Double(RegistrationStep.allCases.count - 1)
     }
 
     var canProceed: Bool {
@@ -237,7 +416,10 @@ final class NewRegistrationViewModel: ObservableObject {
 
     var isUsernameValid: Bool {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.count >= 3 && trimmed.count <= 30 && !trimmed.contains(" ")
+        // Only allow alphanumeric, underscore and dot
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.-"))
+        let usernameCharacters = CharacterSet(charactersIn: trimmed)
+        return trimmed.count >= 3 && trimmed.count <= 30 && usernameCharacters.isSubset(of: allowedCharacters)
     }
 
     var isPhoneValid: Bool {
@@ -275,6 +457,27 @@ final class NewRegistrationViewModel: ObservableObject {
         phoneCountryCode + phoneNumber.filter { $0.isNumber }
     }
 
+    /// Placeholder dynamique selon le pays sélectionné
+    var phonePlaceholder: String {
+        switch phoneCountryCode {
+        case "+237": return "6 99 99 99 99"     // Cameroun: commence par 6, 5, 9
+        case "+33": return "06 12 34 56 78"    // France: commence par 06, 07
+        case "+1": return "555 123 4567"       // USA/Canada
+        case "+44": return "07123 456789"      // UK
+        case "+234": return "801 234 5678"     // Nigeria
+        case "+225": return "07 12 34 56 78"   // Côte d'Ivoire
+        case "+221": return "77 123 45 67"     // Sénégal
+        case "+243": return "81 234 5678"      // RD Congo
+        case "+242": return "06 123 4567"      // Congo
+        case "+241": return "06 12 34 56"      // Gabon
+        case "+32": return "0470 12 34 56"     // Belgique
+        case "+41": return "079 123 45 67"     // Suisse
+        case "+49": return "0151 1234 5678"    // Allemagne
+        case "+34": return "612 34 56 78"      // Espagne
+        default: return "123 456 789"
+        }
+    }
+
     // MARK: - Available Languages
 
     let availableLanguages: [(code: String, name: String, flag: String)] = [
@@ -286,8 +489,8 @@ final class NewRegistrationViewModel: ObservableObject {
         ("ar", "العربية", "🇸🇦"),
         ("zh", "中文", "🇨🇳"),
         ("sw", "Kiswahili", "🇰🇪"),
-        ("ha", "Hausa", "🇳🇬"),
-        ("yo", "Yorùbá", "🇳🇬"),
+        ("ln", "Lingala", "🇨🇩"),
+        ("he", "עברית", "🇮🇱"),
         ("ig", "Igbo", "🇳🇬"),
         ("am", "አማርኛ", "🇪🇹"),
         ("it", "Italiano", "🇮🇹"),
@@ -327,7 +530,7 @@ final class NewRegistrationViewModel: ObservableObject {
 
     // MARK: - Navigation
 
-    func goToStep(_ step: NewRegistrationStep) {
+    func goToStep(_ step: RegistrationStep) {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             currentStep = step
         }
@@ -336,7 +539,7 @@ final class NewRegistrationViewModel: ObservableObject {
     func nextStep() {
         guard canProceed else { return }
 
-        let allSteps = NewRegistrationStep.allCases
+        let allSteps = RegistrationStep.allCases
         if let currentIndex = allSteps.firstIndex(of: currentStep),
            currentIndex < allSteps.count - 1 {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -346,7 +549,7 @@ final class NewRegistrationViewModel: ObservableObject {
     }
 
     func previousStep() {
-        let allSteps = NewRegistrationStep.allCases
+        let allSteps = RegistrationStep.allCases
         if let currentIndex = allSteps.firstIndex(of: currentStep),
            currentIndex > 0 {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -355,9 +558,31 @@ final class NewRegistrationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - API Validation
+    // MARK: - API Validation (avec timeout 2 secondes)
+
+    /// Timeout de 2 secondes pour les appels API
+    private let apiTimeoutSeconds: UInt64 = 2
+
+    /// Exécute une opération async avec timeout
+    private func withTimeout<T>(seconds: UInt64, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                throw APITimeoutError()
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
 
     /// Valide le pseudo via l'API et récupère des suggestions si pris
+    /// Timeout de 2 secondes - si pas de réponse, on considère disponible avec warning
     func checkUsernameAvailability() {
         validationTask?.cancel()
 
@@ -373,8 +598,10 @@ final class NewRegistrationViewModel: ObservableObject {
             defer { isValidatingAPI = false }
 
             do {
-                // Appel API pour vérifier la disponibilité
-                let result = try await APIService.shared.checkUsernameAvailability(username: trimmed)
+                // Appel API avec timeout de 2 secondes
+                let result = try await withTimeout(seconds: apiTimeoutSeconds) {
+                    try await APIService.shared.checkUsernameAvailability(username: trimmed)
+                }
 
                 guard !Task.isCancelled else { return }
 
@@ -386,17 +613,22 @@ final class NewRegistrationViewModel: ObservableObject {
                 } else {
                     usernameError = nil
                 }
+            } catch is APITimeoutError {
+                guard !Task.isCancelled else { return }
+                // Timeout: on permet de continuer mais avec warning
+                usernameAvailable = true
+                usernameError = "⚠️ Connexion lente - vérification non effectuée"
             } catch {
                 guard !Task.isCancelled else { return }
-                // En cas d'erreur réseau, on permet de continuer mais avec warning
+                // Erreur réseau: on permet de continuer mais avec warning
                 usernameAvailable = true
-                usernameError = nil
-                print("⚠️ Username check failed: \(error)")
+                usernameError = "⚠️ Pas de connexion - vérification non effectuée"
             }
         }
     }
 
     /// Valide le téléphone via l'API
+    /// Timeout de 2 secondes - si pas de réponse, on considère disponible avec warning
     func checkPhoneAvailability() {
         validationTask?.cancel()
 
@@ -410,7 +642,10 @@ final class NewRegistrationViewModel: ObservableObject {
             defer { isValidatingAPI = false }
 
             do {
-                let result = try await APIService.shared.checkPhoneAvailability(phone: fullPhoneNumber)
+                let phoneToCheck = self.fullPhoneNumber
+                let result = try await withTimeout(seconds: apiTimeoutSeconds) {
+                    try await APIService.shared.checkPhoneAvailability(phone: phoneToCheck)
+                }
 
                 guard !Task.isCancelled else { return }
 
@@ -421,16 +656,20 @@ final class NewRegistrationViewModel: ObservableObject {
                 } else {
                     phoneError = nil
                 }
+            } catch is APITimeoutError {
+                guard !Task.isCancelled else { return }
+                phoneAvailable = true
+                phoneError = "⚠️ Connexion lente - vérification non effectuée"
             } catch {
                 guard !Task.isCancelled else { return }
                 phoneAvailable = true
-                phoneError = nil
-                print("⚠️ Phone check failed: \(error)")
+                phoneError = "⚠️ Pas de connexion - vérification non effectuée"
             }
         }
     }
 
     /// Valide l'email via l'API
+    /// Timeout de 2 secondes - si pas de réponse, on considère disponible avec warning
     func checkEmailAvailability() {
         validationTask?.cancel()
 
@@ -445,7 +684,9 @@ final class NewRegistrationViewModel: ObservableObject {
             defer { isValidatingAPI = false }
 
             do {
-                let result = try await APIService.shared.checkEmailAvailability(email: trimmed)
+                let result = try await withTimeout(seconds: apiTimeoutSeconds) {
+                    try await APIService.shared.checkEmailAvailability(email: trimmed)
+                }
 
                 guard !Task.isCancelled else { return }
 
@@ -456,11 +697,14 @@ final class NewRegistrationViewModel: ObservableObject {
                 } else {
                     emailError = nil
                 }
+            } catch is APITimeoutError {
+                guard !Task.isCancelled else { return }
+                emailAvailable = true
+                emailError = "⚠️ Connexion lente - vérification non effectuée"
             } catch {
                 guard !Task.isCancelled else { return }
                 emailAvailable = true
-                emailError = nil
-                print("⚠️ Email check failed: \(error)")
+                emailError = "⚠️ Pas de connexion - vérification non effectuée"
             }
         }
     }
@@ -469,52 +713,62 @@ final class NewRegistrationViewModel: ObservableObject {
 
     func validateUsername() {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.-"))
+        let usernameCharacters = CharacterSet(charactersIn: trimmed)
+
+        // Reset API validation state
+        usernameAvailable = nil
+        usernameSuggestions = []
+
         if trimmed.isEmpty {
             usernameError = "Hé mon gars, mets ton pseudo!"
-            usernameAvailable = nil
+            hasInitialUsernameCheck = false  // Reset pour revérifier quand valide
         } else if trimmed.count < 3 {
             usernameError = "C'est trop court ça! Minimum 3 caractères"
-            usernameAvailable = nil
+            hasInitialUsernameCheck = false
         } else if trimmed.count > 30 {
             usernameError = "Trop long! Maximum 30 caractères"
-            usernameAvailable = nil
-        } else if trimmed.contains(" ") {
-            usernameError = "Pas d'espaces mon frère!"
-            usernameAvailable = nil
+        } else if !usernameCharacters.isSubset(of: allowedCharacters) {
+            usernameError = "Lettres, chiffres, _ et . uniquement!"
         } else {
             usernameError = nil
-            // Déclencher la vérification API
-            checkUsernameAvailability()
+            // La vérification API est gérée par Combine (immédiate + debounce 2.5s)
         }
     }
 
     func validatePhone() {
         let digits = phoneNumber.filter { $0.isNumber }
+
+        // Reset API validation state
+        phoneAvailable = nil
+
         if digits.isEmpty {
             phoneError = "Mets ton numéro là!"
-            phoneAvailable = nil
+            hasInitialPhoneCheck = false  // Reset pour revérifier quand valide
         } else if digits.count < 8 {
             phoneError = "Numéro trop court!"
-            phoneAvailable = nil
+            hasInitialPhoneCheck = false
         } else if digits.count > 15 {
             phoneError = "Numéro trop long!"
-            phoneAvailable = nil
         } else {
             phoneError = nil
-            checkPhoneAvailability()
+            // La vérification API est gérée par Combine (immédiate + debounce 2.5s)
         }
     }
 
     func validateEmail() {
+        // Reset API validation state
+        emailAvailable = nil
+
         if email.isEmpty {
             emailError = "Il faut ton email là!"
-            emailAvailable = nil
+            hasInitialEmailCheck = false  // Reset pour revérifier quand valide
         } else if !isEmailValid {
             emailError = "Ça ressemble pas à un email ça!"
-            emailAvailable = nil
+            hasInitialEmailCheck = false
         } else {
             emailError = nil
-            checkEmailAvailability()
+            // La vérification API est gérée par Combine (immédiate + debounce 2.5s)
         }
     }
 
@@ -659,5 +913,14 @@ extension PasswordStrength {
         case .good: return "checkmark.circle"
         case .strong: return "checkmark.seal.fill"
         }
+    }
+}
+
+// MARK: - API Timeout Error
+
+/// Erreur levée quand l'API ne répond pas dans le délai imparti
+struct APITimeoutError: Error, LocalizedError {
+    var errorDescription: String? {
+        return "La connexion a pris trop de temps"
     }
 }
