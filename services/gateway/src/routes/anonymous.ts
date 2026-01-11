@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
+import {
+  errorResponseSchema,
+  anonymousParticipantSchema,
+  conversationLinkSchema,
+  conversationMinimalSchema,
+  userMinimalSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Schemas de validation
 const joinAnonymousSchema = z.object({
@@ -90,7 +97,112 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
   }
 
   // Route pour rejoindre une conversation de maniere anonyme
-  fastify.post('/anonymous/join/:linkId', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/anonymous/join/:linkId', {
+    schema: {
+      description: 'Join a conversation anonymously using a share link. Validates link availability, checks security restrictions (country, IP, language), and creates an anonymous participant session. Returns session token for subsequent authenticated requests.',
+      tags: ['anonymous'],
+      summary: 'Join conversation anonymously',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: { type: 'string', description: 'Share link identifier (format: mshy_...)' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['firstName', 'lastName'],
+        properties: {
+          firstName: { type: 'string', minLength: 1, maxLength: 50, description: 'First name (required)' },
+          lastName: { type: 'string', minLength: 1, maxLength: 50, description: 'Last name (required)' },
+          username: { type: 'string', description: 'Optional username (auto-generated if not provided)' },
+          email: { type: 'string', format: 'email', description: 'Email address (required if link requires email)' },
+          birthday: { type: 'string', format: 'date-time', description: 'Date of birth (required if link requires birthday)' },
+          language: { type: 'string', default: 'fr', description: 'Preferred language code' },
+          deviceFingerprint: { type: 'string', description: 'Optional device fingerprint for session tracking' }
+        }
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                sessionToken: { type: 'string', description: 'Session token for authentication' },
+                participant: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    username: { type: 'string' },
+                    firstName: { type: 'string' },
+                    lastName: { type: 'string' },
+                    language: { type: 'string' },
+                    isMeeshyer: { type: 'boolean', example: false },
+                    canSendMessages: { type: 'boolean' },
+                    canSendFiles: { type: 'boolean' },
+                    canSendImages: { type: 'boolean' }
+                  }
+                },
+                conversation: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    type: { type: 'string', enum: ['direct', 'group'] },
+                    allowViewHistory: { type: 'boolean' }
+                  }
+                },
+                linkId: { type: 'string', description: 'Original link ID' },
+                id: { type: 'string', description: 'Share link database ID' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Error message' },
+            errors: { type: 'array', items: { type: 'object' }, description: 'Validation errors' }
+          }
+        },
+        403: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Access denied (region, IP, language, or account restriction)' },
+            requiresAccount: { type: 'boolean', description: 'True if account is required' }
+          }
+        },
+        404: errorResponseSchema,
+        409: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Username already taken' },
+            suggestedNickname: { type: 'string', description: 'Alternative username suggestion' }
+          }
+        },
+        410: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+          }
+        },
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Nombre maximum d\'utilisateurs concurrent atteint' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { linkId } = request.params as { linkId: string };
       const body = joinAnonymousSchema.parse(request.body);
@@ -380,7 +492,79 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour rafraichir une session anonyme (maintenir la session active)
-  fastify.post('/anonymous/refresh', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/anonymous/refresh', {
+    schema: {
+      description: 'Refresh an anonymous session to keep it active. Updates lastActiveAt timestamp and validates that the share link is still valid. Returns updated participant and conversation information.',
+      tags: ['anonymous'],
+      summary: 'Refresh anonymous session',
+      body: {
+        type: 'object',
+        required: ['sessionToken'],
+        properties: {
+          sessionToken: { type: 'string', minLength: 1, description: 'Session token from join response' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                participant: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    username: { type: 'string' },
+                    firstName: { type: 'string' },
+                    lastName: { type: 'string' },
+                    language: { type: 'string' },
+                    isMeeshyer: { type: 'boolean', example: false },
+                    canSendMessages: { type: 'boolean' },
+                    canSendFiles: { type: 'boolean' },
+                    canSendImages: { type: 'boolean' }
+                  }
+                },
+                conversation: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    type: { type: 'string', enum: ['direct', 'group'] },
+                    allowViewHistory: { type: 'boolean' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Invalid data' },
+            errors: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Session invalide ou expiree' }
+          }
+        },
+        410: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Link expired or deactivated' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);
       const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
@@ -471,7 +655,42 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour quitter une session anonyme
-  fastify.post('/anonymous/leave', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/anonymous/leave', {
+    schema: {
+      description: 'Leave an anonymous session and clean up resources. Marks participant as inactive, sets offline status, decrements concurrent user counter, and records leave timestamp.',
+      tags: ['anonymous'],
+      summary: 'Leave anonymous session',
+      body: {
+        type: 'object',
+        required: ['sessionToken'],
+        properties: {
+          sessionToken: { type: 'string', minLength: 1, description: 'Session token from join response' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Session fermee avec succes' }
+              }
+            }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Session introuvable' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);
 
@@ -521,7 +740,93 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
   // Route pour verifier les informations d'un lien (avant de rejoindre)
   // Accepte soit un linkId (format mshy_...) soit un conversationShareLinkId (ID de base de donnees)
-  fastify.get('/anonymous/link/:identifier', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/anonymous/link/:identifier', {
+    schema: {
+      description: 'Get share link information before joining. Validates link availability, returns conversation details, creator info, requirements (email, nickname, birthday), and statistics (participants, languages). Accepts either linkId (format: mshy_...) or database ID.',
+      tags: ['anonymous'],
+      summary: 'Get share link information',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: { type: 'string', description: 'Share link ID (format: mshy_...) or database ID (24 hex chars)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Database ID of share link' },
+                linkId: { type: 'string', description: 'Share link identifier (mshy_...)' },
+                name: { type: 'string', description: 'Link name/title' },
+                description: { type: 'string', nullable: true, description: 'Link description' },
+                expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
+                maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
+                currentUses: { type: 'number', description: 'Current usage count' },
+                maxConcurrentUsers: { type: 'number', nullable: true, description: 'Max concurrent users' },
+                currentConcurrentUsers: { type: 'number', description: 'Current concurrent users' },
+                requireAccount: { type: 'boolean', description: 'Account required to join' },
+                requireNickname: { type: 'boolean', description: 'Username required' },
+                requireEmail: { type: 'boolean', description: 'Email required' },
+                requireBirthday: { type: 'boolean', description: 'Birthday required' },
+                allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
+                conversation: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    description: { type: 'string', nullable: true },
+                    type: { type: 'string', enum: ['direct', 'group'] },
+                    createdAt: { type: 'string', format: 'date-time' }
+                  }
+                },
+                creator: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    username: { type: 'string' },
+                    firstName: { type: 'string' },
+                    lastName: { type: 'string' },
+                    displayName: { type: 'string' },
+                    avatar: { type: 'string', nullable: true }
+                  }
+                },
+                stats: {
+                  type: 'object',
+                  properties: {
+                    totalParticipants: { type: 'number', description: 'Total active participants' },
+                    memberCount: { type: 'number', description: 'Registered members' },
+                    anonymousCount: { type: 'number', description: 'Anonymous participants' },
+                    languageCount: { type: 'number', description: 'Unique languages spoken' },
+                    spokenLanguages: { type: 'array', items: { type: 'string' }, description: 'List of spoken languages' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Lien de conversation introuvable' }
+          }
+        },
+        410: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { identifier } = request.params as { identifier: string };
 

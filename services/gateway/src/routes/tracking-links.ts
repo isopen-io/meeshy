@@ -2,12 +2,18 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { TrackingLinkService } from '../services/TrackingLinkService';
 import { logError } from '../utils/logger';
-import { 
+import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser
 } from '../middleware/auth';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
+import {
+  trackingLinkSchema,
+  trackingLinkClickSchema,
+  errorResponseSchema,
+  validationErrorResponseSchema,
+} from '@meeshy/shared/types/api-schemas';
 
 /**
  * Helper pour enrichir un TrackingLink avec l'URL complète
@@ -71,7 +77,85 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * POST /api/tracking-links
    */
   fastify.post('/tracking-links', {
-    onRequest: [authOptional]
+    onRequest: [authOptional],
+    schema: {
+      description: 'Create a new tracking link for URL analytics. Supports both authenticated and anonymous users. If a tracking link already exists for the same URL and conversation, returns the existing link. Each link gets a unique 6-character alphanumeric token used for redirection.',
+      tags: ['tracking-links'],
+      summary: 'Create tracking link',
+      body: {
+        type: 'object',
+        required: ['originalUrl'],
+        properties: {
+          originalUrl: {
+            type: 'string',
+            format: 'uri',
+            description: 'The original URL to track'
+          },
+          conversationId: {
+            type: 'string',
+            description: 'Optional conversation ID to associate with this link'
+          },
+          messageId: {
+            type: 'string',
+            description: 'Optional message ID to associate with this link'
+          },
+          expiresAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Optional expiration date for the tracking link'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Existing tracking link found and returned',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLink: {
+                  ...trackingLinkSchema,
+                  properties: {
+                    ...trackingLinkSchema.properties,
+                    fullUrl: { type: 'string', description: 'Complete tracking URL' }
+                  }
+                },
+                existed: { type: 'boolean', example: true }
+              }
+            }
+          }
+        },
+        201: {
+          description: 'New tracking link created successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLink: {
+                  ...trackingLinkSchema,
+                  properties: {
+                    ...trackingLinkSchema.properties,
+                    fullUrl: { type: 'string', description: 'Complete tracking URL' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid request data',
+          ...validationErrorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const body = createTrackingLinkSchema.parse(request.body);
@@ -134,7 +218,44 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /l/:token
    */
   fastify.get('/l/:token', {
-    onRequest: [authOptional]
+    onRequest: [authOptional],
+    schema: {
+      description: 'Redirect to the original URL and record click analytics. Automatically captures visitor information including IP address, user agent, browser, OS, device type, referrer, and language. Associates clicks with authenticated or anonymous users if available.',
+      tags: ['tracking-links'],
+      summary: 'Redirect tracking link',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      response: {
+        302: {
+          description: 'Redirect to original URL'
+        },
+        400: {
+          description: 'Invalid token format',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        410: {
+          description: 'Link inactive or expired',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -227,7 +348,71 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * POST /api/tracking-links/:token/click
    */
   fastify.post('/tracking-links/:token/click', {
-    onRequest: [authOptional]
+    onRequest: [authOptional],
+    schema: {
+      description: 'Manually record a click on a tracking link. Designed for Single Page Applications (SPAs) that handle navigation client-side. Accepts optional visitor metadata or auto-detects from request headers. Returns the original URL and tracking link details.',
+      tags: ['tracking-links'],
+      summary: 'Record tracking click',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          ipAddress: { type: 'string', description: 'Visitor IP address (auto-detected if not provided)' },
+          country: { type: 'string', description: 'Visitor country code' },
+          city: { type: 'string', description: 'Visitor city' },
+          region: { type: 'string', description: 'Visitor region/state' },
+          userAgent: { type: 'string', description: 'Browser user agent (auto-detected if not provided)' },
+          browser: { type: 'string', description: 'Browser name (auto-detected if not provided)' },
+          os: { type: 'string', description: 'Operating system (auto-detected if not provided)' },
+          device: { type: 'string', enum: ['mobile', 'tablet', 'desktop'], description: 'Device type (auto-detected if not provided)' },
+          language: { type: 'string', description: 'Preferred language code' },
+          referrer: { type: 'string', description: 'Referrer URL' },
+          deviceFingerprint: { type: 'string', description: 'Unique device fingerprint for tracking unique visitors' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Click recorded successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                originalUrl: { type: 'string', description: 'Original destination URL' },
+                trackingLink: trackingLinkSchema
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid token format or request data',
+          ...validationErrorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        410: {
+          description: 'Link inactive or expired',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -326,7 +511,50 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /api/tracking-links/:token
    */
   fastify.get('/tracking-links/:token', {
-    onRequest: [authOptional]
+    onRequest: [authOptional],
+    schema: {
+      description: 'Get tracking link details by token. Only the creator of the link can view its full details. Returns complete tracking link information including click counts and metadata.',
+      tags: ['tracking-links'],
+      summary: 'Get tracking link details',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Tracking link details retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLink: trackingLinkSchema
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied - only creator can view details',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -372,7 +600,120 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /api/tracking-links/:token/stats
    */
   fastify.get('/tracking-links/:token/stats', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get detailed analytics and statistics for a tracking link. Only authenticated users who created the link can access stats. Supports optional date range filtering. Returns aggregated click data, geographic distribution, device/browser breakdown, and temporal patterns.',
+      tags: ['tracking-links'],
+      summary: 'Get tracking link statistics',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Filter clicks from this date (ISO 8601 format)'
+          },
+          endDate: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Filter clicks until this date (ISO 8601 format)'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Statistics retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                totalClicks: { type: 'number', description: 'Total number of clicks' },
+                uniqueClicks: { type: 'number', description: 'Number of unique visitors' },
+                clicksByCountry: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      country: { type: 'string' },
+                      count: { type: 'number' }
+                    }
+                  }
+                },
+                clicksByDevice: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      device: { type: 'string' },
+                      count: { type: 'number' }
+                    }
+                  }
+                },
+                clicksByBrowser: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      browser: { type: 'string' },
+                      count: { type: 'number' }
+                    }
+                  }
+                },
+                clicksByOS: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      os: { type: 'string' },
+                      count: { type: 'number' }
+                    }
+                  }
+                },
+                clicksByDate: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      date: { type: 'string', format: 'date' },
+                      count: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid query parameters',
+          ...validationErrorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only creator can view statistics',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -435,7 +776,65 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /api/tracking-links/user/me?limit=20&offset=0
    */
   fastify.get<{ Querystring: { limit?: string; offset?: string } }>('/tracking-links/user/me', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get all tracking links created by the authenticated user. Supports pagination with configurable limit (max 50) and offset. Returns links ordered by creation date (newest first) with pagination metadata.',
+      tags: ['tracking-links'],
+      summary: 'List user tracking links',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            minimum: 1,
+            maximum: 50,
+            default: 20,
+            description: 'Maximum number of links to return (default: 20, max: 50)'
+          },
+          offset: {
+            type: 'number',
+            minimum: 0,
+            default: 0,
+            description: 'Number of links to skip for pagination (default: 0)'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Tracking links retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLinks: {
+                  type: 'array',
+                  items: trackingLinkSchema
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Number of items skipped' },
+                total: { type: 'number', description: 'Total number of links' },
+                hasMore: { type: 'boolean', description: 'Whether more links exist' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied - registered user required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
@@ -491,7 +890,48 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /api/tracking-links/conversation/:conversationId
    */
   fastify.get('/tracking-links/conversation/:conversationId', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get all tracking links associated with a specific conversation. Only active conversation members can access these links. Returns all tracking links created within the conversation context.',
+      tags: ['tracking-links', 'conversations'],
+      summary: 'List conversation tracking links',
+      params: {
+        type: 'object',
+        required: ['conversationId'],
+        properties: {
+          conversationId: {
+            type: 'string',
+            description: 'Unique conversation identifier'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Conversation tracking links retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLinks: {
+                  type: 'array',
+                  items: trackingLinkSchema
+                }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied - not a member of this conversation',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -544,7 +984,51 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * PATCH /api/tracking-links/:token/deactivate
    */
   fastify.patch('/tracking-links/:token/deactivate', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Deactivate a tracking link to prevent further clicks. Only the creator can deactivate their links. Deactivated links will return 410 Gone status when accessed. This is reversible (can be reactivated via update endpoint).',
+      tags: ['tracking-links'],
+      summary: 'Deactivate tracking link',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Tracking link deactivated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLink: trackingLinkSchema
+              }
+            },
+            message: { type: 'string', example: 'Lien désactivé avec succès' }
+          }
+        },
+        403: {
+          description: 'Access denied - only creator can deactivate',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -599,7 +1083,50 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * DELETE /api/tracking-links/:token
    */
   fastify.delete('/tracking-links/:token', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Permanently delete a tracking link and all associated click data. Only the creator can delete their links. This action is irreversible and will remove all analytics data.',
+      tags: ['tracking-links'],
+      summary: 'Delete tracking link',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Tracking link deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Lien supprimé avec succès' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied - only creator can delete',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -651,7 +1178,90 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * PATCH /api/tracking-links/:token
    */
   fastify.patch('/tracking-links/:token', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Update tracking link properties. Only the creator can update their links. Allows changing the original URL, expiration date, active status, or even the token itself. All fields are optional - only provided fields will be updated.',
+      tags: ['tracking-links'],
+      summary: 'Update tracking link',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Current unique 6-character alphanumeric tracking token'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          originalUrl: {
+            type: 'string',
+            format: 'uri',
+            description: 'New original URL to redirect to'
+          },
+          expiresAt: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+            description: 'New expiration date (null to remove expiration)'
+          },
+          isActive: {
+            type: 'boolean',
+            description: 'Whether the link is active'
+          },
+          newToken: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'New 6-character token to replace current token'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Tracking link updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLink: {
+                  ...trackingLinkSchema,
+                  properties: {
+                    ...trackingLinkSchema.properties,
+                    fullUrl: { type: 'string', description: 'Complete tracking URL' }
+                  }
+                }
+              }
+            },
+            message: { type: 'string', example: 'Lien mis à jour avec succès' }
+          }
+        },
+        400: {
+          description: 'Invalid request data (bad URL or token format)',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only creator can update',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found',
+          ...errorResponseSchema
+        },
+        409: {
+          description: 'Conflict - new token already exists',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
@@ -754,7 +1364,51 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
    * GET /api/tracking-links/check-token/:token
    */
   fastify.get('/tracking-links/check-token/:token', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Check if a tracking token is available for use. Useful when creating custom tokens to verify uniqueness before creation. Returns availability status for the requested token.',
+      tags: ['tracking-links'],
+      summary: 'Check token availability',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9]{6}$',
+            description: 'Token to check (must be exactly 6 alphanumeric characters)'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Token availability checked successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                token: { type: 'string', description: 'The checked token' },
+                available: { type: 'boolean', description: 'Whether the token is available' }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid token format',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - registered user required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
