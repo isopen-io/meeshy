@@ -375,11 +375,13 @@ describe('TranslationService', () => {
       mockPrisma.messageTranslation.findFirst.mockResolvedValue({
         id: 'trans-456',
         messageId: 'msg-456',
-        sourceLanguage: 'fr',
         targetLanguage: 'en',
         translatedContent: 'Hello world',
         translationModel: 'basic',
-        confidenceScore: 0.90
+        confidenceScore: 0.90,
+        message: {
+          originalLanguage: 'fr'
+        }
       });
 
       const result = await translationService.getTranslation('msg-456', 'en');
@@ -391,6 +393,11 @@ describe('TranslationService', () => {
         where: {
           messageId: 'msg-456',
           targetLanguage: 'en'
+        },
+        include: {
+          message: {
+            select: { originalLanguage: true }
+          }
         }
       });
     });
@@ -415,11 +422,13 @@ describe('TranslationService', () => {
       mockPrisma.messageTranslation.findFirst.mockResolvedValue({
         id: 'trans-src',
         messageId: 'msg-src',
-        sourceLanguage: 'en',
         targetLanguage: 'fr',
         translatedContent: 'Bonjour',
         translationModel: 'premium',
-        confidenceScore: 0.95
+        confidenceScore: 0.95,
+        message: {
+          originalLanguage: 'en'
+        }
       });
 
       const result = await translationService.getTranslation('msg-src', 'fr', 'en');

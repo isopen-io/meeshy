@@ -50,6 +50,36 @@ jest.mock('jsonwebtoken', () => ({
   verify: (token: string, secret: string) => mockJwtVerify(token, secret)
 }));
 
+// Mock SessionService
+const mockGenerateSessionToken = jest.fn() as jest.Mock<any>;
+const mockCreateSession = jest.fn() as jest.Mock<any>;
+const mockInitSessionService = jest.fn() as jest.Mock<any>;
+
+jest.mock('../../../services/SessionService', () => ({
+  generateSessionToken: () => mockGenerateSessionToken(),
+  createSession: (data: any) => mockCreateSession(data),
+  initSessionService: (prisma: any) => mockInitSessionService(prisma),
+  validateSession: jest.fn(),
+  getUserSessions: jest.fn(),
+  invalidateSession: jest.fn(),
+  invalidateAllSessions: jest.fn(),
+  logout: jest.fn()
+}));
+
+// Mock EmailService
+jest.mock('../../../services/EmailService', () => ({
+  EmailService: jest.fn().mockImplementation(() => ({
+    sendEmailVerification: jest.fn(() => Promise.resolve(undefined))
+  }))
+}));
+
+// Mock SmsService
+jest.mock('../../../services/SmsService', () => ({
+  smsService: {
+    sendVerificationCode: jest.fn(() => Promise.resolve({ success: true }))
+  }
+}));
+
 import { AuthService, LoginCredentials, RegisterData, TokenPayload } from '../../../services/AuthService';
 
 // Alias for UserRoleEnum for tests
@@ -78,6 +108,17 @@ jest.mock('../../../utils/normalize', () => ({
     if (cleaned.startsWith('00')) cleaned = '+' + cleaned.substring(2);
     if (!cleaned.startsWith('+')) cleaned = '+' + cleaned;
     return cleaned;
+  }),
+  normalizePhoneWithCountry: jest.fn((phone: string, countryCode: string) => {
+    if (!phone || phone.trim() === '') return null;
+    let cleaned = phone.replace(/[\s\-().]/g, '');
+    if (cleaned.startsWith('00')) cleaned = '+' + cleaned.substring(2);
+    if (!cleaned.startsWith('+')) cleaned = '+' + cleaned;
+    return {
+      phoneNumber: cleaned,
+      countryCode: countryCode || 'FR',
+      isValid: true
+    };
   })
 }));
 
@@ -173,12 +214,25 @@ const mockSocketIOUser = {
   updatedAt: expect.any(Date)
 };
 
+// Mock session data
+const mockSessionData = {
+  id: 'session-123',
+  userId: 'user-123',
+  token: 'mock-session-token',
+  createdAt: new Date(),
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  isValid: true
+};
+
 describe('AuthService', () => {
   let authService: AuthService;
   const jwtSecret = 'test-jwt-secret';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Setup default session mocks
+    mockGenerateSessionToken.mockReturnValue('mock-session-token');
+    mockCreateSession.mockResolvedValue(mockSessionData);
     authService = new AuthService(mockPrisma, jwtSecret);
   });
 
@@ -196,8 +250,8 @@ describe('AuthService', () => {
       const result = await authService.authenticate(validCredentials);
 
       expect(result).not.toBeNull();
-      expect(result?.id).toBe('user-123');
-      expect(result?.username).toBe('testuser');
+      expect(result?.user.id).toBe('user-123');
+      expect(result?.user.username).toBe('testuser');
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: {
           OR: [
@@ -904,6 +958,9 @@ describe('AuthService - Edge Cases', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Setup default session mocks
+    mockGenerateSessionToken.mockReturnValue('mock-session-token');
+    mockCreateSession.mockResolvedValue(mockSessionData);
     authService = new AuthService(mockPrisma, jwtSecret);
   });
 
@@ -1019,6 +1076,9 @@ describe('AuthService - Security Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Setup default session mocks
+    mockGenerateSessionToken.mockReturnValue('mock-session-token');
+    mockCreateSession.mockResolvedValue(mockSessionData);
     authService = new AuthService(mockPrisma, jwtSecret);
   });
 
