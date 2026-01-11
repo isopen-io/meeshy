@@ -754,7 +754,6 @@ model MessageStatusEntry {
   @@index([anonymousId])
   @@index([readAt])
   @@index([deliveredAt])
-  @@map("message_status_entries")
 }
 
 /// Per-attachment status entry for each user
@@ -839,7 +838,6 @@ model AttachmentStatusEntry {
   @@index([viewedAt])
   @@index([listenedAt])
   @@index([watchedAt])
-  @@map("attachment_status_entries")
 }
 
 /// Reaction on an individual attachment (separate from message reactions)
@@ -866,7 +864,6 @@ model AttachmentReaction {
   @@index([userId])
   @@index([anonymousId])
   @@index([emoji])
-  @@map("attachment_reactions")
 }
 
 /// Conversation-level read cursor (optimized for unread count queries)
@@ -903,7 +900,6 @@ model ConversationReadCursor {
   @@index([userId])
   @@index([anonymousId])
   @@index([unreadCount])
-  @@map("conversation_read_cursors")
 }
 
 /// Réaction emoji sur un message par un utilisateur
@@ -1038,8 +1034,6 @@ model NotificationPreference {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("notification_preferences")
 }
 
 /// Communauté (représente une communauté de conversation)
@@ -1329,7 +1323,6 @@ model CallSession {
   @@index([conversationId])
   @@index([status])
   @@index([startedAt])
-  @@map("call_sessions")
 }
 
 /// Call Participant - Represents a user participating in a call
@@ -1364,7 +1357,6 @@ model CallParticipant {
   @@index([callSessionId])
   @@index([userId])
   @@index([anonymousId])
-  @@map("call_participants")
 }
 
 /// Transcription - Phase 2A/2B (prepared for future)
@@ -1399,7 +1391,6 @@ model Transcription {
   /// Indexes
   @@index([callSessionId])
   @@index([timestamp])
-  @@map("transcriptions")
 }
 
 /// Translation - Phase 3 (prepared for future)
@@ -1429,7 +1420,6 @@ model TranslationCall {
 
   /// Indexes
   @@index([transcriptionId])
-  @@map("translation_calls")
 }
 
 /// Enums for video calls
@@ -1508,7 +1498,6 @@ model UserConversationPreferences {
   @@index([userId])
   @@index([conversationId])
   @@index([categoryId])
-  @@map("user_conversation_preferences")
 }
 
 /// User-defined categories for organizing conversations
@@ -1539,7 +1528,6 @@ model UserConversationCategory {
 
   @@index([userId])
   @@index([userId, order])
-  @@map("user_conversation_categories")
 }
 
 /// =====================================================
@@ -1575,7 +1563,6 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
   @@index([createdAt])
-  @@map("password_reset_tokens")
 }
 
 /// Password History - Prevents password reuse
@@ -1596,7 +1583,6 @@ model PasswordHistory {
 
   @@index([userId])
   @@index([createdAt])
-  @@map("password_history")
 }
 
 /// Security Event - Audit log for security-related events
@@ -1628,7 +1614,6 @@ model SecurityEvent {
   @@index([eventType])
   @@index([severity])
   @@index([createdAt])
-  @@map("security_events")
 }
 
 /// User Session - Complete session tracking for security dashboard
@@ -1680,7 +1665,6 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
   @@index([isValid])
-  @@map("user_sessions")
 }
 
 /// =====================================================
@@ -1739,7 +1723,6 @@ model SignalPreKeyBundle {
 
   @@index([lastRotatedAt])
   @@index([isActive])
-  @@map("signal_pre_key_bundles")
 }
 
 /// =====================================================
@@ -1781,7 +1764,6 @@ model ConversationPublicKey {
   @@unique([userId, conversationId, keyType])
   @@index([conversationId])
   @@index([userId])
-  @@map("conversation_public_keys")
 }
 
 /// =====================================================
@@ -1831,7 +1813,6 @@ model ServerEncryptionKey {
   @@index([userId])
   @@index([expiresAt])
   @@index([isActive])
-  @@map("server_encryption_keys")
 }
 
 /// =====================================================
@@ -1893,7 +1874,6 @@ model DMASession {
   @@index([userId])
   @@index([sessionState])
   @@index([lastUsedAt])
-  @@map("dma_sessions")
 }
 
 /// DMA Enrollment - Stores external platform user's Signal Protocol keys
@@ -1935,7 +1915,6 @@ model DMAEnrollment {
 
   @@index([platform])
   @@index([status])
-  @@map("dma_enrollments")
 }
 
 /// Pre-Key - One-time pre-keys for X3DH key agreement
@@ -1969,7 +1948,6 @@ model PreKey {
   @@unique([signalEnrollmentId, preKeyId])
   @@index([isUsed])
   @@index([expiresAt])
-  @@map("dma_pre_keys")
 }
 
 /// =====================================================
@@ -2048,7 +2026,6 @@ model MessageAudioTranscription {
   @@index([messageId])
   @@index([language])
   @@index([speakerCount])
-  @@map("message_audio_transcriptions")
 }
 
 /// Version audio traduite d'un message (une par langue destinataire)
@@ -2099,7 +2076,6 @@ model MessageTranslatedAudio {
   @@unique([attachmentId, targetLanguage])
   @@index([messageId])
   @@index([targetLanguage])
-  @@map("message_translated_audios")
 }
 
 /// Modèle de voix cloné d'un utilisateur
@@ -2188,7 +2164,6 @@ model UserVoiceModel {
 
   @@index([updatedAt])
   @@index([signatureShort])
-  @@map("user_voice_models")
 }
 
 /// =====================================================
@@ -2209,5 +2184,4 @@ model UserMessageDeletion {
   @@unique([userId, messageId])
   @@index([userId])
   @@index([messageId])
-  @@map("user_message_deletions")
 }
