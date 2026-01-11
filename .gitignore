@@ -152,9 +152,8 @@ htmlcov/
 ./shared/*d.ts
 ./shared/**/*.d.ts
  */translator/.venv/
- **/*/shared
- **/*/shared/*
- ./**/*/shared
+# Note: Removed patterns that were incorrectly ignoring packages/shared/
+# **/*/shared patterns were too broad and matched the monorepo packages
 translator/.venv/
 logs/
 translator/scripts/jinu_the_wisdom_one_year_young_lion.zip
@@ -214,7 +213,8 @@ DerivedData/
 # Swift Package Manager
 .swiftpm/
 .build/
-Packages/
+# Note: Using explicit path to avoid matching monorepo packages/ on case-insensitive filesystems
+apps/ios/Packages/
 Package.pins
 Package.resolved
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/

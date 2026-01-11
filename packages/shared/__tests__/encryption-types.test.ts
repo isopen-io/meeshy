@@ -6,6 +6,9 @@ import {
   isMessageEncrypted,
   canAutoTranslate,
   getEncryptionStatus,
+  isHybridPayload,
+  shouldEncryptAttachment,
+  canTranslateAttachment,
   type EncryptionMode,
 } from '../types/encryption';
 import { createProtocolAddress } from '../encryption/signal/signal-types';
@@ -234,5 +237,204 @@ describe('createProtocolAddress', () => {
 
     expect(address.name()).toBe(uuid);
     expect(address.deviceId()).toBe(5);
+  });
+});
+
+describe('isHybridPayload', () => {
+  it('should return true for valid hybrid payload', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: true,
+      timestamp: Date.now(),
+      e2ee: {
+        ciphertext: 'base64data',
+        type: 1,
+        senderRegistrationId: 123,
+        recipientRegistrationId: 456,
+      },
+      server: {
+        ciphertext: 'base64data',
+        iv: 'ivbase64',
+        authTag: 'tagbase64',
+        keyId: 'key-123',
+      },
+    };
+
+    expect(isHybridPayload(payload)).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isHybridPayload(null)).toBe(false);
+  });
+
+  it('should return false for undefined', () => {
+    expect(isHybridPayload(undefined)).toBe(false);
+  });
+
+  it('should return false for non-object', () => {
+    expect(isHybridPayload('string')).toBe(false);
+    expect(isHybridPayload(123)).toBe(false);
+  });
+
+  it('should return false when mode is not hybrid', () => {
+    const payload = {
+      mode: 'server',
+      canTranslate: true,
+      timestamp: Date.now(),
+      e2ee: {},
+      server: {},
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+
+  it('should return false when canTranslate is not boolean', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: 'true',
+      timestamp: Date.now(),
+      e2ee: {},
+      server: {},
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+
+  it('should return false when timestamp is not number', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: true,
+      timestamp: '2024-01-01',
+      e2ee: {},
+      server: {},
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+
+  it('should return false when e2ee is null', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: true,
+      timestamp: Date.now(),
+      e2ee: null,
+      server: {},
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+
+  it('should return false when server is null', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: true,
+      timestamp: Date.now(),
+      e2ee: {},
+      server: null,
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+
+  it('should return false when e2ee is missing', () => {
+    const payload = {
+      mode: 'hybrid',
+      canTranslate: true,
+      timestamp: Date.now(),
+      server: {},
+    };
+
+    expect(isHybridPayload(payload)).toBe(false);
+  });
+});
+
+describe('shouldEncryptAttachment', () => {
+  it('should return true when encryption is enabled with a mode', () => {
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15'),
+      encryptionMode: 'server' as EncryptionMode,
+    };
+
+    expect(shouldEncryptAttachment(conversation)).toBe(true);
+  });
+
+  it('should return true for e2ee mode', () => {
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15'),
+      encryptionMode: 'e2ee' as EncryptionMode,
+    };
+
+    expect(shouldEncryptAttachment(conversation)).toBe(true);
+  });
+
+  it('should return true for hybrid mode', () => {
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15'),
+      encryptionMode: 'hybrid' as EncryptionMode,
+    };
+
+    expect(shouldEncryptAttachment(conversation)).toBe(true);
+  });
+
+  it('should return false when encryption not enabled', () => {
+    const conversation = {
+      encryptionEnabledAt: null,
+      encryptionMode: null,
+    };
+
+    expect(shouldEncryptAttachment(conversation)).toBe(false);
+  });
+
+  it('should return false when encryptionMode is null even with enabledAt', () => {
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15'),
+      encryptionMode: null,
+    };
+
+    expect(shouldEncryptAttachment(conversation)).toBe(false);
+  });
+});
+
+describe('canTranslateAttachment', () => {
+  it('should return false for non-audio attachments', () => {
+    const conversation = {
+      encryptionMode: 'server' as EncryptionMode,
+    };
+
+    expect(canTranslateAttachment('image', conversation)).toBe(false);
+    expect(canTranslateAttachment('video', conversation)).toBe(false);
+    expect(canTranslateAttachment('document', conversation)).toBe(false);
+  });
+
+  it('should return false for audio in e2ee mode', () => {
+    const conversation = {
+      encryptionMode: 'e2ee' as EncryptionMode,
+    };
+
+    expect(canTranslateAttachment('audio', conversation)).toBe(false);
+  });
+
+  it('should return true for audio in server mode', () => {
+    const conversation = {
+      encryptionMode: 'server' as EncryptionMode,
+    };
+
+    expect(canTranslateAttachment('audio', conversation)).toBe(true);
+  });
+
+  it('should return true for audio in hybrid mode', () => {
+    const conversation = {
+      encryptionMode: 'hybrid' as EncryptionMode,
+    };
+
+    expect(canTranslateAttachment('audio', conversation)).toBe(true);
+  });
+
+  it('should return false for audio when mode is null', () => {
+    const conversation = {
+      encryptionMode: null,
+    };
+
+    expect(canTranslateAttachment('audio', conversation)).toBe(false);
   });
 });
