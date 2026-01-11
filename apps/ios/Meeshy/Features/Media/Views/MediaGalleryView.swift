@@ -233,6 +233,9 @@ struct MediaGalleryView: View {
     /// Preload images around the current index for smooth navigation
     /// Uses a wider range (5 items each direction) to prevent stuttering during fast navigation
     private func preloadAdjacentImages(around index: Int) {
+        // Guard against empty items array to prevent invalid range crash
+        guard !items.isEmpty else { return }
+
         // Wider preload range for smooth fast navigation
         let preloadRadius = 5
         let preloadRange = max(0, index - preloadRadius)...min(items.count - 1, index + preloadRadius)
