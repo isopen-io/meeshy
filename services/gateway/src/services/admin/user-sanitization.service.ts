@@ -86,6 +86,8 @@ export class UserSanitizationService {
         lockedUntil: user.lockedUntil,
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
+        encryptionPreference: user.encryptionPreference,
+        autoTranscriptionEnabled: user.autoTranscriptionEnabled,
         _count: user._count
       };
       return adminData;
