@@ -32,42 +32,42 @@ enum ConversationEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .fetchConversations:
-            return "/api/conversations"
+            return "\(EnvironmentConfig.apiPath)/conversations"
         case .createConversation:
-            return "/api/conversations"
+            return "\(EnvironmentConfig.apiPath)/conversations"
         case .getConversation(let id):
-            return "/api/conversations/\(id)"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(id)"
         case .updateConversation(let id, _):
-            return "/api/conversations/\(id)"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(id)"
         case .deleteConversation(let id):
-            return "/api/conversations/\(id)"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(id)"
         case .fetchMembers(let conversationId, _, _):
-            return "/api/conversations/\(conversationId)/participants"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/participants"
         case .addMembers(let conversationId, _):
-            return "/api/conversations/\(conversationId)/participants"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/participants"
         case .removeMember(let conversationId, let userId):
-            return "/api/conversations/\(conversationId)/participants/\(userId)"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/participants/\(userId)"
         case .updateMemberRole(let conversationId, let userId, _):
-            return "/api/conversations/\(conversationId)/participants/\(userId)/role"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/participants/\(userId)/role"
         case .leaveConversation(let conversationId):
-            return "/api/conversations/\(conversationId)/leave"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/leave"
         case .pinConversation(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .unpinConversation(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .muteConversation(let conversationId, _):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .unmuteConversation(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .archiveConversation(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .unarchiveConversation(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .markAsRead(let conversationId):
             // Use existing backend route (conversations.ts:1614)
-            return "/api/conversations/\(conversationId)/read"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/read"
         case .searchConversations:
-            return "/api/conversations/search"
+            return "\(EnvironmentConfig.apiPath)/conversations/search"
         }
     }
 
@@ -150,15 +150,15 @@ enum UserPreferencesEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .fetchAllPreferences:
-            return "/api/user-preferences/conversations"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations"
         case .fetchPreferences(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .updatePreferences(let conversationId, _):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .deletePreferences(let conversationId):
-            return "/api/user-preferences/conversations/\(conversationId)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/conversations/\(conversationId)"
         case .reorderConversations:
-            return "/api/user-preferences/reorder"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/reorder"
         }
     }
 

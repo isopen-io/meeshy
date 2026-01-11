@@ -217,17 +217,17 @@ enum AttachmentEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .upload:
-            return "/api/attachments/upload"
+            return "\(EnvironmentConfig.apiPath)/attachments/upload"
         case .download(let attachmentId):
-            return "/api/attachments/\(attachmentId)"
+            return "\(EnvironmentConfig.apiPath)/attachments/\(attachmentId)"
         case .delete(let attachmentId):
-            return "/api/attachments/\(attachmentId)"
+            return "\(EnvironmentConfig.apiPath)/attachments/\(attachmentId)"
         case .getThumbnail(let attachmentId, _):
-            return "/api/attachments/\(attachmentId)/thumbnail"
+            return "\(EnvironmentConfig.apiPath)/attachments/\(attachmentId)/thumbnail"
         case .getAttachments(let conversationId, _, _, _):
-            return "/api/conversations/\(conversationId)/attachments"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/attachments"
         case .streamFile(let filePath):
-            return "/api/attachments/file/\(filePath)"
+            return "\(EnvironmentConfig.apiPath)/attachments/file/\(filePath)"
         }
     }
 

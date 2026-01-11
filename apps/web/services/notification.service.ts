@@ -362,5 +362,146 @@ export default NotificationService;
 // Re-export types for convenience
 export type { Notification, NotificationCounts } from '@/types/notification';
 
+/**
+ * Notification service wrapper with local state management
+ * Provides the interface expected by use-notifications.ts hook
+ */
+class NotificationServiceWrapper {
+  private notifications: Notification[] = [];
+  private counts: NotificationCounts = {
+    total: 0,
+    unread: 0,
+    byType: {
+      message: 0,
+      system: 0,
+      user_action: 0,
+      conversation: 0,
+      translation: 0
+    }
+  };
+  private callbacks: {
+    onConnect?: () => void;
+    onDisconnect?: () => void;
+    onError?: (error: Error) => void;
+    onNotificationReceived?: (notification: Notification) => void;
+    onCountsUpdated?: (counts: NotificationCounts) => void;
+  } = {};
+
+  /**
+   * Initialize the notification service
+   */
+  initialize(config: {
+    token: string;
+    userId: string;
+    onConnect?: () => void;
+    onDisconnect?: () => void;
+    onError?: (error: Error) => void;
+    onNotificationReceived?: (notification: Notification) => void;
+    onCountsUpdated?: (counts: NotificationCounts) => void;
+  }) {
+    this.callbacks = config;
+    // Simulate connection success
+    setTimeout(() => {
+      this.callbacks.onConnect?.();
+    }, 100);
+  }
+
+  /**
+   * Disconnect the service
+   */
+  disconnect() {
+    this.callbacks.onDisconnect?.();
+    this.callbacks = {};
+  }
+
+  /**
+   * Get all notifications (local state)
+   */
+  getNotifications(): Notification[] {
+    return this.notifications;
+  }
+
+  /**
+   * Get unread notifications (local state)
+   */
+  getUnreadNotifications(): Notification[] {
+    return this.notifications.filter(n => !n.isRead);
+  }
+
+  /**
+   * Mark a notification as read
+   */
+  async markAsRead(notificationId: string) {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.isRead = true;
+      this.updateCounts();
+    }
+    // Also call API
+    return NotificationService.markAsRead(notificationId);
+  }
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllAsRead() {
+    this.notifications.forEach(n => { n.isRead = true; });
+    this.updateCounts();
+    return NotificationService.markAllAsRead();
+  }
+
+  /**
+   * Remove a notification from local state
+   */
+  removeNotification(notificationId: string) {
+    this.notifications = this.notifications.filter(n => n.id !== notificationId);
+    this.updateCounts();
+  }
+
+  /**
+   * Clear all notifications from local state
+   */
+  clearAll() {
+    this.notifications = [];
+    this.updateCounts();
+  }
+
+  /**
+   * Get notification counts
+   */
+  getCounts(): NotificationCounts {
+    return this.counts;
+  }
+
+  /**
+   * Update counts based on current notifications
+   */
+  private updateCounts() {
+    const unread = this.notifications.filter(n => !n.isRead).length;
+    this.counts = {
+      total: this.notifications.length,
+      unread,
+      byType: {
+        message: this.notifications.filter(n => n.type === 'message').length,
+        system: this.notifications.filter(n => n.type === 'system').length,
+        user_action: this.notifications.filter(n => n.type === 'user_action').length,
+        conversation: this.notifications.filter(n => n.type === 'conversation').length,
+        translation: this.notifications.filter(n => n.type === 'translation').length
+      }
+    };
+    this.callbacks.onCountsUpdated?.(this.counts);
+  }
+
+  // Proxy to API methods
+  fetchNotifications = NotificationService.fetchNotifications.bind(NotificationService);
+  fetchUnreadCount = NotificationService.getUnreadCount.bind(NotificationService);
+  fetchCounts = NotificationService.getCounts.bind(NotificationService);
+  fetchStats = NotificationService.getStats.bind(NotificationService);
+  fetchPreferences = NotificationService.getPreferences.bind(NotificationService);
+  updatePreferences = NotificationService.updatePreferences.bind(NotificationService);
+  deleteNotification = NotificationService.deleteNotification.bind(NotificationService);
+  testNotification = NotificationService.sendTestNotification.bind(NotificationService);
+}
+
 // Alias for backwards compatibility (lowercase)
-export const notificationService = NotificationService;
+export const notificationService = new NotificationServiceWrapper();

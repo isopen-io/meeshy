@@ -76,6 +76,10 @@ const isBrowser = (): boolean => typeof window !== 'undefined';
 const trimSlashes = (value: string): string => value.replace(/\/$/, '');
 const ensureLeadingSlash = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
 
+// API Version - aligned with iOS EnvironmentConfig and gateway
+export const API_VERSION = 'v1';
+export const API_PATH = `/api/${API_VERSION}`;
+
 // Configuration principale
 export const config: MeeshyConfig = {
   frontend: {
@@ -163,7 +167,7 @@ export const APP_CONFIG = {
 // API Configuration for consistent API URL usage
 export const API_CONFIG = {
   getApiUrl: () => {
-    return `${getBackendUrl()}/api`;
+    return `${getBackendUrl()}${API_PATH}`;
   }
 };
 
@@ -314,11 +318,19 @@ export const getWebSocketUrl = (): string => {
 
 // Helper pour construire une URL complète vers l'API Gateway
 export const buildApiUrl = (endpoint: string): string => {
-  // Add /api prefix for all API endpoints that don't already have it
-  const apiEndpoint = endpoint.startsWith('/api/') ? endpoint : `/api${ensureLeadingSlash(endpoint)}`;
+  // Handle endpoints that already have full /api/vX path
+  if (endpoint.startsWith('/api/v')) {
+    return `${getBackendUrl()}${endpoint}`;
+  }
 
-  // Route to gateway with /api prefix
-  return `${getBackendUrl()}${apiEndpoint}`;
+  // Handle endpoints with /api/ prefix but no version - add version
+  if (endpoint.startsWith('/api/')) {
+    const pathWithoutApi = endpoint.substring(4); // Remove '/api'
+    return `${getBackendUrl()}${API_PATH}${pathWithoutApi}`;
+  }
+
+  // Add full /api/v1 prefix for endpoints without it
+  return `${getBackendUrl()}${API_PATH}${ensureLeadingSlash(endpoint)}`;
 };
 
 // Helper pour construire une URL directe vers le Gateway (sans /api prefix)

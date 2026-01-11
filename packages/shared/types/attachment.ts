@@ -192,8 +192,8 @@ export interface Attachment {
   readonly consumedCount: number;    // Listened or watched
 
   // ===== ENCRYPTION =====
+  // Note: encryptionMode is only on Conversation, not Attachment
   readonly isEncrypted: boolean;
-  readonly encryptionMode?: string;
   readonly encryptionIv?: string;
   readonly encryptionAuthTag?: string;
   readonly encryptionHmac?: string;

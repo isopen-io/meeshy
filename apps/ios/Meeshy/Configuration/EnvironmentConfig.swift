@@ -28,13 +28,25 @@ final class EnvironmentConfig: ObservableObject {
 
     nonisolated(unsafe) static let shared = EnvironmentConfig()
 
+    // MARK: - API Versioning
+
+    /// Current API version - configurable via environment variable MEESHY_API_VERSION
+    /// Default: "v1". Change to "v2" etc. to switch all endpoints globally.
+    /// Set in Xcode scheme: Edit Scheme → Run → Arguments → Environment Variables
+    static var apiVersion: String {
+        ProcessInfo.processInfo.environment["MEESHY_API_VERSION"] ?? "v1"
+    }
+
+    /// API path prefix including version (e.g., "/api/v1")
+    static var apiPath: String { "/api/\(apiVersion)" }
+
     // MARK: - Preset URLs
 
     /// Production server URL
     static let productionURL = "https://gate.meeshy.me"
 
-    /// Local development server URL
-    static let localURL = "https://smpdev02.local:3000"
+    /// Local development server URL (HTTPS via Traefik reverse proxy)
+    static let localURL = "https://gate.meeshy.local"
 
     // MARK: - Storage
 
@@ -127,7 +139,6 @@ final class EnvironmentConfig: ObservableObject {
     // MARK: - API Configuration
     // Note: All API endpoints are defined in Meeshy/API/Endpoints/*Endpoints.swift files
 
-    static let apiVersion = "v1"
     static let requestTimeout: TimeInterval = 30.0
     static let enableLogging = true
 

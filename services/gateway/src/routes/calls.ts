@@ -30,7 +30,7 @@ import {
   callParticipantSchema,
   startCallRequestSchema,
   errorResponseSchema
-} from '@meeshy/shared/types/api-schemas.js';
+} from '@meeshy/shared/types/api-schemas';
 
 interface CallParams {
   callId: string;
