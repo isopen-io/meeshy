@@ -198,7 +198,7 @@ async function main() {
   // ================== CRÉER 7 UTILISATEURS MULTILINGUES ==================
   
   
-  // 1. Utilisateur français (Admin)
+  // 1. Utilisateur français (Admin) - Primary language: English (admin default)
   const alice = await prisma.user.create({
     data: {
       username: 'alice_fr',
@@ -208,7 +208,7 @@ async function main() {
       password: '$2b$10$UxJ6jmYYODq6QnsTm8TZMu9AlWUDlY/fZdw/e0YA1gjqz9Cjmwlqq', // password123
       role: 'ADMIN',
       isActive: true,
-      systemLanguage: 'fr',
+      systemLanguage: 'en',  // Admin default: English
       regionalLanguage: 'fr',
       autoTranslateEnabled: true,
       translateToSystemLanguage: true,

@@ -67,7 +67,7 @@ export class PermissionsService {
       canViewAnalytics: true,
       canModerateContent: true,
       canManageNotifications: true,
-      canManageTranslations: false
+      canManageTranslations: true  // ADMIN can now manage translations
     },
     'MODO': {
       canAccessAdmin: true,
