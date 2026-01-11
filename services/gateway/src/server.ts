@@ -53,7 +53,6 @@ import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
 import { maintenanceRoutes } from './routes/maintenance';
-import { authTestRoutes } from './routes/auth-test';
 import affiliateRoutes from './routes/affiliate';
 import messageRoutes from './routes/messages';
 import mentionRoutes from './routes/mentions';
@@ -729,9 +728,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register user deletions routes (delete for me feature)
     await this.server.register(userDeletionsRoutes, { prefix: '' });
 
-    // Register authentication test routes for Phase 3.1.1
-    await this.server.register(authTestRoutes, { prefix: API_PREFIX });
-    
     // Register conversation routes with /api prefix
     await this.server.register(async (fastify) => {
       await conversationRoutes(fastify);

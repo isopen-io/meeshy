@@ -8,8 +8,9 @@
  * - Restore deleted conversations/messages
  */
 
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 interface ConversationIdParams {
   conversationId: string;
@@ -36,7 +37,37 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{ Params: ConversationIdParams }>(
     '/api/conversations/:conversationId/delete-for-me',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Soft-delete a conversation from the authenticated user\'s view. Other participants will still see the conversation. The conversation can be restored later.',
+        tags: ['users', 'conversations'],
+        summary: 'Delete conversation for current user',
+        params: {
+          type: 'object',
+          required: ['conversationId'],
+          properties: {
+            conversationId: { type: 'string', description: 'Conversation ID to delete from user view' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Conversation deleted from your view' }
+                }
+              }
+            }
+          },
+          403: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { conversationId } = request.params;
@@ -98,7 +129,37 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{ Params: ConversationIdParams }>(
     '/api/conversations/:conversationId/restore-for-me',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user.',
+        tags: ['users', 'conversations'],
+        summary: 'Restore deleted conversation',
+        params: {
+          type: 'object',
+          required: ['conversationId'],
+          properties: {
+            conversationId: { type: 'string', description: 'Conversation ID to restore' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Conversation restored' }
+                }
+              }
+            }
+          },
+          400: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { conversationId } = request.params;
@@ -151,7 +212,46 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
     '/api/conversations/:conversationId/clear-history',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Clear conversation history before a specific date for the authenticated user only. Messages before the specified date will be hidden from the user\'s view. Other participants are not affected.',
+        tags: ['users', 'conversations'],
+        summary: 'Clear conversation history',
+        params: {
+          type: 'object',
+          required: ['conversationId'],
+          properties: {
+            conversationId: { type: 'string', description: 'Conversation ID to clear history for' }
+          }
+        },
+        body: {
+          type: 'object',
+          required: ['beforeDate'],
+          properties: {
+            beforeDate: { type: 'string', format: 'date-time', description: 'ISO 8601 date string - messages before this date will be hidden' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Chat history cleared before 2024-01-15T10:30:00.000Z' },
+                  clearHistoryBefore: { type: 'string', format: 'date-time', description: 'The date before which messages are hidden' }
+                }
+              }
+            }
+          },
+          400: errorResponseSchema,
+          403: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { conversationId } = request.params;
@@ -230,7 +330,38 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{ Params: MessageIdParams }>(
     '/api/messages/:messageId/delete-for-me',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Soft-delete a specific message from the authenticated user\'s view. Other participants will still see the message. The message can be restored later.',
+        tags: ['users', 'messages'],
+        summary: 'Delete message for current user',
+        params: {
+          type: 'object',
+          required: ['messageId'],
+          properties: {
+            messageId: { type: 'string', description: 'Message ID to delete from user view' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Message deleted from your view' }
+                }
+              }
+            }
+          },
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { messageId } = request.params;
@@ -301,7 +432,37 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{ Params: MessageIdParams }>(
     '/api/messages/:messageId/restore-for-me',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Restore a previously deleted message to the authenticated user\'s view. Only works if the message was previously deleted by the user.',
+        tags: ['users', 'messages'],
+        summary: 'Restore deleted message',
+        params: {
+          type: 'object',
+          required: ['messageId'],
+          properties: {
+            messageId: { type: 'string', description: 'Message ID to restore' }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Message restored' }
+                }
+              }
+            }
+          },
+          400: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { messageId } = request.params;
@@ -351,7 +512,46 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{ Body: { messageIds: string[] } }>(
     '/api/messages/bulk/delete-for-me',
-    { preValidation: [authMiddleware] },
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Bulk delete multiple messages from the authenticated user\'s view in a single request. Maximum 100 messages per request. Other participants are not affected. Only messages from conversations where the user is a member can be deleted.',
+        tags: ['users', 'messages'],
+        summary: 'Bulk delete messages for current user',
+        body: {
+          type: 'object',
+          required: ['messageIds'],
+          properties: {
+            messageIds: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 1,
+              maxItems: 100,
+              description: 'Array of message IDs to delete (max 100)'
+            }
+          }
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: '15 messages deleted from your view' },
+                  deletedCount: { type: 'number', description: 'Number of messages actually deleted' },
+                  requestedCount: { type: 'number', description: 'Number of message IDs requested' }
+                }
+              }
+            }
+          },
+          400: errorResponseSchema,
+          403: errorResponseSchema,
+          500: errorResponseSchema
+        }
+      }
+    },
     async (request, reply) => {
       try {
         const { messageIds } = request.body;
@@ -432,11 +632,48 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    */
   fastify.get(
     '/api/user/deleted-conversations',
-    { preValidation: [authMiddleware] },
-    async (request, reply) => {
+    {
+      preValidation: [authMiddleware],
+      schema: {
+        description: 'Get a list of all conversations the authenticated user has deleted from their view. Returns conversation details and deletion timestamps. These conversations can be restored.',
+        tags: ['users', 'conversations'],
+        summary: 'Get user deleted conversations',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    conversationId: { type: 'string', description: 'Conversation ID' },
+                    conversation: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        identifier: { type: 'string' },
+                        title: { type: 'string', nullable: true },
+                        type: { type: 'string', enum: ['direct', 'group'] },
+                        avatar: { type: 'string', nullable: true },
+                        lastMessageAt: { type: 'string', format: 'date-time', nullable: true }
+                      }
+                    },
+                    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the user deleted this conversation' }
+                  }
+                }
+              }
+            }
+          },
+          500: errorResponseSchema
+        }
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authRequest = request as UnifiedAuthRequest;
-        const userId = authRequest.authContext.userId;
+        const authContext = (request as any).authContext;
+        const userId = authContext.userId;
 
         const deletedPrefs = await prisma.userConversationPreferences.findMany({
           where: {
