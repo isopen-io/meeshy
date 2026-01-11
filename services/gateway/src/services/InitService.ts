@@ -195,9 +195,9 @@ export class InitService {
     const lastName = 'Manager'; // FIXE
     const email = process.env.ADMIN_EMAIL || 'admin@meeshy.me'; // CONFIGURABLE
     const role = 'ADMIN'; // FIXE
-    const systemLanguage = process.env.ADMIN_SYSTEM_LANGUAGE || 'es'; // CONFIGURABLE
-    const regionalLanguage = process.env.ADMIN_REGIONAL_LANGUAGE || 'de'; // CONFIGURABLE
-    const customDestinationLanguage = process.env.ADMIN_CUSTOM_DESTINATION_LANGUAGE || 'zh'; // CONFIGURABLE
+    const systemLanguage = process.env.ADMIN_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE - Default: English
+    const regionalLanguage = process.env.ADMIN_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE - Default: French
+    const customDestinationLanguage = process.env.ADMIN_CUSTOM_DESTINATION_LANGUAGE || 'es'; // CONFIGURABLE - Default: Spanish
 
 
     try {
@@ -292,18 +292,19 @@ export class InitService {
 
   /**
    * Crée l'utilisateur André Tabeth - Entièrement configurable
+   * Default: ADMIN role with English as primary language
    */
   private async createAndreTabethUser(): Promise<void> {
-    // Utilisateur entièrement configurable
+    // Utilisateur entièrement configurable - Default: ADMIN with English
     const username = process.env.ATABETH_USERNAME || 'atabeth';
     const password = process.env.ATABETH_PASSWORD || 'admin123';
     const firstName = process.env.ATABETH_FIRST_NAME || 'André';
     const lastName = process.env.ATABETH_LAST_NAME || 'Tabeth';
     const email = process.env.ATABETH_EMAIL || 'atabeth@meeshy.me';
-    const role = process.env.ATABETH_ROLE || 'USER';
-    const systemLanguage = process.env.ATABETH_SYSTEM_LANGUAGE || 'fr';
-    const regionalLanguage = process.env.ATABETH_REGIONAL_LANGUAGE || 'en';
-    const customDestinationLanguage = process.env.ATABETH_CUSTOM_DESTINATION_LANGUAGE || 'es';
+    const role = process.env.ATABETH_ROLE || 'ADMIN';  // Default: ADMIN (can manage translations)
+    const systemLanguage = process.env.ATABETH_SYSTEM_LANGUAGE || 'en';  // Default: English
+    const regionalLanguage = process.env.ATABETH_REGIONAL_LANGUAGE || 'fr';  // Default: French
+    const customDestinationLanguage = process.env.ATABETH_CUSTOM_DESTINATION_LANGUAGE || 'es';  // Default: Spanish
 
 
     try {
