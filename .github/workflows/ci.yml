@@ -83,9 +83,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies (bun)
+      - name: Install dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -148,9 +154,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies (bun)
+      - name: Install dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -211,7 +223,7 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
-          uv sync --frozen --extra cpu --extra dev 2>/dev/null || uv sync --extra cpu --extra dev
+          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
       - name: Generate Prisma client (Python)
         env:
@@ -286,7 +298,7 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
-          uv sync --frozen --extra cpu --extra dev 2>/dev/null || uv sync --extra cpu --extra dev
+          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
       - name: Generate Prisma client (Python)
         env:
@@ -375,7 +387,7 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
-          uv sync --frozen --extra cpu --extra dev 2>/dev/null || uv sync --extra cpu --extra dev
+          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
       - name: Generate Prisma client (Python)
         env:
@@ -474,9 +486,15 @@ jobs:
       - name: Setup Python via uv
         run: uv python install ${{ env.PYTHON_VERSION }}
 
-      - name: Install Node.js dependencies (bun)
+      - name: Install Node.js dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install Node.js dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -492,7 +510,7 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
-          uv sync --frozen --extra cpu --extra dev 2>/dev/null || uv sync --extra cpu --extra dev
+          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
       - name: Generate Prisma client (Python)
         env:
@@ -555,9 +573,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies (bun)
+      - name: Install dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -645,9 +669,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies (bun)
+      - name: Install dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -709,9 +739,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies (bun)
+      - name: Install dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
