@@ -337,6 +337,7 @@ struct MeeshyApp: App {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: launchCoordinator.launchState)
+            .applyTheme() // Apply user's selected theme (light/dark/system)
             // Anonymous join sheet
             .sheet(isPresented: $showAnonymousJoinSheet) {
                 if let linkId = pendingJoinLinkId {

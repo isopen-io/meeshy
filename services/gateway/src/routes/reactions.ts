@@ -23,7 +23,7 @@ import {
   reactionSummarySchema,
   addReactionRequestSchema,
   errorResponseSchema
-} from '@meeshy/shared/types/api-schemas.js';
+} from '@meeshy/shared/types/api-schemas';
 
 interface AddReactionBody {
   messageId: string;

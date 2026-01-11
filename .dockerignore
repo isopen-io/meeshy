@@ -79,6 +79,7 @@ docker-compose*.yml
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh
 !services/translator/docker-entrypoint-volumes.sh
+!infrastructure/docker/images/web/entrypoint.sh
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/

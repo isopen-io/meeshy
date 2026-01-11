@@ -22,21 +22,21 @@ enum NotificationEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .fetchNotifications:
-            return "/api/notifications"
+            return "\(EnvironmentConfig.apiPath)/notifications"
         case .markAsRead(let notificationId):
-            return "/api/notifications/\(notificationId)/read"
+            return "\(EnvironmentConfig.apiPath)/notifications/\(notificationId)/read"
         case .markAllAsRead:
-            return "/api/notifications/read-all"
+            return "\(EnvironmentConfig.apiPath)/notifications/read-all"
         case .deleteNotification(let notificationId):
-            return "/api/notifications/\(notificationId)"
+            return "\(EnvironmentConfig.apiPath)/notifications/\(notificationId)"
         case .deleteAllNotifications:
-            return "/api/notifications/read"
+            return "\(EnvironmentConfig.apiPath)/notifications/read"
         case .updatePreferences:
-            return "/api/notifications/preferences"
+            return "\(EnvironmentConfig.apiPath)/notifications/preferences"
         case .registerPushToken:
-            return "/api/notifications/push/register"
+            return "\(EnvironmentConfig.apiPath)/notifications/push/register"
         case .unregisterPushToken:
-            return "/api/notifications/push/unregister"
+            return "\(EnvironmentConfig.apiPath)/notifications/push/unregister"
         }
     }
 

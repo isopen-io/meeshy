@@ -12,6 +12,7 @@
 
 import SwiftUI
 import UIKit
+import MapKit
 
 // MARK: - iOS Version Compatibility Helpers
 
@@ -204,6 +205,12 @@ struct ModernMessageBubble: View {
     /// Parameters: (tappedImageIndex, imagesFromThisMessage)
     var onImageTap: ((Int, [MediaItem]) -> Void)? = nil
 
+    /// True when message is being sent (shows spinner instead of checkmarks)
+    var isSending: Bool = false
+
+    /// Callback to retry sending a failed message
+    var onRetry: (() -> Void)? = nil
+
     @State private var showReactionPopover = false
     @State private var showReactionUsers = false
     @State private var showContextMenu = false
@@ -224,14 +231,19 @@ struct ModernMessageBubble: View {
     // Common quick reactions (popular on the platform)
     private let quickReactions = ["❤️", "👍", "😂", "😮", "😢", "🙏", "🔥", "👏", "🎉"]
 
-    // Show avatar only for first message in group (for non-current user)
+    // Show avatar only for first message in group (for non-current user, not system messages)
     private var showAvatar: Bool {
-        !isCurrentUser && isFirstInGroup
+        !isCurrentUser && isFirstInGroup && !isSystemMessage
     }
 
-    // Show sender name only for first message in group (for non-current user)
+    // Show sender name only for first message in group (for non-current user, not system messages)
     private var showSenderName: Bool {
-        !isCurrentUser && isFirstInGroup
+        !isCurrentUser && isFirstInGroup && !isSystemMessage
+    }
+
+    // Check if this is a system message (no avatar/name needed)
+    private var isSystemMessage: Bool {
+        message.effectiveMessageType == .system || message.messageSource == .system
     }
 
     // Show metadata only for last message in group
@@ -298,6 +310,27 @@ struct ModernMessageBubble: View {
         return (name: "Utilisateur", avatar: nil)
     }
 
+    /// Special icon for message source (ads, app, agent, authority)
+    /// Returns nil for regular user messages
+    private var messageSourceIcon: (icon: String, color: Color)? {
+        guard let source = message.messageSource, source != .user && source != .system else {
+            return nil
+        }
+        switch source {
+        case .ads:
+            return ("megaphone.fill", .orange)
+        case .app:
+            return ("app.badge.fill", .blue)
+        case .agent:
+            return ("sparkles", .green)
+        case .authority:
+            // Public administration icon, not "official badge"
+            return ("building.columns.fill", .indigo)
+        default:
+            return nil
+        }
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if isCurrentUser {
@@ -320,17 +353,40 @@ struct ModernMessageBubble: View {
             }
 
             VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
-                // Sender name (for others, first message in group only)
+                // Sender name with special icons (for others, first message in group only)
                 if showSenderName {
-                    Text(resolvedSenderInfo.name)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                        .padding(.leading, 12)
+                    HStack(spacing: 4) {
+                        // Special source icon before sender name
+                        if let sourceIcon = messageSourceIcon {
+                            Image(systemName: sourceIcon.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(sourceIcon.color)
+                        }
+                        // Forwarded icon
+                        if message.isForwarded {
+                            Image(systemName: "arrowshape.turn.up.forward.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.purple.opacity(0.7))
+                        }
+                        Text(resolvedSenderInfo.name)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.leading, 12)
                 }
 
                 // Message Bubble with Reactions - Using VStack for proper spacing
                 VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 0) {
+                    // Error indicator with retry button (above the bubble for failed messages)
+                    if isCurrentUser, let errorMessage = message.sendError {
+                        SendErrorIndicator(
+                            errorMessage: errorMessage,
+                            onRetry: onRetry
+                        )
+                        .padding(.bottom, 6)
+                    }
+
                     // Main Bubble with long press gesture
                     MessageBubbleContent(
                         message: message,
@@ -428,6 +484,7 @@ struct ModernMessageBubble: View {
                         isCurrentUser: isCurrentUser,
                         hasSelectedTranslation: selectedTranslation != nil,
                         currentUserId: currentUserId,
+                        isSending: isSending,
                         onStatusTap: {
                             // Haptic feedback
                             let generator = UIImpactFeedbackGenerator(style: .light)
@@ -1332,61 +1389,149 @@ struct MessageBubbleContent: View {
 
     var body: some View {
         VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 8) {
-            // Reply Preview (if replying to another message) - always outside bubble
-            if message.isReply {
-                ReplyPreviewView(
-                    replyToId: message.replyToId,
-                    replyToMessage: message.replyToMessage,
+            // Note: Source icons and forwarded icons are now shown before sender name
+            // in ModernMessageBubble, not as separate badges here
+
+            // 1. Deleted messages - show special deleted view
+            if message.isDeleted {
+                DeletedMessageView(deletedAt: message.deletedAt, isCurrentUser: isCurrentUser)
+            }
+            // 2. View-once messages - show timer icon, reveal on tap, then "already viewed"
+            else if message.isViewOnce == true {
+                ViewOnceMessageView(
+                    message: message,
                     isCurrentUser: isCurrentUser,
-                    getUserInfo: getUserInfo,
-                    getMessageById: getMessageById,
-                    onScrollToMessage: onScrollToMessage
+                    hasAttachments: !(message.attachments?.isEmpty ?? true)
                 )
             }
+            // 3. Normal message flow
+            else {
+                // Reply Preview (if replying to another message) - always outside bubble
+                if message.isReply {
+                    ReplyPreviewView(
+                        replyToId: message.replyToId,
+                        replyToMessage: message.replyToMessage,
+                        isCurrentUser: isCurrentUser,
+                        getUserInfo: getUserInfo,
+                        getMessageById: getMessageById,
+                        onScrollToMessage: onScrollToMessage
+                    )
+                }
 
-            // Text bubble (only if there's text content)
-            if hasTextContent || message.effectiveMessageType == .system {
-                textBubbleContent
-            }
+                // System messages get special centered treatment
+                if message.effectiveMessageType == .system || message.messageSource == .system {
+                    SystemMessageView(content: message.content, createdAt: message.createdAt)
+                } else if hasTextContent {
+                    // Blurred messages get blur wrapper
+                    if message.isBlurred == true {
+                        BlurredContentWrapper(isCurrentUser: isCurrentUser) {
+                            textBubbleContent
+                        }
+                    } else {
+                        // Regular text bubble
+                        textBubbleContent
+                    }
+                }
 
-            // All attachments - OUTSIDE the bubble
-            if let attachments = message.attachments, !attachments.isEmpty {
-                AttachmentsOutsideBubble(
-                    attachments: attachments,
-                    isCurrentUser: isCurrentUser,
-                    messageId: message.id,
-                    caption: message.content.isEmpty ? nil : message.content,
-                    senderName: resolvedSenderInfo.name,
-                    senderAvatar: resolvedSenderInfo.avatar,
-                    createdAt: message.createdAt,
-                    onImageTap: onImageTap
-                )
-            }
+                // All attachments - OUTSIDE the bubble (with optional blur)
+                if let attachments = message.attachments, !attachments.isEmpty {
+                    if message.isBlurred == true {
+                        BlurredContentWrapper(isCurrentUser: isCurrentUser) {
+                            AttachmentsOutsideBubble(
+                                attachments: attachments,
+                                isCurrentUser: isCurrentUser,
+                                messageId: message.id,
+                                caption: message.content.isEmpty ? nil : message.content,
+                                senderName: resolvedSenderInfo.name,
+                                senderAvatar: resolvedSenderInfo.avatar,
+                                createdAt: message.createdAt,
+                                onImageTap: onImageTap
+                            )
+                        }
+                    } else {
+                        AttachmentsOutsideBubble(
+                            attachments: attachments,
+                            isCurrentUser: isCurrentUser,
+                            messageId: message.id,
+                            caption: message.content.isEmpty ? nil : message.content,
+                            senderName: resolvedSenderInfo.name,
+                            senderAvatar: resolvedSenderInfo.avatar,
+                            createdAt: message.createdAt,
+                            onImageTap: onImageTap
+                        )
+                    }
+                }
 
-            // Location attachment (special case - no MessageAttachment)
-            if message.effectiveMessageType == .location && (message.attachments?.isEmpty ?? true) {
-                LocationAttachmentView()
+                // Location attachment (special case - location data from content or attachment)
+                if message.effectiveMessageType == .location {
+                    // Try to get location from first attachment with location data
+                    if let locationAttachment = message.attachments?.first(where: { $0.isLocation }) {
+                        if message.isBlurred == true {
+                            BlurredContentWrapper(isCurrentUser: isCurrentUser) {
+                                LocationAttachmentView(
+                                    locationName: locationAttachment.formattedLocation,
+                                    latitude: locationAttachment.latitude,
+                                    longitude: locationAttachment.longitude,
+                                    isCurrentUser: isCurrentUser
+                                )
+                            }
+                        } else {
+                            LocationAttachmentView(
+                                locationName: locationAttachment.formattedLocation,
+                                latitude: locationAttachment.latitude,
+                                longitude: locationAttachment.longitude,
+                                isCurrentUser: isCurrentUser
+                            )
+                        }
+                    } else {
+                        // Fallback: use message content as location name
+                        if message.isBlurred == true {
+                            BlurredContentWrapper(isCurrentUser: isCurrentUser) {
+                                LocationAttachmentView(
+                                    locationName: message.content.isEmpty ? "Position partagée" : message.content,
+                                    isCurrentUser: isCurrentUser
+                                )
+                            }
+                        } else {
+                            LocationAttachmentView(
+                                locationName: message.content.isEmpty ? "Position partagée" : message.content,
+                                isCurrentUser: isCurrentUser
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 
     // MARK: - Text Bubble Content
 
+    /// Dynamic text color based on message type and source
+    private var bubbleTextColor: Color {
+        // For pastel backgrounds, dark text works best
+        Color.bubbleTextColor(for: BubbleStyleConfig.style(for: message, isOwnMessage: isCurrentUser).baseColor, isOwnMessage: isCurrentUser)
+    }
+
+    /// Extract first URL from message content for link preview
+    private var firstLinkURL: URL? {
+        URLExtractor.firstURL(from: message.content)
+    }
+
     @ViewBuilder
     private var textBubbleContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // System messages are special
-            if message.effectiveMessageType == .system {
-                Text(message.content)
-                    .font(.caption)
-                    .italic()
-                    .foregroundColor(.secondary)
-            } else {
-                // Text content
-                Text(displayContent)
-                    .font(.body)
-                    .foregroundColor(isCurrentUser ? .white : .primary)
-                    .fixedSize(horizontal: false, vertical: true) // Allow text to wrap fully
+            // Text content with mention highlighting
+            MentionHighlightedText(
+                text: displayContent,
+                mentions: message.mentions,
+                textColor: bubbleTextColor,
+                onMentionTap: nil
+            )
+
+            // Link preview (if URL detected in text)
+            if let url = firstLinkURL {
+                MessageLinkPreviewView(url: url, isCurrentUser: isCurrentUser)
+                    .padding(.top, 4)
             }
         }
         .padding(.horizontal, 14)
@@ -1395,7 +1540,7 @@ struct MessageBubbleContent: View {
         .padding(.leading, message.messageType == .text && isCurrentUser ? 24 : 0)
         .padding(.trailing, message.messageType == .text && !isCurrentUser ? 24 : 0)
         .background(
-            BubbleBackground(isCurrentUser: isCurrentUser, isTranslated: selectedTranslation != nil && !selectedTranslation!.isEmpty)
+            BubbleBackground(message: message, isCurrentUser: isCurrentUser, isTranslated: selectedTranslation != nil && !selectedTranslation!.isEmpty)
         )
         .clipShape(BubbleShape(isCurrentUser: isCurrentUser))
         // Translation Icon position: TOP-LEFT for sent, TOP-RIGHT for received
@@ -1418,6 +1563,690 @@ struct MessageBubbleContent: View {
                 .offset(x: isCurrentUser ? -8 : 8, y: -8)
             }
         }
+        // Note: Encryption is a conversation-level property, not shown per-message
+    }
+}
+
+// MARK: - System Message View
+
+/// Centered view for system messages (user joined, left, call, etc.)
+struct SystemMessageView: View {
+    let content: String
+    let createdAt: Date
+
+    /// Parsed system action and user from content
+    private var parsedContent: (action: SystemAction, username: String?) {
+        parseSystemMessage(content)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Icon for the action
+            Image(systemName: parsedContent.action.icon)
+                .font(.system(size: 11))
+                .foregroundColor(parsedContent.action.color)
+
+            // Message text with styled username
+            styledContent
+
+            // Time
+            Text(createdAt.shortTimeString)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.7))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(Color(.systemGray6).opacity(0.8))
+        )
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var styledContent: some View {
+        if let username = parsedContent.username {
+            // Style the username in bold
+            (Text(username).bold().foregroundColor(.primary) +
+             Text(parsedContent.action.suffix).foregroundColor(.secondary))
+                .font(.system(size: 12))
+        } else {
+            Text(content)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    /// Parse system message content to extract action and username
+    private func parseSystemMessage(_ content: String) -> (action: SystemAction, username: String?) {
+        let lowercased = content.lowercased()
+
+        if lowercased.contains("a rejoint") || lowercased.contains("joined") {
+            let username = extractUsername(from: content, before: ["a rejoint", "joined"])
+            return (.joined, username)
+        }
+        if lowercased.contains("a quitte") || lowercased.contains("left") || lowercased.contains("a quitté") {
+            let username = extractUsername(from: content, before: ["a quitté", "a quitte", "left"])
+            return (.left, username)
+        }
+        if lowercased.contains("appel manque") || lowercased.contains("missed call") || lowercased.contains("appel manqué") {
+            return (.missedCall, nil)
+        }
+        if lowercased.contains("appel") || lowercased.contains("call") {
+            return (.call, nil)
+        }
+        if lowercased.contains("a nomme") || lowercased.contains("renamed") || lowercased.contains("a nommé") {
+            let username = extractUsername(from: content, before: ["a nommé", "a nomme", "renamed"])
+            return (.renamed, username)
+        }
+        if lowercased.contains("supprime") || lowercased.contains("deleted") || lowercased.contains("supprimé") {
+            let username = extractUsername(from: content, before: ["a supprimé", "a supprime", "deleted"])
+            return (.deleted, username)
+        }
+        if lowercased.contains("cree") || lowercased.contains("created") || lowercased.contains("créé") {
+            let username = extractUsername(from: content, before: ["a créé", "a cree", "created"])
+            return (.created, username)
+        }
+        if lowercased.contains("ajoute") || lowercased.contains("added") || lowercased.contains("ajouté") {
+            let username = extractUsername(from: content, before: ["a ajouté", "a ajoute", "added"])
+            return (.added, username)
+        }
+
+        return (.generic, nil)
+    }
+
+    private func extractUsername(from content: String, before keywords: [String]) -> String? {
+        for keyword in keywords {
+            if let range = content.lowercased().range(of: keyword) {
+                let prefix = String(content[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+                if !prefix.isEmpty {
+                    return prefix
+                }
+            }
+        }
+        return nil
+    }
+}
+
+/// System message action types with associated styling
+enum SystemAction {
+    case joined
+    case left
+    case call
+    case missedCall
+    case renamed
+    case deleted
+    case created
+    case added
+    case generic
+
+    var icon: String {
+        switch self {
+        case .joined: return "person.badge.plus"
+        case .left: return "person.badge.minus"
+        case .call: return "phone.fill"
+        case .missedCall: return "phone.down.fill"
+        case .renamed: return "pencil"
+        case .deleted: return "trash"
+        case .created: return "plus.circle"
+        case .added: return "person.badge.plus"
+        case .generic: return "info.circle"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .joined, .added, .created: return .green
+        case .left, .deleted: return .red
+        case .call: return .blue
+        case .missedCall: return .orange
+        case .renamed: return .purple
+        case .generic: return .secondary
+        }
+    }
+
+    var suffix: String {
+        switch self {
+        case .joined: return " a rejoint la conversation"
+        case .left: return " a quitté la conversation"
+        case .call: return ""
+        case .missedCall: return ""
+        case .renamed: return " a renommé la conversation"
+        case .deleted: return " a supprimé un message"
+        case .created: return " a créé la conversation"
+        case .added: return " a été ajouté(e)"
+        case .generic: return ""
+        }
+    }
+}
+
+// MARK: - Deleted Message View
+
+/// View shown for messages that have been deleted
+struct DeletedMessageView: View {
+    let deletedAt: Date?
+    let isCurrentUser: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "trash")
+                .font(.system(size: 12))
+
+            Text("Ce message a été supprimé")
+                .font(.system(size: 13))
+                .italic()
+        }
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.systemGray6).opacity(0.6))
+                .stroke(Color(.systemGray4).opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - View-Once Message View
+
+/// View for view-once messages that haven't been viewed yet
+/// Shows a timer icon and reveals content on tap, then shows "already viewed"
+struct ViewOnceMessageView: View {
+    let message: Message
+    let isCurrentUser: Bool
+    let hasAttachments: Bool
+    @State private var hasBeenViewed: Bool = false
+    @State private var showContent: Bool = false
+
+    private var isAlreadyViewed: Bool {
+        // Check if viewOnceCount > 0 (server-side tracking)
+        // In showcase, we use local state
+        (message.viewOnceCount ?? 0) > 0 || hasBeenViewed
+    }
+
+    var body: some View {
+        if isAlreadyViewed {
+            // Already viewed - show system-style message
+            HStack(spacing: 6) {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 12))
+
+                Text("Message éphémère déjà consulté")
+                    .font(.system(size: 13))
+                    .italic()
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.systemGray6).opacity(0.6))
+                    .stroke(Color(.systemGray4).opacity(0.3), lineWidth: 1)
+            )
+        } else {
+            // Not yet viewed - show timer icon with tap to reveal
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showContent = true
+                }
+                // Mark as viewed after brief delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation {
+                        hasBeenViewed = true
+                        showContent = false
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "timer")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(isCurrentUser ? Color.bubbleOwnMedia : Color.bubbleReceivedMedia)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(hasAttachments ? "Photo éphémère" : "Message éphémère")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+
+                        Text("Appuyez pour afficher")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: isCurrentUser
+                                    ? [Color.bubbleOwnMedia.opacity(0.3), Color.bubbleOwnMedia.opacity(0.15)]
+                                    : [Color.bubbleReceivedMedia.opacity(0.3), Color.bubbleReceivedMedia.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .stroke(
+                            isCurrentUser ? Color.bubbleOwnMedia.opacity(0.4) : Color.bubbleReceivedMedia.opacity(0.4),
+                            lineWidth: 1.5
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            // Content overlay when revealed
+            .overlay {
+                if showContent {
+                    VStack {
+                        if hasAttachments {
+                            Image(systemName: "photo")
+                                .font(.system(size: 40))
+                                .foregroundColor(.blue)
+                        } else {
+                            Text(message.content)
+                                .font(.body)
+                                .multilineTextAlignment(.center)
+                                .padding()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground).opacity(0.95))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Blurred Content Wrapper
+
+/// Wrapper that applies blur effect to content until user taps to reveal
+/// Discreet design - just a semi-transparent eye icon
+struct BlurredContentWrapper<Content: View>: View {
+    let content: Content
+    let isCurrentUser: Bool
+    @State private var isRevealed: Bool = false
+
+    init(isCurrentUser: Bool, @ViewBuilder content: () -> Content) {
+        self.isCurrentUser = isCurrentUser
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .blur(radius: isRevealed ? 0 : 15)
+            .overlay {
+                if !isRevealed {
+                    // Discreet tap to reveal - just eye icon
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isRevealed = true
+                        }
+                    } label: {
+                        Image(systemName: "eye.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white.opacity(0.7))
+                            .shadow(color: .black.opacity(0.4), radius: 3)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+// MARK: - Mention Highlighted Text
+
+/// Text view that highlights @mentions with a tappable blue style
+struct MentionHighlightedText: View {
+    let text: String
+    let mentions: [Mention]?
+    let textColor: Color
+    let onMentionTap: ((String) -> Void)?
+
+    /// Parse text and create attributed segments
+    private var segments: [TextSegment] {
+        guard let mentionRegex = try? NSRegularExpression(
+            pattern: "@([a-zA-Z0-9_]+)",
+            options: []
+        ) else {
+            return [.text(text)]
+        }
+
+        var result: [TextSegment] = []
+        var lastEnd = text.startIndex
+
+        let nsRange = NSRange(location: 0, length: text.utf16.count)
+        let matches = mentionRegex.matches(in: text, options: [], range: nsRange)
+
+        for match in matches {
+            guard let range = Range(match.range, in: text) else { continue }
+
+            // Add text before mention
+            if lastEnd < range.lowerBound {
+                let beforeText = String(text[lastEnd..<range.lowerBound])
+                result.append(.text(beforeText))
+            }
+
+            // Add mention
+            let mentionText = String(text[range])
+            let username = String(mentionText.dropFirst()) // Remove @
+            result.append(.mention(mentionText, userId: findUserIdForUsername(username)))
+
+            lastEnd = range.upperBound
+        }
+
+        // Add remaining text
+        if lastEnd < text.endIndex {
+            let remaining = String(text[lastEnd...])
+            result.append(.text(remaining))
+        }
+
+        return result.isEmpty ? [.text(text)] : result
+    }
+
+    /// Find userId for username from mentions array
+    private func findUserIdForUsername(_ username: String) -> String? {
+        mentions?.first {
+            $0.mentionedUser?.username.lowercased() == username.lowercased()
+        }?.mentionedUserId
+    }
+
+    var body: some View {
+        segments.reduce(Text("")) { result, segment in
+            switch segment {
+            case .text(let str):
+                return result + Text(str).foregroundColor(textColor)
+            case .mention(let str, _):
+                return result + Text(str)
+                    .foregroundColor(.blue)
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.body)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    enum TextSegment {
+        case text(String)
+        case mention(String, userId: String?)
+    }
+}
+
+// MARK: - URL Preview Extractor
+
+/// Extracts URLs from text for link preview
+struct URLExtractor {
+    static func extractURLs(from text: String) -> [URL] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return []
+        }
+
+        let nsRange = NSRange(location: 0, length: text.utf16.count)
+        let matches = detector.matches(in: text, options: [], range: nsRange)
+
+        return matches.compactMap { $0.url }
+    }
+
+    static func firstURL(from text: String) -> URL? {
+        extractURLs(from: text).first
+    }
+}
+
+// MARK: - Sending Indicator View
+
+/// Spinner shown next to timestamp when message is being sent
+struct SendingIndicatorView: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // Animated spinner
+            Circle()
+                .trim(from: 0, to: 0.7)
+                .stroke(Color.secondary.opacity(0.6), lineWidth: 1.5)
+                .frame(width: 10, height: 10)
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(
+                    .linear(duration: 1)
+                    .repeatForever(autoreverses: false),
+                    value: isAnimating
+                )
+
+            Text("Envoi...")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.8))
+        }
+        .onAppear {
+            isAnimating = true
+        }
+    }
+}
+
+// MARK: - Send Error Indicator
+
+/// Error indicator with retry button for failed messages
+struct SendErrorIndicator: View {
+    let errorMessage: String
+    var onRetry: (() -> Void)?
+
+    @State private var isRetrying = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Error icon
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.red)
+
+            // Error message (truncated)
+            Text("Échec de l'envoi")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.red)
+
+            // Retry button
+            if let onRetry = onRetry {
+                Button {
+                    isRetrying = true
+                    onRetry()
+                    // Reset after delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        isRetrying = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        if isRetrying {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 12, height: 12)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        Text("Renvoyer")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(isRetrying ? Color.gray : Color.blue)
+                    )
+                }
+                .disabled(isRetrying)
+                .animation(.easeInOut(duration: 0.2), value: isRetrying)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Link Preview in Message
+
+/// Compact link preview shown below message text
+struct MessageLinkPreviewView: View {
+    let url: URL
+    let isCurrentUser: Bool
+    @State private var metadata: LinkMetadata?
+    @State private var isLoading = true
+
+    var body: some View {
+        Group {
+            if isLoading {
+                // Skeleton loading
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(.systemGray5))
+                        .frame(width: 50, height: 50)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(.systemGray6))
+                            .frame(height: 10)
+                            .frame(maxWidth: 120)
+                    }
+                }
+                .padding(8)
+                .background(Color(.systemGray6).opacity(0.5))
+                .cornerRadius(10)
+            } else if let meta = metadata {
+                Link(destination: url) {
+                    HStack(spacing: 10) {
+                        // Favicon or image
+                        if let imageUrl = meta.imageURL {
+                            AsyncImage(url: imageUrl) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Rectangle().fill(Color(.systemGray5))
+                            }
+                            .frame(width: 50, height: 50)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        } else {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(.systemGray5))
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Image(systemName: "link")
+                                        .foregroundColor(.secondary)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(meta.title ?? url.host ?? "")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+
+                            Text(url.host ?? url.absoluteString)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.systemGray6).opacity(0.6))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: 250)
+        .task {
+            await loadMetadata()
+        }
+    }
+
+    private func loadMetadata() async {
+        // Simple metadata - just extract domain for now
+        // In production, use LPMetadataProvider
+        try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+        metadata = LinkMetadata(
+            title: url.host?.replacingOccurrences(of: "www.", with: "").capitalized,
+            description: nil,
+            imageURL: nil
+        )
+        isLoading = false
+    }
+
+    struct LinkMetadata {
+        let title: String?
+        let description: String?
+        let imageURL: URL?
+    }
+}
+
+// MARK: - Forwarded Indicator View
+
+/// Visual indicator shown above forwarded messages
+struct ForwardedIndicatorView: View {
+    let originalSenderId: String?
+    let isFromOtherConversation: Bool
+    let isCurrentUser: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrowshape.turn.up.forward.fill")
+                .font(.system(size: 11))
+
+            Text(isFromOtherConversation ? "Transféré d'une autre conversation" : "Transféré")
+                .font(.system(size: 12, weight: .medium))
+        }
+        .foregroundColor(isCurrentUser ? .white.opacity(0.8) : .secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(isCurrentUser ? Color.purple.opacity(0.25) : Color.pink.opacity(0.15))
+        )
+    }
+}
+
+// MARK: - Source Badge View
+
+/// Badge view for special message sources (ads, app, agent, authority)
+/// Subtle source indicator - small icon showing message origin
+/// The bubble color itself conveys the source, this is just a small hint
+struct SourceBadgeView: View {
+    let source: MessageSource
+
+    private var badgeConfig: (icon: String, color: Color) {
+        switch source {
+        case .ads:
+            return ("megaphone.fill", .orange)
+        case .app:
+            return ("app.badge.fill", .blue)
+        case .agent:
+            return ("sparkles", .green)
+        case .authority:
+            return ("checkmark.seal.fill", .indigo)
+        default:
+            return ("person.fill", .gray)
+        }
+    }
+
+    var body: some View {
+        let config = badgeConfig
+
+        // Small icon indicator only - bubble color conveys the rest
+        Image(systemName: config.icon)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(config.color)
+            .padding(5)
+            .background(
+                Circle()
+                    .fill(config.color.opacity(0.15))
+            )
     }
 }
 
@@ -2040,7 +2869,7 @@ struct AttachmentsOutsideBubble: View {
     }
 
     private var fileAttachments: [MessageAttachment] {
-        attachments.filter { !$0.isImage && !$0.isVideo && !$0.isAudio }
+        attachments.filter { !$0.isImage && !$0.isVideo && !$0.isAudio && !$0.isLocation }
     }
 
     /// Convert image attachments to MediaItems
@@ -2132,32 +2961,32 @@ struct ImagesStackView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Image stack with TabView for swipe
-            TabView(selection: $currentIndex) {
-                ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
-                    imageCard(attachment: attachment, index: index)
-                        .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            // Page indicator (only if multiple images)
-            if attachments.count > 1 {
-                HStack(spacing: 4) {
-                    ForEach(0..<attachments.count, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentIndex ? Color.blue : Color.gray.opacity(0.4))
-                            .frame(width: 6, height: 6)
-                    }
-                }
-                .padding(.top, 8)
-                .frame(maxWidth: .infinity, alignment: .center)
+        // Image stack with TabView for swipe - no page indicator
+        TabView(selection: $currentIndex) {
+            ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
+                imageCard(attachment: attachment, index: index)
+                    .tag(index)
             }
         }
-        .frame(maxWidth: 280)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(width: 280, height: 200)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onAppear {
+            // Preload all images for instant display when swiping
+            preloadImages()
+        }
+    }
+
+    /// Preload all images in the stack for instant display when swiping
+    private func preloadImages() {
+        for attachment in attachments {
+            Task {
+                _ = await AttachmentFileCache.shared.downloadAndCache(
+                    from: attachment.fileUrl,
+                    type: .image
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -2171,22 +3000,23 @@ struct ImagesStackView: View {
             onImageTap?(index, mediaItems)
         } label: {
             ZStack(alignment: .topTrailing) {
-                // Background for letterboxing
-                Color(.systemGray6)
-
+                // Use cached image with preloaded content
                 CachedAsyncImage(urlString: attachment.fileUrl, cacheType: .attachment) { image in
                     image
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 280, height: 200)
+                        .clipped()
                 } placeholder: {
+                    // Light placeholder instead of black
                     Rectangle()
                         .fill(Color(.systemGray5))
                         .overlay(
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle())
+                                .tint(.gray)
                         )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Image counter badge (top right)
                 if attachments.count > 1 {
@@ -2210,25 +3040,74 @@ struct ImagesStackView: View {
 // MARK: - Bubble Background & Shape
 
 struct BubbleBackground: View {
+    let message: Message
     let isCurrentUser: Bool
     let isTranslated: Bool
 
+    /// Dynamic style configuration based on message type and source
+    private var styleConfig: BubbleStyleConfig {
+        BubbleStyleConfig.style(for: message, isOwnMessage: isCurrentUser)
+    }
+
     var body: some View {
-        Group {
-            if isCurrentUser {
+        ZStack {
+            // v2 - Base gradient using styleConfig colors
+            LinearGradient(
+                colors: [
+                    styleConfig.baseColor.opacity(styleConfig.opacity),
+                    styleConfig.accentColor.opacity(styleConfig.opacity * 0.85)
+                ],
+                startPoint: isCurrentUser ? .topTrailing : .topLeading,
+                endPoint: isCurrentUser ? .bottomLeading : .bottomTrailing
+            )
+
+            // v2 - Glow highlight for special messages (encrypted, view-once, agent, authority)
+            if styleConfig.glowIntensity > 0 {
                 LinearGradient(
-                    colors: [Color.blue, Color.blue.opacity(0.85)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    colors: [
+                        Color.white.opacity(styleConfig.glowIntensity),
+                        Color.clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .center
                 )
-            } else {
-                Color(.systemGray5)
             }
         }
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(isTranslated ? Color.purple.opacity(0.6) : Color.clear, lineWidth: 2)
+                .stroke(borderColor, lineWidth: borderWidth)
         )
+        .shadow(color: styleConfig.shadowColor, radius: styleConfig.shadowRadius, x: 0, y: 2)
+    }
+
+    /// Border color - translation highlight or source-specific accent
+    private var borderColor: Color {
+        if isTranslated {
+            return Color.purple.opacity(0.6)
+        }
+        // Special border for certain sources
+        if let source = message.messageSource {
+            switch source {
+            case .authority:
+                return Color.indigo.opacity(0.4)
+            case .agent:
+                return Color.green.opacity(0.3)
+            case .ads:
+                return Color.orange.opacity(0.3)
+            default:
+                return Color.clear
+            }
+        }
+        return Color.clear
+    }
+
+    /// Border width
+    private var borderWidth: CGFloat {
+        if isTranslated { return 2 }
+        if let source = message.messageSource, source != .user && source != .system {
+            return 1.5
+        }
+        return 0
     }
 }
 
@@ -2746,6 +3625,8 @@ struct MessageMetadata: View {
     let hasSelectedTranslation: Bool
     /// Current user ID for calculating read status
     var currentUserId: String? = nil
+    /// True when message is being sent (shows spinner instead of checkmarks)
+    var isSending: Bool = false
     var onStatusTap: (() -> Void)? = nil
 
     /// Calculated read status based on message's delivery status array
@@ -2778,13 +3659,18 @@ struct MessageMetadata: View {
                     .foregroundColor(.secondary)
             }
 
-            // Read status checkmarks (current user's messages only)
+            // Sending state or read status checkmarks (current user's messages only)
             if isCurrentUser {
-                MessageCheckmarkView(status: readStatus)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        onStatusTap?()
-                    }
+                if isSending {
+                    // Show animated spinner when sending
+                    SendingIndicatorView()
+                } else {
+                    MessageCheckmarkView(status: readStatus)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onStatusTap?()
+                        }
+                }
             }
         }
         .padding(.horizontal, 4)
@@ -3131,11 +4017,10 @@ struct AudioAttachmentView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(backgroundColor)
-        .cornerRadius(16)
-        .frame(width: 280)
+        // v2 - Frameless integrated design (no background, no border)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .frame(minWidth: 240, maxWidth: 280)
     }
 
     // MARK: - Loading View
@@ -3143,44 +4028,44 @@ struct AudioAttachmentView: View {
     private var loadingView: some View {
         HStack(spacing: 12) {
             ProgressView()
-                .frame(width: 40, height: 40)
+                .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.originalName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
 
                 Text("Chargement...")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundColor(.secondary)
             }
 
             Spacer()
         }
-        .padding(10)
-        .background(backgroundColor)
-        .cornerRadius(16)
-        .frame(width: 280)
+        // v2 - Minimal loading state
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .frame(minWidth: 200, maxWidth: 260)
     }
 
     // MARK: - Error View
 
     private var errorView: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.title2)
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16))
                 .foregroundColor(.orange)
 
             Text("Audio non disponible")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundColor(.secondary)
 
             Spacer()
         }
-        .padding(10)
-        .background(backgroundColor)
-        .cornerRadius(16)
-        .frame(width: 280)
+        // v2 - Minimal error state
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .frame(minWidth: 160, maxWidth: 220)
     }
 
     // MARK: - Expanded Player Sheet
@@ -3842,18 +4727,111 @@ struct FileDownloadingView: View {
 }
 
 struct LocationAttachmentView: View {
-    var body: some View {
-        HStack {
-            Image(systemName: "location.fill")
-                .font(.title2)
-                .foregroundColor(.blue)
+    var locationName: String = "Position partagée"
+    var latitude: Double?
+    var longitude: Double?
+    var isCurrentUser: Bool = false
 
-            Text("Position partagee")
-                .font(.caption)
+    @State private var mapPosition: MapCameraPosition = .automatic
+
+    private var hasValidCoordinates: Bool {
+        latitude != nil && longitude != nil
+    }
+
+    private var coordinate: CLLocationCoordinate2D? {
+        guard let lat = latitude, let lon = longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // Map preview
+            if let coord = coordinate {
+                Map(position: $mapPosition) {
+                    Marker(locationName, coordinate: coord)
+                        .tint(.red)
+                }
+                .mapStyle(.standard(elevation: .realistic))
+                .frame(height: 160)
+                .allowsHitTesting(false) // Map is just a preview
+                .onAppear {
+                    mapPosition = .region(MKCoordinateRegion(
+                        center: coord,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
+            } else {
+                // Fallback: static placeholder
+                ZStack {
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.2), Color.cyan.opacity(0.15)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(height: 120)
+
+                    VStack(spacing: 8) {
+                        Image(systemName: "map.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.blue)
+
+                        Text("Carte non disponible")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            // Location overlay at bottom of map
+            HStack(spacing: 8) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+
+                Text(locationName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                Spacer()
+
+                // Open in Maps button
+                if hasValidCoordinates {
+                    Button {
+                        openInMaps()
+                    } label: {
+                        Image(systemName: "arrow.up.right.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.6), Color.black.opacity(0.4)],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+            )
         }
-        .padding(8)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .frame(width: 240)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(.systemGray4).opacity(0.3), lineWidth: 0.5)
+        )
+    }
+
+    private func openInMaps() {
+        guard let lat = latitude, let lon = longitude else { return }
+
+        let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = locationName
+        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault])
     }
 }
 
@@ -3877,7 +4855,7 @@ struct AttachmentsListView: View {
     }
 
     private var fileAttachments: [MessageAttachment] {
-        attachments.filter { !$0.isImage && !$0.isVideo && !$0.isAudio }
+        attachments.filter { !$0.isImage && !$0.isVideo && !$0.isAudio && !$0.isLocation }
     }
 
     var body: some View {

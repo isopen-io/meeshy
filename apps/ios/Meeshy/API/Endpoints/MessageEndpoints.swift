@@ -29,27 +29,27 @@ enum MessageEndpoints: APIEndpoint, Sendable {
         case .fetchMessages(let conversationId, _, _),
              .fetchMessagesBefore(let conversationId, _, _),
              .fetchMessagesAfter(let conversationId, _, _, _):
-            return "/api/conversations/\(conversationId)/messages"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/messages"
         case .sendMessage(let conversationId, _):
-            return "/api/conversations/\(conversationId)/messages"
+            return "\(EnvironmentConfig.apiPath)/conversations/\(conversationId)/messages"
         case .editMessage(let messageId, _):
-            return "/api/messages/\(messageId)"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)"
         case .deleteMessage(let messageId):
-            return "/api/messages/\(messageId)"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)"
         case .addReaction:
-            return "/api/reactions"
+            return "\(EnvironmentConfig.apiPath)/reactions"
         case .removeReaction(let reactionId):
-            return "/api/reactions/\(reactionId)"
+            return "\(EnvironmentConfig.apiPath)/reactions/\(reactionId)"
         case .getTranslation(let messageId, _):
-            return "/api/messages/\(messageId)/translate"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)/translate"
         case .forwardMessage(let messageId, _):
-            return "/api/messages/\(messageId)/forward"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)/forward"
         case .pinMessage(let messageId):
-            return "/api/messages/\(messageId)/pin"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)/pin"
         case .unpinMessage(let messageId):
-            return "/api/messages/\(messageId)/pin"
+            return "\(EnvironmentConfig.apiPath)/messages/\(messageId)/pin"
         case .searchMessages:
-            return "/api/messages/search"
+            return "\(EnvironmentConfig.apiPath)/messages/search"
         }
     }
 

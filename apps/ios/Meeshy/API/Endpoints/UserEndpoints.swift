@@ -35,37 +35,37 @@ enum UserEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .getCurrentUser:
-            return "/api/auth/me"
+            return "\(EnvironmentConfig.apiPath)/auth/me"
         case .updateProfile:
-            return "/api/users/me"
+            return "\(EnvironmentConfig.apiPath)/users/me"
         case .getUser(let userId):
-            return "/api/users/\(userId)"
+            return "\(EnvironmentConfig.apiPath)/users/\(userId)"
         case .searchUsers:
-            return "/api/users/search"
+            return "\(EnvironmentConfig.apiPath)/users/search"
         case .updateStatus:
-            return "/api/users/me/status"
+            return "\(EnvironmentConfig.apiPath)/users/me/status"
         case .updatePreferences:
-            return "/api/users/me/preferences"
+            return "\(EnvironmentConfig.apiPath)/users/me/preferences"
         case .blockUser(let userId):
-            return "/api/users/me/blocked/\(userId)"
+            return "\(EnvironmentConfig.apiPath)/users/me/blocked/\(userId)"
         case .unblockUser(let userId):
-            return "/api/users/me/blocked/\(userId)"
+            return "\(EnvironmentConfig.apiPath)/users/me/blocked/\(userId)"
         case .getBlockedUsers:
-            return "/api/users/me/blocked"
+            return "\(EnvironmentConfig.apiPath)/users/me/blocked"
         case .reportUser(let userId, _):
-            return "/api/users/\(userId)/report"
+            return "\(EnvironmentConfig.apiPath)/users/\(userId)/report"
         case .deleteAccount:
-            return "/api/users/me"
+            return "\(EnvironmentConfig.apiPath)/users/me"
         case .uploadAvatar:
-            return "/api/users/me/avatar"
+            return "\(EnvironmentConfig.apiPath)/users/me/avatar"
         case .registerDeviceToken, .unregisterDeviceToken:
-            return "/api/users/register-device-token"
+            return "\(EnvironmentConfig.apiPath)/users/register-device-token"
         case .checkUsernameAvailability(let username):
-            return "/api/auth/check-username/\(username)"
+            return "\(EnvironmentConfig.apiPath)/auth/check-username/\(username)"
         case .checkEmailAvailability(let email):
-            return "/api/auth/check-email/\(email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email)"
+            return "\(EnvironmentConfig.apiPath)/auth/check-email/\(email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email)"
         case .checkPhoneAvailability(let phone):
-            return "/api/auth/check-phone/\(phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? phone)"
+            return "\(EnvironmentConfig.apiPath)/auth/check-phone/\(phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? phone)"
         }
     }
 

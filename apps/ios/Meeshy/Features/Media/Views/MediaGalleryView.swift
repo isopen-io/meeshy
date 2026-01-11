@@ -109,20 +109,40 @@ struct MediaGalleryView: View {
     /// Callback when gallery is dismissed - returns the messageId to scroll to (if available)
     var onDismiss: ((String?) -> Void)?
 
+    /// Callback to request loading older messages when reaching the beginning of the gallery
+    var onRequestOlderMedia: (() -> Void)?
+
+    /// Whether older messages are being loaded
+    var isLoadingOlder: Bool = false
+
+    /// Whether there are more older messages to load
+    var hasMoreOlderMedia: Bool = true
+
     @State private var currentIndex: Int
     @State private var showMetadata = true
     @State private var showShareSheet = false
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
+    @State private var hasRequestedOlder = false
 
     // For image zoom
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
 
-    init(items: [MediaItem], initialIndex: Int = 0, onDismiss: ((String?) -> Void)? = nil) {
+    init(
+        items: [MediaItem],
+        initialIndex: Int = 0,
+        onDismiss: ((String?) -> Void)? = nil,
+        onRequestOlderMedia: (() -> Void)? = nil,
+        isLoadingOlder: Bool = false,
+        hasMoreOlderMedia: Bool = true
+    ) {
         self.items = items
         self.initialIndex = initialIndex
         self.onDismiss = onDismiss
+        self.onRequestOlderMedia = onRequestOlderMedia
+        self.isLoadingOlder = isLoadingOlder
+        self.hasMoreOlderMedia = hasMoreOlderMedia
         self._currentIndex = State(initialValue: initialIndex)
     }
 
@@ -149,16 +169,44 @@ struct MediaGalleryView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .offset(y: dragOffset.height)
                 .gesture(dismissDragGesture)
+                .onChange(of: currentIndex) { _, newIndex in
+                    // Preload adjacent images for smooth swiping (wider range)
+                    preloadAdjacentImages(around: newIndex)
+
+                    // Request older media BEFORE reaching the beginning
+                    // Trigger at 20% of total items or 5 items from start, whichever is greater
+                    let preloadThreshold = max(5, Int(Double(items.count) * 0.2))
+                    if newIndex < preloadThreshold && hasMoreOlderMedia && !hasRequestedOlder {
+                        hasRequestedOlder = true
+                        onRequestOlderMedia?()
+                    }
+                }
+
+                // Loading indicator when approaching beginning
+                if isLoadingOlder && currentIndex < max(5, Int(Double(items.count) * 0.2)) {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .tint(.white)
+                                .padding(12)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.black.opacity(0.6))
+                                )
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 60)
+                }
 
                 // Metadata overlay (tap to toggle)
                 if showMetadata {
                     metadataOverlay
                 }
 
-                // Page indicator
-                if items.count > 1 {
-                    pageIndicator
-                }
+                // Page indicator removed - use counter in metadata instead
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -169,6 +217,36 @@ struct MediaGalleryView: View {
                 shareSheet
             }
             .statusBarHidden(!showMetadata)
+            .onAppear {
+                // Preload images around initial index
+                preloadAdjacentImages(around: initialIndex)
+            }
+            .onChange(of: items.count) { oldCount, newCount in
+                // Reset the flag when new items are loaded so we can load more later
+                if newCount > oldCount {
+                    hasRequestedOlder = false
+                }
+            }
+        }
+    }
+
+    /// Preload images around the current index for smooth navigation
+    /// Uses a wider range (5 items each direction) to prevent stuttering during fast navigation
+    private func preloadAdjacentImages(around index: Int) {
+        // Wider preload range for smooth fast navigation
+        let preloadRadius = 5
+        let preloadRange = max(0, index - preloadRadius)...min(items.count - 1, index + preloadRadius)
+
+        for i in preloadRange {
+            let item = items[i]
+            if item.isImage {
+                Task {
+                    _ = await AttachmentFileCache.shared.downloadAndCache(
+                        from: item.url,
+                        type: .image
+                    )
+                }
+            }
         }
     }
 

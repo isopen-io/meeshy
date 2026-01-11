@@ -86,6 +86,67 @@ final class ModernChatViewModel: ObservableObject {
 
     private let conversationService = ConversationService.shared
 
+    // MARK: - Language Analytics
+
+    /// Top languages spoken in this conversation (for animated background)
+    /// Extracts language codes from members' primary language preferences
+    var topConversationLanguages: [String] {
+        // Get unique language codes from members
+        var languageCounts: [String: Int] = [:]
+
+        for member in members {
+            if let lang = member.user?.primaryLanguage, !lang.isEmpty {
+                languageCounts[lang, default: 0] += 1
+            }
+        }
+
+        // Sort by frequency and return top 10
+        return languageCounts
+            .sorted { $0.value > $1.value }
+            .prefix(10)
+            .map { $0.key }
+    }
+
+    // MARK: - Avatar URLs for Animation
+
+    /// Random member avatar URLs for group animation background
+    /// Returns avatars from random members (excluding current user)
+    /// Min 2, Max 10 with percentage based on member count:
+    /// - <10 members: 70%
+    /// - <20 members: 50%
+    /// - <30 members: 40%
+    /// - 30+ members: 30%
+    var randomMemberAvatarURLs: [String] {
+        // Filter members that have avatars and exclude current user
+        let eligibleMembers = members.filter { member in
+            member.userId != currentUserId &&
+            member.avatar != nil &&
+            !member.avatar!.isEmpty
+        }
+
+        // Shuffle and take appropriate count
+        let shuffled = eligibleMembers.shuffled()
+
+        // Calculate percentage based on member count
+        let memberCount = conversation.memberCount ?? conversation.totalMemberCount
+        let percentage: Double
+        if memberCount < 10 {
+            percentage = 0.70
+        } else if memberCount < 20 {
+            percentage = 0.50
+        } else if memberCount < 30 {
+            percentage = 0.40
+        } else {
+            percentage = 0.30
+        }
+
+        let calculatedCount = Int(Double(memberCount) * percentage)
+        let maxAvatars = min(10, max(2, calculatedCount))
+        let takeCount = min(maxAvatars, shuffled.count)
+
+        return shuffled.prefix(takeCount).compactMap { $0.avatar }
+    }
+
     // MARK: - Initialization
 
     init(conversation: Conversation) {

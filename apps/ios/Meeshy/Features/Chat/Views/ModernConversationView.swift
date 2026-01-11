@@ -81,6 +81,15 @@ struct ModernConversationView: View {
 
     var body: some View {
         ZStack {
+            // LAYER 0: Animated background (full screen, behind everything)
+            ConversationAnimatedBackground(
+                config: ConversationBackgroundConfig(
+                    from: conversation,
+                    topLanguages: viewModel.topConversationLanguages,
+                    memberAvatarURLs: viewModel.randomMemberAvatarURLs
+                )
+            )
+
             // LAYER 1: Messages (full screen, scrolls behind header and input)
             ModernMessageList(
                 messages: viewModel.messages,
@@ -316,7 +325,20 @@ struct ModernConversationView: View {
                     if let messageId = messageIdToScrollTo {
                         viewModel.scrollToMessageId = messageId
                     }
-                }
+                },
+                onRequestOlderMedia: {
+                    // Load older messages to get more media
+                    viewModel.loadMoreMessages()
+                    // Rebuild the gallery images after loading
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        await MainActor.run {
+                            rebuildGalleryImages()
+                        }
+                    }
+                },
+                isLoadingOlder: viewModel.isLoadingMore,
+                hasMoreOlderMedia: viewModel.hasMoreMessages
             )
         }
         .onAppear {
@@ -373,6 +395,50 @@ struct ModernConversationView: View {
         allConversationImages = allImages
         selectedImageIndex = galleryIndex
         showImageGallery = true
+    }
+
+    /// Rebuild the gallery images list after loading older messages
+    /// Keeps the current image in view by adjusting the index
+    private func rebuildGalleryImages() {
+        // Remember current image ID to maintain position
+        let currentImageId = allConversationImages[safe: selectedImageIndex]?.id
+
+        // Rebuild the images list from all messages
+        var allImages: [MediaItem] = []
+
+        for message in viewModel.messages {
+            guard let attachments = message.attachments else { continue }
+            let imageAttachments = attachments.filter { $0.isImage }
+            guard !imageAttachments.isEmpty else { continue }
+
+            let senderInfo = viewModel.getUserInfo(userId: message.senderId ?? "")
+            let caption = message.content.isEmpty ? nil : message.content
+
+            for attachment in imageAttachments {
+                let mediaItem = MediaItem(
+                    messageAttachment: attachment,
+                    messageId: message.id,
+                    caption: caption,
+                    senderName: senderInfo.name,
+                    senderAvatar: senderInfo.avatar,
+                    createdAt: message.createdAt
+                )
+                allImages.append(mediaItem)
+            }
+        }
+
+        // Sort by date (oldest first)
+        allImages.sort { $0.createdAt < $1.createdAt }
+
+        // Find the new index for the current image
+        var newIndex = 0
+        if let currentId = currentImageId {
+            newIndex = allImages.firstIndex { $0.id == currentId } ?? 0
+        }
+
+        // Update state
+        allConversationImages = allImages
+        selectedImageIndex = newIndex
     }
 }
 
@@ -1276,7 +1342,8 @@ struct ModernMessageList: View {
                             .id("bottom-anchor")
                     }
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(Color.clear)
+                .scrollContentBackground(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 // Pull-to-refresh to fetch new messages from server
                 .refreshable {

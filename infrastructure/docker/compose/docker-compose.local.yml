@@ -289,6 +289,8 @@ services:
       PUBLIC_URL: https://gate.meeshy.local
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Attachment Encryption
+      ATTACHMENT_MASTER_KEY: ${ATTACHMENT_MASTER_KEY:-3To8V/l+VWjyQ3HzYHc7SHr597jub0iRv35A0UGHZrA=}
       # User initialization
       FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}

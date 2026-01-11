@@ -266,14 +266,8 @@ export const messageSchema = {
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     readByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read by all timestamp' },
 
-    // Encryption
+    // Encryption (encryptionMode is only on Conversation)
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
-    encryptionMode: {
-      type: 'string',
-      enum: ['server', 'e2ee', 'hybrid'],
-      nullable: true,
-      description: 'Encryption mode'
-    },
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Message creation timestamp' },
@@ -516,6 +510,44 @@ export const conversationSchema = {
 } as const;
 
 /**
+ * Conversation member schema for minimal conversation
+ */
+export const conversationMemberMinimalSchema = {
+  type: 'object',
+  description: 'Conversation member data',
+  properties: {
+    id: { type: 'string', description: 'Membership ID' },
+    userId: { type: 'string', description: 'User ID' },
+    role: { type: 'string', description: 'Member role' },
+    nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
+    canSendMessage: { type: 'boolean', description: 'Can send messages' },
+    canSendFiles: { type: 'boolean', description: 'Can send files' },
+    canSendImages: { type: 'boolean', description: 'Can send images' },
+    canSendVideos: { type: 'boolean', description: 'Can send videos' },
+    canSendAudios: { type: 'boolean', description: 'Can send audios' },
+    canSendLocations: { type: 'boolean', description: 'Can send locations' },
+    canSendLinks: { type: 'boolean', description: 'Can send links' },
+    joinedAt: { type: 'string', format: 'date-time', description: 'Join timestamp' },
+    isActive: { type: 'boolean', description: 'Is active member' },
+    user: {
+      type: 'object',
+      nullable: true,
+      description: 'User info',
+      properties: {
+        id: { type: 'string', description: 'User ID' },
+        username: { type: 'string', description: 'Username' },
+        displayName: { type: 'string', nullable: true, description: 'Display name' },
+        firstName: { type: 'string', nullable: true, description: 'First name' },
+        lastName: { type: 'string', nullable: true, description: 'Last name' },
+        avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+        isOnline: { type: 'boolean', description: 'Online status' },
+        lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' }
+      }
+    }
+  }
+} as const;
+
+/**
  * Minimal conversation schema for lists
  */
 export const conversationMinimalSchema = {
@@ -527,10 +559,46 @@ export const conversationMinimalSchema = {
     title: { type: 'string', nullable: true, description: 'Conversation title' },
     type: { type: 'string', description: 'Conversation type' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+    banner: { type: 'string', nullable: true, description: 'Banner URL' },
+    isActive: { type: 'boolean', description: 'Is conversation active' },
+    communityId: { type: 'string', nullable: true, description: 'Community ID if linked' },
     memberCount: { type: 'number', description: 'Member count' },
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Last message' },
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
-    unreadCount: { type: 'number', nullable: true, description: 'Unread count' }
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    unreadCount: { type: 'number', nullable: true, description: 'Unread count' },
+    members: {
+      type: 'array',
+      items: conversationMemberMinimalSchema,
+      description: 'Conversation members (limited)'
+    },
+    userPreferences: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          isPinned: { type: 'boolean', description: 'Is pinned by user' },
+          isMuted: { type: 'boolean', description: 'Is muted by user' },
+          isArchived: { type: 'boolean', description: 'Is archived by user' },
+          isDeletedForUser: { type: 'boolean', description: 'Is deleted for user' }
+        }
+      },
+      description: 'User preferences for this conversation'
+    },
+    anonymousParticipants: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Anonymous participant ID' },
+          username: { type: 'string', description: 'Anonymous username' },
+          firstName: { type: 'string', nullable: true, description: 'First name' },
+          lastName: { type: 'string', nullable: true, description: 'Last name' },
+          isOnline: { type: 'boolean', description: 'Online status' }
+        }
+      },
+      description: 'Anonymous participants'
+    }
   }
 } as const;
 
@@ -665,19 +733,22 @@ export const editMessageRequestSchema = {
 
 /**
  * Conversation list response schema
+ * Route sends: { success, data: [...conversations], pagination: { limit, offset, total, hasMore } }
  */
 export const conversationListResponseSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
     data: {
+      type: 'array',
+      items: conversationMinimalSchema
+    },
+    pagination: {
       type: 'object',
       properties: {
-        conversations: {
-          type: 'array',
-          items: conversationMinimalSchema
-        },
-        totalCount: { type: 'number', description: 'Total number of conversations' },
+        limit: { type: 'number', description: 'Number of items per page' },
+        offset: { type: 'number', description: 'Number of items skipped' },
+        total: { type: 'number', description: 'Total number of conversations' },
         hasMore: { type: 'boolean', description: 'More conversations available' }
       }
     }
@@ -912,14 +983,8 @@ export const messageAttachmentSchema = {
     viewedCount: { type: 'number', description: 'Number of viewers' },
     downloadedCount: { type: 'number', description: 'Number of downloads' },
 
-    // Encryption
+    // Encryption (encryptionMode is only on Conversation, not Attachment)
     isEncrypted: { type: 'boolean', description: 'Whether encrypted' },
-    encryptionMode: {
-      type: 'string',
-      enum: ['e2ee', 'server', 'hybrid'],
-      nullable: true,
-      description: 'Encryption mode'
-    },
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
@@ -1355,7 +1420,20 @@ export const callSessionSchema = {
     initiator: { ...userMinimalSchema, description: 'Call initiator user info' },
     participants: {
       type: 'array',
-      items: { $ref: '#/components/schemas/CallParticipant' },
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Participant record ID' },
+          userId: { type: 'string', description: 'User ID' },
+          role: { type: 'string', enum: ['initiator', 'participant', 'observer'], description: 'Participant role' },
+          status: { type: 'string', enum: ['invited', 'ringing', 'connected', 'disconnected', 'declined'], description: 'Participant status' },
+          joinedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Join timestamp' },
+          leftAt: { type: 'string', format: 'date-time', nullable: true, description: 'Leave timestamp' },
+          isMuted: { type: 'boolean', description: 'Audio muted' },
+          isVideoOff: { type: 'boolean', description: 'Video disabled' },
+          user: { ...userMinimalSchema, description: 'User info' }
+        }
+      },
       description: 'Call participants'
     },
     participantCount: { type: 'number', description: 'Number of participants' }

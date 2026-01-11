@@ -31,17 +31,17 @@ enum CategoryEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .fetchCategories:
-            return "/api/user-preferences/categories"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories"
         case .fetchCategory(let id):
-            return "/api/user-preferences/categories/\(id)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories/\(id)"
         case .createCategory:
-            return "/api/user-preferences/categories"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories"
         case .updateCategory(let id, _):
-            return "/api/user-preferences/categories/\(id)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories/\(id)"
         case .deleteCategory(let id):
-            return "/api/user-preferences/categories/\(id)"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories/\(id)"
         case .reorderCategories:
-            return "/api/user-preferences/categories/reorder"
+            return "\(EnvironmentConfig.apiPath)/user-preferences/categories/reorder"
         }
     }
 

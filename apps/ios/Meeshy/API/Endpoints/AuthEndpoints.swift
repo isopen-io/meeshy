@@ -32,27 +32,27 @@ enum AuthEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .login:
-            return "/api/auth/login"
+            return "\(EnvironmentConfig.apiPath)/auth/login"
         case .currentUser:
-            return "/api/auth/me"
-         case .register:
-            return "/api/auth/register"
+            return "\(EnvironmentConfig.apiPath)/auth/me"
+        case .register:
+            return "\(EnvironmentConfig.apiPath)/auth/register"
         case .refreshToken:
-            return "/api/auth/refresh"
-       case .logout:
-            return "/api/auth/logout"
+            return "\(EnvironmentConfig.apiPath)/auth/refresh"
+        case .logout:
+            return "\(EnvironmentConfig.apiPath)/auth/logout"
         case .setup2FA:
-            return "/api/auth/2fa/setup"
+            return "\(EnvironmentConfig.apiPath)/auth/2fa/setup"
         case .verify2FA:
-            return "/api/auth/2fa/verify"
+            return "\(EnvironmentConfig.apiPath)/auth/2fa/verify"
         case .requestPasswordReset:
-            return "/api/auth/password/reset"
+            return "\(EnvironmentConfig.apiPath)/auth/password/reset"
         case .changePassword:
-            return "/api/auth/password/change"
+            return "\(EnvironmentConfig.apiPath)/auth/password/change"
         case .verifyEmail(let token):
-            return "/api/auth/verify/\(token)"
+            return "\(EnvironmentConfig.apiPath)/auth/verify/\(token)"
         case .resendVerification:
-            return "/api/auth/verify/resend"
+            return "\(EnvironmentConfig.apiPath)/auth/verify/resend"
         case .checkAvailability(let username, let email, let phoneNumber):
             var queryItems: [String] = []
             if let username = username {
@@ -65,17 +65,17 @@ enum AuthEndpoints: APIEndpoint, Sendable {
                 queryItems.append("phoneNumber=\(phoneNumber.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? phoneNumber)")
             }
             let queryString = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
-            return "/api/auth/check-availability\(queryString)"
+            return "\(EnvironmentConfig.apiPath)/auth/check-availability\(queryString)"
         case .joinAnonymous(let linkId, _):
-            return "/api/anonymous/join/\(linkId)"
+            return "\(EnvironmentConfig.apiPath)/anonymous/join/\(linkId)"
         case .getLinkInfo(let linkId):
-            return "/api/anonymous/link/\(linkId)"
+            return "\(EnvironmentConfig.apiPath)/anonymous/link/\(linkId)"
         case .checkUsername(let username):
-            return "/api/users/check-username/\(username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username)"
+            return "\(EnvironmentConfig.apiPath)/users/check-username/\(username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username)"
         case .refreshAnonymousSession:
-            return "/api/anonymous/refresh"
+            return "\(EnvironmentConfig.apiPath)/anonymous/refresh"
         case .leaveAnonymousSession:
-            return "/api/anonymous/leave"
+            return "\(EnvironmentConfig.apiPath)/anonymous/leave"
         }
     }
 

@@ -19,15 +19,15 @@ enum CommunityEndpoints: APIEndpoint, Sendable {
     var path: String {
         switch self {
         case .fetchCommunities:
-            return "/api/communities"
+            return "\(EnvironmentConfig.apiPath)/communities"
         case .getCommunity(let id):
-            return "/api/communities/\(id)"
+            return "\(EnvironmentConfig.apiPath)/communities/\(id)"
         case .joinCommunity(let id):
-            return "/api/communities/\(id)/join"
+            return "\(EnvironmentConfig.apiPath)/communities/\(id)/join"
         case .leaveCommunity(let id):
-            return "/api/communities/\(id)/leave"
+            return "\(EnvironmentConfig.apiPath)/communities/\(id)/leave"
         case .getCommunityConversations(let communityId, _, _):
-            return "/api/communities/\(communityId)/conversations"
+            return "\(EnvironmentConfig.apiPath)/communities/\(communityId)/conversations"
         }
     }
 
