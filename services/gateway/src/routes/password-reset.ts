@@ -9,6 +9,7 @@ import { PasswordResetService } from '../services/PasswordResetService';
 import { RedisWrapper } from '../services/RedisWrapper';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService } from '../services/GeoIPService';
+import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 
 // Zod schemas for request validation
 const forgotPasswordSchema = z.object({
@@ -48,6 +49,9 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/forgot-password', {
     schema: {
+      description: 'Initiate password reset process by requesting a reset link via email. This endpoint always returns success to prevent email enumeration attacks. If the email exists, a password reset link will be sent.',
+      tags: ['auth'],
+      summary: 'Request password reset',
       body: {
         type: 'object',
         required: ['email', 'captchaToken'],
@@ -55,31 +59,44 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           email: {
             type: 'string',
             format: 'email',
+            maxLength: 255,
             description: 'User email address',
             example: 'user@example.com'
           },
           captchaToken: {
             type: 'string',
-            description: 'hCaptcha verification token',
+            minLength: 1,
+            description: 'hCaptcha verification token to prevent automated abuse',
             example: 'P0_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
           },
           deviceFingerprint: {
             type: 'string',
-            description: 'Optional device fingerprint for anomaly detection',
+            description: 'Optional device fingerprint for anomaly detection and security monitoring',
             example: 'fp_abc123xyz'
           }
         }
       },
       response: {
         200: {
-          description: 'Generic success response (always returned to prevent email enumeration)',
+          description: 'Generic success response - always returned to prevent email enumeration attacks',
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            message: { type: 'string' }
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  example: 'If an account exists with this email, a password reset link has been sent.'
+                }
+              }
+            }
           }
-        }
-      }
+        },
+        400: validationErrorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -126,60 +143,78 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
+      description: 'Complete password reset using the token received via email. The new password must be at least 12 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      tags: ['auth'],
+      summary: 'Complete password reset',
       body: {
         type: 'object',
         required: ['token', 'newPassword', 'confirmPassword'],
         properties: {
           token: {
             type: 'string',
-            description: 'Reset token from email link',
-            example: 'abc123xyz...'
+            minLength: 1,
+            description: 'Reset token from email link (single-use, time-limited)',
+            example: 'abc123xyz456def789...'
           },
           newPassword: {
             type: 'string',
             minLength: 12,
             maxLength: 128,
-            description: 'New password (min 12 characters, must include uppercase, lowercase, digit, special char)',
+            description: 'New password (minimum 12 characters, must include uppercase, lowercase, digit, and special character)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
             minLength: 12,
             maxLength: 128,
-            description: 'Password confirmation (must match newPassword)',
+            description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'
           },
           twoFactorCode: {
             type: 'string',
             pattern: '^[0-9]{6}$',
-            description: 'Optional 2FA code (required if user has 2FA enabled)',
+            description: '6-digit 2FA code (required only if user has two-factor authentication enabled)',
             example: '123456'
           },
           deviceFingerprint: {
             type: 'string',
-            description: 'Optional device fingerprint for anomaly detection',
+            description: 'Optional device fingerprint for anomaly detection and security monitoring',
             example: 'fp_abc123xyz'
           }
         }
       },
       response: {
         200: {
-          description: 'Password reset successful',
+          description: 'Password reset completed successfully',
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            message: { type: 'string' }
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  example: 'Password has been reset successfully. You can now log in with your new password.'
+                }
+              }
+            }
           }
         },
         400: {
-          description: 'Password reset failed',
+          description: 'Bad request - invalid token, password mismatch, weak password, or missing 2FA code',
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'string',
+              example: 'Invalid or expired reset token'
+            }
           }
-        }
-      }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -237,27 +272,62 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/reset-password/verify-token', {
     schema: {
+      description: 'Verify if a password reset token is valid without consuming it. This endpoint allows the frontend to check token validity before presenting the password reset form, improving user experience by detecting expired or invalid tokens early.',
+      tags: ['auth'],
+      summary: 'Verify reset token',
       querystring: {
         type: 'object',
         required: ['token'],
         properties: {
           token: {
             type: 'string',
-            description: 'Reset token to verify'
+            minLength: 1,
+            description: 'Password reset token to verify (from email link)',
+            example: 'abc123xyz456def789...'
           }
         }
       },
       response: {
         200: {
-          description: 'Token verification result',
+          description: 'Token verification result with validity status and additional information',
           type: 'object',
           properties: {
-            valid: { type: 'boolean' },
-            requires2FA: { type: 'boolean' },
-            expiresAt: { type: 'string', format: 'date-time' }
+            valid: {
+              type: 'boolean',
+              description: 'Whether the token is valid and can be used for password reset',
+              example: true
+            },
+            requires2FA: {
+              type: 'boolean',
+              description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
+              example: false
+            },
+            expiresAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Token expiration timestamp (ISO 8601 format)',
+              example: '2026-01-11T15:30:00.000Z'
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - missing token parameter',
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Token is required' }
+          }
+        },
+        500: {
+          description: 'Internal server error during token verification',
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Error verifying token' }
           }
         }
-      }
+      },
+      security: []
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {

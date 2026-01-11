@@ -5,6 +5,10 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
+import {
+  userPreferenceSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 interface UserPreferenceBody {
   key: string;
@@ -18,7 +22,36 @@ interface UserPreferenceParams {
 export default async function userPreferencesRoutes(fastify: FastifyInstance) {
   // Récupérer toutes les préférences de l'utilisateur connecté
   fastify.get('/preferences', {
-    preValidation: [fastify.authenticate]
+    preValidation: [fastify.authenticate],
+    schema: {
+      description: 'Get all preferences for the authenticated user. Returns a list of key-value pairs representing user preferences sorted by most recently updated.',
+      tags: ['users', 'preferences'],
+      summary: 'Get all user preferences',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: 'Preference ID' },
+                  userId: { type: 'string', description: 'User ID' },
+                  key: { type: 'string', description: 'Preference key' },
+                  value: { type: 'string', description: 'Preference value' },
+                  createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                  updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
+                }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Utiliser le nouveau système d'authentification unifié
@@ -54,7 +87,42 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
 
   // Récupérer une préférence spécifique
   fastify.get<{ Params: UserPreferenceParams }>('/preferences/:key', {
-    preValidation: [fastify.authenticate]
+    preValidation: [fastify.authenticate],
+    schema: {
+      description: 'Get a specific preference by key for the authenticated user. Returns the preference value if found, or null if not set.',
+      tags: ['users', 'preferences'],
+      summary: 'Get preference by key',
+      params: {
+        type: 'object',
+        required: ['key'],
+        properties: {
+          key: { type: 'string', description: 'Preference key to retrieve' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                id: { type: 'string', description: 'Preference ID' },
+                userId: { type: 'string', description: 'User ID' },
+                key: { type: 'string', description: 'Preference key' },
+                value: { type: 'string', description: 'Preference value' },
+                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest<{ Params: UserPreferenceParams }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.id;
@@ -92,13 +160,50 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: UserPreferenceBody }>('/preferences', {
     preValidation: [fastify.authenticate],
     schema: {
+      description: 'Create or update a user preference. If the preference key already exists, it will be updated with the new value. Special validation applies for certain keys like font-family.',
+      tags: ['users', 'preferences'],
+      summary: 'Create or update preference',
       body: {
         type: 'object',
         required: ['key', 'value'],
         properties: {
-          key: { type: 'string' },
-          value: { type: 'string' }
+          key: {
+            type: 'string',
+            description: 'Preference key (e.g., font-family, theme, etc.)'
+          },
+          value: {
+            type: 'string',
+            description: 'Preference value (must be valid for the specific key)'
+          }
         }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Preference ID' },
+                userId: { type: 'string', description: 'User ID' },
+                key: { type: 'string', description: 'Preference key' },
+                value: { type: 'string', description: 'Preference value' },
+                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', description: 'Error message (e.g., invalid font)' }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
       }
     }
   }, async (request: FastifyRequest<{ Body: UserPreferenceBody }>, reply: FastifyReply) => {
@@ -164,7 +269,36 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
 
   // Supprimer une préférence
   fastify.delete<{ Params: UserPreferenceParams }>('/preferences/:key', {
-    preValidation: [fastify.authenticate]
+    preValidation: [fastify.authenticate],
+    schema: {
+      description: 'Delete a specific user preference by key. Removes the preference from the database if it exists. Operation is idempotent.',
+      tags: ['users', 'preferences'],
+      summary: 'Delete preference by key',
+      params: {
+        type: 'object',
+        required: ['key'],
+        properties: {
+          key: { type: 'string', description: 'Preference key to delete' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Préférence supprimée avec succès' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest<{ Params: UserPreferenceParams }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.id;
@@ -206,7 +340,28 @@ export default async function userPreferencesRoutes(fastify: FastifyInstance) {
 
   // Réinitialiser toutes les préférences
   fastify.delete('/preferences', {
-    preValidation: [fastify.authenticate]
+    preValidation: [fastify.authenticate],
+    schema: {
+      description: 'Reset all user preferences by deleting them from the database. This will remove all preference settings for the authenticated user. Use with caution.',
+      tags: ['users', 'preferences'],
+      summary: 'Reset all preferences',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Toutes les préférences ont été réinitialisées' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.id;

@@ -16,6 +16,14 @@ import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { createSignalProtocolRateLimitConfig } from '../middleware/rate-limiter';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import {
+  errorResponseSchema,
+  signalPreKeyBundleSchema,
+  generatePreKeyBundleResponseSchema,
+  getPreKeyBundleResponseSchema,
+  establishSessionRequestSchema,
+  establishSessionResponseSchema,
+} from '@meeshy/shared/types/api-schemas';
 
 const logger = enhancedLogger.child({ module: 'SignalProtocolRoutes' });
 
@@ -70,11 +78,21 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
       preValidation: [authMiddleware],
       config: {
         rateLimit: createSignalProtocolRateLimitConfig('keys_post')
+      },
+      schema: {
+        description: 'Generate and store Signal Protocol pre-key bundle for the authenticated user. Creates cryptographic keys for E2EE session establishment. Keys are stored server-side and can be retrieved by authorized users.',
+        tags: ['encryption', 'signal'],
+        summary: 'Generate pre-key bundle',
+        response: {
+          200: generatePreKeyBundleResponseSchema,
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        }
       }
     },
     async (request, reply) => {
       try {
-        const authRequest = request as UnifiedAuthRequest;
+        const authRequest = request as unknown as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
         // Generate pre-key bundle
@@ -165,11 +183,55 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
       preValidation: [authMiddleware],
       config: {
         rateLimit: createSignalProtocolRateLimitConfig('keys_get')
+      },
+      schema: {
+        description: 'Retrieve pre-key bundle for another user to establish an E2EE session. Requires authorization: requesting user must share a conversation or friendship with the target user. This prevents unauthorized key scraping attacks.',
+        tags: ['encryption', 'signal'],
+        summary: 'Get user pre-key bundle',
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: {
+            userId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 255,
+              description: 'Target user ID to fetch pre-key bundle for'
+            }
+          }
+        },
+        response: {
+          200: getPreKeyBundleResponseSchema,
+          400: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: { type: 'string', description: 'Validation error message' },
+              details: { type: 'array', items: { type: 'object' } }
+            }
+          },
+          401: errorResponseSchema,
+          403: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: { type: 'string', example: 'You are not authorized to access this user\'s encryption keys' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: { type: 'string', example: 'User has not generated encryption keys' }
+            }
+          },
+          500: errorResponseSchema,
+        }
       }
     },
     async (request, reply) => {
       try {
-        const authRequest = request as UnifiedAuthRequest;
+        const authRequest = request as unknown as UnifiedAuthRequest;
         const requestingUserId = authRequest.authContext.userId;
 
         // Validate params
@@ -304,11 +366,54 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
       preValidation: [authMiddleware],
       config: {
         rateLimit: createSignalProtocolRateLimitConfig('session_establish')
+      },
+      schema: {
+        description: 'Establish an end-to-end encrypted session with another user in a conversation. Validates that both users are participants in the specified conversation. Fetches recipient pre-key bundle and marks one-time pre-keys as consumed. Requires Signal Protocol library for full E2EE functionality.',
+        tags: ['encryption', 'signal'],
+        summary: 'Establish E2EE session',
+        body: establishSessionRequestSchema,
+        response: {
+          200: establishSessionResponseSchema,
+          400: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'string',
+                description: 'Validation error or recipient not in conversation',
+                examples: [
+                  'Invalid request body',
+                  'Recipient is not a participant in this conversation'
+                ]
+              },
+              details: { type: 'array', items: { type: 'object' }, description: 'Validation error details' }
+            }
+          },
+          401: errorResponseSchema,
+          403: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: { type: 'string', example: 'You are not a participant in this conversation' }
+            }
+          },
+          404: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: { type: 'string', example: 'Recipient has not generated encryption keys' }
+            }
+          },
+          500: errorResponseSchema,
+        }
       }
     },
     async (request, reply) => {
       try {
         // Validate request body
+        const authRequest = request as unknown as UnifiedAuthRequest;
+        const userId = authRequest.authContext.userId;
+
         const bodyResult = EstablishSessionBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
           return reply.status(400).send({
@@ -317,9 +422,6 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
             details: bodyResult.error.errors,
           });
         }
-
-        const authRequest = request as UnifiedAuthRequest;
-        const userId = authRequest.authContext.userId;
         const { recipientUserId, conversationId } = bodyResult.data;
 
         // SECURITY: Verify user is a participant in the conversation
