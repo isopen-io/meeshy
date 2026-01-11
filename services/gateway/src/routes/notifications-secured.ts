@@ -32,6 +32,12 @@ import {
   createStrictRateLimiter,
   createBatchRateLimiter
 } from '../utils/rate-limiter';
+import {
+  notificationSchema,
+  notificationPreferenceSchema,
+  updateNotificationPreferencesRequestSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Initialize rate limiters (Redis will be injected if available)
 let notificationRateLimiter: ReturnType<typeof createNotificationRateLimiter>;
@@ -59,7 +65,94 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       fastify.authenticate,
       notificationRateLimiter.middleware()
     ],
-    preHandler: validateQuery(GetNotificationsQuerySchema)
+    preHandler: validateQuery(GetNotificationsQuerySchema),
+    schema: {
+      description: 'Retrieve paginated list of notifications for the authenticated user with comprehensive IDOR protection. Automatically removes expired notifications before fetching. Supports advanced filtering by read status, notification type, priority, and date range.',
+      tags: ['notifications'],
+      summary: 'Get user notifications (secured)',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'number',
+            description: 'Pagination offset',
+            default: 0,
+            minimum: 0
+          },
+          limit: {
+            type: 'number',
+            description: 'Number of notifications per page',
+            default: 20,
+            minimum: 1,
+            maximum: 100
+          },
+          unread: {
+            type: 'boolean',
+            description: 'Filter by read status (true = only unread)',
+            default: false
+          },
+          type: {
+            type: 'string',
+            enum: ['all', 'new_conversation', 'new_message', 'message_edited', 'friend_request', 'friend_accepted', 'missed_call', 'mention', 'reaction', 'member_joined', 'system'],
+            description: 'Filter by notification type',
+            default: 'all'
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'normal', 'high', 'urgent'],
+            description: 'Filter by notification priority',
+            nullable: true
+          },
+          startDate: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Filter notifications created after this date (ISO 8601)',
+            nullable: true
+          },
+          endDate: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Filter notifications created before this date (ISO 8601)',
+            nullable: true
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notifications retrieved successfully with IDOR protection',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: notificationSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of notifications matching filter' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'Whether more items exist' }
+              }
+            },
+            unreadCount: { type: 'number', description: 'Total unread notifications count for user' }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const startTime = Date.now();
 
@@ -204,7 +297,54 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       fastify.authenticate,
       notificationRateLimiter.middleware()
     ],
-    preHandler: validateParams(MarkAsReadParamSchema)
+    preHandler: validateParams(MarkAsReadParamSchema),
+    schema: {
+      description: 'Mark a specific notification as read. Uses atomic updateMany operation with IDOR protection to ensure users can only mark their own notifications. Logs potential IDOR attempts for security monitoring.',
+      tags: ['notifications'],
+      summary: 'Mark notification as read (secured)',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Notification unique identifier',
+            pattern: '^[a-f0-9]{24}$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notification marked as read successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Notification marked as read' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Notification not found or does not belong to user (IDOR protection)',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -274,7 +414,40 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [
       fastify.authenticate,
       strictRateLimiter.middleware()
-    ]
+    ],
+    schema: {
+      description: 'Mark all unread notifications as read for the authenticated user. Returns the count of notifications that were updated. Uses atomic updateMany with strict IDOR protection and aggressive rate limiting to prevent abuse.',
+      tags: ['notifications'],
+      summary: 'Mark all notifications as read (secured)',
+      response: {
+        200: {
+          description: 'All notifications marked as read successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'All notifications marked as read' },
+                count: { type: 'number', description: 'Number of notifications updated', example: 15 }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (10 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -338,7 +511,54 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       fastify.authenticate,
       notificationRateLimiter.middleware()
     ],
-    preHandler: validateParams(DeleteNotificationParamSchema)
+    preHandler: validateParams(DeleteNotificationParamSchema),
+    schema: {
+      description: 'Delete a specific notification. This action is permanent and cannot be undone. Uses atomic deleteMany operation with IDOR protection to ensure users can only delete their own notifications. Logs potential IDOR attempts.',
+      tags: ['notifications'],
+      summary: 'Delete notification (secured)',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Notification unique identifier',
+            pattern: '^[a-f0-9]{24}$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notification deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Notification deleted' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Notification not found or does not belong to user (IDOR protection)',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -399,7 +619,40 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [
       fastify.authenticate,
       strictRateLimiter.middleware()
-    ]
+    ],
+    schema: {
+      description: 'Delete all read notifications for the authenticated user. This action is permanent and cannot be undone. Unread notifications will not be affected. Uses atomic deleteMany with strict IDOR protection and aggressive rate limiting.',
+      tags: ['notifications'],
+      summary: 'Delete all read notifications (secured)',
+      response: {
+        200: {
+          description: 'Read notifications deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Read notifications deleted' },
+                count: { type: 'number', description: 'Number of notifications deleted', example: 23 }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (10 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -447,7 +700,34 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [
       fastify.authenticate,
       notificationRateLimiter.middleware()
-    ]
+    ],
+    schema: {
+      description: 'Retrieve notification preferences for the authenticated user. If no preferences exist, they will be automatically created with default values (all notifications enabled except Do Not Disturb). IDOR protection ensures users can only access their own preferences.',
+      tags: ['notifications'],
+      summary: 'Get notification preferences (secured)',
+      response: {
+        200: {
+          description: 'Notification preferences retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: notificationPreferenceSchema
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -504,7 +784,60 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       fastify.authenticate,
       strictRateLimiter.middleware()
     ],
-    preHandler: validateBody(UpdateNotificationPreferencesSchema)
+    preHandler: validateBody(UpdateNotificationPreferencesSchema),
+    schema: {
+      description: 'Update notification preferences for the authenticated user. All fields are optional - only provided fields will be updated. If preferences do not exist, they will be created. DND times should be in HH:mm format. Uses strict rate limiting and comprehensive input validation.',
+      tags: ['notifications'],
+      summary: 'Update notification preferences (secured)',
+      body: updateNotificationPreferencesRequestSchema,
+      response: {
+        200: {
+          description: 'Notification preferences updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Preferences updated' },
+                preferences: notificationPreferenceSchema
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid request data - validation failed',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error message' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string', description: 'Field that failed validation' },
+                  message: { type: 'string', description: 'Validation error message' },
+                  code: { type: 'string', description: 'Zod error code' }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (10 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = request.body as z.infer<typeof UpdateNotificationPreferencesSchema>;
@@ -579,7 +912,59 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [
       fastify.authenticate,
       notificationRateLimiter.middleware()
-    ]
+    ],
+    schema: {
+      description: 'Retrieve notification statistics for the authenticated user, including total count, unread count, and breakdown by notification type. Uses aggregation with IDOR protection to ensure users can only view their own statistics.',
+      tags: ['notifications'],
+      summary: 'Get notification statistics (secured)',
+      response: {
+        200: {
+          description: 'Notification statistics retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                total: {
+                  type: 'number',
+                  description: 'Total number of notifications',
+                  example: 42
+                },
+                unread: {
+                  type: 'number',
+                  description: 'Number of unread notifications',
+                  example: 7
+                },
+                byType: {
+                  type: 'object',
+                  description: 'Count of notifications grouped by type',
+                  additionalProperties: { type: 'number' },
+                  example: {
+                    'new_message': 25,
+                    'friend_request': 5,
+                    'missed_call': 3,
+                    'system': 9
+                  }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.user as any;
@@ -640,7 +1025,74 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       fastify.authenticate,
       batchRateLimiter.middleware()
     ],
-    preHandler: validateBody(BatchMarkAsReadSchema)
+    preHandler: validateBody(BatchMarkAsReadSchema),
+    schema: {
+      description: 'Mark multiple notifications as read in a single batch operation. Maximum 100 notifications per batch. Uses atomic updateMany with IDOR protection to ensure users can only mark their own notifications. Very strict rate limiting (5 req/min) to prevent abuse.',
+      tags: ['notifications'],
+      summary: 'Batch mark notifications as read (secured)',
+      body: {
+        type: 'object',
+        required: ['notificationIds'],
+        properties: {
+          notificationIds: {
+            type: 'array',
+            description: 'Array of notification IDs to mark as read',
+            minItems: 1,
+            maxItems: 100,
+            items: {
+              type: 'string',
+              pattern: '^[a-f0-9]{24}$',
+              description: 'MongoDB ObjectId'
+            },
+            example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012']
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Notifications marked as read successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: {
+                  type: 'string',
+                  example: '15 notifications marked as read',
+                  description: 'Success message with count'
+                },
+                count: {
+                  type: 'number',
+                  description: 'Actual number of notifications updated (may be less than requested if some do not belong to user)',
+                  example: 15
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid request data - validation failed',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error message' }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (5 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { notificationIds } = request.body as z.infer<typeof BatchMarkAsReadSchema>;
