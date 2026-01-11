@@ -12,6 +12,14 @@
  */
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import {
+  communitySchema,
+  communityMinimalSchema,
+  communityMemberSchema,
+  createCommunityRequestSchema,
+  updateCommunityRequestSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
 enum CommunityRole {
@@ -92,7 +100,49 @@ function validatePagination(
 export async function communityRoutes(fastify: FastifyInstance) {
 
   // Route pour verifier la disponibilite d'un identifiant de communaute
-  fastify.get('/communities/check-identifier/:identifier', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities/check-identifier/:identifier', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Check if a community identifier is available for use. Returns whether the identifier is already taken by another community.',
+      tags: ['communities'],
+      summary: 'Check identifier availability',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Community identifier to check (e.g., "mshy_mycommunity")',
+            minLength: 1
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully checked identifier availability',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean', description: 'Whether the identifier is available' },
+                identifier: { type: 'string', description: 'The checked identifier' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { identifier } = request.params as { identifier: string };
 
@@ -118,7 +168,66 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir toutes les communautes de l'utilisateur connecte
-  fastify.get('/communities', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve all communities that the authenticated user is a member of or created. Supports pagination and search filtering by name or identifier.',
+      tags: ['communities'],
+      summary: 'Get user communities',
+      querystring: {
+        type: 'object',
+        properties: {
+          search: {
+            type: 'string',
+            description: 'Search query to filter communities by name or identifier (minimum 2 characters)',
+            minLength: 2
+          },
+          offset: {
+            type: 'string',
+            description: 'Number of items to skip for pagination',
+            default: '0',
+            pattern: '^[0-9]+$'
+          },
+          limit: {
+            type: 'string',
+            description: 'Maximum number of items to return (max 100)',
+            default: '20',
+            pattern: '^[0-9]+$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully retrieved communities',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: communitySchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of communities matching the query' },
+                limit: { type: 'number', description: 'Number of items per page' },
+                offset: { type: 'number', description: 'Number of items skipped' },
+                hasMore: { type: 'boolean', description: 'Whether there are more items to fetch' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as any).authContext;
@@ -213,7 +322,81 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour rechercher des communautes PUBLIQUES accessibles a tous
-  fastify.get('/communities/search', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities/search', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Search for public communities by name, identifier, description, or member names. Only returns non-private communities. Results are paginated.',
+      tags: ['communities'],
+      summary: 'Search public communities',
+      querystring: {
+        type: 'object',
+        properties: {
+          q: {
+            type: 'string',
+            description: 'Search query (searches name, identifier, description, and member names)',
+            minLength: 1
+          },
+          offset: {
+            type: 'string',
+            description: 'Number of items to skip for pagination',
+            default: '0',
+            pattern: '^[0-9]+$'
+          },
+          limit: {
+            type: 'string',
+            description: 'Maximum number of items to return (max 100)',
+            default: '20',
+            pattern: '^[0-9]+$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully retrieved search results',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  identifier: { type: 'string' },
+                  description: { type: 'string', nullable: true },
+                  avatar: { type: 'string', nullable: true },
+                  isPrivate: { type: 'boolean' },
+                  memberCount: { type: 'number' },
+                  conversationCount: { type: 'number' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  creator: { type: 'object' },
+                  members: { type: 'array', items: { type: 'object' } }
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
@@ -323,7 +506,50 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir une communaute par ID ou identifier
-  fastify.get('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities/:id', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve a specific community by its unique ID or human-readable identifier. Access is restricted to community members for private communities. Public communities can be viewed by any authenticated user.',
+      tags: ['communities'],
+      summary: 'Get a community by ID or identifier',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID or identifier (e.g., "mshy_mycommunity")'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully retrieved community',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: communitySchema
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - user is not a member of this private community',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
 
@@ -440,7 +666,37 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour creer une nouvelle communaute
-  fastify.post('/communities', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/communities', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Create a new community. The authenticated user becomes the creator and is automatically added as an admin member. The identifier is auto-generated from the name with a "mshy_" prefix unless a custom identifier is provided.',
+      tags: ['communities'],
+      summary: 'Create a community',
+      body: createCommunityRequestSchema,
+      response: {
+        201: {
+          description: 'Community successfully created',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: communitySchema
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        409: {
+          description: 'Community identifier already exists',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const validatedData = CreateCommunitySchema.parse(request.body);
 
@@ -531,7 +787,79 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir les membres d'une communaute
-  fastify.get('/communities/:id/members', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities/:id/members', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve all members of a community with pagination. Access is restricted to community members for private communities. Returns user details including online status and role.',
+      tags: ['communities'],
+      summary: 'Get community members',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'string',
+            description: 'Number of items to skip for pagination',
+            default: '0',
+            pattern: '^[0-9]+$'
+          },
+          limit: {
+            type: 'string',
+            description: 'Maximum number of items to return (max 100)',
+            default: '20',
+            pattern: '^[0-9]+$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully retrieved community members',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: communityMemberSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - user is not a member of this private community',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
 
@@ -618,7 +946,66 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour ajouter un membre a la communaute
-  fastify.post('/communities/:id/members', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/communities/:id/members', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Add a new member to a community. Only community admins can add members. The member is assigned the specified role (defaults to "member").',
+      tags: ['communities'],
+      summary: 'Add a member to community',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: {
+            type: 'string',
+            description: 'User ID to add as member'
+          },
+          role: {
+            type: 'string',
+            enum: ['admin', 'moderator', 'member'],
+            default: 'member',
+            description: 'Role to assign to the new member'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Member successfully added',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: communityMemberSchema
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only community admins can add members',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community or user not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const validatedData = AddMemberSchema.parse(request.body);
@@ -724,7 +1111,65 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour mettre a jour le role d'un membre
-  fastify.patch('/communities/:id/members/:memberId/role', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.patch('/communities/:id/members/:memberId/role', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the role of a community member. Only community admins can update member roles.',
+      tags: ['communities'],
+      summary: 'Update member role',
+      params: {
+        type: 'object',
+        required: ['id', 'memberId'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          },
+          memberId: {
+            type: 'string',
+            description: 'Member unique ID'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['role'],
+        properties: {
+          role: {
+            type: 'string',
+            enum: ['admin', 'moderator', 'member'],
+            description: 'New role for the member'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Member role successfully updated',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: communityMemberSchema
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only community admins can update member roles',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community or member not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id, memberId } = request.params as { id: string; memberId: string };
       const validatedData = UpdateMemberRoleSchema.parse(request.body);
@@ -800,7 +1245,59 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour retirer un membre de la communaute
-  fastify.delete('/communities/:id/members/:memberId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.delete('/communities/:id/members/:memberId', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Remove a member from a community. Only community admins can remove members.',
+      tags: ['communities'],
+      summary: 'Remove a member from community',
+      params: {
+        type: 'object',
+        required: ['id', 'memberId'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          },
+          memberId: {
+            type: 'string',
+            description: 'User ID of the member to remove'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Member successfully removed',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Member removed successfully' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only community admins can remove members',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id, memberId } = request.params as { id: string; memberId: string };
 
@@ -867,7 +1364,55 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour mettre a jour une communaute
-  fastify.put('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.put('/communities/:id', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update a community. Only the community creator can update community details. All fields are optional. If a new identifier is provided, it will be validated for uniqueness.',
+      tags: ['communities'],
+      summary: 'Update a community',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          }
+        }
+      },
+      body: updateCommunityRequestSchema,
+      response: {
+        200: {
+          description: 'Community successfully updated',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: communitySchema
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only the community creator can update the community',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        409: {
+          description: 'New identifier already exists',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const validatedData = UpdateCommunitySchema.parse(request.body);
@@ -967,7 +1512,55 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour supprimer une communaute
-  fastify.delete('/communities/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.delete('/communities/:id', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Delete a community permanently. Only the community creator can delete the community. This will also cascade delete all associated members and conversations.',
+      tags: ['communities'],
+      summary: 'Delete a community',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Community successfully deleted',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Community deleted successfully' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - only the community creator can delete the community',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
 
@@ -1020,7 +1613,78 @@ export async function communityRoutes(fastify: FastifyInstance) {
   });
 
   // Conversations d'une communaute
-  fastify.get('/communities/:id/conversations', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/communities/:id/conversations', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve all conversations within a community. Only returns conversations where the authenticated user is a member. Results are sorted by most recently updated.',
+      tags: ['communities'],
+      summary: 'Get community conversations',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully retrieved community conversations',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  communityId: { type: 'string' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  members: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        userId: { type: 'string' },
+                        user: { type: 'object' }
+                      }
+                    }
+                  },
+                  _count: {
+                    type: 'object',
+                    properties: {
+                      messages: { type: 'number' },
+                      members: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'User not authenticated',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied - user is not a member of this private community',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Community not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
 

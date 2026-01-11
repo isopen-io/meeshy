@@ -18,6 +18,12 @@ import type {
   ReactionSyncEventData,
   SERVER_EVENTS
 } from '@meeshy/shared/types';
+import {
+  reactionSchema,
+  reactionSummarySchema,
+  addReactionRequestSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas.js';
 
 interface AddReactionBody {
   messageId: string;
@@ -59,7 +65,55 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: AddReactionBody;
   }>('/reactions', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    schema: {
+      description: 'Add an emoji reaction to a message. Both authenticated and anonymous users can add reactions. The reaction will be broadcast to all conversation participants via Socket.IO.',
+      tags: ['reactions'],
+      summary: 'Add emoji reaction to message',
+      body: {
+        type: 'object',
+        required: ['messageId', 'emoji'],
+        properties: {
+          messageId: { type: 'string', description: 'Message ID to react to' },
+          emoji: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 10,
+            description: 'Emoji character to add as reaction'
+          }
+        }
+      },
+      response: {
+        201: {
+          description: 'Reaction added successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: reactionSchema
+          }
+        },
+        400: {
+          description: 'Bad request - Invalid input or emoji format',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - Access denied to conversation',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - Message not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request, reply) => {
     try {
       const { messageId, emoji } = request.body;
@@ -164,7 +218,51 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   fastify.delete<{
     Params: RemoveReactionParams;
   }>('/reactions/:messageId/:emoji', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    schema: {
+      description: 'Remove an emoji reaction from a message. Users can only remove their own reactions. The removal will be broadcast to all conversation participants via Socket.IO.',
+      tags: ['reactions'],
+      summary: 'Remove emoji reaction from message',
+      params: {
+        type: 'object',
+        required: ['messageId', 'emoji'],
+        properties: {
+          messageId: { type: 'string', description: 'Message ID' },
+          emoji: { type: 'string', description: 'URL-encoded emoji character to remove' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Reaction removed successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Reaction removed successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - Invalid emoji format',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - Reaction not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request, reply) => {
     try {
       const { messageId, emoji } = request.params;
@@ -246,7 +344,48 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: GetReactionsParams;
   }>('/reactions/:messageId', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    schema: {
+      description: 'Get all reactions for a specific message, grouped by emoji with aggregated counts and user information. Returns whether the current user has reacted with each emoji.',
+      tags: ['reactions'],
+      summary: 'Get message reactions',
+      params: {
+        type: 'object',
+        required: ['messageId'],
+        properties: {
+          messageId: { type: 'string', description: 'Message ID' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Reactions retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: reactionSummarySchema
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - Access denied to conversation',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - Message not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -324,7 +463,44 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: GetUserReactionsParams;
   }>('/reactions/user/:userId', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    schema: {
+      description: 'Get all reactions created by a specific user. Only authenticated users can access this endpoint, and users can only view their own reactions (unless admin).',
+      tags: ['reactions'],
+      summary: 'Get user reactions',
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'string', description: 'User ID' }
+        }
+      },
+      response: {
+        200: {
+          description: 'User reactions retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: reactionSchema
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - Anonymous users cannot access or users can only view their own reactions',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request, reply) => {
     try {
       const { userId: targetUserId } = request.params;

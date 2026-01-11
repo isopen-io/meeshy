@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import {
+  adminAuditLogSchema,
+  securityEventSchema,
+  userSchema,
+  userMinimalSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
 
 // Types pour les roles et permissions
 type UserRole = UserRoleEnum;
@@ -165,7 +172,85 @@ function validatePagination(
 export async function adminRoutes(fastify: FastifyInstance) {
   // Tableau de bord administrateur
   fastify.get('/dashboard', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get comprehensive admin dashboard statistics including user counts, activity metrics, translations, share links, and recent activity summaries. Requires admin access.',
+      tags: ['admin'],
+      summary: 'Get admin dashboard statistics',
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          description: 'Dashboard statistics successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                statistics: {
+                  type: 'object',
+                  properties: {
+                    totalUsers: { type: 'number', description: 'Total registered users' },
+                    activeUsers: { type: 'number', description: 'Currently active users' },
+                    inactiveUsers: { type: 'number', description: 'Inactive users' },
+                    adminUsers: { type: 'number', description: 'Admin/Moderator users' },
+                    totalAnonymousUsers: { type: 'number', description: 'Total anonymous participants' },
+                    activeAnonymousUsers: { type: 'number', description: 'Active anonymous participants' },
+                    inactiveAnonymousUsers: { type: 'number', description: 'Inactive anonymous participants' },
+                    totalMessages: { type: 'number', description: 'Total messages sent' },
+                    totalCommunities: { type: 'number', description: 'Total communities created' },
+                    totalTranslations: { type: 'number', description: 'Total message translations' },
+                    totalShareLinks: { type: 'number', description: 'Total share links created' },
+                    activeShareLinks: { type: 'number', description: 'Active share links' },
+                    totalReports: { type: 'number', description: 'Total reports filed' },
+                    totalInvitations: { type: 'number', description: 'Total pending invitations' },
+                    topLanguages: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          language: { type: 'string', description: 'Language code' },
+                          count: { type: 'number', description: 'Message count' }
+                        }
+                      }
+                    },
+                    usersByRole: { type: 'object', additionalProperties: { type: 'number' } },
+                    messagesByType: { type: 'object', additionalProperties: { type: 'number' } }
+                  }
+                },
+                recentActivity: {
+                  type: 'object',
+                  properties: {
+                    newUsers: { type: 'number', description: 'New users in last 7 days' },
+                    newConversations: { type: 'number', description: 'New conversations in last 7 days' },
+                    newMessages: { type: 'number', description: 'New messages in last 7 days' },
+                    newAnonymousUsers: { type: 'number', description: 'New anonymous users in last 7 days' }
+                  }
+                },
+                userPermissions: {
+                  type: 'object',
+                  properties: {
+                    canAccessAdmin: { type: 'boolean' },
+                    canManageUsers: { type: 'boolean' },
+                    canManageCommunities: { type: 'boolean' },
+                    canManageConversations: { type: 'boolean' },
+                    canViewAnalytics: { type: 'boolean' },
+                    canModerateContent: { type: 'boolean' },
+                    canViewAuditLogs: { type: 'boolean' },
+                    canManageNotifications: { type: 'boolean' },
+                    canManageTranslations: { type: 'boolean' }
+                  }
+                },
+                timestamp: { type: 'string', format: 'date-time' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -319,7 +404,85 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des utilisateurs - Liste avec pagination
   fastify.get('/users', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of registered users with filtering options. Supports search by username, email, name and filtering by role and status. Requires canManageUsers permission.',
+      tags: ['admin'],
+      summary: 'List all users with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          search: { type: 'string', description: 'Search by username, email, firstName, lastName' },
+          role: { type: 'string', enum: ['USER', 'MODERATOR', 'ADMIN', 'CREATOR', 'ANALYST', 'AUDIT', 'BIGBOSS'], description: 'Filter by user role' },
+          status: { type: 'string', enum: ['active', 'inactive'], description: 'Filter by account status' }
+        }
+      },
+      response: {
+        200: {
+          description: 'User list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  username: { type: 'string' },
+                  firstName: { type: 'string' },
+                  lastName: { type: 'string' },
+                  displayName: { type: 'string' },
+                  email: { type: 'string' },
+                  avatar: { type: 'string', nullable: true },
+                  role: { type: 'string' },
+                  isActive: { type: 'boolean' },
+                  isOnline: { type: 'boolean' },
+                  lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  emailVerifiedAt: { type: 'string', format: 'date-time', nullable: true },
+                  phoneVerifiedAt: { type: 'string', format: 'date-time', nullable: true },
+                  twoFactorEnabledAt: { type: 'string', format: 'date-time', nullable: true },
+                  failedLoginAttempts: { type: 'number' },
+                  lockedUntil: { type: 'string', format: 'date-time', nullable: true },
+                  lastPasswordChange: { type: 'string', format: 'date-time', nullable: true },
+                  deactivatedAt: { type: 'string', format: 'date-time', nullable: true },
+                  deletedAt: { type: 'string', format: 'date-time', nullable: true },
+                  deletedBy: { type: 'string', nullable: true },
+                  profileCompletionRate: { type: 'number', nullable: true },
+                  _count: {
+                    type: 'object',
+                    properties: {
+                      sentMessages: { type: 'number' },
+                      conversations: { type: 'number' },
+                      communityMemberships: { type: 'number' },
+                      createdCommunities: { type: 'number' },
+                      createdShareLinks: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of users' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'More pages available' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -427,7 +590,44 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des utilisateurs anonymes - Liste avec pagination
   fastify.get('/anonymous-users', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of anonymous users/participants with filtering options. Requires canManageUsers permission.',
+      tags: ['admin'],
+      summary: 'List anonymous users with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          search: { type: 'string', description: 'Search by username, firstName, lastName, email' },
+          status: { type: 'string', enum: ['active', 'inactive'], description: 'Filter by status' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Anonymous users list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -533,7 +733,41 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Details d'un utilisateur
   fastify.get('/users/:id', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get detailed information about a specific user including statistics, activity counts, and security information. Requires canManageUsers permission.',
+      tags: ['admin'],
+      summary: 'Get user details by ID',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User unique identifier' }
+        }
+      },
+      response: {
+        200: {
+          description: 'User details successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: userSchema
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: {
+          description: 'User not found',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Utilisateur non trouve' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -590,7 +824,79 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Modifier le role d'un utilisateur
   fastify.patch('/users/:id/role', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Update user role. Admins can only modify roles of users with lower hierarchy level. Requires canManageUsers permission.',
+      tags: ['admin'],
+      summary: 'Update user role',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User unique identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['role'],
+        properties: {
+          role: {
+            type: 'string',
+            enum: ['USER', 'MODERATOR', 'ADMIN', 'CREATOR', 'ANALYST', 'AUDIT', 'BIGBOSS'],
+            description: 'New role to assign'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'User role successfully updated',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                username: { type: 'string' },
+                firstName: { type: 'string' },
+                lastName: { type: 'string' },
+                role: { type: 'string' },
+                updatedAt: { type: 'string', format: 'date-time' }
+              }
+            },
+            message: { type: 'string', example: 'Role mis a jour vers ADMIN' }
+          }
+        },
+        400: {
+          description: 'Invalid input data',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Donnees invalides' },
+            errors: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        403: {
+          description: 'Insufficient permissions or cannot modify this user',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le role de cet utilisateur' }
+          }
+        },
+        404: {
+          description: 'User not found',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Utilisateur non trouve' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -672,7 +978,76 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Activer/desactiver un utilisateur
   fastify.patch('/users/:id/status', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Activate or deactivate user account. Admins can only modify status of users with lower hierarchy level. Requires canManageUsers permission.',
+      tags: ['admin'],
+      summary: 'Update user status',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User unique identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['isActive'],
+        properties: {
+          isActive: { type: 'boolean', description: 'Set to true to activate, false to deactivate' }
+        }
+      },
+      response: {
+        200: {
+          description: 'User status successfully updated',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                username: { type: 'string' },
+                firstName: { type: 'string' },
+                lastName: { type: 'string' },
+                isActive: { type: 'boolean' },
+                deactivatedAt: { type: 'string', format: 'date-time', nullable: true },
+                updatedAt: { type: 'string', format: 'date-time' }
+              }
+            },
+            message: { type: 'string', example: 'Utilisateur active' }
+          }
+        },
+        400: {
+          description: 'Invalid input data',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Donnees invalides' },
+            errors: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        403: {
+          description: 'Insufficient permissions or cannot modify this user',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le statut de cet utilisateur' }
+          }
+        },
+        404: {
+          description: 'User not found',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Utilisateur non trouve' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -751,7 +1126,45 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des messages - Liste avec pagination
   fastify.get('/messages', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of messages with filtering by content, type, and time period. Requires canModerateContent permission.',
+      tags: ['admin'],
+      summary: 'List messages with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          search: { type: 'string', description: 'Search in message content' },
+          type: { type: 'string', description: 'Filter by message type' },
+          period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Messages list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -894,7 +1307,44 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des communautes - Liste avec pagination
   fastify.get('/communities', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of communities with filtering options. Requires canManageCommunities permission.',
+      tags: ['admin'],
+      summary: 'List communities with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          search: { type: 'string', description: 'Search by name, identifier, description' },
+          isPrivate: { type: 'string', enum: ['true', 'false'], description: 'Filter by privacy status' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Communities list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -982,7 +1432,45 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des traductions - Liste avec pagination
   fastify.get('/translations', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of message translations with filtering by source/target language and time period. Requires canManageTranslations permission.',
+      tags: ['admin'],
+      summary: 'List translations with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          sourceLanguage: { type: 'string', description: 'Filter by source language code' },
+          targetLanguage: { type: 'string', description: 'Filter by target language code' },
+          period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Translations list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1105,7 +1593,44 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Gestion des liens de partage - Liste avec pagination
   fastify.get('/share-links', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get paginated list of conversation share links with filtering options. Requires canManageConversations permission.',
+      tags: ['admin'],
+      summary: 'List share links with pagination',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Pagination offset', default: '0' },
+          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
+          search: { type: 'string', description: 'Search by linkId, identifier, name' },
+          isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by active status' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Share links list successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'array', items: { type: 'object' } },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1207,7 +1732,49 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Statistiques avancees
   fastify.get('/analytics', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get advanced analytics including user activity, message trends, conversation metrics over specified time periods. Requires canViewAnalytics permission.',
+      tags: ['admin'],
+      summary: 'Get advanced analytics',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['24h', '7d', '30d', '90d'],
+            default: '7d',
+            description: 'Analytics time period'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Analytics successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                period: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                userActivity: { type: 'array', items: { type: 'object' } },
+                messageActivity: { type: 'array', items: { type: 'object' } },
+                conversationActivity: { type: 'array', items: { type: 'object' } },
+                usersByRole: { type: 'array', items: { type: 'object' } },
+                topActiveUsers: { type: 'array', items: { type: 'object' } }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -1332,7 +1899,71 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Classement/Ranking des utilisateurs et conversations
   fastify.get('/ranking', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Get rankings of users, conversations, messages, or links based on various criteria (message count, reactions, calls, etc.). Supports multiple entity types and ranking criteria with configurable time periods. Requires canViewAnalytics permission.',
+      tags: ['admin'],
+      summary: 'Get entity rankings',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          entityType: {
+            type: 'string',
+            enum: ['users', 'conversations', 'messages', 'links'],
+            default: 'users',
+            description: 'Type of entity to rank'
+          },
+          criterion: {
+            type: 'string',
+            description: 'Ranking criterion (varies by entity type). For users: messages_sent, reactions_given, mentions_received, etc. For conversations: message_count, member_count, reaction_count, etc.'
+          },
+          period: {
+            type: 'string',
+            enum: ['1d', '7d', '30d', '60d', '90d', '180d', '365d', 'all'],
+            default: '7d',
+            description: 'Time period for ranking'
+          },
+          limit: {
+            type: 'string',
+            default: '50',
+            description: 'Maximum number of results (max 100)'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Rankings successfully retrieved',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                entityType: { type: 'string' },
+                criterion: { type: 'string' },
+                period: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time', nullable: true },
+                endDate: { type: 'string', format: 'date-time' },
+                rankings: { type: 'array', items: { type: 'object' } },
+                total: { type: 'number' }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid entity type or criterion',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string' }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
