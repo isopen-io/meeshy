@@ -13,15 +13,38 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import {
-  IdentityKeyPair,
-  PrivateKey,
-  SignedPreKeyRecord,
-  PreKeyRecord,
-} from '@signalapp/libsignal-client';
 
 // Create a child logger for encryption operations
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
+
+// Signal Protocol types (loaded dynamically to avoid native module issues)
+let SignalLib: {
+  IdentityKeyPair: any;
+  PrivateKey: any;
+  SignedPreKeyRecord: any;
+  PreKeyRecord: any;
+} | null = null;
+
+// Flag to track if Signal Protocol is available
+let signalProtocolAvailable = false;
+
+// Try to load Signal Protocol library
+// Note: A symlink to prebuilds should exist in the gateway directory for node-gyp-build to work
+try {
+  const signalModule = require('@signalapp/libsignal-client');
+  SignalLib = {
+    IdentityKeyPair: signalModule.IdentityKeyPair,
+    PrivateKey: signalModule.PrivateKey,
+    SignedPreKeyRecord: signalModule.SignedPreKeyRecord,
+    PreKeyRecord: signalModule.PreKeyRecord,
+  };
+  signalProtocolAvailable = true;
+  logger.info('Signal Protocol library loaded successfully');
+} catch (error) {
+  logger.warn('Signal Protocol library not available - E2EE features will be disabled', {
+    error: error instanceof Error ? error.message : 'Unknown error'
+  });
+}
 
 // Types defined locally to avoid build order issues with shared package
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -755,10 +778,14 @@ export class EncryptionService {
    * Generate Signal Protocol pre-key bundle
    */
   async generatePreKeyBundle(): Promise<PreKeyBundle> {
+    if (!signalProtocolAvailable || !SignalLib) {
+      throw new Error('Signal Protocol is not available on this platform. E2EE features are disabled.');
+    }
+
     logger.debug('Generating Signal Protocol pre-key bundle using libsignal-client');
 
     // Generate identity key pair using Signal library
-    const identityKeyPair = IdentityKeyPair.generate();
+    const identityKeyPair = SignalLib.IdentityKeyPair.generate();
     const identityPublicKey = identityKeyPair.publicKey;
 
     // Generate registration ID (1-16380 as per Signal spec)
@@ -767,13 +794,13 @@ export class EncryptionService {
 
     // Generate pre-key (one-time key)
     const preKeyId = crypto.randomInt(1, 16777215);
-    const preKeyPrivate = PrivateKey.generate();
+    const preKeyPrivate = SignalLib.PrivateKey.generate();
     const preKeyPublic = preKeyPrivate.getPublicKey();
-    const preKeyRecord = PreKeyRecord.new(preKeyId, preKeyPublic, preKeyPrivate);
+    const preKeyRecord = SignalLib.PreKeyRecord.new(preKeyId, preKeyPublic, preKeyPrivate);
 
     // Generate signed pre-key (medium-term key, signed by identity key)
     const signedPreKeyId = crypto.randomInt(1, 16777215);
-    const signedPreKeyPrivate = PrivateKey.generate();
+    const signedPreKeyPrivate = SignalLib.PrivateKey.generate();
     const signedPreKeyPublic = signedPreKeyPrivate.getPublicKey();
 
     // Sign the signed pre-key with identity private key
@@ -782,7 +809,7 @@ export class EncryptionService {
     );
 
     const timestamp = Date.now();
-    const signedPreKeyRecord = SignedPreKeyRecord.new(
+    const signedPreKeyRecord = SignalLib.SignedPreKeyRecord.new(
       signedPreKeyId,
       timestamp,
       signedPreKeyPublic,
@@ -822,7 +849,7 @@ export class EncryptionService {
    * Check if Signal Protocol is available
    */
   isSignalProtocolAvailable(): boolean {
-    return this.signalService !== null;
+    return signalProtocolAvailable;
   }
 
   /**

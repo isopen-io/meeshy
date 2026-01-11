@@ -330,6 +330,20 @@ struct MainSettingsView: View {
                     showChevron: true
                 )
             }
+
+            Divider().padding(.leading, 60)
+
+            NavigationLink {
+                BubbleShowcaseView()
+            } label: {
+                SettingRow(
+                    icon: "bubble.left.and.bubble.right.fill",
+                    title: "Aperçu de votre configuration",
+                    value: "Tous les styles de messages",
+                    color: .cyan,
+                    showChevron: true
+                )
+            }
         }
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)

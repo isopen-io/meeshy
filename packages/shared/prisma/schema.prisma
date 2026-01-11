@@ -470,14 +470,14 @@ model Message {
   /// Encrypted content (base64 encoded ciphertext)
   encryptedContent String?
 
-  /// Encryption mode when message was sent: 'server', 'e2ee', null (plaintext)
-  encryptionMode String?
-
   /// Encryption metadata (IV, auth tag, key version, etc.)
   encryptionMetadata Json?
 
   /// Flag indicating if message is encrypted
   isEncrypted Boolean @default(false)
+
+  /// Encryption mode: 'e2ee' (end-to-end), 'server' (server-side), 'hybrid'
+  encryptionMode String?
 
   // Status tracking (per-user per-message)
   statusEntries       MessageStatusEntry[]    @relation("MessageStatusEntries")
@@ -648,7 +648,7 @@ model MessageAttachment {
   /// Whether this attachment is encrypted
   isEncrypted Boolean @default(false)
 
-  /// Encryption mode: 'e2ee', 'server', 'hybrid'
+  /// Encryption mode: 'e2ee' (end-to-end), 'server' (server-side), 'hybrid'
   encryptionMode String?
 
   /// Base64-encoded initialization vector (12 bytes for AES-GCM)

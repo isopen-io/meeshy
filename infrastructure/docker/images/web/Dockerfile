@@ -166,6 +166,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy entrypoint script for runtime URL injection
+COPY infrastructure/docker/images/web/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Create logs directory and set permissions
 RUN mkdir -p /app/logs && \
     chown -R nextjs:nodejs /app && \
@@ -177,8 +181,8 @@ USER nextjs
 # Expose port
 EXPOSE 3100
 
-# Use tini as entrypoint for proper signal handling
-ENTRYPOINT ["/sbin/tini", "--"]
+# Use tini as entrypoint for proper signal handling, then our entrypoint script
+ENTRYPOINT ["/sbin/tini", "--", "/app/entrypoint.sh"]
 
 # === HEALTH CHECK ===
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \

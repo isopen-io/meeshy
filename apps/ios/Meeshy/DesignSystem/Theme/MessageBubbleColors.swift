@@ -55,6 +55,20 @@ extension Color {
     /// Error state
     static let bubbleError = Color(red: 0.98, green: 0.84, blue: 0.84) // #FAD6D6
 
+    // MARK: - v2 - MessageSource Colors
+
+    /// Orange for ads/sponsored messages
+    static let bubbleAds = Color(red: 1.0, green: 0.85, blue: 0.70) // #FFD9B3
+
+    /// Blue for app system messages
+    static let bubbleApp = Color(red: 0.70, green: 0.85, blue: 1.0) // #B3D9FF
+
+    /// Green for agent/assistant messages
+    static let bubbleAgent = Color(red: 0.70, green: 0.95, blue: 0.80) // #B3F2CC
+
+    /// Indigo for authority/official messages
+    static let bubbleAuthority = Color(red: 0.80, green: 0.75, blue: 0.98) // #CCBFFA
+
     /// Sending state shimmer
     static let bubbleShimmer = Color.white.opacity(0.3)
 
@@ -172,6 +186,50 @@ struct BubbleStyleConfig {
                 shadowRadius: 5,
                 glowIntensity: 0
             )
+        }
+
+        // v2 - MessageSource-specific styling (ads, app, agent, authority)
+        if let source = message.messageSource, source != .user {
+            switch source {
+            case .ads:
+                return BubbleStyleConfig(
+                    baseColor: .bubbleAds,
+                    accentColor: Color(red: 0.98, green: 0.75, blue: 0.55),
+                    opacity: 0.92,
+                    shadowColor: .orange.opacity(0.25),
+                    shadowRadius: 5,
+                    glowIntensity: 0.1
+                )
+            case .app:
+                return BubbleStyleConfig(
+                    baseColor: .bubbleApp,
+                    accentColor: Color(red: 0.55, green: 0.78, blue: 0.98),
+                    opacity: 0.92,
+                    shadowColor: .blue.opacity(0.2),
+                    shadowRadius: 4,
+                    glowIntensity: 0.05
+                )
+            case .agent:
+                return BubbleStyleConfig(
+                    baseColor: .bubbleAgent,
+                    accentColor: Color(red: 0.55, green: 0.88, blue: 0.70),
+                    opacity: 0.92,
+                    shadowColor: .green.opacity(0.2),
+                    shadowRadius: 4,
+                    glowIntensity: 0.15
+                )
+            case .authority:
+                return BubbleStyleConfig(
+                    baseColor: .bubbleAuthority,
+                    accentColor: Color(red: 0.70, green: 0.62, blue: 0.95),
+                    opacity: 0.92,
+                    shadowColor: .indigo.opacity(0.25),
+                    shadowRadius: 5,
+                    glowIntensity: 0.2
+                )
+            case .user, .system:
+                break // Continue to other checks
+            }
         }
 
         // Forwarded messages

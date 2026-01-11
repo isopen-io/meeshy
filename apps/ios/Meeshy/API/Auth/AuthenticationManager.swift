@@ -408,9 +408,84 @@ final class AuthenticationManager: ObservableObject, @unchecked Sendable {
         return now >= bufferDate
     }
 
+    // MARK: - Cache Clearing
+
+    /// CRITICAL SECURITY FUNCTION: Clear ALL user data and caches before new login
+    /// This prevents data leakage between different user sessions
+    /// Called synchronously before storing new auth credentials
+    private func clearAllUserDataSync() {
+        logger.info("🧹 [Security] Starting complete cache clear...")
+
+        // 1. Clear in-memory state
+        self.accessToken = nil
+        self.refreshToken = nil
+        self.tokenExpirationDate = nil
+
+        // 2. Clear Keychain tokens
+        keychain.deleteAllTokens()
+        logger.info("🧹 [Security] Keychain tokens cleared")
+
+        // 3. Clear CacheManager (sync - memory + disk)
+        CacheManager.shared.invalidateAll()
+        logger.info("🧹 [Security] CacheManager cleared")
+
+        // 4. Clear DiskCache (sync)
+        DiskCache.shared.clearAll()
+        logger.info("🧹 [Security] DiskCache cleared")
+
+        // 5. Fire async cache clears (non-blocking)
+        // These run in background to avoid blocking login
+        Task.detached { [logger] in
+            logger.info("🧹 [Security] Starting async cache clears...")
+
+            // Clear DataManager (conversations, categories, communities, messages)
+            await DataManager.shared.clearAllData()
+            logger.info("🧹 [Security] DataManager cleared")
+
+            // Clear AppCache (in-memory paginated caches)
+            await AppCache.clearAll()
+            logger.info("🧹 [Security] AppCache cleared")
+
+            // Clear ImageCacheManager
+            await ImageCacheManager.shared.clearAllCaches()
+            logger.info("🧹 [Security] ImageCacheManager cleared")
+
+            // Clear MemberCacheManager
+            await MemberCacheManager.shared.clearAll()
+            logger.info("🧹 [Security] MemberCacheManager cleared")
+
+            // Clear AttachmentFileCache (only clears if login changes - attachments are user-specific)
+            await AttachmentFileCache.shared.clearAllCache()
+            logger.info("🧹 [Security] AttachmentFileCache cleared")
+
+            logger.info("✅ [Security] All async caches cleared successfully")
+        }
+
+        // 6. Disconnect WebSocket (will reconnect with new credentials)
+        Task { @MainActor in
+            WebSocketService.shared.disconnect()
+            logger.info("🧹 [Security] WebSocket disconnected")
+        }
+
+        // 7. Clear UI state on MainActor
+        Task { @MainActor in
+            self.currentUser = nil
+            self.isAuthenticated = false
+            self.isAnonymous = false
+            self.sessionToken = nil
+        }
+
+        logger.info("✅ [Security] Synchronous cache clear complete, async clears in progress")
+    }
+
     // MARK: - Private Methods
 
     private func handleAuthResponse(_ response: AuthResponse) {
+        // CRITICAL: Clear ALL previous user data before storing new auth
+        // This prevents data leakage between different user sessions
+        logger.info("🧹 Clearing all previous user data before new login...")
+        clearAllUserDataSync()
+
         // Store tokens in memory
         self.accessToken = response.token
         self.refreshToken = response.refreshToken ?? response.token // Use token as refresh token if not provided
