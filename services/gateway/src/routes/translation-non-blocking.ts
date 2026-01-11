@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -26,6 +27,224 @@ interface TranslateRequest {
   conversation_id?: string;
 }
 
+// =============================================================================
+// OpenAPI Schemas
+// =============================================================================
+
+/**
+ * OpenAPI schema for non-blocking translation request body
+ */
+const translateRequestSchema = {
+  type: 'object',
+  properties: {
+    text: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 1000,
+      description: 'Text to translate. Required if message_id is not provided.',
+      example: 'Hello, how are you?'
+    },
+    source_language: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 5,
+      description: 'Source language code (ISO 639-1). Optional, can be auto-detected.',
+      example: 'en'
+    },
+    target_language: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 5,
+      description: 'Target language code (ISO 639-1). Required.',
+      example: 'fr'
+    },
+    model_type: {
+      type: 'string',
+      enum: ['basic', 'medium', 'premium'],
+      description: 'Translation model type. Optional, defaults to "basic".',
+      example: 'medium'
+    },
+    message_id: {
+      type: 'string',
+      description: 'ID of an existing message to retranslate. Either text or message_id must be provided.',
+      example: 'msg_123abc'
+    },
+    conversation_id: {
+      type: 'string',
+      description: 'ID of the conversation or identifier. Required when message_id is not provided.',
+      example: 'conv_456def'
+    }
+  },
+  required: ['target_language']
+} as const;
+
+/**
+ * OpenAPI schema for non-blocking translation success response
+ */
+const translationNonBlockingResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'Status message',
+          example: 'Translation request submitted successfully'
+        },
+        messageId: {
+          type: 'string',
+          description: 'ID of the message being translated',
+          example: 'msg_123abc'
+        },
+        conversationId: {
+          type: 'string',
+          description: 'ID of the conversation',
+          example: 'conv_456def'
+        },
+        targetLanguage: {
+          type: 'string',
+          description: 'Target language code',
+          example: 'fr'
+        },
+        status: {
+          type: 'string',
+          description: 'Processing status',
+          example: 'processing',
+          enum: ['processing']
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for translation status response
+ */
+const translationStatusResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Translation status',
+          example: 'completed',
+          enum: ['processing', 'completed']
+        },
+        translation: {
+          type: 'object',
+          description: 'Translation result if completed',
+          properties: {
+            translatedText: { type: 'string', example: 'Bonjour, comment allez-vous?' },
+            sourceLanguage: { type: 'string', example: 'en' },
+            targetLanguage: { type: 'string', example: 'fr' },
+            confidenceScore: { type: 'number', example: 0.95 },
+            modelType: { type: 'string', example: 'medium' },
+            processingTime: { type: 'number', example: 0.234 }
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for conversation response
+ */
+const conversationResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'MongoDB ObjectId of the conversation',
+          example: '507f1f77bcf86cd799439011'
+        },
+        identifier: {
+          type: 'string',
+          description: 'Human-readable conversation identifier',
+          example: 'conv_456def'
+        },
+        title: {
+          type: 'string',
+          description: 'Conversation title',
+          example: 'Support Chat'
+        },
+        type: {
+          type: 'string',
+          description: 'Conversation type',
+          example: 'direct',
+          enum: ['direct', 'group', 'channel']
+        },
+        createdAt: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Conversation creation timestamp',
+          example: '2024-01-15T10:30:00.000Z'
+        },
+        lastMessageAt: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Last message timestamp',
+          example: '2024-01-15T14:30:00.000Z'
+        },
+        messageCount: {
+          type: 'number',
+          description: 'Number of messages in the conversation',
+          example: 42
+        },
+        memberCount: {
+          type: 'number',
+          description: 'Number of members in the conversation',
+          example: 3
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for status route params
+ */
+const statusParamsSchema = {
+  type: 'object',
+  properties: {
+    messageId: {
+      type: 'string',
+      description: 'ID of the message',
+      example: 'msg_123abc'
+    },
+    language: {
+      type: 'string',
+      description: 'Target language code',
+      example: 'fr'
+    }
+  },
+  required: ['messageId', 'language']
+} as const;
+
+/**
+ * OpenAPI schema for conversation params
+ */
+const conversationParamsSchema = {
+  type: 'object',
+  properties: {
+    identifier: {
+      type: 'string',
+      description: 'Conversation identifier (human-readable or ObjectId)',
+      example: 'conv_456def'
+    }
+  },
+  required: ['identifier']
+} as const;
+
 // ===== ROUTE NON-BLOQUANTE =====
 export async function translationRoutes(fastify: FastifyInstance, options: any) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
@@ -42,7 +261,29 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
 
 
   // ===== ROUTE PRINCIPALE NON-BLOQUANTE =====
-  fastify.post<{ Body: TranslateRequest }>('/translate', async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
+  fastify.post<{ Body: TranslateRequest }>('/translate', {
+    schema: {
+      description: 'Translate text asynchronously with non-blocking behavior. This endpoint submits a translation request and returns immediately with a "processing" status. The actual translation happens asynchronously in the background. Use the GET /status/:messageId/:language endpoint to check translation status and retrieve the result. Supports both new message translation and retranslation of existing messages.',
+      tags: ['translation'],
+      summary: 'Translate text (non-blocking)',
+      body: translateRequestSchema,
+      response: {
+        200: translationNonBlockingResponseSchema,
+        400: {
+          description: 'Bad request - validation error or missing required fields',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - message or conversation does not exist',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error - translation service failure',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
       const validatedData = TranslateRequestSchema.parse(request.body);
 
@@ -181,7 +422,21 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
   });
 
   // ===== ROUTE UTILITAIRE POUR RECUPERER LE STATUT =====
-  fastify.get('/status/:messageId/:language', async (request: any, reply: FastifyReply) => {
+  fastify.get('/status/:messageId/:language', {
+    schema: {
+      description: 'Get the translation status and result for a specific message and target language. Returns "processing" status if the translation is still being processed, or "completed" status with the translation result if available. This endpoint is used to poll for translation completion after submitting a non-blocking translation request.',
+      tags: ['translation'],
+      summary: 'Get translation status',
+      params: statusParamsSchema,
+      response: {
+        200: translationStatusResponseSchema,
+        500: {
+          description: 'Internal server error - failed to retrieve translation status',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: any, reply: FastifyReply) => {
     try {
       const { messageId, language } = request.params;
 
@@ -214,7 +469,25 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
   });
 
   // ===== ROUTE POUR RECUPERER UNE CONVERSATION PAR IDENTIFIANT =====
-  fastify.get<{ Params: { identifier: string } }>('/conversation/:identifier', async (request: FastifyRequest<{ Params: { identifier: string } }>, reply: FastifyReply) => {
+  fastify.get<{ Params: { identifier: string } }>('/conversation/:identifier', {
+    schema: {
+      description: 'Retrieve conversation details by identifier. Accepts either a human-readable identifier or a MongoDB ObjectId. Returns conversation metadata including ID, title, type, timestamps, and counts of messages and members. This endpoint is useful for validating conversation identifiers before submitting translation requests.',
+      tags: ['translation'],
+      summary: 'Get conversation by identifier',
+      params: conversationParamsSchema,
+      response: {
+        200: conversationResponseSchema,
+        404: {
+          description: 'Not found - conversation does not exist',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error - failed to retrieve conversation',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{ Params: { identifier: string } }>, reply: FastifyReply) => {
     try {
       const { identifier } = request.params;
 
