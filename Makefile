@@ -1766,7 +1766,7 @@ DOCKER_REGISTRY ?= isopen
 TAG ?= latest
 
 # Préparation des dépendances partagées avant build Docker
-_prepare-docker-build:
+_prepare-docker-build: _ensure-docker-running
 	@echo "$(BLUE)📦 Préparation des dépendances pour le build Docker...$(NC)"
 	@# Vérifier que shared est buildé
 	@if [ ! -d "$(SHARED_DIR)/dist" ]; then \
