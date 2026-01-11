@@ -2,7 +2,7 @@
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-hosts \
-        _generate-certs _copy-certs-to-docker \
+        _generate-certs _copy-certs-to-docker _ensure-docker-running \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
@@ -1609,11 +1609,37 @@ logs-web: ## Afficher les logs du web
 # DOCKER COMPOSE
 # =============================================================================
 
-docker-infra: ## Démarrer l'infrastructure avec Traefik HTTPS (MongoDB + Redis)
+# Helper: Vérifier et démarrer Docker si nécessaire
+_ensure-docker-running:
 	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
-		echo "$(RED)❌ Docker non disponible$(NC)"; \
+		echo "$(RED)❌ Docker non installé$(NC)"; \
+		echo "$(YELLOW)💡 Installez Docker Desktop: https://docker.com/get-started$(NC)"; \
 		exit 1; \
 	fi
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "$(YELLOW)🐳 Docker n'est pas démarré, lancement en cours...$(NC)"; \
+		if [ "$(OS)" = "macos" ]; then \
+			open -a Docker; \
+		elif [ "$(OS)" = "linux" ]; then \
+			sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true; \
+		fi; \
+		echo "$(BLUE)⏳ Attente du démarrage de Docker...$(NC)"; \
+		for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
+			if docker info >/dev/null 2>&1; then \
+				echo "$(GREEN)✅ Docker est prêt$(NC)"; \
+				break; \
+			fi; \
+			sleep 2; \
+			printf "."; \
+		done; \
+		echo ""; \
+		if ! docker info >/dev/null 2>&1; then \
+			echo "$(RED)❌ Échec du démarrage de Docker après 60s$(NC)"; \
+			exit 1; \
+		fi; \
+	fi
+
+docker-infra: _ensure-docker-running ## Démarrer l'infrastructure avec Traefik HTTPS (MongoDB + Redis)
 	@# Vérifier les certificats
 	@if [ ! -f "$(CERTS_DIR)/cert.pem" ]; then \
 		echo "$(YELLOW)⚠️  Certificats manquants, exécution de 'make setup-certs'...$(NC)"; \
@@ -1629,11 +1655,7 @@ docker-infra: ## Démarrer l'infrastructure avec Traefik HTTPS (MongoDB + Redis)
 	@echo "   - MongoDB:  mongodb://localhost:27017"
 	@echo "   - Redis:    redis://localhost:6379"
 
-docker-infra-simple: ## Démarrer infrastructure simple sans HTTPS (MongoDB + Redis uniquement)
-	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
-		echo "$(RED)❌ Docker non disponible$(NC)"; \
-		exit 1; \
-	fi
+docker-infra-simple: _ensure-docker-running ## Démarrer infrastructure simple sans HTTPS (MongoDB + Redis uniquement)
 	@echo "$(BLUE)🐳 Démarrage de l'infrastructure simple (MongoDB + Redis)...$(NC)"
 	@docker compose -f $(COMPOSE_DEV) up -d
 	@echo "$(GREEN)✅ Infrastructure démarrée$(NC)"
@@ -1642,31 +1664,19 @@ docker-infra-simple: ## Démarrer infrastructure simple sans HTTPS (MongoDB + Re
 	@echo "   - MongoDB: mongodb://localhost:27017"
 	@echo "   - Redis:   redis://localhost:6379"
 
-docker-start: ## Démarrer tous les services via Docker Compose (localhost)
-	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
-		echo "$(RED)❌ Docker non disponible$(NC)"; \
-		exit 1; \
-	fi
+docker-start: _ensure-docker-running ## Démarrer tous les services via Docker Compose (localhost)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Meeshy...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés$(NC)"
 	@$(MAKE) urls
 
-docker-start-local: docker-build ## 🔨 Builder les images localement puis démarrer
-	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
-		echo "$(RED)❌ Docker non disponible$(NC)"; \
-		exit 1; \
-	fi
+docker-start-local: _ensure-docker-running docker-build ## 🔨 Builder les images localement puis démarrer
 	@echo "$(BLUE)🐳 Démarrage avec images locales...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés avec images locales$(NC)"
 	@$(MAKE) urls
 
-docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès réseau
-	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
-		echo "$(RED)❌ Docker non disponible$(NC)"; \
-		exit 1; \
-	fi
+docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services Docker avec accès réseau
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║   MEESHY - Docker 100% avec Accès Réseau (Mobile/Devices)   ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
@@ -1706,45 +1716,45 @@ docker-start-network: ## 🌐 Démarrer tous les services Docker avec accès ré
 	@echo ""
 	@echo "$(YELLOW)💡 Pour les mobiles: make share-cert$(NC)"
 
-docker-stop: ## Arrêter tous les services Docker
+docker-stop: _ensure-docker-running ## Arrêter tous les services Docker
 	@echo "$(YELLOW)⏹️  Arrêt des services Docker...$(NC)"
 	@docker compose -f $(COMPOSE_DEV) down 2>/dev/null || true
 	@docker compose -f $(COMPOSE_LOCAL) down 2>/dev/null || true
 	@docker compose -f $(COMPOSE_PROD) down 2>/dev/null || true
 	@echo "$(GREEN)✅ Services arrêtés$(NC)"
 
-docker-logs: ## Afficher les logs Docker (SERVICE=nom pour filtrer)
+docker-logs: _ensure-docker-running ## Afficher les logs Docker (SERVICE=nom pour filtrer)
 	@if [ -z "$(SERVICE)" ]; then \
 		docker compose -f $(COMPOSE_FILE) logs -f; \
 	else \
 		docker compose -f $(COMPOSE_FILE) logs -f $(SERVICE); \
 	fi
 
-docker-pull: ## Télécharger les dernières images Docker
+docker-pull: _ensure-docker-running ## Télécharger les dernières images Docker
 	@echo "$(BLUE)📥 Téléchargement des images...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) pull
 	@echo "$(GREEN)✅ Images mises à jour$(NC)"
 
-docker-build: ## Builder toutes les images Docker localement
+docker-build: _ensure-docker-running ## Builder toutes les images Docker localement
 	@$(MAKE) build-all-docker
 
 # =============================================================================
 # DOCKER HEALTH TESTS
 # =============================================================================
 
-docker-test: ## Tester les services Docker (MODE=dev|local|prod)
+docker-test: _ensure-docker-running ## Tester les services Docker (MODE=dev|local|prod)
 	@echo "$(BLUE)🧪 Test des services Docker...$(NC)"
 	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode $(or $(MODE),local)
 
-docker-test-dev: ## Tester les services localhost (HTTP)
+docker-test-dev: _ensure-docker-running ## Tester les services localhost (HTTP)
 	@echo "$(BLUE)🧪 Test des services localhost...$(NC)"
 	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode dev
 
-docker-test-local: ## Tester les services *.meeshy.local (HTTPS)
+docker-test-local: _ensure-docker-running ## Tester les services *.meeshy.local (HTTPS)
 	@echo "$(BLUE)🧪 Test des services meeshy.local...$(NC)"
 	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode local
 
-docker-test-prod: ## Tester les services *.meeshy.me (HTTPS)
+docker-test-prod: _ensure-docker-running ## Tester les services *.meeshy.me (HTTPS)
 	@echo "$(BLUE)🧪 Test des services meeshy.me...$(NC)"
 	@python3 $(COMPOSE_SCRIPTS)/test-services.py --mode prod
 
@@ -1870,12 +1880,12 @@ release: build-all-docker push-all ## Builder et pusher toutes les images (TAG=v
 	@echo "$(GREEN)🚀 Release $(TAG) publiée!$(NC)"
 
 # Vérifier l'authentification Docker Hub
-docker-login: ## Se connecter à Docker Hub
+docker-login: _ensure-docker-running ## Se connecter à Docker Hub
 	@echo "$(BLUE)🔐 Connexion à Docker Hub...$(NC)"
 	@docker login
 	@echo "$(GREEN)✅ Connecté$(NC)"
 
-docker-images: ## Lister les images Meeshy locales
+docker-images: _ensure-docker-running ## Lister les images Meeshy locales
 	@echo "$(BLUE)📦 Images Meeshy locales:$(NC)"
 	@docker images | grep -E "REPOSITORY|meeshy" | head -20
 
