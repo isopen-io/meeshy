@@ -1,7 +1,16 @@
+/**
+ * Routes API pour la gestion du système d'affiliation
+ */
+
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
 import { validatePagination } from '../utils/pagination';
+import {
+  affiliateTokenSchema,
+  affiliateRelationSchema,
+  errorResponseSchema,
+} from '@meeshy/shared/types/api-schemas';
 
 // Schémas de validation Zod
 const createAffiliateTokenSchema = z.object({
@@ -37,9 +46,75 @@ const registerAffiliateSchema = z.object({
 });
 
 export default async function affiliateRoutes(fastify: FastifyInstance) {
-  // Créer un token d'affiliation
+  /**
+   * POST /affiliate/tokens
+   * Create a new affiliate/referral token for user invitations
+   */
   fastify.post('/affiliate/tokens', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Create a new affiliate token for user referrals. Generates a unique token and affiliate link that can be shared to track new user signups. Authenticated users only.',
+      tags: ['affiliate'],
+      summary: 'Create affiliate token',
+      body: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 100,
+            description: 'Friendly name for this affiliate token (e.g., "Twitter Campaign", "Friend Invite")'
+          },
+          maxUses: {
+            type: 'number',
+            minimum: 1,
+            description: 'Maximum number of times this token can be used (optional, unlimited if not specified)'
+          },
+          expiresAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Token expiration date in ISO 8601 format (optional, never expires if not specified)',
+            example: '2024-12-31T23:59:59Z'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Affiliate token created successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Token database ID' },
+                token: { type: 'string', description: 'Unique affiliate token code' },
+                name: { type: 'string', description: 'Token friendly name' },
+                affiliateLink: {
+                  type: 'string',
+                  format: 'uri',
+                  description: 'Complete shareable affiliate link',
+                  example: 'https://app.meeshy.com/?affiliate=aff_1234567890_abc'
+                },
+                maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
+                currentUses: { type: 'number', description: 'Current use count' },
+                expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
+                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -106,9 +181,84 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Récupérer les tokens d'affiliation de l'utilisateur
+  /**
+   * GET /affiliate/tokens
+   * Get all affiliate tokens created by the authenticated user
+   */
   fastify.get('/affiliate/tokens', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve all affiliate tokens created by the authenticated user with pagination support. Returns tokens with usage statistics and full affiliate links.',
+      tags: ['affiliate'],
+      summary: 'List user affiliate tokens',
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'number',
+            minimum: 0,
+            default: 0,
+            description: 'Number of tokens to skip (for pagination)'
+          },
+          limit: {
+            type: 'number',
+            minimum: 1,
+            maximum: 100,
+            default: 50,
+            description: 'Maximum number of tokens to return'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Affiliate tokens retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: 'Token ID' },
+                  token: { type: 'string', description: 'Unique affiliate token' },
+                  name: { type: 'string', description: 'Token friendly name' },
+                  affiliateLink: { type: 'string', format: 'uri', description: 'Complete affiliate link' },
+                  maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
+                  currentUses: { type: 'number', description: 'Current use count' },
+                  isActive: { type: 'boolean', description: 'Whether token is active' },
+                  expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
+                  createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                  _count: {
+                    type: 'object',
+                    properties: {
+                      affiliations: { type: 'number', description: 'Number of successful referrals' }
+                    }
+                  }
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of tokens' },
+                limit: { type: 'number', description: 'Items per page' },
+                offset: { type: 'number', description: 'Current offset' },
+                hasMore: { type: 'boolean', description: 'Whether more items exist' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -191,9 +341,56 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Récupérer les statistiques d'affiliation
+  /**
+   * GET /affiliate/stats
+   * Get affiliate statistics and performance metrics
+   */
   fastify.get('/affiliate/stats', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Retrieve affiliate performance statistics for the authenticated user. Filter by specific token or status. Returns aggregated metrics including total referrals, conversions, and earnings.',
+      tags: ['affiliate'],
+      summary: 'Get affiliate statistics',
+      querystring: {
+        type: 'object',
+        properties: {
+          tokenId: {
+            type: 'string',
+            description: 'Filter statistics for a specific affiliate token'
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'completed', 'expired'],
+            description: 'Filter by affiliation status'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Affiliate statistics retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              description: 'Affiliate statistics and metrics'
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid filter parameters',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;
@@ -234,8 +431,75 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Valider un token d'affiliation (pour la page signin)
+  /**
+   * GET /affiliate/validate/:token
+   * Validate an affiliate token for the signup page
+   */
   fastify.get('/affiliate/validate/:token', {
+    schema: {
+      description: 'Validate an affiliate/referral token before user signup. Checks if token is active, not expired, and within usage limits. Returns token details and affiliate user information if valid. No authentication required (public endpoint for signup flow).',
+      tags: ['affiliate'],
+      summary: 'Validate affiliate token',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            description: 'Affiliate token code to validate',
+            example: 'aff_1234567890_abc'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Token validation result (always returns 200 even if invalid)',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                isValid: {
+                  type: 'boolean',
+                  description: 'Whether the token is valid and can be used'
+                },
+                token: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'Token details (only present if valid)',
+                  properties: {
+                    id: { type: 'string', description: 'Token ID' },
+                    name: { type: 'string', description: 'Token friendly name' },
+                    token: { type: 'string', description: 'Token code' },
+                    maxUses: { type: 'number', nullable: true, description: 'Maximum uses' },
+                    currentUses: { type: 'number', description: 'Current use count' },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' }
+                  }
+                },
+                affiliateUser: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'Affiliate user who created the token (only present if valid)',
+                  properties: {
+                    id: { type: 'string', description: 'User ID' },
+                    username: { type: 'string', description: 'Username' },
+                    firstName: { type: 'string', nullable: true, description: 'First name' },
+                    lastName: { type: 'string', nullable: true, description: 'Last name' },
+                    displayName: { type: 'string', nullable: true, description: 'Display name' },
+                    avatar: { type: 'string', nullable: true, description: 'Avatar URL' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const params = affiliateLinkSchema.parse(request.params);
@@ -327,8 +591,63 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Tracker une visite d'affiliation (pour persistance même si pas d'inscription immédiate)
+  /**
+   * POST /affiliate/track-visit
+   * Track an affiliate link visit for conversion tracking
+   */
   fastify.post('/affiliate/track-visit', {
+    schema: {
+      description: 'Track a visit through an affiliate link. Creates a session that can be converted to a full referral when the visitor signs up. This allows tracking even if signup does not happen immediately. Returns a session key to associate the visitor with the token. No authentication required (public endpoint).',
+      tags: ['affiliate'],
+      summary: 'Track affiliate visit',
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            description: 'Affiliate token code from the referral link'
+          },
+          visitorData: {
+            type: 'object',
+            description: 'Optional visitor metadata for analytics',
+            properties: {
+              ipAddress: { type: 'string', description: 'Visitor IP address' },
+              userAgent: { type: 'string', description: 'Browser user agent' },
+              referrer: { type: 'string', description: 'HTTP referrer URL' },
+              country: { type: 'string', description: 'Visitor country code' },
+              language: { type: 'string', description: 'Browser language preference' }
+            }
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Visit tracked successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                sessionKey: {
+                  type: 'string',
+                  description: 'Unique session key to associate future signup with this visit'
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid token or tracking failed',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = trackVisitSchema.parse(request.body);
@@ -358,8 +677,55 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Créer une relation d'affiliation (appelé lors de l'inscription)
+  /**
+   * POST /affiliate/register
+   * Create affiliate relationship when user signs up
+   */
   fastify.post('/affiliate/register', {
+    schema: {
+      description: 'Convert an affiliate visit into a confirmed referral relationship when a user signs up. Links the new user to the affiliate who shared the token. Can use session key from track-visit or directly provide token. No authentication required (called during signup flow).',
+      tags: ['affiliate'],
+      summary: 'Register affiliate referral',
+      body: {
+        type: 'object',
+        required: ['token', 'referredUserId'],
+        properties: {
+          token: {
+            type: 'string',
+            description: 'Affiliate token code from the referral link'
+          },
+          referredUserId: {
+            type: 'string',
+            description: 'ID of the newly registered user being referred'
+          },
+          sessionKey: {
+            type: 'string',
+            description: 'Optional session key from track-visit to link with prior tracking data'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Affiliate relationship created successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              description: 'Created affiliate relationship details'
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid token or registration failed',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = registerAffiliateSchema.parse(request.body);
@@ -392,9 +758,48 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Supprimer un token d'affiliation
+  /**
+   * DELETE /affiliate/tokens/:id
+   * Delete an affiliate token
+   */
   fastify.delete('/affiliate/tokens/:id', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Delete an affiliate token created by the authenticated user. Only the token creator can delete their own tokens. This permanently removes the token and prevents future use, but does not affect existing referral relationships.',
+      tags: ['affiliate'],
+      summary: 'Delete affiliate token',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Affiliate token ID to delete'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Affiliate token deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Token not found or user does not own this token',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as any).authContext;

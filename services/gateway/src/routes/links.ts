@@ -3,12 +3,13 @@ import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../services/TrackingLinkService';
-import { 
+import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser,
   getUserPermissions
 } from '../middleware/auth';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // Schémas de validation
 const createLinkSchema = z.object({
@@ -71,6 +72,178 @@ const sendMessageSchema = z.object({
 }, {
   message: 'Message content cannot be empty (unless attachments are included)'
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JSON SCHEMAS FOR OPENAPI DOCUMENTATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+const shareLinkSchema = {
+  type: 'object',
+  description: 'Share link configuration and metadata',
+  properties: {
+    id: { type: 'string', description: 'Share link database ID' },
+    linkId: { type: 'string', description: 'Public share link identifier (mshy_*)', example: 'mshy_67890abcdef12345_a1b2c3d4' },
+    identifier: { type: 'string', description: 'Human-readable identifier', example: 'mshy_my-link' },
+    conversationId: { type: 'string', description: 'Associated conversation ID' },
+    name: { type: 'string', nullable: true, description: 'Link display name' },
+    description: { type: 'string', nullable: true, description: 'Link description' },
+    createdBy: { type: 'string', description: 'Creator user ID' },
+    isActive: { type: 'boolean', description: 'Link active status', default: true },
+
+    // Limits
+    maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
+    maxConcurrentUsers: { type: 'number', nullable: true, description: 'Maximum concurrent users' },
+    maxUniqueSessions: { type: 'number', nullable: true, description: 'Maximum unique sessions' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration timestamp' },
+
+    // Anonymous Permissions
+    allowAnonymousMessages: { type: 'boolean', description: 'Allow anonymous users to send messages', default: true },
+    allowAnonymousFiles: { type: 'boolean', description: 'Allow anonymous users to send files', default: false },
+    allowAnonymousImages: { type: 'boolean', description: 'Allow anonymous users to send images', default: true },
+    allowViewHistory: { type: 'boolean', description: 'Allow viewing message history', default: true },
+
+    // Requirements
+    requireAccount: { type: 'boolean', description: 'Require user account', default: false },
+    requireNickname: { type: 'boolean', description: 'Require nickname', default: true },
+    requireEmail: { type: 'boolean', description: 'Require email', default: false },
+    requireBirthday: { type: 'boolean', description: 'Require birthday', default: false },
+
+    // Restrictions
+    allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes (ISO 3166-1 alpha-2)' },
+    allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes (ISO 639-1)' },
+    allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges (CIDR notation)' },
+
+    // Metadata
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
+  }
+} as const;
+
+const conversationSummarySchema = {
+  type: 'object',
+  description: 'Conversation summary information',
+  properties: {
+    id: { type: 'string', description: 'Conversation unique identifier' },
+    identifier: { type: 'string', nullable: true, description: 'Conversation identifier (e.g., "meeshy")' },
+    title: { type: 'string', description: 'Conversation title' },
+    description: { type: 'string', nullable: true, description: 'Conversation description' },
+    type: { type: 'string', enum: ['direct', 'group', 'public', 'global'], description: 'Conversation type' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
+  }
+} as const;
+
+const messageSenderSchema = {
+  type: 'object',
+  description: 'Message sender information',
+  properties: {
+    id: { type: 'string', description: 'Sender unique identifier' },
+    username: { type: 'string', description: 'Sender username' },
+    firstName: { type: 'string', description: 'Sender first name' },
+    lastName: { type: 'string', description: 'Sender last name' },
+    displayName: { type: 'string', nullable: true, description: 'Sender display name' },
+    avatar: { type: 'string', nullable: true, description: 'Sender avatar URL' },
+    isMeeshyer: { type: 'boolean', description: 'Is registered user (vs anonymous)' }
+  }
+} as const;
+
+const messageSchema = {
+  type: 'object',
+  description: 'Message object',
+  properties: {
+    id: { type: 'string', description: 'Message unique identifier' },
+    content: { type: 'string', description: 'Message content' },
+    originalLanguage: { type: 'string', description: 'Original message language code', default: 'fr' },
+    messageType: { type: 'string', description: 'Message type', default: 'text' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    sender: { ...messageSenderSchema, nullable: true },
+    translations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          targetLanguage: { type: 'string' },
+          translatedContent: { type: 'string' },
+          translationModel: { type: 'string', nullable: true },
+          confidenceScore: { type: 'number', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  }
+} as const;
+
+const createLinkBodySchema = {
+  type: 'object',
+  description: 'Create share link request body',
+  properties: {
+    conversationId: { type: 'string', description: 'Existing conversation ID (optional if creating new conversation)' },
+    name: { type: 'string', description: 'Link display name' },
+    description: { type: 'string', description: 'Link description' },
+    maxUses: { type: 'number', minimum: 1, description: 'Maximum uses allowed' },
+    maxConcurrentUsers: { type: 'number', minimum: 1, description: 'Maximum concurrent users' },
+    maxUniqueSessions: { type: 'number', minimum: 1, description: 'Maximum unique sessions' },
+    expiresAt: { type: 'string', format: 'date-time', description: 'Expiration timestamp' },
+    allowAnonymousMessages: { type: 'boolean', default: true },
+    allowAnonymousFiles: { type: 'boolean', default: false },
+    allowAnonymousImages: { type: 'boolean', default: true },
+    allowViewHistory: { type: 'boolean', default: true },
+    requireAccount: { type: 'boolean', default: false },
+    requireNickname: { type: 'boolean', default: true },
+    requireEmail: { type: 'boolean', default: false },
+    requireBirthday: { type: 'boolean', default: false },
+    allowedCountries: { type: 'array', items: { type: 'string' } },
+    allowedLanguages: { type: 'array', items: { type: 'string' } },
+    allowedIpRanges: { type: 'array', items: { type: 'string' } },
+    newConversation: {
+      type: 'object',
+      description: 'Create new conversation with this link',
+      properties: {
+        title: { type: 'string', minLength: 1, description: 'Conversation title (required)' },
+        description: { type: 'string', description: 'Conversation description' },
+        memberIds: { type: 'array', items: { type: 'string' }, description: 'Initial member user IDs' }
+      },
+      required: ['title']
+    }
+  }
+} as const;
+
+const updateLinkBodySchema = {
+  type: 'object',
+  description: 'Update share link request body (all fields optional)',
+  properties: {
+    name: { type: 'string' },
+    description: { type: 'string' },
+    maxUses: { type: 'number', nullable: true, minimum: 1 },
+    maxConcurrentUsers: { type: 'number', nullable: true, minimum: 1 },
+    maxUniqueSessions: { type: 'number', nullable: true, minimum: 1 },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    isActive: { type: 'boolean' },
+    allowAnonymousMessages: { type: 'boolean' },
+    allowAnonymousFiles: { type: 'boolean' },
+    allowAnonymousImages: { type: 'boolean' },
+    allowViewHistory: { type: 'boolean' },
+    requireAccount: { type: 'boolean' },
+    requireNickname: { type: 'boolean' },
+    requireEmail: { type: 'boolean' },
+    requireBirthday: { type: 'boolean' },
+    allowedCountries: { type: 'array', items: { type: 'string' } },
+    allowedLanguages: { type: 'array', items: { type: 'string' } },
+    allowedIpRanges: { type: 'array', items: { type: 'string' } }
+  }
+} as const;
+
+const sendMessageBodySchema = {
+  type: 'object',
+  description: 'Send message via share link request body',
+  properties: {
+    content: { type: 'string', maxLength: 1000, description: 'Message content (required unless attachments provided)' },
+    originalLanguage: { type: 'string', default: 'fr', description: 'Message language code' },
+    messageType: { type: 'string', default: 'text', description: 'Message type' },
+    attachments: { type: 'array', items: { type: 'string' }, description: 'Attachment IDs' }
+  }
+} as const;
 
 export async function linksRoutes(fastify: FastifyInstance) {
   // Middlewares d'authentification unifiés
@@ -254,7 +427,49 @@ export async function linksRoutes(fastify: FastifyInstance) {
   }
 
   // Route pour vérifier la disponibilité d'un identifiant de lien de partage
-  fastify.get('/links/check-identifier/:identifier', { onRequest: [authRequired] }, async (request, reply) => {
+  fastify.get('/links/check-identifier/:identifier', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Check if a share link identifier (linkId) is available for use. This endpoint verifies that no existing share link is using the requested identifier. Case-insensitive matching is performed.',
+      tags: ['links'],
+      summary: 'Check link identifier availability',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Link identifier to check (case-insensitive)',
+            example: 'my-awesome-link'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Identifier availability check successful',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean', description: 'Whether identifier is available' },
+                identifier: { type: 'string', description: 'Checked identifier' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
       const { identifier } = request.params as { identifier: string };
 
@@ -285,8 +500,61 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // 1. Créer un lien - Les utilisateurs authentifiés peuvent créer des liens pour leurs conversations
-  fastify.post('/links', { 
-    onRequest: [authRequired] 
+  fastify.post('/links', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Create a share link for an existing conversation or create a new conversation with a share link. Authenticated users can create links for conversations they are members of. For global conversations, only ADMIN and BIGBOSS roles can create links. Direct conversations cannot have share links. If conversationId is not provided, a new public conversation will be created.',
+      tags: ['links'],
+      summary: 'Create share link',
+      body: createLinkBodySchema,
+      response: {
+        201: {
+          description: 'Share link created successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                linkId: { type: 'string', description: 'Generated link ID (mshy_*)', example: 'mshy_67890abcdef12345_a1b2c3d4' },
+                conversationId: { type: 'string', description: 'Associated conversation ID' },
+                shareLink: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', description: 'Share link database ID' },
+                    linkId: { type: 'string', description: 'Public link identifier' },
+                    name: { type: 'string', nullable: true, description: 'Link display name' },
+                    description: { type: 'string', nullable: true, description: 'Link description' },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration timestamp' },
+                    isActive: { type: 'boolean', description: 'Link active status' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - insufficient permissions or invalid conversation type',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Conversation not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const body = createLinkSchema.parse(request.body);
@@ -574,8 +842,101 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
   // 2. Récupérer les informations d'un lien par linkId ou conversationShareLinkId
   // Vérification accessToken ou sessionToken requise
-  fastify.get('/links/:identifier', { 
-    onRequest: [authOptional] 
+  fastify.get('/links/:identifier', {
+    onRequest: [authOptional],
+    schema: {
+      description: 'Get detailed information about a share link including conversation details, participants, messages, and permissions. Supports both linkId (mshy_*), database ID (ObjectId), and custom identifier formats. Returns different data based on user type (member vs anonymous). Members of the conversation receive a redirectTo field pointing to the full conversation view.',
+      tags: ['links'],
+      summary: 'Get share link details',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Link identifier (linkId starting with mshy_, database ObjectId, or custom identifier)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'string',
+            default: '50',
+            description: 'Maximum number of messages to return',
+            example: '50'
+          },
+          offset: {
+            type: 'string',
+            default: '0',
+            description: 'Number of messages to skip for pagination',
+            example: '0'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Share link details retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                conversation: conversationSummarySchema,
+                link: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    linkId: { type: 'string' },
+                    name: { type: 'string', nullable: true },
+                    description: { type: 'string', nullable: true },
+                    allowViewHistory: { type: 'boolean' },
+                    allowAnonymousMessages: { type: 'boolean' },
+                    allowAnonymousFiles: { type: 'boolean' },
+                    allowAnonymousImages: { type: 'boolean' },
+                    requireEmail: { type: 'boolean' },
+                    requireNickname: { type: 'boolean' },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                    isActive: { type: 'boolean' }
+                  }
+                },
+                userType: { type: 'string', enum: ['member', 'anonymous'], description: 'Current user relationship to conversation' },
+                redirectTo: { type: 'string', description: 'Redirect URL for members (e.g., /conversations/:id)' },
+                messages: { type: 'array', items: messageSchema },
+                stats: {
+                  type: 'object',
+                  properties: {
+                    totalMessages: { type: 'number' },
+                    totalMembers: { type: 'number' },
+                    totalAnonymousParticipants: { type: 'number' },
+                    onlineAnonymousParticipants: { type: 'number' },
+                    hasMore: { type: 'boolean' }
+                  }
+                },
+                members: { type: 'array', items: { type: 'object' } },
+                anonymousParticipants: { type: 'array', items: { type: 'object' } },
+                currentUser: { type: 'object', nullable: true, description: 'Current user information with permissions' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied to this link',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { identifier } = request.params as { identifier: string };
@@ -1025,8 +1386,61 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // 3. Récupérer les messages d'un lien (avec sender et senderAnonymous distincts)
-  fastify.get('/links/:identifier/messages', { 
-    onRequest: [authOptional] 
+  fastify.get('/links/:identifier/messages', {
+    onRequest: [authOptional],
+    schema: {
+      description: 'Get messages from a conversation via share link with pagination. Returns messages with full sender information (registered users have sender field, anonymous users have anonymousSender field), attachments, reactions, and translations. Supports both authenticated and anonymous users with appropriate access control.',
+      tags: ['links', 'messages'],
+      summary: 'Get link messages',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Link identifier (linkId starting with mshy_ or database ID)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', default: '50', description: 'Maximum number of messages', example: '50' },
+          offset: { type: 'string', default: '0', description: 'Number of messages to skip', example: '0' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Messages retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                messages: { type: 'array', items: messageSchema },
+                conversation: conversationSummarySchema,
+                hasMore: { type: 'boolean', description: 'Whether more messages are available' },
+                total: { type: 'number', description: 'Total number of messages' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied to this conversation',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { identifier } = request.params as { identifier: string };
@@ -1330,7 +1744,86 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // 4. Envoyer un message via un lien partagé (sessionToken uniquement)
-  fastify.post('/links/:identifier/messages', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/links/:identifier/messages', {
+    schema: {
+      description: 'Send a message as an anonymous user via share link. Requires x-session-token header. The share link must be active, not expired, and allow anonymous messages. The anonymous participant must have message sending permissions. Message content or attachments are required. Automatically processes and tracks links in message content.',
+      tags: ['links', 'messages'],
+      summary: 'Send message (anonymous)',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Link identifier (linkId or database ID)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      headers: {
+        type: 'object',
+        required: ['x-session-token'],
+        properties: {
+          'x-session-token': {
+            type: 'string',
+            description: 'Anonymous session token'
+          }
+        }
+      },
+      body: sendMessageBodySchema,
+      response: {
+        201: {
+          description: 'Message sent successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                messageId: { type: 'string', description: 'Created message ID' },
+                message: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    content: { type: 'string' },
+                    originalLanguage: { type: 'string' },
+                    messageType: { type: 'string' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    sender: { type: 'null' },
+                    anonymousSender: { type: 'object', description: 'Anonymous sender information' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Session token required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - anonymous messages not allowed or insufficient permissions',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        410: {
+          description: 'Link expired or inactive',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { identifier } = request.params as { identifier: string };
       const body = sendMessageSchema.parse(request.body);
@@ -1521,8 +2014,76 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // 6. Envoyer un message via un lien partagé (utilisateurs authentifiés)
-  fastify.post('/links/:identifier/messages/auth', { 
-    onRequest: [authRequired] 
+  fastify.post('/links/:identifier/messages/auth', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Send a message as an authenticated user via share link. User must be a member of the associated conversation. For the global "meeshy" conversation, all authenticated users have access. The share link must be active and not expired. Automatically processes and tracks links in message content.',
+      tags: ['links', 'messages'],
+      summary: 'Send message (authenticated)',
+      params: {
+        type: 'object',
+        required: ['identifier'],
+        properties: {
+          identifier: {
+            type: 'string',
+            description: 'Link identifier (linkId or database ID)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      body: sendMessageBodySchema,
+      response: {
+        201: {
+          description: 'Message sent successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                messageId: { type: 'string', description: 'Created message ID' },
+                message: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    content: { type: 'string' },
+                    originalLanguage: { type: 'string' },
+                    messageType: { type: 'string' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    sender: { ...messageSenderSchema },
+                    anonymousSender: { type: 'null' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - not a member of this conversation',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        410: {
+          description: 'Link expired or inactive',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { identifier } = request.params as { identifier: string };
@@ -1718,8 +2279,60 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // 5. Mettre à jour un lien (seuls les admins de conversation ou créateur du lien)
-  fastify.put('/links/:conversationShareLinkId', { 
-    onRequest: [authRequired] 
+  fastify.put('/links/:conversationShareLinkId', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Update a share link configuration by database ID. Only the link creator or conversation administrators/moderators can update. All fields in the request body are optional and will only update if provided.',
+      tags: ['links'],
+      summary: 'Update share link (by database ID)',
+      params: {
+        type: 'object',
+        required: ['conversationShareLinkId'],
+        properties: {
+          conversationShareLinkId: {
+            type: 'string',
+            description: 'Share link database ID (ObjectId)',
+            example: '507f1f77bcf86cd799439011'
+          }
+        }
+      },
+      body: updateLinkBodySchema,
+      response: {
+        200: {
+          description: 'Share link updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                shareLink: shareLinkSchema
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - only link creator or conversation admin can update',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { conversationShareLinkId } = request.params as { conversationShareLinkId: string };
@@ -1818,8 +2431,56 @@ export async function linksRoutes(fastify: FastifyInstance) {
   });
 
   // Route PATCH pour mettre à jour un lien (compatible avec le frontend)
-  fastify.patch('/links/:linkId', { 
-    onRequest: [authRequired] 
+  fastify.patch('/links/:linkId', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Update a share link configuration by linkId. Only the link creator or conversation administrators/moderators can update. All fields in the request body are optional and will only update if provided. Returns full link details with conversation and creator information.',
+      tags: ['links'],
+      summary: 'Update share link (by linkId)',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: {
+            type: 'string',
+            description: 'Public link identifier (mshy_*)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      body: updateLinkBodySchema,
+      response: {
+        200: {
+          description: 'Share link updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: shareLinkSchema,
+            message: { type: 'string', example: 'Lien mis à jour avec succès' }
+          }
+        },
+        400: {
+          description: 'Bad request - invalid data',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - insufficient permissions',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Share link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { linkId } = request.params as { linkId: string };
@@ -1942,7 +2603,92 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir tous les liens créés par l'utilisateur
   fastify.get<{ Querystring: { limit?: string; offset?: string } }>('/links/my-links', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get all share links created by the authenticated user with pagination. Returns links with conversation details, participant statistics, and language information. Maximum 50 links per request.',
+      tags: ['links'],
+      summary: 'List user\'s share links',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'string',
+            default: '20',
+            description: 'Maximum number of links to return (max 50)',
+            example: '20'
+          },
+          offset: {
+            type: 'string',
+            default: '0',
+            description: 'Number of links to skip for pagination',
+            example: '0'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Links retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                allOf: [
+                  shareLinkSchema,
+                  {
+                    type: 'object',
+                    properties: {
+                      conversation: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string' },
+                          title: { type: 'string' },
+                          type: { type: 'string' },
+                          description: { type: 'string', nullable: true },
+                          conversationUrl: { type: 'string', description: 'URL to conversation', example: '/conversations/:id' }
+                        }
+                      },
+                      creator: {
+                        type: 'object',
+                        description: 'Link creator information'
+                      },
+                      stats: {
+                        type: 'object',
+                        properties: {
+                          totalParticipants: { type: 'number' },
+                          memberCount: { type: 'number' },
+                          anonymousCount: { type: 'number' },
+                          languageCount: { type: 'number' },
+                          spokenLanguages: { type: 'array', items: { type: 'string' } }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                total: { type: 'number', description: 'Total number of links' },
+                hasMore: { type: 'boolean', description: 'Whether more links are available' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const authContext = request.authContext;
@@ -2037,7 +2783,61 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
   // Route pour basculer l'état actif/inactif d'un lien
   fastify.patch('/links/:linkId/toggle', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Toggle a share link\'s active status (activate or deactivate). Only the link creator or conversation administrators/moderators can toggle. When deactivated, the link becomes inaccessible to new and existing anonymous users.',
+      tags: ['links'],
+      summary: 'Toggle link status',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: {
+            type: 'string',
+            description: 'Public link identifier (mshy_*)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['isActive'],
+        properties: {
+          isActive: {
+            type: 'boolean',
+            description: 'New active status for the link',
+            example: true
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Link status toggled successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: shareLinkSchema,
+            message: { type: 'string', description: 'Success message' }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - insufficient permissions',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
@@ -2133,7 +2933,62 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
   // Route pour prolonger la durée d'un lien
   fastify.patch('/links/:linkId/extend', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Extend a share link\'s expiration date. Only the link creator or conversation administrators/moderators can extend. Provide a new expiresAt timestamp in ISO 8601 format.',
+      tags: ['links'],
+      summary: 'Extend link expiration',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: {
+            type: 'string',
+            description: 'Public link identifier (mshy_*)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['expiresAt'],
+        properties: {
+          expiresAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'New expiration timestamp (ISO 8601)',
+            example: '2024-12-31T23:59:59Z'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Link expiration extended successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: shareLinkSchema,
+            message: { type: 'string', example: 'Lien prolongé avec succès' }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - insufficient permissions',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
@@ -2229,7 +3084,54 @@ export async function linksRoutes(fastify: FastifyInstance) {
 
   // Route pour supprimer un lien
   fastify.delete('/links/:linkId', {
-    onRequest: [authRequired]
+    onRequest: [authRequired],
+    schema: {
+      description: 'Permanently delete a share link. Only the link creator or conversation administrators/moderators can delete. This action is irreversible and will immediately invalidate all anonymous participants using this link.',
+      tags: ['links'],
+      summary: 'Delete share link',
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: {
+            type: 'string',
+            description: 'Public link identifier (mshy_*)',
+            example: 'mshy_67890abcdef12345_a1b2c3d4'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Link deleted successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Lien supprimé avec succès' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - insufficient permissions to delete link',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Link not found',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
