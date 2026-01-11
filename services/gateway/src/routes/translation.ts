@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { TranslationService } from '../services/TranslationService';
 import { logError } from '../utils/logger';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -46,6 +47,220 @@ function getPredictedModelType(textLength: number): 'basic' | 'medium' | 'premiu
   return 'premium';
 }
 
+// =============================================================================
+// OpenAPI Schemas
+// =============================================================================
+
+/**
+ * OpenAPI schema for translation request body
+ */
+const translateRequestSchema = {
+  type: 'object',
+  properties: {
+    text: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 1000,
+      description: 'Text to translate. Required if message_id is not provided.',
+      example: 'Hello, how are you?'
+    },
+    source_language: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 5,
+      description: 'Source language code (ISO 639-1). Optional, can be auto-detected.',
+      example: 'en'
+    },
+    target_language: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 5,
+      description: 'Target language code (ISO 639-1). Required.',
+      example: 'fr'
+    },
+    model_type: {
+      type: 'string',
+      enum: ['basic', 'medium', 'premium'],
+      description: 'Translation model type. If set to "basic", the system will automatically predict the best model based on text length. Optional.',
+      example: 'medium'
+    },
+    message_id: {
+      type: 'string',
+      description: 'ID of an existing message to retranslate. Either text or message_id must be provided.',
+      example: 'msg_123abc'
+    },
+    conversation_id: {
+      type: 'string',
+      description: 'ID of the conversation. Required when message_id is not provided.',
+      example: 'conv_456def'
+    }
+  },
+  required: ['target_language']
+} as const;
+
+/**
+ * OpenAPI schema for successful translation response
+ */
+const translationSuccessResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        message_id: {
+          type: 'string',
+          description: 'ID of the translated message',
+          example: 'msg_123abc'
+        },
+        translated_text: {
+          type: 'string',
+          description: 'The translated text',
+          example: 'Bonjour, comment allez-vous?'
+        },
+        original_text: {
+          type: 'string',
+          description: 'The original text before translation',
+          example: 'Hello, how are you?'
+        },
+        source_language: {
+          type: 'string',
+          description: 'Detected or provided source language code',
+          example: 'en'
+        },
+        target_language: {
+          type: 'string',
+          description: 'Target language code',
+          example: 'fr'
+        },
+        model_used: {
+          type: 'string',
+          description: 'Translation model that was used',
+          example: 'medium',
+          enum: ['basic', 'medium', 'premium', 'fallback', 'none']
+        },
+        confidence: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'Translation confidence score (0-1)',
+          example: 0.95
+        },
+        processing_time: {
+          type: 'number',
+          description: 'Processing time in seconds',
+          example: 0.234
+        },
+        from_cache: {
+          type: 'boolean',
+          description: 'Whether the translation was retrieved from cache',
+          example: false
+        },
+        cache_key: {
+          type: 'string',
+          description: 'Cache key used for this translation (optional)',
+          example: 'trans_en_fr_abc123'
+        },
+        timestamp: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601 timestamp of the response',
+          example: '2024-01-15T10:30:00.000Z'
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for language list response
+ */
+const languagesResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        languages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'en' },
+              name: { type: 'string', example: 'English' },
+              flag: { type: 'string', example: 'US' }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for language detection request
+ */
+const detectLanguageRequestSchema = {
+  type: 'object',
+  properties: {
+    text: {
+      type: 'string',
+      minLength: 1,
+      description: 'Text to detect language from',
+      example: 'Bonjour le monde'
+    }
+  },
+  required: ['text']
+} as const;
+
+/**
+ * OpenAPI schema for language detection response
+ */
+const detectLanguageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        language: {
+          type: 'string',
+          description: 'Detected language code',
+          example: 'fr'
+        },
+        confidence: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'Detection confidence score (0-1)',
+          example: 0.7
+        },
+        text: {
+          type: 'string',
+          description: 'Original text that was analyzed',
+          example: 'Bonjour le monde'
+        }
+      }
+    }
+  }
+} as const;
+
+/**
+ * OpenAPI schema for E2EE translation error
+ */
+const e2eeErrorResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: false },
+    error: { type: 'string', example: 'E2EE_NOT_TRANSLATABLE' },
+    message: {
+      type: 'string',
+      example: 'End-to-end encrypted messages cannot be translated by the server'
+    }
+  }
+} as const;
+
 
 export async function translationRoutes(fastify: FastifyInstance) {
   // Récupérer le service de traduction depuis les options
@@ -56,7 +271,37 @@ export async function translationRoutes(fastify: FastifyInstance) {
   }
 
   // Route principale de traduction
-  fastify.post<{ Body: TranslateRequest }>('/translate-blocking', async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
+  fastify.post<{ Body: TranslateRequest }>('/translate-blocking', {
+    schema: {
+      description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Supports both new message translation and retranslation of existing messages. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
+      tags: ['translation'],
+      summary: 'Translate text (blocking)',
+      body: translateRequestSchema,
+      response: {
+        200: translationSuccessResponseSchema,
+        400: {
+          description: 'Bad request - validation error or E2EE message',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Unauthorized - invalid or missing authentication',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - no access to the requested message',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - message does not exist',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error - translation service failure',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
       const validatedData = TranslateRequestSchema.parse(request.body);
 
@@ -275,7 +520,20 @@ export async function translationRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir les langues supportées
-  fastify.get('/languages', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/languages', {
+    schema: {
+      description: 'Get the list of supported languages for translation. Returns language codes, display names, and associated flag codes.',
+      tags: ['translation'],
+      summary: 'Get supported languages',
+      response: {
+        200: languagesResponseSchema,
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
       success: true,
       data: {
@@ -294,7 +552,25 @@ export async function translationRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour détecter la langue
-  fastify.post<{ Body: { text: string } }>('/detect-language', async (request: FastifyRequest<{ Body: { text: string } }>, reply: FastifyReply) => {
+  fastify.post<{ Body: { text: string } }>('/detect-language', {
+    schema: {
+      description: 'Detect the language of a given text using pattern-based analysis. Returns the detected language code and a confidence score. The detection is based on character patterns specific to different languages (accents, special characters).',
+      tags: ['translation'],
+      summary: 'Detect text language',
+      body: detectLanguageRequestSchema,
+      response: {
+        200: detectLanguageResponseSchema,
+        400: {
+          description: 'Bad request - validation error (empty text)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error - detection failed',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { text: string } }>, reply: FastifyReply) => {
     try {
       const { text } = request.body;
 
@@ -343,7 +619,47 @@ export async function translationRoutes(fastify: FastifyInstance) {
   });
 
   // Route de test pour le service de traduction
-  fastify.get('/test', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/test', {
+    schema: {
+      description: 'Test the translation service by translating a sample text ("Hello world" from English to French). This endpoint is useful for health checks and verifying that the translation service is operational. Returns the translation result with metadata.',
+      tags: ['translation'],
+      summary: 'Test translation service',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Translation service is working' },
+                message_id: { type: 'string', example: 'msg_test123' },
+                test_result: {
+                  type: 'object',
+                  properties: {
+                    translated_text: { type: 'string', example: 'Bonjour le monde' },
+                    source_language: { type: 'string', example: 'en' },
+                    target_language: { type: 'string', example: 'fr' },
+                    model: { type: 'string', example: 'basic' },
+                    confidence: { type: 'number', example: 0.95 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        500: {
+          description: 'Internal server error - test failed',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'TEST_FAILED' },
+            message: { type: 'string', example: 'Translation service test failed' }
+          }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Test avec un nouveau message (comportement WebSocket)
       const messageData: any = {

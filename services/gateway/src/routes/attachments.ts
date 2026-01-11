@@ -8,6 +8,11 @@ import { AttachmentTranslateService } from '../services/AttachmentTranslateServi
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
+import {
+  messageAttachmentSchema,
+  messageAttachmentMinimalSchema,
+  errorResponseSchema,
+} from '@meeshy/shared/types/api-schemas';
 
 export async function attachmentRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService((fastify as any).prisma);
@@ -41,6 +46,65 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     '/attachments/upload',
     {
       onRequest: [authOptional],
+      schema: {
+        description: 'Upload one or multiple files. Supports both authenticated and anonymous users. Files are processed with metadata extraction (dimensions for images, duration for audio/video). Anonymous users must have file/image upload permissions on their share link.',
+        tags: ['attachments'],
+        summary: 'Upload file attachments',
+        consumes: ['multipart/form-data'],
+        body: {
+          type: 'object',
+          description: 'Multipart form data with file(s) and optional metadata',
+          properties: {
+            file: {
+              type: 'string',
+              format: 'binary',
+              description: 'File to upload (can send multiple files)'
+            },
+            metadata_0: {
+              type: 'string',
+              description: 'JSON metadata for first file (index 0). Example: {"duration": 5000, "title": "My Audio"}'
+            },
+            metadata_1: {
+              type: 'string',
+              description: 'JSON metadata for second file (index 1)'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Files uploaded successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  attachments: {
+                    type: 'array',
+                    items: messageAttachmentSchema
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: 'Bad request - no files provided',
+            ...errorResponseSchema
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          403: {
+            description: 'Forbidden - anonymous users without upload permissions',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -173,16 +237,48 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/attachments/upload-text',
     {
-      onRequest: [authOptional], // Utiliser authOptional au lieu de fastify.authenticate
+      onRequest: [authOptional],
       schema: {
+        description: 'Create a text file attachment from provided content. Useful for BubbleStream and text-based messaging. The content is stored as a .txt file and treated as a standard attachment.',
+        tags: ['attachments'],
+        summary: 'Create text file attachment',
         body: {
           type: 'object',
           required: ['content'],
           properties: {
-            content: { type: 'string' },
-            messageId: { type: 'string' },
+            content: {
+              type: 'string',
+              description: 'Text content to save as a file'
+            },
+            messageId: {
+              type: 'string',
+              description: 'Optional message ID to associate with this attachment'
+            },
           },
         },
+        response: {
+          200: {
+            description: 'Text attachment created successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  attachment: messageAttachmentSchema
+                }
+              }
+            }
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -230,6 +326,38 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
    */
   fastify.get(
     '/attachments/:attachmentId',
+    {
+      schema: {
+        description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Files are cached for 1 year (immutable).',
+        tags: ['attachments'],
+        summary: 'Get attachment file',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'File stream returned successfully',
+            type: 'string',
+            format: 'binary'
+          },
+          404: {
+            description: 'Attachment not found',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { attachmentId } = request.params as { attachmentId: string };
@@ -288,6 +416,38 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
    */
   fastify.get(
     '/attachments/:attachmentId/thumbnail',
+    {
+      schema: {
+        description: 'Stream the thumbnail image for an attachment. Only available for image attachments. Thumbnails are JPEG format, optimized for fast loading in lists and previews. Supports CORS and aggressive caching.',
+        tags: ['attachments'],
+        summary: 'Get attachment thumbnail',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Thumbnail stream returned successfully (image/jpeg)',
+            type: 'string',
+            format: 'binary'
+          },
+          404: {
+            description: 'Thumbnail not found (attachment may not be an image)',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { attachmentId } = request.params as { attachmentId: string };
@@ -339,6 +499,40 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/attachments/file/*',
     {
+      schema: {
+        description: 'Stream a file by its file path. Supports Range requests for audio/video seeking. Determines MIME type from file extension. Allows iframe embedding for PDFs and other documents. CORS-enabled for cross-origin access.',
+        tags: ['attachments'],
+        summary: 'Get file by path',
+        params: {
+          type: 'object',
+          properties: {
+            '*': {
+              type: 'string',
+              description: 'Relative file path from uploads directory'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'File stream returned successfully',
+            type: 'string',
+            format: 'binary'
+          },
+          206: {
+            description: 'Partial content (Range request for media files)',
+            type: 'string',
+            format: 'binary'
+          },
+          404: {
+            description: 'File not found',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      },
       // Use onSend hook to remove restrictive headers
       // This allows PDFs and other attachments to be embedded in iframes
       onSend: async (request, reply, payload) => {
@@ -481,7 +675,53 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   fastify.delete(
     '/attachments/:attachmentId',
     {
-      onRequest: [authOptional], // Support auth normale ET anonyme
+      onRequest: [authOptional],
+      schema: {
+        description: 'Delete an attachment and its associated files (original and thumbnail). Authorization rules: attachment owner can delete their own files, admins/moderators can delete any attachment, anonymous users can only delete their own attachments. This permanently removes the file from storage.',
+        tags: ['attachments'],
+        summary: 'Delete attachment',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Attachment deleted successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Attachment deleted successfully' }
+                }
+              }
+            }
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          403: {
+            description: 'Insufficient permissions - can only delete own attachments',
+            ...errorResponseSchema
+          },
+          404: {
+            description: 'Attachment not found',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -564,14 +804,72 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     {
       onRequest: [authOptional],
       schema: {
+        description: 'Get all attachments from a conversation with optional filtering by type. Supports pagination. Authenticated users must be members of the conversation. Anonymous users must have view history permission on their share link.',
+        tags: ['attachments', 'conversations'],
+        summary: 'List conversation attachments',
+        params: {
+          type: 'object',
+          required: ['conversationId'],
+          properties: {
+            conversationId: {
+              type: 'string',
+              description: 'Conversation unique identifier'
+            }
+          }
+        },
         querystring: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['image', 'document', 'audio', 'video', 'text'] },
-            limit: { type: 'number' },
-            offset: { type: 'number' },
+            type: {
+              type: 'string',
+              enum: ['image', 'document', 'audio', 'video', 'text'],
+              description: 'Filter by attachment type'
+            },
+            limit: {
+              type: 'number',
+              minimum: 1,
+              maximum: 100,
+              default: 50,
+              description: 'Maximum number of attachments to return'
+            },
+            offset: {
+              type: 'number',
+              minimum: 0,
+              default: 0,
+              description: 'Number of attachments to skip (for pagination)'
+            },
           },
         },
+        response: {
+          200: {
+            description: 'Attachments retrieved successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  attachments: {
+                    type: 'array',
+                    items: messageAttachmentMinimalSchema
+                  }
+                }
+              }
+            }
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          403: {
+            description: 'Access denied to this conversation',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -699,6 +997,19 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     {
       onRequest: [authRequired],
       schema: {
+        description: 'Translate an attachment to one or more target languages. Currently supports audio files with speech-to-text, translation, and text-to-speech (with optional voice cloning). Image, video, and document translation are planned but not yet implemented. Translation can be async with webhook notification.',
+        tags: ['attachments', 'translation'],
+        summary: 'Translate attachment',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
         body: {
           type: 'object',
           required: ['targetLanguages'],
@@ -706,13 +1017,86 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
             targetLanguages: {
               type: 'array',
               items: { type: 'string' },
-              minItems: 1
+              minItems: 1,
+              description: 'Array of target language codes (ISO 639-1: en, fr, es, etc.)',
+              example: ['en', 'es', 'fr']
             },
-            sourceLanguage: { type: 'string' },
-            generateVoiceClone: { type: 'boolean' },
-            async: { type: 'boolean' },
-            webhookUrl: { type: 'string', format: 'uri' },
-            priority: { type: 'number', minimum: 1, maximum: 10 }
+            sourceLanguage: {
+              type: 'string',
+              description: 'Source language code (auto-detected if not provided)',
+              example: 'fr'
+            },
+            generateVoiceClone: {
+              type: 'boolean',
+              description: 'Whether to clone the original voice in translated audio',
+              default: false
+            },
+            async: {
+              type: 'boolean',
+              description: 'Whether to process translation asynchronously',
+              default: false
+            },
+            webhookUrl: {
+              type: 'string',
+              format: 'uri',
+              description: 'Webhook URL for async translation completion notification'
+            },
+            priority: {
+              type: 'number',
+              minimum: 1,
+              maximum: 10,
+              description: 'Translation priority (1=lowest, 10=highest)',
+              default: 5
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Translation completed or queued successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', description: 'Translation status', example: 'completed' },
+                  jobId: { type: 'string', description: 'Job ID for async translations' },
+                  translations: {
+                    type: 'array',
+                    description: 'Translated attachment results (for sync translations)',
+                    items: messageAttachmentSchema
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: 'Bad request - invalid parameters',
+            ...errorResponseSchema
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          403: {
+            description: 'Access denied - user does not own attachment',
+            ...errorResponseSchema
+          },
+          404: {
+            description: 'Attachment not found',
+            ...errorResponseSchema
+          },
+          501: {
+            description: 'Not implemented - attachment type not supported for translation',
+            ...errorResponseSchema
+          },
+          503: {
+            description: 'Service unavailable - translation service not initialized',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
           }
         }
       }
