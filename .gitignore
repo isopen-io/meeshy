@@ -51,8 +51,6 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !infrastructure/envs/.env.example
-!infrastructure/envs/.env.digitalocean
-!infrastructure/envs/.env.production
 
 # vercel
 .vercel
