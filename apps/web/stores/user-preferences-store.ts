@@ -13,7 +13,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { API_CONFIG } from '@/lib/config';
+import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 
 // ============================================================================
@@ -242,7 +242,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/notifications`, {
+          const response = await fetch(buildApiUrl('/user-preferences/notifications'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -265,7 +265,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
+          const response = await fetch(buildApiUrl('/users/me/encryption-preferences'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -294,7 +294,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/privacy`, {
+          const response = await fetch(buildApiUrl('/user-preferences/privacy'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -327,7 +327,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
 
         try {
-          const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/notifications`, {
+          const response = await fetch(buildApiUrl('/user-preferences/notifications'), {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -354,7 +354,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         // Only sync server-side preferences
         if (prefs.encryptionPreference) {
           try {
-            const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
+            const response = await fetch(buildApiUrl('/users/me/encryption-preferences'), {
               method: 'PUT',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -396,7 +396,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
 
         try {
-          const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/privacy`, {
+          const response = await fetch(buildApiUrl('/user-preferences/privacy'), {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
