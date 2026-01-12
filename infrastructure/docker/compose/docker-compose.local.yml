@@ -384,6 +384,7 @@ services:
       INTERNAL_WS_URL: ws://gateway:3000
       INTERNAL_TRANSLATION_URL: http://translator:8000
       # Client-side URLs - replaced at container startup by entrypoint script
+      NEXT_PUBLIC_API_URL: https://gate.meeshy.local
       NEXT_PUBLIC_BACKEND_URL: https://gate.meeshy.local
       NEXT_PUBLIC_WS_URL: wss://gate.meeshy.local
       NEXT_PUBLIC_FRONTEND_URL: https://meeshy.local

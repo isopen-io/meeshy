@@ -250,12 +250,13 @@ services:
     profiles: ["full"]
     environment:
       <<: *common-env
-      NEXT_PUBLIC_WS_URL: ws://localhost:3000
-      NEXT_PUBLIC_TRANSLATION_URL: http://localhost:8000/translate
       NEXT_PUBLIC_API_URL: http://localhost:3000
-      NEXT_PUBLIC_BACKEND_URL: http://gateway:3000
-      INTERNAL_BACKEND_URL: http://gateway:3000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
       NEXT_PUBLIC_FRONTEND_URL: http://localhost:3100
+      NEXT_PUBLIC_TRANSLATION_URL: http://localhost:8000/translate
+      NEXT_PUBLIC_STATIC_URL: http://localhost:3000
+      INTERNAL_BACKEND_URL: http://gateway:3000
       NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION: "true"
       NEXT_PUBLIC_USE_API_TRANSLATION_ONLY: "true"
       NEXT_PUBLIC_DEBUG_LOGS: "true"

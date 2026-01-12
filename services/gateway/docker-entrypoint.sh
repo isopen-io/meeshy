@@ -36,9 +36,9 @@ main() {
     wait_for_database
     
     echo "[GATEWAY] 🚀 Démarrage de l'application Gateway..."
-    
-    # Changer vers l'utilisateur gateway pour la sécurité
-    exec su gateway -c "node dist/src/server.js"
+
+    # Execute the server directly (USER directive ensures we're already running as gateway)
+    exec node dist/src/server.js
 }
 
 # Exécuter la fonction principale

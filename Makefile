@@ -17,7 +17,8 @@
         test-gateway test-web test-shared test-translator lint type-check \
         uv-install uv-sync uv-sync-cpu uv-sync-gpu uv-sync-gpu-cu121 uv-sync-gpu-cu118 \
         uv-lock uv-add uv-add-dev uv-run uv-upgrade uv-info \
-        build-translator-cpu build-translator-gpu
+        build-translator-cpu build-translator-gpu build-translator-gpu-cu121 security-scan validate-images \
+        validate-docker-full validate-docker-gateway validate-docker-frontend validate-docker-translator
 
 # Couleurs
 BLUE := \033[0;34m
@@ -1694,9 +1695,13 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "HOST_IP=$(HOST_IP)" > $(COMPOSE_DIR)/.env.network
 	@echo "HOST=$(HOST)" >> $(COMPOSE_DIR)/.env.network
 	@echo "LOCAL_DOMAIN=$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
-	@echo "NEXT_PUBLIC_API_URL=https://$(LOCAL_DOMAIN)/api" >> $(COMPOSE_DIR)/.env.network
-	@echo "NEXT_PUBLIC_WS_URL=wss://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
-	@echo "NEXT_PUBLIC_BACKEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "# Frontend environment variables (for entrypoint.sh runtime injection)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_API_URL=https://gate.$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_BACKEND_URL=https://gate.$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_WS_URL=wss://gate.$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_TRANSLATION_URL=https://ml.$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
+	@echo "NEXT_PUBLIC_STATIC_URL=https://static.$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
 	@echo "  $(GREEN)✓ .env.network généré$(NC)"
 	@echo ""
@@ -1765,6 +1770,13 @@ docker-test-prod: _ensure-docker-running ## Tester les services *.meeshy.me (HTT
 DOCKER_REGISTRY ?= isopen
 TAG ?= latest
 
+# Version reading from service VERSION files
+GATEWAY_VERSION := $(shell cat services/gateway/VERSION 2>/dev/null || echo "1.0.0")
+FRONTEND_VERSION := $(shell cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
+TRANSLATOR_VERSION := $(shell cat services/translator/VERSION 2>/dev/null || echo "1.0.0")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+VCS_REF := $(shell git rev-parse --short HEAD 2>/dev/null || echo "local")
+
 # Préparation des dépendances partagées avant build Docker
 _prepare-docker-build: _ensure-docker-running
 	@echo "$(BLUE)📦 Préparation des dépendances pour le build Docker...$(NC)"
@@ -1784,59 +1796,76 @@ _prepare-docker-build: _ensure-docker-running
 	fi
 
 build-gateway: _prepare-docker-build ## Builder l'image Gateway
-	@echo "$(BLUE)🔨 Build de l'image Gateway ($(DOCKER_REGISTRY)/meeshy-gateway:$(TAG))...$(NC)"
-	@docker build -t $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG) -f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker tag $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG) $(DOCKER_REGISTRY)/meeshy-gateway:latest; \
-	fi
-	@echo "$(GREEN)✅ Image Gateway buildée$(NC)"
+	@echo "$(BLUE)🔨 Build de l'image Gateway ($(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION))...$(NC)"
+	@docker build \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(GATEWAY_VERSION)" \
+		--build-arg PACKAGE_MANAGER=bun \
+		-t $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) \
+		-t $(DOCKER_REGISTRY)/meeshy-gateway:latest \
+		-f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
+	@echo "$(GREEN)✅ Image Gateway buildée: v$(GATEWAY_VERSION)$(NC)"
 
 build-translator: build-translator-cpu ## Builder l'image Translator (alias pour CPU)
 
 build-translator-cpu: _prepare-docker-build ## Builder l'image Translator CPU (~2GB)
-	@echo "$(BLUE)🔨 Build de l'image Translator CPU ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu)...$(NC)"
+	@echo "$(BLUE)🔨 Build de l'image Translator CPU ($(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-cpu)...$(NC)"
 	@docker build --load \
 		--build-arg TORCH_BACKEND=cpu \
-		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu \
-		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(TRANSLATOR_VERSION)" \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-cpu \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:latest \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:cpu \
 		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu $(DOCKER_REGISTRY)/meeshy-translator:latest; \
-		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-cpu $(DOCKER_REGISTRY)/meeshy-translator:cpu; \
-	fi
-	@echo "$(GREEN)✅ Image Translator CPU buildée$(NC)"
+	@echo "$(GREEN)✅ Image Translator CPU buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-translator-gpu: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.4 (~8GB)
-	@echo "$(BLUE)🔨 Build de l'image Translator GPU ($(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu)...$(NC)"
+	@echo "$(BLUE)🔨 Build de l'image Translator GPU ($(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-gpu)...$(NC)"
 	@docker build --load \
 		--build-arg TORCH_BACKEND=gpu \
-		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(TRANSLATOR_VERSION)" \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-gpu \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:gpu \
 		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker tag $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu $(DOCKER_REGISTRY)/meeshy-translator:gpu; \
-	fi
-	@echo "$(GREEN)✅ Image Translator GPU buildée$(NC)"
+	@echo "$(GREEN)✅ Image Translator GPU buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.1
 	@echo "$(BLUE)🔨 Build de l'image Translator GPU CUDA 12.1...$(NC)"
 	@docker build \
 		--build-arg TORCH_BACKEND=gpu-cu121 \
-		-t $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)-gpu-cu121 \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(TRANSLATOR_VERSION)" \
+		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-gpu-cu121 \
 		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
-	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée$(NC)"
+	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-frontend: _prepare-docker-build ## Builder l'image Frontend
-	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-frontend:$(TAG))...$(NC)"
-	@docker build -t $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG) -f $(INFRA_DIR)/docker/images/web/Dockerfile .
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker tag $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG) $(DOCKER_REGISTRY)/meeshy-frontend:latest; \
-	fi
-	@echo "$(GREEN)✅ Image Frontend buildée$(NC)"
+	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION))...$(NC)"
+	@docker build \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(FRONTEND_VERSION)" \
+		--build-arg PACKAGE_MANAGER=bun \
+		-t $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) \
+		-t $(DOCKER_REGISTRY)/meeshy-frontend:latest \
+		-f $(INFRA_DIR)/docker/images/web/Dockerfile .
+	@echo "$(GREEN)✅ Image Frontend buildée: v$(FRONTEND_VERSION)$(NC)"
 
 build-all-docker: build-gateway build-translator build-frontend ## Builder toutes les images Docker
 	@echo "$(GREEN)✅ Toutes les images buildées$(NC)"
 	@echo ""
 	@echo "$(BLUE)📦 Images créées:$(NC)"
+	@echo "   - Gateway:    v$(GATEWAY_VERSION)"
+	@echo "   - Frontend:   v$(FRONTEND_VERSION)"
+	@echo "   - Translator: v$(TRANSLATOR_VERSION)"
+	@echo ""
 	@docker images | grep "$(DOCKER_REGISTRY)/meeshy" | head -10
 
 # =============================================================================
@@ -1844,40 +1873,84 @@ build-all-docker: build-gateway build-translator build-frontend ## Builder toute
 # =============================================================================
 
 push-gateway: ## Push l'image Gateway vers Docker Hub
-	@echo "$(BLUE)📤 Push de l'image Gateway...$(NC)"
-	@docker push $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG)
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker push $(DOCKER_REGISTRY)/meeshy-gateway:latest; \
-	fi
-	@echo "$(GREEN)✅ Gateway pushée$(NC)"
+	@echo "$(BLUE)📤 Push de l'image Gateway v$(GATEWAY_VERSION)...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION)
+	@docker push $(DOCKER_REGISTRY)/meeshy-gateway:latest
+	@echo "$(GREEN)✅ Gateway pushée: v$(GATEWAY_VERSION)$(NC)"
 
 push-translator: ## Push l'image Translator vers Docker Hub
-	@echo "$(BLUE)📤 Push de l'image Translator...$(NC)"
-	@docker push $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker push $(DOCKER_REGISTRY)/meeshy-translator:latest; \
-	fi
-	@echo "$(GREEN)✅ Translator pushée$(NC)"
+	@echo "$(BLUE)📤 Push de l'image Translator v$(TRANSLATOR_VERSION)...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)
+	@docker push $(DOCKER_REGISTRY)/meeshy-translator:latest
+	@docker push $(DOCKER_REGISTRY)/meeshy-translator:cpu
+	@echo "$(GREEN)✅ Translator pushée: v$(TRANSLATOR_VERSION)$(NC)"
 
 push-frontend: ## Push l'image Frontend vers Docker Hub
-	@echo "$(BLUE)📤 Push de l'image Frontend...$(NC)"
-	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG)
-	@if [ "$(TAG)" != "latest" ]; then \
-		docker push $(DOCKER_REGISTRY)/meeshy-frontend:latest; \
-	fi
-	@echo "$(GREEN)✅ Frontend pushée$(NC)"
+	@echo "$(BLUE)📤 Push de l'image Frontend v$(FRONTEND_VERSION)...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION)
+	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:latest
+	@echo "$(GREEN)✅ Frontend pushée: v$(FRONTEND_VERSION)$(NC)"
 
 push-all: push-gateway push-translator push-frontend ## Push toutes les images vers Docker Hub
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les images pushées vers $(DOCKER_REGISTRY)$(NC)"
-	@echo "   - $(DOCKER_REGISTRY)/meeshy-gateway:$(TAG)"
-	@echo "   - $(DOCKER_REGISTRY)/meeshy-translator:$(TAG)"
-	@echo "   - $(DOCKER_REGISTRY)/meeshy-frontend:$(TAG)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION)"
 
 # Build + Push en une commande
-release: build-all-docker push-all ## Builder et pusher toutes les images (TAG=v1.0.0)
+release: build-all-docker push-all ## Builder et pusher toutes les images
 	@echo ""
-	@echo "$(GREEN)🚀 Release $(TAG) publiée!$(NC)"
+	@echo "$(GREEN)🚀 Release publiée!$(NC)"
+	@echo "   Gateway:    v$(GATEWAY_VERSION)"
+	@echo "   Frontend:   v$(FRONTEND_VERSION)"
+	@echo "   Translator: v$(TRANSLATOR_VERSION)"
+
+# =============================================================================
+# SECURITY & VALIDATION
+# =============================================================================
+
+security-scan: ## Scanner les vulnérabilités des images Docker
+	@echo "$(BLUE)🔍 Scanning Docker images for vulnerabilities...$(NC)"
+	@command -v trivy >/dev/null 2>&1 || { echo "$(RED)Trivy not installed. Install with: brew install trivy$(NC)"; exit 1; }
+	@echo ""
+	@echo "$(CYAN)=== Gateway v$(GATEWAY_VERSION) ===$(NC)"
+	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) || true
+	@echo ""
+	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
+	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) || true
+	@echo ""
+	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
+	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) || true
+
+validate-images: ## Valider les labels et métadonnées des images (rapide)
+	@echo "$(BLUE)🔍 Validating Docker image metadata...$(NC)"
+	@echo ""
+	@echo "$(CYAN)=== Gateway v$(GATEWAY_VERSION) ===$(NC)"
+	@docker inspect $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
+	@echo ""
+	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
+	@docker inspect $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
+	@echo ""
+	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
+	@docker inspect $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
+
+validate-docker-full: ## Validation complète des images Docker (labels, security, health)
+	@echo "$(BLUE)🔍 Running full Docker image validation...$(NC)"
+	@./scripts/docker/validate-docker-build.sh --all
+
+validate-docker-gateway: ## Valider l'image Gateway
+	@./scripts/docker/validate-docker-build.sh gateway
+
+validate-docker-frontend: ## Valider l'image Frontend
+	@./scripts/docker/validate-docker-build.sh frontend
+
+validate-docker-translator: ## Valider l'image Translator
+	@./scripts/docker/validate-docker-build.sh translator
+
+# =============================================================================
+# DOCKER UTILITIES
+# =============================================================================
 
 # Vérifier l'authentification Docker Hub
 docker-login: _ensure-docker-running ## Se connecter à Docker Hub

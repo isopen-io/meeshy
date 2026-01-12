@@ -138,11 +138,18 @@ FROM runtime-${TORCH_BACKEND} AS runtime
 # Re-declare ARGs after FROM (they don't persist across stages)
 ARG TORCH_BACKEND
 
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=1.0.0
+
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Translator - FastAPI ML Service" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
       org.opencontainers.image.vendor="Meeshy" \
-      torch.backend="${TORCH_BACKEND}"
+      torch.backend="${TORCH_BACKEND}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${VERSION}"
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG NODE_VERSION=22
