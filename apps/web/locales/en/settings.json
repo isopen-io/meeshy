@@ -17,6 +17,9 @@
     },
     "tabs": {
       "profile": "Profile",
+      "notifications": "Notifications",
+      "privacy": "Privacy",
+      "encryption": "Encryption",
       "translation": "Translation",
       "security": "Security",
       "theme": "Theme",
@@ -233,6 +236,71 @@
     "privacy": {
       "title": "Privacy Settings",
       "description": "Control your privacy and data settings"
+    },
+    "encryption": {
+      "title": "Encryption Settings",
+      "description": "Manage your end-to-end encryption settings",
+      "status": {
+        "title": "Encryption Status",
+        "description": "Status of your end-to-end encryption keys",
+        "keysActive": "Encryption keys active",
+        "keysNotGenerated": "Keys not generated",
+        "registrationId": "Registration ID",
+        "generateKeys": "Generate your keys to enable E2EE encryption",
+        "generateButton": "Generate encryption keys",
+        "generating": "Generating...",
+        "active": "Active",
+        "inactive": "Inactive",
+        "lastRotation": "Last key rotation",
+        "keysGenerated": "Encryption keys generated successfully"
+      },
+      "newConversations": {
+        "title": "New conversations",
+        "description": "Default encryption settings for new conversations",
+        "defaultEnabled": "Encrypt by default",
+        "defaultEnabledDescription": "Automatically enable E2EE encryption for new conversations",
+        "showIndicator": "Show indicator",
+        "showIndicatorDescription": "Display encryption icon in secure conversations",
+        "encryptMedia": "Encrypt media",
+        "encryptMediaDescription": "Require encryption for photos, videos and files"
+      },
+      "level": {
+        "title": "Encryption level",
+        "description": "Choose your protection level for messages",
+        "disabled": {
+          "label": "Disabled",
+          "description": "No end-to-end encryption. Messages are transmitted in plain text on the server."
+        },
+        "optional": {
+          "label": "Optional",
+          "description": "E2EE encryption is used if the recipient supports it. Recommended for compatibility."
+        },
+        "always": {
+          "label": "Always",
+          "description": "Forces E2EE encryption for all messages. Users without keys will not be able to contact you."
+        }
+      },
+      "about": {
+        "title": "About E2EE encryption",
+        "description": "End-to-end encryption (E2EE) ensures that only you and your recipient can read your messages. Even Meeshy servers cannot decrypt your conversations.",
+        "protocol": "Meeshy uses the Signal protocol, recognized as one of the most secure in the world.",
+        "features": {
+          "privateKeys": "Your private keys never leave your device",
+          "uniqueKeys": "Each message uses a unique key",
+          "autoRotation": "Automatic key rotation enhances security"
+        }
+      },
+      "actions": {
+        "save": "Save",
+        "saving": "Saving...",
+        "preferencesUpdated": "Encryption preferences updated"
+      },
+      "errors": {
+        "notAuthenticated": "Not authenticated",
+        "updateFailed": "Error updating",
+        "generateFailed": "Error generating keys",
+        "networkError": "Network error"
+      }
     },
     "languageSelector": {
       "placeholder": "Select a language...",
