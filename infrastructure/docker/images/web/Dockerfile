@@ -18,6 +18,15 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.title="Meeshy Web" \
       org.opencontainers.image.description="Next.js web application for Meeshy platform"
 
+# === BUILD METADATA ===
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=1.0.0
+
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${VERSION}"
+
 # === BUILD ARGUMENTS ===
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
@@ -120,17 +129,25 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
     fi
 
 # === BUILD ENVIRONMENT VARIABLES ===
-ARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me
-ARG NEXT_PUBLIC_WS_URL=wss://gate.meeshy.me
-ARG NEXT_PUBLIC_BACKEND_URL=https://gate.meeshy.me
+# Use placeholder values that will be replaced at runtime by entrypoint.sh
+# This allows the same image to work in any environment
+ARG NEXT_PUBLIC_API_URL=__MEESHY_API_URL__
+ARG NEXT_PUBLIC_WS_URL=__MEESHY_WS_URL__
+ARG NEXT_PUBLIC_BACKEND_URL=__MEESHY_BACKEND_URL__
 ARG NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=false
 ARG NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=true
+ARG NEXT_PUBLIC_FRONTEND_URL=__MEESHY_FRONTEND_URL__
+ARG NEXT_PUBLIC_TRANSLATION_URL=__MEESHY_TRANSLATION_URL__
+ARG NEXT_PUBLIC_STATIC_URL=__MEESHY_STATIC_URL__
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
     NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL} \
     NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION} \
     NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY} \
+    NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL} \
+    NEXT_PUBLIC_TRANSLATION_URL=${NEXT_PUBLIC_TRANSLATION_URL} \
+    NEXT_PUBLIC_STATIC_URL=${NEXT_PUBLIC_STATIC_URL} \
     NEXT_TELEMETRY_DISABLED=1
 
 # Build with appropriate package manager
@@ -154,10 +171,10 @@ ENV NODE_ENV=production \
     PORT=3100 \
     HOSTNAME="0.0.0.0"
 
-# Create nextjs user and install tini
+# Create nextjs user and install tini and wget
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
-    apk add --no-cache tini
+    apk add --no-cache tini wget
 
 # Copy public assets
 COPY --from=builder /app/public ./public
@@ -186,7 +203,7 @@ ENTRYPOINT ["/sbin/tini", "--", "/app/entrypoint.sh"]
 
 # === HEALTH CHECK ===
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD node -e "const http=require('http');const req=http.get({hostname:'0.0.0.0',port:3100,path:'/api/health',timeout:5000},(res)=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1);});"
+    CMD wget -q --spider http://localhost:3100/ || exit 1
 
 # Start Next.js in production mode (standalone)
 CMD ["node", "server.js"]

@@ -19,6 +19,15 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.title="Meeshy Gateway" \
       org.opencontainers.image.description="Fastify API gateway for Meeshy platform"
 
+# === BUILD METADATA ===
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=1.0.0
+
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${VERSION}"
+
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
 ARG BUN_VERSION=1.1.38
@@ -197,4 +206,4 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${FASTIFY_PORT}/health || exit 1
 
-CMD ["node", "dist/src/server.js"]
+CMD ["/app/docker-entrypoint.sh"]
