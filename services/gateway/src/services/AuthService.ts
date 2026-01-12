@@ -299,16 +299,32 @@ export class AuthService {
       // Send email verification email (in user's preferred language)
       try {
         const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
-        await this.emailService.sendEmailVerification({
+        console.log('[AUTH_SERVICE] 📧 ======== EMAIL VERIFICATION FLOW ========');
+        console.log('[AUTH_SERVICE] 📧 User created:', user.id);
+        console.log('[AUTH_SERVICE] 📧 Email:', normalizedEmail);
+        console.log('[AUTH_SERVICE] 📧 Verification Link:', verificationLink);
+        console.log('[AUTH_SERVICE] 📧 Token (raw, for testing):', verificationToken);
+        console.log('[AUTH_SERVICE] 📧 Token Expiry:', verificationExpiry.toISOString());
+        console.log('[AUTH_SERVICE] 📧 Language:', data.systemLanguage || 'fr');
+        console.log('[AUTH_SERVICE] 📧 ==========================================');
+
+        const emailResult = await this.emailService.sendEmailVerification({
           to: normalizedEmail,
           name: normalizedDisplayName,
           verificationLink,
           expiryHours: tokenExpiryHours,
           language: data.systemLanguage || 'fr'
         });
-        console.log('[AUTH_SERVICE] ✅ Email de vérification envoyé à:', normalizedEmail, '(langue:', data.systemLanguage || 'fr', ')');
+
+        if (emailResult.success) {
+          console.log('[AUTH_SERVICE] ✅ Email de vérification envoyé avec succès!');
+          console.log('[AUTH_SERVICE] ✅ Provider:', emailResult.provider);
+          console.log('[AUTH_SERVICE] ✅ Message ID:', emailResult.messageId);
+        } else {
+          console.error('[AUTH_SERVICE] ❌ Échec de l\'envoi:', emailResult.error);
+        }
       } catch (emailError) {
-        console.error('[AUTH_SERVICE] ⚠️ Échec de l\'envoi de l\'email de vérification:', emailError);
+        console.error('[AUTH_SERVICE] ⚠️ Exception lors de l\'envoi de l\'email de vérification:', emailError);
         // Don't fail registration if email fails - user can request a new one
       }
 
