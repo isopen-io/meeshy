@@ -577,7 +577,7 @@ sequenceDiagram
     actor UserB as User B (Authenticated)
 
     %% Anonymous user accesses share link
-    AnonUser->>FE_A: Access share link<br/>https://meeshy.com/links/tracked/:token
+    AnonUser->>FE_A: Access share link<br/>https://meeshy.me/links/tracked/:token
 
     FE_A->>GW: GET /api/links/tracked/:token
     GW->>DB: Find ConversationShareLink, verify active

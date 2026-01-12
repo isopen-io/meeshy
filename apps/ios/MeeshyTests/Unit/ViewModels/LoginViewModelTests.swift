@@ -40,7 +40,7 @@ final class LoginViewModelTests: XCTestCase {
     // MARK: - Email Validation Tests
 
     func testEmailValidation_ValidEmail() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
 
         // Wait for debounce
         try? await Task.sleep(nanoseconds: 600_000_000)
@@ -68,7 +68,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testEmailValidation_EmailWithSpaces() async {
-        sut.email = "  test@meeshy.com  "
+        sut.email = "  test@meeshy.me  "
 
         // Wait for debounce
         try? await Task.sleep(nanoseconds: 600_000_000)
@@ -79,7 +79,7 @@ final class LoginViewModelTests: XCTestCase {
     // MARK: - Password Validation Tests
 
     func testPasswordValidation_ValidPassword() {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         // Trigger validation through login attempt
@@ -92,7 +92,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testPasswordValidation_EmptyPassword() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = ""
 
         await sut.login()
@@ -102,7 +102,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testPasswordValidation_ShortPassword() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "12345"
 
         await sut.login()
@@ -116,7 +116,7 @@ final class LoginViewModelTests: XCTestCase {
     func testLogin_Success() async {
         // This test would require dependency injection of AuthService
         // Demonstrating the test structure:
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         // Note: In production, inject MockAuthService via dependency injection
@@ -129,7 +129,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testLogin_InvalidCredentials() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "wrongpassword"
 
         // Would test with mocked service that returns error
@@ -139,7 +139,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testLogin_Requires2FA() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         // Would test with mocked service that throws requires2FA error
@@ -148,7 +148,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testLogin_NetworkError() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         // Would test with mocked service that throws network error
@@ -158,7 +158,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testLogin_LoadingState() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         let expectation = XCTestExpectation(description: "Login started")
@@ -259,7 +259,7 @@ final class LoginViewModelTests: XCTestCase {
             requires2FA: false
         )
 
-        viewModel.email = "test@meeshy.com"
+        viewModel.email = "test@meeshy.me"
         viewModel.password = "password123"
 
         await viewModel.login()
@@ -267,14 +267,14 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(mockAuthService.loginCallCount, 1)
-        XCTAssertEqual(mockAuthService.lastLoginEmail, "test@meeshy.com")
+        XCTAssertEqual(mockAuthService.lastLoginEmail, "test@meeshy.me")
         */
     }
 
     // MARK: - Edge Case Tests
 
     func testLogin_WithWhitespaceEmail() async {
-        sut.email = "  test@meeshy.com  "
+        sut.email = "  test@meeshy.me  "
         sut.password = "password123"
 
         // Should trim whitespace before sending
@@ -293,7 +293,7 @@ final class LoginViewModelTests: XCTestCase {
     }
 
     func testLogin_ConcurrentCalls() async {
-        sut.email = "test@meeshy.com"
+        sut.email = "test@meeshy.me"
         sut.password = "password123"
 
         // Test that concurrent login calls are handled properly

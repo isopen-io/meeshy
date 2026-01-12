@@ -463,5 +463,5 @@ All deliverables are located in:
 For questions or clarifications:
 - **Architecture**: Refer to `SECURE_PASSWORD_RESET_ARCHITECTURE.md`
 - **Implementation**: Refer to `IMPLEMENTATION_GUIDE.md`
-- **Security**: security@meeshy.com
-- **Technical**: development@meeshy.com
+- **Security**: security@meeshy.me
+- **Technical**: development@meeshy.me

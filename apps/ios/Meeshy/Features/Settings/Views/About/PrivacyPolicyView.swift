@@ -54,7 +54,7 @@ struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "7. Contact Us",
-                    content: "If you have any questions about this privacy policy, please contact us at privacy@meeshy.com"
+                    content: "If you have any questions about this privacy policy, please contact us at privacy@meeshy.me"
                 )
             }
             .padding()

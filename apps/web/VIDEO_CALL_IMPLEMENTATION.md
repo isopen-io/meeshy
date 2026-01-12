@@ -325,7 +325,7 @@ Navigate to dynamic route:
 ```
 /call/[callId]
 ```
-Example: `https://meeshy.com/call/abc123xyz`
+Example: `https://meeshy.me/call/abc123xyz`
 
 Features:
 - Auto-authentication check

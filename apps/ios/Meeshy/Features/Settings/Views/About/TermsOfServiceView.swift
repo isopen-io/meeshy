@@ -64,7 +64,7 @@ struct TermsOfServiceView: View {
 
                 termsSection(
                     title: "9. Contact Information",
-                    content: "Questions about the Terms of Service should be sent to us at legal@meeshy.com"
+                    content: "Questions about the Terms of Service should be sent to us at legal@meeshy.me"
                 )
             }
             .padding()

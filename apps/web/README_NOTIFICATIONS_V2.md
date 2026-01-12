@@ -820,7 +820,7 @@ describe('NotificationItem', () => {
 
 Pour toute question ou problème :
 - Ouvrir une issue sur GitHub
-- Contacter l'équipe technique : tech@meeshy.com
+- Contacter l'équipe technique : tech@meeshy.me
 
 ---
 

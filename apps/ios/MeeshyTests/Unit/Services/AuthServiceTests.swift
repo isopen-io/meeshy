@@ -25,8 +25,8 @@ final class AuthServiceTests: XCTestCase {
         let user = MockDataGenerator.createUser()
         mockAPIService.mockLoginResponse = (user, "access-token", "refresh-token", false)
 
-        // let loggedInUser = try await authService.login(email: "test@meeshy.com", password: "password")
-        // XCTAssertEqual(loggedInUser.email, "test@meeshy.com")
+        // let loggedInUser = try await authService.login(email: "test@meeshy.me", password: "password")
+        // XCTAssertEqual(loggedInUser.email, "test@meeshy.me")
         // XCTAssertTrue(authService.isAuthenticated)
     }
 
@@ -40,7 +40,7 @@ final class AuthServiceTests: XCTestCase {
 
         // Test that requires2FA error is thrown
         // do {
-        //     _ = try await authService.login(email: "test@meeshy.com", password: "password")
+        //     _ = try await authService.login(email: "test@meeshy.me", password: "password")
         //     XCTFail("Should throw requires2FA")
         // } catch AuthError.requires2FA {
         //     // Expected
@@ -85,7 +85,7 @@ final class AuthServiceTests: XCTestCase {
 
         // let registeredUser = try await authService.register(
         //     username: "testuser",
-        //     email: "test@meeshy.com",
+        //     email: "test@meeshy.me",
         //     password: "password",
         //     displayName: "Test User"
         // )

@@ -345,7 +345,7 @@ Pour toute question ou assistance :
 - **Documentation**: Consultez d'abord les documents ci-dessus
 - **Issues GitHub**: [github.com/meeshy/meeshy/issues](https://github.com)
 - **Slack**: #notifications-dev (pour les discussions techniques)
-- **Email**: architecture@meeshy.com
+- **Email**: architecture@meeshy.me
 
 ---
 

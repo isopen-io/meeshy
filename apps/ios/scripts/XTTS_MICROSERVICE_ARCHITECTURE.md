@@ -137,7 +137,7 @@ Translate voice to another language with voice cloning.
     "translated_text": "Hello, how are you?",
     "source_language": "fr",
     "target_language": "en",
-    "audio_url": "https://cdn.meeshy.com/audio/job_abc123.wav",
+    "audio_url": "https://cdn.meeshy.me/audio/job_abc123.wav",
     "audio_base64": "base64_encoded_audio",
     "duration_seconds": 2.5,
     "voice_similarity": 0.87,
@@ -872,7 +872,7 @@ struct VoiceTranslationResponse: Codable {
 class VoiceTranslationAPIService {
     static let shared = VoiceTranslationAPIService()
 
-    private let baseURL = "https://api.meeshy.com"
+    private let baseURL = "https://api.meeshy.me"
 
     func translateVoice(
         audioData: Data,

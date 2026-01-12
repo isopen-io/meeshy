@@ -31,7 +31,7 @@ describe('DMA Encryption Interoperability Tests', () => {
     meeshyUser = await prisma.user.create({
       data: {
         username: 'meeshy_native',
-        email: 'native@meeshy.com',
+        email: 'native@meeshy.me',
         phoneNumber: '+1111111111',
         firstName: 'Meeshy',
         lastName: 'User',
@@ -186,7 +186,7 @@ describe('DMA Encryption Interoperability Tests', () => {
       const meeshyUser2 = await prisma.user.create({
         data: {
           username: 'meeshy_user2',
-          email: 'user2@meeshy.com',
+          email: 'user2@meeshy.me',
           phoneNumber: '+4444444444',
           firstName: 'Meeshy',
           lastName: 'User2',

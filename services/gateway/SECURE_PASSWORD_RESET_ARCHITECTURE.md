@@ -2124,7 +2124,7 @@ class SecurityAlertService {
       });
 
       await this.sendEmailAlert({
-        to: 'security-team@meeshy.com',
+        to: 'security-team@meeshy.me',
         subject: `CRITICAL Security Alert: ${eventType}`,
         body: JSON.stringify(details, null, 2)
       });

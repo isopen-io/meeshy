@@ -240,8 +240,8 @@ Temps total: ~4.5 heures
 
 Pour toute question sur cette revue:
 - Engineering Lead: [Lead Name]
-- Security Team: security@meeshy.com
-- DevOps Team: devops@meeshy.com
+- Security Team: security@meeshy.me
+- DevOps Team: devops@meeshy.me
 
 ---
 

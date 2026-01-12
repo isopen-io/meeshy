@@ -450,8 +450,8 @@ Track these KPIs post-deployment:
 
 ## Support & Contact
 
-**Security Issues**: security@meeshy.com
-**Technical Support**: support@meeshy.com
+**Security Issues**: security@meeshy.me
+**Technical Support**: support@meeshy.me
 **Documentation Issues**: Create GitHub issue
 
 ---

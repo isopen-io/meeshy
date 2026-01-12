@@ -422,7 +422,7 @@ Pour un message typique (10-50 lignes), la différence est imperceptible (<1ms).
 
 - **Tech Lead** : [Nom]
 - **Frontend Team** : #frontend-team
-- **Support** : support@meeshy.com
+- **Support** : support@meeshy.me
 
 ### Resources
 

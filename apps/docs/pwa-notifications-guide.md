@@ -151,7 +151,7 @@ Ajouter dans `.env` :
 # Backend (.env)
 VAPID_PUBLIC_KEY=BEo...XYZ
 VAPID_PRIVATE_KEY=abc...123
-VAPID_SUBJECT=mailto:contact@meeshy.com
+VAPID_SUBJECT=mailto:contact@meeshy.me
 ```
 
 ```bash
@@ -647,7 +647,7 @@ export class PushNotificationService {
 
     // Configuration VAPID
     webPush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:contact@meeshy.com',
+      process.env.VAPID_SUBJECT || 'mailto:contact@meeshy.me',
       process.env.VAPID_PUBLIC_KEY!,
       process.env.VAPID_PRIVATE_KEY!
     );

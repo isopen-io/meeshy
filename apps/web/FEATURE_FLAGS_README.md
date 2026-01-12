@@ -64,7 +64,7 @@ NEXT_PUBLIC_ENABLE_PASSWORD_RESET=false
 # frontend/.env.local
 NEXT_PUBLIC_ENABLE_PASSWORD_RESET=true
 NEXT_PUBLIC_HCAPTCHA_SITE_KEY=10000000-ffff-ffff-ffff-000000000001
-NEXT_PUBLIC_API_URL=https://api.meeshy.com
+NEXT_PUBLIC_API_URL=https://api.meeshy.me
 ```
 
 **Prerequisites**:
@@ -211,7 +211,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 # frontend/.env.staging
 NEXT_PUBLIC_ENABLE_PASSWORD_RESET=true
 NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_staging_site_key
-NEXT_PUBLIC_API_URL=https://staging-api.meeshy.com
+NEXT_PUBLIC_API_URL=https://staging-api.meeshy.me
 ```
 
 ### Production
@@ -220,7 +220,7 @@ NEXT_PUBLIC_API_URL=https://staging-api.meeshy.com
 # frontend/.env.production
 NEXT_PUBLIC_ENABLE_PASSWORD_RESET=true
 NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_production_site_key
-NEXT_PUBLIC_API_URL=https://api.meeshy.com
+NEXT_PUBLIC_API_URL=https://api.meeshy.me
 ```
 
 ---

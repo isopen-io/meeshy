@@ -226,7 +226,7 @@
 │   │    "translated_text": "Hello, how are you?",                                │   │
 │   │    "source_language": "fr",                                                  │   │
 │   │    "target_language": "en",                                                  │   │
-│   │    "audio_url": "https://cdn.meeshy.com/audio/abc123.wav",                  │   │
+│   │    "audio_url": "https://cdn.meeshy.me/audio/abc123.wav",                  │   │
 │   │    "audio_base64": "UklGRi4A...",                                           │   │
 │   │    "duration_seconds": 2.3,                                                  │   │
 │   │    "voice_similarity": 0.87,                                                 │   │
@@ -506,7 +506,7 @@ translator/
 │  │     "source_language": "fr",                                                 │    │
 │  │     "target_language": "en",                                                 │    │
 │  │     "audio_base64": "UklGRi4A...",                                          │    │
-│  │     "audio_url": "https://cdn.meeshy.com/audio/abc123.wav",                 │    │
+│  │     "audio_url": "https://cdn.meeshy.me/audio/abc123.wav",                 │    │
 │  │     "duration_seconds": 2.3,                                                 │    │
 │  │     "voice_similarity": 0.87,                                                │    │
 │  │     "processing_time_ms": 3200                                               │    │

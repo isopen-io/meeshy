@@ -131,7 +131,7 @@ function sanitizeSDP(sdp: string): string {
   sdp = sdp.replace(/a=candidate:.*?fe80:.*?\r\n/g, '');
 
   // Validate STUN/TURN server URLs (whitelist)
-  const allowedStunServers = ['stun.meeshy.com', 'turn.meeshy.com'];
+  const allowedStunServers = ['stun.meeshy.me', 'turn.meeshy.me'];
   // ... validation logic
 
   return sdp;
@@ -180,10 +180,10 @@ peerConnection.addEventListener('icecandidate', (event) => {
 ```nginx
 server {
   listen 443 ssl http2;
-  server_name api.meeshy.com;
+  server_name api.meeshy.me;
 
-  ssl_certificate /etc/letsencrypt/live/meeshy.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/meeshy.com/privkey.pem;
+  ssl_certificate /etc/letsencrypt/live/meeshy.me/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/meeshy.me/privkey.pem;
   ssl_protocols TLSv1.2 TLSv1.3;
   ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
 
@@ -542,9 +542,9 @@ app.post('/api/calls', async (req, res) => {
   res.json({
     call,
     iceServers: [
-      { urls: 'stun:stun.meeshy.com:3478' },
+      { urls: 'stun:stun.meeshy.me:3478' },
       {
-        urls: 'turn:turn.meeshy.com:3478',
+        urls: 'turn:turn.meeshy.me:3478',
         username: turnCredentials.username,
         credential: turnCredentials.credential
       }
@@ -572,8 +572,8 @@ denied-peer-ip=192.168.0.0-192.168.255.255
 
 # TLS
 tls-listening-port=5349
-cert=/etc/letsencrypt/live/turn.meeshy.com/fullchain.pem
-pkey=/etc/letsencrypt/live/turn.meeshy.com/privkey.pem
+cert=/etc/letsencrypt/live/turn.meeshy.me/fullchain.pem
+pkey=/etc/letsencrypt/live/turn.meeshy.me/privkey.pem
 ```
 
 ### 2. STUN/TURN Server Whitelisting
@@ -581,10 +581,10 @@ pkey=/etc/letsencrypt/live/turn.meeshy.com/privkey.pem
 **Frontend**: Only use whitelisted STUN/TURN servers:
 ```typescript
 const allowedIceServers = [
-  { urls: 'stun:stun.meeshy.com:3478' },
+  { urls: 'stun:stun.meeshy.me:3478' },
   { urls: 'stun:stun.l.google.com:19302' },  // Google STUN (public)
   {
-    urls: ['turn:turn.meeshy.com:3478', 'turn:turn.meeshy.com:5349'],
+    urls: ['turn:turn.meeshy.me:3478', 'turn:turn.meeshy.me:5349'],
     username: turnUsername,
     credential: turnCredential
   }

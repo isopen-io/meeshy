@@ -147,7 +147,7 @@ Lien de tracking Meeshy : m+ABC123 (sera automatiquement transformé en lien)
 
 URL directe : https://example.com (sera automatiquement transformée en lien cliquable)
 
-URL avec texte personnalisé : [Visitez notre site](https://meeshy.com)
+URL avec texte personnalisé : [Visitez notre site](https://meeshy.me)
 
 ## Test Retours à Ligne
 

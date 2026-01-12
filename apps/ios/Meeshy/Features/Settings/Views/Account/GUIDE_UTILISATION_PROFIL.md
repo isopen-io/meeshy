@@ -155,7 +155,7 @@ Oui, vous pouvez vous connecter sur plusieurs appareils simultanément. Gérez v
 ## 📞 Support
 
 Besoin d'aide ?
-- **Email** : support@meeshy.com
+- **Email** : support@meeshy.me
 - **Chat** : Disponible dans l'application
 - **FAQ** : Consultez la section "À propos" > "Aide"
 

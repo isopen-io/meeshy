@@ -293,7 +293,7 @@ services:
       ATTACHMENT_MASTER_KEY: ${ATTACHMENT_MASTER_KEY:-3To8V/l+VWjyQ3HzYHc7SHr597jub0iRv35A0UGHZrA=}
       # Email Service (Brevo)
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-brevo}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@meeshy.com}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@meeshy.me}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Meeshy}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       # User initialization

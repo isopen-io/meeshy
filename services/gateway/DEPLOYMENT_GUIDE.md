@@ -36,12 +36,12 @@ HCAPTCHA_SECRET=your-hcaptcha-secret-key
 HCAPTCHA_SITE_KEY=your-hcaptcha-site-key
 EMAIL_PROVIDER=sendgrid  # or mailgun
 SENDGRID_API_KEY=your-sendgrid-api-key
-FRONTEND_URL=https://meeshy.com
+FRONTEND_URL=https://meeshy.me
 
 # Optional but recommended
 GEOIP_LICENSE_KEY=your-maxmind-license-key
 MAXMIND_ACCOUNT_ID=your-maxmind-account-id
-SECURITY_ADMIN_EMAILS=security@meeshy.com,admin@meeshy.com
+SECURITY_ADMIN_EMAILS=security@meeshy.me,admin@meeshy.me
 
 # Development only
 BYPASS_CAPTCHA=false  # NEVER set to true in production
@@ -57,7 +57,7 @@ BYPASS_CAPTCHA=false  # NEVER set to true in production
 
 **SendGrid** or **Mailgun**:
 1. Create account
-2. Verify sender email (noreply@meeshy.com)
+2. Verify sender email (noreply@meeshy.me)
 3. Get API key
 4. Add to environment variables
 
@@ -186,7 +186,7 @@ db.security_events.find({
 
 Configure admin emails in environment:
 ```bash
-SECURITY_ADMIN_EMAILS=security@meeshy.com,admin@meeshy.com
+SECURITY_ADMIN_EMAILS=security@meeshy.me,admin@meeshy.me
 ```
 
 ### 3. Metrics Dashboard
@@ -243,7 +243,7 @@ NODE_ENV=production npm start
 
 ```bash
 # Test forgot-password endpoint
-curl -X POST https://api.meeshy.com/auth/forgot-password \
+curl -X POST https://api.meeshy.me/auth/forgot-password \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","captchaToken":"test"}'
 
@@ -362,8 +362,8 @@ db.password_reset_tokens.updateMany(
 
 ### Contact
 
-- **Security Issues**: security@meeshy.com
-- **Technical Support**: support@meeshy.com
+- **Security Issues**: security@meeshy.me
+- **Technical Support**: support@meeshy.me
 - **Documentation**: See PASSWORD_RESET_README.md
 
 ---

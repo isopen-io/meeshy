@@ -20,7 +20,7 @@ The Media Server exposes two interfaces:
 
 ### Base URL
 - Development: `http://localhost:3001`
-- Production: `https://media.meeshy.com`
+- Production: `https://media.meeshy.me`
 
 ### Authentication
 All requests require JWT token in `Authorization` header:
@@ -81,7 +81,7 @@ JWT is validated by Media Server (shared secret with Gateway).
 
 **Example**:
 ```bash
-curl -X POST https://media.meeshy.com/api/rooms/65abc123/create \
+curl -X POST https://media.meeshy.me/api/rooms/65abc123/create \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
 ```
 
@@ -465,11 +465,11 @@ curl -X POST https://media.meeshy.com/api/rooms/65abc123/create \
 
 ### Connection
 
-**URL**: `wss://media.meeshy.com`
+**URL**: `wss://media.meeshy.me`
 
 **Authentication**:
 ```javascript
-const socket = io('wss://media.meeshy.com', {
+const socket = io('wss://media.meeshy.me', {
   auth: {
     token: jwtToken
   }

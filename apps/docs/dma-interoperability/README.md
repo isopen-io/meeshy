@@ -235,12 +235,12 @@ shared/schema.prisma
 ### Questions techniques
 
 **Slack** : #dma-implementation
-**Email** : tech@meeshy.com
+**Email** : tech@meeshy.me
 **Issues** : GitHub Issues avec tag `[DMA]`
 
 ### Questions business
 
-**Email** : ceo@meeshy.com
+**Email** : ceo@meeshy.me
 **Meetings** : Demander via Slack #leadership
 
 ### Bugs et incidents

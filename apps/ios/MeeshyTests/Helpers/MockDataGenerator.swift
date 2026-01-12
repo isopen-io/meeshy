@@ -13,7 +13,7 @@ struct MockDataGenerator {
 
     static func createUser(
         id: String = UUID().uuidString,
-        email: String = "test@meeshy.com",
+        email: String = "test@meeshy.me",
         username: String = "testuser",
         displayName: String? = "Test User",
         avatar: String? = nil,
@@ -36,7 +36,7 @@ struct MockDataGenerator {
         return (0..<count).map { index in
             createUser(
                 id: "user-\(index)",
-                email: "user\(index)@meeshy.com",
+                email: "user\(index)@meeshy.me",
                 username: "user\(index)",
                 displayName: "User \(index)"
             )
@@ -276,7 +276,7 @@ struct MockDataGenerator {
     }
 
     static func createMessageWithURL() -> Message {
-        return createMessage(content: "Check out https://meeshy.com for more info")
+        return createMessage(content: "Check out https://meeshy.me for more info")
     }
 
     static func createFailedMessage() -> Message {

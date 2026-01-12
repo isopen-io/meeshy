@@ -222,12 +222,12 @@ quadrantChart
      { urls: 'stun:stun.l.google.com:19302' },
      { urls: 'stun:stun1.l.google.com:19302' },
      {
-       urls: 'turn:turn.meeshy.com:3478',
+       urls: 'turn:turn.meeshy.me:3478',
        username: 'user',
        credential: 'pass'
      },
      {
-       urls: 'turns:turn.meeshy.com:5349', // TLS
+       urls: 'turns:turn.meeshy.me:5349', // TLS
        username: 'user',
        credential: 'pass'
      }

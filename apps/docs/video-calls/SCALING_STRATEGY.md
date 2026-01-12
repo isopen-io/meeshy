@@ -140,7 +140,7 @@ upstream gateway {
 
 server {
   listen 443 ssl;
-  server_name api.meeshy.com;
+  server_name api.meeshy.me;
 
   location /socket.io/ {
     proxy_pass http://gateway;
@@ -491,9 +491,9 @@ app.get('/health', async (req, res) => {
 
 **DNS round-robin** (for failover):
 ```
-media.meeshy.com → 10.0.1.10 (media-1)
-media.meeshy.com → 10.0.1.11 (media-2)
-media.meeshy.com → 10.0.1.12 (media-3)
+media.meeshy.me → 10.0.1.10 (media-1)
+media.meeshy.me → 10.0.1.11 (media-2)
+media.meeshy.me → 10.0.1.12 (media-3)
 ```
 
 ### TURN Server Load Balancing
@@ -505,7 +505,7 @@ TurnServerUSWest:
   Type: AWS::Route53::RecordSet
   Properties:
     HostedZoneId: Z123456789
-    Name: turn.meeshy.com
+    Name: turn.meeshy.me
     Type: A
     SetIdentifier: turn-us-west
     GeoLocation:
@@ -518,7 +518,7 @@ TurnServerEUWest:
   Type: AWS::Route53::RecordSet
   Properties:
     HostedZoneId: Z123456789
-    Name: turn.meeshy.com
+    Name: turn.meeshy.me
     Type: A
     SetIdentifier: turn-eu-west
     GeoLocation:
@@ -682,9 +682,9 @@ return translation;
 // next.config.js
 module.exports = {
   images: {
-    domains: ['cdn.meeshy.com']
+    domains: ['cdn.meeshy.me']
   },
-  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://cdn.meeshy.com' : ''
+  assetPrefix: process.env.NODE_ENV === 'production' ? 'https://cdn.meeshy.me' : ''
 };
 ```
 
@@ -692,10 +692,10 @@ module.exports = {
 
 **Multi-region TURN servers**:
 ```
-turn-us-west.meeshy.com → 34.56.78.90 (Oregon, US)
-turn-us-east.meeshy.com → 35.67.89.01 (Virginia, US)
-turn-eu-west.meeshy.com → 34.89.12.34 (Ireland, EU)
-turn-ap-southeast.meeshy.com → 35.90.23.45 (Singapore, AP)
+turn-us-west.meeshy.me → 34.56.78.90 (Oregon, US)
+turn-us-east.meeshy.me → 35.67.89.01 (Virginia, US)
+turn-eu-west.meeshy.me → 34.89.12.34 (Ireland, EU)
+turn-ap-southeast.meeshy.me → 35.90.23.45 (Singapore, AP)
 ```
 
 **Client-side region selection**:
@@ -706,10 +706,10 @@ async function getNearestTurnServer(): Promise<string> {
   const region = await fetch('/api/region').then(r => r.json());
 
   const turnServers = {
-    'NA': 'turn-us-west.meeshy.com',
-    'EU': 'turn-eu-west.meeshy.com',
-    'AS': 'turn-ap-southeast.meeshy.com',
-    'default': 'turn-us-west.meeshy.com'
+    'NA': 'turn-us-west.meeshy.me',
+    'EU': 'turn-eu-west.meeshy.me',
+    'AS': 'turn-ap-southeast.meeshy.me',
+    'default': 'turn-us-west.meeshy.me'
   };
 
   return turnServers[region.continent] || turnServers.default;
@@ -937,7 +937,7 @@ socket.on('call:initiate', async (data) => {
 ```yaml
 # load-test.yml
 config:
-  target: "https://api.meeshy.com"
+  target: "https://api.meeshy.me"
   phases:
     - duration: 60
       arrivalRate: 10
