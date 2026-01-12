@@ -49,6 +49,7 @@ import userPreferencesRoutes from './routes/user-preferences';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
 import notificationPreferencesRoutes from './routes/notification-preferences';
+import privacyPreferencesRoutes from './routes/privacy-preferences';
 import conversationEncryptionRoutes from './routes/conversation-encryption';
 import encryptionKeysRoutes from './routes/encryption-keys';
 import userEncryptionPreferencesRoutes from './routes/user-encryption-preferences';
@@ -790,6 +791,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register notification preferences routes with /api prefix
     await this.server.register(notificationPreferencesRoutes, { prefix: API_PREFIX });
+
+    // Register privacy preferences routes with /api prefix
+    await this.server.register(privacyPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation encryption routes with /api prefix
     await this.server.register(conversationEncryptionRoutes, { prefix: '' });

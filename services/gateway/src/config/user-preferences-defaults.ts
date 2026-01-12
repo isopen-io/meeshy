@@ -18,6 +18,10 @@ export const USER_PREFERENCES_DEFAULTS: Record<string, { value: string; valueTyp
   'show-last-seen': { value: 'true', valueType: 'boolean', description: 'Show last seen time to others' },
   'show-read-receipts': { value: 'true', valueType: 'boolean', description: 'Send read receipts' },
   'show-typing-indicator': { value: 'true', valueType: 'boolean', description: 'Show typing indicator' },
+  'allow-contact-requests': { value: 'true', valueType: 'boolean', description: 'Allow contact requests from strangers' },
+  'allow-group-invites': { value: 'true', valueType: 'boolean', description: 'Allow group invites from non-contacts' },
+  'save-media-to-gallery': { value: 'false', valueType: 'boolean', description: 'Auto-save media to gallery' },
+  'allow-analytics': { value: 'true', valueType: 'boolean', description: 'Allow anonymous usage analytics' },
 
   // Media
   'autoplay-videos': { value: 'true', valueType: 'boolean', description: 'Autoplay videos in chat' },
@@ -164,6 +168,61 @@ export function createDefaultNotificationPreferences(
 export function isValidDndTime(time: string): boolean {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(time);
 }
+
+// ========== PRIVACY PREFERENCES DEFAULTS ==========
+
+export interface PrivacyPreferencesDefaults {
+  // Profile visibility
+  showOnlineStatus: boolean;
+  showLastSeen: boolean;
+  showReadReceipts: boolean;
+  showTypingIndicator: boolean;
+
+  // Contact settings
+  allowContactRequests: boolean;
+  allowGroupInvites: boolean;
+
+  // Data settings
+  saveMediaToGallery: boolean;
+  allowAnalytics: boolean;
+}
+
+export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
+  // Profile visibility - all enabled by default
+  showOnlineStatus: true,
+  showLastSeen: true,
+  showReadReceipts: true,
+  showTypingIndicator: true,
+
+  // Contact settings - all enabled by default
+  allowContactRequests: true,
+  allowGroupInvites: true,
+
+  // Data settings
+  saveMediaToGallery: false, // disabled by default for privacy
+  allowAnalytics: true,
+};
+
+/**
+ * Mapping between camelCase frontend keys and kebab-case database keys
+ */
+export const PRIVACY_KEY_MAPPING: Record<keyof PrivacyPreferencesDefaults, string> = {
+  showOnlineStatus: 'show-online-status',
+  showLastSeen: 'show-last-seen',
+  showReadReceipts: 'show-read-receipts',
+  showTypingIndicator: 'show-typing-indicator',
+  allowContactRequests: 'allow-contact-requests',
+  allowGroupInvites: 'allow-group-invites',
+  saveMediaToGallery: 'save-media-to-gallery',
+  allowAnalytics: 'allow-analytics',
+};
+
+/**
+ * Reverse mapping for database to frontend
+ */
+export const PRIVACY_KEY_REVERSE_MAPPING: Record<string, keyof PrivacyPreferencesDefaults> = Object.fromEntries(
+  Object.entries(PRIVACY_KEY_MAPPING).map(([k, v]) => [v, k as keyof PrivacyPreferencesDefaults])
+) as Record<string, keyof PrivacyPreferencesDefaults>;
 
 // ========== HELPER FUNCTIONS ==========
 
