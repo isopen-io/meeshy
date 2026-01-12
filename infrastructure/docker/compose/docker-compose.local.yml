@@ -296,6 +296,8 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@meeshy.me}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Meeshy}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
+      # Captcha bypass for development
+      BYPASS_CAPTCHA: ${BYPASS_CAPTCHA:-true}
       # User initialization
       FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}

@@ -65,17 +65,26 @@ export class PasswordResetService {
   ): Promise<{ success: boolean; message: string }> {
     const { email, captchaToken, deviceFingerprint, ipAddress, userAgent } = request;
 
+    console.log('[PasswordResetService] 📧 ======== PASSWORD RESET REQUEST ========');
+    console.log('[PasswordResetService] 📧 Email:', email);
+    console.log('[PasswordResetService] 📧 IP:', ipAddress);
+    console.log('[PasswordResetService] 📧 BYPASS_CAPTCHA:', process.env.BYPASS_CAPTCHA);
+
     try {
       // 1. Verify CAPTCHA
       const isCaptchaValid = await this.verifyCaptcha(captchaToken, ipAddress);
+      console.log('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
       if (!isCaptchaValid) {
+        console.log('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
         // Return generic response (don't reveal CAPTCHA failure)
         return this.genericSuccessResponse();
       }
 
       // 2. Rate limiting
       const isRateLimited = await this.checkRateLimit(email, ipAddress);
+      console.log('[PasswordResetService] 📧 Rate limited:', isRateLimited);
       if (isRateLimited) {
+        console.log('[PasswordResetService] ❌ Rate limited - returning generic response');
         await this.logSecurityEvent(null, 'RATE_LIMIT_EXCEEDED', 'MEDIUM', {
           email,
           ipAddress,
@@ -85,6 +94,7 @@ export class PasswordResetService {
       }
 
       // 3. Find user by email (case-insensitive)
+      console.log('[PasswordResetService] 📧 Looking for user with email:', email.toLowerCase().trim());
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: email.toLowerCase().trim(), mode: 'insensitive' },
@@ -104,16 +114,20 @@ export class PasswordResetService {
 
       // 4. User not found - return generic response
       if (!user) {
+        console.log('[PasswordResetService] ❌ User not found - returning generic response');
         return this.genericSuccessResponse();
       }
+      console.log('[PasswordResetService] ✅ User found:', user.id, user.email);
 
       // 5. Email not verified - return generic response
       if (!user.emailVerifiedAt) {
+        console.log('[PasswordResetService] ❌ Email not verified - returning generic response');
         await this.logSecurityEvent(user.id, 'PASSWORD_RESET_UNVERIFIED_EMAIL', 'LOW', {
           email: user.email
         });
         return this.genericSuccessResponse();
       }
+      console.log('[PasswordResetService] ✅ Email verified at:', user.emailVerifiedAt);
 
       // 6. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
@@ -428,6 +442,12 @@ export class PasswordResetService {
   }
 
   private async verifyCaptcha(token: string, ipAddress: string): Promise<boolean> {
+    // Check if CAPTCHA bypass is enabled (development only)
+    if (process.env.BYPASS_CAPTCHA === 'true') {
+      console.log('[PasswordResetService] ✅ CAPTCHA bypassed (development mode)');
+      return true;
+    }
+
     try {
       const response = await axios.post(
         'https://hcaptcha.com/siteverify',

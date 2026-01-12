@@ -1873,9 +1873,9 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 
 docker-stop: _ensure-docker-running ## Arrêter tous les services Docker
 	@echo "$(YELLOW)⏹️  Arrêt des services Docker...$(NC)"
-	@docker compose -f $(COMPOSE_DEV) down 2>/dev/null || true
-	@docker compose -f $(COMPOSE_LOCAL) down 2>/dev/null || true
-	@docker compose -f $(COMPOSE_PROD) down 2>/dev/null || true
+	@docker compose -f $(COMPOSE_DEV) -p $(PROJECT_DEV) --profile full down --remove-orphans 2>/dev/null || true
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --profile full down --remove-orphans 2>/dev/null || true
+	@docker compose -f $(COMPOSE_PROD) -p $(PROJECT_PROD) --profile full down --remove-orphans 2>/dev/null || true
 	@echo "$(GREEN)✅ Services arrêtés$(NC)"
 
 docker-logs: _ensure-docker-running ## Afficher les logs Docker (SERVICE=nom pour filtrer)
