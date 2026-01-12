@@ -1,11 +1,20 @@
 /**
  * Routes for user-specific conversation preferences
  * Handles personal settings: pin, mute, archive, tags, categories, etc.
+ *
+ * Routes:
+ * - GET /user-preferences/conversations/:conversationId - Get preferences (with defaults)
+ * - GET /user-preferences/conversations - List all (paginated)
+ * - PUT /user-preferences/conversations/:conversationId - Upsert preferences
+ * - DELETE /user-preferences/conversations/:conversationId - Delete preferences
+ * - POST /user-preferences/conversations/reorder - Batch reorder
+ * - GET/POST/PATCH/DELETE /user-preferences/categories/* - Category CRUD
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -40,7 +49,7 @@ const conversationPreferencesSchema = {
   type: 'object',
   description: 'User preferences for a specific conversation',
   properties: {
-    id: { type: 'string', description: 'Unique preference ID' },
+    id: { type: 'string', nullable: true, description: 'Unique preference ID (null if default)' },
     userId: { type: 'string', description: 'User ID' },
     conversationId: { type: 'string', description: 'Conversation ID' },
     isPinned: { type: 'boolean', description: 'Whether conversation is pinned' },
@@ -51,8 +60,9 @@ const conversationPreferencesSchema = {
     orderInCategory: { type: 'number', nullable: true, description: 'Display order within category' },
     customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
+    isDefault: { type: 'boolean', description: 'Whether this is using default values' },
+    createdAt: { type: 'string', format: 'date-time', nullable: true, description: 'Creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last update timestamp' },
     category: {
       type: 'object',
       nullable: true,
@@ -237,7 +247,6 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             }
           },
           401: errorResponseSchema,
-          404: errorResponseSchema,
           500: errorResponseSchema
         }
       }
@@ -267,17 +276,31 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           }
         });
 
-        if (!preferences) {
-          return reply.status(404).send({
-            success: false,
-            message: 'Preferences not found'
+        // Return stored preferences or defaults
+        if (preferences) {
+          reply.send({
+            success: true,
+            data: {
+              ...preferences,
+              isDefault: false
+            }
+          });
+        } else {
+          // Return default preferences for new conversations
+          reply.send({
+            success: true,
+            data: {
+              id: null,
+              userId,
+              conversationId,
+              ...CONVERSATION_PREFERENCES_DEFAULTS,
+              isDefault: true,
+              createdAt: null,
+              updatedAt: null,
+              category: null
+            }
           });
         }
-
-        reply.send({
-          success: true,
-          data: preferences
-        });
       } catch (error) {
         logError(fastify.log, 'Error fetching conversation preferences:', error);
         reply.code(500).send({
@@ -348,9 +371,15 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           fastify.prisma.userConversationPreferences.count({ where: whereClause })
         ]);
 
+        // Add isDefault: false to all stored preferences
+        const preferencesWithDefault = preferences.map(p => ({
+          ...p,
+          isDefault: false
+        }));
+
         reply.send({
           success: true,
-          data: preferences,
+          data: preferencesWithDefault,
           pagination: {
             total: totalCount,
             limit: limitNum,
@@ -446,7 +475,10 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         reply.send({
           success: true,
-          data: preferences
+          data: {
+            ...preferences,
+            isDefault: false
+          }
         });
       } catch (error) {
         logError(fastify.log, 'Error upserting conversation preferences:', error);

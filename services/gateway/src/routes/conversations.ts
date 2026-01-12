@@ -23,7 +23,8 @@ import {
   updateConversationRequestSchema,
   conversationListResponseSchema,
   conversationResponseSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  messageSchema
 } from '@meeshy/shared/types/api-schemas';
 
 /**
@@ -1052,7 +1053,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                messages: { type: 'array', items: { type: 'object' } },
+                messages: { type: 'array', items: messageSchema },
                 hasMore: { type: 'boolean', description: 'Whether more messages are available' }
               }
             }

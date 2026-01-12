@@ -37,7 +37,8 @@ export function useFontPreference() {
         const token = authManager.getAuthToken();
         if (token && typeof window !== 'undefined') {
           try {
-            const response = await fetch(buildApiUrl('/users/preferences'), {
+            // Utiliser le nouvel endpoint unifié /user-preferences/:key
+            const response = await fetch(buildApiUrl(`/user-preferences/${FONT_PREFERENCE_KEY}`), {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -47,14 +48,15 @@ export function useFontPreference() {
 
             if (response.ok) {
               const result = await response.json();
-              if (result.success && result.data) {
-                const serverFont = result.data.find((pref: any) => pref.key === FONT_PREFERENCE_KEY);
-                
-                if (serverFont && serverFont.value && getFontConfig(serverFont.value as FontFamily)) {
-                  const fontFamily = serverFont.value as FontFamily;
+              // Le nouvel endpoint retourne directement la préférence avec { success, data: { key, value, ... } }
+              if (result.success && result.data && result.data.value) {
+                const serverFontValue = result.data.value;
+
+                if (getFontConfig(serverFontValue as FontFamily)) {
+                  const fontFamily = serverFontValue as FontFamily;
                   setCurrentFont(fontFamily);
                   applyFontToDocument(fontFamily);
-                  
+
                   // Synchroniser avec localStorage
                   localStorage.setItem(FONT_PREFERENCE_KEY, fontFamily);
                 }
@@ -130,7 +132,8 @@ export function useFontPreference() {
         const token = authManager.getAuthToken();
         if (token) {
           try {
-            const response = await fetch(buildApiUrl('/users/preferences'), {
+            // Utiliser le nouvel endpoint unifié POST /user-preferences/
+            const response = await fetch(buildApiUrl('/user-preferences'), {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${token}`,

@@ -163,6 +163,7 @@ model User {
   callParticipations     CallParticipant[]             @relation("CallParticipants")
   conversationPrefs      UserConversationPreferences[]
   conversationCategories UserConversationCategory[]
+  communityPrefs         UserCommunityPreferences[]
 
   // Password Reset Relations
   passwordResetTokens PasswordResetToken[]
@@ -1057,9 +1058,10 @@ model Community {
   updatedAt   DateTime  @updatedAt
 
   members             CommunityMember[]
-  creator             User                @relation("CommunityCreator", fields: [createdBy], references: [id])
-  sharedConversations ConversationShare[] @relation("CommunityShares")
+  creator             User                         @relation("CommunityCreator", fields: [createdBy], references: [id])
+  sharedConversations ConversationShare[]          @relation("CommunityShares")
   Conversation        Conversation[]
+  userPreferences     UserCommunityPreferences[]
 }
 
 /// Appartenance aux communautés
@@ -1528,6 +1530,48 @@ model UserConversationCategory {
 
   @@index([userId])
   @@index([userId, order])
+}
+
+/// User-specific preferences for communities
+model UserCommunityPreferences {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  communityId String @db.ObjectId
+
+  /// Pin community to top of list
+  isPinned Boolean @default(false)
+
+  /// Mute notifications for this community
+  isMuted Boolean @default(false)
+
+  /// Archive community (hide from main list)
+  isArchived Boolean @default(false)
+
+  /// Hide community from list without leaving
+  isHidden Boolean @default(false)
+
+  /// Notification level: 'all', 'mentions', 'none'
+  notificationLevel String @default("all")
+
+  /// Custom display name override
+  customName String?
+
+  /// Assigned category ID for organization
+  categoryId String? @db.ObjectId
+
+  /// Order within category (for manual sorting)
+  orderInCategory Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([userId])
+  @@index([communityId])
+  @@index([categoryId])
 }
 
 /// =====================================================

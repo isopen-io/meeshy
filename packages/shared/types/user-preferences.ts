@@ -112,3 +112,71 @@ export interface ConversationGroup {
   readonly conversations: any[]; // Sera typé avec Conversation + UserConversationPreferences
   readonly isExpanded: boolean;
 }
+
+// ========== COMMUNITY PREFERENCES ==========
+
+/**
+ * Niveau de notification pour une communauté
+ */
+export type CommunityNotificationLevel = 'all' | 'mentions' | 'none';
+
+/**
+ * Préférences utilisateur pour une communauté spécifique
+ */
+export interface UserCommunityPreferences {
+  readonly id: string;
+  readonly userId: string;
+  readonly communityId: string;
+
+  // Organisation
+  readonly isPinned: boolean;              // Épinglé en haut de la liste
+  readonly isMuted: boolean;               // Notifications désactivées
+  readonly isArchived: boolean;            // Archivé (caché de la liste principale)
+  readonly isHidden: boolean;              // Caché sans quitter
+
+  // Notifications
+  readonly notificationLevel: CommunityNotificationLevel;
+
+  // Personnalisation
+  readonly customName?: string;            // Nom personnalisé de la communauté
+  readonly categoryId?: string;            // Catégorie personnelle
+  readonly orderInCategory?: number;       // Ordre dans la catégorie
+
+  // Métadonnées
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
+ * Données pour créer ou mettre à jour des préférences de communauté
+ */
+export interface CreateUserCommunityPreferencesRequest {
+  readonly communityId: string;
+  readonly isPinned?: boolean;
+  readonly isMuted?: boolean;
+  readonly isArchived?: boolean;
+  readonly isHidden?: boolean;
+  readonly notificationLevel?: CommunityNotificationLevel;
+  readonly customName?: string | null;
+  readonly categoryId?: string | null;
+  readonly orderInCategory?: number;
+}
+
+export interface UpdateUserCommunityPreferencesRequest {
+  readonly isPinned?: boolean;
+  readonly isMuted?: boolean;
+  readonly isArchived?: boolean;
+  readonly isHidden?: boolean;
+  readonly notificationLevel?: CommunityNotificationLevel;
+  readonly customName?: string | null;
+  readonly categoryId?: string | null;
+  readonly orderInCategory?: number;
+}
+
+/**
+ * Réponse du serveur avec les préférences de communauté
+ */
+export interface UserCommunityPreferencesResponse {
+  readonly success: boolean;
+  readonly data: UserCommunityPreferences;
+}
