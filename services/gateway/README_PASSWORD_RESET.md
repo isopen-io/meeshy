@@ -294,9 +294,9 @@ Designed to scale, easy to maintain, extensible architecture.
 
 ### Technical Support
 
-- **Security**: security@meeshy.com
-- **Technical**: development@meeshy.com
-- **Product**: product@meeshy.com
+- **Security**: security@meeshy.me
+- **Technical**: development@meeshy.me
+- **Product**: product@meeshy.me
 
 ---
 

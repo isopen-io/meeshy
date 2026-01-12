@@ -250,7 +250,7 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https:;
   font-src 'self' data:;
-  connect-src 'self' wss://api.meeshy.com https://api.meeshy.com;
+  connect-src 'self' wss://api.meeshy.me https://api.meeshy.me;
   media-src 'self' blob:;
   object-src 'none';
   base-uri 'self';

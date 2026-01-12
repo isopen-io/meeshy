@@ -387,13 +387,13 @@ All code is located in:
 
 ### For Security Questions
 
-- Email: security@meeshy.com
+- Email: security@meeshy.me
 - Slack: #security-team
 - Document: `PASSWORD_RESET_SECURITY_SUMMARY.md`
 
 ### For Business/Product Questions
 
-- Email: product@meeshy.com
+- Email: product@meeshy.me
 - Document: `PASSWORD_RESET_SECURITY_SUMMARY.md`
 
 ---

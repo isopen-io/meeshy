@@ -26,9 +26,9 @@ EMAIL_PROVIDER=sendgrid  # or 'mailgun'
 SENDGRID_API_KEY=your-sendgrid-api-key
 # OR
 MAILGUN_API_KEY=your-mailgun-api-key
-MAILGUN_DOMAIN=mg.meeshy.com
+MAILGUN_DOMAIN=mg.meeshy.me
 
-EMAIL_FROM=noreply@meeshy.com
+EMAIL_FROM=noreply@meeshy.me
 EMAIL_FROM_NAME=Meeshy
 
 # CAPTCHA
@@ -40,7 +40,7 @@ GEOIP_LICENSE_KEY=your-maxmind-license-key
 MAXMIND_ACCOUNT_ID=your-maxmind-account-id
 
 # Frontend
-FRONTEND_URL=https://meeshy.com  # or http://localhost:3000 for dev
+FRONTEND_URL=https://meeshy.me  # or http://localhost:3000 for dev
 
 # Redis (should already exist)
 REDIS_URL=redis://localhost:6379

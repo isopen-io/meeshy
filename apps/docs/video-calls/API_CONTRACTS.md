@@ -18,9 +18,9 @@ This document defines all API contracts for the Video Call Feature, including:
 - **Media Server API**: mediasoup integration for SFU mode
 
 ### Base URLs
-- **Gateway REST API**: `https://api.meeshy.com/api`
-- **Gateway Socket.IO**: `wss://api.meeshy.com` (path: `/socket.io`)
-- **Media Server**: `http://media-server:3001` (internal) or `wss://media.meeshy.com` (public WebSocket)
+- **Gateway REST API**: `https://api.meeshy.me/api`
+- **Gateway Socket.IO**: `wss://api.meeshy.me` (path: `/socket.io`)
+- **Media Server**: `http://media-server:3001` (internal) or `wss://media.meeshy.me` (public WebSocket)
 
 ### Authentication
 - **REST API**: JWT Bearer token in `Authorization` header
@@ -1118,7 +1118,7 @@ socket.on('call:error', (data) => {
 
 The Media Server (mediasoup) exposes HTTP and WebSocket APIs for SFU operations. Communication is primarily via WebSocket for real-time control.
 
-**Base URL**: `http://media-server:3001` (internal) or `wss://media.meeshy.com` (public)
+**Base URL**: `http://media-server:3001` (internal) or `wss://media.meeshy.me` (public)
 
 **Authentication**: Shared secret between Gateway and Media Server
 
