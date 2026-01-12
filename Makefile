@@ -2,7 +2,7 @@
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-hosts \
-        _generate-certs _copy-certs-to-docker _ensure-docker-running \
+        _generate-certs _copy-certs-to-docker _ensure-docker-running _ensure-ports-free \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
@@ -1610,6 +1610,56 @@ logs-web: ## Afficher les logs du web
 # DOCKER COMPOSE
 # =============================================================================
 
+# Ports utilisés par docker-compose.local.yml (network mode avec Traefik)
+PORTS_LOCAL := 80 443 3000 3100 5555 5558 6379 8000 8080 27017
+# Ports utilisés par docker-compose.dev.yml
+PORTS_DEV := 3000 3001 3100 5555 5558 6379 7843 8000 27017
+
+# Helper: Libérer les ports avec retry (3 tentatives)
+# Usage: $(MAKE) _ensure-ports-free REQUIRED_PORTS="3000 3100 8000"
+_ensure-ports-free:
+	@echo "$(BLUE)🔍 Vérification des ports requis...$(NC)"
+	@PORTS="$(REQUIRED_PORTS)"; \
+	MAX_RETRIES=3; \
+	for attempt in 1 2 3; do \
+		ALL_FREE=true; \
+		BLOCKED_PORTS=""; \
+		for port in $$PORTS; do \
+			if lsof -i :$$port -t >/dev/null 2>&1; then \
+				ALL_FREE=false; \
+				BLOCKED_PORTS="$$BLOCKED_PORTS $$port"; \
+			fi; \
+		done; \
+		if [ "$$ALL_FREE" = "true" ]; then \
+			echo "  $(GREEN)✅ Tous les ports sont disponibles$(NC)"; \
+			break; \
+		fi; \
+		echo "  $(YELLOW)⚠️  Tentative $$attempt/$$MAX_RETRIES - Ports occupés:$$BLOCKED_PORTS$(NC)"; \
+		for port in $$BLOCKED_PORTS; do \
+			PIDS=$$(lsof -i :$$port -t 2>/dev/null || true); \
+			if [ -n "$$PIDS" ]; then \
+				for pid in $$PIDS; do \
+					PROC_NAME=$$(ps -p $$pid -o comm= 2>/dev/null || echo "unknown"); \
+					echo "    $(DIM)Port $$port: PID $$pid ($$PROC_NAME) - kill...$(NC)"; \
+					kill -9 $$pid 2>/dev/null || true; \
+				done; \
+			fi; \
+		done; \
+		sleep 1; \
+		if [ $$attempt -eq $$MAX_RETRIES ]; then \
+			echo ""; \
+			echo "  $(RED)❌ Échec après $$MAX_RETRIES tentatives$(NC)"; \
+			echo "  $(RED)   Ports toujours occupés:$$BLOCKED_PORTS$(NC)"; \
+			echo ""; \
+			echo "  $(YELLOW)💡 Essayez manuellement:$(NC)"; \
+			for port in $$BLOCKED_PORTS; do \
+				echo "     sudo lsof -i :$$port"; \
+				echo "     sudo kill -9 \$$(lsof -i :$$port -t)"; \
+			done; \
+			exit 1; \
+		fi; \
+	done
+
 # Helper: Vérifier et démarrer Docker si nécessaire
 _ensure-docker-running:
 	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
@@ -1672,6 +1722,7 @@ docker-start: _ensure-docker-running ## Démarrer tous les services via Docker C
 	@$(MAKE) urls
 
 docker-start-local: _ensure-docker-running docker-build ## 🔨 Builder les images localement puis démarrer
+	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_DEV)"
 	@echo "$(BLUE)🐳 Démarrage avec images locales...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés avec images locales$(NC)"
@@ -1681,6 +1732,9 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║   MEESHY - Docker 100% avec Accès Réseau (Mobile/Devices)   ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@# Vérifier et libérer les ports requis
+	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_LOCAL)"
 	@echo ""
 	@echo "$(BOLD)🌐 Configuration Réseau:$(NC)"
 	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
