@@ -98,6 +98,7 @@ MIGRATIONS=(
     "003_add_attachment_indexes.js"
     "004_report_missing_audio_duration.js"
     "006_remove_encryptionMode_from_message_attachment.js"
+    "007_migrate_snake_case_to_camel_case.js"
 )
 
 # Filter to specific migration if requested

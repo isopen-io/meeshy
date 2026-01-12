@@ -90,6 +90,24 @@ The encryption mode is inherited by all messages and attachments in that convers
 
 **Safe:** Only removes the field, does not affect other data.
 
+### 007_migrate_snake_case_to_camel_case.js
+
+Migrates data from snake_case collections to CamelCase collections and drops old collections.
+
+| From (snake_case) | To (CamelCase) |
+|-------------------|----------------|
+| `call_sessions` | `CallSession` |
+| `call_participants` | `CallParticipant` |
+| `user_conversation_categories` | `UserConversationCategory` |
+| `user_conversation_preferences` | `UserConversationPreferences` |
+| `user_voice_models` | `UserVoiceModel` |
+
+Also removes backup collections:
+- `MessageAttachment_backup_urls`
+- `old_message_status`
+
+**Safe:** Verifies all data is migrated before dropping old collections.
+
 ## Verification
 
 ```bash
@@ -158,7 +176,8 @@ scripts/migrations/mongodb/
 ├── 003_add_attachment_indexes.js                        # Create indexes
 ├── 004_report_missing_audio_duration.js                 # Report missing duration
 ├── 005_extract_audio_duration.sh                        # Extract duration with ffprobe
-└── 006_remove_encryptionMode_from_message_attachment.js # Remove encryptionMode from Message/Attachment
+├── 006_remove_encryptionMode_from_message_attachment.js # Remove encryptionMode from Message/Attachment
+└── 007_migrate_snake_case_to_camel_case.js              # Migrate snake_case to CamelCase collections
 ```
 
 ## Expected Results After Migration
