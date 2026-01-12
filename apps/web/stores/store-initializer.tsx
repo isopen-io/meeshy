@@ -8,6 +8,7 @@ import { useEffect, ReactNode } from 'react';
 import { useAppStore } from './app-store';
 import { useAuthStore } from './auth-store';
 import { useLanguageStore } from './language-store';
+import { useUserPreferencesStore } from './user-preferences-store';
 
 interface StoreInitializerProps {
   children: ReactNode;
@@ -17,6 +18,7 @@ export function StoreInitializer({ children }: StoreInitializerProps) {
   const initializeApp = useAppStore((state) => state.initialize);
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
   const detectBrowserLanguage = useLanguageStore((state) => state.detectAndSetBrowserLanguage);
+  const initializeUserPreferences = useUserPreferencesStore((state) => state.initialize);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
@@ -30,7 +32,10 @@ export function StoreInitializer({ children }: StoreInitializerProps) {
           initializeApp(),
           initializeAuth(),
         ]);
-        
+
+        // Initialize user preferences after auth (requires authentication)
+        await initializeUserPreferences();
+
         // Initialize language after auth (user preferences might affect language)
         // IMPORTANT: Ne PAS écraser la langue si elle est déjà persistée dans localStorage
         const languageStore = useLanguageStore.getState();
