@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOgImageUrl } from '@/lib/og-images';
+import { buildApiUrl } from '@/lib/config';
 
 interface MetadataResponse {
   title: string;
@@ -18,20 +19,19 @@ export async function GET(request: NextRequest) {
     const linkId = searchParams.get('linkId');
     const type = searchParams.get('type') || 'default';
 
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
     const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
 
     let metadata: MetadataResponse;
 
     switch (type) {
       case 'affiliate':
-        metadata = await generateAffiliateMetadata(affiliateToken, baseUrl, frontendUrl);
+        metadata = await generateAffiliateMetadata(affiliateToken, frontendUrl);
         break;
       case 'conversation':
-        metadata = await generateConversationMetadata(linkId, baseUrl, frontendUrl);
+        metadata = await generateConversationMetadata(linkId, frontendUrl);
         break;
       case 'join':
-        metadata = await generateJoinMetadata(linkId, baseUrl, frontendUrl);
+        metadata = await generateJoinMetadata(linkId, frontendUrl);
         break;
       default:
         metadata = generateDefaultMetadata(frontendUrl);
@@ -45,8 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function generateAffiliateMetadata(
-  affiliateToken: string | null, 
-  baseUrl: string, 
+  affiliateToken: string | null,
   frontendUrl: string
 ): Promise<MetadataResponse> {
   if (!affiliateToken) {
@@ -55,7 +54,7 @@ async function generateAffiliateMetadata(
 
   try {
     // Valider le token d'affiliation
-    const response = await fetch(`${baseUrl}/api/affiliate/validate/${affiliateToken}`);
+    const response = await fetch(buildApiUrl(`/affiliate/validate/${affiliateToken}`));
     
     if (response.ok) {
       const data = await response.json();
@@ -81,8 +80,7 @@ async function generateAffiliateMetadata(
 }
 
 async function generateConversationMetadata(
-  linkId: string | null, 
-  baseUrl: string, 
+  linkId: string | null,
   frontendUrl: string
 ): Promise<MetadataResponse> {
   if (!linkId) {
@@ -91,7 +89,7 @@ async function generateConversationMetadata(
 
   try {
     // Récupérer les informations de la conversation
-    const response = await fetch(`${baseUrl}/api/links/${linkId}/info`);
+    const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     
     if (response.ok) {
       const data = await response.json();
@@ -117,8 +115,7 @@ async function generateConversationMetadata(
 }
 
 async function generateJoinMetadata(
-  linkId: string | null, 
-  baseUrl: string, 
+  linkId: string | null,
   frontendUrl: string
 ): Promise<MetadataResponse> {
   if (!linkId) {
@@ -127,7 +124,7 @@ async function generateJoinMetadata(
 
   try {
     // Récupérer les informations du lien de jointure
-    const response = await fetch(`${baseUrl}/api/links/${linkId}/info`);
+    const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     
     if (response.ok) {
       const data = await response.json();

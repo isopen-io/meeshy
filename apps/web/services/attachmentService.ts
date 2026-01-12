@@ -2,8 +2,8 @@
  * Service de gestion des attachments côté frontend
  */
 
-import { 
-  Attachment, 
+import {
+  Attachment,
   UploadedAttachmentResponse,
   UploadMultipleResponse,
   formatFileSize,
@@ -12,21 +12,7 @@ import {
   isAcceptedMimeType
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-// Helper pour construire l'URL correcte sans duplication du préfixe /api
-const buildApiUrl = (path: string): string => {
-  const baseUrl = API_URL.replace(/\/$/, ''); // Enlever le slash final
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  
-  // Si baseUrl contient déjà /api, ne pas le rajouter
-  if (baseUrl.endsWith('/api')) {
-    return `${baseUrl}${cleanPath}`;
-  }
-
-  return `${baseUrl}/api${cleanPath}`;
-};
+import { buildApiUrl } from '@/lib/config';
 
 export class AttachmentService {
   /**
