@@ -437,6 +437,11 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       const offset = parseInt(request.query.offset || '0', 10);
       const includeCount = request.query.includeCount === 'true';
 
+      // First, get all valid user IDs to filter orphaned members
+      const validUserIds = await prisma.user.findMany({
+        select: { id: true }
+      }).then(users => new Set(users.map(u => u.id)));
+
       const conversations = await prisma.conversation.findMany({
         where: {
           OR: [
@@ -466,7 +471,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           avatar: true,
           communityId: true,
           members: {
-            take: 5, // Réduit à 5 membres au lieu de 10
+            take: 10, // Fetch more to account for filtering orphans
+            where: {
+              isActive: true
+            },
             select: {
               id: true,
               userId: true,
@@ -480,19 +488,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
               canSendLocations: true,
               canSendLinks: true,
               joinedAt: true,
-              isActive: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  isOnline: true,
-                  lastActiveAt: true
-                }
-              }
+              isActive: true
             }
           },
           // User preferences (isPinned, isMuted, isArchived)
@@ -573,6 +569,34 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
 
+      // Collect all unique member userIds and fetch user data separately (avoids orphan crash)
+      const allMemberUserIds = new Set<string>();
+      for (const conv of conversations) {
+        for (const member of conv.members) {
+          if (validUserIds.has(member.userId)) {
+            allMemberUserIds.add(member.userId);
+          }
+        }
+      }
+
+      // Fetch user data for all valid member userIds
+      const memberUsers = allMemberUserIds.size > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: Array.from(allMemberUserIds) } },
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              isOnline: true,
+              lastActiveAt: true
+            }
+          })
+        : [];
+      const userMap = new Map(memberUsers.map(u => [u.id, u]));
+
       // Utiliser MessageReadStatusService pour calculer les unreadCounts
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
@@ -604,15 +628,24 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         hasMore = conversations.length === limit;
       }
 
-      // Mapper les conversations avec unreadCount (sans Promise.all - tout est déjà chargé)
+      // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
+
+        // Filter out orphaned members and merge user data
+        const membersWithUser = conversation.members
+          .filter((m: any) => validUserIds.has(m.userId))
+          .slice(0, 5) // Limit to 5 members as originally intended
+          .map((m: any) => ({
+            ...m,
+            user: userMap.get(m.userId) || null
+          }));
 
         // S'assurer qu'un titre existe toujours
         const displayTitle = conversation.title && conversation.title.trim() !== ''
           ? conversation.title
           : generateDefaultConversationTitle(
-              conversation.members.map((m: any) => ({
+              membersWithUser.map((m: any) => ({
                 id: m.userId,
                 displayName: m.user?.displayName,
                 username: m.user?.username,
@@ -624,6 +657,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
         return {
           ...conversation,
+          members: membersWithUser,
           title: displayTitle,
           lastMessage: conversation.messages[0] || null,
           unreadCount
