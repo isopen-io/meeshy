@@ -105,6 +105,10 @@ export const useAuthStore = create<AuthStore>()(
           const { authManager } = await import('../services/auth-manager.service');
           authManager.clearAllSessions();
 
+          // Reset user preferences store
+          const { resetUserPreferences } = await import('./user-preferences-store');
+          resetUserPreferences();
+
           // Redirect to home page
           if (typeof window !== 'undefined') {
             // Petit délai pour s'assurer que tout est nettoyé

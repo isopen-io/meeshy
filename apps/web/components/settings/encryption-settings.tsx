@@ -12,49 +12,42 @@ import { API_CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/useI18n';
-
-type EncryptionPreference = 'disabled' | 'optional' | 'always';
-
-interface EncryptionData {
-  encryptionPreference: EncryptionPreference;
-  hasSignalKeys: boolean;
-  signalRegistrationId: number | null;
-  signalPreKeyBundleVersion: number | null;
-  lastKeyRotation: string | null;
-}
-
-const DEFAULT_ENCRYPTION_DATA: EncryptionData = {
-  encryptionPreference: 'optional',
-  hasSignalKeys: false,
-  signalRegistrationId: null,
-  signalPreKeyBundleVersion: null,
-  lastKeyRotation: null,
-};
-
-// Local encryption settings (stored in localStorage)
-interface LocalEncryptionSettings {
-  defaultEncryptionEnabled: boolean;
-  showEncryptionIndicator: boolean;
-  requireEncryptionForMedia: boolean;
-}
-
-const LOCAL_SETTINGS_KEY = 'meeshy-encryption-settings';
-
-const DEFAULT_LOCAL_SETTINGS: LocalEncryptionSettings = {
-  defaultEncryptionEnabled: true,
-  showEncryptionIndicator: true,
-  requireEncryptionForMedia: true,
-};
+import {
+  useUserPreferencesStore,
+  useEncryptionPreferences,
+  type EncryptionPreference,
+} from '@/stores';
 
 export function EncryptionSettings() {
   const { t } = useI18n('settings');
-  const [loading, setLoading] = useState(true);
+
+  // Use centralized store
+  const {
+    preferences: encryptionData,
+    update: updateEncryption,
+    updateLocalSettings,
+    sync: syncEncryption,
+  } = useEncryptionPreferences();
+
+  const isLoading = useUserPreferencesStore(state => state.isLoading);
+  const isInitialized = useUserPreferencesStore(state => state.isInitialized);
+
   const [saving, setSaving] = useState(false);
   const [generatingKeys, setGeneratingKeys] = useState(false);
-  const [data, setData] = useState<EncryptionData>(DEFAULT_ENCRYPTION_DATA);
-  const [selectedPreference, setSelectedPreference] = useState<EncryptionPreference>('optional');
+  const [selectedPreference, setSelectedPreference] = useState<EncryptionPreference>(
+    encryptionData.encryptionPreference
+  );
   const [hasChanges, setHasChanges] = useState(false);
-  const [localSettings, setLocalSettings] = useState<LocalEncryptionSettings>(DEFAULT_LOCAL_SETTINGS);
+
+  // Sync selected preference with store when data changes
+  useEffect(() => {
+    setSelectedPreference(encryptionData.encryptionPreference);
+  }, [encryptionData.encryptionPreference]);
+
+  // Track changes
+  useEffect(() => {
+    setHasChanges(selectedPreference !== encryptionData.encryptionPreference);
+  }, [selectedPreference, encryptionData.encryptionPreference]);
 
   // Preference options with translations
   const preferenceOptions: {
@@ -83,93 +76,15 @@ export function EncryptionSettings() {
     },
   ];
 
-  // Load local settings from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_SETTINGS_KEY);
-      if (saved) {
-        setLocalSettings({ ...DEFAULT_LOCAL_SETTINGS, ...JSON.parse(saved) });
-      }
-    } catch (error) {
-      console.error('Error loading local encryption settings:', error);
-    }
-  }, []);
-
-  // Save local settings to localStorage
-  const updateLocalSetting = (key: keyof LocalEncryptionSettings, value: boolean) => {
-    const newSettings = { ...localSettings, [key]: value };
-    setLocalSettings(newSettings);
-    localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(newSettings));
-  };
-
-  useEffect(() => {
-    loadEncryptionPreferences();
-  }, []);
-
-  useEffect(() => {
-    setHasChanges(selectedPreference !== data.encryptionPreference);
-  }, [selectedPreference, data.encryptionPreference]);
-
-  const loadEncryptionPreferences = async () => {
-    try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          setData(result.data);
-          setSelectedPreference(result.data.encryptionPreference || 'optional');
-        }
-      }
-    } catch (error) {
-      console.error('Error loading encryption preferences:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const savePreference = async () => {
     setSaving(true);
     try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        toast.error(t('encryption.errors.notAuthenticated'));
-        return;
-      }
-
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ encryptionPreference: selectedPreference }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setData(prev => ({ ...prev, encryptionPreference: selectedPreference }));
-          setHasChanges(false);
-          toast.success(t('encryption.actions.preferencesUpdated'));
-        }
-      } else {
-        const error = await response.json();
-        toast.error(error.error || t('encryption.errors.updateFailed'));
-      }
+      await updateEncryption({ encryptionPreference: selectedPreference });
+      setHasChanges(false);
+      toast.success(t('encryption.actions.preferencesUpdated'));
     } catch (error) {
       console.error('Error saving encryption preference:', error);
-      toast.error(t('encryption.errors.networkError'));
+      toast.error(t('encryption.errors.updateFailed'));
     } finally {
       setSaving(false);
     }
@@ -196,13 +111,8 @@ export function EncryptionSettings() {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          setData(prev => ({
-            ...prev,
-            hasSignalKeys: true,
-            signalRegistrationId: result.data.signalRegistrationId,
-            signalPreKeyBundleVersion: result.data.signalPreKeyBundleVersion,
-            lastKeyRotation: new Date().toISOString(),
-          }));
+          // Sync the store to get the updated key data
+          await syncEncryption();
           toast.success(t('encryption.status.keysGenerated'));
         }
       } else {
@@ -217,7 +127,7 @@ export function EncryptionSettings() {
     }
   };
 
-  if (loading) {
+  if (!isInitialized || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -241,30 +151,30 @@ export function EncryptionSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <div className="flex items-center gap-3">
-              {data.hasSignalKeys ? (
+              {encryptionData.hasSignalKeys ? (
                 <CheckCircle className="h-6 w-6 text-green-500" />
               ) : (
                 <AlertTriangle className="h-6 w-6 text-yellow-500" />
               )}
               <div>
                 <p className="font-medium">
-                  {data.hasSignalKeys ? t('encryption.status.keysActive') : t('encryption.status.keysNotGenerated')}
+                  {encryptionData.hasSignalKeys ? t('encryption.status.keysActive') : t('encryption.status.keysNotGenerated')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {data.hasSignalKeys
-                    ? `${t('encryption.status.registrationId')}: ${data.signalRegistrationId}`
+                  {encryptionData.hasSignalKeys
+                    ? `${t('encryption.status.registrationId')}: ${encryptionData.signalRegistrationId}`
                     : t('encryption.status.generateKeys')}
                 </p>
               </div>
             </div>
-            <Badge variant={data.hasSignalKeys ? 'default' : 'secondary'}>
-              {data.hasSignalKeys ? t('encryption.status.active') : t('encryption.status.inactive')}
+            <Badge variant={encryptionData.hasSignalKeys ? 'default' : 'secondary'}>
+              {encryptionData.hasSignalKeys ? t('encryption.status.active') : t('encryption.status.inactive')}
             </Badge>
           </div>
 
-          {data.hasSignalKeys && data.lastKeyRotation && (
+          {encryptionData.hasSignalKeys && encryptionData.lastKeyRotation && (
             <div className="text-sm text-muted-foreground">
-              {t('encryption.status.lastRotation')}: {new Date(data.lastKeyRotation).toLocaleDateString(undefined, {
+              {t('encryption.status.lastRotation')}: {new Date(encryptionData.lastKeyRotation).toLocaleDateString(undefined, {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -274,7 +184,7 @@ export function EncryptionSettings() {
             </div>
           )}
 
-          {!data.hasSignalKeys && (
+          {!encryptionData.hasSignalKeys && (
             <Button
               onClick={generateKeys}
               disabled={generatingKeys}
@@ -316,8 +226,8 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={localSettings.defaultEncryptionEnabled}
-              onCheckedChange={(checked) => updateLocalSetting('defaultEncryptionEnabled', checked)}
+              checked={encryptionData.localSettings.autoEncryptNewConversations}
+              onCheckedChange={(checked) => updateLocalSettings({ autoEncryptNewConversations: checked })}
             />
           </div>
 
@@ -329,8 +239,8 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={localSettings.showEncryptionIndicator}
-              onCheckedChange={(checked) => updateLocalSetting('showEncryptionIndicator', checked)}
+              checked={encryptionData.localSettings.showEncryptionStatus}
+              onCheckedChange={(checked) => updateLocalSettings({ showEncryptionStatus: checked })}
             />
           </div>
 
@@ -342,8 +252,8 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={localSettings.requireEncryptionForMedia}
-              onCheckedChange={(checked) => updateLocalSetting('requireEncryptionForMedia', checked)}
+              checked={encryptionData.localSettings.warnOnUnencrypted}
+              onCheckedChange={(checked) => updateLocalSettings({ warnOnUnencrypted: checked })}
             />
           </div>
         </CardContent>

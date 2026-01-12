@@ -42,5 +42,21 @@ export {
   useConversationActions,
 } from './conversation-store';
 
+// User Preferences Store (Unified)
+export {
+  useUserPreferencesStore,
+  useNotificationPreferences,
+  useEncryptionPreferences,
+  usePrivacyPreferences,
+  useLanguagePreferencesFromStore,
+  initializeUserPreferences,
+  resetUserPreferences,
+  type NotificationPreferences,
+  type EncryptionPreferences,
+  type PrivacyPreferences,
+  type LanguagePreferences,
+  type EncryptionPreference,
+} from './user-preferences-store';
+
 // Store Initializer
 export { StoreInitializer } from './store-initializer';
