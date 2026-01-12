@@ -7,99 +7,112 @@
 #
 # This allows the same Docker image to work in different environments
 # without rebuilding.
+#
+# Compatible with BusyBox (Alpine) - uses find+grep instead of grep --include
 # =============================================================================
 
 set -e
 
-# Default placeholder values (what was used during build)
-DEFAULT_BACKEND_URL="https://gate.meeshy.me"
+# Placeholder values used during build (unique identifiers)
+PLACEHOLDER_API_URL="__MEESHY_API_URL__"
+PLACEHOLDER_WS_URL="__MEESHY_WS_URL__"
+PLACEHOLDER_BACKEND_URL="__MEESHY_BACKEND_URL__"
+PLACEHOLDER_FRONTEND_URL="__MEESHY_FRONTEND_URL__"
+PLACEHOLDER_TRANSLATION_URL="__MEESHY_TRANSLATION_URL__"
+PLACEHOLDER_STATIC_URL="__MEESHY_STATIC_URL__"
+
+# Default production values (fallback if env vars not set)
+DEFAULT_API_URL="https://gate.meeshy.me"
 DEFAULT_WS_URL="wss://gate.meeshy.me"
+DEFAULT_BACKEND_URL="https://gate.meeshy.me"
 DEFAULT_FRONTEND_URL="https://meeshy.me"
 DEFAULT_TRANSLATION_URL="https://ml.meeshy.me"
 DEFAULT_STATIC_URL="https://static.meeshy.me"
-DEFAULT_API_URL="https://gate.meeshy.me"
 
-# Target runtime values from environment variables
-RUNTIME_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-$DEFAULT_BACKEND_URL}"
+# Runtime values from environment (with defaults)
+RUNTIME_API_URL="${NEXT_PUBLIC_API_URL:-$DEFAULT_API_URL}"
 RUNTIME_WS_URL="${NEXT_PUBLIC_WS_URL:-$DEFAULT_WS_URL}"
+RUNTIME_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-$DEFAULT_BACKEND_URL}"
 RUNTIME_FRONTEND_URL="${NEXT_PUBLIC_FRONTEND_URL:-$DEFAULT_FRONTEND_URL}"
 RUNTIME_TRANSLATION_URL="${NEXT_PUBLIC_TRANSLATION_URL:-$DEFAULT_TRANSLATION_URL}"
 RUNTIME_STATIC_URL="${NEXT_PUBLIC_STATIC_URL:-$DEFAULT_STATIC_URL}"
-RUNTIME_API_URL="${NEXT_PUBLIC_API_URL:-$DEFAULT_API_URL}"
 
 echo "=== Meeshy Web - Runtime Environment Variable Injection ==="
-echo "Backend URL:     $RUNTIME_BACKEND_URL"
+echo "API URL:         $RUNTIME_API_URL"
 echo "WebSocket URL:   $RUNTIME_WS_URL"
+echo "Backend URL:     $RUNTIME_BACKEND_URL"
 echo "Frontend URL:    $RUNTIME_FRONTEND_URL"
 echo "Translation URL: $RUNTIME_TRANSLATION_URL"
 echo "Static URL:      $RUNTIME_STATIC_URL"
-echo "API URL:         $RUNTIME_API_URL"
 
-# Function to replace URLs in a file
-replace_urls() {
-    file="$1"
+# Function to count occurrences (BusyBox compatible)
+count_occurrences() {
+    pattern="$1"
+    # Use find + xargs + grep for BusyBox compatibility
+    find .next -type f \( -name "*.js" -o -name "*.json" \) -print0 2>/dev/null | \
+        xargs -0 grep -l "$pattern" 2>/dev/null | wc -l || echo "0"
+}
 
-    # Only process if file exists
-    if [ -f "$file" ]; then
-        # Backend URL
-        if [ "$RUNTIME_BACKEND_URL" != "$DEFAULT_BACKEND_URL" ]; then
-            sed -i "s|$DEFAULT_BACKEND_URL|$RUNTIME_BACKEND_URL|g" "$file" 2>/dev/null || true
-        fi
+# Function to replace a placeholder with runtime value
+replace_placeholder() {
+    placeholder="$1"
+    runtime_value="$2"
+    label="$3"
 
-        # WebSocket URL
-        if [ "$RUNTIME_WS_URL" != "$DEFAULT_WS_URL" ]; then
-            sed -i "s|$DEFAULT_WS_URL|$RUNTIME_WS_URL|g" "$file" 2>/dev/null || true
-        fi
+    if [ -d ".next" ]; then
+        # Count occurrences before replacement (BusyBox compatible)
+        count_before=$(count_occurrences "$placeholder")
 
-        # Frontend URL
-        if [ "$RUNTIME_FRONTEND_URL" != "$DEFAULT_FRONTEND_URL" ]; then
-            sed -i "s|$DEFAULT_FRONTEND_URL|$RUNTIME_FRONTEND_URL|g" "$file" 2>/dev/null || true
-        fi
+        if [ "$count_before" -gt 0 ]; then
+            echo "  Replacing $label: $count_before files"
 
-        # Translation URL
-        if [ "$RUNTIME_TRANSLATION_URL" != "$DEFAULT_TRANSLATION_URL" ]; then
-            sed -i "s|$DEFAULT_TRANSLATION_URL|$RUNTIME_TRANSLATION_URL|g" "$file" 2>/dev/null || true
-        fi
+            # Use find + sed for reliable replacement
+            find .next -type f \( -name "*.js" -o -name "*.json" \) -exec \
+                sed -i "s|${placeholder}|${runtime_value}|g" {} \; 2>/dev/null || true
 
-        # Static URL
-        if [ "$RUNTIME_STATIC_URL" != "$DEFAULT_STATIC_URL" ]; then
-            sed -i "s|$DEFAULT_STATIC_URL|$RUNTIME_STATIC_URL|g" "$file" 2>/dev/null || true
-        fi
+            # Verify replacement
+            count_after=$(count_occurrences "$placeholder")
 
-        # API URL (same as backend but explicit)
-        if [ "$RUNTIME_API_URL" != "$DEFAULT_API_URL" ]; then
-            sed -i "s|$DEFAULT_API_URL|$RUNTIME_API_URL|g" "$file" 2>/dev/null || true
+            if [ "$count_after" -eq 0 ]; then
+                echo "    ✅ Success: All occurrences replaced"
+            else
+                echo "    ⚠️  Warning: $count_after files still contain placeholder"
+            fi
+        else
+            echo "  Skipping $label: No occurrences found"
         fi
     fi
 }
 
-# Check if we need to do any replacements
-needs_replacement=false
-
-if [ "$RUNTIME_BACKEND_URL" != "$DEFAULT_BACKEND_URL" ] || \
-   [ "$RUNTIME_WS_URL" != "$DEFAULT_WS_URL" ] || \
-   [ "$RUNTIME_FRONTEND_URL" != "$DEFAULT_FRONTEND_URL" ] || \
-   [ "$RUNTIME_TRANSLATION_URL" != "$DEFAULT_TRANSLATION_URL" ] || \
-   [ "$RUNTIME_STATIC_URL" != "$DEFAULT_STATIC_URL" ] || \
-   [ "$RUNTIME_API_URL" != "$DEFAULT_API_URL" ]; then
-    needs_replacement=true
+# Check if .next directory exists
+if [ ! -d ".next" ]; then
+    echo "⚠️  Warning: .next directory not found, skipping URL replacements"
+    exec "$@"
 fi
 
-if [ "$needs_replacement" = true ]; then
-    echo "=== Performing URL replacements in JavaScript bundles ==="
+echo "=== Performing URL replacements in JavaScript bundles ==="
 
-    # Replace in all JavaScript files in .next directory
-    if [ -d ".next" ]; then
-        find .next -type f \( -name "*.js" -o -name "*.json" \) | while read file; do
-            replace_urls "$file"
-        done
-        echo "=== URL replacement complete ==="
-    else
-        echo "Warning: .next directory not found"
-    fi
+# Replace all placeholders with runtime values
+replace_placeholder "$PLACEHOLDER_API_URL" "$RUNTIME_API_URL" "API URL"
+replace_placeholder "$PLACEHOLDER_WS_URL" "$RUNTIME_WS_URL" "WebSocket URL"
+replace_placeholder "$PLACEHOLDER_BACKEND_URL" "$RUNTIME_BACKEND_URL" "Backend URL"
+replace_placeholder "$PLACEHOLDER_FRONTEND_URL" "$RUNTIME_FRONTEND_URL" "Frontend URL"
+replace_placeholder "$PLACEHOLDER_TRANSLATION_URL" "$RUNTIME_TRANSLATION_URL" "Translation URL"
+replace_placeholder "$PLACEHOLDER_STATIC_URL" "$RUNTIME_STATIC_URL" "Static URL"
+
+# Count remaining placeholders for verification (BusyBox compatible)
+REMAINING=$(count_occurrences "__MEESHY_")
+
+echo ""
+if [ "$REMAINING" -gt 0 ]; then
+    echo "⚠️  Warning: $REMAINING files still contain unreplaced placeholders"
+    echo "    This may indicate missing environment variables"
 else
-    echo "=== No URL replacements needed (using default production URLs) ==="
+    echo "✅ All placeholders replaced successfully"
 fi
+
+echo ""
+echo "=== Starting Next.js server ==="
 
 # Execute the main command (node server.js)
 exec "$@"
