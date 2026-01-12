@@ -17,6 +17,9 @@
     },
     "tabs": {
       "profile": "Perfil",
+      "notifications": "Notificaciones",
+      "privacy": "Privacidad",
+      "encryption": "Cifrado",
       "translation": "Traducción",
       "security": "Seguridad",
       "theme": "Tema",
@@ -233,6 +236,71 @@
     "privacy": {
       "title": "Configuración de privacidad",
       "description": "Controle su configuración de privacidad y datos"
+    },
+    "encryption": {
+      "title": "Configuración de cifrado",
+      "description": "Administre su configuración de cifrado de extremo a extremo",
+      "status": {
+        "title": "Estado del cifrado",
+        "description": "Estado de sus claves de cifrado de extremo a extremo",
+        "keysActive": "Claves de cifrado activas",
+        "keysNotGenerated": "Claves no generadas",
+        "registrationId": "ID de registro",
+        "generateKeys": "Genere sus claves para activar el cifrado E2EE",
+        "generateButton": "Generar claves de cifrado",
+        "generating": "Generando...",
+        "active": "Activo",
+        "inactive": "Inactivo",
+        "lastRotation": "Última rotación de claves",
+        "keysGenerated": "Claves de cifrado generadas con éxito"
+      },
+      "newConversations": {
+        "title": "Nuevas conversaciones",
+        "description": "Configuración de cifrado predeterminada para nuevas conversaciones",
+        "defaultEnabled": "Cifrar por defecto",
+        "defaultEnabledDescription": "Activar el cifrado E2EE automáticamente para nuevas conversaciones",
+        "showIndicator": "Mostrar indicador",
+        "showIndicatorDescription": "Mostrar el icono de cifrado en las conversaciones seguras",
+        "encryptMedia": "Cifrar medios",
+        "encryptMediaDescription": "Requerir cifrado para fotos, videos y archivos"
+      },
+      "level": {
+        "title": "Nivel de cifrado",
+        "description": "Elija su nivel de protección para los mensajes",
+        "disabled": {
+          "label": "Desactivado",
+          "description": "Sin cifrado de extremo a extremo. Los mensajes se transmiten en texto plano en el servidor."
+        },
+        "optional": {
+          "label": "Opcional",
+          "description": "El cifrado E2EE se usa si el destinatario lo soporta. Recomendado para compatibilidad."
+        },
+        "always": {
+          "label": "Siempre",
+          "description": "Fuerza el cifrado E2EE para todos los mensajes. Los usuarios sin claves no podrán contactarlo."
+        }
+      },
+      "about": {
+        "title": "Acerca del cifrado E2EE",
+        "description": "El cifrado de extremo a extremo (E2EE) garantiza que solo usted y su destinatario pueden leer sus mensajes. Incluso los servidores de Meeshy no pueden descifrar sus conversaciones.",
+        "protocol": "Meeshy utiliza el protocolo Signal, reconocido como uno de los más seguros del mundo.",
+        "features": {
+          "privateKeys": "Sus claves privadas nunca salen de su dispositivo",
+          "uniqueKeys": "Cada mensaje usa una clave única",
+          "autoRotation": "La rotación automática de claves refuerza la seguridad"
+        }
+      },
+      "actions": {
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "preferencesUpdated": "Preferencias de cifrado actualizadas"
+      },
+      "errors": {
+        "notAuthenticated": "No autenticado",
+        "updateFailed": "Error al actualizar",
+        "generateFailed": "Error al generar las claves",
+        "networkError": "Error de red"
+      }
     },
     "languageSelector": {
       "placeholder": "Seleccionar un idioma...",
