@@ -31,12 +31,12 @@ HCAPTCHA_SECRET=your-hcaptcha-secret-key
 HCAPTCHA_SITE_KEY=your-hcaptcha-site-key
 EMAIL_PROVIDER=sendgrid  # or mailgun
 SENDGRID_API_KEY=your-sendgrid-api-key
-FRONTEND_URL=https://meeshy.com
+FRONTEND_URL=https://meeshy.me
 
 # Optional but recommended
 GEOIP_LICENSE_KEY=your-maxmind-license-key
 MAXMIND_ACCOUNT_ID=your-maxmind-account-id
-SECURITY_ADMIN_EMAILS=security@meeshy.com
+SECURITY_ADMIN_EMAILS=security@meeshy.me
 ```
 
 ### 3. Register Routes
@@ -386,8 +386,8 @@ curl -X POST http://localhost:4000/auth/reset-password \
 
 ## Support
 
-For security issues: `security@meeshy.com`
-For technical support: `support@meeshy.com`
+For security issues: `security@meeshy.me`
+For technical support: `support@meeshy.me`
 
 ---
 

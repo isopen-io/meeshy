@@ -40,7 +40,7 @@ final class RegisterViewModelTests: XCTestCase {
     }
 
     func testEmailValidation_Valid() {
-        // XCTAssertTrue(sut.isEmailValid("test@meeshy.com"))
+        // XCTAssertTrue(sut.isEmailValid("test@meeshy.me"))
     }
 
     func testPasswordStrength_Weak() {

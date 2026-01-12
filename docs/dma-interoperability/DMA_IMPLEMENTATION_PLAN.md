@@ -362,7 +362,7 @@ model MLSCredential {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   userId            String   @db.ObjectId
   credentialType    String   @default("basic")  // basic, x509, etc.
-  identity          String              // Identité MLS (ex: user@meeshy.com)
+  identity          String              // Identité MLS (ex: user@meeshy.me)
   signaturePublicKey String            // Clé publique de signature
   signaturePrivateKeyEnc String        // Clé privée chiffrée
   createdAt         DateTime @default(now())
@@ -2085,7 +2085,7 @@ Cela peut arriver si :
 
 ## 📞 Support
 
-Questions ? Contactez-nous à support@meeshy.com
+Questions ? Contactez-nous à support@meeshy.me
 ```
 
 ---

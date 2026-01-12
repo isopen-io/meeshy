@@ -95,7 +95,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                   type: 'string',
                   format: 'uri',
                   description: 'Complete shareable affiliate link',
-                  example: 'https://app.meeshy.com/?affiliate=aff_1234567890_abc'
+                  example: 'https://app.meeshy.me/?affiliate=aff_1234567890_abc'
                 },
                 maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
                 currentUses: { type: 'number', description: 'Current use count' },

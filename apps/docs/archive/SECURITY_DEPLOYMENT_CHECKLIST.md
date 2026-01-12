@@ -341,11 +341,11 @@ The notification system contains **26 security vulnerabilities**, including **5 
 
 | Role | Name | Email | Phone |
 |------|------|-------|-------|
-| Security Lead | ___________ | ______@meeshy.com | __________ |
-| Backend Lead | ___________ | ______@meeshy.com | __________ |
-| Frontend Lead | ___________ | ______@meeshy.com | __________ |
-| DevOps Lead | ___________ | ______@meeshy.com | __________ |
-| Legal Counsel | ___________ | ______@meeshy.com | __________ |
+| Security Lead | ___________ | ______@meeshy.me | __________ |
+| Backend Lead | ___________ | ______@meeshy.me | __________ |
+| Frontend Lead | ___________ | ______@meeshy.me | __________ |
+| DevOps Lead | ___________ | ______@meeshy.me | __________ |
+| Legal Counsel | ___________ | ______@meeshy.me | __________ |
 
 ### External Contacts
 

@@ -841,7 +841,7 @@ export ENABLE_REACTION_NOTIFICATIONS=false
 pm2 restart gateway
 
 # 3. Vérifier que les anciennes notifications fonctionnent
-curl -H "Authorization: Bearer $TOKEN" https://api.meeshy.com/api/notifications
+curl -H "Authorization: Bearer $TOKEN" https://api.meeshy.me/api/notifications
 ```
 
 ---

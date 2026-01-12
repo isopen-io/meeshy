@@ -51,7 +51,7 @@ struct AboutView: View {
             }
 
             Section("Links") {
-                Link(destination: URL(string: "https://meeshy.com")!) {
+                Link(destination: URL(string: "https://meeshy.me")!) {
                     HStack {
                         Label("Website", systemImage: "safari")
                         Spacer()

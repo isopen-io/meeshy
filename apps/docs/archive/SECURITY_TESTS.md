@@ -48,7 +48,7 @@ describe('XSS Protection Tests', () => {
       method: 'POST',
       url: '/auth/login',
       payload: {
-        email: 'security-test@meeshy.com',
+        email: 'security-test@meeshy.me',
         password: 'Test123!@#'
       }
     });
@@ -454,7 +454,7 @@ describe('Rate Limiting Tests', () => {
       method: 'POST',
       url: '/auth/login',
       payload: {
-        email: 'ratelimit-test@meeshy.com',
+        email: 'ratelimit-test@meeshy.me',
         password: 'Test123!@#'
       }
     });
@@ -619,7 +619,7 @@ describe('Input Validation Tests', () => {
       method: 'POST',
       url: '/auth/login',
       payload: {
-        email: 'validation-test@meeshy.com',
+        email: 'validation-test@meeshy.me',
         password: 'Test123!@#'
       }
     });
@@ -1000,7 +1000,7 @@ describe('End-to-End Security Tests', () => {
   describe('XSS in Real Browser', () => {
     it('should not execute XSS in notification rendering', async () => {
       // Login
-      await page.fill('input[name="email"]', 'test@meeshy.com');
+      await page.fill('input[name="email"]', 'test@meeshy.me');
       await page.fill('input[name="password"]', 'Test123!@#');
       await page.click('button[type="submit"]');
 
@@ -1038,7 +1038,7 @@ describe('End-to-End Security Tests', () => {
   describe('CSRF Protection', () => {
     it('should reject requests without CSRF token', async () => {
       // Login to get auth cookie
-      await page.fill('input[name="email"]', 'test@meeshy.com');
+      await page.fill('input[name="email"]', 'test@meeshy.me');
       await page.fill('input[name="password"]', 'Test123!@#');
       await page.click('button[type="submit"]');
 
@@ -1060,7 +1060,7 @@ describe('End-to-End Security Tests', () => {
   describe('Session Security', () => {
     it('should clear localStorage on logout', async () => {
       // Login
-      await page.fill('input[name="email"]', 'test@meeshy.com');
+      await page.fill('input[name="email"]', 'test@meeshy.me');
       await page.fill('input[name="password"]', 'Test123!@#');
       await page.click('button[type="submit"]');
 

@@ -327,14 +327,14 @@ SecureStorage.setItem('key', sensitiveData);
 
 ### Questions About This Audit?
 
-**Security Team**: security@meeshy.com
-**Documentation Issues**: docs@meeshy.com
-**Emergency Security Incidents**: security-emergency@meeshy.com (24/7)
+**Security Team**: security@meeshy.me
+**Documentation Issues**: docs@meeshy.me
+**Emergency Security Incidents**: security-emergency@meeshy.me (24/7)
 
 ### External Security Researchers
 
 If you've discovered a security vulnerability, please report it responsibly to:
-**security@meeshy.com**
+**security@meeshy.me**
 
 We appreciate responsible disclosure and will acknowledge your findings.
 

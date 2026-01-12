@@ -236,8 +236,8 @@ Diagrammes ASCII pour comprendre l'architecture:
 
 ### Questions sur la revue:
 - Engineering Lead: [Lead Name]
-- Security Team: security@meeshy.com
-- DevOps: devops@meeshy.com
+- Security Team: security@meeshy.me
+- DevOps: devops@meeshy.me
 
 ### Rapporter un bug dans cette revue:
 Si vous trouvez une erreur ou avez des suggestions pour améliorer cette revue, créez une issue sur le repo ou contactez l'équipe engineering.

@@ -17,7 +17,7 @@ struct SupportView: View {
         List {
             Section("Get Help") {
                 Button {
-                    if let url = URL(string: "https://meeshy.com/help") {
+                    if let url = URL(string: "https://meeshy.me/help") {
                         UIApplication.shared.open(url)
                     }
                 } label: {
@@ -31,7 +31,7 @@ struct SupportView: View {
                 }
 
                 Button {
-                    if let url = URL(string: "https://meeshy.com/faq") {
+                    if let url = URL(string: "https://meeshy.me/faq") {
                         UIApplication.shared.open(url)
                     }
                 } label: {
@@ -45,7 +45,7 @@ struct SupportView: View {
                 }
 
                 Button {
-                    if let url = URL(string: "https://community.meeshy.com") {
+                    if let url = URL(string: "https://community.meeshy.me") {
                         UIApplication.shared.open(url)
                     }
                 } label: {

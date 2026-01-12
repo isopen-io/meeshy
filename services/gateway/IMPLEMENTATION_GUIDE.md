@@ -189,10 +189,10 @@ EMAIL_PROVIDER=sendgrid  # or 'mailgun'
 SENDGRID_API_KEY=your-sendgrid-api-key
 # OR
 MAILGUN_API_KEY=your-mailgun-api-key
-MAILGUN_DOMAIN=mg.meeshy.com
+MAILGUN_DOMAIN=mg.meeshy.me
 
 # Email Configuration
-EMAIL_FROM=noreply@meeshy.com
+EMAIL_FROM=noreply@meeshy.me
 EMAIL_FROM_NAME=Meeshy
 
 # CAPTCHA
@@ -204,7 +204,7 @@ GEOIP_LICENSE_KEY=your-maxmind-license-key
 MAXMIND_ACCOUNT_ID=your-maxmind-account-id
 
 # Frontend URL
-FRONTEND_URL=https://meeshy.com  # or http://localhost:3000 for dev
+FRONTEND_URL=https://meeshy.me  # or http://localhost:3000 for dev
 
 # Redis (already configured)
 REDIS_URL=redis://localhost:6379
@@ -256,7 +256,7 @@ const emailService = new EmailService();
 await emailService.sendPasswordResetEmail({
   to: 'test@example.com',
   name: 'Test User',
-  resetLink: 'https://meeshy.com/reset-password?token=test',
+  resetLink: 'https://meeshy.me/reset-password?token=test',
   expiryMinutes: 15
 });
 ```
@@ -746,7 +746,7 @@ git push origin main
 npx prisma db push --preview-feature
 
 # Verify health
-curl https://api.meeshy.com/health
+curl https://api.meeshy.me/health
 ```
 
 ### 12.3 Post-Deployment Smoke Tests
@@ -830,7 +830,7 @@ git push origin main
 For questions or issues during implementation:
 - Review architecture document: `SECURE_PASSWORD_RESET_ARCHITECTURE.md`
 - Check security best practices: OWASP Password Reset Cheat Sheet
-- Contact security team: security@meeshy.com
+- Contact security team: security@meeshy.me
 
 ---
 

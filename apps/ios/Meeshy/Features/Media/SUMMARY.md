@@ -203,8 +203,8 @@ Fields:
 Response:
 {
     "id": "att_123",
-    "url": "https://cdn.meeshy.com/...",
-    "thumbnail_url": "https://cdn.meeshy.com/...",
+    "url": "https://cdn.meeshy.me/...",
+    "thumbnail_url": "https://cdn.meeshy.me/...",
     "file_size": 1234567
 }
 ```
@@ -488,7 +488,7 @@ Before deploying to production:
 - Check PERMISSIONS.md for setup
 
 ### Contact
-Development Team: claude@meeshy.com
+Development Team: claude@meeshy.me
 
 ---
 

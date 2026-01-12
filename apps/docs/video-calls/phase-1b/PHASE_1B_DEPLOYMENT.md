@@ -335,7 +335,7 @@ services:
     environment:
       DETECT_EXTERNAL_IP: 'yes'
       DETECT_RELAY_IP: 'yes'
-      REALM: meeshy.com
+      REALM: meeshy.me
       USERNAME: meeshy
       PASSWORD: change-me-in-production
     networks:
