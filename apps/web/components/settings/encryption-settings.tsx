@@ -118,7 +118,7 @@ export function EncryptionSettings() {
         return;
       }
 
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/api/users/me/encryption-preferences`, {
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -147,7 +147,7 @@ export function EncryptionSettings() {
         return;
       }
 
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/api/users/me/encryption-preferences`, {
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-preferences`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -184,7 +184,7 @@ export function EncryptionSettings() {
         return;
       }
 
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/api/users/me/encryption-keys`, {
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-keys`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
