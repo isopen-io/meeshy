@@ -286,26 +286,44 @@ export const NotificationService = {
 
   /**
    * Récupère les préférences de notifications
+   * Utilise le nouvel endpoint unifié /user-preferences/notifications
    */
   async getPreferences(): Promise<ApiResponse<{ preferences: NotificationPreferences }>> {
     return withRetry(async () => {
-      return apiService.get<{ preferences: NotificationPreferences }>(
-        '/notifications/preferences'
+      const response = await apiService.get<{ success: boolean; data: NotificationPreferences }>(
+        '/user-preferences/notifications'
       );
+      // Adapter la réponse au format attendu
+      if (response.data?.data) {
+        return {
+          ...response,
+          data: { preferences: response.data.data }
+        } as ApiResponse<{ preferences: NotificationPreferences }>;
+      }
+      return response as unknown as ApiResponse<{ preferences: NotificationPreferences }>;
     });
   },
 
   /**
    * Met à jour les préférences de notifications
+   * Utilise le nouvel endpoint unifié /user-preferences/notifications
    */
   async updatePreferences(
     preferences: Partial<NotificationPreferences>
   ): Promise<ApiResponse<{ success: boolean; preferences: NotificationPreferences }>> {
     return withRetry(async () => {
-      return apiService.post<{ success: boolean; preferences: NotificationPreferences }>(
-        '/notifications/preferences',
+      const response = await apiService.put<{ success: boolean; data: NotificationPreferences }>(
+        '/user-preferences/notifications',
         preferences
       );
+      // Adapter la réponse au format attendu
+      if (response.data?.data) {
+        return {
+          ...response,
+          data: { success: true, preferences: response.data.data }
+        } as ApiResponse<{ success: boolean; preferences: NotificationPreferences }>;
+      }
+      return response as unknown as ApiResponse<{ success: boolean; preferences: NotificationPreferences }>;
     });
   },
 

@@ -229,51 +229,53 @@ export function ConversationHeader({
 
     // Pour les conversations directes, essayer plusieurs sources de données
 
-    // 1. Utiliser les participants chargés (conversationParticipants)
+    // 1. Utiliser les participants chargés (conversationParticipants prop)
     const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
     if (otherParticipant?.user) {
       const user = otherParticipant.user;
-      return user.displayName ||
-             user.username ||
-             (user.firstName || user.lastName
-               ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-               : null) ||
-             'Utilisateur';
+      const name = user.displayName || user.username ||
+             (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+      if (name) return name;
     }
 
-    // 2. Fallback: utiliser conversation.participants (données de la conversation)
-    const otherConvParticipant = (conversation as any).participants?.find((p: any) => p.userId !== currentUser?.id);
-    if (otherConvParticipant?.user) {
-      const user = otherConvParticipant.user;
-      return user.displayName ||
-             user.username ||
-             (user.firstName || user.lastName
-               ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-               : null) ||
-             'Utilisateur';
-    }
-
-    // 3. Fallback: utiliser conversation.members si disponible
-    if ((conversation as any).members) {
-      const otherMember = (conversation as any).members.find((m: any) => m.userId !== currentUser?.id);
-      if (otherMember?.user) {
-        const user = otherMember.user;
-        return user.displayName ||
-               user.username ||
-               (user.firstName || user.lastName
-                 ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                 : null) ||
-               'Utilisateur';
+    // 2. Fallback: utiliser conversation.participants (données transformées)
+    const convParticipants = (conversation as any).participants;
+    if (Array.isArray(convParticipants) && convParticipants.length > 0) {
+      const otherConvParticipant = convParticipants.find((p: any) => p.userId !== currentUser?.id);
+      if (otherConvParticipant?.user) {
+        const user = otherConvParticipant.user;
+        const name = user.displayName || user.username ||
+               (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+        if (name) return name;
       }
     }
 
-    // 4. Dernier fallback: utiliser le titre de la conversation s'il existe
-    if (conversation.title && conversation.title !== 'Conversation privée') {
-      return conversation.title;
+    // 3. Fallback: utiliser conversation.members si disponible (données brutes API)
+    const members = (conversation as any).members;
+    if (Array.isArray(members) && members.length > 0) {
+      const otherMember = members.find((m: any) => m.userId !== currentUser?.id);
+      if (otherMember?.user) {
+        const user = otherMember.user;
+        const name = user.displayName || user.username ||
+               (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+        if (name) return name;
+      }
+    }
+
+    // 4. Fallback: extraire le nom du titre "Conversation avec X"
+    if (conversation.title) {
+      const match = conversation.title.match(/^Conversation avec (.+)$/i);
+      if (match && match[1]) {
+        return match[1];
+      }
+      // Utiliser le titre tel quel s'il n'est pas le titre par défaut
+      if (conversation.title !== 'Conversation privée') {
+        return conversation.title;
+      }
     }
 
     // 5. Fallback ultime
-    return 'Utilisateur inconnu';
+    return 'Utilisateur';
   }, [conversation, currentUser, conversationParticipants]);
 
   // Obtenir l'avatar

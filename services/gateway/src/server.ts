@@ -47,6 +47,8 @@ import { messagesRoutes } from './routes/admin/messages';
 import { userRoutes } from './routes/users';
 import userPreferencesRoutes from './routes/user-preferences';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
+import communityPreferencesRoutes from './routes/community-preferences';
+import notificationPreferencesRoutes from './routes/notification-preferences';
 import conversationEncryptionRoutes from './routes/conversation-encryption';
 import encryptionKeysRoutes from './routes/encryption-keys';
 import { translationRoutes } from './routes/translation-non-blocking';
@@ -431,6 +433,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         tags: [
           { name: 'auth', description: 'Authentication and registration' },
           { name: 'users', description: 'User management' },
+          { name: 'preferences', description: 'User preferences (key-value settings)' },
           { name: 'conversations', description: 'Conversation management' },
           { name: 'messages', description: 'Message operations' },
           { name: 'notifications', description: 'Notification management' },
@@ -439,6 +442,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           { name: 'friends', description: 'Friend requests and contacts' },
           { name: 'attachments', description: 'File uploads and downloads' },
           { name: 'translation', description: 'Translation services' },
+          { name: 'categories', description: 'Conversation categories management' },
           { name: 'admin', description: 'Admin operations' }
         ],
         components: {
@@ -779,6 +783,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register conversation preferences routes with /api prefix
     await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });
+
+    // Register community preferences routes with /api prefix
+    await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
+
+    // Register notification preferences routes with /api prefix
+    await this.server.register(notificationPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation encryption routes with /api prefix
     await this.server.register(conversationEncryptionRoutes, { prefix: '' });
