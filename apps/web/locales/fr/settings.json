@@ -17,6 +17,9 @@
     },
     "tabs": {
       "profile": "Profil",
+      "notifications": "Notifications",
+      "privacy": "Confidentialité",
+      "encryption": "Chiffrement",
       "translation": "Traduction",
       "security": "Sécurité",
       "theme": "Thème",
@@ -233,6 +236,71 @@
     "privacy": {
       "title": "Paramètres de confidentialité",
       "description": "Contrôlez vos paramètres de confidentialité et de données"
+    },
+    "encryption": {
+      "title": "Paramètres de chiffrement",
+      "description": "Gérez vos paramètres de chiffrement de bout en bout",
+      "status": {
+        "title": "État du chiffrement",
+        "description": "Statut de vos clés de chiffrement de bout en bout",
+        "keysActive": "Clés de chiffrement actives",
+        "keysNotGenerated": "Clés non générées",
+        "registrationId": "ID d'enregistrement",
+        "generateKeys": "Générez vos clés pour activer le chiffrement E2EE",
+        "generateButton": "Générer les clés de chiffrement",
+        "generating": "Génération en cours...",
+        "active": "Actif",
+        "inactive": "Inactif",
+        "lastRotation": "Dernière rotation des clés",
+        "keysGenerated": "Clés de chiffrement générées avec succès"
+      },
+      "newConversations": {
+        "title": "Nouvelles conversations",
+        "description": "Paramètres de chiffrement par défaut pour les nouvelles conversations",
+        "defaultEnabled": "Chiffrer par défaut",
+        "defaultEnabledDescription": "Activer le chiffrement E2EE automatiquement pour les nouvelles conversations",
+        "showIndicator": "Afficher l'indicateur",
+        "showIndicatorDescription": "Afficher l'icône de chiffrement dans les conversations sécurisées",
+        "encryptMedia": "Chiffrer les médias",
+        "encryptMediaDescription": "Exiger le chiffrement pour les photos, vidéos et fichiers"
+      },
+      "level": {
+        "title": "Niveau de chiffrement",
+        "description": "Choisissez votre niveau de protection pour les messages",
+        "disabled": {
+          "label": "Désactivé",
+          "description": "Aucun chiffrement de bout en bout. Les messages transitent en clair sur le serveur."
+        },
+        "optional": {
+          "label": "Optionnel",
+          "description": "Le chiffrement E2EE est utilisé si le destinataire le supporte. Recommandé pour la compatibilité."
+        },
+        "always": {
+          "label": "Toujours",
+          "description": "Force le chiffrement E2EE pour tous les messages. Les utilisateurs sans clés ne pourront pas vous contacter."
+        }
+      },
+      "about": {
+        "title": "À propos du chiffrement E2EE",
+        "description": "Le chiffrement de bout en bout (E2EE) garantit que seuls vous et votre correspondant pouvez lire vos messages. Même les serveurs Meeshy ne peuvent pas déchiffrer vos conversations.",
+        "protocol": "Meeshy utilise le protocole Signal, reconnu comme l'un des plus sécurisés au monde.",
+        "features": {
+          "privateKeys": "Vos clés privées ne quittent jamais votre appareil",
+          "uniqueKeys": "Chaque message utilise une clé unique",
+          "autoRotation": "La rotation automatique des clés renforce la sécurité"
+        }
+      },
+      "actions": {
+        "save": "Enregistrer",
+        "saving": "Enregistrement...",
+        "preferencesUpdated": "Préférences de chiffrement mises à jour"
+      },
+      "errors": {
+        "notAuthenticated": "Non authentifié",
+        "updateFailed": "Erreur lors de la mise à jour",
+        "generateFailed": "Erreur lors de la génération des clés",
+        "networkError": "Erreur réseau"
+      }
     },
     "languageSelector": {
       "placeholder": "Sélectionner une langue...",

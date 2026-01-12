@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { authManager } from '@/services/auth-manager.service';
+import { useI18n } from '@/hooks/useI18n';
 
 type EncryptionPreference = 'disabled' | 'optional' | 'always';
 
@@ -45,33 +46,8 @@ const DEFAULT_LOCAL_SETTINGS: LocalEncryptionSettings = {
   requireEncryptionForMedia: true,
 };
 
-const PREFERENCE_OPTIONS: {
-  value: EncryptionPreference;
-  label: string;
-  description: string;
-  icon: React.ReactNode;
-}[] = [
-  {
-    value: 'disabled',
-    label: 'Désactivé',
-    description: 'Aucun chiffrement de bout en bout. Les messages transitent en clair sur le serveur.',
-    icon: <ShieldOff className="h-5 w-5" />,
-  },
-  {
-    value: 'optional',
-    label: 'Optionnel',
-    description: 'Le chiffrement E2EE est utilisé si le destinataire le supporte. Recommandé pour la compatibilité.',
-    icon: <Shield className="h-5 w-5" />,
-  },
-  {
-    value: 'always',
-    label: 'Toujours',
-    description: 'Force le chiffrement E2EE pour tous les messages. Les utilisateurs sans clés ne pourront pas vous contacter.',
-    icon: <ShieldCheck className="h-5 w-5" />,
-  },
-];
-
 export function EncryptionSettings() {
+  const { t } = useI18n('settings');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generatingKeys, setGeneratingKeys] = useState(false);
@@ -79,6 +55,33 @@ export function EncryptionSettings() {
   const [selectedPreference, setSelectedPreference] = useState<EncryptionPreference>('optional');
   const [hasChanges, setHasChanges] = useState(false);
   const [localSettings, setLocalSettings] = useState<LocalEncryptionSettings>(DEFAULT_LOCAL_SETTINGS);
+
+  // Preference options with translations
+  const preferenceOptions: {
+    value: EncryptionPreference;
+    labelKey: string;
+    descriptionKey: string;
+    icon: React.ReactNode;
+  }[] = [
+    {
+      value: 'disabled',
+      labelKey: 'encryption.level.disabled.label',
+      descriptionKey: 'encryption.level.disabled.description',
+      icon: <ShieldOff className="h-5 w-5" />,
+    },
+    {
+      value: 'optional',
+      labelKey: 'encryption.level.optional.label',
+      descriptionKey: 'encryption.level.optional.description',
+      icon: <Shield className="h-5 w-5" />,
+    },
+    {
+      value: 'always',
+      labelKey: 'encryption.level.always.label',
+      descriptionKey: 'encryption.level.always.description',
+      icon: <ShieldCheck className="h-5 w-5" />,
+    },
+  ];
 
   // Load local settings from localStorage
   useEffect(() => {
@@ -140,7 +143,7 @@ export function EncryptionSettings() {
     try {
       const token = authManager.getAuthToken();
       if (!token) {
-        toast.error('Non authentifié');
+        toast.error(t('encryption.errors.notAuthenticated'));
         return;
       }
 
@@ -158,15 +161,15 @@ export function EncryptionSettings() {
         if (result.success) {
           setData(prev => ({ ...prev, encryptionPreference: selectedPreference }));
           setHasChanges(false);
-          toast.success('Préférences de chiffrement mises à jour');
+          toast.success(t('encryption.actions.preferencesUpdated'));
         }
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Erreur lors de la mise à jour');
+        toast.error(error.error || t('encryption.errors.updateFailed'));
       }
     } catch (error) {
       console.error('Error saving encryption preference:', error);
-      toast.error('Erreur réseau');
+      toast.error(t('encryption.errors.networkError'));
     } finally {
       setSaving(false);
     }
@@ -177,7 +180,7 @@ export function EncryptionSettings() {
     try {
       const token = authManager.getAuthToken();
       if (!token) {
-        toast.error('Non authentifié');
+        toast.error(t('encryption.errors.notAuthenticated'));
         return;
       }
 
@@ -200,15 +203,15 @@ export function EncryptionSettings() {
             signalPreKeyBundleVersion: result.data.signalPreKeyBundleVersion,
             lastKeyRotation: new Date().toISOString(),
           }));
-          toast.success('Clés de chiffrement générées avec succès');
+          toast.success(t('encryption.status.keysGenerated'));
         }
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Erreur lors de la génération des clés');
+        toast.error(error.error || t('encryption.errors.generateFailed'));
       }
     } catch (error) {
       console.error('Error generating keys:', error);
-      toast.error('Erreur réseau');
+      toast.error(t('encryption.errors.networkError'));
     } finally {
       setGeneratingKeys(false);
     }
@@ -229,10 +232,10 @@ export function EncryptionSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Shield className="h-4 w-4 sm:h-5 sm:w-5" />
-            État du chiffrement
+            {t('encryption.status.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Statut de vos clés de chiffrement de bout en bout
+            {t('encryption.status.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -245,23 +248,23 @@ export function EncryptionSettings() {
               )}
               <div>
                 <p className="font-medium">
-                  {data.hasSignalKeys ? 'Clés de chiffrement actives' : 'Clés non générées'}
+                  {data.hasSignalKeys ? t('encryption.status.keysActive') : t('encryption.status.keysNotGenerated')}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {data.hasSignalKeys
-                    ? `ID d'enregistrement: ${data.signalRegistrationId}`
-                    : 'Générez vos clés pour activer le chiffrement E2EE'}
+                    ? `${t('encryption.status.registrationId')}: ${data.signalRegistrationId}`
+                    : t('encryption.status.generateKeys')}
                 </p>
               </div>
             </div>
             <Badge variant={data.hasSignalKeys ? 'default' : 'secondary'}>
-              {data.hasSignalKeys ? 'Actif' : 'Inactif'}
+              {data.hasSignalKeys ? t('encryption.status.active') : t('encryption.status.inactive')}
             </Badge>
           </div>
 
           {data.hasSignalKeys && data.lastKeyRotation && (
             <div className="text-sm text-muted-foreground">
-              Dernière rotation des clés: {new Date(data.lastKeyRotation).toLocaleDateString('fr-FR', {
+              {t('encryption.status.lastRotation')}: {new Date(data.lastKeyRotation).toLocaleDateString(undefined, {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -280,12 +283,12 @@ export function EncryptionSettings() {
               {generatingKeys ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Génération en cours...
+                  {t('encryption.status.generating')}
                 </>
               ) : (
                 <>
                   <Key className="h-4 w-4 mr-2" />
-                  Générer les clés de chiffrement
+                  {t('encryption.status.generateButton')}
                 </>
               )}
             </Button>
@@ -298,18 +301,18 @@ export function EncryptionSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
-            Nouvelles conversations
+            {t('encryption.newConversations.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Paramètres de chiffrement par défaut pour les nouvelles conversations
+            {t('encryption.newConversations.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Chiffrer par défaut</Label>
+              <Label className="text-sm sm:text-base">{t('encryption.newConversations.defaultEnabled')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Activer le chiffrement E2EE automatiquement pour les nouvelles conversations
+                {t('encryption.newConversations.defaultEnabledDescription')}
               </p>
             </div>
             <Switch
@@ -320,9 +323,9 @@ export function EncryptionSettings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Afficher l&apos;indicateur</Label>
+              <Label className="text-sm sm:text-base">{t('encryption.newConversations.showIndicator')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Afficher l&apos;icône de chiffrement dans les conversations sécurisées
+                {t('encryption.newConversations.showIndicatorDescription')}
               </p>
             </div>
             <Switch
@@ -333,9 +336,9 @@ export function EncryptionSettings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Chiffrer les médias</Label>
+              <Label className="text-sm sm:text-base">{t('encryption.newConversations.encryptMedia')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Exiger le chiffrement pour les photos, vidéos et fichiers
+                {t('encryption.newConversations.encryptMediaDescription')}
               </p>
             </div>
             <Switch
@@ -351,14 +354,14 @@ export function EncryptionSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
-            Niveau de chiffrement
+            {t('encryption.level.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Choisissez votre niveau de protection pour les messages
+            {t('encryption.level.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {PREFERENCE_OPTIONS.map((option) => (
+          {preferenceOptions.map((option) => (
             <button
               key={option.value}
               type="button"
@@ -380,13 +383,13 @@ export function EncryptionSettings() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{option.label}</span>
+                  <span className="font-medium">{t(option.labelKey)}</span>
                   {selectedPreference === option.value && (
                     <CheckCircle className="h-4 w-4 text-primary" />
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {option.description}
+                  {t(option.descriptionKey)}
                 </p>
               </div>
             </button>
@@ -395,7 +398,7 @@ export function EncryptionSettings() {
           {hasChanges && (
             <div className="flex justify-end pt-4">
               <Button onClick={savePreference} disabled={saving}>
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
+                {saving ? t('encryption.actions.saving') : t('encryption.actions.save')}
               </Button>
             </div>
           )}
@@ -405,20 +408,19 @@ export function EncryptionSettings() {
       {/* Information Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">À propos du chiffrement E2EE</CardTitle>
+          <CardTitle className="text-lg">{t('encryption.about.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Le chiffrement de bout en bout (E2EE) garantit que seuls vous et votre correspondant
-            pouvez lire vos messages. Même les serveurs Meeshy ne peuvent pas déchiffrer vos conversations.
+            {t('encryption.about.description')}
           </p>
           <p>
-            Meeshy utilise le protocole Signal, reconnu comme l&apos;un des plus sécurisés au monde.
+            {t('encryption.about.protocol')}
           </p>
           <ul className="list-disc list-inside space-y-1">
-            <li>Vos clés privées ne quittent jamais votre appareil</li>
-            <li>Chaque message utilise une clé unique</li>
-            <li>La rotation automatique des clés renforce la sécurité</li>
+            <li>{t('encryption.about.features.privateKeys')}</li>
+            <li>{t('encryption.about.features.uniqueKeys')}</li>
+            <li>{t('encryption.about.features.autoRotation')}</li>
           </ul>
         </CardContent>
       </Card>
