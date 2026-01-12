@@ -51,6 +51,7 @@ import communityPreferencesRoutes from './routes/community-preferences';
 import notificationPreferencesRoutes from './routes/notification-preferences';
 import conversationEncryptionRoutes from './routes/conversation-encryption';
 import encryptionKeysRoutes from './routes/encryption-keys';
+import userEncryptionPreferencesRoutes from './routes/user-encryption-preferences';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
@@ -795,6 +796,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register encryption key exchange routes with /api prefix
     await this.server.register(encryptionKeysRoutes, { prefix: '' });
+
+    // Register user encryption preferences routes
+    await this.server.register(userEncryptionPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register affiliate routes
     await this.server.register(affiliateRoutes, { prefix: API_PREFIX });

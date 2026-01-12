@@ -109,11 +109,11 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
   });
 
   /**
-   * GET /api/users/me/encryption-preferences
+   * GET /users/me/encryption-preferences
    * Get current user's encryption preferences
    */
   fastify.get(
-    '/api/users/me/encryption-preferences',
+    '/users/me/encryption-preferences',
     {
       preValidation: [authMiddleware],
       schema: {
@@ -193,13 +193,13 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
   );
 
   /**
-   * PUT /api/users/me/encryption-preferences
+   * PUT /users/me/encryption-preferences
    * Update user's encryption preference
    */
   fastify.put<{
     Body: UpdateEncryptionPreferenceRequest;
   }>(
-    '/api/users/me/encryption-preferences',
+    '/users/me/encryption-preferences',
     {
       preValidation: [authMiddleware],
       schema: {
@@ -297,14 +297,14 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
   );
 
   /**
-   * POST /api/users/me/encryption-keys
+   * POST /users/me/encryption-keys
    * Generate Signal Protocol keys for E2EE
    * This creates identity keys and pre-keys for the user
    */
   fastify.post<{
     Body: GenerateKeysRequest;
   }>(
-    '/api/users/me/encryption-keys',
+    '/users/me/encryption-keys',
     {
       preValidation: [authMiddleware],
       schema: {
@@ -451,13 +451,13 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
   );
 
   /**
-   * GET /api/users/:userId/encryption-key-bundle
+   * GET /users/:userId/encryption-key-bundle
    * Get public key bundle for a user (for establishing E2EE sessions)
    */
   fastify.get<{
     Params: { userId: string };
   }>(
-    '/api/users/:userId/encryption-key-bundle',
+    '/users/:userId/encryption-key-bundle',
     {
       preValidation: [authMiddleware],
       schema: {
