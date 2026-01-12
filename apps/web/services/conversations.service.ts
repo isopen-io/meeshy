@@ -505,8 +505,9 @@ export class ConversationsService {
    * Créer une nouvelle conversation
    */
   async createConversation(data: CreateConversationRequest): Promise<Conversation> {
-    const response = await apiService.post<{ success: boolean; data: Conversation }>('/api/conversations', data);
-    return response.data.data;
+    const response = await apiService.post<{ success: boolean; data: unknown }>('/api/conversations', data);
+    // Transformer les données pour avoir le bon format (participants au lieu de members, etc.)
+    return this.transformConversationData(response.data.data);
   }
 
   /**

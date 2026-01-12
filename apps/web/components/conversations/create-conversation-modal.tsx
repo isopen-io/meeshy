@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
-import { apiService } from '@/services/api.service';
+import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import { Check, X, Users, User as UserIcon, Building2, Hash, Search, Plus, Sparkles, UserPlus, Globe, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -457,22 +457,15 @@ export function CreateConversationModal({
       // Log pour debug
       console.log('🔍 [CreateConversation] Request body:', JSON.stringify(requestBody, null, 2));
 
-      const response = await apiService.post<{ success: boolean; data: any }>('/conversations', requestBody);
+      // Utiliser conversationsService qui transforme correctement les données
+      const conversation = await conversationsService.createConversation(requestBody);
 
-      if (response.data.success) {
-        const responseData = response.data;
-        const conversation = responseData.data;
-        console.log('✅ [CreateConversation] Conversation créée avec succès:', conversation);
-        toast.success(t('createConversationModal.success.conversationCreated'));
+      console.log('✅ [CreateConversation] Conversation créée avec succès:', conversation);
+      toast.success(t('createConversationModal.success.conversationCreated'));
 
-        // Passer les données de la conversation créée pour un ajout immédiat
-        onConversationCreated(conversation.id, conversation);
-        handleClose();
-      } else {
-        // Handle error response
-        console.error('❌ [CreateConversation] Échec de création (response.success = false):', response.data);
-        toast.error(t('createConversationModal.errors.creationError'));
-      }
+      // Passer les données de la conversation créée (correctement transformée avec participants)
+      onConversationCreated(conversation.id, conversation);
+      handleClose();
     } catch (error: any) {
       console.error('❌ [CreateConversation] Erreur lors de la création:', {
         message: error?.message,
