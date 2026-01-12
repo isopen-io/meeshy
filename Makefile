@@ -2,7 +2,7 @@
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-hosts \
-        _generate-certs _copy-certs-to-docker _ensure-docker-running _ensure-ports-free \
+        _generate-certs _copy-certs-to-docker _ensure-docker-running _wait-docker-stable _docker-down-if-running _ensure-ports-free \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
@@ -76,6 +76,11 @@ endif
 HOST ?= $(HOST_IP)
 LOCAL_DOMAIN ?= meeshy.local
 ENV_LOCAL := $(COMPOSE_DIR)/.env.local
+
+# Docker Compose Project Names (explicit pour éviter les états corrompus)
+PROJECT_LOCAL := meeshy-local
+PROJECT_DEV := meeshy-dev
+PROJECT_PROD := meeshy-prod
 
 # Paths
 WEB_DIR := apps/web
@@ -1610,12 +1615,42 @@ logs-web: ## Afficher les logs du web
 # DOCKER COMPOSE
 # =============================================================================
 
-# Ports utilisés par docker-compose.local.yml (network mode avec Traefik)
-PORTS_LOCAL := 80 443 3000 3100 5555 5558 6379 8000 8080 27017
-# Ports utilisés par docker-compose.dev.yml
-PORTS_DEV := 3000 3001 3100 5555 5558 6379 7843 8000 27017
+# Ports infrastructure (ne PAS toucher - services qui doivent rester actifs)
+PORTS_INFRA := 27017 6379
 
-# Helper: Libérer les ports avec retry (3 tentatives)
+# Ports applicatifs (à vérifier/libérer si nécessaire)
+# docker-compose.local.yml (network mode avec Traefik)
+PORTS_APP_LOCAL := 80 443 3000 3100 5555 5558 8000 8080
+# docker-compose.dev.yml
+PORTS_APP_DEV := 3000 3001 3100 5555 5558 7843 8000
+
+# Helper: Arrêter automatiquement docker-compose si des conteneurs Meeshy sont en cours
+# Vérifie d'abord que Docker est stable avant d'agir
+_docker-down-if-running:
+	@# Vérifier que Docker daemon est opérationnel
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "$(DIM)  Docker non disponible, skip down$(NC)"; \
+		exit 0; \
+	fi
+	@# Vérifier s'il y a des pulls/builds en cours (ne pas interrompre)
+	@PULLING=$$(docker ps --filter "status=created" -q 2>/dev/null | wc -l | tr -d ' '); \
+	if [ "$$PULLING" != "0" ] && [ -n "$$PULLING" ]; then \
+		echo "$(YELLOW)⏳ Opérations Docker en cours, attente...$(NC)"; \
+		sleep 5; \
+	fi
+	@COMPOSE_FILE_TO_USE="$(or $(COMPOSE_TO_CHECK),$(COMPOSE_LOCAL))"; \
+	if docker compose -f "$$COMPOSE_FILE_TO_USE" ps -q 2>/dev/null | grep -q .; then \
+		echo "$(YELLOW)🛑 Arrêt des services Docker...$(NC)"; \
+		docker compose -f "$$COMPOSE_FILE_TO_USE" down --remove-orphans 2>/dev/null || true; \
+		sleep 2; \
+		echo "$(GREEN)✅ Services Docker arrêtés$(NC)"; \
+	fi
+
+# Helper: Libérer les ports applicatifs avec retry (3 tentatives)
+# Note: Ne touche PAS aux ports infrastructure ($(PORTS_INFRA))
+# Note: Utilise -sTCP:LISTEN pour ne cibler QUE les processus qui écoutent sur le port
+#       (pas les connexions sortantes comme Chrome vers HTTPS)
+# Note: Ne tue JAMAIS les processus Docker (com.docker, Docker Desktop)
 # Usage: $(MAKE) _ensure-ports-free REQUIRED_PORTS="3000 3100 8000"
 _ensure-ports-free:
 	@echo "$(BLUE)🔍 Vérification des ports requis...$(NC)"
@@ -1625,7 +1660,7 @@ _ensure-ports-free:
 		ALL_FREE=true; \
 		BLOCKED_PORTS=""; \
 		for port in $$PORTS; do \
-			if lsof -i :$$port -t >/dev/null 2>&1; then \
+			if lsof -i :$$port -sTCP:LISTEN -t >/dev/null 2>&1; then \
 				ALL_FREE=false; \
 				BLOCKED_PORTS="$$BLOCKED_PORTS $$port"; \
 			fi; \
@@ -1636,10 +1671,15 @@ _ensure-ports-free:
 		fi; \
 		echo "  $(YELLOW)⚠️  Tentative $$attempt/$$MAX_RETRIES - Ports occupés:$$BLOCKED_PORTS$(NC)"; \
 		for port in $$BLOCKED_PORTS; do \
-			PIDS=$$(lsof -i :$$port -t 2>/dev/null || true); \
+			PIDS=$$(lsof -i :$$port -sTCP:LISTEN -t 2>/dev/null || true); \
 			if [ -n "$$PIDS" ]; then \
 				for pid in $$PIDS; do \
 					PROC_NAME=$$(ps -p $$pid -o comm= 2>/dev/null || echo "unknown"); \
+					PROC_PATH=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
+					if echo "$$PROC_PATH" | grep -qi "docker"; then \
+						echo "    $(DIM)Port $$port: PID $$pid ($$PROC_NAME) - Docker, skip$(NC)"; \
+						continue; \
+					fi; \
 					echo "    $(DIM)Port $$port: PID $$pid ($$PROC_NAME) - kill...$(NC)"; \
 					kill -9 $$pid 2>/dev/null || true; \
 				done; \
@@ -1648,25 +1688,42 @@ _ensure-ports-free:
 		sleep 1; \
 		if [ $$attempt -eq $$MAX_RETRIES ]; then \
 			echo ""; \
-			echo "  $(RED)❌ Échec après $$MAX_RETRIES tentatives$(NC)"; \
-			echo "  $(RED)   Ports toujours occupés:$$BLOCKED_PORTS$(NC)"; \
-			echo ""; \
-			echo "  $(YELLOW)💡 Essayez manuellement:$(NC)"; \
+			echo "  $(YELLOW)⚠️  Échec après $$MAX_RETRIES tentatives - ports toujours occupés:$$BLOCKED_PORTS$(NC)"; \
+			echo "  $(BLUE)🔄 Arrêt des containers Docker pour libérer les ports...$(NC)"; \
+			docker compose -f $(COMPOSE_LOCAL) down --remove-orphans 2>/dev/null || true; \
+			docker compose -f $(COMPOSE_DEV) down --remove-orphans 2>/dev/null || true; \
+			sleep 2; \
+			STILL_BLOCKED=""; \
 			for port in $$BLOCKED_PORTS; do \
-				echo "     sudo lsof -i :$$port"; \
-				echo "     sudo kill -9 \$$(lsof -i :$$port -t)"; \
+				if lsof -i :$$port -sTCP:LISTEN -t >/dev/null 2>&1; then \
+					STILL_BLOCKED="$$STILL_BLOCKED $$port"; \
+				fi; \
 			done; \
-			exit 1; \
+			if [ -n "$$STILL_BLOCKED" ]; then \
+				echo "  $(YELLOW)⚠️  Ports encore occupés après docker down:$$STILL_BLOCKED$(NC)"; \
+				echo "  $(BLUE)💡 Tentative de kill forcé (hors Docker)...$(NC)"; \
+				for port in $$STILL_BLOCKED; do \
+					for pid in $$(lsof -i :$$port -sTCP:LISTEN -t 2>/dev/null || true); do \
+						PROC_PATH=$$(ps -p $$pid -o args= 2>/dev/null || echo ""); \
+						if ! echo "$$PROC_PATH" | grep -qi "docker"; then \
+							kill -9 $$pid 2>/dev/null || true; \
+						fi; \
+					done; \
+				done; \
+				sleep 1; \
+			fi; \
+			echo "  $(GREEN)✅ Ports libérés après docker down$(NC)"; \
 		fi; \
 	done
 
-# Helper: Vérifier et démarrer Docker si nécessaire
+# Helper: Vérifier et démarrer Docker si nécessaire (avec vérification d'état)
 _ensure-docker-running:
 	@if [ "$(HAS_DOCKER)" != "yes" ]; then \
 		echo "$(RED)❌ Docker non installé$(NC)"; \
 		echo "$(YELLOW)💡 Installez Docker Desktop: https://docker.com/get-started$(NC)"; \
 		exit 1; \
 	fi
+	@# Vérifier si Docker daemon répond
 	@if ! docker info >/dev/null 2>&1; then \
 		echo "$(YELLOW)🐳 Docker n'est pas démarré, lancement en cours...$(NC)"; \
 		if [ "$(OS)" = "macos" ]; then \
@@ -1688,6 +1745,30 @@ _ensure-docker-running:
 			echo "$(RED)❌ Échec du démarrage de Docker après 60s$(NC)"; \
 			exit 1; \
 		fi; \
+	fi
+	@# Attendre que Docker soit complètement opérationnel (pas en cours de démarrage/redémarrage)
+	@$(MAKE) _wait-docker-stable
+
+# Helper: Attendre que Docker soit stable (pas d'opérations en cours)
+_wait-docker-stable:
+	@MAX_WAIT=30; \
+	WAITED=0; \
+	while [ $$WAITED -lt $$MAX_WAIT ]; do \
+		if docker info >/dev/null 2>&1; then \
+			PULLING=$$(docker ps -a --filter "status=created" -q 2>/dev/null | wc -l | tr -d ' '); \
+			if [ "$$PULLING" = "0" ] || [ -z "$$PULLING" ]; then \
+				break; \
+			fi; \
+			echo "  $(DIM)⏳ Containers en création, attente...$(NC)"; \
+		else \
+			echo "  $(YELLOW)⏳ Docker daemon en cours de démarrage...$(NC)"; \
+		fi; \
+		sleep 2; \
+		WAITED=$$((WAITED + 2)); \
+	done; \
+	if ! docker info >/dev/null 2>&1; then \
+		echo "$(RED)❌ Docker n'est pas stable après $${MAX_WAIT}s$(NC)"; \
+		exit 1; \
 	fi
 
 docker-infra: _ensure-docker-running ## Démarrer l'infrastructure avec Traefik HTTPS (MongoDB + Redis)
@@ -1722,7 +1803,8 @@ docker-start: _ensure-docker-running ## Démarrer tous les services via Docker C
 	@$(MAKE) urls
 
 docker-start-local: _ensure-docker-running docker-build ## 🔨 Builder les images localement puis démarrer
-	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_DEV)"
+	@$(MAKE) _docker-down-if-running COMPOSE_TO_CHECK="$(COMPOSE_FILE)"
+	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_APP_DEV)"
 	@echo "$(BLUE)🐳 Démarrage avec images locales...$(NC)"
 	@docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d
 	@echo "$(GREEN)✅ Services démarrés avec images locales$(NC)"
@@ -1733,8 +1815,18 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "$(CYAN)║   MEESHY - Docker 100% avec Accès Réseau (Mobile/Devices)   ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@# Vérifier et libérer les ports requis
-	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_LOCAL)"
+	@# Nettoyage complet: arrêter tous les containers et supprimer les orphelins
+	@echo "$(BLUE)🧹 Nettoyage des containers existants...$(NC)"
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) down --remove-orphans 2>/dev/null || true
+	@docker compose -f $(COMPOSE_DEV) -p $(PROJECT_DEV) down --remove-orphans 2>/dev/null || true
+	@# Supprimer les containers orphelins Meeshy qui pourraient rester
+	@ORPHANS=$$(docker ps -a --filter "name=meeshy" -q 2>/dev/null); \
+	if [ -n "$$ORPHANS" ]; then echo "$$ORPHANS" | xargs docker rm -f 2>/dev/null || true; fi
+	@# Nettoyer tous les containers arrêtés
+	@docker container prune -f >/dev/null 2>&1 || true
+	@sleep 2
+	@# Vérifier et libérer les ports applicatifs (ignore ports infrastructure: $(PORTS_INFRA))
+	@$(MAKE) _ensure-ports-free REQUIRED_PORTS="$(PORTS_APP_LOCAL)"
 	@echo ""
 	@echo "$(BOLD)🌐 Configuration Réseau:$(NC)"
 	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
@@ -1761,11 +1853,11 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo ""
 	@# Télécharger les dernières images depuis Docker Hub
 	@echo "$(BLUE)📥 Téléchargement des images depuis Docker Hub...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full pull
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full pull
 	@echo ""
 	@# Démarrer avec le profil full (tous les services)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Docker...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d --remove-orphans
 	@echo ""
 	@echo "$(GREEN)✅ Services démarrés avec accès réseau$(NC)"
 	@echo ""

@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { buildApiUrl } from '@/lib/config';
 
 interface ConversationPageProps {
   params: { conversationId: string };
@@ -8,11 +9,10 @@ interface ConversationPageProps {
 export async function generateMetadata({ params }: ConversationPageProps): Promise<Metadata> {
   const { conversationId } = params;
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-  
+
   try {
     // Récupérer les informations de la conversation
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/conversations/${conversationId}`, {
+    const response = await fetch(buildApiUrl(`/conversations/${conversationId}`), {
       next: { revalidate: 300 } // Cache 5 minutes
     });
     

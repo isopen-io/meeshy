@@ -2,6 +2,8 @@
  * Utilitaires pour la génération et gestion des liens de partage
  */
 
+import { buildApiUrl } from './config';
+
 export interface ShareLinkOptions {
   type: 'affiliate' | 'conversation' | 'join' | 'default';
   affiliateToken?: string;
@@ -122,8 +124,7 @@ export async function shareLink(
  */
 export async function validateAffiliateToken(token: string): Promise<boolean> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://gate.meeshy.me';
-    const response = await fetch(`${baseUrl}/api/affiliate/validate/${token}`);
+    const response = await fetch(buildApiUrl(`/affiliate/validate/${token}`));
     return response.ok;
   } catch (error) {
     console.error('Erreur validation token affiliation:', error);
@@ -136,8 +137,7 @@ export async function validateAffiliateToken(token: string): Promise<boolean> {
  */
 export async function validateConversationLink(linkId: string): Promise<boolean> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://gate.meeshy.me';
-    const response = await fetch(`${baseUrl}/api/links/${linkId}/info`);
+    const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     return response.ok;
   } catch (error) {
     console.error('Erreur validation lien conversation:', error);
@@ -163,9 +163,8 @@ export async function getShareStats(linkId: string): Promise<{
   clicks: number;
 } | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://gate.meeshy.me';
-    const response = await fetch(`${baseUrl}/api/links/${linkId}/stats`);
-    
+    const response = await fetch(buildApiUrl(`/links/${linkId}/stats`));
+
     if (response.ok) {
       const data = await response.json();
       return data.data;
@@ -173,6 +172,6 @@ export async function getShareStats(linkId: string): Promise<{
   } catch (error) {
     console.error('Erreur récupération statistiques:', error);
   }
-  
+
   return null;
 }

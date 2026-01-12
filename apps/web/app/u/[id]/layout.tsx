@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
+import { buildApiUrl } from '@/lib/config';
 
 interface UserProfileLayoutProps {
   children: ReactNode;
@@ -9,7 +10,6 @@ interface UserProfileLayoutProps {
 export async function generateMetadata({ params }: UserProfileLayoutProps): Promise<Metadata> {
   const { id } = await params; // Next.js 15: params est une Promise
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
   // Si c'est "me", rediriger vers le profil général
   if (id === 'me') {
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
 
-    const response = await fetch(`${backendUrl}/api/users/profile/${id}`, {
+    const response = await fetch(buildApiUrl(`/users/profile/${id}`), {
       next: { revalidate: 300 }, // Cache 5 minutes
       signal: controller.signal,
       headers: {
