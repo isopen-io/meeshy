@@ -723,8 +723,16 @@ export function ConversationList({
 
   // Filtrage et tri des conversations - épinglées en haut
   const filteredConversations = useMemo(() => {
+    // Dédupliquer les conversations par id pour éviter les erreurs de clés dupliquées
+    const seenIds = new Set<string>();
+    const uniqueConversations = conversations.filter(conv => {
+      if (conv.id && seenIds.has(conv.id)) return false;
+      if (conv.id) seenIds.add(conv.id);
+      return true;
+    });
+
     // Filtrer selon le filtre sélectionné (all/community/reacted/archived/category)
-    let filtered = conversations.filter(conv => {
+    let filtered = uniqueConversations.filter(conv => {
       const prefs = preferencesMap.get(conv.id);
       const isArchived = prefs?.isArchived || false;
 
@@ -1065,11 +1073,11 @@ export function ConversationList({
                   {/* Conversations du groupe - masquées si collapsed, sauf pour uncategorized sans catégories */}
                   {(!isCollapsed || (group.type === 'uncategorized' && categories.length === 0)) && (
                     <div className="space-y-1">
-                      {group.conversations.map((conversation) => {
+                      {group.conversations.map((conversation, convIndex) => {
                         const prefs = preferencesMap.get(conversation.id);
                         return (
                           <ConversationItem
-                            key={conversation.id}
+                            key={`${group.type}-${conversation.id}-${convIndex}`}
                             conversation={conversation}
                             isSelected={selectedConversation?.id === conversation.id}
                             currentUser={currentUser}
