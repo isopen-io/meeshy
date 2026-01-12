@@ -296,7 +296,7 @@ export const messageSchema = {
 } as const;
 
 /**
- * Minimal message schema for lists
+ * Minimal message schema for lists (includes sender & attachments for ConversationList display)
  */
 export const messageMinimalSchema = {
   type: 'object',
@@ -306,7 +306,33 @@ export const messageMinimalSchema = {
     content: { type: 'string', description: 'Message content (truncated)' },
     senderId: { type: 'string', nullable: true, description: 'Sender ID' },
     messageType: { type: 'string', description: 'Message type' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' }
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    // Sender info (required for ConversationList.tsx getSenderName())
+    sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },
+    anonymousSender: { ...anonymousSenderSchema, nullable: true, description: 'Anonymous sender info' },
+    // Attachments (required for ConversationList.tsx attachment preview)
+    attachments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Attachment ID' },
+          mimeType: { type: 'string', description: 'MIME type' },
+          originalName: { type: 'string', nullable: true, description: 'Original filename' },
+          width: { type: 'number', nullable: true, description: 'Width (images/videos)' },
+          height: { type: 'number', nullable: true, description: 'Height (images/videos)' },
+          duration: { type: 'number', nullable: true, description: 'Duration in ms (audio/video)' },
+          fps: { type: 'number', nullable: true, description: 'FPS (videos)' },
+          bitrate: { type: 'number', nullable: true, description: 'Bitrate (audio/video)' },
+          sampleRate: { type: 'number', nullable: true, description: 'Sample rate (audio)' },
+          pageCount: { type: 'number', nullable: true, description: 'Page count (PDFs)' },
+          lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
+          metadata: { type: 'object', nullable: true, description: 'Additional metadata (audioEffectsTimeline, etc.)' }
+        }
+      },
+      nullable: true,
+      description: 'Message attachments for preview'
+    }
   }
 } as const;
 
