@@ -98,12 +98,22 @@ export function ConversationParticipantsDrawer({
 
   // Utiliser les participants du store (mis à jour en temps réel)
   // Fallback sur les props si le store est vide
-  const activeParticipants = storeParticipants.length > 0
+  // Dédupliquer par oderId ou oderId pour éviter les erreurs de clés dupliquées
+  const rawActiveParticipants = storeParticipants.length > 0
     ? participants.map(p => ({
         ...p,
         user: storeParticipants.find(u => u.id === p.userId) || p.user
       }))
     : participants;
+
+  // Déduplication des participants par oderId
+  const seenIds = new Set<string>();
+  const activeParticipants = rawActiveParticipants.filter(p => {
+    const key = p.id || p.userId;
+    if (key && seenIds.has(key)) return false;
+    if (key) seenIds.add(key);
+    return true;
+  });
 
   const handleManualRefresh = async () => {
     try {
@@ -367,11 +377,11 @@ export function ConversationParticipantsDrawer({
                 {searchQuery.length >= 2 && searchResults.length > 0 && (
                   <ScrollArea className="mt-3 max-h-[200px]">
                     <div className="space-y-2">
-                      {searchResults.map((user) => {
+                      {searchResults.map((user, index) => {
                         const isAlreadyMember = activeParticipants.some(p => p.userId === user.id);
                         return (
                           <div
-                            key={user.id}
+                            key={`search-${user.id}-${index}`}
                             className="flex items-center gap-3 p-2 rounded hover:bg-white/50 dark:hover:bg-blue-900/20"
                           >
                             <Avatar className="h-8 w-8">
@@ -431,12 +441,12 @@ export function ConversationParticipantsDrawer({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {onlineParticipants.map((participant) => {
+                      {onlineParticipants.map((participant, index) => {
                         const user = participant.user;
                         const isCurrentUser = user.id === currentUser.id;
                         return (
                           <div
-                            key={participant.id}
+                            key={`online-${participant.id || participant.userId}-${index}`}
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
                           >
                             <div className="relative">
@@ -550,12 +560,12 @@ export function ConversationParticipantsDrawer({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {offlineParticipants.map((participant) => {
+                      {offlineParticipants.map((participant, index) => {
                         const user = participant.user;
                         const isCurrentUser = user.id === currentUser.id;
                         return (
                           <div
-                            key={participant.id}
+                            key={`offline-${participant.id || participant.userId}-${index}`}
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
                           >
                             <div className="relative">

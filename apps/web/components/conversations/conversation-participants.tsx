@@ -111,11 +111,20 @@ export function ConversationParticipants({
     return conversationType !== 'direct' && isCreator(participant);
   };
 
+  // Dédupliquer les participants par userId pour éviter les erreurs de clés dupliquées
+  const uniqueParticipantsMap = new Map<string, ThreadMember>();
+  participants.forEach(p => {
+    if (p.userId && !uniqueParticipantsMap.has(p.userId)) {
+      uniqueParticipantsMap.set(p.userId, p);
+    }
+  });
+  const uniqueParticipants = Array.from(uniqueParticipantsMap.values());
+
   // Trouver l'utilisateur connecté dans les participants ou l'ajouter
-  const currentUserParticipant = participants.find(p => p.userId === currentUser.id);
+  const currentUserParticipant = uniqueParticipants.find(p => p.userId === currentUser.id);
   const allParticipantsIncludingCurrent = currentUserParticipant
-    ? participants
-    : [...participants, { userId: currentUser.id, user: currentUser, role: UserRoleEnum.MEMBER } as ThreadMember];
+    ? uniqueParticipants
+    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: UserRoleEnum.MEMBER } as ThreadMember];
 
   // Afficher les 3 premiers participants en ligne (incluant l'utilisateur connecté s'il est en ligne)
   // Afficher l'utilisateur courant + 2 autres participants (en ligne ou non)
@@ -146,13 +155,15 @@ export function ConversationParticipants({
           <>
             {/* Avatars des participants en ligne */}
             <div className="flex -space-x-2">
-              {displayParticipants.map((participant) => {
+              {displayParticipants.map((participant, index) => {
                 const user = participant.user;
                 const isAnonymous = isAnonymousUser(user);
                 const isCurrentUser = user.id === currentUser.id;
+                // Utiliser index pour garantir l'unicité même en cas de doublons dans les données
+                const uniqueKey = `${participant.userId || participant.user?.id || 'unknown'}-${index}`;
 
-                const avatarElement = (
-                  <div key={participant.userId} className="relative group">
+                const avatarContent = (
+                  <>
                     {isAnonymous ? (
                       <div className="h-6 w-6 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center border-2 border-background">
                         <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
@@ -173,19 +184,23 @@ export function ConversationParticipants({
                         {isCurrentUser && ` (${t('conversationDetails.you')})`}
                       </div>
                     </div>
-                  </div>
+                  </>
                 );
 
                 // Si l'utilisateur n'est pas anonyme et a un username, le rendre cliquable
                 if (!isAnonymous && user.username) {
                   return (
-                    <Link key={participant.userId} href={`/u/${user.username}`} onClick={(e) => e.stopPropagation()}>
-                      {avatarElement}
+                    <Link key={uniqueKey} href={`/u/${user.username}`} onClick={(e) => e.stopPropagation()} className="relative group">
+                      {avatarContent}
                     </Link>
                   );
                 }
 
-                return avatarElement;
+                return (
+                  <div key={uniqueKey} className="relative group">
+                    {avatarContent}
+                  </div>
+                );
               })}
             </div>
           </>
