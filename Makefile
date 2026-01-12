@@ -1705,6 +1705,10 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
 	@echo "  $(GREEN)✓ .env.network généré$(NC)"
 	@echo ""
+	@# Télécharger les dernières images depuis Docker Hub
+	@echo "$(BLUE)📥 Téléchargement des images depuis Docker Hub...$(NC)"
+	@docker compose -f $(COMPOSE_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full pull
+	@echo ""
 	@# Démarrer avec le profil full (tous les services)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Docker...$(NC)"
 	@docker compose -f $(COMPOSE_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d
