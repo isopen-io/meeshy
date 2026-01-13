@@ -69,6 +69,7 @@ import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
 import { passwordResetRoutes } from './routes/password-reset';
 import { twoFactorRoutes } from './routes/two-factor';
+import { magicLinkRoutes } from './routes/magic-link';
 import userDeletionsRoutes from './routes/user-deletions';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
@@ -735,6 +736,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register 2FA routes with /api/auth/2fa prefix
     await this.server.register(twoFactorRoutes, { prefix: `${API_PREFIX}/auth/2fa` });
+
+    // Register magic link routes with /api/auth prefix
+    await this.server.register(magicLinkRoutes, { prefix: `${API_PREFIX}/auth` });
 
     // Register user deletions routes (delete for me feature)
     await this.server.register(userDeletionsRoutes, { prefix: '' });

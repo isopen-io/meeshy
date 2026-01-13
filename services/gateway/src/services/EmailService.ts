@@ -70,6 +70,14 @@ export interface SecurityAlertEmailData {
   language?: string;
 }
 
+export interface MagicLinkEmailData {
+  to: string;
+  name: string;
+  magicLink: string;
+  location: string;
+  language?: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -461,5 +469,76 @@ export class EmailService {
     const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text });
+  }
+
+  async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {
+    const lang = data.language || 'en';
+    const copyright = `© ${new Date().getFullYear()} Meeshy. All rights reserved.`;
+    const dateFormatted = new Date().toLocaleString(this.getLocale(lang));
+
+    const content = this.getMagicLinkTranslations(lang);
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>✨ Meeshy</h1></div><div class="content"><p>${content.greeting} <strong>${data.name}</strong>,</p><p>${content.intro}</p><div style="text-align:center"><a href="${data.magicLink}" class="button">${content.buttonText}</a></div><div class="warning"><strong>⏰ ${content.expiryTitle}</strong><br>${content.expiryText}</div><div class="info"><strong>📍 ${content.requestFrom}</strong> ${data.location}<br><strong>🕐 ${content.requestAt}</strong> ${dateFormatted}</div><p style="color:#6b7280;font-size:14px">${content.notYou}</p><p>${content.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${copyright}`;
+
+    return this.sendEmail({ to: data.to, subject: content.subject, html, text });
+  }
+
+  private getMagicLinkTranslations(language: string): Record<string, string> {
+    const translations: Record<string, Record<string, string>> = {
+      fr: {
+        subject: '🔐 Votre lien de connexion Meeshy',
+        title: 'Connexion Meeshy',
+        greeting: 'Bonjour',
+        intro: 'Cliquez sur le bouton ci-dessous pour vous connecter. Ce lien est valide pendant 1 minute seulement.',
+        buttonText: 'Se connecter',
+        expiryTitle: 'Lien à usage unique',
+        expiryText: 'Ce lien expire dans 1 minute et ne peut être utilisé qu\'une seule fois.',
+        requestFrom: 'Demande depuis:',
+        requestAt: 'Demandé le:',
+        notYou: 'Si vous n\'avez pas demandé ce lien, ignorez simplement cet email.',
+        footer: 'L\'équipe Meeshy'
+      },
+      en: {
+        subject: '🔐 Your Meeshy login link',
+        title: 'Meeshy Login',
+        greeting: 'Hello',
+        intro: 'Click the button below to sign in. This link is valid for 1 minute only.',
+        buttonText: 'Sign in',
+        expiryTitle: 'One-time use link',
+        expiryText: 'This link expires in 1 minute and can only be used once.',
+        requestFrom: 'Request from:',
+        requestAt: 'Requested at:',
+        notYou: 'If you did not request this link, simply ignore this email.',
+        footer: 'The Meeshy Team'
+      },
+      es: {
+        subject: '🔐 Tu enlace de inicio de sesión de Meeshy',
+        title: 'Inicio de sesión en Meeshy',
+        greeting: 'Hola',
+        intro: 'Haz clic en el botón de abajo para iniciar sesión. Este enlace es válido solo por 1 minuto.',
+        buttonText: 'Iniciar sesión',
+        expiryTitle: 'Enlace de un solo uso',
+        expiryText: 'Este enlace expira en 1 minuto y solo puede usarse una vez.',
+        requestFrom: 'Solicitud desde:',
+        requestAt: 'Solicitado el:',
+        notYou: 'Si no solicitaste este enlace, simplemente ignora este correo.',
+        footer: 'El equipo de Meeshy'
+      },
+      pt: {
+        subject: '🔐 Seu link de login Meeshy',
+        title: 'Login Meeshy',
+        greeting: 'Olá',
+        intro: 'Clique no botão abaixo para entrar. Este link é válido por apenas 1 minuto.',
+        buttonText: 'Entrar',
+        expiryTitle: 'Link de uso único',
+        expiryText: 'Este link expira em 1 minuto e só pode ser usado uma vez.',
+        requestFrom: 'Solicitação de:',
+        requestAt: 'Solicitado em:',
+        notYou: 'Se você não solicitou este link, simplesmente ignore este e-mail.',
+        footer: 'A equipe Meeshy'
+      }
+    };
+    return translations[language] || translations['en'];
   }
 }
