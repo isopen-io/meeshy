@@ -267,6 +267,13 @@ services:
       - ATABETH_FIRST_NAME=${ATABETH_FIRST_NAME:-Atabeth}
       - ATABETH_LAST_NAME=${ATABETH_LAST_NAME:-User}
       - ATABETH_ROLE=${ATABETH_ROLE:-user}
+      # Session configuration
+      - SESSION_EXPIRY_MOBILE_DAYS=${SESSION_EXPIRY_MOBILE_DAYS:-365}
+      - SESSION_EXPIRY_DESKTOP_DAYS=${SESSION_EXPIRY_DESKTOP_DAYS:-30}
+      - SESSION_EXPIRY_TRUSTED_DAYS=${SESSION_EXPIRY_TRUSTED_DAYS:-365}
+      - MAX_SESSIONS_PER_USER=${MAX_SESSIONS_PER_USER:-10}
+      # Branding
+      - BRAND_LOGO_URL=${BRAND_LOGO_URL:-https://meeshy.me/images/meeshy-logo.png}
       # Firebase
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
     volumes:
