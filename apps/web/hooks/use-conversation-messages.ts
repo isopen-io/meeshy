@@ -125,6 +125,7 @@ export function useConversationMessages(
 
 
       // Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
+      // Backend inclut toujours réactions et traductions automatiquement
       const response = await apiService.get<{
         success: boolean;
         data: Message[];  // Directement les messages
@@ -134,9 +135,7 @@ export function useConversationMessages(
         endpoint,
         {
           limit: limit.toString(),
-          offset: currentOffset.toString(),
-          include_reactions: 'true',
-          include_translations: 'true'
+          offset: currentOffset.toString()
         },
         requestOptions.headers ? { headers: requestOptions.headers } : undefined
       );
