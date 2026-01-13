@@ -1,12 +1,12 @@
 import { apiService } from './api.service';
-import type { ApiResponse } from '@meeshy/shared/types';
+import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
 
 export interface Message {
   id: string;
   content: string;
   authorId: string;
   conversationId?: string;
-  groupId?: string;
+  originalLanguage?: string;  // Langue source du message
   createdAt: string;
   updatedAt: string;
   isEdited: boolean;
@@ -23,7 +23,7 @@ export interface Message {
 export interface CreateMessageDto {
   content: string;
   conversationId?: string;
-  groupId?: string;
+  originalLanguage?: string;  // Langue source du message (défaut: 'fr')
   replyToId?: string;
 }
 
@@ -31,13 +31,11 @@ export interface UpdateMessageDto {
   content: string;
 }
 
-export interface MessagesResponse {
-  messages: Message[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
+/**
+ * Standard message list response - aligned with MessagesListResponse from @meeshy/shared/types
+ * Backend returns optimized format: { success, data: Message[], pagination, meta: { userLanguage } }
+ */
+export type MessagesResponse = MessagesListResponse<Message>;
 
 
 /**
@@ -58,31 +56,19 @@ export const messagesService = {
   },
 
   /**
-   * Récupère les messages d'une conversation avec pagination
+   * Récupère les messages d'une conversation avec pagination standard (offset/limit)
+   * Utilise le format de pagination natif du backend : PaginationMeta { total, offset, limit, hasMore }
+   *
+   * @deprecated Utiliser getMessagesWithOffset qui retourne le format natif
    */
   async getMessagesByConversation(
-    conversationId: string, 
-    page: number = 1, 
+    conversationId: string,
+    page: number = 1,
     limit: number = 20
-  ): Promise<ApiResponse<MessagesResponse>> {
+  ): Promise<MessagesResponse> {
     try {
-      // Utiliser l'endpoint correct de la gateway avec pagination optimisée
-      const response = await apiService.get<{messages: Message[], hasMore: boolean, userLanguage: string}>(
-        `/conversations/${conversationId}/messages?limit=${limit}&offset=${(page - 1) * limit}&include_translations=true`
-      );
-      
-      // Adapter la réponse au format attendu
-      return {
-        success: true,
-        data: {
-          messages: response.data.messages,
-          total: response.data.messages.length, // Approximation
-          page: page,
-          limit: limit,
-          hasMore: response.data.hasMore
-        },
-        message: response.message
-      };
+      const offset = (page - 1) * limit;
+      return await this.getMessagesWithOffset(conversationId, offset, limit);
     } catch (error) {
       console.error('Erreur lors de la récupération des messages:', error);
       throw error;
@@ -91,18 +77,30 @@ export const messagesService = {
 
   /**
    * Récupère les messages d'une conversation avec pagination par offset
+   * Retourne le format natif optimisé du backend
+   *
+   * Backend response format (optimized):
+   * {
+   *   success: true,
+   *   data: Message[],  // Directement les messages, pas d'objet wrapper
+   *   pagination: { total, offset, limit, hasMore },
+   *   meta: { userLanguage: string }
+   * }
    */
   async getMessagesWithOffset(
-    conversationId: string, 
-    offset: number = 0, 
+    conversationId: string,
+    offset: number = 0,
     limit: number = 20
-  ): Promise<{messages: Message[], hasMore: boolean, userLanguage: string}> {
+  ): Promise<MessagesResponse> {
     try {
-      const response = await apiService.get<{messages: Message[], hasMore: boolean, userLanguage: string}>(
-        `/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}&include_translations=true`
+      // Backend inclut toujours réactions et traductions, pas besoin de paramètres
+      const response = await apiService.get<MessagesResponse>(
+        `/conversations/${conversationId}/messages`,
+        { limit, offset }
       );
-      
-      return response.data;
+
+      // Le backend retourne directement le format MessagesListResponse
+      return response.data as unknown as MessagesResponse;
     } catch (error) {
       console.error('Erreur lors de la récupération des messages avec offset:', error);
       throw error;

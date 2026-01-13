@@ -95,10 +95,35 @@ export interface SendMessageResponse<TMessage = unknown> extends ApiResponse<Sen
 
 /**
  * Response data for message list
+ * @deprecated Use PaginatedResponse<Message> directly with userLanguage in meta
  */
 export interface GetMessagesResponseData<TMessage = unknown> {
   readonly messages: readonly TMessage[];
+  /** @deprecated Use pagination.hasMore instead */
   readonly hasMore: boolean;
+}
+
+/**
+ * Optimized message list response - aligns with standard PaginatedResponse
+ * Format: { success, data: Message[], pagination, meta: { userLanguage } }
+ */
+export interface MessagesListMeta extends ResponseMeta {
+  userLanguage?: string;
+}
+
+/**
+ * Standard message list response
+ * @example
+ * {
+ *   success: true,
+ *   data: [{ id: '1', content: 'Hello' }, ...],
+ *   pagination: { total: 100, offset: 0, limit: 20, hasMore: true },
+ *   meta: { userLanguage: 'fr' }
+ * }
+ */
+export interface MessagesListResponse<TMessage = unknown> extends ApiResponse<readonly TMessage[]> {
+  pagination: PaginationMeta;
+  meta?: MessagesListMeta;
 }
 
 /**

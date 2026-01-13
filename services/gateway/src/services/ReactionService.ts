@@ -131,6 +131,10 @@ export class ReactionService {
       }
     });
 
+    // ===== MISE À JOUR DES CHAMPS DÉNORMALISÉS =====
+    // Mettre à jour reactionSummary et reactionCount sur le message
+    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+
     return this.mapReactionToData(reaction);
   }
 
@@ -154,6 +158,12 @@ export class ReactionService {
         emoji: sanitized
       }
     });
+
+    // ===== MISE À JOUR DES CHAMPS DÉNORMALISÉS =====
+    // Mettre à jour reactionSummary et reactionCount si suppression réussie
+    if (result.count > 0) {
+      await this.updateMessageReactionSummary(messageId, sanitized, 'remove', result.count);
+    }
 
     return result.count > 0;
   }
@@ -339,6 +349,17 @@ export class ReactionService {
       where: { messageId }
     });
 
+    // ===== RÉINITIALISER LES CHAMPS DÉNORMALISÉS =====
+    if (result.count > 0) {
+      await this.prisma.message.update({
+        where: { id: messageId },
+        data: {
+          reactionSummary: {},
+          reactionCount: 0
+        }
+      });
+    }
+
     return result.count;
   }
 
@@ -368,6 +389,59 @@ export class ReactionService {
       aggregation,
       timestamp: new Date()
     };
+  }
+
+  /**
+   * Met à jour les champs dénormalisés reactionSummary et reactionCount sur le message
+   * Appelé lors de l'ajout ou suppression de réactions
+   */
+  private async updateMessageReactionSummary(
+    messageId: string,
+    emoji: string,
+    action: 'add' | 'remove',
+    count: number = 1
+  ): Promise<void> {
+    // Récupérer le message actuel pour obtenir le reactionSummary
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { reactionSummary: true, reactionCount: true }
+    });
+
+    if (!message) {
+      return; // Message non trouvé, rien à faire
+    }
+
+    // Parser le reactionSummary actuel (ou initialiser vide)
+    const currentSummary = (message.reactionSummary as Record<string, number>) || {};
+    const currentCount = message.reactionCount || 0;
+
+    // Mettre à jour selon l'action
+    if (action === 'add') {
+      currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+    } else {
+      // remove
+      if (currentSummary[emoji]) {
+        currentSummary[emoji] -= count;
+        // Supprimer la clé si le compteur tombe à 0 ou moins
+        if (currentSummary[emoji] <= 0) {
+          delete currentSummary[emoji];
+        }
+      }
+    }
+
+    // Calculer le nouveau total
+    const newReactionCount = action === 'add'
+      ? currentCount + count
+      : Math.max(0, currentCount - count);
+
+    // Mettre à jour le message
+    await this.prisma.message.update({
+      where: { id: messageId },
+      data: {
+        reactionSummary: currentSummary,
+        reactionCount: newReactionCount
+      }
+    });
   }
 
   /**
