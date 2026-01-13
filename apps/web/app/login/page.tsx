@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/hooks/use-auth';
 import { LargeLogo } from '@/components/branding';
-import { authManager } from '@/services/auth-manager.service';
+import { authManager, SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
 import { Mail, Lock, Sparkles } from 'lucide-react';
 
@@ -205,10 +205,10 @@ function QuickLoginPageContent() {
       if (data.success && data.data?.requires2FA) {
         console.log('[LOGIN] 2FA requis, redirection vers la page de vérification');
 
-        // Stocker le token temporaire pour la vérification 2FA
-        sessionStorage.setItem('2fa_temp_token', data.data.twoFactorToken);
-        sessionStorage.setItem('2fa_user_id', data.data.user?.id || '');
-        sessionStorage.setItem('2fa_username', data.data.user?.username || formData.username);
+        // Stocker le token temporaire pour la vérification 2FA - utilise les clés centralisées
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN, data.data.twoFactorToken);
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID, data.data.user?.id || '');
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME, data.data.user?.username || formData.username);
 
         // Rediriger vers la page de vérification 2FA
         const verifyUrl = `/auth/verify-2fa${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`;
