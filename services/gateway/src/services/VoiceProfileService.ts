@@ -320,10 +320,14 @@ export class VoiceProfileService extends EventEmitter {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
-          voiceProfileConsentAt: true,
-          voiceCloningEnabledAt: true,
-          ageVerificationConsentAt: true,
-          birthDate: true
+          birthDate: true,
+          userFeature: {
+            select: {
+              voiceProfileConsentAt: true,
+              voiceCloningEnabledAt: true,
+              ageVerifiedAt: true
+            }
+          }
         }
       });
 
@@ -338,9 +342,9 @@ export class VoiceProfileService extends EventEmitter {
       return {
         success: true,
         data: {
-          hasVoiceRecordingConsent: !!user.voiceProfileConsentAt,
-          hasVoiceCloningConsent: !!user.voiceCloningEnabledAt,
-          hasAgeVerification: !!user.ageVerificationConsentAt,
+          hasVoiceRecordingConsent: !!user.userFeature?.voiceProfileConsentAt,
+          hasVoiceCloningConsent: !!user.userFeature?.voiceCloningEnabledAt,
+          hasAgeVerification: !!user.userFeature?.ageVerifiedAt,
           birthDate: user.birthDate
         }
       };
@@ -366,10 +370,13 @@ export class VoiceProfileService extends EventEmitter {
       // Check consent
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          voiceProfileConsentAt: true,
-          voiceCloningEnabledAt: true,
-          birthDate: true,
+        include: {
+          userFeature: {
+            select: {
+              voiceProfileConsentAt: true,
+              voiceCloningEnabledAt: true
+            }
+          },
           voiceModel: true
         }
       });
@@ -378,7 +385,7 @@ export class VoiceProfileService extends EventEmitter {
         return { success: false, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
       }
 
-      if (!user.voiceProfileConsentAt) {
+      if (!user.userFeature?.voiceProfileConsentAt) {
         return { success: false, error: 'Voice recording consent required', errorCode: 'CONSENT_REQUIRED' };
       }
 
@@ -585,9 +592,9 @@ export class VoiceProfileService extends EventEmitter {
         where: { userId }
       });
 
-      // Reset consent fields
-      await this.prisma.user.update({
-        where: { id: userId },
+      // Reset consent fields in UserFeature
+      await this.prisma.userFeature.update({
+        where: { userId },
         data: {
           voiceProfileConsentAt: null,
           voiceCloningEnabledAt: null

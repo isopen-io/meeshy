@@ -5,6 +5,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AttachmentService } from '../services/AttachmentService';
 import { AttachmentTranslateService } from '../services/AttachmentTranslateService';
+import { UserFeaturesService } from '../services/UserFeaturesService';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
@@ -16,6 +17,7 @@ import {
 
 export async function attachmentRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService((fastify as any).prisma);
+  const userFeaturesService = new UserFeaturesService((fastify as any).prisma);
 
   // Initialize translate service if ZMQ client is available
   let translateService: AttachmentTranslateService | null = null;
@@ -1131,6 +1133,97 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         };
 
         const userId = authContext.userId;
+
+        // Get attachment to determine type for feature validation
+        const attachment = await (fastify as any).prisma.attachment.findUnique({
+          where: { id: attachmentId },
+          select: { mimeType: true }
+        });
+
+        if (!attachment) {
+          return reply.status(404).send({
+            success: false,
+            error: 'ATTACHMENT_NOT_FOUND',
+            message: 'Attachment not found'
+          });
+        }
+
+        // Validate user features based on attachment type
+        const mimeType = attachment.mimeType || '';
+
+        if (mimeType.startsWith('audio/')) {
+          // Audio translation requires: audioTranscription + textTranslation + audioTranslation
+          const audioValidation = await userFeaturesService.canTranslateAudio(userId);
+          if (!audioValidation.allowed) {
+            return reply.status(403).send({
+              success: false,
+              error: 'FEATURE_NOT_ENABLED',
+              message: audioValidation.reason || 'Audio translation not enabled',
+              details: {
+                missingConsents: audioValidation.missingConsents,
+                missingFeatures: audioValidation.missingFeatures
+              }
+            });
+          }
+
+          // If voice cloning is requested, validate that feature too
+          if (body.generateVoiceClone) {
+            const voiceCloningValidation = await userFeaturesService.canUseVoiceCloning(userId);
+            if (!voiceCloningValidation.allowed) {
+              return reply.status(403).send({
+                success: false,
+                error: 'VOICE_CLONING_NOT_ENABLED',
+                message: voiceCloningValidation.reason || 'Voice cloning not enabled',
+                details: {
+                  missingConsents: voiceCloningValidation.missingConsents,
+                  missingFeatures: voiceCloningValidation.missingFeatures
+                }
+              });
+            }
+          }
+        } else if (mimeType.startsWith('image/')) {
+          // Image text translation requires: textTranslation + imageTextTranslation
+          const textValidation = await userFeaturesService.canTranslateText(userId);
+          if (!textValidation.allowed) {
+            return reply.status(403).send({
+              success: false,
+              error: 'FEATURE_NOT_ENABLED',
+              message: textValidation.reason || 'Text translation not enabled',
+              details: {
+                missingConsents: textValidation.missingConsents,
+                missingFeatures: textValidation.missingFeatures
+              }
+            });
+          }
+        } else if (mimeType.startsWith('video/')) {
+          // Video subtitle translation requires: audioTranscription + textTranslation
+          const audioValidation = await userFeaturesService.canTranslateAudio(userId);
+          if (!audioValidation.allowed) {
+            return reply.status(403).send({
+              success: false,
+              error: 'FEATURE_NOT_ENABLED',
+              message: audioValidation.reason || 'Video subtitle translation not enabled',
+              details: {
+                missingConsents: audioValidation.missingConsents,
+                missingFeatures: audioValidation.missingFeatures
+              }
+            });
+          }
+        } else if (mimeType === 'application/pdf' || mimeType.startsWith('text/')) {
+          // Document translation requires: textTranslation + documentTranslation
+          const textValidation = await userFeaturesService.canTranslateText(userId);
+          if (!textValidation.allowed) {
+            return reply.status(403).send({
+              success: false,
+              error: 'FEATURE_NOT_ENABLED',
+              message: textValidation.reason || 'Document translation not enabled',
+              details: {
+                missingConsents: textValidation.missingConsents,
+                missingFeatures: textValidation.missingFeatures
+              }
+            });
+          }
+        }
 
         const result = await translateService.translate(userId, attachmentId, {
           targetLanguages: body.targetLanguages,

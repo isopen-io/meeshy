@@ -100,6 +100,19 @@ export interface UserPreference {
 // ===== ADMIN USER MANAGEMENT TYPES =====
 
 /**
+ * Type pour les features utilisateur (provenant de UserFeature)
+ */
+export interface UserFeatureData {
+  twoFactorEnabledAt: Date | null;
+  autoTranslateEnabled: boolean;
+  translateToSystemLanguage: boolean;
+  translateToRegionalLanguage: boolean;
+  useCustomDestination: boolean;
+  encryptionPreference: string;
+  audioTranscriptionEnabledAt: Date | null;
+}
+
+/**
  * Type strict pour les donnees utilisateur completes (BACKEND ONLY)
  * Ne doit JAMAIS etre expose directement via l'API
  */
@@ -118,17 +131,10 @@ export interface FullUser {
   isOnline: boolean;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
-  twoFactorEnabledAt: Date | null;
   lastActiveAt: Date;
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage: string | null;
-  autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
-  encryptionPreference: string;
-  autoTranscriptionEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   deactivatedAt: Date | null;
@@ -138,6 +144,7 @@ export interface FullUser {
   lastPasswordChange: Date | null;
   failedLoginAttempts: number | null;
   lockedUntil: Date | null;
+  userFeature?: UserFeatureData | null;
   _count?: {
     sentMessages?: number;
     conversations?: number;
@@ -179,21 +186,15 @@ export interface PublicUser {
 export interface AdminUser extends PublicUser {
   email: string;
   phoneNumber: string | null;
-  twoFactorEnabledAt: Date | null;
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage: string | null;
-  autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
-  encryptionPreference: string;
-  autoTranscriptionEnabled: boolean;
   lastPasswordChange: Date | null;
   failedLoginAttempts: number | null;
   lockedUntil: Date | null;
   deletedAt: Date | null;
   deletedBy: string | null;
+  userFeature?: UserFeatureData | null;
   _count?: {
     sentMessages?: number;
     conversations?: number;

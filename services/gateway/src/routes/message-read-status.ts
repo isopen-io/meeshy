@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
+import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 
 interface MessageParams {
   messageId: string;
@@ -17,6 +18,7 @@ interface MessageIdsQuery {
 export default async function messageReadStatusRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
   const readStatusService = new MessageReadStatusService(prisma);
+  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
   // Middleware d'authentification
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
@@ -190,22 +192,30 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Marquer comme lu
       await readStatusService.markMessagesAsRead(userId, conversationId);
 
-      // Émettre événement Socket.IO
-      try {
-        const socketIOHandler = fastify.socketIOHandler;
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = `conversation_${conversationId}`;
-          (socketIOManager as any).io.to(room).emit('read-status:updated', {
-            conversationId,
-            userId,
-            type: 'read',
-            updatedAt: new Date()
-          });
+      // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
+      const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
+        userId,
+        false // Les utilisateurs authentifiés ne sont pas anonymes ici
+      );
+
+      // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
+      if (shouldShowReadReceipts) {
+        try {
+          const socketIOHandler = fastify.socketIOHandler;
+          const socketIOManager = socketIOHandler.getManager();
+          if (socketIOManager) {
+            const room = `conversation_${conversationId}`;
+            (socketIOManager as any).io.to(room).emit('read-status:updated', {
+              conversationId,
+              userId,
+              type: 'read',
+              updatedAt: new Date()
+            });
+          }
+        } catch (socketError) {
+          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
+          // Ne pas faire échouer la requête si Socket.IO échoue
         }
-      } catch (socketError) {
-        console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
-        // Ne pas faire échouer la requête si Socket.IO échoue
       }
 
       return reply.send({
@@ -256,21 +266,30 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Marquer comme reçu
       await readStatusService.markMessagesAsReceived(userId, conversationId);
 
-      // Émettre événement Socket.IO
-      try {
-        const socketIOHandler = fastify.socketIOHandler;
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = `conversation_${conversationId}`;
-          (socketIOManager as any).io.to(room).emit('read-status:updated', {
-            conversationId,
-            userId,
-            type: 'received',
-            updatedAt: new Date()
-          });
+      // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
+      // Note: Les "received" (delivery receipts) suivent aussi la préférence showReadReceipts
+      const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
+        userId,
+        false // Les utilisateurs authentifiés ne sont pas anonymes ici
+      );
+
+      // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
+      if (shouldShowReadReceipts) {
+        try {
+          const socketIOHandler = fastify.socketIOHandler;
+          const socketIOManager = socketIOHandler.getManager();
+          if (socketIOManager) {
+            const room = `conversation_${conversationId}`;
+            (socketIOManager as any).io.to(room).emit('read-status:updated', {
+              conversationId,
+              userId,
+              type: 'received',
+              updatedAt: new Date()
+            });
+          }
+        } catch (socketError) {
+          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
         }
-      } catch (socketError) {
-        console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
       }
 
       return reply.send({

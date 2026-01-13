@@ -446,7 +446,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
                   updatedAt: { type: 'string', format: 'date-time' },
                   emailVerifiedAt: { type: 'string', format: 'date-time', nullable: true },
                   phoneVerifiedAt: { type: 'string', format: 'date-time', nullable: true },
-                  twoFactorEnabledAt: { type: 'string', format: 'date-time', nullable: true },
                   failedLoginAttempts: { type: 'number' },
                   lockedUntil: { type: 'string', format: 'date-time', nullable: true },
                   lastPasswordChange: { type: 'string', format: 'date-time', nullable: true },
@@ -542,7 +541,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
             // Champs de securite et verification
             emailVerifiedAt: true,
             phoneVerifiedAt: true,
-            twoFactorEnabledAt: true,
             failedLoginAttempts: true,
             lockedUntil: true,
             lastPasswordChange: true,

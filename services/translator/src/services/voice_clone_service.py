@@ -1733,6 +1733,139 @@ class VoiceCloneService:
         # Créer le modèle avec ce qu'on a
         return await self._create_voice_model(user_id, audio_paths, total_duration)
 
+    async def create_voice_model_from_gateway_profile(
+        self,
+        profile_data: Dict[str, Any],
+        user_id: str
+    ) -> Optional[VoiceModel]:
+        """
+        Crée un VoiceModel à partir du profil vocal reçu de Gateway.
+
+        Cette méthode permet à Gateway d'envoyer un profil vocal existant
+        (par exemple celui de l'émetteur original d'un message transféré)
+        sans que Translator ait besoin d'accéder à MongoDB.
+
+        Args:
+            profile_data: Données du profil vocal envoyées par Gateway:
+                - profileId: str - ID unique du profil
+                - userId: str - ID de l'utilisateur propriétaire du profil
+                - embedding: str - Embedding Base64 encoded (numpy array)
+                - qualityScore: float - Score de qualité 0-1
+                - fingerprint: Dict - Empreinte vocale (optionnel)
+                - voiceCharacteristics: Dict - Caractéristiques vocales (optionnel)
+                - version: int - Version du profil
+                - audioCount: int - Nombre d'audios agrégés
+                - totalDurationMs: int - Durée totale des audios
+
+            user_id: ID de l'utilisateur (pour logs)
+
+        Returns:
+            VoiceModel prêt à l'emploi, ou None si échec
+        """
+        if not profile_data:
+            logger.warning(f"[VOICE_CLONE] ⚠️ Pas de profil fourni par Gateway pour {user_id}")
+            return None
+
+        try:
+            logger.info(f"[VOICE_CLONE] 📦 Création VoiceModel depuis profil Gateway pour {user_id}")
+
+            # Décoder l'embedding Base64
+            import base64
+            embedding_base64 = profile_data.get('embedding')
+            if not embedding_base64:
+                logger.error(f"[VOICE_CLONE] ❌ Embedding manquant dans le profil Gateway")
+                return None
+
+            embedding_bytes = base64.b64decode(embedding_base64)
+            embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+
+            logger.info(f"[VOICE_CLONE] ✅ Embedding décodé: shape={embedding.shape}")
+
+            # Créer les caractéristiques vocales si fournies
+            voice_characteristics = None
+            voice_chars_data = profile_data.get('voiceCharacteristics')
+            if voice_chars_data:
+                try:
+                    voice_characteristics = VoiceCharacteristics(
+                        pitch_mean_hz=voice_chars_data.get('pitch_mean_hz', 0),
+                        pitch_std_hz=voice_chars_data.get('pitch_std_hz', 0),
+                        pitch_range_hz=voice_chars_data.get('pitch_range_hz', (0, 0)),
+                        estimated_gender=voice_chars_data.get('estimated_gender', 'unknown'),
+                        speaking_rate_wpm=voice_chars_data.get('speaking_rate_wpm', 0),
+                        spectral_centroid_hz=voice_chars_data.get('spectral_centroid_hz', 0),
+                        spectral_bandwidth_hz=voice_chars_data.get('spectral_bandwidth_hz', 0),
+                        energy_mean=voice_chars_data.get('energy_mean', 0),
+                        energy_std=voice_chars_data.get('energy_std', 0),
+                        mfcc_signature=voice_chars_data.get('mfcc_signature'),
+                        formants_hz=voice_chars_data.get('formants_hz'),
+                        jitter_percent=voice_chars_data.get('jitter_percent'),
+                        shimmer_percent=voice_chars_data.get('shimmer_percent'),
+                        confidence=voice_chars_data.get('confidence', 0.8)
+                    )
+                except Exception as e:
+                    logger.warning(f"[VOICE_CLONE] ⚠️ Impossible de recréer VoiceCharacteristics: {e}")
+
+            # Créer l'empreinte vocale si fournie
+            fingerprint = None
+            fingerprint_data = profile_data.get('fingerprint')
+            if fingerprint_data:
+                try:
+                    fingerprint = VoiceFingerprint(
+                        fingerprint_id=fingerprint_data.get('fingerprint_id', ''),
+                        signature=fingerprint_data.get('signature', ''),
+                        signature_short=fingerprint_data.get('signature_short', ''),
+                        audio_duration_ms=fingerprint_data.get('audio_duration_ms', 0),
+                        created_at=datetime.fromisoformat(fingerprint_data.get('created_at', datetime.now().isoformat()))
+                    )
+                except Exception as e:
+                    logger.warning(f"[VOICE_CLONE] ⚠️ Impossible de recréer VoiceFingerprint: {e}")
+
+            # Créer un dossier temporaire pour l'embedding (nécessaire pour TTS)
+            profile_user_id = profile_data.get('userId', user_id)
+            user_dir = self.voice_cache_dir / profile_user_id
+            user_dir.mkdir(parents=True, exist_ok=True)
+
+            profile_id = profile_data.get('profileId', f"vfp_{profile_user_id[:8]}")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            embedding_filename = f"{profile_user_id}_{profile_id}_{timestamp}_gateway.pkl"
+            embedding_path = str(user_dir / embedding_filename)
+
+            # Sauvegarder l'embedding dans un fichier temporaire (pickle déjà utilisé dans le service)
+            with open(embedding_path, 'wb') as f:
+                pickle.dump(embedding, f)
+
+            logger.info(f"[VOICE_CLONE] 💾 Embedding sauvegardé: {embedding_path}")
+
+            # Créer le VoiceModel
+            model = VoiceModel(
+                user_id=profile_user_id,
+                embedding_path=embedding_path,
+                audio_count=profile_data.get('audioCount', 1),
+                total_duration_ms=profile_data.get('totalDurationMs', 0),
+                quality_score=profile_data.get('qualityScore', 0.8),
+                profile_id=profile_id,
+                version=profile_data.get('version', 1),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+                embedding=embedding,
+                voice_characteristics=voice_characteristics,
+                fingerprint=fingerprint
+            )
+
+            logger.info(
+                f"[VOICE_CLONE] ✅ VoiceModel créé depuis Gateway: "
+                f"user={profile_user_id}, quality={model.quality_score:.2f}, "
+                f"profile_id={profile_id}"
+            )
+
+            return model
+
+        except Exception as e:
+            logger.error(f"[VOICE_CLONE] ❌ Erreur création VoiceModel depuis Gateway: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     async def _create_voice_model(
         self,
         user_id: str,

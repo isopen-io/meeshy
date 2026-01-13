@@ -1778,7 +1778,7 @@ docker-infra: _ensure-docker-running ## Démarrer l'infrastructure avec Traefik 
 		$(MAKE) setup-certs; \
 	fi
 	@echo "$(BLUE)🐳 Démarrage de l'infrastructure avec HTTPS (Traefik + MongoDB + Redis)...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL) up -d
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) up -d --force-recreate --remove-orphans
 	@echo "$(GREEN)✅ Infrastructure démarrée$(NC)"
 	@echo ""
 	@echo "$(BLUE)📍 Services:$(NC)"
@@ -1857,7 +1857,7 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo ""
 	@# Démarrer avec le profil full (tous les services)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Docker...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d --remove-orphans
+	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full up -d --force-recreate --remove-orphans
 	@echo ""
 	@echo "$(GREEN)✅ Services démarrés avec accès réseau$(NC)"
 	@echo ""

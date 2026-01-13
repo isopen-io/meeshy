@@ -152,11 +152,11 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
           });
         }
 
+        // Query User for Signal Protocol keys
         const user = await fastify.prisma.user.findUnique({
           where: { id: authContext.userId },
           select: {
             id: true,
-            encryptionPreference: true,
             signalIdentityKeyPublic: true,
             signalRegistrationId: true,
             signalPreKeyBundleVersion: true,
@@ -171,10 +171,16 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
           });
         }
 
+        // Query UserFeature for encryptionPreference
+        const userFeature = await fastify.prisma.userFeature.findUnique({
+          where: { userId: authContext.userId },
+          select: { encryptionPreference: true }
+        });
+
         return reply.send({
           success: true,
           data: {
-            encryptionPreference: user.encryptionPreference || 'optional',
+            encryptionPreference: userFeature?.encryptionPreference || 'optional',
             hasSignalKeys: !!user.signalIdentityKeyPublic,
             signalRegistrationId: user.signalRegistrationId,
             signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
@@ -264,16 +270,12 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
           });
         }
 
-        // Update user preference
-        const updatedUser = await fastify.prisma.user.update({
-          where: { id: authContext.userId },
-          data: {
-            encryptionPreference,
-          },
-          select: {
-            id: true,
-            encryptionPreference: true,
-          }
+        // Update UserFeature (upsert to handle case where UserFeature doesn't exist yet)
+        const updatedUserFeature = await fastify.prisma.userFeature.upsert({
+          where: { userId: authContext.userId },
+          update: { encryptionPreference },
+          create: { userId: authContext.userId, encryptionPreference },
+          select: { encryptionPreference: true }
         });
 
         console.log(`[UserEncryptionPreferences] User ${authContext.userId} updated encryption preference to ${encryptionPreference}`);
@@ -281,7 +283,7 @@ export default async function userEncryptionPreferencesRoutes(fastify: FastifyIn
         return reply.send({
           success: true,
           data: {
-            encryptionPreference: updatedUser.encryptionPreference,
+            encryptionPreference: updatedUserFeature.encryptionPreference,
           },
           message: 'Encryption preference updated successfully'
         });

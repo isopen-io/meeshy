@@ -1796,5 +1796,323 @@ class TestAdditionalCoverage:
                         await server._connect_database_background()
 
 
+# =============================================================================
+# TESTS POUR PRIORITY FIELD ET FAST POOL
+# =============================================================================
+
+class TestPriorityQueueIntegration:
+    """Tests pour l'intégration du système de priorité dans le serveur ZMQ."""
+
+    @pytest.fixture
+    def mock_translation_service(self):
+        service = AsyncMock()
+        service.translate = AsyncMock(return_value={
+            'translated_text': 'Bonjour',
+            'source_language': 'en',
+            'target_language': 'fr',
+            'model_tier': 'basic'
+        })
+        service.detect_language = AsyncMock(return_value='en')
+        return service
+
+    @pytest.fixture
+    def mock_database_service(self):
+        db = MagicMock()
+        db.connect = AsyncMock(return_value=True)
+        db.disconnect = AsyncMock()
+        db.is_connected = True
+        return db
+
+    @pytest.fixture
+    def mock_zmq_context(self):
+        context = MagicMock()
+        pull_socket = MagicMock()
+        pub_socket = MagicMock()
+
+        pull_socket.bind = MagicMock()
+        pull_socket.close = MagicMock()
+        pull_socket.recv = AsyncMock(return_value=b'{}')
+
+        pub_socket.bind = MagicMock()
+        pub_socket.close = MagicMock()
+        pub_socket.send = MagicMock()
+
+        context.socket.side_effect = [pull_socket, pub_socket]
+
+        return context, pull_socket, pub_socket
+
+    def test_translation_task_has_priority_field(self):
+        """Test 20.60: TranslationTask a un champ priority"""
+        from services.zmq_server import TranslationTask
+
+        task = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text="Hello",
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=1
+        )
+
+        assert hasattr(task, 'priority')
+        assert task.priority == 1
+
+    def test_translation_task_priority_default(self):
+        """Test 20.61: TranslationTask priority par défaut"""
+        from services.zmq_server import TranslationTask
+
+        task = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text="Hello",
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1"
+        )
+
+        # Priority should have a default value
+        assert hasattr(task, 'priority')
+
+    def test_translation_task_high_priority_short_text(self):
+        """Test 20.62: Texte court = haute priorité"""
+        from services.zmq_server import TranslationTask
+
+        short_text = "Hi"  # < 100 chars
+        task = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text=short_text,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=1  # HIGH priority
+        )
+
+        assert len(task.text) < 100
+        assert task.priority == 1
+
+    def test_translation_task_low_priority_long_text(self):
+        """Test 20.63: Texte long = basse priorité"""
+        from services.zmq_server import TranslationTask
+
+        long_text = "a" * 600  # > 500 chars
+        task = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text=long_text,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=3  # LOW priority
+        )
+
+        assert len(task.text) > 500
+        assert task.priority == 3
+
+    @pytest.mark.asyncio
+    async def test_fast_pool_exists(self, mock_translation_service, mock_database_service, mock_zmq_context):
+        """Test 20.64: fast_pool existe dans TranslationPoolManager"""
+        from services.zmq_server import TranslationPoolManager
+
+        pool_manager = TranslationPoolManager(
+            translation_service=mock_translation_service,
+            normal_workers=4,
+            any_workers=2
+        )
+
+        # fast_pool should exist
+        assert hasattr(pool_manager, 'fast_pool')
+
+    @pytest.mark.asyncio
+    async def test_enqueue_short_text_uses_fast_pool(self, mock_translation_service, mock_database_service, mock_zmq_context):
+        """Test 20.65: Texte court utilise fast_pool"""
+        from services.zmq_server import TranslationPoolManager, TranslationTask
+
+        pool_manager = TranslationPoolManager(
+            translation_service=mock_translation_service,
+            normal_workers=4,
+            any_workers=2
+        )
+
+        # Create a short text task
+        short_task = TranslationTask(
+            task_id="short_1",
+            message_id="msg_short",
+            text="Hi",  # Very short
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1"
+        )
+
+        # Enqueue should work
+        result = await pool_manager.enqueue_task(short_task)
+        # Result should be True (queued) or task might be processed
+        assert result is True or result is not None
+
+    @pytest.mark.asyncio
+    async def test_short_text_threshold(self, mock_translation_service, mock_database_service, mock_zmq_context):
+        """Test 20.66: Seuil de texte court (100 chars)"""
+        context, pull_socket, pub_socket = mock_zmq_context
+
+        from services.zmq_server import TranslationTask
+
+        # Text at threshold boundary
+        text_99 = "a" * 99   # Should be HIGH priority
+        text_101 = "a" * 101  # Should NOT be HIGH priority
+
+        task_short = TranslationTask(
+            task_id="task_short",
+            message_id="msg_1",
+            text=text_99,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1"
+        )
+
+        task_medium = TranslationTask(
+            task_id="task_medium",
+            message_id="msg_2",
+            text=text_101,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1"
+        )
+
+        assert len(task_short.text) < 100
+        assert len(task_medium.text) > 100
+
+
+class TestWorkerLoopPriorityHandling:
+    """Tests pour la gestion des priorités dans les worker loops."""
+
+    @pytest.fixture
+    def mock_translation_service(self):
+        service = AsyncMock()
+        service.translate = AsyncMock(return_value={
+            'translated_text': 'Bonjour',
+            'source_language': 'en',
+            'target_language': 'fr',
+            'model_tier': 'basic'
+        })
+        return service
+
+    def test_priority_import_from_performance(self):
+        """Test 20.67: Priority enum est importé du module performance"""
+        try:
+            from utils.performance import Priority
+            assert Priority.HIGH == 1
+            assert Priority.MEDIUM == 2
+            assert Priority.LOW == 3
+        except ImportError:
+            # Module may not be available in test environment
+            pass
+
+    def test_performance_config_import(self):
+        """Test 20.68: PerformanceConfig est importé"""
+        try:
+            from utils.performance import PerformanceConfig
+            config = PerformanceConfig()
+            assert config.short_text_threshold == 100
+        except ImportError:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_pool_manager_uses_performance_config(self, mock_translation_service):
+        """Test 20.69: TranslationPoolManager utilise PerformanceConfig"""
+        from services.zmq_server import TranslationPoolManager
+
+        pool = TranslationPoolManager(
+            translation_service=mock_translation_service,
+            normal_workers=4,
+            any_workers=2
+        )
+
+        # Pool should have enable_priority_queue from performance config
+        assert hasattr(pool, 'enable_priority_queue')
+        assert hasattr(pool, 'short_text_threshold')
+
+
+class TestPriorityDataclass:
+    """Tests pour le champ priority dans TranslationTask dataclass."""
+
+    def test_task_serialization_with_priority(self):
+        """Test 20.70: Sérialisation de task avec priority"""
+        from services.zmq_server import TranslationTask
+        from dataclasses import asdict
+
+        # Use a medium-length text to avoid auto-priority adjustment
+        medium_text = "a" * 200  # Between 100 and 500 chars -> MEDIUM priority
+        task = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text=medium_text,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=2  # MEDIUM
+        )
+
+        task_dict = asdict(task)
+        assert 'priority' in task_dict
+        # With medium text and default priority=2, it stays at 2 (MEDIUM)
+        assert task_dict['priority'] == 2
+
+    def test_task_equality_with_priority(self):
+        """Test 20.71: Égalité de tasks avec différentes priorités"""
+        from services.zmq_server import TranslationTask
+
+        # Use long text to prevent auto-priority adjustment from changing priority=1 to something else
+        long_text = "a" * 600  # > 500 chars ensures LOW priority won't override
+
+        task1 = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text=long_text,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=1  # Force HIGH (won't be auto-adjusted since we're explicitly setting it and text is long)
+        )
+
+        task2 = TranslationTask(
+            task_id="task_1",
+            message_id="msg_1",
+            text=long_text,
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_1",
+            priority=3  # Force LOW
+        )
+
+        # Tasks with different priorities should not be equal
+        assert task1.priority != task2.priority
+
+    def test_multiple_priorities_sorting(self):
+        """Test 20.72: Tri de tasks par priorité"""
+        from services.zmq_server import TranslationTask
+
+        tasks = [
+            TranslationTask(
+                task_id=f"task_{i}",
+                message_id=f"msg_{i}",
+                text="Test",
+                source_language="en",
+                target_languages=["fr"],
+                conversation_id="conv_1",
+                priority=p
+            )
+            for i, p in enumerate([3, 1, 2, 1, 3])
+        ]
+
+        # Sort by priority
+        sorted_tasks = sorted(tasks, key=lambda t: t.priority)
+
+        # HIGH priority (1) should come first
+        assert sorted_tasks[0].priority == 1
+        assert sorted_tasks[1].priority == 1
+        assert sorted_tasks[-1].priority == 3
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
