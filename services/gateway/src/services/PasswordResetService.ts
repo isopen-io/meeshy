@@ -612,8 +612,8 @@ export class PasswordResetService {
     const errors: string[] = [];
 
     // Basic requirements
-    if (password.length < 12) {
-      errors.push('minimum 12 characters');
+    if (password.length < 8) {
+      errors.push('minimum 8 characters');
     }
 
     if (!/[a-z]/.test(password)) {

@@ -27,9 +27,9 @@ export function PasswordRequirementsChecklist({
     const reqs = [
       {
         id: 'minLength',
-        label: t('resetPassword.requirements.minLength') || 'At least 12 characters',
-        test: (pwd: string) => pwd.length >= 12,
-        met: password.length >= 12,
+        label: t('resetPassword.requirements.minLength') || 'At least 8 characters',
+        test: (pwd: string) => pwd.length >= 8,
+        met: password.length >= 8,
       },
       {
         id: 'uppercase',

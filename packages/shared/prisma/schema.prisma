@@ -144,8 +144,9 @@ model User {
   conversationCategories UserConversationCategory[]
   communityPrefs         UserCommunityPreferences[]
 
-  // Password Reset Relations
+  // Password Reset & Magic Link Relations
   passwordResetTokens PasswordResetToken[]
+  magicLinkTokens     MagicLinkToken[]
   passwordHistory     PasswordHistory[]
   securityEvents      SecurityEvent[]
   sessions            UserSession[]
@@ -1711,6 +1712,38 @@ model PasswordResetToken {
   revokedReason String? // "MANUAL" | "SUSPICIOUS_ACTIVITY" | "PASSWORD_CHANGED" | "NEW_REQUEST"
 
   /// Request Metadata (for anomaly detection)
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  geoLocation       String? // "City, Country"
+  geoCoordinates    String? // "lat,lon"
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+/// Magic Link Token - Stores hashed tokens for passwordless login
+/// Token expires after 1 minute for security
+model MagicLinkToken {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// SHA-256 hash of the token (NOT the token itself)
+  tokenHash String @unique
+
+  /// Expiry & Usage
+  expiresAt     DateTime // 1 minute from creation
+  usedAt        DateTime? // Null if not used yet
+  isRevoked     Boolean   @default(false)
+  revokedReason String? // "MANUAL" | "EXPIRED" | "NEW_REQUEST"
+
+  /// Request Metadata (for security audit)
   ipAddress         String?
   userAgent         String?
   deviceFingerprint String?

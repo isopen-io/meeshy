@@ -580,17 +580,17 @@ describe('PasswordResetService', () => {
         expect(result.error).toBe('Passwords do not match');
       });
 
-      it('should reject password shorter than 12 characters', async () => {
+      it('should reject password shorter than 8 characters', async () => {
         mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
 
         const result = await service.completePasswordReset({
           ...validResetCompletion,
-          newPassword: 'Short1!',
-          confirmPassword: 'Short1!'
+          newPassword: 'Sh1!',
+          confirmPassword: 'Sh1!'
         });
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('minimum 12 characters');
+        expect(result.error).toContain('minimum 8 characters');
       });
 
       it('should reject password without lowercase letter', async () => {
