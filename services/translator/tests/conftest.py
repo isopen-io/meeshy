@@ -66,15 +66,19 @@ def _setup_module_mocks():
         mock_psutil.cpu_count = MagicMock(return_value=8)
         sys.modules['psutil'] = mock_psutil
 
-    # Mock httpx module
-    if 'httpx' not in sys.modules:
-        mock_httpx = MagicMock()
-        mock_httpx.AsyncClient = MagicMock()
-        mock_httpx.Client = MagicMock()
-        mock_httpx.HTTPError = Exception
-        mock_httpx.RequestError = Exception
-        mock_httpx.TimeoutException = Exception
-        sys.modules['httpx'] = mock_httpx
+    # Mock httpx module - only if not installed
+    try:
+        import httpx
+        # httpx is installed, don't mock it
+    except ImportError:
+        if 'httpx' not in sys.modules:
+            mock_httpx = MagicMock()
+            mock_httpx.AsyncClient = MagicMock()
+            mock_httpx.Client = MagicMock()
+            mock_httpx.HTTPError = Exception
+            mock_httpx.RequestError = Exception
+            mock_httpx.TimeoutException = Exception
+            sys.modules['httpx'] = mock_httpx
 
     # Mock prisma module
     if 'prisma' not in sys.modules:
@@ -102,35 +106,43 @@ def _setup_module_mocks():
         sys.modules['redis'] = mock_redis
         sys.modules['redis.asyncio'] = mock_redis.asyncio
 
-    # Mock fastapi module
-    if 'fastapi' not in sys.modules:
-        mock_fastapi = MagicMock()
-        mock_fastapi.FastAPI = MagicMock()
-        mock_fastapi.APIRouter = MagicMock()
-        mock_fastapi.Request = MagicMock()
-        mock_fastapi.Response = MagicMock()
-        mock_fastapi.HTTPException = Exception
-        mock_fastapi.Depends = MagicMock()
-        mock_fastapi.Body = MagicMock()
-        mock_fastapi.Query = MagicMock()
-        mock_fastapi.Path = MagicMock()
-        mock_fastapi.File = MagicMock()
-        mock_fastapi.UploadFile = MagicMock()
-        mock_fastapi.Form = MagicMock()
-        mock_fastapi.BackgroundTasks = MagicMock()
-        sys.modules['fastapi'] = mock_fastapi
-        sys.modules['fastapi.responses'] = MagicMock()
-        sys.modules['fastapi.middleware'] = MagicMock()
-        sys.modules['fastapi.middleware.cors'] = MagicMock()
+    # Mock fastapi module - only if not installed
+    try:
+        import fastapi
+        # FastAPI is installed, don't mock it
+    except ImportError:
+        if 'fastapi' not in sys.modules:
+            mock_fastapi = MagicMock()
+            mock_fastapi.FastAPI = MagicMock()
+            mock_fastapi.APIRouter = MagicMock()
+            mock_fastapi.Request = MagicMock()
+            mock_fastapi.Response = MagicMock()
+            mock_fastapi.HTTPException = Exception
+            mock_fastapi.Depends = MagicMock()
+            mock_fastapi.Body = MagicMock()
+            mock_fastapi.Query = MagicMock()
+            mock_fastapi.Path = MagicMock()
+            mock_fastapi.File = MagicMock()
+            mock_fastapi.UploadFile = MagicMock()
+            mock_fastapi.Form = MagicMock()
+            mock_fastapi.BackgroundTasks = MagicMock()
+            sys.modules['fastapi'] = mock_fastapi
+            sys.modules['fastapi.responses'] = MagicMock()
+            sys.modules['fastapi.middleware'] = MagicMock()
+            sys.modules['fastapi.middleware.cors'] = MagicMock()
 
-    # Mock pydantic module
-    if 'pydantic' not in sys.modules:
-        mock_pydantic = MagicMock()
-        mock_pydantic.BaseModel = type('BaseModel', (), {})
-        mock_pydantic.Field = MagicMock()
-        mock_pydantic.validator = MagicMock()
-        mock_pydantic.root_validator = MagicMock()
-        sys.modules['pydantic'] = mock_pydantic
+    # Mock pydantic module - only if not installed
+    try:
+        import pydantic
+        # Pydantic is installed, don't mock it
+    except ImportError:
+        if 'pydantic' not in sys.modules:
+            mock_pydantic = MagicMock()
+            mock_pydantic.BaseModel = type('BaseModel', (), {})
+            mock_pydantic.Field = MagicMock()
+            mock_pydantic.validator = MagicMock()
+            mock_pydantic.root_validator = MagicMock()
+            sys.modules['pydantic'] = mock_pydantic
 
     # Mock transformers module
     if 'transformers' not in sys.modules:
