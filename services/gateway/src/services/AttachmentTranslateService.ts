@@ -25,6 +25,12 @@ export interface TranslateOptions {
   async?: boolean;
   webhookUrl?: string;
   priority?: number;
+
+  /**
+   * Pour les transferts: utiliser la voix de l'émetteur ORIGINAL (pas le forwarder)
+   * Par défaut: true (utilise toujours la voix originale)
+   */
+  useOriginalVoice?: boolean;
 }
 
 export interface AsyncJobSubmitResult {
@@ -227,25 +233,125 @@ export class AttachmentTranslateService {
     attachment: any,
     options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
+    // =========================================================================
+    // 1. TROUVER L'ATTACHEMENT ORIGINAL ET L'ÉMETTEUR ORIGINAL
+    // =========================================================================
+
+    // Trouver l'attachement original en cas de transferts multiples (A → B → C → D)
+    const { originalAttachmentId, originalSenderId } = await this._findOriginalAttachmentAndSender(attachment.id);
+
+    // L'utilisateur dont la voix sera utilisée (par défaut: émetteur original)
+    const useOriginalVoice = options.useOriginalVoice !== false; // true par défaut
+    const voiceUserId = useOriginalVoice && originalSenderId ? originalSenderId : userId;
+
+    // =========================================================================
+    // 2. RÉCUPÉRER LE PROFIL VOCAL DE L'ÉMETTEUR ORIGINAL (si disponible)
+    // =========================================================================
+
+    const voiceProfile = await this._getVoiceProfile(voiceUserId);
+
+    // =========================================================================
+    // 3. VÉRIFIER LES TRADUCTIONS EXISTANTES (cache/réutilisation)
+    // =========================================================================
+
+    // Récupérer les traductions existantes de l'attachement ORIGINAL
+    const existingTranslations = await this.prisma.messageTranslatedAudio.findMany({
+      where: { attachmentId: originalAttachmentId },
+      select: { targetLanguage: true, translatedText: true, audioUrl: true, audioPath: true, durationMs: true, voiceCloned: true, voiceQuality: true }
+    });
+
+    const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
+
+    // Filtrer les langues qui ne sont pas encore traduites
+    const languagesToTranslate = options.targetLanguages.filter(lang => !existingLanguages.has(lang));
+
+    const isForwarded = attachment.isForwarded || attachment.forwardedFromAttachmentId;
+
+    console.log(`[AttachmentTranslateService] 🎤 Audio ${attachment.id}`);
+    console.log(`   📦 Original attachment: ${originalAttachmentId}${isForwarded ? ' (forwarded)' : ''}`);
+    console.log(`   👤 Original sender: ${originalSenderId || 'unknown'}`);
+    console.log(`   🎙️ Voice profile: ${voiceUserId}${voiceProfile ? ' (loaded from DB)' : ' (will be created)'}`);
+    console.log(`   ✅ Déjà traduit: [${Array.from(existingLanguages).join(', ')}]`);
+    console.log(`   🔄 À traduire: [${languagesToTranslate.join(', ')}]`);
+
+    // =========================================================================
+    // 2. SI TOUTES LES LANGUES SONT DÉJÀ TRADUITES, RETOURNER LE CACHE
+    // =========================================================================
+
+    if (languagesToTranslate.length === 0) {
+      console.log(`   ⚡ Cache HIT - Toutes les langues déjà traduites`);
+
+      // Si c'est un transfert, copier les traductions de l'original vers le nouvel attachement
+      if (isForwarded && attachment.id !== originalAttachmentId) {
+        await this._copyTranslationsForForward(originalAttachmentId, attachment.id, attachment.message?.id);
+      }
+
+      // Construire la réponse à partir du cache
+      const cachedResult: AudioTranslationResult = {
+        translationId: `cached_${attachment.id}`,
+        originalAudio: {
+          transcription: '', // Sera rempli si on a la transcription
+          language: options.sourceLanguage || 'auto',
+          durationMs: attachment.duration || 0,
+          confidence: 1.0
+        },
+        translations: existingTranslations
+          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .map(t => ({
+            targetLanguage: t.targetLanguage,
+            translatedText: t.translatedText,
+            audioUrl: t.audioUrl,
+            durationMs: t.durationMs,
+            voiceCloned: t.voiceCloned,
+            voiceQuality: t.voiceQuality
+          })),
+        processingTimeMs: 0
+      };
+
+      return {
+        success: true,
+        data: {
+          type: 'audio',
+          attachmentId: attachment.id,
+          result: cachedResult
+        }
+      };
+    }
+
+    // =========================================================================
+    // 3. TRADUIRE LES LANGUES MANQUANTES
+    // =========================================================================
+
+    console.log(`   🚀 Envoi au Translator pour ${languagesToTranslate.length} langues`);
+
     // Read audio file
     const audioBuffer = await this.readAttachmentFile(attachment.filePath);
     const audioBase64 = audioBuffer.toString('base64');
 
-    // Translate via AudioTranslateService
+    // Translate via AudioTranslateService (seulement les langues manquantes)
+    // Transmettre le profil vocal de l'émetteur original pour le clonage vocal
     const result = options.async
       ? await this.audioTranslateService.translateAsync(userId, {
           audioBase64,
-          targetLanguages: options.targetLanguages,
+          targetLanguages: languagesToTranslate, // Seulement les nouvelles langues
           sourceLanguage: options.sourceLanguage,
           generateVoiceClone: options.generateVoiceClone,
           webhookUrl: options.webhookUrl,
-          priority: options.priority
+          priority: options.priority,
+          // Voice profile options (pour messages transférés - voix de l'émetteur original)
+          originalSenderId: originalSenderId || undefined,
+          existingVoiceProfile: voiceProfile || undefined,
+          useOriginalVoice
         })
       : await this.audioTranslateService.translateSync(userId, {
           audioBase64,
-          targetLanguages: options.targetLanguages,
+          targetLanguages: languagesToTranslate, // Seulement les nouvelles langues
           sourceLanguage: options.sourceLanguage,
-          generateVoiceClone: options.generateVoiceClone
+          generateVoiceClone: options.generateVoiceClone,
+          // Voice profile options (pour messages transférés - voix de l'émetteur original)
+          originalSenderId: originalSenderId || undefined,
+          existingVoiceProfile: voiceProfile || undefined,
+          useOriginalVoice
         });
 
     if (!result.success) {
@@ -256,6 +362,27 @@ export class AttachmentTranslateService {
       };
     }
 
+    // =========================================================================
+    // 4. MERGER LE CACHE + NOUVELLES TRADUCTIONS
+    // =========================================================================
+
+    // Si on a aussi des traductions en cache, les ajouter au résultat
+    if (existingTranslations.length > 0 && result.data && 'translations' in result.data) {
+      const fullResult = result.data as AudioTranslationResult;
+      const cachedForRequest = existingTranslations
+        .filter(t => options.targetLanguages.includes(t.targetLanguage))
+        .map(t => ({
+          targetLanguage: t.targetLanguage,
+          translatedText: t.translatedText,
+          audioUrl: t.audioUrl,
+          durationMs: t.durationMs,
+          voiceCloned: t.voiceCloned,
+          voiceQuality: t.voiceQuality
+        }));
+
+      fullResult.translations = [...fullResult.translations, ...cachedForRequest];
+    }
+
     return {
       success: true,
       data: {
@@ -264,6 +391,190 @@ export class AttachmentTranslateService {
         result: result.data!
       }
     };
+  }
+
+  /**
+   * Trouve l'attachement ORIGINAL et son ÉMETTEUR en traversant la chaîne de transferts.
+   *
+   * Exemple: Si A → B → C → D (D est transféré de C, qui est transféré de B, qui est transféré de A)
+   * Cette méthode retourne { originalAttachmentId: A.id, originalSenderId: sender_of_A }
+   *
+   * @param attachmentId - ID de l'attachement courant
+   * @returns { originalAttachmentId, originalSenderId }
+   */
+  private async _findOriginalAttachmentAndSender(attachmentId: string): Promise<{
+    originalAttachmentId: string;
+    originalSenderId: string | null;
+  }> {
+    const MAX_CHAIN_DEPTH = 10; // Protection contre les boucles infinies
+    let currentId = attachmentId;
+    let depth = 0;
+
+    while (depth < MAX_CHAIN_DEPTH) {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: currentId },
+        select: {
+          forwardedFromAttachmentId: true,
+          message: {
+            select: { senderId: true }
+          }
+        }
+      });
+
+      // Si pas d'attachement ou pas de parent → on a trouvé l'original
+      if (!attachment || !attachment.forwardedFromAttachmentId) {
+        return {
+          originalAttachmentId: currentId,
+          originalSenderId: attachment?.message?.senderId || null
+        };
+      }
+
+      // Remonter au parent
+      currentId = attachment.forwardedFromAttachmentId;
+      depth++;
+    }
+
+    console.warn(`[AttachmentTranslateService] ⚠️ Chaîne de transferts trop longue (>${MAX_CHAIN_DEPTH})`);
+
+    // Récupérer le senderId du dernier attachement atteint
+    const lastAttachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: currentId },
+      select: { message: { select: { senderId: true } } }
+    });
+
+    return {
+      originalAttachmentId: currentId,
+      originalSenderId: lastAttachment?.message?.senderId || null
+    };
+  }
+
+  /**
+   * Récupère le profil vocal d'un utilisateur depuis MongoDB.
+   * Ce profil sera envoyé à Translator pour éviter de le recréer.
+   *
+   * @param userId - ID de l'utilisateur
+   * @returns Profil vocal ou null si inexistant
+   */
+  private async _getVoiceProfile(userId: string): Promise<{
+    profileId: string;
+    userId: string;
+    embedding: string;
+    qualityScore: number;
+    fingerprint?: Record<string, any>;
+    voiceCharacteristics?: Record<string, any>;
+    version: number;
+    audioCount: number;
+    totalDurationMs: number;
+  } | null> {
+    try {
+      const voiceModel = await this.prisma.userVoiceModel.findUnique({
+        where: { userId },
+        select: {
+          profileId: true,
+          embedding: true,
+          qualityScore: true,
+          fingerprint: true,
+          voiceCharacteristics: true,
+          version: true,
+          audioCount: true,
+          totalDurationMs: true
+        }
+      });
+
+      if (!voiceModel || !voiceModel.embedding) {
+        return null;
+      }
+
+      return {
+        profileId: voiceModel.profileId || `vfp_${userId}`,
+        userId,
+        embedding: voiceModel.embedding.toString('base64'), // Bytes → Base64
+        qualityScore: voiceModel.qualityScore,
+        fingerprint: voiceModel.fingerprint as Record<string, any> | undefined,
+        voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | undefined,
+        version: voiceModel.version,
+        audioCount: voiceModel.audioCount,
+        totalDurationMs: voiceModel.totalDurationMs
+      };
+    } catch (error) {
+      console.error(`[AttachmentTranslateService] Error fetching voice profile: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Copie les traductions ET la transcription d'un attachement source vers un transféré.
+   * Les fichiers audio ne sont PAS dupliqués - on référence les mêmes URLs.
+   *
+   * IMPORTANT: Ceci préserve les traductions existantes sans retraduire.
+   * Pour les nouvelles langues demandées, elles seront traitées avec le profil vocal
+   * du forwarder (userId actuel) et non de l'émetteur original.
+   */
+  private async _copyTranslationsForForward(
+    originalAttachmentId: string,
+    targetAttachmentId: string,
+    targetMessageId?: string
+  ): Promise<void> {
+    try {
+      // 1. Copier la transcription si elle existe
+      const sourceTranscription = await this.prisma.messageAudioTranscription.findUnique({
+        where: { attachmentId: originalAttachmentId }
+      });
+
+      if (sourceTranscription && targetMessageId) {
+        await this.prisma.messageAudioTranscription.upsert({
+          where: { attachmentId: targetAttachmentId },
+          update: {}, // Pas de mise à jour si existe déjà
+          create: {
+            attachmentId: targetAttachmentId,
+            messageId: targetMessageId,
+            transcribedText: sourceTranscription.transcribedText,
+            language: sourceTranscription.language,
+            confidence: sourceTranscription.confidence,
+            source: `forwarded:${sourceTranscription.source}`, // Marquer comme forwarded
+            segments: sourceTranscription.segments,
+            audioDurationMs: sourceTranscription.audioDurationMs,
+            speakerCount: sourceTranscription.speakerCount,
+            primarySpeakerId: sourceTranscription.primarySpeakerId,
+            speakersAnalysis: sourceTranscription.speakersAnalysis
+          }
+        });
+        console.log(`   📝 Transcription copiée depuis l'original`);
+      }
+
+      // 2. Copier les traductions audio
+      const sourceTranslations = await this.prisma.messageTranslatedAudio.findMany({
+        where: { attachmentId: originalAttachmentId }
+      });
+
+      for (const translation of sourceTranslations) {
+        await this.prisma.messageTranslatedAudio.upsert({
+          where: {
+            attachmentId_targetLanguage: {
+              attachmentId: targetAttachmentId,
+              targetLanguage: translation.targetLanguage
+            }
+          },
+          update: {}, // Pas de mise à jour si existe déjà
+          create: {
+            attachmentId: targetAttachmentId,
+            messageId: targetMessageId || translation.messageId,
+            targetLanguage: translation.targetLanguage,
+            translatedText: translation.translatedText,
+            audioPath: translation.audioPath, // Référence le même fichier
+            audioUrl: translation.audioUrl,   // Référence la même URL
+            durationMs: translation.durationMs,
+            voiceCloned: translation.voiceCloned,
+            voiceQuality: translation.voiceQuality,
+            voiceModelId: translation.voiceModelId
+          }
+        });
+      }
+
+      console.log(`   📋 Copied ${sourceTranslations.length} audio translations for forwarded attachment`);
+    } catch (error) {
+      console.error(`[AttachmentTranslateService] Error copying translations: ${error}`);
+    }
   }
 
   private async translateImage(

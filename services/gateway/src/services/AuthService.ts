@@ -47,6 +47,8 @@ export interface AuthResult {
   user: SocketIOUser;
   sessionToken: string;
   session: SessionData;
+  requires2FA?: boolean; // True if 2FA verification is needed
+  twoFactorToken?: string; // Temporary token for 2FA flow
 }
 
 export class AuthService {
@@ -109,6 +111,18 @@ export class AuthService {
             { phoneNumber: normalizedPhone }
           ],
           isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
         }
       });
 
@@ -128,6 +142,46 @@ export class AuthService {
 
       console.log('[AUTH_SERVICE] ✅ Mot de passe valide pour:', user.username);
 
+      // Check if 2FA is enabled
+      if (user.userFeature?.twoFactorEnabledAt) {
+        console.log('[AUTH_SERVICE] 🔐 2FA activé pour:', user.username, '- Génération du token temporaire');
+
+        // Generate a temporary token for 2FA verification
+        const twoFactorToken = crypto.randomBytes(32).toString('hex');
+        const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+
+        // Store the temporary token (expires in 5 minutes)
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            // Store hash of the token for security
+            phoneVerificationCode: twoFactorTokenHash, // Reusing this field temporarily
+            phoneVerificationExpiry: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+          }
+        });
+
+        // Return partial auth result requiring 2FA
+        const socketIOUser = this.userToSocketIOUser(user);
+        return {
+          user: socketIOUser,
+          sessionToken: '', // No session token until 2FA verified
+          session: {
+            id: '',
+            userId: user.id,
+            deviceType: requestContext?.deviceInfo?.type || 'desktop',
+            browserName: requestContext?.deviceInfo?.browser || null,
+            osName: requestContext?.deviceInfo?.os || null,
+            location: requestContext?.geoData?.location || null,
+            isMobile: requestContext?.deviceInfo?.type === 'mobile',
+            createdAt: new Date(),
+            lastActivityAt: new Date()
+          } as SessionData,
+          requires2FA: true,
+          twoFactorToken // Return the raw token to the client
+        };
+      }
+
+      // No 2FA - proceed with normal login
       // Mettre à jour la dernière connexion avec contexte
       await this.prisma.user.update({
         where: { id: user.id },
@@ -177,7 +231,8 @@ export class AuthService {
       return {
         user: socketIOUser,
         sessionToken,
-        session
+        session,
+        requires2FA: false
       };
 
     } catch (error) {
@@ -186,6 +241,138 @@ export class AuthService {
         console.error('[AUTH_SERVICE] Détails:', error.message, error.stack);
       }
       return null;
+    }
+  }
+
+  /**
+   * Complete authentication with 2FA code
+   * Called after initial authenticate() returned requires2FA: true
+   * @param twoFactorToken - The temporary token from initial auth
+   * @param code - The 2FA code (TOTP or backup code)
+   * @param requestContext - Request context for session creation
+   */
+  async completeAuthWith2FA(
+    twoFactorToken: string,
+    code: string,
+    requestContext?: RequestContext
+  ): Promise<AuthResult | { success: false; error: string }> {
+    try {
+      // Hash the token to compare with stored value
+      const tokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+
+      // Find user with matching token
+      const user = await this.prisma.user.findFirst({
+        where: {
+          phoneVerificationCode: tokenHash,
+          phoneVerificationExpiry: { gt: new Date() },
+          isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
+        }
+      });
+
+      if (!user) {
+        console.warn('[AUTH_SERVICE] ❌ Token 2FA invalide ou expiré');
+        return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
+
+      // Verify 2FA code
+      const cleanCode = code.replace(/-/g, '').toUpperCase();
+      let isValid = false;
+      let usedBackupCode = false;
+
+      // Try TOTP code first (6 digits)
+      if (/^\d{6}$/.test(cleanCode) && user.twoFactorSecret) {
+        const speakeasy = await import('speakeasy');
+        isValid = speakeasy.default.totp.verify({
+          secret: user.twoFactorSecret,
+          encoding: 'base32',
+          token: cleanCode,
+          window: 1
+        });
+      }
+
+      // Try backup code if TOTP failed (8 alphanumeric chars)
+      if (!isValid && /^[A-Z0-9]{8}$/.test(cleanCode)) {
+        const backupCodeHash = crypto.createHash('sha256').update(cleanCode).digest('hex');
+        const backupCodeIndex = user.twoFactorBackupCodes.indexOf(backupCodeHash);
+
+        if (backupCodeIndex !== -1) {
+          // Remove used backup code
+          const updatedCodes = [...user.twoFactorBackupCodes];
+          updatedCodes.splice(backupCodeIndex, 1);
+
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { twoFactorBackupCodes: updatedCodes }
+          });
+
+          isValid = true;
+          usedBackupCode = true;
+          console.log('[AUTH_SERVICE] 🔑 Code de secours utilisé pour:', user.username, '- Restants:', updatedCodes.length);
+        }
+      }
+
+      if (!isValid) {
+        console.warn('[AUTH_SERVICE] ❌ Code 2FA invalide pour:', user.username);
+        return { success: false, error: 'Code 2FA invalide' };
+      }
+
+      console.log('[AUTH_SERVICE] ✅ Code 2FA valide pour:', user.username);
+
+      // Clear the temporary token and complete login
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          phoneVerificationCode: null,
+          phoneVerificationExpiry: null,
+          isOnline: true,
+          lastActiveAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
+      });
+
+      // Create full session
+      const socketIOUser = this.userToSocketIOUser(user);
+      const sessionToken = generateSessionToken();
+      const defaultContext: RequestContext = {
+        ip: '127.0.0.1',
+        userAgent: null,
+        geoData: null,
+        deviceInfo: null
+      };
+
+      const session = await createSession({
+        userId: user.id,
+        token: sessionToken,
+        requestContext: requestContext || defaultContext
+      });
+
+      console.log('[AUTH_SERVICE] ✅ Session 2FA créée pour:', user.username, '- ID:', session.id);
+
+      return {
+        user: socketIOUser,
+        sessionToken,
+        session,
+        requires2FA: false
+      };
+
+    } catch (error) {
+      console.error('[AUTH_SERVICE] ❌ Erreur dans completeAuthWith2FA:', error);
+      return { success: false, error: 'Erreur lors de la vérification 2FA' };
     }
   }
 
@@ -386,6 +573,18 @@ export class AuthService {
         where: {
           id: userId,
           isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
         }
       });
 
@@ -818,6 +1017,7 @@ export class AuthService {
 
   /**
    * Convertir un User Prisma en SocketIOUser
+   * Note: user.userFeature doit être inclus dans la requête pour les champs de préférences
    */
   private userToSocketIOUser(user: any): SocketIOUser {
     return {
@@ -828,6 +1028,7 @@ export class AuthService {
       email: user.email,
       phoneNumber: user.phoneNumber,
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
+      bio: user.bio,
       avatar: user.avatar,
       role: user.role,
       permissions: this.getUserPermissions({
@@ -839,14 +1040,26 @@ export class AuthService {
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,
       customDestinationLanguage: user.customDestinationLanguage,
-      autoTranslateEnabled: user.autoTranslateEnabled,
-      translateToSystemLanguage: user.translateToSystemLanguage,
-      translateToRegionalLanguage: user.translateToRegionalLanguage,
-      useCustomDestination: user.useCustomDestination,
+      // Feature flags from userFeature relation (with defaults for backwards compatibility)
+      autoTranslateEnabled: user.userFeature?.autoTranslateEnabled ?? true,
+      translateToSystemLanguage: user.userFeature?.translateToSystemLanguage ?? true,
+      translateToRegionalLanguage: user.userFeature?.translateToRegionalLanguage ?? false,
+      useCustomDestination: user.userFeature?.useCustomDestination ?? false,
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,
-      updatedAt: user.updatedAt
+      updatedAt: user.updatedAt,
+      // Security & verification fields for auth responses
+      emailVerifiedAt: user.emailVerifiedAt,
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      twoFactorEnabledAt: user.userFeature?.twoFactorEnabledAt ?? null,
+      lastPasswordChange: user.lastPasswordChange,
+      // Login tracking
+      lastLoginIp: user.lastLoginIp,
+      lastLoginLocation: user.lastLoginLocation,
+      lastLoginDevice: user.lastLoginDevice,
+      // Profile metadata
+      profileCompletionRate: user.profileCompletionRate
     };
   }
 

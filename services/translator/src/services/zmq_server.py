@@ -57,9 +57,27 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ [ZMQ] VoiceProfileHandler non disponible: {e}")
 
+# Import du service de cache Redis pour traductions
+CACHE_AVAILABLE = False
+try:
+    from .redis_service import get_redis_service, get_translation_cache_service, TranslationCacheService
+    CACHE_AVAILABLE = True
+    logger.info("✅ [ZMQ] Cache Redis disponible")
+except ImportError as e:
+    logger.warning(f"⚠️ [ZMQ] Cache Redis non disponible: {e}")
+
+# Import des optimisations de performance
+PERFORMANCE_MODULE_AVAILABLE = False
+try:
+    from utils.performance import Priority, PerformanceConfig
+    PERFORMANCE_MODULE_AVAILABLE = True
+    logger.info("✅ [ZMQ] Module performance disponible")
+except ImportError as e:
+    logger.warning(f"⚠️ [ZMQ] Module performance non disponible: {e}")
+
 @dataclass
 class TranslationTask:
-    """Tâche de traduction avec support multi-langues"""
+    """Tâche de traduction avec support multi-langues et priorité"""
     task_id: str
     message_id: str
     text: str
@@ -68,10 +86,20 @@ class TranslationTask:
     conversation_id: str
     model_type: str = "basic"
     created_at: float = None
-    
+    priority: int = 2  # 1=HIGH (short), 2=MEDIUM, 3=LOW (long), 4=BULK
+
     def __post_init__(self):
         if self.created_at is None:
             self.created_at = time.time()
+        # Auto-assign priority based on text length if not set
+        if PERFORMANCE_MODULE_AVAILABLE and self.priority == 2:
+            text_len = len(self.text)
+            if text_len < 100:
+                self.priority = Priority.HIGH.value
+            elif text_len < 500:
+                self.priority = Priority.MEDIUM.value
+            else:
+                self.priority = Priority.LOW.value
 
 class TranslationPoolManager:
     """
@@ -107,20 +135,28 @@ class TranslationPoolManager:
           - 10-15x avec les deux combinés
     """
     
-    def __init__(self, 
+    def __init__(self,
                  normal_pool_size: int = 10000,
                  any_pool_size: int = 10000,
                  normal_workers: int = 20,  # Augmenté pour haute performance
                  any_workers: int = 10,     # Augmenté pour haute performance
                  translation_service=None,
                  enable_dynamic_scaling: bool = True):
-        
+
         # Pools FIFO séparées
         self.normal_pool = asyncio.Queue(maxsize=normal_pool_size)
         self.any_pool = asyncio.Queue(maxsize=any_pool_size)
-        
+
         # Configuration des workers avec valeurs par défaut configurables
         import os
+
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATION: Fast pool pour textes courts (haute priorité)
+        # Les textes < 100 caractères sont traités en priorité
+        # ═══════════════════════════════════════════════════════════════
+        self.fast_pool = asyncio.Queue(maxsize=5000)
+        self.enable_priority_queue = PERFORMANCE_MODULE_AVAILABLE and os.getenv("TRANSLATOR_PRIORITY_QUEUE", "true").lower() == "true"
+        self.short_text_threshold = int(os.getenv("TRANSLATOR_SHORT_TEXT_THRESHOLD", "100"))
         
         # Valeurs par défaut configurables
         self.normal_workers_default = int(os.getenv('NORMAL_WORKERS_DEFAULT', '20'))
@@ -162,7 +198,15 @@ class TranslationPoolManager:
         
         # Service de traduction partagé
         self.translation_service = translation_service
-        
+
+        # Service de cache Redis pour traductions
+        self.translation_cache = None
+        self.redis_service = None
+        if CACHE_AVAILABLE:
+            self.redis_service = get_redis_service()
+            self.translation_cache = get_translation_cache_service()
+            logger.info("[TRANSLATOR] ✅ Cache Redis initialisé pour traductions")
+
         # Statistiques avancées
         self.stats = {
             'normal_pool_size': 0,
@@ -189,15 +233,25 @@ class TranslationPoolManager:
         logger.info(f"[TRANSLATOR] Gestion dynamique des workers: {'activée' if enable_dynamic_scaling else 'désactivée'}")
     
     async def enqueue_task(self, task: TranslationTask) -> bool:
-        """Enfile une tâche dans la pool appropriée"""
+        """Enfile une tâche dans la pool appropriée avec support priorité"""
         try:
+            # ═══════════════════════════════════════════════════════════════
+            # OPTIMISATION: Textes courts → fast_pool (traités en priorité)
+            # ═══════════════════════════════════════════════════════════════
+            if self.enable_priority_queue and len(task.text) < self.short_text_threshold:
+                if not self.fast_pool.full():
+                    await self.fast_pool.put(task)
+                    logger.debug(f"⚡ Tâche {task.task_id} enfilée dans fast_pool (texte court: {len(task.text)} chars)")
+                    return True
+                # Si fast_pool pleine, continue vers les pools normales
+
             if task.conversation_id == "any":
                 # Pool spéciale pour conversation "any"
                 if self.any_pool.full():
                     logger.warning(f"Pool 'any' pleine, rejet de la tâche {task.task_id}")
                     self.stats['pool_full_rejections'] += 1
                     return False
-                
+
                 await self.any_pool.put(task)
                 self.stats['any_pool_size'] = self.any_pool.qsize()
                 logger.info(f"Tâche {task.task_id} enfilée dans pool 'any' (taille: {self.stats['any_pool_size']})")
@@ -207,13 +261,13 @@ class TranslationPoolManager:
                     logger.warning(f"Pool normale pleine, rejet de la tâche {task.task_id}")
                     self.stats['pool_full_rejections'] += 1
                     return False
-                
+
                 await self.normal_pool.put(task)
                 self.stats['normal_pool_size'] = self.normal_pool.qsize()
                 logger.info(f"Tâche {task.task_id} enfilée dans pool normale (taille: {self.stats['normal_pool_size']})")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Erreur lors de l'enfilage de la tâche {task.task_id}: {e}")
             return False
@@ -324,18 +378,31 @@ class TranslationPoolManager:
     async def _normal_worker_loop(self, worker_name: str):
         """Boucle de travail pour les workers de la pool normale avec scaling dynamique"""
         logger.info(f"Worker {worker_name} démarré")
-        
+
         while self.normal_workers_running:
             try:
                 # Vérifier le scaling dynamique
                 await self._dynamic_scaling_check()
-                
-                # Attendre une tâche avec timeout
-                try:
-                    task = await asyncio.wait_for(self.normal_pool.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
-                
+
+                # ═══════════════════════════════════════════════════════════════
+                # OPTIMISATION: Vérifier fast_pool d'abord (textes courts prioritaires)
+                # ═══════════════════════════════════════════════════════════════
+                task = None
+
+                if self.enable_priority_queue and not self.fast_pool.empty():
+                    try:
+                        task = self.fast_pool.get_nowait()
+                        logger.debug(f"⚡ Worker {worker_name} traite tâche fast_pool")
+                    except asyncio.QueueEmpty:
+                        pass
+
+                # Si pas de tâche fast, attendre la pool normale
+                if task is None:
+                    try:
+                        task = await asyncio.wait_for(self.normal_pool.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+
                 self.stats['normal_workers_active'] += 1
                 self.stats['normal_pool_size'] = self.normal_pool.qsize()
                 
@@ -366,18 +433,31 @@ class TranslationPoolManager:
     async def _any_worker_loop(self, worker_name: str):
         """Boucle de travail pour les workers de la pool 'any' avec scaling dynamique"""
         logger.info(f"Worker {worker_name} démarré")
-        
+
         while self.any_workers_running:
             try:
                 # Vérifier le scaling dynamique
                 await self._dynamic_scaling_check()
-                
-                # Attendre une tâche avec timeout
-                try:
-                    task = await asyncio.wait_for(self.any_pool.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
-                
+
+                # ═══════════════════════════════════════════════════════════════
+                # OPTIMISATION: Vérifier fast_pool d'abord (textes courts prioritaires)
+                # ═══════════════════════════════════════════════════════════════
+                task = None
+
+                if self.enable_priority_queue and not self.fast_pool.empty():
+                    try:
+                        task = self.fast_pool.get_nowait()
+                        logger.debug(f"⚡ Worker {worker_name} traite tâche fast_pool")
+                    except asyncio.QueueEmpty:
+                        pass
+
+                # Si pas de tâche fast, attendre la pool "any"
+                if task is None:
+                    try:
+                        task = await asyncio.wait_for(self.any_pool.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+
                 self.stats['any_workers_active'] += 1
                 self.stats['any_pool_size'] = self.any_pool.qsize()
                 
@@ -439,33 +519,78 @@ class TranslationPoolManager:
             self.stats['tasks_failed'] += 1
     
     async def _translate_single_language(self, task: TranslationTask, target_language: str, worker_name: str):
-        """Traduit un texte vers une langue cible spécifique"""
+        """Traduit un texte vers une langue cible spécifique (avec cache Redis)"""
         start_time = time.time()
-        
+
         try:
-            # Utiliser le service de traduction partagé
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 1: Vérifier le cache (basé sur hash du texte)
+            # Le hash change automatiquement si le texte est modifié
+            # ═══════════════════════════════════════════════════════════════
+            if self.translation_cache:
+                cached = await self.translation_cache.get_translation(
+                    text=task.text,
+                    source_lang=task.source_language,
+                    target_lang=target_language,
+                    model_type=task.model_type
+                )
+
+                if cached:
+                    processing_time = time.time() - start_time
+                    logger.debug(f"⚡ [CACHE] Hit traduction: {task.source_language}→{target_language} (msg={task.message_id})")
+
+                    return {
+                        'messageId': task.message_id,
+                        'translatedText': cached.get('translated_text', ''),
+                        'sourceLanguage': cached.get('source_lang', task.source_language),
+                        'targetLanguage': target_language,
+                        'confidenceScore': 0.99,  # Cache = haute confiance
+                        'processingTime': processing_time,
+                        'modelType': cached.get('model_type', task.model_type),
+                        'workerName': worker_name,
+                        'fromCache': True,
+                        'segmentsCount': 0,
+                        'emojisCount': 0
+                    }
+
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 2: Traduire si pas en cache
+            # ═══════════════════════════════════════════════════════════════
             if self.translation_service:
-                # Effectuer la vraie traduction avec préservation de structure (retours à la ligne, paragraphes, emojis)
+                # Effectuer la vraie traduction avec préservation de structure
                 result = await self.translation_service.translate_with_structure(
                     text=task.text,
                     source_language=task.source_language,
                     target_language=target_language,
                     model_type=task.model_type,
-                    source_channel='zmq'  # Identifier le canal source
+                    source_channel='zmq'
                 )
-                
+
                 processing_time = time.time() - start_time
-                
+
                 # Vérifier si le résultat est None ou invalide
                 if result is None:
                     logger.error(f"❌ [TRANSLATOR] Service ML a retourné None pour {worker_name}")
                     raise Exception("Service de traduction a retourné None")
-                
+
                 # Vérifier que le résultat contient les clés attendues
                 if not isinstance(result, dict) or 'translated_text' not in result:
                     logger.error(f"❌ [TRANSLATOR] Résultat invalide pour {worker_name}: {result}")
                     raise Exception(f"Résultat de traduction invalide: {result}")
-                
+
+                # ═══════════════════════════════════════════════════════════════
+                # ÉTAPE 3: Mettre en cache la nouvelle traduction (TTL 1 mois)
+                # Le hash du texte sert de clé - réutilisable cross-message
+                # ═══════════════════════════════════════════════════════════════
+                if self.translation_cache:
+                    await self.translation_cache.set_translation(
+                        text=task.text,
+                        source_lang=task.source_language,
+                        target_lang=target_language,
+                        translated_text=result['translated_text'],
+                        model_type=task.model_type
+                    )
+
                 return {
                     'messageId': task.message_id,
                     'translatedText': result['translated_text'],
@@ -475,6 +600,7 @@ class TranslationPoolManager:
                     'processingTime': processing_time,
                     'modelType': task.model_type,
                     'workerName': worker_name,
+                    'fromCache': False,
                     # Métriques de préservation de structure
                     'segmentsCount': result.get('segments_count', 0),
                     'emojisCount': result.get('emojis_count', 0)
@@ -546,9 +672,36 @@ class TranslationPoolManager:
         }
 
 class ZMQTranslationServer:
-    """Serveur ZMQ pour la traduction avec architecture PUB/SUB"""
-    
-    def __init__(self, 
+    """
+    Serveur ZMQ pour la traduction avec architecture PUB/SUB
+
+    ═══════════════════════════════════════════════════════════════════════════════
+    ARCHITECTURE: SÉPARATION DES RESPONSABILITÉS
+    ═══════════════════════════════════════════════════════════════════════════════
+
+    TRANSLATOR (ce service):
+      ✅ Traduit les textes (modèles ML NLLB)
+      ✅ Transcrit les audios (Whisper)
+      ✅ Clone les voix et génère TTS
+      ✅ Cache les résultats dans Redis (TTL 1 mois)
+      ✅ Renvoie les résultats à Gateway via ZMQ PUB
+      ❌ NE SAUVEGARDE PAS en base de données (sauf profils vocaux)
+
+    GATEWAY:
+      ✅ Reçoit les résultats via ZMQ SUB
+      ✅ Persiste en base de données (MongoDB/Prisma)
+      ✅ Gère l'encryption des traductions si nécessaire
+      ✅ Contrôle la logique métier de persistance
+
+    Avantages:
+      - Translator peut fonctionner sans base de données
+      - Meilleure scalabilité (Translator stateless)
+      - Gateway contrôle la logique de persistance
+      - Séparation claire des responsabilités
+    ═══════════════════════════════════════════════════════════════════════════════
+    """
+
+    def __init__(self,
                  host: str = "0.0.0.0",
                  gateway_push_port: int = 5555,  # Port où Translator PULL bind (Gateway PUSH connect ici)
                  gateway_sub_port: int = 5558,   # Port où Translator PUB bind (Gateway SUB connect ici)
@@ -897,7 +1050,11 @@ class ZMQTranslationServer:
                 metadata=metadata,
                 target_languages=request_data.get('targetLanguages'),
                 generate_voice_clone=request_data.get('generateVoiceClone', True),
-                model_type=request_data.get('modelType', 'medium')
+                model_type=request_data.get('modelType', 'medium'),
+                # Voice profile options (pour messages transférés - voix de l'émetteur original)
+                original_sender_id=request_data.get('originalSenderId'),
+                existing_voice_profile=request_data.get('existingVoiceProfile'),
+                use_original_voice=request_data.get('useOriginalVoice', True)
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -958,6 +1115,23 @@ class ZMQTranslationServer:
                 'processingTimeMs': processing_time,
                 'timestamp': time.time()
             }
+
+            # Inclure le nouveau profil vocal si créé par Translator
+            # Gateway doit le sauvegarder dans MongoDB pour réutilisation future
+            if hasattr(result, 'new_voice_profile') and result.new_voice_profile:
+                nvp = result.new_voice_profile
+                message['newVoiceProfile'] = {
+                    'userId': nvp.user_id,
+                    'profileId': nvp.profile_id,
+                    'embedding': nvp.embedding_base64,
+                    'qualityScore': nvp.quality_score,
+                    'audioCount': nvp.audio_count,
+                    'totalDurationMs': nvp.total_duration_ms,
+                    'version': nvp.version,
+                    'fingerprint': nvp.fingerprint,
+                    'voiceCharacteristics': nvp.voice_characteristics
+                }
+                logger.info(f"📦 [TRANSLATOR] Nouveau profil vocal inclus pour Gateway: {nvp.user_id}")
 
             if self.pub_socket:
                 await self.pub_socket.send(json.dumps(message).encode('utf-8'))
@@ -1205,15 +1379,25 @@ class ZMQTranslationServer:
                     'poolType': result.get('poolType', 'normal')
                 }
                 
-                # Sauvegarder en base de données (si connecté)
-                if self.database_service.is_db_connected():
-                    save_success = await self.database_service.save_translation(save_data)
-                    if save_success:
-                        logger.info(f"💾 [TRANSLATOR] Traduction sauvegardée en base: {result.get('messageId')} -> {target_language}")
-                    else:
-                        logger.warning(f"⚠️ [TRANSLATOR] Échec sauvegarde en base: {result.get('messageId')} -> {target_language}")
-                else:
-                    logger.info(f"📋 [TRANSLATOR] Base de données non connectée, pas de sauvegarde pour: {result.get('messageId')} -> {target_language}")
+                # ═══════════════════════════════════════════════════════════════════════
+                # ARCHITECTURE: PAS DE SAUVEGARDE EN BASE ICI
+                # ═══════════════════════════════════════════════════════════════════════
+                # La persistance des traductions est la RESPONSABILITÉ DE LA GATEWAY.
+                # Translator ne fait que:
+                #   1. Traduire (avec cache Redis pour éviter les retraductions)
+                #   2. Renvoyer les résultats à Gateway via ZMQ PUB
+                # Gateway reçoit les résultats et persiste en base de données.
+                #
+                # Avantages:
+                #   - Séparation claire des responsabilités
+                #   - Translator peut fonctionner sans base de données
+                #   - Gateway contrôle la logique de persistance (encryption, etc.)
+                #   - Meilleure scalabilité (Translator stateless)
+                # ═══════════════════════════════════════════════════════════════════════
+                # CODE DÉSACTIVÉ - Conservé pour référence uniquement:
+                # if self.database_service.is_db_connected():
+                #     save_success = await self.database_service.save_translation(save_data)
+                # ═══════════════════════════════════════════════════════════════════════
                     
             except Exception as e:
                 logger.error(f"❌ [TRANSLATOR] Erreur sauvegarde base de données: {e}")

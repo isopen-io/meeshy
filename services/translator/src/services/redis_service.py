@@ -293,69 +293,352 @@ class RedisService:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# HELPERS POUR CACHE AUDIO
+# CACHE TRADUCTION TEXTE - BASÉ SUR HASH
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class AudioCacheService:
+import hashlib
+
+
+class TranslationCacheService:
     """
-    Service de cache spécialisé pour les transcriptions et traductions audio
-    Utilise les patterns de clés définis dans settings.py
+    Service de cache pour les traductions texte.
+    Utilise un hash du contenu pour éviter les retraductions.
+
+    Stratégie:
+    - Clé = hash(text + source_lang + target_lang + model_type)
+    - TTL = 1 mois (le texte lui-même indique s'il y a eu modification)
+    - Si le texte change → hash change → cache miss automatique
+    - Réutilisation cross-message/conversation pour textes identiques
+    - Fonctionne aussi au niveau segment (chaque segment est caché individuellement)
     """
 
     def __init__(self, redis_service: RedisService, settings=None):
         self.redis = redis_service
         self.settings = settings
 
-        # Patterns de clés par défaut
-        self.key_transcription = "audio:transcription:{attachment_id}"
-        self.key_translated_audio = "audio:translation:{attachment_id}:{lang}"
+        # Pattern de clé - basé uniquement sur le hash du contenu
+        self.key_pattern = "translation:text:{hash}"
+
+        # TTL = 1 mois (30 jours = 2592000 secondes)
+        # Le texte lui-même sert d'indicateur de modification
+        self.ttl_translation = int(os.getenv("TRANSLATION_CACHE_TTL", "2592000"))
+
+        # Modèle premium pour éviter retraduction
+        self.premium_models = ["premium", "1.3B", "nllb-200-1.3B"]
+
+    def _compute_hash(self, text: str, source_lang: str, target_lang: str, model_type: str = "premium") -> str:
+        """
+        Calcule un hash unique pour une traduction.
+        Combine: texte + langues + modèle
+        """
+        content = f"{text}|{source_lang}|{target_lang}|{model_type}"
+        return hashlib.sha256(content.encode()).hexdigest()[:32]
+
+    async def get_translation(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        model_type: str = "premium"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Récupère une traduction depuis le cache.
+
+        Args:
+            text: Texte source (peut être un message complet ou un segment)
+            source_lang: Langue source
+            target_lang: Langue cible
+            model_type: Type de modèle
+
+        Returns:
+            Dict avec 'translated_text', 'model_type', 'cached_at' ou None
+        """
+        # Vérifier par hash du texte
+        cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
+        key = self.key_pattern.format(hash=cache_hash)
+
+        data = await self.redis.get(key)
+        if data:
+            logger.debug(f"[CACHE] ✅ Hit: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
+            return json.loads(data)
+
+        # Si on demande un modèle non-premium, vérifier si une version premium existe
+        if model_type not in self.premium_models:
+            premium_hash = self._compute_hash(text, source_lang, target_lang, "premium")
+            premium_key = self.key_pattern.format(hash=premium_hash)
+            premium_data = await self.redis.get(premium_key)
+            if premium_data:
+                logger.debug(f"[CACHE] ✅ Hit premium: {source_lang}→{target_lang}")
+                return json.loads(premium_data)
+
+        return None
+
+    async def set_translation(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        translated_text: str,
+        model_type: str = "premium",
+        ttl: int = None
+    ) -> bool:
+        """
+        Sauvegarde une traduction dans le cache.
+
+        Args:
+            text: Texte source (peut être un message complet ou un segment)
+            source_lang: Langue source
+            target_lang: Langue cible
+            translated_text: Texte traduit
+            model_type: Type de modèle
+            ttl: Durée de vie en secondes (défaut: 1 mois)
+        """
+        cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
+        key = self.key_pattern.format(hash=cache_hash)
+        ttl = ttl or self.ttl_translation
+
+        cache_data = {
+            "translated_text": translated_text,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "model_type": model_type,
+            "cached_at": datetime.now().isoformat(),
+            "text_hash": cache_hash
+        }
+
+        # Stocker par hash (réutilisation cross-message/segment)
+        success = await self.redis.setex(key, ttl, json.dumps(cache_data))
+
+        if success:
+            logger.debug(f"[CACHE] 💾 Traduction mise en cache: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
+
+        return success
+
+    async def get_batch_translations(
+        self,
+        texts: List[str],
+        source_lang: str,
+        target_lang: str,
+        model_type: str = "premium"
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Récupère plusieurs traductions en batch.
+
+        Returns:
+            Dict[text -> cached_result or None]
+        """
+        results = {}
+        for text in texts:
+            cached = await self.get_translation(text, source_lang, target_lang, model_type)
+            results[text] = cached
+        return results
+
+    async def invalidate_translation(self, text: str, source_lang: str, target_lang: str, model_type: str = "premium") -> bool:
+        """Invalide une traduction du cache"""
+        cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
+        key = self.key_pattern.format(hash=cache_hash)
+        return await self.redis.delete(key)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques du cache traduction"""
+        return {
+            **self.redis.get_stats(),
+            "ttl_translation": self.ttl_translation,
+            "premium_models": self.premium_models
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPERS POUR CACHE AUDIO
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AudioCacheService:
+    """
+    Service de cache spécialisé pour les transcriptions et traductions audio.
+    Utilise un hash du contenu audio pour éviter les retraductions.
+
+    Stratégie:
+    - Transcription: indexée par hash audio (pas attachmentId) pour réutilisation cross-conversation
+    - Audio traduit: indexé par hash audio + langue cible
+    - Profil vocal: indexé par userId
+    """
+
+    def __init__(self, redis_service: RedisService, settings=None):
+        self.redis = redis_service
+        self.settings = settings
+
+        # Patterns de clés - basés sur HASH audio (pas attachmentId)
+        self.key_transcription_by_hash = "audio:transcription:hash:{audio_hash}"
+        self.key_translated_audio_by_hash = "audio:translation:hash:{audio_hash}:{lang}"
+        self.key_audio_hash_mapping = "audio:hash:mapping:{attachment_id}"  # attachment_id -> audio_hash
         self.key_voice_profile = "voice:profile:{user_id}"
 
-        # TTL par défaut
-        self.ttl_transcription = 3600  # 1 heure
-        self.ttl_translated_audio = 3600  # 1 heure
+        # Patterns legacy (pour compatibilité)
+        self.key_transcription = "audio:transcription:{attachment_id}"
+        self.key_translated_audio = "audio:translation:{attachment_id}:{lang}"
+
+        # TTL par défaut - 1 mois pour transcription/audio traduit
+        self.ttl_transcription = 2592000  # 30 jours (audio réutilisable cross-conversation)
+        self.ttl_translated_audio = 2592000  # 30 jours (audio traduit réutilisable)
         self.ttl_voice_profile = 7776000  # 90 jours (3 mois)
+        self.ttl_hash_mapping = 2592000  # 30 jours pour le mapping
 
         if settings:
-            self.key_transcription = getattr(settings, 'redis_key_transcription', self.key_transcription)
-            self.key_translated_audio = getattr(settings, 'redis_key_translated_audio', self.key_translated_audio)
-            self.key_voice_profile = getattr(settings, 'redis_key_voice_profile', self.key_voice_profile)
             self.ttl_voice_profile = getattr(settings, 'voice_profile_cache_ttl', self.ttl_voice_profile)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # TRANSCRIPTION STT
+    # HASH AUDIO - Permet réutilisation cross-conversation
     # ─────────────────────────────────────────────────────────────────────────
 
-    async def get_transcription(self, attachment_id: str) -> Optional[Dict[str, Any]]:
-        """Récupère une transcription depuis le cache"""
+    def compute_audio_hash(self, audio_path: str) -> str:
+        """
+        Calcule un hash SHA256 du contenu audio.
+        Permet d'identifier un audio identique même dans différentes conversations.
+        """
+        try:
+            with open(audio_path, 'rb') as f:
+                content = f.read()
+            return hashlib.sha256(content).hexdigest()[:32]
+        except Exception as e:
+            logger.warning(f"[CACHE] Impossible de hasher l'audio: {e}")
+            # Fallback sur le chemin
+            return hashlib.sha256(audio_path.encode()).hexdigest()[:32]
+
+    async def get_or_compute_audio_hash(self, attachment_id: str, audio_path: str) -> str:
+        """
+        Récupère le hash audio depuis le cache ou le calcule.
+        Stocke le mapping attachment_id -> audio_hash pour référence rapide.
+        """
+        # Vérifier si le mapping existe
+        mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
+        cached_hash = await self.redis.get(mapping_key)
+        if cached_hash:
+            return cached_hash
+
+        # Calculer le hash
+        audio_hash = self.compute_audio_hash(audio_path)
+
+        # Stocker le mapping
+        await self.redis.setex(mapping_key, self.ttl_hash_mapping, audio_hash)
+
+        return audio_hash
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # TRANSCRIPTION STT - BASÉE SUR HASH AUDIO
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def get_transcription_by_hash(self, audio_hash: str) -> Optional[Dict[str, Any]]:
+        """Récupère une transcription par hash audio (cross-conversation)"""
+        key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
+        data = await self.redis.get(key)
+        if data:
+            logger.debug(f"[CACHE] ✅ Hit transcription (hash={audio_hash[:8]})")
+            return json.loads(data)
+        return None
+
+    async def set_transcription_by_hash(self, audio_hash: str, transcription: Dict[str, Any], ttl: int = None) -> bool:
+        """Sauvegarde une transcription par hash audio"""
+        key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
+        ttl = ttl or self.ttl_transcription
+        success = await self.redis.setex(key, ttl, json.dumps(transcription))
+        if success:
+            logger.debug(f"[CACHE] 💾 Transcription mise en cache (hash={audio_hash[:8]})")
+        return success
+
+    async def get_transcription(self, attachment_id: str, audio_path: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Récupère une transcription - essaie d'abord par hash si audio_path fourni.
+        Compatible cross-conversation.
+        """
+        # Si on a le chemin audio, utiliser le hash
+        if audio_path:
+            audio_hash = await self.get_or_compute_audio_hash(attachment_id, audio_path)
+            cached = await self.get_transcription_by_hash(audio_hash)
+            if cached:
+                return cached
+
+        # Fallback sur attachment_id (legacy)
         key = self.key_transcription.format(attachment_id=attachment_id)
         data = await self.redis.get(key)
         if data:
             return json.loads(data)
         return None
 
-    async def set_transcription(self, attachment_id: str, transcription: Dict[str, Any], ttl: int = None) -> bool:
-        """Sauvegarde une transcription dans le cache"""
-        key = self.key_transcription.format(attachment_id=attachment_id)
+    async def set_transcription(self, attachment_id: str, transcription: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
+        """Sauvegarde une transcription - utilise hash si audio_path fourni"""
         ttl = ttl or self.ttl_transcription
+
+        # Stocker par hash si audio_path fourni
+        if audio_path:
+            audio_hash = await self.get_or_compute_audio_hash(attachment_id, audio_path)
+            await self.set_transcription_by_hash(audio_hash, transcription, ttl)
+
+        # Stocker aussi par attachment_id (legacy compatibility)
+        key = self.key_transcription.format(attachment_id=attachment_id)
         return await self.redis.setex(key, ttl, json.dumps(transcription))
 
     # ─────────────────────────────────────────────────────────────────────────
-    # AUDIO TRADUIT
+    # AUDIO TRADUIT - BASÉ SUR HASH AUDIO
     # ─────────────────────────────────────────────────────────────────────────
 
-    async def get_translated_audio(self, attachment_id: str, lang: str) -> Optional[Dict[str, Any]]:
-        """Récupère les métadonnées d'un audio traduit depuis le cache"""
+    async def get_translated_audio_by_hash(self, audio_hash: str, lang: str) -> Optional[Dict[str, Any]]:
+        """Récupère un audio traduit par hash (cross-conversation)"""
+        key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
+        data = await self.redis.get(key)
+        if data:
+            logger.debug(f"[CACHE] ✅ Hit audio traduit {lang} (hash={audio_hash[:8]})")
+            return json.loads(data)
+        return None
+
+    async def set_translated_audio_by_hash(self, audio_hash: str, lang: str, audio_data: Dict[str, Any], ttl: int = None) -> bool:
+        """Sauvegarde un audio traduit par hash"""
+        key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
+        ttl = ttl or self.ttl_translated_audio
+        success = await self.redis.setex(key, ttl, json.dumps(audio_data))
+        if success:
+            logger.debug(f"[CACHE] 💾 Audio traduit {lang} mis en cache (hash={audio_hash[:8]})")
+        return success
+
+    async def get_all_translated_audio_by_hash(self, audio_hash: str, target_languages: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Récupère toutes les traductions audio existantes pour un hash.
+        Retourne un dict {lang: audio_data or None}
+        """
+        results = {}
+        for lang in target_languages:
+            results[lang] = await self.get_translated_audio_by_hash(audio_hash, lang)
+        return results
+
+    async def get_translated_audio(self, attachment_id: str, lang: str, audio_path: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Récupère un audio traduit - essaie d'abord par hash.
+        Compatible cross-conversation.
+        """
+        # Si on a le chemin audio, utiliser le hash
+        if audio_path:
+            audio_hash = await self.get_or_compute_audio_hash(attachment_id, audio_path)
+            cached = await self.get_translated_audio_by_hash(audio_hash, lang)
+            if cached:
+                return cached
+
+        # Fallback sur attachment_id (legacy)
         key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
         data = await self.redis.get(key)
         if data:
             return json.loads(data)
         return None
 
-    async def set_translated_audio(self, attachment_id: str, lang: str, audio_data: Dict[str, Any], ttl: int = None) -> bool:
-        """Sauvegarde les métadonnées d'un audio traduit dans le cache"""
-        key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
+    async def set_translated_audio(self, attachment_id: str, lang: str, audio_data: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
+        """Sauvegarde un audio traduit - utilise hash si audio_path fourni"""
         ttl = ttl or self.ttl_translated_audio
+
+        # Stocker par hash si audio_path fourni
+        if audio_path:
+            audio_hash = await self.get_or_compute_audio_hash(attachment_id, audio_path)
+            await self.set_translated_audio_by_hash(audio_hash, lang, audio_data, ttl)
+
+        # Stocker aussi par attachment_id (legacy compatibility)
+        key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
         return await self.redis.setex(key, ttl, json.dumps(audio_data))
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -392,11 +675,12 @@ class AudioCacheService:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SINGLETON HELPER
+# SINGLETON HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _redis_service: Optional[RedisService] = None
 _audio_cache: Optional[AudioCacheService] = None
+_translation_cache: Optional[TranslationCacheService] = None
 
 
 def get_redis_service() -> RedisService:
@@ -413,3 +697,11 @@ def get_audio_cache_service(settings=None) -> AudioCacheService:
     if _audio_cache is None:
         _audio_cache = AudioCacheService(get_redis_service(), settings)
     return _audio_cache
+
+
+def get_translation_cache_service(settings=None) -> TranslationCacheService:
+    """Retourne l'instance singleton du service de cache traduction"""
+    global _translation_cache
+    if _translation_cache is None:
+        _translation_cache = TranslationCacheService(get_redis_service(), settings)
+    return _translation_cache

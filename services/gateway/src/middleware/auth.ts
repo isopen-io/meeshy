@@ -27,10 +27,6 @@ export interface RegisteredUser {
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage?: string;
-  autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
   isOnline: boolean;
   lastActiveAt: Date;
 }
@@ -141,10 +137,6 @@ export class AuthMiddleware {
           systemLanguage: true,
           regionalLanguage: true,
           customDestinationLanguage: true,
-          autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: true,
-          useCustomDestination: true,
           isOnline: true,
           lastActiveAt: true,
           isActive: true,
@@ -163,12 +155,11 @@ export class AuthMiddleware {
         this.statusService.updateUserLastSeen(user.id);
       }
 
-      // Déterminer la langue principale
-      const userLanguage = user.useCustomDestination && user.customDestinationLanguage
-        ? user.customDestinationLanguage
-        : user.translateToSystemLanguage 
-        ? user.systemLanguage 
-        : user.regionalLanguage;
+      // Déterminer la langue principale (priorité: custom > regional > system)
+      const userLanguage = user.customDestinationLanguage
+        || user.regionalLanguage
+        || user.systemLanguage
+        || 'en';
 
       return {
         type: 'jwt',
