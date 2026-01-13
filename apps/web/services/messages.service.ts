@@ -1,5 +1,5 @@
 import { apiService } from './api.service';
-import type { ApiResponse, PaginationMeta } from '@meeshy/shared/types';
+import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
 
 export interface Message {
   id: string;
@@ -32,22 +32,10 @@ export interface UpdateMessageDto {
 }
 
 /**
- * Response data for messages list - aligned with backend format
+ * Standard message list response - aligned with MessagesListResponse from @meeshy/shared/types
+ * Backend returns optimized format: { success, data: Message[], pagination, meta: { userLanguage } }
  */
-export interface MessagesResponseData {
-  messages: Message[];
-  userLanguage: string;
-}
-
-/**
- * Response format for messages list - uses standard PaginationMeta from @meeshy/shared/types
- * Backend returns: { success, data: { messages, userLanguage }, pagination: PaginationMeta }
- */
-export interface MessagesResponse {
-  success: boolean;
-  data: MessagesResponseData;
-  pagination: PaginationMeta;
-}
+export type MessagesResponse = MessagesListResponse<Message>;
 
 
 /**
@@ -89,13 +77,14 @@ export const messagesService = {
 
   /**
    * Récupère les messages d'une conversation avec pagination par offset
-   * Retourne le format natif du backend avec PaginationMeta standard
+   * Retourne le format natif optimisé du backend
    *
-   * Backend response format:
+   * Backend response format (optimized):
    * {
    *   success: true,
-   *   data: { messages: Message[], userLanguage: string },
-   *   pagination: { total: number, offset: number, limit: number, hasMore: boolean }
+   *   data: Message[],  // Directement les messages, pas d'objet wrapper
+   *   pagination: { total, offset, limit, hasMore },
+   *   meta: { userLanguage: string }
    * }
    */
   async getMessagesWithOffset(
@@ -109,7 +98,7 @@ export const messagesService = {
         { limit, offset, include_translations: 'true' }
       );
 
-      // Le backend retourne déjà le format standard, pas besoin d'adapter
+      // Le backend retourne directement le format MessagesListResponse
       return response.data as unknown as MessagesResponse;
     } catch (error) {
       console.error('Erreur lors de la récupération des messages avec offset:', error);

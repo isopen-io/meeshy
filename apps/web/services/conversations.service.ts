@@ -520,7 +520,7 @@ export class ConversationsService {
 
   /**
    * Obtenir les messages d'une conversation avec pagination standard (offset/limit)
-   * Utilise le format de pagination natif du backend : PaginationMeta { total, offset, limit, hasMore }
+   * Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
    *
    * @param conversationId - ID de la conversation
    * @param page - Numéro de page (converti en offset)
@@ -541,13 +541,12 @@ export class ConversationsService {
       // Convertir page en offset pour le backend
       const offset = (page - 1) * limit;
 
+      // Format optimisé: data = Message[] directement, meta = { userLanguage }
       const response = await apiService.get<{
         success: boolean;
-        data: {
-          messages: unknown[];
-          userLanguage?: string;
-        };
+        data: unknown[];  // Directement les messages
         pagination?: PaginationMeta;
+        meta?: { userLanguage?: string };
       }>(`/conversations/${conversationId}/messages`, { offset, limit }, {
         signal: controller.signal
       });
@@ -565,8 +564,8 @@ export class ConversationsService {
         };
       }
 
-      // Transformer les messages du backend vers le format frontend
-      const transformedMessages = (response.data.data.messages || []).map(msg => this.transformMessageData(msg));
+      // data est directement le tableau de messages (format optimisé)
+      const transformedMessages = (response.data.data || []).map(msg => this.transformMessageData(msg));
 
       // Utiliser les métadonnées de pagination du backend
       const pagination = response.data.pagination;
