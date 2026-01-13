@@ -6,7 +6,7 @@ export interface Message {
   content: string;
   authorId: string;
   conversationId?: string;
-  groupId?: string;
+  originalLanguage?: string;  // Langue source du message
   createdAt: string;
   updatedAt: string;
   isEdited: boolean;
@@ -23,7 +23,7 @@ export interface Message {
 export interface CreateMessageDto {
   content: string;
   conversationId?: string;
-  groupId?: string;
+  originalLanguage?: string;  // Langue source du message (défaut: 'fr')
   replyToId?: string;
 }
 
@@ -93,9 +93,10 @@ export const messagesService = {
     limit: number = 20
   ): Promise<MessagesResponse> {
     try {
+      // Backend inclut toujours réactions et traductions, pas besoin de paramètres
       const response = await apiService.get<MessagesResponse>(
         `/conversations/${conversationId}/messages`,
-        { limit, offset, include_translations: 'true' }
+        { limit, offset }
       );
 
       // Le backend retourne directement le format MessagesListResponse
