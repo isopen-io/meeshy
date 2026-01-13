@@ -97,6 +97,19 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
+      # Build shared package first (required for type-check)
+      - name: Build shared package (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build shared package (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          cd packages/shared
+          pnpm run build
+
       - name: Lint
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
@@ -167,6 +180,19 @@ jobs:
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
+
+      # Build shared package first (required for gateway tests)
+      - name: Build shared package (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build shared package (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          cd packages/shared
+          pnpm run build
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -518,6 +544,19 @@ jobs:
         run: |
           cd services/translator
           uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
+
+      # Build shared package (required for gateway tests)
+      - name: Build shared package (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build shared package (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          cd packages/shared
+          pnpm run build
 
       # Gateway Voice API Tests
       - name: Run Gateway Voice API tests
