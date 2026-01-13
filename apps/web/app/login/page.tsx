@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { LargeLogo } from '@/components/branding';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
+import { Mail, Lock, Sparkles } from 'lucide-react';
 
 // Composants inline légers pour éviter les imports lourds
 const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -16,36 +17,48 @@ const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; c
   </div>
 );
 
-const SimpleButton = ({ 
-  children, 
-  onClick, 
-  disabled = false, 
+const SimpleButton = ({
+  children,
+  onClick,
+  disabled = false,
   type = 'button',
+  variant = 'primary',
   className = ''
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   type?: 'button' | 'submit';
+  variant?: 'primary' | 'secondary' | 'outline';
   className?: string;
-}) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition-colors ${className}`}
-  >
-    {children}
-  </button>
-);
+}) => {
+  const baseStyles = 'w-full font-medium py-2.5 px-4 rounded-md transition-colors flex items-center justify-center gap-2';
+  const variantStyles = {
+    primary: 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white',
+    secondary: 'bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white',
+    outline: 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
+  };
 
-const SimpleInput = ({ 
-  type = 'text', 
-  value, 
-  onChange, 
-  placeholder, 
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseStyles} ${variantStyles[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+const SimpleInput = ({
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
   disabled = false,
-  className = ''
+  className = '',
+  icon: Icon
 }: {
   type?: string;
   value: string;
@@ -53,15 +66,34 @@ const SimpleInput = ({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }) => (
-  <input
-    type={type}
-    value={value}
-    onChange={onChange}
-    placeholder={placeholder}
-    disabled={disabled}
-    className={`w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 ${className}`}
-  />
+  <div className="relative">
+    {Icon && (
+      <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+    )}
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      className={`w-full px-3 py-2.5 ${Icon ? 'pl-10' : ''} bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 ${className}`}
+    />
+  </div>
+);
+
+const Divider = ({ text }: { text: string }) => (
+  <div className="relative my-6">
+    <div className="absolute inset-0 flex items-center">
+      <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+    </div>
+    <div className="relative flex justify-center text-sm">
+      <span className="px-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+        {text}
+      </span>
+    </div>
+  </div>
 );
 
 function QuickLoginPageContent() {
@@ -162,11 +194,31 @@ function QuickLoginPageContent() {
 
       // Parser la réponse JSON
       const data = await response.json();
-      console.log('[LOGIN] Données reçues:', { success: data.success, hasToken: !!data.data?.token, hasUser: !!data.data?.user });
+      console.log('[LOGIN] Données reçues:', {
+        success: data.success,
+        hasToken: !!data.data?.token,
+        hasUser: !!data.data?.user,
+        requires2FA: data.data?.requires2FA
+      });
+
+      // Vérifier si 2FA est requis
+      if (data.success && data.data?.requires2FA) {
+        console.log('[LOGIN] 2FA requis, redirection vers la page de vérification');
+
+        // Stocker le token temporaire pour la vérification 2FA
+        sessionStorage.setItem('2fa_temp_token', data.data.twoFactorToken);
+        sessionStorage.setItem('2fa_user_id', data.data.user?.id || '');
+        sessionStorage.setItem('2fa_username', data.data.user?.username || formData.username);
+
+        // Rediriger vers la page de vérification 2FA
+        const verifyUrl = `/auth/verify-2fa${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`;
+        router.push(verifyUrl);
+        return;
+      }
 
       // Vérifier le succès de la connexion
       if (data.success && data.data?.token) {
-        console.log('[LOGIN] ✅ Connexion réussie pour utilisateur:', data.data.user?.username);
+        console.log('[LOGIN] Connexion réussie pour utilisateur:', data.data.user?.username);
 
         // Mettre à jour le store d'authentification
         authLogin(data.data.user, data.data.token);
@@ -183,14 +235,14 @@ function QuickLoginPageContent() {
       } else {
         // Réponse invalide ou erreur métier
         const errorMsg = data.error || t('login.errors.loginFailed');
-        console.error('[LOGIN] ❌ Échec de connexion:', errorMsg);
+        console.error('[LOGIN] Échec de connexion:', errorMsg);
         setError(errorMsg);
         toast.error(errorMsg);
         setIsLoading(false);
       }
     } catch (error) {
       // Erreur réseau ou autre erreur inattendue
-      console.error('[LOGIN] ❌ Erreur réseau ou exception:', error);
+      console.error('[LOGIN] Erreur réseau ou exception:', error);
       const errorMsg = error instanceof Error
         ? `${t('login.errors.networkError')}: ${error.message}`
         : t('login.errors.networkError');
@@ -257,46 +309,70 @@ function QuickLoginPageContent() {
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 placeholder={t('login.usernamePlaceholder')}
                 disabled={isLoading}
+                icon={Mail}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('login.passwordLabel')}
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('login.passwordLabel')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => router.push('/forgot-password')}
+                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                >
+                  {t('login.forgotPassword')}
+                </button>
+              </div>
               <SimpleInput
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder={t('login.passwordPlaceholder')}
                 disabled={isLoading}
+                icon={Lock}
               />
             </div>
 
-            <SimpleButton type="submit" disabled={isLoading}>
+            <SimpleButton type="submit" disabled={isLoading} variant="primary">
               {isLoading ? (
-                <div className="flex items-center justify-center space-x-2">
+                <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   <span>{t('login.loggingIn')}</span>
-                </div>
+                </>
               ) : (
                 t('login.loginButton')
               )}
             </SimpleButton>
-
-            <div className="text-center pt-4">
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                {t('login.noAccount')}{' '}
-                <button
-                  type="button"
-                  onClick={() => router.push('/signin' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
-                  className="text-blue-600 hover:text-blue-700 font-medium underline"
-                >
-                  {t('login.registerLink')}
-                </button>
-              </p>
-            </div>
           </form>
+
+          {/* Séparateur */}
+          <Divider text={t('login.orContinueWith')} />
+
+          {/* Bouton Magic Link */}
+          <SimpleButton
+            variant="secondary"
+            onClick={() => router.push('/auth/magic-link' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
+          >
+            <Sparkles className="h-4 w-4" />
+            {t('login.magicLinkButton')}
+          </SimpleButton>
+
+          {/* Lien vers inscription */}
+          <div className="text-center pt-6">
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              {t('login.noAccount')}{' '}
+              <button
+                type="button"
+                onClick={() => router.push('/signin' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
+                className="text-blue-600 hover:text-blue-700 font-medium underline"
+              >
+                {t('login.registerLink')}
+              </button>
+            </p>
+          </div>
         </SimpleCard>
       </div>
     </div>
