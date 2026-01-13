@@ -10,7 +10,8 @@ import type {
   UserRole,
   UserPermissions,
   CreateConversationRequest,
-  SendMessageRequest
+  SendMessageRequest,
+  PaginationMeta
 } from '@meeshy/shared/types';
 
 /**
@@ -518,31 +519,41 @@ export class ConversationsService {
   }
 
   /**
-   * Obtenir les messages d'une conversation
+   * Obtenir les messages d'une conversation avec pagination standard (offset/limit)
+   * Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
+   *
+   * @param conversationId - ID de la conversation
+   * @param page - Numéro de page (converti en offset)
+   * @param limit - Nombre de messages par page
+   * @returns Messages avec métadonnées de pagination
    */
   async getMessages(conversationId: string, page = 1, limit = 20): Promise<{
     messages: Message[];
     total: number;
     hasMore: boolean;
+    pagination?: PaginationMeta;
   }> {
     try {
       // Créer un controller pour annuler les requêtes précédentes
       const requestKey = `messages-${conversationId}`;
       const controller = this.createRequestController(requestKey);
-      
+
+      // Convertir page en offset pour le backend
+      const offset = (page - 1) * limit;
+
+      // Format optimisé: data = Message[] directement, meta = { userLanguage }
       const response = await apiService.get<{
         success: boolean;
-        data: {
-          messages: unknown[];
-          hasMore: boolean;
-        };
-      }>(`/conversations/${conversationId}/messages`, { page, limit }, {
+        data: unknown[];  // Directement les messages
+        pagination?: PaginationMeta;
+        meta?: { userLanguage?: string };
+      }>(`/conversations/${conversationId}/messages`, { offset, limit }, {
         signal: controller.signal
       });
-      
+
       // Nettoyer le controller une fois la requête terminée
       this.pendingRequests.delete(requestKey);
-      
+
       // Vérifier la structure de la réponse
       if (!response.data?.success || !response.data?.data) {
         console.warn('⚠️ Structure de réponse inattendue:', response.data);
@@ -552,15 +563,18 @@ export class ConversationsService {
           hasMore: false,
         };
       }
-      
-      // Transformer les messages du backend vers le format frontend
-      const transformedMessages = (response.data.data.messages || []).map(msg => this.transformMessageData(msg));
-      
-      // Vérification de sécurité pour éviter les erreurs undefined
+
+      // data est directement le tableau de messages (format optimisé)
+      const transformedMessages = (response.data.data || []).map(msg => this.transformMessageData(msg));
+
+      // Utiliser les métadonnées de pagination du backend
+      const pagination = response.data.pagination;
+
       return {
         messages: transformedMessages,
-        total: transformedMessages.length, // Pour l'instant on utilise la longueur des messages
-        hasMore: response.data.data.hasMore || false,
+        total: pagination?.total ?? transformedMessages.length,
+        hasMore: pagination?.hasMore ?? false,
+        pagination,
       };
     } catch (error) {
       // Vérifier si l'erreur est due à l'annulation
@@ -568,7 +582,7 @@ export class ConversationsService {
         // Retourner une erreur spéciale pour indiquer l'annulation
         throw new Error('REQUEST_CANCELLED');
       }
-      
+
       console.error('❌ Erreur lors du chargement des messages:', error);
       // Retourner des données par défaut en cas d'erreur
       return {
