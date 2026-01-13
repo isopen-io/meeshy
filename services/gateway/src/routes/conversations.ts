@@ -1378,13 +1378,15 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       // Construire les métadonnées de pagination standard
       const paginationMeta = buildPaginationMeta(totalCount, offset, limit, messages.length);
 
+      // Format optimisé: data directement = Message[], meta pour userLanguage
+      // Aligné avec MessagesListResponse de @meeshy/shared/types
       reply.send({
         success: true,
-        data: {
-          messages: messagesWithAllTranslations,
+        data: messagesWithAllTranslations,
+        pagination: paginationMeta,
+        meta: {
           userLanguage: userPreferredLanguage
-        },
-        pagination: paginationMeta
+        }
       });
 
     } catch (error) {
