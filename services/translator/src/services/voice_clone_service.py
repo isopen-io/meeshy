@@ -2,6 +2,7 @@
 Service de clonage vocal - Singleton
 Gère les modèles de voix des utilisateurs avec cache et amélioration continue.
 Architecture: OpenVoice V2 pour extraction d'embedding, cache fichier pour persistance.
+Fonctionne sur CPU, CUDA, et MPS (Apple Silicon).
 """
 
 import os
@@ -45,6 +46,14 @@ try:
 except ImportError:
     logger.warning("⚠️ [VOICE_CLONE] numpy/pydub/soundfile non disponibles")
     import numpy as np  # numpy should be available
+
+# Import PerformanceOptimizer for device detection
+try:
+    from utils.performance import get_performance_optimizer
+    PERF_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    PERF_OPTIMIZER_AVAILABLE = False
+    logger.debug("[VOICE_CLONE] PerformanceOptimizer not available, using manual device selection")
 
 
 @dataclass
@@ -1554,7 +1563,7 @@ class VoiceCloneService:
     def __init__(
         self,
         voice_cache_dir: Optional[str] = None,
-        device: str = "cpu",
+        device: str = "auto",
         database_service = None
     ):
         if self._initialized:
@@ -1565,7 +1574,16 @@ class VoiceCloneService:
 
         # Configuration
         self.voice_cache_dir = Path(voice_cache_dir or os.getenv('VOICE_MODEL_CACHE_DIR', '/app/voice_models'))
-        self.device = os.getenv('VOICE_CLONE_DEVICE', self._settings.voice_clone_device)
+
+        # Device detection: Use PerformanceOptimizer if available, else fallback to settings
+        env_device = os.getenv('VOICE_CLONE_DEVICE', self._settings.voice_clone_device)
+        if env_device == "auto" and PERF_OPTIMIZER_AVAILABLE:
+            perf_opt = get_performance_optimizer()
+            self.device = perf_opt.device
+            logger.info(f"[VOICE_CLONE] Device auto-detected: {self.device}")
+        else:
+            # Manual device selection or explicit device specified
+            self.device = env_device if env_device != "auto" else "cpu"
 
         # Service de persistance MongoDB
         self.database_service = database_service
@@ -2210,9 +2228,17 @@ class VoiceCloneService:
 
         Stocke l'embedding binaire (numpy tobytes) + metadonnees JSON.
         Note: Cache Redis desactive pour le moment.
+
+        ═══════════════════════════════════════════════════════════════════════
+        ARCHITECTURE NOTE:
+        Les profils vocaux sont une exception - ils PEUVENT être sauvegardés
+        par Translator car ils sont créés/gérés par ce service.
+        Cependant, pour les traductions de messages et attachments,
+        la persistance est la responsabilité de Gateway.
+        ═══════════════════════════════════════════════════════════════════════
         """
         if not self.database_service or not self.database_service.is_db_connected():
-            logger.warning("[VOICE_CLONE] MongoDB non connecte, impossible de sauvegarder")
+            logger.debug("[VOICE_CLONE] MongoDB non connecté, sauvegarde profil vocal ignorée")
             return
 
         try:
