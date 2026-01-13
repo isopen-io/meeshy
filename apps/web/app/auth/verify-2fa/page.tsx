@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
 import { twoFactorService } from '@/services/two-factor.service';
+import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { ShieldCheck, KeyRound, ArrowLeft } from 'lucide-react';
 
 // Composants inline légers
@@ -130,8 +131,8 @@ function Verify2FAPageContent() {
 
   // Récupérer le token temporaire et les infos utilisateur
   useEffect(() => {
-    const tempToken = sessionStorage.getItem('2fa_temp_token');
-    const storedUsername = sessionStorage.getItem('2fa_username');
+    const tempToken = sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
+    const storedUsername = sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME);
 
     if (!tempToken) {
       // Pas de token temporaire, rediriger vers login
@@ -155,7 +156,7 @@ function Verify2FAPageContent() {
       return;
     }
 
-    const tempToken = sessionStorage.getItem('2fa_temp_token');
+    const tempToken = sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
     if (!tempToken) {
       setError(t('twoFactor.verify.errors.sessionExpired'));
       router.replace('/login');
@@ -168,10 +169,10 @@ function Verify2FAPageContent() {
       const response = await twoFactorService.verify(tempToken, codeToVerify);
 
       if (response.success && response.data?.token) {
-        // Nettoyer le sessionStorage
-        sessionStorage.removeItem('2fa_temp_token');
-        sessionStorage.removeItem('2fa_user_id');
-        sessionStorage.removeItem('2fa_username');
+        // Nettoyer le sessionStorage - utilise les clés centralisées
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID);
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME);
 
         // Afficher un message si un backup code a été utilisé
         if (response.data.usedBackupCode) {
@@ -195,10 +196,10 @@ function Verify2FAPageContent() {
   };
 
   const handleBackToLogin = () => {
-    // Nettoyer le sessionStorage
-    sessionStorage.removeItem('2fa_temp_token');
-    sessionStorage.removeItem('2fa_user_id');
-    sessionStorage.removeItem('2fa_username');
+    // Nettoyer le sessionStorage - utilise les clés centralisées
+    sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
+    sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID);
+    sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME);
     router.push('/login');
   };
 

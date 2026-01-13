@@ -38,6 +38,17 @@ export const AUTH_STORAGE_KEYS = {
 } as const;
 
 /**
+ * Définition centralisée des clés sessionStorage (données temporaires)
+ * Ces données doivent être nettoyées après utilisation ou lors du logout
+ */
+export const SESSION_STORAGE_KEYS = {
+  // Tokens temporaires 2FA (utilisés pendant le flow de vérification)
+  TWO_FACTOR_TEMP_TOKEN: '2fa_temp_token',
+  TWO_FACTOR_USER_ID: '2fa_user_id',
+  TWO_FACTOR_USERNAME: '2fa_username',
+} as const;
+
+/**
  * Interface pour session anonyme avec expiration
  */
 export interface AnonymousSession {
@@ -194,6 +205,7 @@ class AuthManager {
    * - Sessions anonymes
    * - Données tierces (recherches, affiliate)
    * - Cookies de session
+   * - Données temporaires sessionStorage (tokens 2FA, etc.)
    *
    * Support: SSR Next.js, iframes, WAP browsers, private mode
    */
@@ -243,6 +255,10 @@ class AuthManager {
 
       // 6. Nettoyer cookies de session
       this.clearAuthCookies();
+
+      // 7. CRITIQUE: Nettoyer les données temporaires sessionStorage (tokens 2FA)
+      // Ces données ne doivent pas persister après un logout ou avant un nouveau login
+      this.clearTemporaryAuthData();
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[AUTH_MANAGER] All sessions cleared successfully');
@@ -446,6 +462,67 @@ class AuthManager {
       // Quota exceeded, private mode, etc.
       console.warn(`[AUTH_MANAGER] Could not set ${key}:`, error);
       return false;
+    }
+  }
+
+  // ==================== HELPERS - sessionStorage ====================
+
+  /**
+   * Vérifie si sessionStorage est disponible
+   * Support: SSR, iframes cross-origin, private mode, WAP browsers
+   */
+  private isSessionStorageAvailable(): boolean {
+    if (typeof window === 'undefined') return false;
+    if (!window.sessionStorage) return false;
+
+    try {
+      // Test d'écriture pour vérifier les restrictions
+      const testKey = '__meeshy_session_storage_test__';
+      sessionStorage.setItem(testKey, 'test');
+      sessionStorage.removeItem(testKey);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Supprime un item de sessionStorage de manière sécurisée
+   * Support: iframes, private mode, quota exceeded, etc.
+   */
+  private safeRemoveSessionItem(key: string): void {
+    if (!this.isSessionStorageAvailable()) return;
+
+    try {
+      sessionStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`[AUTH_MANAGER] Could not remove session item ${key}:`, error);
+    }
+  }
+
+  /**
+   * Nettoie les données temporaires d'authentification (sessionStorage)
+   * Inclut: tokens 2FA temporaires, données de vérification en cours
+   *
+   * CRITIQUE: Doit être appelé:
+   * - À chaque logout
+   * - Après une vérification 2FA réussie
+   * - En cas d'échec/annulation du flow 2FA
+   */
+  clearTemporaryAuthData(): void {
+    if (typeof window === 'undefined') return;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] Clearing temporary auth data (sessionStorage)...');
+    }
+
+    // Nettoyer les tokens temporaires 2FA
+    this.safeRemoveSessionItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
+    this.safeRemoveSessionItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID);
+    this.safeRemoveSessionItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] Temporary auth data cleared');
     }
   }
 
