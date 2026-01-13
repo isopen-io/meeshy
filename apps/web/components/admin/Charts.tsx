@@ -35,6 +35,10 @@ export interface StatItem {
     value: number;
     isPositive: boolean;
   };
+  badge?: {
+    text: string;
+    variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+  };
 }
 
 interface StatCardProps {
@@ -55,8 +59,15 @@ export function StatCard({ stat }: StatCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {stat.value}
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {stat.value}
+          </span>
+          {stat.badge && (
+            <Badge variant={stat.badge.variant || 'default'} className="text-xs">
+              {stat.badge.text}
+            </Badge>
+          )}
         </div>
         {stat.description && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -114,16 +125,22 @@ export function StatsGrid({ stats, columns = 4 }: StatsGridProps) {
 // ======================
 
 export interface TimeSeriesDataPoint {
-  name: string;
-  value: number;
   [key: string]: string | number;
 }
 
-interface TimeSeriesChartProps {
+export interface DataKeyConfig {
+  key: string;
+  name: string;
+  color: string;
+}
+
+export interface TimeSeriesChartProps {
   data: TimeSeriesDataPoint[];
   title: string;
+  subtitle?: string;
   description?: string;
   dataKey?: string;
+  dataKeys?: DataKeyConfig[];
   xAxisKey?: string;
   color?: string;
   height?: number;
@@ -133,21 +150,25 @@ interface TimeSeriesChartProps {
 export function TimeSeriesChart({
   data,
   title,
+  subtitle,
   description,
   dataKey = 'value',
+  dataKeys,
   xAxisKey = 'name',
   color = '#3b82f6',
   height = 300,
   showArea = true
 }: TimeSeriesChartProps) {
+  const displayDescription = subtitle || description;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
           {title}
         </CardTitle>
-        {description && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+        {displayDescription && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{displayDescription}</p>
         )}
       </CardHeader>
       <CardContent>
@@ -155,10 +176,19 @@ export function TimeSeriesChart({
           {showArea ? (
             <AreaChart data={data}>
               <defs>
-                <linearGradient id={`colorGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={color} stopOpacity={0.8} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0.1} />
-                </linearGradient>
+                {dataKeys ? (
+                  dataKeys.map((dk) => (
+                    <linearGradient key={dk.key} id={`colorGradient-${dk.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={dk.color} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={dk.color} stopOpacity={0.1} />
+                    </linearGradient>
+                  ))
+                ) : (
+                  <linearGradient id={`colorGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={color} stopOpacity={0.8} />
+                    <stop offset="95%" stopColor={color} stopOpacity={0.1} />
+                  </linearGradient>
+                )}
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
               <XAxis
@@ -178,13 +208,28 @@ export function TimeSeriesChart({
                   fontSize: '0.875rem'
                 }}
               />
-              <Area
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                strokeWidth={2}
-                fill={`url(#colorGradient-${dataKey})`}
-              />
+              {dataKeys ? (
+                dataKeys.map((dk) => (
+                  <Area
+                    key={dk.key}
+                    type="monotone"
+                    dataKey={dk.key}
+                    name={dk.name}
+                    stroke={dk.color}
+                    strokeWidth={2}
+                    fill={`url(#colorGradient-${dk.key})`}
+                  />
+                ))
+              ) : (
+                <Area
+                  type="monotone"
+                  dataKey={dataKey}
+                  stroke={color}
+                  strokeWidth={2}
+                  fill={`url(#colorGradient-${dataKey})`}
+                />
+              )}
+              {dataKeys && <Legend />}
             </AreaChart>
           ) : (
             <LineChart data={data}>
@@ -206,14 +251,30 @@ export function TimeSeriesChart({
                   fontSize: '0.875rem'
                 }}
               />
-              <Line
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                strokeWidth={2}
-                dot={{ fill: color, r: 4 }}
-                activeDot={{ r: 6 }}
-              />
+              {dataKeys ? (
+                dataKeys.map((dk) => (
+                  <Line
+                    key={dk.key}
+                    type="monotone"
+                    dataKey={dk.key}
+                    name={dk.name}
+                    stroke={dk.color}
+                    strokeWidth={2}
+                    dot={{ fill: dk.color, r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                ))
+              ) : (
+                <Line
+                  type="monotone"
+                  dataKey={dataKey}
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={{ fill: color, r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              )}
+              {dataKeys && <Legend />}
             </LineChart>
           )}
         </ResponsiveContainer>
@@ -232,9 +293,10 @@ export interface DonutDataPoint {
   color: string;
 }
 
-interface DonutChartProps {
+export interface DonutChartProps {
   data: DonutDataPoint[];
   title: string;
+  subtitle?: string;
   description?: string;
   height?: number;
   innerRadius?: number;
@@ -245,6 +307,7 @@ interface DonutChartProps {
 export function DonutChart({
   data,
   title,
+  subtitle,
   description,
   height = 300,
   innerRadius = 60,
@@ -252,6 +315,7 @@ export function DonutChart({
   showLegend = true
 }: DonutChartProps) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
+  const displayDescription = subtitle || description;
 
   return (
     <Card>
@@ -259,8 +323,8 @@ export function DonutChart({
         <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
           {title}
         </CardTitle>
-        {description && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+        {displayDescription && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{displayDescription}</p>
         )}
       </CardHeader>
       <CardContent>
