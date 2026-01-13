@@ -420,12 +420,20 @@ export class VoiceProfileService extends EventEmitter {
       // Calculate expiration based on age
       const expiresAt = this.calculateExpirationDate(user.birthDate);
 
+      // Decode embedding binary from base64 (for MongoDB storage)
+      let embeddingBuffer: Buffer | null = null;
+      if (response.embedding_data) {
+        embeddingBuffer = Buffer.from(response.embedding_data, 'base64');
+      }
+
       // Save to database
       const voiceModel = await this.prisma.userVoiceModel.create({
         data: {
           userId,
           profileId: response.profile_id || `vp_${userId.substring(0, 12)}`,
-          embeddingPath: response.embedding_path || '',
+          embedding: embeddingBuffer,  // Binary embedding stored directly in MongoDB
+          embeddingDimension: response.embedding_dimension || 256,
+          embeddingPath: response.embedding_path || '',  // Legacy, kept for backwards compatibility
           audioCount: 1,
           totalDurationMs: response.audio_duration_ms || 0,
           qualityScore: response.quality_score || 0,
@@ -501,6 +509,12 @@ export class VoiceProfileService extends EventEmitter {
       // Calculate new expiration
       const expiresAt = this.calculateExpirationDate(voiceModel.user.birthDate);
 
+      // Decode embedding binary from base64 (for MongoDB storage)
+      let embeddingBuffer: Buffer | null = null;
+      if (response.embedding_data) {
+        embeddingBuffer = Buffer.from(response.embedding_data, 'base64');
+      }
+
       // Update database
       const updateData: any = {
         qualityScore: response.quality_score || voiceModel.qualityScore,
@@ -510,6 +524,12 @@ export class VoiceProfileService extends EventEmitter {
         signatureShort: response.signature_short || voiceModel.signatureShort,
         nextRecalibrationAt: expiresAt
       };
+
+      // Update embedding if provided
+      if (embeddingBuffer) {
+        updateData.embedding = embeddingBuffer;
+        updateData.embeddingDimension = response.embedding_dimension || 256;
+      }
 
       if (request.replaceExisting) {
         // Replace: reset counts

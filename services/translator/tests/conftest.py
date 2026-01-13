@@ -16,6 +16,161 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, AsyncMock, patch
 import json
 
+# ═══════════════════════════════════════════════════════════════
+# MOCK EXTERNAL MODULES (MUST BE BEFORE src path addition)
+# This ensures tests can run without optional dependencies like zmq, psutil
+# ═══════════════════════════════════════════════════════════════
+
+def _setup_module_mocks():
+    """Setup mock modules for dependencies that may not be installed"""
+
+    # Mock zmq module
+    if 'zmq' not in sys.modules:
+        mock_zmq = MagicMock()
+        mock_zmq.PULL = 1
+        mock_zmq.PUSH = 2
+        mock_zmq.PUB = 3
+        mock_zmq.SUB = 4
+        mock_zmq.REQ = 5
+        mock_zmq.REP = 6
+        mock_zmq.DEALER = 7
+        mock_zmq.ROUTER = 8
+        mock_zmq.SUBSCRIBE = b''
+        mock_zmq.LINGER = 1
+        mock_zmq.RCVTIMEO = 2
+        mock_zmq.SNDTIMEO = 3
+        mock_zmq.IDENTITY = 4
+        mock_zmq.Context = MagicMock()
+        mock_zmq.ZMQError = Exception
+        mock_zmq.Again = Exception
+        sys.modules['zmq'] = mock_zmq
+
+        # Mock zmq.asyncio
+        mock_zmq_asyncio = MagicMock()
+        mock_zmq_asyncio.Context = MagicMock()
+        sys.modules['zmq.asyncio'] = mock_zmq_asyncio
+
+    # Mock psutil module
+    if 'psutil' not in sys.modules:
+        mock_psutil = MagicMock()
+        mock_psutil.Process = MagicMock(return_value=MagicMock(
+            memory_info=MagicMock(return_value=MagicMock(rss=100*1024*1024)),
+            cpu_percent=MagicMock(return_value=10.0)
+        ))
+        mock_psutil.virtual_memory = MagicMock(return_value=MagicMock(
+            total=16*1024*1024*1024,
+            available=8*1024*1024*1024,
+            percent=50.0
+        ))
+        mock_psutil.cpu_percent = MagicMock(return_value=25.0)
+        mock_psutil.cpu_count = MagicMock(return_value=8)
+        sys.modules['psutil'] = mock_psutil
+
+    # Mock httpx module
+    if 'httpx' not in sys.modules:
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient = MagicMock()
+        mock_httpx.Client = MagicMock()
+        mock_httpx.HTTPError = Exception
+        mock_httpx.RequestError = Exception
+        mock_httpx.TimeoutException = Exception
+        sys.modules['httpx'] = mock_httpx
+
+    # Mock prisma module
+    if 'prisma' not in sys.modules:
+        mock_prisma = MagicMock()
+        mock_prisma.Prisma = MagicMock()
+        mock_prisma.Client = MagicMock()
+        sys.modules['prisma'] = mock_prisma
+        sys.modules['prisma.models'] = MagicMock()
+
+    # Mock grpc modules
+    if 'grpc' not in sys.modules:
+        mock_grpc = MagicMock()
+        mock_grpc.aio = MagicMock()
+        mock_grpc.insecure_channel = MagicMock()
+        mock_grpc.StatusCode = MagicMock()
+        sys.modules['grpc'] = mock_grpc
+        sys.modules['grpc.aio'] = mock_grpc.aio
+
+    # Mock redis module
+    if 'redis' not in sys.modules:
+        mock_redis = MagicMock()
+        mock_redis.asyncio = MagicMock()
+        mock_redis.Redis = MagicMock()
+        mock_redis.ConnectionError = Exception
+        sys.modules['redis'] = mock_redis
+        sys.modules['redis.asyncio'] = mock_redis.asyncio
+
+    # Mock fastapi module
+    if 'fastapi' not in sys.modules:
+        mock_fastapi = MagicMock()
+        mock_fastapi.FastAPI = MagicMock()
+        mock_fastapi.APIRouter = MagicMock()
+        mock_fastapi.Request = MagicMock()
+        mock_fastapi.Response = MagicMock()
+        mock_fastapi.HTTPException = Exception
+        mock_fastapi.Depends = MagicMock()
+        mock_fastapi.Body = MagicMock()
+        mock_fastapi.Query = MagicMock()
+        mock_fastapi.Path = MagicMock()
+        mock_fastapi.File = MagicMock()
+        mock_fastapi.UploadFile = MagicMock()
+        mock_fastapi.Form = MagicMock()
+        mock_fastapi.BackgroundTasks = MagicMock()
+        sys.modules['fastapi'] = mock_fastapi
+        sys.modules['fastapi.responses'] = MagicMock()
+        sys.modules['fastapi.middleware'] = MagicMock()
+        sys.modules['fastapi.middleware.cors'] = MagicMock()
+
+    # Mock pydantic module
+    if 'pydantic' not in sys.modules:
+        mock_pydantic = MagicMock()
+        mock_pydantic.BaseModel = type('BaseModel', (), {})
+        mock_pydantic.Field = MagicMock()
+        mock_pydantic.validator = MagicMock()
+        mock_pydantic.root_validator = MagicMock()
+        sys.modules['pydantic'] = mock_pydantic
+
+    # Mock transformers module
+    if 'transformers' not in sys.modules:
+        mock_transformers = MagicMock()
+        mock_transformers.AutoTokenizer = MagicMock()
+        mock_transformers.AutoModelForSeq2SeqLM = MagicMock()
+        mock_transformers.pipeline = MagicMock()
+        sys.modules['transformers'] = mock_transformers
+
+    # Mock torch module
+    if 'torch' not in sys.modules:
+        mock_torch = MagicMock()
+        mock_torch.float32 = "float32"
+        mock_torch.float16 = "float16"
+        mock_torch.bfloat16 = "bfloat16"
+        mock_torch.int8 = "int8"
+        mock_torch.cuda = MagicMock()
+        mock_torch.cuda.is_available = MagicMock(return_value=False)
+        mock_torch.backends = MagicMock()
+        mock_torch.backends.mps = MagicMock()
+        mock_torch.backends.mps.is_available = MagicMock(return_value=False)
+        mock_torch.device = MagicMock()
+        mock_torch.no_grad = MagicMock()
+        mock_torch.inference_mode = MagicMock()
+        mock_torch.get_num_threads = MagicMock(return_value=4)
+        mock_torch.get_num_interop_threads = MagicMock(return_value=2)
+        mock_torch.Tensor = MagicMock()
+        sys.modules['torch'] = mock_torch
+
+    # Mock aiohttp module
+    if 'aiohttp' not in sys.modules:
+        mock_aiohttp = MagicMock()
+        mock_aiohttp.ClientSession = MagicMock()
+        mock_aiohttp.ClientTimeout = MagicMock()
+        mock_aiohttp.ClientError = Exception
+        sys.modules['aiohttp'] = mock_aiohttp
+
+# Apply mocks before anything else
+_setup_module_mocks()
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
