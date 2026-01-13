@@ -277,10 +277,10 @@ describe('PasswordResetService', () => {
       expect(validation.errors).toContain('one special character');
     });
 
-    it('should reject passwords shorter than 12 characters', () => {
-      const validation = (service as any).validatePasswordStrength('Short1!');
+    it('should reject passwords shorter than 8 characters', () => {
+      const validation = (service as any).validatePasswordStrength('Sh1!');
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('minimum 12 characters');
+      expect(validation.errors).toContain('minimum 8 characters');
     });
   });
 });

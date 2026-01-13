@@ -73,21 +73,15 @@ export class UserSanitizationService {
         ...publicData,
         email: user.email,
         phoneNumber: user.phoneNumber,
-        twoFactorEnabledAt: user.twoFactorEnabledAt,
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        autoTranslateEnabled: user.autoTranslateEnabled,
-        translateToSystemLanguage: user.translateToSystemLanguage,
-        translateToRegionalLanguage: user.translateToRegionalLanguage,
-        useCustomDestination: user.useCustomDestination,
         lastPasswordChange: user.lastPasswordChange,
         failedLoginAttempts: user.failedLoginAttempts,
         lockedUntil: user.lockedUntil,
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
-        encryptionPreference: user.encryptionPreference,
-        autoTranscriptionEnabled: user.autoTranscriptionEnabled,
+        userFeature: user.userFeature,
         _count: user._count
       };
       return adminData;
