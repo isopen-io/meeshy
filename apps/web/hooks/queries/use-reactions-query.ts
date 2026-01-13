@@ -33,6 +33,8 @@ export interface UseReactionsQueryOptions {
   currentUserId?: string;
   isAnonymous?: boolean;
   enabled?: boolean;
+  /** Données initiales provenant du message (reactionSummary dénormalisé) */
+  initialReactionSummary?: Record<string, number>;
 }
 
 interface ReactionState {
@@ -78,10 +80,35 @@ export function useReactionsQuery({
   currentUserId,
   isAnonymous = false,
   enabled = true,
+  initialReactionSummary,
 }: UseReactionsQueryOptions) {
   const { t } = useI18n('reactions');
   const queryClient = useQueryClient();
   const MAX_REACTIONS_PER_USER = 3;
+
+  // Convertir reactionSummary en données initiales pour React Query
+  // Permet un affichage instantané sans attendre Socket.IO
+  const initialData = useMemo((): ReactionState | undefined => {
+    if (!initialReactionSummary || Object.keys(initialReactionSummary).length === 0) {
+      return undefined;
+    }
+
+    // Convertir { "❤️": 5, "👍": 3 } en ReactionAggregation[]
+    const reactions: ReactionAggregation[] = Object.entries(initialReactionSummary).map(
+      ([emoji, count]) => ({
+        emoji,
+        count,
+        userIds: [],
+        anonymousIds: [],
+        hasCurrentUser: false, // Sera mis à jour après sync Socket.IO
+      })
+    );
+
+    return {
+      reactions,
+      userReactions: [], // Sera mis à jour après sync Socket.IO
+    };
+  }, [initialReactionSummary]);
 
   // Query pour récupérer les réactions
   const {
@@ -95,6 +122,7 @@ export function useReactionsQuery({
     enabled: enabled && !!messageId,
     staleTime: Infinity, // Socket.IO gère les mises à jour
     retry: 1,
+    initialData, // Utiliser reactionSummary pour affichage instantané
   });
 
   const reactions = data?.reactions ?? [];
