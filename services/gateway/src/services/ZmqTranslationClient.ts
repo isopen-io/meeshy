@@ -256,6 +256,8 @@ export interface VoiceProfileAnalyzeResult {
   fingerprint_id?: string;
   signature_short?: string;
   embedding_path?: string;
+  embedding_data?: string;  // Base64-encoded embedding binary for MongoDB storage
+  embedding_dimension?: number;  // Embedding vector dimension (default 256)
   error?: string;
 }
 
