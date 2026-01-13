@@ -35,6 +35,8 @@ export interface UseReactionsQueryOptions {
   enabled?: boolean;
   /** Données initiales provenant du message (reactionSummary dénormalisé) */
   initialReactionSummary?: Record<string, number>;
+  /** Réactions de l'utilisateur connecté (pour affichage instantané sans sync) */
+  initialCurrentUserReactions?: string[];
 }
 
 interface ReactionState {
@@ -81,34 +83,42 @@ export function useReactionsQuery({
   isAnonymous = false,
   enabled = true,
   initialReactionSummary,
+  initialCurrentUserReactions,
 }: UseReactionsQueryOptions) {
   const { t } = useI18n('reactions');
   const queryClient = useQueryClient();
   const MAX_REACTIONS_PER_USER = 3;
 
-  // Convertir reactionSummary en données initiales pour React Query
+  // Convertir reactionSummary + currentUserReactions en données initiales pour React Query
   // Permet un affichage instantané sans attendre Socket.IO
   const initialData = useMemo((): ReactionState | undefined => {
-    if (!initialReactionSummary || Object.keys(initialReactionSummary).length === 0) {
+    // Si pas de données initiales, pas d'état initial
+    const hasReactionSummary = initialReactionSummary && Object.keys(initialReactionSummary).length > 0;
+    const hasUserReactions = initialCurrentUserReactions && initialCurrentUserReactions.length > 0;
+
+    if (!hasReactionSummary && !hasUserReactions) {
       return undefined;
     }
 
+    // Set des réactions de l'utilisateur pour vérification rapide
+    const userReactionsSet = new Set(initialCurrentUserReactions || []);
+
     // Convertir { "❤️": 5, "👍": 3 } en ReactionAggregation[]
-    const reactions: ReactionAggregation[] = Object.entries(initialReactionSummary).map(
+    const reactions: ReactionAggregation[] = Object.entries(initialReactionSummary || {}).map(
       ([emoji, count]) => ({
         emoji,
         count,
         userIds: [],
         anonymousIds: [],
-        hasCurrentUser: false, // Sera mis à jour après sync Socket.IO
+        hasCurrentUser: userReactionsSet.has(emoji), // Indique si l'utilisateur a réagi
       })
     );
 
     return {
       reactions,
-      userReactions: [], // Sera mis à jour après sync Socket.IO
+      userReactions: initialCurrentUserReactions || [],
     };
-  }, [initialReactionSummary]);
+  }, [initialReactionSummary, initialCurrentUserReactions]);
 
   // Query pour récupérer les réactions
   const {

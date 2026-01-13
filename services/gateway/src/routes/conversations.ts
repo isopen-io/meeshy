@@ -1375,6 +1375,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       // ===== OPTIMISATION: Exécuter les requêtes en parallèle =====
       // Évite le problème N+1 séquentiel (count -> messages -> user)
       const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !authRequest.authContext.isAnonymous;
+      const isAnonymousUser = authRequest.authContext.isAnonymous;
 
       const [totalCount, messages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination)
@@ -1404,6 +1405,36 @@ export async function conversationRoutes(fastify: FastifyInstance) {
             })
           : Promise.resolve(null)
       ]);
+
+      // ===== RÉCUPÉRER LES RÉACTIONS DE L'UTILISATEUR CONNECTÉ =====
+      // Permet d'afficher les réactions de l'utilisateur sans requête de sync Socket.IO
+      let userReactionsMap: Map<string, string[]> = new Map();
+
+      if (authRequest.authContext.isAuthenticated && messages.length > 0) {
+        const messageIds = messages.map(m => m.id);
+
+        // Requête pour obtenir les réactions de l'utilisateur sur ces messages
+        const userReactions = await prisma.reaction.findMany({
+          where: {
+            messageId: { in: messageIds },
+            ...(isAnonymousUser
+              ? { anonymousId: userId }
+              : { userId: userId }
+            )
+          },
+          select: {
+            messageId: true,
+            emoji: true
+          }
+        });
+
+        // Grouper par messageId
+        for (const reaction of userReactions) {
+          const existing = userReactionsMap.get(reaction.messageId) || [];
+          existing.push(reaction.emoji);
+          userReactionsMap.set(reaction.messageId, existing);
+        }
+      }
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
@@ -1474,6 +1505,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
           reactionCount: message.reactionCount,
+          // Réactions de l'utilisateur connecté (pour affichage instantané sans sync Socket.IO)
+          currentUserReactions: userReactionsMap.get(message.id) || [],
 
           // Chiffrement
           isEncrypted: message.isEncrypted,

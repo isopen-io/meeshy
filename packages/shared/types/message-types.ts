@@ -134,6 +134,8 @@ export interface GatewayMessage {
   readonly reactionSummary?: Record<string, number>;
   /** Nombre total de réactions */
   readonly reactionCount?: number;
+  /** Emojis auxquels l'utilisateur connecté a réagi (pour affichage instantané sans sync) */
+  readonly currentUserReactions?: readonly string[];
 
   // ===== CHIFFREMENT (E2EE) =====
   readonly isEncrypted?: boolean;
