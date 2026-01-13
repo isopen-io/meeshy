@@ -1077,7 +1077,11 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         properties: {
           limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
           offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
-          before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' }
+          before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
+          include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include reactions (default true)' },
+          include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
+          include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
+          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' }
         }
       },
       response: {
@@ -1103,9 +1107,23 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { limit: limitStr = '20', offset: offsetStr = '0', before } = request.query;
+      const {
+        limit: limitStr = '20',
+        offset: offsetStr = '0',
+        before,
+        include_reactions: includeReactionsStr = 'true',
+        include_translations: includeTranslationsStr = 'true',
+        include_status: includeStatusStr = 'false',
+        include_replies: includeRepliesStr = 'true'
+      } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+
+      // Parser les paramètres optionnels d'inclusion
+      const includeReactions = includeReactionsStr === 'true';
+      const includeTranslations = includeTranslationsStr === 'true';
+      const includeStatus = includeStatusStr === 'true';
+      const includeReplies = includeRepliesStr === 'true';
 
       // Valider et parser les paramètres de pagination
       const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
@@ -1157,146 +1175,205 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const messages = await prisma.message.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          content: true,
-          originalLanguage: true,
-          createdAt: true,
-          updatedAt: true,
-          editedAt: true,
-          senderId: true,
-          anonymousSenderId: true,
-          conversationId: true,
-          isDeleted: true,
-          replyToId: true,
-          validatedMentions: true,
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              role: true
-            }
-          },
-          anonymousSender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              language: true
-            }
-          },
-          attachments: {
-            select: {
-              id: true,
-              messageId: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              metadata: true, // Inclure audioEffectsTimeline et autres métadonnées JSON
-              uploadedBy: true,
-              isAnonymous: true,
-              createdAt: true
-            }
-          },
-          statusEntries: {
-            where: {
-              userId: userId // Charger seulement le status de l'utilisateur courant
-            },
-            select: {
-              userId: true,
-              readAt: true
-            }
-          },
-          translations: {
-            select: {
-              id: true,
-              targetLanguage: true,
-              translatedContent: true,
-              translationModel: true
-            }
-          },
-          reactions: {
-            select: {
-              id: true,
-              emoji: true,
-              userId: true,
-              anonymousId: true,
-              createdAt: true
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 20 // Limiter à 20 réactions par message
-          },
-          replyTo: {
-            select: {
-              id: true,
-              content: true,
-              originalLanguage: true,
-              createdAt: true,
-              senderId: true,
-              anonymousSenderId: true,
-              validatedMentions: true,
-              sender: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true
-                }
-              },
-              anonymousSender: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true
-                }
-              },
-              attachments: {
-                select: {
-                  id: true,
-                  fileName: true,
-                  mimeType: true,
-                  fileUrl: true,
-                  thumbnailUrl: true
-                },
-                take: 3 // Limiter à 3 attachments dans le replyTo
-              },
-              // Ne pas charger les translations/reactions du replyTo pour optimiser
-              _count: {
-                select: {
-                  reactions: true
-                }
-              }
-            }
-          },
-          _count: {
-            select: {
-              reactions: true,
-              statusEntries: true
-            }
+      // Construire le select Prisma dynamiquement selon les paramètres d'inclusion
+      const messageSelect: any = {
+        // ===== CHAMPS DE BASE =====
+        id: true,
+        content: true,
+        originalLanguage: true,
+        conversationId: true,
+        senderId: true,
+        anonymousSenderId: true,
+        messageType: true,
+        messageSource: true,
+
+        // ===== ÉDITION / SUPPRESSION =====
+        isEdited: true,
+        editedAt: true,
+        isDeleted: true,
+        deletedAt: true,
+
+        // ===== REPLY / FORWARD =====
+        replyToId: true,
+        forwardedFromId: true,
+        forwardedFromConversationId: true,
+
+        // ===== VIEW-ONCE / BLUR / EXPIRATION =====
+        isViewOnce: true,
+        maxViewOnceCount: true,
+        viewOnceCount: true,
+        isBlurred: true,
+        expiresAt: true,
+
+        // ===== STATUTS AGRÉGÉS (dénormalisés) =====
+        deliveredToAllAt: true,
+        receivedByAllAt: true,
+        readByAllAt: true,
+        deliveredCount: true,
+        readCount: true,
+
+        // ===== CHIFFREMENT =====
+        isEncrypted: true,
+        encryptionMode: true,
+
+        // ===== TIMESTAMPS =====
+        createdAt: true,
+        updatedAt: true,
+
+        // ===== MENTIONS =====
+        validatedMentions: true,
+
+        // ===== RELATIONS OBLIGATOIRES =====
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            role: true
           }
         },
+        anonymousSender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            language: true
+          }
+        },
+        attachments: {
+          select: {
+            id: true,
+            messageId: true,
+            fileName: true,
+            originalName: true,
+            mimeType: true,
+            fileSize: true,
+            fileUrl: true,
+            thumbnailUrl: true,
+            width: true,
+            height: true,
+            duration: true,
+            bitrate: true,
+            sampleRate: true,
+            codec: true,
+            channels: true,
+            fps: true,
+            videoCodec: true,
+            pageCount: true,
+            lineCount: true,
+            metadata: true,
+            uploadedBy: true,
+            isAnonymous: true,
+            createdAt: true
+          }
+        },
+        _count: {
+          select: {
+            reactions: true,
+            statusEntries: true
+          }
+        }
+      };
+
+      // ===== RELATIONS OPTIONNELLES (selon paramètres include_*) =====
+      if (includeTranslations) {
+        messageSelect.translations = {
+          select: {
+            id: true,
+            targetLanguage: true,
+            translatedContent: true,
+            translationModel: true
+          }
+        };
+      }
+
+      if (includeReactions) {
+        messageSelect.reactions = {
+          select: {
+            id: true,
+            emoji: true,
+            userId: true,
+            anonymousId: true,
+            createdAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 20
+        };
+      }
+
+      if (includeStatus) {
+        // Charger les statusEntries détaillés (par utilisateur)
+        messageSelect.statusEntries = {
+          select: {
+            id: true,
+            userId: true,
+            anonymousId: true,
+            deliveredAt: true,
+            receivedAt: true,
+            readAt: true,
+            readDurationMs: true,
+            readDevice: true,
+            viewedOnceAt: true,
+            revealedAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        };
+      }
+
+      if (includeReplies) {
+        // Charger les détails du message de réponse
+        messageSelect.replyTo = {
+          select: {
+            id: true,
+            content: true,
+            originalLanguage: true,
+            createdAt: true,
+            senderId: true,
+            anonymousSenderId: true,
+            validatedMentions: true,
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true
+              }
+            },
+            anonymousSender: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true
+              }
+            },
+            attachments: {
+              select: {
+                id: true,
+                fileName: true,
+                mimeType: true,
+                fileUrl: true,
+                thumbnailUrl: true
+              },
+              take: 3
+            },
+            _count: {
+              select: {
+                reactions: true
+              }
+            }
+          }
+        };
+      }
+
+      const messages = await prisma.message.findMany({
+        where: whereClause,
+        select: messageSelect,
         orderBy: { createdAt: 'desc' },
         take: limit, // Max 50 messages (validé par validatePagination)
         skip: before ? 0 : offset
@@ -1336,27 +1413,83 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Retourner les messages avec toutes leurs traductions
-      // Le frontend se chargera d'afficher la bonne traduction
-      const messagesWithAllTranslations = messages.map(message => {
-        // Adapter le message de réponse également
-        let adaptedReplyTo = null;
-        if (message.replyTo) {
-          adaptedReplyTo = {
+      // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
+      const mappedMessages = messages.map((message: any) => {
+        // Construire l'objet de réponse aligné avec GatewayMessage
+        const mappedMessage: any = {
+          // Identifiants
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          anonymousSenderId: message.anonymousSenderId,
+
+          // Contenu
+          content: message.content,
+          originalLanguage: message.originalLanguage || 'fr',
+          messageType: message.messageType,
+          messageSource: message.messageSource,
+
+          // Édition/Suppression
+          isEdited: message.isEdited,
+          editedAt: message.editedAt,
+          isDeleted: message.isDeleted,
+          deletedAt: message.deletedAt,
+
+          // Reply/Forward
+          replyToId: message.replyToId,
+          forwardedFromId: message.forwardedFromId,
+          forwardedFromConversationId: message.forwardedFromConversationId,
+
+          // View-once / Blur / Expiration
+          isViewOnce: message.isViewOnce,
+          maxViewOnceCount: message.maxViewOnceCount,
+          viewOnceCount: message.viewOnceCount,
+          isBlurred: message.isBlurred,
+          expiresAt: message.expiresAt,
+
+          // Statuts agrégés (dénormalisés)
+          deliveredToAllAt: message.deliveredToAllAt,
+          receivedByAllAt: message.receivedByAllAt,
+          readByAllAt: message.readByAllAt,
+          deliveredCount: message.deliveredCount,
+          readCount: message.readCount,
+
+          // Chiffrement
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+
+          // Timestamps
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+
+          // Mentions
+          validatedMentions: message.validatedMentions,
+
+          // Relations obligatoires
+          sender: message.sender,
+          anonymousSender: message.anonymousSender,
+          attachments: message.attachments,
+          _count: message._count
+        };
+
+        // Relations optionnelles (selon paramètres include_*)
+        if (includeTranslations && message.translations) {
+          mappedMessage.translations = message.translations;
+        }
+        if (includeReactions && message.reactions) {
+          mappedMessage.reactions = message.reactions;
+        }
+        if (includeStatus && message.statusEntries) {
+          mappedMessage.statusEntries = message.statusEntries;
+        }
+        if (includeReplies && message.replyTo) {
+          mappedMessage.replyTo = {
             ...message.replyTo,
-            originalLanguage: message.replyTo.originalLanguage || 'fr' // Garantir une langue par défaut
-            // Note: translations non chargées dans replyTo pour optimisation
+            originalLanguage: message.replyTo.originalLanguage || 'fr'
           };
         }
 
-        return {
-          ...message,
-          originalLanguage: message.originalLanguage || 'fr', // Garantir une langue par défaut
-          translations: message.translations, // Garder toutes les traductions
-          attachments: message.attachments, // Garder les attachments bruts avec metadata
-          replyTo: adaptedReplyTo,
-          userPreferredLanguage: userPreferredLanguage // Indiquer au frontend la langue préférée
-        };
+        return mappedMessage;
       });
 
       // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
@@ -1382,7 +1515,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       // Aligné avec MessagesListResponse de @meeshy/shared/types
       reply.send({
         success: true,
-        data: messagesWithAllTranslations,
+        data: mappedMessages,
         pagination: paginationMeta,
         meta: {
           userLanguage: userPreferredLanguage
