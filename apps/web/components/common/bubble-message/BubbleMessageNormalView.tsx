@@ -76,6 +76,8 @@ interface BubbleMessageNormalViewProps {
     attachments?: any[];
     /** Réactions dénormalisées pour affichage instantané { "❤️": 5, "👍": 3 } */
     reactionSummary?: Record<string, number>;
+    /** Réactions de l'utilisateur connecté (pour affichage instantané sans sync) */
+    currentUserReactions?: string[];
   };
   currentUser?: User; // Rendre optionnel pour éviter les erreurs
   userLanguage: string;
@@ -144,13 +146,14 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
 
   // Hook centralisé pour gérer les réactions (React Query) - sera partagé avec MessageReactions via props
-  // Utilise reactionSummary pour affichage instantané (sans attendre Socket.IO)
+  // Utilise reactionSummary + currentUserReactions pour affichage instantané (sans attendre Socket.IO)
   const messageReactionsHook = useReactionsQuery({
     messageId: message.id,
     currentUserId: isAnonymous ? currentAnonymousUserId : (currentUser?.id || ''),
     isAnonymous,
     enabled: !!currentUser || !!currentAnonymousUserId,
-    initialReactionSummary: message.reactionSummary
+    initialReactionSummary: message.reactionSummary,
+    initialCurrentUserReactions: message.currentUserReactions
   });
 
   // Hook pour fixer les z-index des popovers
