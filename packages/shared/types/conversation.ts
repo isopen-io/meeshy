@@ -165,6 +165,10 @@ export interface Message {
   readonly viewOnceCount: number;      // Number of unique viewers (denormalized)
   readonly isBlurred: boolean;         // Content blurred until tap to reveal
 
+  // ===== PINNING =====
+  readonly pinnedAt?: Date;   // Date when message was pinned (null = not pinned)
+  readonly pinnedBy?: string; // User ID who pinned the message
+
   // ===== DELIVERY STATUS (denormalized) =====
   readonly deliveredToAllAt?: Date;
   readonly receivedByAllAt?: Date;

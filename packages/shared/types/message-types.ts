@@ -111,6 +111,12 @@ export interface GatewayMessage {
   /** Date d'expiration pour messages éphémères */
   readonly expiresAt?: Date;
 
+  // ===== ÉPINGLAGE =====
+  /** Date à laquelle le message a été épinglé (null = non épinglé) */
+  readonly pinnedAt?: Date;
+  /** ID de l'utilisateur qui a épinglé le message */
+  readonly pinnedBy?: string;
+
   // ===== STATUTS AGRÉGÉS (dénormalisés pour performance) =====
   /** Date de livraison à TOUS les participants */
   readonly deliveredToAllAt?: Date;
