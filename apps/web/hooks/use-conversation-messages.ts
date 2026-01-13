@@ -124,25 +124,31 @@ export function useConversationMessages(
       }
 
 
-      const response = await apiService.get<{ success: boolean; data: { messages: Message[] } }>(
+      // Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
+      // Backend inclut toujours réactions et traductions automatiquement
+      const response = await apiService.get<{
+        success: boolean;
+        data: Message[];  // Directement les messages
+        pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
+        meta?: { userLanguage?: string };
+      }>(
         endpoint,
         {
           limit: limit.toString(),
-          offset: currentOffset.toString(),
-          include_reactions: 'true',
-          include_translations: 'true'
+          offset: currentOffset.toString()
         },
         requestOptions.headers ? { headers: requestOptions.headers } : undefined
       );
 
       const data = response.data;
-      
+
       if (!data.success) {
         throw new Error('Erreur lors du chargement des messages');
       }
 
-      const newMessages = data.data.messages || [];
-      const hasMoreMessages = (data.data as any).hasMore || false;
+      // data.data est directement Message[] (format optimisé)
+      const newMessages = data.data || [];
+      const hasMoreMessages = data.pagination?.hasMore ?? false;
 
       // Log des traductions reçues pour debugging
 

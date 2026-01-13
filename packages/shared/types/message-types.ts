@@ -37,43 +37,154 @@ export interface MessageTranslation {
 }
 
 /**
+ * Statut de lecture/réception par utilisateur (aligné avec Prisma MessageStatusEntry)
+ * Optionnel: retourné uniquement si include_status=true
+ */
+export interface MessageStatusEntry {
+  readonly id: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+
+  // Statuts de livraison
+  readonly deliveredAt?: Date;
+  readonly receivedAt?: Date;
+  readonly readAt?: Date;
+
+  // Détails de lecture (analytics)
+  readonly readDurationMs?: number;
+  readonly readDevice?: 'ios' | 'android' | 'web' | 'desktop';
+  readonly clientVersion?: string;
+
+  // View-once
+  readonly viewedOnceAt?: Date;
+  readonly revealedAt?: Date;
+
+  // Timestamps
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/**
  * Message retourné par la Gateway
+ * Aligné avec le modèle Prisma Message
+ *
  * Utilisé pour :
  * - Réception de nouveaux messages via Socket.IO
  * - Chargement de messages d'une conversation
  * - Réponses API
  */
 export interface GatewayMessage {
-  // Identifiants
+  // ===== IDENTIFIANTS =====
   readonly id: string;
   readonly conversationId: string;
   readonly senderId?: string;
   readonly anonymousSenderId?: string;
-  
-  // Contenu
+
+  // ===== CONTENU =====
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
-  
-  // Métadonnées
+  readonly messageSource?: 'user' | 'system' | 'ads' | 'app' | 'agent' | 'authority';
+
+  // ===== ÉDITION/SUPPRESSION =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
   readonly isDeleted: boolean;
   readonly deletedAt?: Date;
+
+  // ===== REPLY/FORWARD =====
   readonly replyToId?: string;
-  
-  // Timestamps
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+
+  // ===== VIEW-ONCE / BLUR / EXPIRATION =====
+  /** Message visible une seule fois (disparaît après lecture) */
+  readonly isViewOnce?: boolean;
+  /** Nombre max de lecteurs uniques (null = tous les membres) */
+  readonly maxViewOnceCount?: number;
+  /** Nombre d'utilisateurs ayant vu le message */
+  readonly viewOnceCount?: number;
+  /** Contenu flouté jusqu'à ce que l'utilisateur clique */
+  readonly isBlurred?: boolean;
+  /** Date d'expiration pour messages éphémères */
+  readonly expiresAt?: Date;
+
+  // ===== ÉPINGLAGE =====
+  /** Date à laquelle le message a été épinglé (null = non épinglé) */
+  readonly pinnedAt?: Date;
+  /** ID de l'utilisateur qui a épinglé le message */
+  readonly pinnedBy?: string;
+
+  // ===== STATUTS AGRÉGÉS (dénormalisés pour performance) =====
+  /** Date de livraison à TOUS les participants */
+  readonly deliveredToAllAt?: Date;
+  /** Date de réception par TOUS les participants */
+  readonly receivedByAllAt?: Date;
+  /** Date de lecture par TOUS les participants */
+  readonly readByAllAt?: Date;
+  /** Nombre de participants ayant reçu le message */
+  readonly deliveredCount?: number;
+  /** Nombre de participants ayant lu le message */
+  readonly readCount?: number;
+
+  // ===== RÉACTIONS (dénormalisées pour performance) =====
+  /** Comptage des réactions par emoji: { "❤️": 5, "👍": 3, "🔥": 1 } */
+  readonly reactionSummary?: Record<string, number>;
+  /** Nombre total de réactions */
+  readonly reactionCount?: number;
+  /** Emojis auxquels l'utilisateur connecté a réagi (pour affichage instantané sans sync) */
+  readonly currentUserReactions?: readonly string[];
+
+  // ===== CHIFFREMENT (E2EE) =====
+  readonly isEncrypted?: boolean;
+  readonly encryptionMode?: 'e2ee' | 'server' | 'hybrid';
+
+  // ===== TIMESTAMPS =====
   readonly createdAt: Date;
   readonly updatedAt?: Date;
-  
-  // Sender résolu (authentifié ou anonyme)
+
+  // ===== RELATIONS =====
+  /** Sender résolu (authentifié ou anonyme) */
   readonly sender?: User | AnonymousParticipant;
-  
-  // Traductions disponibles (peut être vide pour nouveaux messages)
-  readonly translations: readonly MessageTranslation[];
-  
-  // Message de réponse référencé
+  /** Traductions disponibles (optionnel: include_translations=true) */
+  readonly translations?: readonly MessageTranslation[];
+  /** Message de réponse référencé */
   readonly replyTo?: GatewayMessage;
+  /** Réactions (optionnel: include_reactions=true) */
+  readonly reactions?: readonly MessageReaction[];
+  /** Pièces jointes */
+  readonly attachments?: readonly MessageAttachment[];
+  /** Statuts par utilisateur (optionnel: include_status=true) */
+  readonly statusEntries?: readonly MessageStatusEntry[];
+}
+
+/**
+ * Réaction sur un message
+ */
+export interface MessageReaction {
+  readonly id: string;
+  readonly messageId: string;
+  readonly userId?: string;
+  readonly anonymousId?: string;
+  readonly emoji: string;
+  readonly createdAt: Date;
+}
+
+/**
+ * Pièce jointe d'un message
+ */
+export interface MessageAttachment {
+  readonly id: string;
+  readonly messageId: string;
+  readonly type: 'image' | 'video' | 'audio' | 'file' | 'location';
+  readonly url: string;
+  readonly filename?: string;
+  readonly mimeType?: string;
+  readonly size?: number;
+  readonly metadata?: Record<string, unknown>;
+  readonly createdAt: Date;
 }
 
 // ===== 2. MESSAGES UI (Interface utilisateur) =====
@@ -163,8 +274,8 @@ export function gatewayToUIMessage(
     canReply?: boolean;
   }
 ): UIMessage {
-  // Convertir les traductions Gateway en états UI
-  const uiTranslations: UITranslationState[] = gatewayMessage.translations.map(t => ({
+  // Convertir les traductions Gateway en états UI (gère le cas où translations est undefined)
+  const uiTranslations: UITranslationState[] = (gatewayMessage.translations ?? []).map(t => ({
     language: t.targetLanguage,
     content: t.translatedContent,
     status: 'completed' as const,

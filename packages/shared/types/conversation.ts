@@ -165,12 +165,20 @@ export interface Message {
   readonly viewOnceCount: number;      // Number of unique viewers (denormalized)
   readonly isBlurred: boolean;         // Content blurred until tap to reveal
 
+  // ===== PINNING =====
+  readonly pinnedAt?: Date;   // Date when message was pinned (null = not pinned)
+  readonly pinnedBy?: string; // User ID who pinned the message
+
   // ===== DELIVERY STATUS (denormalized) =====
   readonly deliveredToAllAt?: Date;
   readonly receivedByAllAt?: Date;
   readonly readByAllAt?: Date;
   readonly deliveredCount: number;
   readonly readCount: number;
+
+  // ===== REACTION SUMMARY (denormalized) =====
+  readonly reactionSummary?: Record<string, number>; // { "❤️": 5, "👍": 3 }
+  readonly reactionCount: number;
 
   // ===== E2EE / ENCRYPTION =====
   readonly encryptedContent?: string;       // Base64 encoded ciphertext
