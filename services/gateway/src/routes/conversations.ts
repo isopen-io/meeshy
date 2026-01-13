@@ -292,6 +292,10 @@ interface MessagesQuery {
   limit?: string;
   offset?: string;
   before?: string; // messageId pour pagination
+  include_reactions?: string;
+  include_translations?: string;
+  include_status?: string;
+  include_replies?: string;
 }
 
 interface SearchQuery {
@@ -1359,7 +1363,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                 fileName: true,
                 mimeType: true,
                 fileUrl: true,
-                thumbnailUrl: true
+                thumbnailUrl: true,
+                metadata: true
               },
               take: 3
             },
@@ -1411,7 +1416,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       let userReactionsMap: Map<string, string[]> = new Map();
 
       if (authRequest.authContext.isAuthenticated && messages.length > 0) {
-        const messageIds = messages.map(m => m.id);
+        const messageIds: string[] = (messages as any[]).map(m => m.id);
 
         // Requête pour obtenir les réactions de l'utilisateur sur ces messages
         const userReactions = await prisma.reaction.findMany({
@@ -1442,19 +1447,23 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         : 'en';
 
       // DEBUG: Log pour vérifier les attachments et metadata
-      if (messages.length > 0 && messages[0].attachments && messages[0].attachments.length > 0) {
-        console.log('🔍 [CONVERSATIONS] Premier message avec attachments:', {
-          messageId: messages[0].id,
-          attachmentCount: messages[0].attachments.length,
-          firstAttachment: {
-            id: messages[0].attachments[0].id,
-            hasMetadata: !!messages[0].attachments[0].metadata,
-            metadata: messages[0].attachments[0].metadata,
-            metadataType: typeof messages[0].attachments[0].metadata,
-            metadataKeys: messages[0].attachments[0].metadata ? Object.keys(messages[0].attachments[0].metadata) : [],
-            fullAttachment: JSON.stringify(messages[0].attachments[0], null, 2)
-          }
-        });
+      if (messages.length > 0) {
+        const firstMessage = messages[0] as any;
+        if (firstMessage.attachments && firstMessage.attachments.length > 0) {
+          const firstAttachment = firstMessage.attachments[0];
+          console.log('🔍 [CONVERSATIONS] Premier message avec attachments:', {
+            messageId: firstMessage.id,
+            attachmentCount: firstMessage.attachments.length,
+            firstAttachment: {
+              id: firstAttachment.id,
+              hasMetadata: !!firstAttachment.metadata,
+              metadata: firstAttachment.metadata,
+              metadataType: typeof firstAttachment.metadata,
+              metadataKeys: firstAttachment.metadata ? Object.keys(firstAttachment.metadata) : [],
+              fullAttachment: JSON.stringify(firstAttachment, null, 2)
+            }
+          });
+        }
       }
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types

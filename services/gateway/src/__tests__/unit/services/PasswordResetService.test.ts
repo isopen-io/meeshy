@@ -801,8 +801,10 @@ describe('PasswordResetService', () => {
     describe('Two-Factor Authentication', () => {
       const userWith2FA = {
         ...mockUser,
-        twoFactorEnabledAt: new Date(),
-        twoFactorSecret: 'JBSWY3DPEHPK3PXP'
+        twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+        userFeature: {
+          twoFactorEnabledAt: new Date()
+        }
       };
 
       beforeEach(() => {
