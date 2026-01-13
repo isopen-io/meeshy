@@ -229,8 +229,8 @@ services:
       SESSION_EXPIRY_DESKTOP_DAYS: ${SESSION_EXPIRY_DESKTOP_DAYS:-30}
       SESSION_EXPIRY_TRUSTED_DAYS: ${SESSION_EXPIRY_TRUSTED_DAYS:-365}
       MAX_SESSIONS_PER_USER: ${MAX_SESSIONS_PER_USER:-10}
-      # Branding
-      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-https://meeshy.me/images/meeshy-logo.png}
+      # Branding (optional - defaults to ${FRONTEND_URL}/android-chrome-512x512.png)
+      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-}
     ports:
       - "3000:3000"
     depends_on:

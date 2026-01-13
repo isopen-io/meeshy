@@ -288,8 +288,10 @@ export class EmailService {
   constructor() {
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
-    this.brandLogoUrl = process.env.BRAND_LOGO_URL || 'https://meeshy.me/images/meeshy-logo.png';
     this.frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
+    // Use the app icon from the frontend public folder (deployed with the web app)
+    // This is the same icon used for PWA and mobile bookmarks (android-chrome-512x512.png)
+    this.brandLogoUrl = process.env.BRAND_LOGO_URL || `${this.frontendUrl}/android-chrome-512x512.png`;
     this.initializeProviders();
   }
 
