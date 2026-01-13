@@ -243,10 +243,12 @@ class TestTranslationPoolManager:
             translation_service=mock_translation_service
         )
 
+        # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
+        long_text = "This is a longer text message that exceeds the short text threshold of 100 characters for testing the normal pool queue functionality properly."
         task = TranslationTask(
             task_id="task_123",
             message_id="msg_456",
-            text="Hello",
+            text=long_text,
             source_language="en",
             target_languages=["fr"],
             conversation_id="conv_123"
@@ -267,10 +269,12 @@ class TestTranslationPoolManager:
             translation_service=mock_translation_service
         )
 
+        # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
+        long_text = "This is a longer text message that exceeds the short text threshold of 100 characters for testing the any pool queue functionality properly."
         task = TranslationTask(
             task_id="task_123",
             message_id="msg_456",
-            text="Hello",
+            text=long_text,
             source_language="en",
             target_languages=["fr"],
             conversation_id="any"  # This should go to "any" pool
@@ -291,12 +295,15 @@ class TestTranslationPoolManager:
             translation_service=mock_translation_service
         )
 
+        # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
+        long_text = "This is a longer text message that exceeds the short text threshold of 100 characters for testing pool overflow functionality properly."
+
         # Fill the pool
         for i in range(2):
             task = TranslationTask(
                 task_id=f"task_{i}",
                 message_id=f"msg_{i}",
-                text="Hello",
+                text=long_text,
                 source_language="en",
                 target_languages=["fr"],
                 conversation_id="conv_123"
@@ -307,7 +314,7 @@ class TestTranslationPoolManager:
         overflow_task = TranslationTask(
             task_id="overflow_task",
             message_id="overflow_msg",
-            text="Hello",
+            text=long_text,
             source_language="en",
             target_languages=["fr"],
             conversation_id="conv_123"
@@ -427,27 +434,30 @@ class TestTranslationPoolManager:
     @pytest.mark.asyncio
     async def test_translate_single_language_no_service(self):
         """Test single language translation without service (fallback)"""
-        from services.zmq_server import TranslationPoolManager, TranslationTask
+        with patch('services.zmq_server.CACHE_AVAILABLE', False):
+            from services.zmq_server import TranslationPoolManager, TranslationTask
 
-        manager = TranslationPoolManager(
-            translation_service=None  # No translation service
-        )
+            manager = TranslationPoolManager(
+                translation_service=None  # No translation service
+            )
+            # Ensure cache is disabled for this test
+            manager.translation_cache = None
 
-        task = TranslationTask(
-            task_id="task_123",
-            message_id="msg_456",
-            text="Hello world",
-            source_language="en",
-            target_languages=["fr"],
-            conversation_id="conv_789"
-        )
+            task = TranslationTask(
+                task_id="task_123",
+                message_id="msg_456",
+                text="Hello world",
+                source_language="en",
+                target_languages=["fr"],
+                conversation_id="conv_789"
+            )
 
-        result = await manager._translate_single_language(task, "fr", "worker_1")
+            result = await manager._translate_single_language(task, "fr", "worker_1")
 
-        assert result['messageId'] == "msg_456"
-        assert result['modelType'] == "fallback"
-        assert result['confidenceScore'] == 0.1
-        assert "[FR]" in result['translatedText']
+            assert result['messageId'] == "msg_456"
+            assert result['modelType'] == "fallback"
+            assert result['confidenceScore'] == 0.1
+            assert "[FR]" in result['translatedText']
 
     @pytest.mark.asyncio
     async def test_translate_single_language_service_returns_none(self):
@@ -461,6 +471,8 @@ class TestTranslationPoolManager:
         manager = TranslationPoolManager(
             translation_service=bad_service
         )
+        # Ensure cache is disabled for this test
+        manager.translation_cache = None
 
         task = TranslationTask(
             task_id="task_123",
@@ -489,6 +501,8 @@ class TestTranslationPoolManager:
         manager = TranslationPoolManager(
             translation_service=bad_service
         )
+        # Ensure cache is disabled for this test
+        manager.translation_cache = None
 
         task = TranslationTask(
             task_id="task_123",
@@ -1372,11 +1386,12 @@ class TestAdditionalCoverage:
             translation_service=mock_translation_service
         )
 
-        # Create a task that will work normally
+        # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
+        long_text = "This is a longer text message that exceeds the short text threshold of 100 characters for testing exception handling in the normal pool properly."
         task = TranslationTask(
             task_id="task_exception",
             message_id="msg_exception",
-            text="Test",
+            text=long_text,
             source_language="en",
             target_languages=["fr"],
             conversation_id="conv_exception"
@@ -1596,19 +1611,33 @@ class TestAdditionalCoverage:
                         )
                         server.pub_socket = pub_socket
 
-                        # Create mock result
-                        mock_result = MagicMock()
-                        mock_result.message_id = "msg_123"
-                        mock_result.attachment_id = "att_456"
-                        mock_result.original = MagicMock()
-                        mock_result.original.transcription = "Hello world"
-                        mock_result.original.language = "en"
-                        mock_result.original.confidence = 0.95
-                        mock_result.original.source = "whisper"
-                        mock_result.original.segments = []
-                        mock_result.translations = {}
-                        mock_result.voice_model_user_id = "user_123"
-                        mock_result.voice_model_quality = 0.9
+                        # Create mock result with real values (not MagicMock) for JSON serialization
+                        @dataclass
+                        class MockOriginal:
+                            transcription: str = "Hello world"
+                            language: str = "en"
+                            confidence: float = 0.95
+                            source: str = "whisper"
+                            segments: list = None
+                            def __post_init__(self):
+                                if self.segments is None:
+                                    self.segments = []
+
+                        @dataclass
+                        class MockAudioResult:
+                            message_id: str = "msg_123"
+                            attachment_id: str = "att_456"
+                            original: MockOriginal = None
+                            translations: dict = None
+                            voice_model_user_id: str = "user_123"
+                            voice_model_quality: float = 0.9
+                            def __post_init__(self):
+                                if self.original is None:
+                                    self.original = MockOriginal()
+                                if self.translations is None:
+                                    self.translations = {}
+
+                        mock_result = MockAudioResult()
 
                         await server._publish_audio_result("task_123", mock_result, 500)
 
@@ -1685,10 +1714,14 @@ class TestAdditionalCoverage:
                         )
                         server.pub_socket = pub_socket
 
+                        # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
+                        long_text_1 = "This is a longer text message that exceeds the short text threshold of 100 characters for testing pool overflow functionality properly with first message."
+                        long_text_2 = "This is a longer text message that exceeds the short text threshold of 100 characters for testing pool overflow functionality properly with second message."
+
                         # Fill the pool first
                         msg1 = json.dumps({
                             'messageId': 'msg_1',
-                            'text': 'Hello',
+                            'text': long_text_1,
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr'],
                             'conversationId': 'conv_1'
@@ -1698,7 +1731,7 @@ class TestAdditionalCoverage:
                         # Now try another - should fail
                         msg2 = json.dumps({
                             'messageId': 'msg_2',
-                            'text': 'World',
+                            'text': long_text_2,
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr'],
                             'conversationId': 'conv_2'
