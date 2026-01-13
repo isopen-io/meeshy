@@ -1,0 +1,37 @@
+{
+  "sessions": [
+    {
+      "id": "20260113_114018_fr",
+      "timestamp": "20260113_114018",
+      "source_lang": "fr",
+      "reference": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/reference.wav",
+      "translations": {
+        "en": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_en.wav",
+          "text": "Hello, I am testing cloning",
+          "similarity": 0.8794801516235093,
+          "timestamp": "2026-01-13T11:40:42.844362"
+        },
+        "de": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_de.wav",
+          "text": "Hallo, ich teste das Klonen",
+          "similarity": 0.9109240379321647,
+          "timestamp": "2026-01-13T11:41:10.621743"
+        },
+        "es": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_es.wav",
+          "text": "Hola, estoy probando la clonación.",
+          "similarity": 0.8864809516325307,
+          "timestamp": "2026-01-13T11:41:24.341070"
+        },
+        "it": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_it.wav",
+          "text": "Ciao, sto testando la clonazione",
+          "similarity": 0.8548427839614605,
+          "timestamp": "2026-01-13T11:41:48.583553"
+        }
+      }
+    }
+  ],
+  "latest_voice": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/reference.wav"
+}

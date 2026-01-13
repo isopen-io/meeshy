@@ -18,11 +18,31 @@ import { logger } from '../utils/logger';
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Voice profile data to send to Translator for voice cloning
+ */
+export interface VoiceProfileData {
+  profileId: string;
+  userId: string;
+  embedding: string; // Base64 encoded numpy array
+  qualityScore: number;
+  fingerprint?: Record<string, any>;
+  voiceCharacteristics?: Record<string, any>;
+  version: number;
+  audioCount: number;
+  totalDurationMs: number;
+}
+
 export interface AudioTranslationOptions {
   audioBase64: string;
   targetLanguages: string[];
   sourceLanguage?: string;
   generateVoiceClone?: boolean;
+
+  // Voice profile options - for using original sender's voice in forwarded messages
+  originalSenderId?: string;
+  existingVoiceProfile?: VoiceProfileData;
+  useOriginalVoice?: boolean; // Default: true - always use original sender's voice
 }
 
 export interface AudioTranslationAsyncOptions extends AudioTranslationOptions {
@@ -186,7 +206,11 @@ export class AudioTranslateService extends EventEmitter {
         audioBase64: options.audioBase64,
         targetLanguages: options.targetLanguages,
         sourceLanguage: options.sourceLanguage,
-        generateVoiceClone: options.generateVoiceClone ?? true
+        generateVoiceClone: options.generateVoiceClone ?? true,
+        // Voice profile for voice cloning (original sender's voice)
+        originalSenderId: options.originalSenderId,
+        existingVoiceProfile: options.existingVoiceProfile,
+        useOriginalVoice: options.useOriginalVoice ?? true
       };
 
       const result = await this.sendRequest<AudioTranslationResult>(request);
@@ -223,7 +247,11 @@ export class AudioTranslateService extends EventEmitter {
         generateVoiceClone: options.generateVoiceClone ?? true,
         webhookUrl: options.webhookUrl,
         priority: options.priority ?? 1,
-        callbackMetadata: options.callbackMetadata
+        callbackMetadata: options.callbackMetadata,
+        // Voice profile for voice cloning (original sender's voice)
+        originalSenderId: options.originalSenderId,
+        existingVoiceProfile: options.existingVoiceProfile,
+        useOriginalVoice: options.useOriginalVoice ?? true
       };
 
       const result = await this.sendRequest<{ jobId: string; status: string }>(

@@ -1,0 +1,40 @@
+{
+  "engine": "chatterbox",
+  "reference": {
+    "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/original_voice.wav",
+    "text": "Bonjour, je teste le clonage",
+    "language": "fr",
+    "pitch_hz": 73.94556728256975
+  },
+  "settings": {
+    "exaggeration": 0.5,
+    "cfg_weight": 0.3
+  },
+  "total_time": 87.95562386512756,
+  "translations": {
+    "en": {
+      "text": "Hello, I am testing cloning",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_en.wav",
+      "similarity": 0.8794801516235093,
+      "time": 21.379674911499023
+    },
+    "de": {
+      "text": "Hallo, ich teste das Klonen",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_de.wav",
+      "similarity": 0.9109240379321647,
+      "time": 49.33961319923401
+    },
+    "es": {
+      "text": "Hola, estoy probando la clonación.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_es.wav",
+      "similarity": 0.8864809516325307,
+      "time": 40.60531401634216
+    },
+    "it": {
+      "text": "Ciao, sto testando la clonazione",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_it.wav",
+      "similarity": 0.8548427839614605,
+      "time": 37.224852085113525
+    }
+  }
+}

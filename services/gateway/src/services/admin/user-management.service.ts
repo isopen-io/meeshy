@@ -52,7 +52,9 @@ export class UserManagementService {
     }
 
     if (filters.twoFactorEnabled !== undefined) {
-      where.twoFactorEnabledAt = filters.twoFactorEnabled ? { not: null } : null;
+      where.userFeature = {
+        twoFactorEnabledAt: filters.twoFactorEnabled ? { not: null } : null
+      };
     }
 
     if (filters.createdAfter || filters.createdBefore) {
@@ -89,13 +91,16 @@ export class UserManagementService {
         where,
         orderBy,
         skip: offset,
-        take: limit
+        take: limit,
+        include: {
+          userFeature: true
+        }
       }),
       this.prisma.user.count({ where })
     ]);
 
     return {
-      users: users as FullUser[],
+      users: users as unknown as FullUser[],
       total: totalUsers
     };
   }
@@ -107,6 +112,7 @@ export class UserManagementService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
+        userFeature: true,
         _count: {
           select: {
             sentMessages: true,
@@ -116,7 +122,7 @@ export class UserManagementService {
       }
     });
 
-    return user as FullUser | null;
+    return user as unknown as FullUser | null;
   }
 
   /**
@@ -140,15 +146,22 @@ export class UserManagementService {
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        autoTranslateEnabled: false,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        userFeature: {
+          create: {
+            autoTranslateEnabled: false,
+            translateToSystemLanguage: true,
+            translateToRegionalLanguage: false,
+            useCustomDestination: false
+          }
+        }
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -164,10 +177,13 @@ export class UserManagementService {
       data: {
         ...data,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -198,10 +214,13 @@ export class UserManagementService {
       data: {
         email: data.newEmail,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return updatedUser as FullUser;
+    return updatedUser as unknown as FullUser;
   }
 
   /**
@@ -217,10 +236,13 @@ export class UserManagementService {
       data: {
         role: data.role,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -237,10 +259,13 @@ export class UserManagementService {
         isActive: data.isActive,
         deactivatedAt: data.isActive ? null : new Date(),
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -258,10 +283,13 @@ export class UserManagementService {
       data: {
         password: hashedPassword,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -273,10 +301,13 @@ export class UserManagementService {
       data: {
         isActive: false,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -288,10 +319,13 @@ export class UserManagementService {
       data: {
         isActive: true,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -303,10 +337,13 @@ export class UserManagementService {
       data: {
         avatar: avatarUrl,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 
   /**
@@ -318,9 +355,12 @@ export class UserManagementService {
       data: {
         avatar: null,
         updatedAt: new Date()
+      },
+      include: {
+        userFeature: true
       }
     });
 
-    return user as FullUser;
+    return user as unknown as FullUser;
   }
 }

@@ -3361,13 +3361,12 @@ export async function conversationRoutes(fastify: FastifyInstance) {
               systemLanguage: true,
               regionalLanguage: true,
               customDestinationLanguage: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
               isActive: true,
               createdAt: true,
-              updatedAt: true
+              updatedAt: true,
+              userFeature: {
+                select: { textTranslationEnabledAt: true }
+              }
             }
           }
         },
@@ -3397,10 +3396,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         systemLanguage: participant.user.systemLanguage,
         regionalLanguage: participant.user.regionalLanguage,
         customDestinationLanguage: participant.user.customDestinationLanguage,
-        autoTranslateEnabled: participant.user.autoTranslateEnabled,
-        translateToSystemLanguage: participant.user.translateToSystemLanguage,
-        translateToRegionalLanguage: participant.user.translateToRegionalLanguage,
-        useCustomDestination: participant.user.useCustomDestination,
+        // Traduction activée si textTranslationEnabledAt n'est pas null (dans UserFeature)
+        autoTranslateEnabled: participant.user.userFeature?.textTranslationEnabledAt != null,
         isActive: participant.user.isActive,
         createdAt: participant.user.createdAt,
         updatedAt: participant.user.updatedAt,

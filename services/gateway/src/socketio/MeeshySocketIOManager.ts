@@ -14,6 +14,7 @@ import { CallEventsHandler } from './CallEventsHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/AttachmentService';
 import { NotificationService } from '../services/NotificationService';
+import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { validateMessageLength } from '../config/message-limits';
 import jwt from 'jsonwebtoken';
 import type {
@@ -56,6 +57,7 @@ export class MeeshySocketIOManager {
   private callEventsHandler: CallEventsHandler;
   private callService: CallService;
   private notificationService: NotificationService;
+  private privacyPreferencesService: PrivacyPreferencesService;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -81,6 +83,9 @@ export class MeeshySocketIOManager {
 
     // Initialiser StatusService pour throttling des updates lastActiveAt
     this.statusService = new StatusService(prisma);
+
+    // Initialiser PrivacyPreferencesService pour vérifier les préférences de confidentialité
+    this.privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
@@ -1496,9 +1501,18 @@ export class MeeshySocketIOManager {
 
   /**
    * CORRECTION: Broadcaster le changement de statut d'un utilisateur à tous les clients
+   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
+      // PRIVACY: Vérifier les préférences de confidentialité de l'utilisateur
+      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, isAnonymous);
+
+      // Si l'utilisateur a désactivé showOnlineStatus, ne pas broadcaster son statut
+      if (!privacyPrefs.showOnlineStatus) {
+        return;
+      }
+
       // Récupérer les informations de l'utilisateur pour le broadcast
       if (isAnonymous) {
         const participant = await this.prisma.anonymousParticipant.findUnique({
@@ -1516,12 +1530,15 @@ export class MeeshySocketIOManager {
         if (participant) {
           const displayName = `${participant.firstName} ${participant.lastName}`.trim() || participant.username;
 
+          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
+          const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
+
           // Broadcaster uniquement dans la conversation du participant anonyme
           this.io.to(`conversation_${participant.conversationId}`).emit(SERVER_EVENTS.USER_STATUS, {
             userId: participant.id,
             username: displayName,
             isOnline,
-            lastActiveAt: participant.lastActiveAt
+            lastActiveAt
           });
 
         }
@@ -1546,13 +1563,16 @@ export class MeeshySocketIOManager {
         if (user) {
           const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
 
+          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
+          const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
+
           // Broadcaster dans toutes les conversations de l'utilisateur
           for (const conv of user.conversations) {
             this.io.to(`conversation_${conv.conversationId}`).emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
               username: displayName,
               isOnline,
-              lastActiveAt: user.lastActiveAt
+              lastActiveAt
             });
           }
 
@@ -1585,6 +1605,16 @@ export class MeeshySocketIOManager {
       // → Mettre à jour lastActiveAt (throttled à 5s)
       if (this.statusService) {
         this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
+      }
+
+      // PRIVACY: Vérifier si l'utilisateur a activé showTypingIndicator
+      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
+        userId,
+        connectedUser.isAnonymous
+      );
+      if (!shouldShowTyping) {
+        // L'utilisateur a désactivé l'indicateur de frappe, ne pas broadcaster
+        return;
       }
 
       let displayName: string;
@@ -1667,6 +1697,17 @@ export class MeeshySocketIOManager {
       const connectedUser = this.connectedUsers.get(userId);
       if (!connectedUser) {
         console.warn('⚠️ [TYPING] Utilisateur non connecté:', userId);
+        return;
+      }
+
+      // PRIVACY: Vérifier si l'utilisateur a activé showTypingIndicator
+      // Note: On vérifie aussi pour typing:stop pour cohérence
+      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
+        userId,
+        connectedUser.isAnonymous
+      );
+      if (!shouldShowTyping) {
+        // L'utilisateur a désactivé l'indicateur de frappe, ne pas broadcaster
         return;
       }
 

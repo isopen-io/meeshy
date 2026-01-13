@@ -254,3 +254,6 @@ apps/ios/Meeshy/Resources/MLModels/
 # Firebase config (contains sensitive data)
 GoogleService-Info.plist
 google-services.json
+# Voice cloning output files
+apps/ios/scripts/voice_cloning_output/*.wav
+apps/ios/scripts/voice_cloning_output/history/**/*.wav

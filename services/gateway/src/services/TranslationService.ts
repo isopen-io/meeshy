@@ -309,10 +309,16 @@ export class TranslationService extends EventEmitter {
       // ⚠️ CORRECTION DOUBLONS: Retirer les anciens listeners AVANT d'en ajouter de nouveaux
       this.zmqClient.removeAllListeners('translationCompleted');
       this.zmqClient.removeAllListeners('translationError');
-      
+      this.zmqClient.removeAllListeners('audioProcessCompleted');
+      this.zmqClient.removeAllListeners('audioProcessError');
+
       // Écouter les événements de traduction terminée
       this.zmqClient.on('translationCompleted', this._handleTranslationCompleted.bind(this));
       this.zmqClient.on('translationError', this._handleTranslationError.bind(this));
+
+      // Écouter les événements de traduction audio (attachements)
+      this.zmqClient.on('audioProcessCompleted', this._handleAudioProcessCompleted.bind(this));
+      this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
       
       
       // Test de réception après initialisation
@@ -663,9 +669,9 @@ export class TranslationService extends EventEmitter {
       // OPTIMISATION: Faire les 2 requêtes en parallèle au lieu de séquentiellement
       const [members, anonymousParticipants] = await Promise.all([
         this.prisma.conversationMember.findMany({
-          where: { 
+          where: {
             conversationId: conversationId,
-            isActive: true 
+            isActive: true
           },
           include: {
             user: {
@@ -673,10 +679,14 @@ export class TranslationService extends EventEmitter {
                 systemLanguage: true,
                 regionalLanguage: true,
                 customDestinationLanguage: true,
-                autoTranslateEnabled: true,
-                translateToSystemLanguage: true,
-                translateToRegionalLanguage: true,
-                useCustomDestination: true
+                userFeature: {
+                  select: {
+                    autoTranslateEnabled: true,
+                    translateToSystemLanguage: true,
+                    translateToRegionalLanguage: true,
+                    useCustomDestination: true
+                  }
+                }
               }
             }
           }
@@ -695,20 +705,22 @@ export class TranslationService extends EventEmitter {
       // Extraire TOUTES les langues des utilisateurs authentifiés
       // On extrait toujours systemLanguage, et les autres langues selon les préférences
       for (const member of members) {
+        const userPrefs = member.user.userFeature;
+
         // Toujours ajouter la langue système du participant
         if (member.user.systemLanguage) {
           languages.add(member.user.systemLanguage);
         }
-        
+
         // Ajouter les langues additionnelles si l'utilisateur a activé la traduction automatique
-        if (member.user.autoTranslateEnabled) {
+        if (userPrefs?.autoTranslateEnabled) {
           // Langue régionale si activée
-          if (member.user.translateToRegionalLanguage && member.user.regionalLanguage) {
-            languages.add(member.user.regionalLanguage); 
+          if (userPrefs.translateToRegionalLanguage && member.user.regionalLanguage) {
+            languages.add(member.user.regionalLanguage);
           }
           // Langue personnalisée si activée
-          if (member.user.useCustomDestination && member.user.customDestinationLanguage) {
-            languages.add(member.user.customDestinationLanguage); 
+          if (userPrefs.useCustomDestination && member.user.customDestinationLanguage) {
+            languages.add(member.user.customDestinationLanguage);
           }
         }
       }
@@ -825,13 +837,229 @@ export class TranslationService extends EventEmitter {
 
   private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
     console.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
-    
+
     if (data.error === 'translation pool full') {
       this.stats.pool_full_rejections++;
     }
-    
+
     this.stats.errors++;
   }
+
+  // ============================================================================
+  // AUDIO ATTACHMENT TRANSLATION HANDLERS
+  // ============================================================================
+
+  /**
+   * Traite les résultats de traduction audio (attachements) reçus du Translator.
+   * Sauvegarde:
+   * 1. La transcription dans MessageAudioTranscription
+   * 2. Chaque audio traduit dans MessageTranslatedAudio
+   */
+  private async _handleAudioProcessCompleted(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    transcription: {
+      text: string;
+      language: string;
+      confidence: number;
+      source: string;
+      segments?: Array<{ text: string; startMs: number; endMs: number }>;
+    };
+    translatedAudios: Array<{
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+    }>;
+    voiceModelUserId: string;
+    voiceModelQuality: number;
+    processingTimeMs: number;
+    // Nouveau profil vocal créé par Translator (à sauvegarder)
+    newVoiceProfile?: {
+      userId: string;
+      profileId: string;
+      embedding: string; // Base64
+      qualityScore: number;
+      audioCount: number;
+      totalDurationMs: number;
+      version: number;
+      fingerprint?: Record<string, any>;
+      voiceCharacteristics?: Record<string, any>;
+    };
+  }) {
+    try {
+      const startTime = Date.now();
+
+      logger.info(`🎤 [TranslationService] Audio process completed: ${data.attachmentId}`);
+      logger.info(`   📝 Transcription: ${data.transcription.text.substring(0, 50)}...`);
+      logger.info(`   🌍 Traductions: ${data.translatedAudios.length} langues`);
+
+      // 1. Récupérer les infos de l'attachment pour vérifier
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: data.attachmentId },
+        select: { id: true, messageId: true, duration: true }
+      });
+
+      if (!attachment) {
+        logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
+        return;
+      }
+
+      // 2. Sauvegarder la transcription (upsert)
+      await this.prisma.messageAudioTranscription.upsert({
+        where: { attachmentId: data.attachmentId },
+        update: {
+          transcribedText: data.transcription.text,
+          language: data.transcription.language,
+          confidence: data.transcription.confidence,
+          source: data.transcription.source,
+          segments: data.transcription.segments || null,
+          audioDurationMs: attachment.duration || 0
+        },
+        create: {
+          attachmentId: data.attachmentId,
+          messageId: data.messageId,
+          transcribedText: data.transcription.text,
+          language: data.transcription.language,
+          confidence: data.transcription.confidence,
+          source: data.transcription.source,
+          segments: data.transcription.segments || null,
+          audioDurationMs: attachment.duration || 0
+        }
+      });
+
+      logger.info(`   ✅ Transcription sauvegardée (${data.transcription.language})`);
+
+      // 3. Sauvegarder chaque audio traduit (upsert pour éviter les doublons)
+      for (const translatedAudio of data.translatedAudios) {
+        await this.prisma.messageTranslatedAudio.upsert({
+          where: {
+            attachmentId_targetLanguage: {
+              attachmentId: data.attachmentId,
+              targetLanguage: translatedAudio.targetLanguage
+            }
+          },
+          update: {
+            translatedText: translatedAudio.translatedText,
+            audioPath: translatedAudio.audioPath,
+            audioUrl: translatedAudio.audioUrl,
+            durationMs: translatedAudio.durationMs,
+            voiceCloned: translatedAudio.voiceCloned,
+            voiceQuality: translatedAudio.voiceQuality,
+            voiceModelId: data.voiceModelUserId || null
+          },
+          create: {
+            attachmentId: data.attachmentId,
+            messageId: data.messageId,
+            targetLanguage: translatedAudio.targetLanguage,
+            translatedText: translatedAudio.translatedText,
+            audioPath: translatedAudio.audioPath,
+            audioUrl: translatedAudio.audioUrl,
+            durationMs: translatedAudio.durationMs,
+            voiceCloned: translatedAudio.voiceCloned,
+            voiceQuality: translatedAudio.voiceQuality,
+            voiceModelId: data.voiceModelUserId || null
+          }
+        });
+
+        logger.info(`   ✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
+      }
+
+      // 4. Sauvegarder le nouveau profil vocal si créé par Translator
+      if (data.newVoiceProfile) {
+        try {
+          const nvp = data.newVoiceProfile;
+          logger.info(`   📦 Sauvegarde nouveau profil vocal: ${nvp.userId}`);
+
+          // Décoder l'embedding Base64 en Buffer
+          const embeddingBuffer = Buffer.from(nvp.embedding, 'base64');
+
+          // Upsert le profil vocal dans UserVoiceModel
+          await this.prisma.userVoiceModel.upsert({
+            where: { userId: nvp.userId },
+            update: {
+              profileId: nvp.profileId,
+              embedding: embeddingBuffer,
+              qualityScore: nvp.qualityScore,
+              audioCount: nvp.audioCount,
+              totalDurationMs: nvp.totalDurationMs,
+              version: nvp.version,
+              fingerprint: nvp.fingerprint || null,
+              voiceCharacteristics: nvp.voiceCharacteristics || null,
+              updatedAt: new Date()
+            },
+            create: {
+              userId: nvp.userId,
+              profileId: nvp.profileId,
+              embedding: embeddingBuffer,
+              qualityScore: nvp.qualityScore,
+              audioCount: nvp.audioCount,
+              totalDurationMs: nvp.totalDurationMs,
+              version: nvp.version,
+              fingerprint: nvp.fingerprint || null,
+              voiceCharacteristics: nvp.voiceCharacteristics || null
+            }
+          });
+
+          logger.info(`   ✅ Profil vocal sauvegardé: ${nvp.userId} (quality=${nvp.qualityScore.toFixed(2)})`);
+        } catch (voiceProfileError) {
+          logger.error(`   ⚠️ Erreur sauvegarde profil vocal: ${voiceProfileError}`);
+          // Ne pas faire échouer le traitement principal
+        }
+      }
+
+      // 5. Émettre événement pour notifier les clients (Socket.IO)
+      this.emit('audioTranslationReady', {
+        taskId: data.taskId,
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        transcription: data.transcription,
+        translatedAudios: data.translatedAudios,
+        processingTimeMs: data.processingTimeMs
+      });
+
+      const totalTime = Date.now() - startTime;
+      logger.info(`   ⏱️ Persistance audio terminée en ${totalTime}ms`);
+
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur sauvegarde audio: ${error}`);
+      this.stats.errors++;
+    }
+  }
+
+  /**
+   * Gère les erreurs de processing audio
+   */
+  private async _handleAudioProcessError(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode: string;
+  }) {
+    logger.error(`❌ [TranslationService] Audio process error: ${data.attachmentId}`);
+    logger.error(`   Code: ${data.errorCode}`);
+    logger.error(`   Error: ${data.error}`);
+
+    // Émettre événement d'erreur pour notifier les clients
+    this.emit('audioTranslationError', {
+      taskId: data.taskId,
+      messageId: data.messageId,
+      attachmentId: data.attachmentId,
+      error: data.error,
+      errorCode: data.errorCode
+    });
+
+    this.stats.errors++;
+  }
+
+  // ============================================================================
+  // END AUDIO ATTACHMENT HANDLERS
+  // ============================================================================
 
   private _addToCache(key: string, result: TranslationResult) {
     // Gestion du cache LRU simple

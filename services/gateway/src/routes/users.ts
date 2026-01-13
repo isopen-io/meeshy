@@ -746,23 +746,24 @@ export async function userRoutes(fastify: FastifyInstance) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
 
-      // Champs de configuration de traduction
-      if (body.autoTranslateEnabled !== undefined) updateData.autoTranslateEnabled = body.autoTranslateEnabled;
-      if (body.translateToSystemLanguage !== undefined) updateData.translateToSystemLanguage = body.translateToSystemLanguage;
-      if (body.translateToRegionalLanguage !== undefined) updateData.translateToRegionalLanguage = body.translateToRegionalLanguage;
-      if (body.useCustomDestination !== undefined) updateData.useCustomDestination = body.useCustomDestination;
+      // Champs de configuration de traduction (stored in UserFeature)
+      const featureUpdateData: any = {};
+      if (body.autoTranslateEnabled !== undefined) featureUpdateData.autoTranslateEnabled = body.autoTranslateEnabled;
+      if (body.translateToSystemLanguage !== undefined) featureUpdateData.translateToSystemLanguage = body.translateToSystemLanguage;
+      if (body.translateToRegionalLanguage !== undefined) featureUpdateData.translateToRegionalLanguage = body.translateToRegionalLanguage;
+      if (body.useCustomDestination !== undefined) featureUpdateData.useCustomDestination = body.useCustomDestination;
 
       // Logique exclusive pour les options de traduction
       // Si une option de traduction est activee, desactiver les autres
       if (body.translateToSystemLanguage === true) {
-        updateData.translateToRegionalLanguage = false;
-        updateData.useCustomDestination = false;
+        featureUpdateData.translateToRegionalLanguage = false;
+        featureUpdateData.useCustomDestination = false;
       } else if (body.translateToRegionalLanguage === true) {
-        updateData.translateToSystemLanguage = false;
-        updateData.useCustomDestination = false;
+        featureUpdateData.translateToSystemLanguage = false;
+        featureUpdateData.useCustomDestination = false;
       } else if (body.useCustomDestination === true) {
-        updateData.translateToSystemLanguage = false;
-        updateData.translateToRegionalLanguage = false;
+        featureUpdateData.translateToSystemLanguage = false;
+        featureUpdateData.translateToRegionalLanguage = false;
       }
 
       // Verifier si l'email est unique (si modifie) - comparaison case-insensitive
@@ -822,22 +823,45 @@ export async function userRoutes(fastify: FastifyInstance) {
           systemLanguage: true,
           regionalLanguage: true,
           customDestinationLanguage: true,
-          autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: true,
-          useCustomDestination: true,
           role: true,
           isActive: true,
           lastActiveAt: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          userFeature: {
+            select: {
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true
+            }
+          }
         }
       });
+
+      // Update UserFeature if there are translation preference changes
+      if (Object.keys(featureUpdateData).length > 0) {
+        await fastify.prisma.userFeature.upsert({
+          where: { userId },
+          update: featureUpdateData,
+          create: { userId, ...featureUpdateData }
+        });
+      }
+
+      // Flatten the response to maintain backward compatibility
+      const responseUser = {
+        ...updatedUser,
+        autoTranslateEnabled: updatedUser.userFeature?.autoTranslateEnabled ?? true,
+        translateToSystemLanguage: updatedUser.userFeature?.translateToSystemLanguage ?? true,
+        translateToRegionalLanguage: updatedUser.userFeature?.translateToRegionalLanguage ?? false,
+        useCustomDestination: updatedUser.userFeature?.useCustomDestination ?? false
+      };
+      delete (responseUser as any).userFeature;
 
       return reply.send({
         success: true,
         data: {
-          user: updatedUser,
+          user: responseUser,
           message: 'Profile updated successfully'
         }
       });
@@ -1453,14 +1477,18 @@ export async function userRoutes(fastify: FastifyInstance) {
           systemLanguage: true,
           regionalLanguage: true,
           customDestinationLanguage: true,
-          autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: true,
-          useCustomDestination: true,
           isActive: true,
           deactivatedAt: true,
           createdAt: true,
           updatedAt: true,
+          userFeature: {
+            select: {
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true
+            }
+          }
           // Exclure les champs sensibles: email, phoneNumber, password
           // Exclure aussi: emailVerified, phoneVerified, lastLoginAt, etc.
         }
@@ -1476,10 +1504,16 @@ export async function userRoutes(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
 
+      // Flatten userFeature data for backward compatibility
+      const { userFeature, ...userWithoutFeature } = user;
 
       // Ajouter les champs manquants pour completer le type SocketIOUser
       const publicUserProfile = {
-        ...user,
+        ...userWithoutFeature,
+        autoTranslateEnabled: userFeature?.autoTranslateEnabled ?? true,
+        translateToSystemLanguage: userFeature?.translateToSystemLanguage ?? true,
+        translateToRegionalLanguage: userFeature?.translateToRegionalLanguage ?? false,
+        useCustomDestination: userFeature?.useCustomDestination ?? false,
         email: '', // Masque pour la securite
         phoneNumber: undefined, // Masque pour la securite
         permissions: undefined, // Non applicable pour les profils publics

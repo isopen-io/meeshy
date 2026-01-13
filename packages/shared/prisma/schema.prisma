@@ -33,13 +33,16 @@ model User {
   timezone                    String?
   /// Array of blocked user IDs for quick access
   blockedUserIds              String[]  @default([]) @db.ObjectId
+  // ============================================
+  // LANGUAGE CONFIGURATION
+  // ============================================
+  /// User's primary system language (ISO 639-1)
   systemLanguage              String    @default("en")
-  regionalLanguage            String    @default("fr")
+  /// User's secondary regional language (ISO 639-1)
+  regionalLanguage            String?
+  /// Custom destination language for translations (if set, takes priority)
   customDestinationLanguage   String?
-  autoTranslateEnabled        Boolean   @default(true)
-  translateToSystemLanguage   Boolean   @default(true)
-  translateToRegionalLanguage Boolean   @default(false)
-  useCustomDestination        Boolean   @default(false)
+
   /// USER, ADMIN, MODO, AUDIT, ANALYST, BIGBOSS
   role                        String    @default("USER")
   isActive                    Boolean   @default(true)
@@ -52,8 +55,9 @@ model User {
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
-  twoFactorEnabledAt      DateTime?
-  twoFactorSecret         String? // TOTP secret (encrypted)
+  twoFactorSecret         String? // TOTP secret (base32 encoded)
+  twoFactorBackupCodes    String[] @default([]) // Hashed backup codes for 2FA recovery
+  twoFactorPendingSecret  String? // Temporary secret during 2FA setup (before confirmation)
 
   // Account Lockout
   failedLoginAttempts Int       @default(0)
@@ -86,9 +90,6 @@ model User {
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
-  /// User encryption preference: disabled, optional, always
-  encryptionPreference String @default("optional")
-
   /// Signal Protocol identity key (public part - base64 encoded)
   signalIdentityKeyPublic String?
 
@@ -104,31 +105,8 @@ model User {
   /// Last key rotation timestamp
   lastKeyRotation DateTime?
 
-  // ============================================
-  // TRANSCRIPTION SETTINGS (ON-DEVICE)
-  // ============================================
-  /// Auto-transcribe audio/video messages when no server transcription exists
-  autoTranscriptionEnabled Boolean @default(true)
-
-  // ============================================
-  // VOICE PROFILE & CONSENT FIELDS
-  // ============================================
-  /// Date of consent for voice profile recording (null = not consented)
-  /// User must explicitly consent before recording their voice profile
-  voiceProfileConsentAt DateTime?
-
-  /// Date of age verification consent (null = not verified)
-  /// Required for users under 18 - voice profile expires every 2 months
-  ageVerificationConsentAt DateTime?
-
-  /// User's declared birth date (for age-based profile expiration)
+  /// Date de naissance déclarée (pour calcul expiration profil vocal)
   birthDate DateTime?
-
-  /// Date when user enabled voice cloning for their messages (null = disabled)
-  voiceCloningEnabledAt DateTime?
-
-  /// Last voice profile update notification sent
-  voiceProfileUpdateNotifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -152,6 +130,7 @@ model User {
   mentions               Mention[]                     @relation("UserMentions")
   notifications          Notification[]
   notificationPreference NotificationPreference?
+  userFeature            UserFeature?
   preferences            UserPreference[]
   stats                  UserStats?
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
@@ -1047,6 +1026,128 @@ model NotificationPreference {
   dndEnabled   Boolean @default(false)
   dndStartTime String? // Format: "22:00"
   dndEndTime   String? // Format: "08:00"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Fonctionnalités et consentements utilisateur (1:1 avec User)
+/// Centralise tous les toggles de features et consentements GDPR
+/// Pattern: DateTime? = null (désactivé) | Date (activé à cette date - audit trail)
+model UserFeature {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  // ============================================
+  // GDPR CONSENTS (DateTime? = audit trail obligatoire)
+  // null = pas de consentement, Date = consentement donné à cette date
+  // ============================================
+  /// Consentement général traitement des données (BASE OBLIGATOIRE)
+  dataProcessingConsentAt     DateTime?
+  /// Consentement traitement données vocales (requis pour audio)
+  voiceDataConsentAt          DateTime?
+  /// Consentement création profil vocal
+  voiceProfileConsentAt       DateTime?
+  /// Consentement clonage vocal (TTS avec sa voix)
+  voiceCloningConsentAt       DateTime?
+  /// Consentement envoi données à services tiers (Google, OpenAI, etc.)
+  thirdPartyServicesConsentAt DateTime?
+  /// Date de vérification d'âge (requis pour mineurs)
+  ageVerifiedAt               DateTime?
+
+  // ============================================
+  // SECURITY FEATURES
+  // ============================================
+  /// Authentification à deux facteurs activée
+  twoFactorEnabledAt   DateTime?
+  /// Préférence de chiffrement: disabled, optional, always
+  encryptionPreference String @default("optional")
+
+  // ============================================
+  // TEXT TRANSLATION FEATURES
+  // ============================================
+  /// Traduction des messages texte activée
+  textTranslationEnabledAt DateTime?
+
+  // ============================================
+  // TRANSLATION DESTINATION PREFERENCES
+  // ============================================
+  /// Activer la traduction automatique
+  autoTranslateEnabled      Boolean @default(true)
+  /// Traduire vers la langue système
+  translateToSystemLanguage Boolean @default(true)
+  /// Traduire vers la langue régionale
+  translateToRegionalLanguage Boolean @default(false)
+  /// Utiliser une langue de destination personnalisée
+  useCustomDestination      Boolean @default(false)
+
+  // ============================================
+  // AUDIO TRANSCRIPTION FEATURES
+  // ============================================
+  /// Transcription audio activée (speech-to-text)
+  audioTranscriptionEnabledAt DateTime?
+  /// Source de transcription préférée: "auto" | "mobile" | "server"
+  transcriptionSource         String    @default("auto")
+  /// Détection multi-locuteurs (speaker diarization)
+  speakerDiarizationEnabledAt DateTime?
+
+  // ============================================
+  // AUDIO TRANSLATION FEATURES
+  // Dépend de: audioTranscriptionEnabledAt + textTranslationEnabledAt
+  // ============================================
+  /// Traduction des audios en texte traduit
+  audioTranslationEnabledAt          DateTime?
+  /// Génération d'audio traduit (TTS)
+  translatedAudioGenerationEnabledAt DateTime?
+  /// Format audio traduit: "mp3" | "wav" | "ogg"
+  translatedAudioFormat              String    @default("mp3")
+
+  // ============================================
+  // VOICE CLONING FEATURES
+  // Dépend de: voiceCloningConsentAt
+  // ============================================
+  /// Clonage vocal actif pour mes messages
+  voiceCloningEnabledAt        DateTime?
+  /// Permettre aux autres d'entendre ma voix clonée sur mes audios traduits
+  allowOthersCloneMyVoiceAt    DateTime?
+  /// Date d'expiration du profil vocal (auto-calculée, mineurs: 60j, adultes: 90j)
+  voiceProfileExpiresAt        DateTime?
+  /// Prochaine date de recalibration suggérée
+  nextVoiceRecalibrationAt     DateTime?
+  /// Dernière notification de mise à jour du profil vocal
+  voiceProfileUpdateNotifiedAt DateTime?
+
+  // ============================================
+  // ATTACHMENT TRANSLATION FEATURES
+  // ============================================
+  /// OCR + traduction du texte dans les images
+  imageTextTranslationEnabledAt     DateTime?
+  /// Traduction des documents (PDF, DOCX, etc.)
+  documentTranslationEnabledAt      DateTime?
+  /// Traduction des sous-titres vidéo
+  videoSubtitleTranslationEnabledAt DateTime?
+
+  // ============================================
+  // PLAYBACK PREFERENCES
+  // ============================================
+  /// Lecture automatique des messages audio
+  autoplayAudioEnabledAt           DateTime?
+  /// Lecture automatique des audios traduits
+  autoplayTranslatedAudioEnabledAt DateTime?
+  /// Préférer l'audio traduit par défaut (au lieu de l'original)
+  preferTranslatedAudioAt          DateTime?
+
+  // ============================================
+  // DATA RETENTION (GDPR)
+  // ============================================
+  /// Suppression automatique des données expirées
+  autoDeleteExpiredDataAt DateTime?
+  /// Durée de rétention des données générales (jours)
+  dataRetentionDays       Int       @default(365)
+  /// Durée de rétention des données vocales (jours)
+  voiceDataRetentionDays  Int       @default(180)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

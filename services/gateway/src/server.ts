@@ -46,6 +46,7 @@ import { messagesRoutes } from './routes/admin/messages';
 // import { linksAdminRoutes } from './routes/admin/links';
 import { userRoutes } from './routes/users';
 import userPreferencesRoutes from './routes/user-preferences';
+import userFeaturesRoutes from './routes/user-features';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
 import notificationPreferencesRoutes from './routes/notification-preferences';
@@ -67,6 +68,7 @@ import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
 import { passwordResetRoutes } from './routes/password-reset';
+import { twoFactorRoutes } from './routes/two-factor';
 import userDeletionsRoutes from './routes/user-deletions';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
@@ -731,6 +733,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register password reset routes with /api/auth prefix
     await this.server.register(passwordResetRoutes, { prefix: `${API_PREFIX}/auth` });
 
+    // Register 2FA routes with /api/auth/2fa prefix
+    await this.server.register(twoFactorRoutes, { prefix: `${API_PREFIX}/auth/2fa` });
+
     // Register user deletions routes (delete for me feature)
     await this.server.register(userDeletionsRoutes, { prefix: '' });
 
@@ -782,6 +787,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     
     // Register user preferences routes with /api prefix
     await this.server.register(userPreferencesRoutes, { prefix: API_PREFIX });
+
+    // Register user features routes with /api prefix (GDPR consents, feature toggles)
+    await this.server.register(userFeaturesRoutes, { prefix: API_PREFIX });
 
     // Register conversation preferences routes with /api prefix
     await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });

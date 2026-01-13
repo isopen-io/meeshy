@@ -93,6 +93,41 @@ export interface AudioProcessRequest {
   targetLanguages: string[];
   generateVoiceClone: boolean;
   modelType: string;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VOICE PROFILE FIELDS (pour transferts et réutilisation)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * ID de l'émetteur original (différent de senderId si message transféré)
+   * Pour les messages normaux: originalSenderId === senderId
+   * Pour les transferts: originalSenderId = émetteur du message original
+   */
+  originalSenderId?: string;
+
+  /**
+   * Profil vocal existant de l'émetteur original (si disponible en BDD Gateway)
+   * Si fourni, Translator l'utilise directement sans le recréer
+   * Si absent, Translator génère un nouveau profil et le retourne à Gateway
+   */
+  existingVoiceProfile?: {
+    profileId: string;
+    userId: string;
+    embedding: string;      // Base64 encoded numpy array
+    qualityScore: number;
+    fingerprint?: Record<string, any>;
+    voiceCharacteristics?: Record<string, any>;
+    version: number;
+    audioCount: number;
+    totalDurationMs: number;
+  };
+
+  /**
+   * Si true, utiliser la voix de l'émetteur original même pour les transferts
+   * Si false, utiliser la voix du forwarder (senderId)
+   * Par défaut: true
+   */
+  useOriginalVoice?: boolean;
 }
 
 export interface TranscriptionData {

@@ -258,7 +258,15 @@ export class PasswordResetService {
       // 4. Find token in database (with constant-time comparison via hash)
       const resetToken = await this.prisma.passwordResetToken.findUnique({
         where: { tokenHash },
-        include: { user: true }
+        include: {
+          user: {
+            include: {
+              userFeature: {
+                select: { twoFactorEnabledAt: true }
+              }
+            }
+          }
+        }
       });
 
       if (!resetToken) {
@@ -304,7 +312,7 @@ export class PasswordResetService {
       }
 
       // 9. Verify 2FA if enabled
-      if (user.twoFactorEnabledAt) {
+      if (user.userFeature?.twoFactorEnabledAt) {
         if (!twoFactorCode) {
           return { success: false, error: '2FA code required' };
         }
@@ -660,10 +668,15 @@ export class PasswordResetService {
   private async verify2FA(userId: string, token: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { twoFactorSecret: true, twoFactorEnabledAt: true }
+      select: {
+        twoFactorSecret: true,
+        userFeature: {
+          select: { twoFactorEnabledAt: true }
+        }
+      }
     });
 
-    if (!user?.twoFactorEnabledAt || !user.twoFactorSecret) {
+    if (!user?.userFeature?.twoFactorEnabledAt || !user.twoFactorSecret) {
       return true; // 2FA not enabled
     }
 

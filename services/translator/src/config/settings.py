@@ -123,6 +123,37 @@ class Settings:
         self.max_text_length = int(os.getenv("MAX_TEXT_LENGTH", "100000"))
         self.concurrent_translations = int(os.getenv("CONCURRENT_TRANSLATIONS", "4"))  # Optimisé pour 4 cores
 
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATIONS LINUX/CUDA - Batch Processing & Priority Queue
+        # ═══════════════════════════════════════════════════════════════
+
+        # Batch translation settings
+        self.batch_size = int(os.getenv("TRANSLATOR_BATCH_SIZE", "8"))
+        self.batch_timeout_ms = int(os.getenv("TRANSLATOR_BATCH_TIMEOUT_MS", "50"))
+        self.max_batch_tokens = int(os.getenv("TRANSLATOR_MAX_BATCH_TOKENS", "4096"))
+
+        # Priority queue settings (prioritize short texts for faster response)
+        self.enable_priority_queue = os.getenv("TRANSLATOR_PRIORITY_QUEUE", "true").lower() == "true"
+        self.short_text_threshold = int(os.getenv("TRANSLATOR_SHORT_TEXT_THRESHOLD", "100"))
+        self.medium_text_threshold = int(os.getenv("TRANSLATOR_MEDIUM_TEXT_THRESHOLD", "500"))
+
+        # PyTorch optimization settings
+        self.enable_torch_compile = os.getenv("TRANSLATOR_TORCH_COMPILE", "true").lower() == "true"
+        self.torch_compile_mode = os.getenv("TRANSLATOR_COMPILE_MODE", "reduce-overhead")
+        self.enable_cudnn_benchmark = os.getenv("TRANSLATOR_CUDNN_BENCHMARK", "true").lower() == "true"
+
+        # Thread/Process pool settings
+        self.num_inference_workers = int(os.getenv("TRANSLATOR_INFERENCE_WORKERS", "4"))
+        self.use_process_pool = os.getenv("TRANSLATOR_USE_PROCESS_POOL", "false").lower() == "true"
+
+        # Memory management
+        self.max_memory_fraction = float(os.getenv("TRANSLATOR_MAX_MEMORY_FRACTION", "0.85"))
+        self.enable_memory_cleanup = os.getenv("TRANSLATOR_MEMORY_CLEANUP", "true").lower() == "true"
+
+        # Linux-specific thread settings
+        self.num_omp_threads = int(os.getenv("OMP_NUM_THREADS", "4"))
+        self.num_mkl_threads = int(os.getenv("MKL_NUM_THREADS", "4"))
+
         # Configuration des timeouts pour le chargement des modèles
         self.model_load_timeout = int(os.getenv("MODEL_LOAD_TIMEOUT", "60"))  # 60 secondes pour charger un modèle
         self.tokenizer_load_timeout = int(os.getenv("TOKENIZER_LOAD_TIMEOUT", "20"))  # 20 secondes pour charger un tokenizer

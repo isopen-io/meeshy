@@ -86,7 +86,30 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { user, sessionToken, session } = authResult;
+      const { user, sessionToken, session, requires2FA, twoFactorToken } = authResult;
+
+      // If 2FA is required, return partial response
+      if (requires2FA) {
+        console.log('[AUTH] 🔐 2FA requis pour:', user.username);
+        return reply.send({
+          success: true,
+          data: {
+            requires2FA: true,
+            twoFactorToken, // Client stores this temporarily
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              displayName: user.displayName,
+              avatar: user.avatar
+            },
+            message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
+          }
+        });
+      }
+
       console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
 
       // Générer le JWT token
@@ -168,6 +191,136 @@ export async function authRoutes(fastify: FastifyInstance) {
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la connexion'
+      });
+    }
+  });
+
+  // Route de connexion 2FA - Complete login with 2FA code
+  fastify.post<{
+    Body: { twoFactorToken: string; code: string }
+  }>('/login/2fa', {
+    schema: {
+      description: 'Complete login with 2FA verification. Called after initial login returns requires2FA: true.',
+      tags: ['auth', '2fa'],
+      summary: 'Complete 2FA login',
+      body: {
+        type: 'object',
+        required: ['twoFactorToken', 'code'],
+        properties: {
+          twoFactorToken: { type: 'string', description: 'Temporary token from initial login' },
+          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successful 2FA verification - returns full session',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                token: { type: 'string', description: 'JWT access token' },
+                sessionToken: { type: 'string', description: 'Session token' },
+                session: sessionMinimalSchema,
+                expiresIn: { type: 'number', example: 86400 }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema
+      },
+      security: []
+    }
+  }, async (request, reply) => {
+    try {
+      const { twoFactorToken, code } = request.body;
+
+      if (!twoFactorToken || !code) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Token 2FA et code requis'
+        });
+      }
+
+      const requestContext = await getRequestContext(request);
+      const result = await authService.completeAuthWith2FA(twoFactorToken, code, requestContext);
+
+      // Check for error response
+      if ('success' in result && result.success === false) {
+        return reply.status(401).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      // Successful 2FA - return full session
+      const authResult = result as { user: SocketIOUser; sessionToken: string; session: any };
+      const { user, sessionToken, session } = authResult;
+
+      console.log('[AUTH] ✅ Connexion 2FA réussie pour:', user.username);
+
+      const jwtToken = authService.generateToken(user);
+
+      return reply.send({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            bio: user.bio,
+            avatar: user.avatar,
+            phoneNumber: user.phoneNumber,
+            role: user.role,
+            isActive: user.isActive,
+            deactivatedAt: user.deactivatedAt,
+            systemLanguage: user.systemLanguage,
+            regionalLanguage: user.regionalLanguage,
+            customDestinationLanguage: user.customDestinationLanguage,
+            autoTranslateEnabled: user.autoTranslateEnabled,
+            translateToSystemLanguage: user.translateToSystemLanguage,
+            translateToRegionalLanguage: user.translateToRegionalLanguage,
+            useCustomDestination: user.useCustomDestination,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt,
+            emailVerifiedAt: user.emailVerifiedAt,
+            phoneVerifiedAt: user.phoneVerifiedAt,
+            twoFactorEnabledAt: user.twoFactorEnabledAt,
+            lastPasswordChange: user.lastPasswordChange,
+            lastLoginIp: user.lastLoginIp,
+            lastLoginLocation: user.lastLoginLocation,
+            lastLoginDevice: user.lastLoginDevice,
+            profileCompletionRate: user.profileCompletionRate,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            permissions: user.permissions
+          },
+          token: jwtToken,
+          sessionToken,
+          session: {
+            id: session.id,
+            deviceType: session.deviceType,
+            browserName: session.browserName,
+            osName: session.osName,
+            location: session.location,
+            isMobile: session.isMobile,
+            createdAt: session.createdAt
+          },
+          expiresIn: 24 * 60 * 60
+        }
+      });
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur 2FA:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification 2FA'
       });
     }
   });
