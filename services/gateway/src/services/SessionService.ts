@@ -83,16 +83,25 @@ export function generateSessionToken(): string {
 /**
  * Determine session expiry based on device type
  * Mobile apps get longer sessions (365 days), desktop browsers get 30 days
+ *
+ * User-Agent detection patterns:
+ * - iOS App: "Meeshy-iOS/1.0.0" (set in APIClient.swift)
+ * - Android App: "Meeshy-Android/1.0.0" (future)
+ * - Web App: Standard browser User-Agent (Safari, Chrome, etc.)
  */
 function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number {
+  const userAgent = deviceInfo?.rawUserAgent || '';
+
   // Check if it's a native mobile app (iOS/Android)
-  const isMobileApp = deviceInfo?.rawUserAgent?.includes('Meeshy/') ||
-                      deviceInfo?.rawUserAgent?.includes('MeeshyApp') ||
-                      deviceInfo?.type === 'mobile';
+  // Pattern: "Meeshy-iOS/x.x.x" or "Meeshy-Android/x.x.x"
+  const isMobileApp = /Meeshy-(iOS|Android)\/[\d.]+/.test(userAgent) ||
+                      userAgent.includes('MeeshyApp') ||
+                      (deviceInfo?.type === 'mobile' && !userAgent.includes('Safari') && !userAgent.includes('Chrome'));
 
   // Mobile apps get extended sessions
   if (isMobileApp) {
     console.log(`[SessionService] 📱 Mobile app detected - session duration: ${SESSION_EXPIRY_MOBILE_DAYS} days`);
+    console.log(`[SessionService] 📱 User-Agent: ${userAgent.substring(0, 50)}...`);
     return SESSION_EXPIRY_MOBILE_DAYS;
   }
 

@@ -2330,6 +2330,148 @@ export const requestPasswordResetRequestSchema = {
   }
 } as const;
 
+// =============================================================================
+// MAGIC LINK AUTHENTICATION SCHEMAS
+// =============================================================================
+
+/**
+ * Request magic link (passwordless login) request body schema
+ * POST /api/v1/auth/magic-link/request
+ */
+export const magicLinkRequestSchema = {
+  type: 'object',
+  required: ['email'],
+  properties: {
+    email: {
+      type: 'string',
+      format: 'email',
+      description: 'Email address to send magic link to'
+    },
+    deviceFingerprint: {
+      type: 'string',
+      nullable: true,
+      description: 'Optional device fingerprint for additional security'
+    }
+  }
+} as const;
+
+/**
+ * Magic link request response schema
+ */
+export const magicLinkRequestResponseSchema = {
+  type: 'object',
+  required: ['success', 'message'],
+  properties: {
+    success: {
+      type: 'boolean',
+      description: 'Always true to prevent email enumeration'
+    },
+    message: {
+      type: 'string',
+      description: 'Generic message (same for success/failure)'
+    }
+  }
+} as const;
+
+/**
+ * Validate magic link token request body schema
+ * POST /api/v1/auth/magic-link/validate
+ */
+export const magicLinkValidateRequestSchema = {
+  type: 'object',
+  required: ['token'],
+  properties: {
+    token: {
+      type: 'string',
+      minLength: 1,
+      description: 'Magic link token from email URL'
+    }
+  }
+} as const;
+
+/**
+ * Validate magic link token query schema (for GET request)
+ * GET /api/v1/auth/magic-link/validate?token=xxx
+ */
+export const magicLinkValidateQuerySchema = {
+  type: 'object',
+  required: ['token'],
+  properties: {
+    token: {
+      type: 'string',
+      minLength: 1,
+      description: 'Magic link token from email URL'
+    }
+  }
+} as const;
+
+/**
+ * Magic link validation success response schema
+ */
+export const magicLinkValidateSuccessResponseSchema = {
+  type: 'object',
+  required: ['success', 'user', 'token', 'sessionToken', 'session'],
+  properties: {
+    success: { type: 'boolean', enum: [true] },
+    user: {
+      type: 'object',
+      description: 'Authenticated user data',
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        displayName: { type: 'string' },
+        avatar: { type: 'string', nullable: true },
+        role: { type: 'string' },
+        isOnline: { type: 'boolean' },
+        systemLanguage: { type: 'string' },
+        regionalLanguage: { type: 'string', nullable: true },
+        autoTranslateEnabled: { type: 'boolean' },
+        twoFactorEnabledAt: { type: 'string', format: 'date-time', nullable: true }
+      }
+    },
+    token: {
+      type: 'string',
+      description: 'JWT token for API authentication (24h validity)'
+    },
+    sessionToken: {
+      type: 'string',
+      description: 'Session token for session management'
+    },
+    session: {
+      type: 'object',
+      description: 'Session details with device/location tracking',
+      properties: {
+        id: { type: 'string' },
+        deviceType: { type: 'string', nullable: true },
+        osName: { type: 'string', nullable: true },
+        browserName: { type: 'string', nullable: true },
+        isMobile: { type: 'boolean' },
+        ipAddress: { type: 'string', nullable: true },
+        location: { type: 'string', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  }
+} as const;
+
+/**
+ * Magic link validation error response schema
+ */
+export const magicLinkValidateErrorResponseSchema = {
+  type: 'object',
+  required: ['success', 'error'],
+  properties: {
+    success: { type: 'boolean', enum: [false] },
+    error: {
+      type: 'string',
+      description: 'Error message (e.g., "Invalid or expired link")'
+    }
+  }
+} as const;
+
 /**
  * Update user profile request body schema
  */

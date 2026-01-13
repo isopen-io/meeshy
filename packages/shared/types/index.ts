@@ -70,6 +70,9 @@ export * from './admin.js';
 // Export des types de sécurité (sessions, tokens, events)
 export * from './security.js';
 
+// Export des types Magic Link (authentification sans mot de passe)
+export * from './magic-link.js';
+
 // Export des types Signal Protocol database (pre-key bundles, conversation keys)
 export * from './signal-database.js';
 
