@@ -918,3 +918,936 @@ describe('TranslationService - Types and Interfaces', () => {
     expect(stats.memory_usage_mb).toBe(128);
   });
 });
+
+describe('TranslationService - E2EE Message Handling', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockZmqClient.sendTranslationRequest.mockReset();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should skip translation for E2EE messages with existing ID', async () => {
+    const messageData: MessageData = {
+      id: 'e2ee-msg-123',
+      conversationId: 'conv-123',
+      senderId: 'user-456',
+      content: '[Encrypted]',
+      originalLanguage: 'en',
+      encryptionMode: 'e2ee',
+      isEncrypted: true
+    };
+
+    const result = await translationService.handleNewMessage(messageData);
+
+    expect(result.status).toBe('e2ee_skipped');
+    expect(result.messageId).toBe('e2ee-msg-123');
+    // Should NOT send translation request for E2EE messages
+    expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+  });
+
+  it('should save new E2EE message but skip translation', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-e2ee',
+      senderId: 'user-456',
+      content: '[Encrypted Content]',
+      originalLanguage: 'en',
+      encryptionMode: 'e2ee',
+      isEncrypted: true
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-e2ee' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'new-e2ee-msg',
+      conversationId: 'conv-e2ee',
+      content: '[Encrypted Content]',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+
+    const result = await translationService.handleNewMessage(messageData);
+
+    expect(result.status).toBe('e2ee_skipped');
+    expect(result.messageId).toBe('new-e2ee-msg');
+    expect(mockPrisma.message.create).toHaveBeenCalled();
+    // Should NOT send translation request for E2EE messages
+    expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+  });
+
+  it('should process non-E2EE messages normally', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-normal',
+      senderId: 'user-456',
+      content: 'Hello world',
+      originalLanguage: 'en',
+      encryptionMode: 'server',
+      isEncrypted: false
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-normal' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-normal',
+      conversationId: 'conv-normal',
+      content: 'Hello world',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    ]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-normal',
+      conversationId: 'conv-normal',
+      content: 'Hello world',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-normal');
+
+    const result = await translationService.handleNewMessage(messageData);
+
+    expect(result.status).toBe('message_saved');
+    expect(result.messageId).toBe('msg-normal');
+    expect(mockPrisma.message.create).toHaveBeenCalled();
+  });
+
+  it('should handle hybrid encryption mode (allows translation)', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-hybrid',
+      senderId: 'user-456',
+      content: 'Hybrid message',
+      originalLanguage: 'en',
+      encryptionMode: 'hybrid',
+      isEncrypted: true
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-hybrid' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-hybrid',
+      conversationId: 'conv-hybrid',
+      content: 'Hybrid message',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-hybrid',
+      conversationId: 'conv-hybrid',
+      content: 'Hybrid message',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-hybrid');
+
+    const result = await translationService.handleNewMessage(messageData);
+
+    // Hybrid mode should NOT skip translation
+    expect(result.status).toBe('message_saved');
+    expect(result.messageId).toBe('msg-hybrid');
+  });
+});
+
+describe('TranslationService - Language Extraction and Filtering', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockZmqClient.sendTranslationRequest.mockReset();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should extract languages from authenticated conversation members', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-langs',
+      senderId: 'user-456',
+      content: 'Hello',
+      originalLanguage: 'en'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-langs' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-langs',
+      conversationId: 'conv-langs',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    // Multiple users with different languages
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      {
+        user: {
+          systemLanguage: 'fr',
+          regionalLanguage: 'de',
+          customDestinationLanguage: null,
+          userFeature: {
+            autoTranslateEnabled: true,
+            translateToSystemLanguage: true,
+            translateToRegionalLanguage: true,
+            useCustomDestination: false
+          }
+        }
+      },
+      {
+        user: {
+          systemLanguage: 'es',
+          regionalLanguage: null,
+          customDestinationLanguage: 'pt',
+          userFeature: {
+            autoTranslateEnabled: true,
+            translateToSystemLanguage: true,
+            translateToRegionalLanguage: false,
+            useCustomDestination: true
+          }
+        }
+      }
+    ]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-langs',
+      conversationId: 'conv-langs',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-langs');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Should have called sendTranslationRequest with extracted languages
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+  });
+
+  it('should include anonymous participant languages', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-anon-langs',
+      senderId: 'user-456',
+      content: 'Hello',
+      originalLanguage: 'en'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-anon-langs' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-anon-langs',
+      conversationId: 'conv-anon-langs',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      { user: { systemLanguage: 'fr', userFeature: null } }
+    ]);
+    // Anonymous participants with their own languages
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([
+      { language: 'ar' },
+      { language: 'zh' }
+    ]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-anon-langs',
+      conversationId: 'conv-anon-langs',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-anon-langs');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+  });
+
+  it('should filter out source language from target languages', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-filter',
+      senderId: 'user-456',
+      content: 'Bonjour',
+      originalLanguage: 'fr'  // Source is French
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-filter' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-filter',
+      conversationId: 'conv-filter',
+      content: 'Bonjour',
+      originalLanguage: 'fr'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    // User also speaks French - should be filtered out
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
+      { user: { systemLanguage: 'en', userFeature: { autoTranslateEnabled: true } } }
+    ]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-filter',
+      conversationId: 'conv-filter',
+      content: 'Bonjour',
+      originalLanguage: 'fr'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-filter');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // Should still call translation for 'en', but not 'fr'
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+    const callArgs = mockZmqClient.sendTranslationRequest.mock.calls[0][0];
+    // Should not include 'fr' in target languages since source is 'fr'
+    expect(callArgs.targetLanguages).not.toContain('fr');
+  });
+
+  it('should not send translation request when all targets match source', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-same-lang',
+      senderId: 'user-456',
+      content: 'Bonjour',
+      originalLanguage: 'fr'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-same-lang' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-same-lang',
+      conversationId: 'conv-same-lang',
+      content: 'Bonjour',
+      originalLanguage: 'fr'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    // All users speak French only
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
+      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    ]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-same-lang',
+      conversationId: 'conv-same-lang',
+      content: 'Bonjour',
+      originalLanguage: 'fr'
+    });
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // Should NOT call sendTranslationRequest since all targets filtered out
+    expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+  });
+
+  it('should use specific targetLanguage when provided', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-specific',
+      senderId: 'user-456',
+      content: 'Hello',
+      originalLanguage: 'en',
+      targetLanguage: 'ja'  // Specific target language
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-specific' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-specific',
+      conversationId: 'conv-specific',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    // Should use 'ja' from messageData, not from members
+    mockPrisma.conversationMember.findMany.mockResolvedValue([
+      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    ]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-specific',
+      conversationId: 'conv-specific',
+      content: 'Hello',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-specific');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+    const callArgs = mockZmqClient.sendTranslationRequest.mock.calls[0][0];
+    expect(callArgs.targetLanguages).toContain('ja');
+  });
+
+  it('should fallback to default languages when no members found', async () => {
+    const messageData: MessageData = {
+      conversationId: 'conv-no-members',
+      senderId: 'user-456',
+      content: 'Hello',
+      originalLanguage: 'zh'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-no-members' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-no-members',
+      conversationId: 'conv-no-members',
+      content: 'Hello',
+      originalLanguage: 'zh'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    // No members found
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-no-members',
+      conversationId: 'conv-no-members',
+      content: 'Hello',
+      originalLanguage: 'zh'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-no-members');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // Should still work, may not send request if no target languages
+    // Implementation falls back to ['en', 'fr'] when extraction fails
+    expect(mockPrisma.conversationMember.findMany).toHaveBeenCalled();
+    expect(mockPrisma.anonymousParticipant.findMany).toHaveBeenCalled();
+  });
+});
+
+describe('TranslationService - Audio Translation Handling', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  // Extend mock Prisma for audio-related tables
+  const extendMockPrisma = (basePrisma: ReturnType<typeof createMockPrisma>) => ({
+    ...basePrisma,
+    messageAttachment: {
+      findUnique: jest.fn() as MockFn,
+      findFirst: jest.fn() as MockFn
+    },
+    messageAudioTranscription: {
+      upsert: jest.fn() as MockFn,
+      findFirst: jest.fn() as MockFn
+    },
+    messageTranslatedAudio: {
+      upsert: jest.fn() as MockFn,
+      findMany: jest.fn() as MockFn
+    },
+    userVoiceModel: {
+      upsert: jest.fn() as MockFn,
+      findUnique: jest.fn() as MockFn
+    }
+  });
+
+  let extendedMockPrisma: ReturnType<typeof extendMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockZmqClient.sendTranslationRequest.mockReset();
+    mockPrisma = createMockPrisma();
+    extendedMockPrisma = extendMockPrisma(mockPrisma);
+    translationService = new TranslationService(extendedMockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should emit audioTranslationReady event when audio processing completes', (done) => {
+    const audioData = {
+      taskId: 'audio-task-123',
+      messageId: 'msg-audio-123',
+      attachmentId: 'attach-123',
+      transcription: {
+        text: 'Hello, this is a voice message',
+        language: 'en',
+        confidence: 0.95,
+        source: 'whisper'
+      },
+      translatedAudios: [
+        {
+          targetLanguage: 'fr',
+          translatedText: 'Bonjour, ceci est un message vocal',
+          audioUrl: 'https://storage.example.com/audio/fr-123.mp3',
+          audioPath: '/audio/fr-123.mp3',
+          durationMs: 3500,
+          voiceCloned: true,
+          voiceQuality: 0.92
+        }
+      ],
+      voiceModelUserId: 'user-456',
+      voiceModelQuality: 0.9,
+      processingTimeMs: 2500
+    };
+
+    // Mock database operations
+    extendedMockPrisma.messageAttachment.findUnique.mockResolvedValue({
+      id: 'attach-123',
+      messageId: 'msg-audio-123',
+      duration: 3500
+    });
+    extendedMockPrisma.messageAudioTranscription.upsert.mockResolvedValue({ id: 'trans-123' });
+    extendedMockPrisma.messageTranslatedAudio.upsert.mockResolvedValue({ id: 'audio-trans-123' });
+
+    translationService.on('audioTranslationReady', (data) => {
+      expect(data.taskId).toBe('audio-task-123');
+      expect(data.messageId).toBe('msg-audio-123');
+      expect(data.attachmentId).toBe('attach-123');
+      expect(data.transcription.text).toBe('Hello, this is a voice message');
+      expect(data.translatedAudios).toHaveLength(1);
+      expect(data.translatedAudios[0].targetLanguage).toBe('fr');
+      done();
+    });
+
+    // Trigger audio process completed event
+    mockZmqClient.emit('audioProcessCompleted', audioData);
+  });
+
+  it('should emit audioTranslationError event on audio processing error', (done) => {
+    const errorData = {
+      taskId: 'audio-error-task',
+      messageId: 'msg-audio-error',
+      attachmentId: 'attach-error',
+      error: 'Audio transcription failed: unsupported format',
+      errorCode: 'TRANSCRIPTION_FAILED'
+    };
+
+    translationService.on('audioTranslationError', (data) => {
+      expect(data.taskId).toBe('audio-error-task');
+      expect(data.messageId).toBe('msg-audio-error');
+      expect(data.attachmentId).toBe('attach-error');
+      expect(data.error).toContain('unsupported format');
+      expect(data.errorCode).toBe('TRANSCRIPTION_FAILED');
+      done();
+    });
+
+    // Trigger audio process error event
+    mockZmqClient.emit('audioProcessError', errorData);
+  });
+
+  it('should increment errors stat on audio processing error', () => {
+    const errorData = {
+      taskId: 'audio-error-task-2',
+      messageId: 'msg-audio-error-2',
+      attachmentId: 'attach-error-2',
+      error: 'Voice cloning failed',
+      errorCode: 'VOICE_CLONE_FAILED'
+    };
+
+    const statsBefore = translationService.getStats();
+    const errorsBefore = statsBefore.errors;
+
+    mockZmqClient.emit('audioProcessError', errorData);
+
+    const statsAfter = translationService.getStats();
+    expect(statsAfter.errors).toBe(errorsBefore + 1);
+  });
+
+  it('should save new voice profile when provided in audio completion', (done) => {
+    const audioDataWithProfile = {
+      taskId: 'audio-profile-task',
+      messageId: 'msg-profile',
+      attachmentId: 'attach-profile',
+      transcription: {
+        text: 'Voice profile test',
+        language: 'en',
+        confidence: 0.98,
+        source: 'whisper'
+      },
+      translatedAudios: [],
+      voiceModelUserId: 'user-voice-123',
+      voiceModelQuality: 0.95,
+      processingTimeMs: 3000,
+      newVoiceProfile: {
+        userId: 'user-voice-123',
+        profileId: 'profile-new-123',
+        embedding: Buffer.from('mock-embedding-data').toString('base64'),
+        qualityScore: 0.95,
+        audioCount: 5,
+        totalDurationMs: 15000,
+        version: 1,
+        fingerprint: { f0_mean: 120.5 },
+        voiceCharacteristics: { pitch: 'medium' }
+      }
+    };
+
+    extendedMockPrisma.messageAttachment.findUnique.mockResolvedValue({
+      id: 'attach-profile',
+      messageId: 'msg-profile',
+      duration: 3000
+    });
+    extendedMockPrisma.messageAudioTranscription.upsert.mockResolvedValue({ id: 'trans-profile' });
+    extendedMockPrisma.userVoiceModel.upsert.mockResolvedValue({ userId: 'user-voice-123' });
+
+    translationService.on('audioTranslationReady', () => {
+      // Verify voice model was saved
+      expect(extendedMockPrisma.userVoiceModel.upsert).toHaveBeenCalled();
+      const upsertCall = extendedMockPrisma.userVoiceModel.upsert.mock.calls[0][0];
+      expect(upsertCall.where.userId).toBe('user-voice-123');
+      expect(upsertCall.create.profileId).toBe('profile-new-123');
+      done();
+    });
+
+    mockZmqClient.emit('audioProcessCompleted', audioDataWithProfile);
+  });
+});
+
+describe('TranslationService - Model Type Selection', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockZmqClient.sendTranslationRequest.mockReset();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should use provided modelType from message data', async () => {
+    const messageData: MessageData & { modelType?: string } = {
+      conversationId: 'conv-model',
+      senderId: 'user-456',
+      content: 'Short text',
+      originalLanguage: 'en',
+      targetLanguage: 'fr',
+      modelType: 'premium'  // Explicitly set
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-model' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-model',
+      conversationId: 'conv-model',
+      content: 'Short text',
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-model',
+      conversationId: 'conv-model',
+      content: 'Short text',
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-model');
+
+    await translationService.handleNewMessage(messageData as any);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+    const callArgs = mockZmqClient.sendTranslationRequest.mock.calls[0][0];
+    expect(callArgs.modelType).toBe('premium');
+  });
+
+  it('should auto-select medium model for short messages', async () => {
+    const shortContent = 'Hi';  // Less than 80 chars
+
+    const messageData: MessageData = {
+      conversationId: 'conv-short',
+      senderId: 'user-456',
+      content: shortContent,
+      originalLanguage: 'en',
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-short' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-short',
+      conversationId: 'conv-short',
+      content: shortContent,
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-short',
+      conversationId: 'conv-short',
+      content: shortContent,
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-short');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+    const callArgs = mockZmqClient.sendTranslationRequest.mock.calls[0][0];
+    expect(callArgs.modelType).toBe('medium');
+  });
+
+  it('should auto-select premium model for long messages', async () => {
+    const longContent = 'A'.repeat(100);  // More than 80 chars
+
+    const messageData: MessageData = {
+      conversationId: 'conv-long',
+      senderId: 'user-456',
+      content: longContent,
+      originalLanguage: 'en',
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-long' });
+    mockPrisma.message.create.mockResolvedValue({
+      id: 'msg-long',
+      conversationId: 'conv-long',
+      content: longContent,
+      originalLanguage: 'en'
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'msg-long',
+      conversationId: 'conv-long',
+      content: longContent,
+      originalLanguage: 'en'
+    });
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('task-long');
+
+    await translationService.handleNewMessage(messageData);
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalled();
+    const callArgs = mockZmqClient.sendTranslationRequest.mock.calls[0][0];
+    expect(callArgs.modelType).toBe('premium');
+  });
+});
+
+describe('TranslationService - Translation Deduplication', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should not process duplicate translation completed events', (done) => {
+    const translationData = {
+      taskId: 'dup-task-123',
+      result: {
+        messageId: 'msg-dup-123',
+        translatedText: 'Bonjour',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        confidenceScore: 0.95,
+        processingTime: 100,
+        modelType: 'basic'
+      },
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.messageTranslation.findMany.mockResolvedValue([]);
+    mockPrisma.messageTranslation.upsert.mockResolvedValue({ id: 'trans-dup' });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: 'msg-dup-123', senderId: 'user-123' });
+    mockPrisma.userStats.upsert.mockResolvedValue({});
+
+    let emitCount = 0;
+    translationService.on('translationReady', () => {
+      emitCount++;
+    });
+
+    // Emit the same event twice
+    mockZmqClient.emit('translationCompleted', translationData);
+    mockZmqClient.emit('translationCompleted', translationData);
+
+    // Wait a bit and check
+    setTimeout(() => {
+      // Should only emit once due to deduplication
+      expect(emitCount).toBe(1);
+      done();
+    }, 100);
+  });
+
+  it('should allow same message to be translated to different languages', (done) => {
+    const translationDataFr = {
+      taskId: 'multi-task-fr',
+      result: {
+        messageId: 'msg-multi',
+        translatedText: 'Bonjour',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        confidenceScore: 0.95,
+        processingTime: 100,
+        modelType: 'basic'
+      },
+      targetLanguage: 'fr'
+    };
+
+    const translationDataEs = {
+      taskId: 'multi-task-es',
+      result: {
+        messageId: 'msg-multi',
+        translatedText: 'Hola',
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        confidenceScore: 0.94,
+        processingTime: 110,
+        modelType: 'basic'
+      },
+      targetLanguage: 'es'
+    };
+
+    mockPrisma.messageTranslation.findMany.mockResolvedValue([]);
+    mockPrisma.messageTranslation.upsert.mockResolvedValue({ id: 'trans-multi' });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: 'msg-multi', senderId: 'user-123' });
+    mockPrisma.userStats.upsert.mockResolvedValue({});
+
+    let emitCount = 0;
+    const receivedLanguages: string[] = [];
+
+    translationService.on('translationReady', (data) => {
+      emitCount++;
+      receivedLanguages.push(data.targetLanguage);
+    });
+
+    // Emit both translations
+    mockZmqClient.emit('translationCompleted', translationDataFr);
+    mockZmqClient.emit('translationCompleted', translationDataEs);
+
+    // Wait and check
+    setTimeout(() => {
+      // Both should be processed (different task IDs)
+      expect(emitCount).toBe(2);
+      expect(receivedLanguages).toContain('fr');
+      expect(receivedLanguages).toContain('es');
+      done();
+    }, 100);
+  });
+});
+
+describe('TranslationService - Retranslation with Old Translation Cleanup', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockZmqClient.sendTranslationRequest.mockReset();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('retrans-task');
+  });
+
+  it('should delete old translations before retranslation', async () => {
+    const messageData: MessageData = {
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en',
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.message.findFirst.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      conversationId: 'conv-retrans',
+      content: 'Content to retranslate',
+      originalLanguage: 'en'
+    });
+    mockPrisma.messageTranslation.deleteMany.mockResolvedValue({ count: 2 });
+    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+
+    const result = await translationService.handleNewMessage(messageData);
+
+    expect(result.status).toBe('retranslation_queued');
+
+    // Wait for async processing
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Should have called deleteMany to remove old translations
+    expect(mockPrisma.messageTranslation.deleteMany).toHaveBeenCalledWith({
+      where: {
+        messageId: 'existing-retrans-msg',
+        targetLanguage: {
+          in: ['fr']
+        }
+      }
+    });
+  });
+});
+
+describe('TranslationService - Cache Management', () => {
+  let translationService: TranslationService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockZmqClient.removeAllListeners();
+    mockPrisma = createMockPrisma();
+    translationService = new TranslationService(mockPrisma as any);
+    await translationService.initialize();
+  });
+
+  it('should return cached translation on second request', async () => {
+    // First request - from database
+    mockPrisma.messageTranslation.findFirst.mockResolvedValue({
+      id: 'trans-cache-1',
+      messageId: 'msg-cache',
+      targetLanguage: 'fr',
+      translatedContent: 'Bonjour du cache',
+      translationModel: 'basic',
+      confidenceScore: 0.95,
+      message: {
+        originalLanguage: 'en'
+      }
+    });
+
+    const result1 = await translationService.getTranslation('msg-cache', 'fr');
+    expect(result1?.translatedText).toBe('Bonjour du cache');
+    expect(mockPrisma.messageTranslation.findFirst).toHaveBeenCalledTimes(1);
+
+    // Second request - should be from cache
+    const result2 = await translationService.getTranslation('msg-cache', 'fr');
+    expect(result2?.translatedText).toBe('Bonjour du cache');
+    // Should still only have 1 database call (second was cached)
+    expect(mockPrisma.messageTranslation.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('should update cache when translation completed', (done) => {
+    const translationData = {
+      taskId: 'cache-update-task',
+      result: {
+        messageId: 'msg-cache-update',
+        translatedText: 'Nouvelle traduction',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        confidenceScore: 0.98,
+        processingTime: 50,
+        modelType: 'premium'
+      },
+      targetLanguage: 'fr'
+    };
+
+    mockPrisma.messageTranslation.findMany.mockResolvedValue([]);
+    mockPrisma.messageTranslation.upsert.mockResolvedValue({ id: 'trans-cache-update' });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: 'msg-cache-update', senderId: 'user-123' });
+    mockPrisma.userStats.upsert.mockResolvedValue({});
+
+    translationService.on('translationReady', async () => {
+      // Now try to get the translation - should be in cache
+      mockPrisma.messageTranslation.findFirst.mockResolvedValue(null);  // DB would return null
+
+      const result = await translationService.getTranslation('msg-cache-update', 'fr', 'en');
+      expect(result?.translatedText).toBe('Nouvelle traduction');
+      done();
+    });
+
+    mockZmqClient.emit('translationCompleted', translationData);
+  });
+});
