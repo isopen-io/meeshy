@@ -446,6 +446,14 @@ model Message {
   /// Content is blurred until user taps to reveal
   isBlurred        Boolean @default(false)
 
+  // ============================================
+  // PINNING
+  // ============================================
+  /// Date when message was pinned (null = not pinned)
+  pinnedAt DateTime?
+  /// User who pinned the message
+  pinnedBy String?   @db.ObjectId
+
   validatedMentions String[] @default([]) // Usernames des mentions validées (pour performance)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

@@ -1167,15 +1167,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Compter le total des messages (pour pagination)
-      const totalCount = await prisma.message.count({
-        where: {
-          conversationId: conversationId,
-          isDeleted: false
-        }
-      });
-
       // Construire le select Prisma dynamiquement selon les paramètres d'inclusion
+      // (avant les requêtes pour permettre la parallélisation)
       const messageSelect: any = {
         // ===== CHAMPS DE BASE =====
         id: true,
@@ -1204,6 +1197,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         viewOnceCount: true,
         isBlurred: true,
         expiresAt: true,
+
+        // ===== ÉPINGLAGE =====
+        pinnedAt: true,
+        pinnedBy: true,
 
         // ===== STATUTS AGRÉGÉS (dénormalisés) =====
         deliveredToAllAt: true,
@@ -1371,31 +1368,43 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         };
       }
 
-      const messages = await prisma.message.findMany({
-        where: whereClause,
-        select: messageSelect,
-        orderBy: { createdAt: 'desc' },
-        take: limit, // Max 50 messages (validé par validatePagination)
-        skip: before ? 0 : offset
-      });
+      // ===== OPTIMISATION: Exécuter les requêtes en parallèle =====
+      // Évite le problème N+1 séquentiel (count -> messages -> user)
+      const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !authRequest.authContext.isAnonymous;
 
-      // Optimisation : Récupérer les préférences linguistiques seulement si nécessaire
-      // (le frontend peut aussi utiliser ses préférences locales en cache)
-      let userPreferredLanguage = 'en';
-
-      if (authRequest.authContext.isAuthenticated && !authRequest.authContext.isAnonymous) {
-        const user = await prisma.user.findFirst({
-          where: { id: userId },
-          select: {
-            systemLanguage: true,
-            regionalLanguage: true,
-            customDestinationLanguage: true
+      const [totalCount, messages, userPrefs] = await Promise.all([
+        // 1. Compter le total des messages (pour pagination)
+        prisma.message.count({
+          where: {
+            conversationId: conversationId,
+            isDeleted: false
           }
-        });
+        }),
+        // 2. Récupérer les messages avec toutes les relations
+        prisma.message.findMany({
+          where: whereClause,
+          select: messageSelect,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: before ? 0 : offset
+        }),
+        // 3. Récupérer les préférences linguistiques (si authentifié)
+        shouldFetchUserPrefs
+          ? prisma.user.findFirst({
+              where: { id: userId },
+              select: {
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true
+              }
+            })
+          : Promise.resolve(null)
+      ]);
 
-        // Déterminer la langue préférée de l'utilisateur (pour information au frontend)
-        userPreferredLanguage = resolveUserLanguage(user || { systemLanguage: 'en' });
-      }
+      // Déterminer la langue préférée de l'utilisateur
+      const userPreferredLanguage = userPrefs
+        ? resolveUserLanguage(userPrefs)
+        : 'en';
 
       // DEBUG: Log pour vérifier les attachments et metadata
       if (messages.length > 0 && messages[0].attachments && messages[0].attachments.length > 0) {
@@ -1446,6 +1455,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           viewOnceCount: message.viewOnceCount,
           isBlurred: message.isBlurred,
           expiresAt: message.expiresAt,
+
+          // Épinglage
+          pinnedAt: message.pinnedAt,
+          pinnedBy: message.pinnedBy,
 
           // Statuts agrégés (dénormalisés)
           deliveredToAllAt: message.deliveredToAllAt,
