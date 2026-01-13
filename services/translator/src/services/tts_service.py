@@ -2,6 +2,7 @@
 Service TTS avec support du clonage vocal - Singleton
 Génère des audios dans la voix de l'émetteur original.
 Architecture: XTTS/Coqui TTS pour synthèse, compatible avec OpenVoice embeddings.
+Fonctionne sur CPU, CUDA, et MPS (Apple Silicon).
 """
 
 import os
@@ -16,6 +17,14 @@ from pathlib import Path
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
+
+# Import PerformanceOptimizer for device detection
+try:
+    from utils.performance import get_performance_optimizer
+    PERF_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    PERF_OPTIMIZER_AVAILABLE = False
+    logger.debug("[TTS] PerformanceOptimizer not available, using manual device selection")
 
 # Flags de disponibilité des dépendances
 TTS_AVAILABLE = False
@@ -116,7 +125,7 @@ class TTSService:
     def __init__(
         self,
         output_dir: Optional[str] = None,
-        device: str = "cpu",
+        device: str = "auto",
         model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2"
     ):
         if self._initialized:
@@ -124,9 +133,18 @@ class TTSService:
 
         # Configuration
         self.output_dir = Path(output_dir or os.getenv('TTS_OUTPUT_DIR', '/app/outputs/audio'))
-        self.device = os.getenv('TTS_DEVICE', device)
         self.model_name = os.getenv('TTS_MODEL', model_name)
         self.default_format = os.getenv('TTS_DEFAULT_FORMAT', 'mp3')
+
+        # Device detection: Use PerformanceOptimizer if available, else fallback to manual
+        env_device = os.getenv('TTS_DEVICE', device)
+        if env_device == "auto" and PERF_OPTIMIZER_AVAILABLE:
+            perf_opt = get_performance_optimizer()
+            self.device = perf_opt.device
+            logger.info(f"[TTS] Device auto-detected: {self.device}")
+        else:
+            # Manual device selection or explicit device specified
+            self.device = env_device if env_device != "auto" else "cpu"
 
         # TTS model
         self.tts_model = None
@@ -134,6 +152,7 @@ class TTSService:
         # État
         self.is_initialized = False
         self._init_lock = asyncio.Lock()
+        self._synthesis_lock = asyncio.Lock()  # Lock pour synthèses parallèles (GPU/MPS thread-safety)
 
         # Créer le répertoire de sortie
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -226,9 +245,6 @@ class TTSService:
                 if not self.tts_model:
                     raise RuntimeError("Échec initialisation TTS")
 
-            # Synthèse avec voix clonée
-            loop = asyncio.get_event_loop()
-
             # Vérifier si on a un fichier audio de référence (pour XTTS)
             speaker_wav = None
             if hasattr(voice_model, 'embedding_path') and voice_model.embedding_path:
@@ -238,30 +254,34 @@ class TTSService:
                 if combined_audio.exists():
                     speaker_wav = str(combined_audio)
 
-            if speaker_wav and os.path.exists(speaker_wav):
-                # Synthèse avec clonage vocal
-                await loop.run_in_executor(
-                    None,
-                    lambda: self.tts_model.tts_to_file(
-                        text=text,
-                        speaker_wav=speaker_wav,
-                        language=xtts_lang,
-                        file_path=str(output_path)
+            # Lock pour thread-safety GPU/MPS (un seul appel TTS à la fois)
+            async with self._synthesis_lock:
+                loop = asyncio.get_event_loop()
+
+                if speaker_wav and os.path.exists(speaker_wav):
+                    # Synthèse avec clonage vocal
+                    await loop.run_in_executor(
+                        None,
+                        lambda: self.tts_model.tts_to_file(
+                            text=text,
+                            speaker_wav=speaker_wav,
+                            language=xtts_lang,
+                            file_path=str(output_path)
+                        )
                     )
-                )
-                voice_cloned = True
-            else:
-                # Synthèse sans clonage (voix par défaut)
-                logger.warning(f"[TTS] ⚠️ Pas de fichier audio de référence, utilisation voix par défaut")
-                await loop.run_in_executor(
-                    None,
-                    lambda: self.tts_model.tts_to_file(
-                        text=text,
-                        language=xtts_lang,
-                        file_path=str(output_path)
+                    voice_cloned = True
+                else:
+                    # Synthèse sans clonage (voix par défaut)
+                    logger.warning(f"[TTS] ⚠️ Pas de fichier audio de référence, utilisation voix par défaut")
+                    await loop.run_in_executor(
+                        None,
+                        lambda: self.tts_model.tts_to_file(
+                            text=text,
+                            language=xtts_lang,
+                            file_path=str(output_path)
+                        )
                     )
-                )
-                voice_cloned = False
+                    voice_cloned = False
 
             # Convertir si nécessaire (le format de sortie de XTTS est wav)
             if output_format != 'wav' and AUDIO_PROCESSING_AVAILABLE:
@@ -332,15 +352,17 @@ class TTSService:
                 if not self.tts_model:
                     raise RuntimeError("TTS non disponible")
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: self.tts_model.tts_to_file(
-                    text=text,
-                    language=xtts_lang,
-                    file_path=str(output_path)
+            # Lock pour thread-safety GPU/MPS (un seul appel TTS à la fois)
+            async with self._synthesis_lock:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None,
+                    lambda: self.tts_model.tts_to_file(
+                        text=text,
+                        language=xtts_lang,
+                        file_path=str(output_path)
+                    )
                 )
-            )
 
             # Convertir si nécessaire
             if output_format != 'wav' and AUDIO_PROCESSING_AVAILABLE:
