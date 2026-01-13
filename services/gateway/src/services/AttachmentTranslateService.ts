@@ -488,7 +488,7 @@ export class AttachmentTranslateService {
       return {
         profileId: voiceModel.profileId || `vfp_${userId}`,
         userId,
-        embedding: voiceModel.embedding.toString('base64'), // Bytes → Base64
+        embedding: Buffer.from(voiceModel.embedding).toString('base64'), // Bytes → Base64
         qualityScore: voiceModel.qualityScore,
         fingerprint: voiceModel.fingerprint as Record<string, any> | undefined,
         voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | undefined,
@@ -536,7 +536,7 @@ export class AttachmentTranslateService {
             audioDurationMs: sourceTranscription.audioDurationMs,
             speakerCount: sourceTranscription.speakerCount,
             primarySpeakerId: sourceTranscription.primarySpeakerId,
-            speakersAnalysis: sourceTranscription.speakersAnalysis
+            speakerAnalysis: sourceTranscription.speakerAnalysis
           }
         });
         console.log(`   📝 Transcription copiée depuis l'original`);
