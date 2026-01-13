@@ -1,5 +1,5 @@
 import { apiService } from './api.service';
-import type { ApiResponse } from '@meeshy/shared/types';
+import type { ApiResponse, PaginationMeta } from '@meeshy/shared/types';
 
 export interface Message {
   id: string;
@@ -31,12 +31,22 @@ export interface UpdateMessageDto {
   content: string;
 }
 
-export interface MessagesResponse {
+/**
+ * Response data for messages list - aligned with backend format
+ */
+export interface MessagesResponseData {
   messages: Message[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
+  userLanguage: string;
+}
+
+/**
+ * Response format for messages list - uses standard PaginationMeta from @meeshy/shared/types
+ * Backend returns: { success, data: { messages, userLanguage }, pagination: PaginationMeta }
+ */
+export interface MessagesResponse {
+  success: boolean;
+  data: MessagesResponseData;
+  pagination: PaginationMeta;
 }
 
 
@@ -58,31 +68,19 @@ export const messagesService = {
   },
 
   /**
-   * Récupère les messages d'une conversation avec pagination
+   * Récupère les messages d'une conversation avec pagination standard (offset/limit)
+   * Utilise le format de pagination natif du backend : PaginationMeta { total, offset, limit, hasMore }
+   *
+   * @deprecated Utiliser getMessagesWithOffset qui retourne le format natif
    */
   async getMessagesByConversation(
-    conversationId: string, 
-    page: number = 1, 
+    conversationId: string,
+    page: number = 1,
     limit: number = 20
-  ): Promise<ApiResponse<MessagesResponse>> {
+  ): Promise<MessagesResponse> {
     try {
-      // Utiliser l'endpoint correct de la gateway avec pagination optimisée
-      const response = await apiService.get<{messages: Message[], hasMore: boolean, userLanguage: string}>(
-        `/conversations/${conversationId}/messages?limit=${limit}&offset=${(page - 1) * limit}&include_translations=true`
-      );
-      
-      // Adapter la réponse au format attendu
-      return {
-        success: true,
-        data: {
-          messages: response.data.messages,
-          total: response.data.messages.length, // Approximation
-          page: page,
-          limit: limit,
-          hasMore: response.data.hasMore
-        },
-        message: response.message
-      };
+      const offset = (page - 1) * limit;
+      return await this.getMessagesWithOffset(conversationId, offset, limit);
     } catch (error) {
       console.error('Erreur lors de la récupération des messages:', error);
       throw error;
@@ -91,18 +89,28 @@ export const messagesService = {
 
   /**
    * Récupère les messages d'une conversation avec pagination par offset
+   * Retourne le format natif du backend avec PaginationMeta standard
+   *
+   * Backend response format:
+   * {
+   *   success: true,
+   *   data: { messages: Message[], userLanguage: string },
+   *   pagination: { total: number, offset: number, limit: number, hasMore: boolean }
+   * }
    */
   async getMessagesWithOffset(
-    conversationId: string, 
-    offset: number = 0, 
+    conversationId: string,
+    offset: number = 0,
     limit: number = 20
-  ): Promise<{messages: Message[], hasMore: boolean, userLanguage: string}> {
+  ): Promise<MessagesResponse> {
     try {
-      const response = await apiService.get<{messages: Message[], hasMore: boolean, userLanguage: string}>(
-        `/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}&include_translations=true`
+      const response = await apiService.get<MessagesResponse>(
+        `/conversations/${conversationId}/messages`,
+        { limit, offset, include_translations: 'true' }
       );
-      
-      return response.data;
+
+      // Le backend retourne déjà le format standard, pas besoin d'adapter
+      return response.data as unknown as MessagesResponse;
     } catch (error) {
       console.error('Erreur lors de la récupération des messages avec offset:', error);
       throw error;

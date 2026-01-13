@@ -124,7 +124,11 @@ export function useConversationMessages(
       }
 
 
-      const response = await apiService.get<{ success: boolean; data: { messages: Message[] } }>(
+      const response = await apiService.get<{
+        success: boolean;
+        data: { messages: Message[]; userLanguage?: string };
+        pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
+      }>(
         endpoint,
         {
           limit: limit.toString(),
@@ -136,13 +140,14 @@ export function useConversationMessages(
       );
 
       const data = response.data;
-      
+
       if (!data.success) {
         throw new Error('Erreur lors du chargement des messages');
       }
 
       const newMessages = data.data.messages || [];
-      const hasMoreMessages = (data.data as any).hasMore || false;
+      // Utiliser le format de pagination standard (pagination au niveau root)
+      const hasMoreMessages = data.pagination?.hasMore ?? false;
 
       // Log des traductions reçues pour debugging
 
