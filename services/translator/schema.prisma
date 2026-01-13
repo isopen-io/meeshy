@@ -213,17 +213,30 @@ model Message {
 model MessageTranslation {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   messageId         String   @db.ObjectId
-  sourceLanguage    String
   targetLanguage    String
   translatedContent String
   translationModel  String   // "basic", "medium", "premium"
-  cacheKey          String   @unique
   confidenceScore   Float?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  
+
+  // Source language - stored explicitly for translator service
+  // Can also be derived from message.originalLanguage
+  sourceLanguage    String?
+
+  // Cache key for optimized lookups (format: messageId_sourceLang_targetLang_model)
+  // Optional field for translator caching
+  cacheKey          String?
+
+  // Encryption fields for secure conversations (server/hybrid modes)
+  // Translations inherit encryption from parent message
+  isEncrypted       Boolean  @default(false)
+  encryptionKeyId   String?  // References server_encryption_keys.id
+  encryptionIv      String?  // Base64 encoded IV (12 bytes for AES-GCM)
+  encryptionAuthTag String?  // Base64 encoded auth tag (16 bytes)
+
   message           Message  @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  
+
   // Contrainte d'unicité: une seule traduction par message et langue cible
   // Permet de mettre à jour la traduction existante vers un niveau supérieur
   @@unique([messageId, targetLanguage], name: "messageId_targetLanguage")
