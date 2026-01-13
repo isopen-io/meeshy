@@ -421,9 +421,10 @@ export class VoiceProfileService extends EventEmitter {
       const expiresAt = this.calculateExpirationDate(user.birthDate);
 
       // Decode embedding binary from base64 (for MongoDB storage)
-      let embeddingBuffer: Buffer | null = null;
+      let embeddingBuffer: Uint8Array | null = null;
       if (response.embedding_data) {
-        embeddingBuffer = Buffer.from(response.embedding_data, 'base64');
+        const buffer = Buffer.from(response.embedding_data, 'base64');
+        embeddingBuffer = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       }
 
       // Save to database
@@ -510,9 +511,10 @@ export class VoiceProfileService extends EventEmitter {
       const expiresAt = this.calculateExpirationDate(voiceModel.user.birthDate);
 
       // Decode embedding binary from base64 (for MongoDB storage)
-      let embeddingBuffer: Buffer | null = null;
+      let embeddingBuffer: Uint8Array | null = null;
       if (response.embedding_data) {
-        embeddingBuffer = Buffer.from(response.embedding_data, 'base64');
+        const buffer = Buffer.from(response.embedding_data, 'base64');
+        embeddingBuffer = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       }
 
       // Update database
