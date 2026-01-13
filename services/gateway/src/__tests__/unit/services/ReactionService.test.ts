@@ -105,7 +105,8 @@ describe('ReactionService', () => {
     // Create mock Prisma client
     mockPrisma = {
       message: {
-        findUnique: jest.fn()
+        findUnique: jest.fn(),
+        update: jest.fn()
       },
       reaction: {
         create: jest.fn(),
