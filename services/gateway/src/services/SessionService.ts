@@ -1,15 +1,22 @@
 /**
  * Session Service - Manages user sessions with device/location tracking
  * Provides security features like session listing, revocation, and cleanup
+ *
+ * Session Duration:
+ * - Mobile apps (iOS/Android): 365 days (configurable via SESSION_EXPIRY_MOBILE_DAYS)
+ * - Desktop browsers: 30 days (configurable via SESSION_EXPIRY_DESKTOP_DAYS)
+ * - Trusted devices: Extended duration (configurable via SESSION_EXPIRY_TRUSTED_DAYS)
  */
 
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RequestContext } from './GeoIPService';
 
-// Session configuration
-const SESSION_EXPIRY_DAYS = 30;
-const MAX_SESSIONS_PER_USER = 10;
+// Session configuration (configurable via environment variables)
+const SESSION_EXPIRY_MOBILE_DAYS = parseInt(process.env.SESSION_EXPIRY_MOBILE_DAYS || '365'); // 1 year for mobile apps
+const SESSION_EXPIRY_DESKTOP_DAYS = parseInt(process.env.SESSION_EXPIRY_DESKTOP_DAYS || '30'); // 30 days for browsers
+const SESSION_EXPIRY_TRUSTED_DAYS = parseInt(process.env.SESSION_EXPIRY_TRUSTED_DAYS || '365'); // 1 year for trusted devices
+const MAX_SESSIONS_PER_USER = parseInt(process.env.MAX_SESSIONS_PER_USER || '10');
 
 // Module-level prisma reference (initialized via initSessionService)
 let prisma: PrismaClient;
@@ -74,6 +81,27 @@ export function generateSessionToken(): string {
 }
 
 /**
+ * Determine session expiry based on device type
+ * Mobile apps get longer sessions (365 days), desktop browsers get 30 days
+ */
+function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number {
+  // Check if it's a native mobile app (iOS/Android)
+  const isMobileApp = deviceInfo?.rawUserAgent?.includes('Meeshy/') ||
+                      deviceInfo?.rawUserAgent?.includes('MeeshyApp') ||
+                      deviceInfo?.type === 'mobile';
+
+  // Mobile apps get extended sessions
+  if (isMobileApp) {
+    console.log(`[SessionService] 📱 Mobile app detected - session duration: ${SESSION_EXPIRY_MOBILE_DAYS} days`);
+    return SESSION_EXPIRY_MOBILE_DAYS;
+  }
+
+  // Default for desktop/browser
+  console.log(`[SessionService] 💻 Desktop/browser - session duration: ${SESSION_EXPIRY_DESKTOP_DAYS} days`);
+  return SESSION_EXPIRY_DESKTOP_DAYS;
+}
+
+/**
  * Create a new session for a user
  */
 export async function createSession(input: CreateSessionInput): Promise<SessionData> {
@@ -84,9 +112,10 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
   // Hash the token for storage
   const sessionToken = hashToken(token);
 
-  // Calculate expiry date
+  // Calculate expiry date based on device type
+  const expiryDays = getSessionExpiryDays(deviceInfo);
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
+  expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
   // Create the session
   const session = await db.userSession.create({
@@ -301,17 +330,109 @@ export async function cleanupExpiredSessions(): Promise<number> {
 
 /**
  * Mark a session as trusted (e.g., after 2FA verification)
+ * Trusted sessions get extended expiry (1 year by default)
  */
 export async function markSessionTrusted(sessionId: string): Promise<boolean> {
   const db = getPrisma();
   try {
+    // Extend expiry for trusted sessions
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + SESSION_EXPIRY_TRUSTED_DAYS);
+
     await db.userSession.update({
       where: { id: sessionId },
-      data: { isTrusted: true },
+      data: {
+        isTrusted: true,
+        expiresAt: newExpiresAt
+      },
     });
+    console.log(`[SessionService] ✅ Session marked trusted - extended to ${SESSION_EXPIRY_TRUSTED_DAYS} days`);
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Extend session expiry (useful for "remember me" or when user is active)
+ * @param token - Session token
+ * @param days - Number of days to extend (optional, uses device-appropriate default)
+ */
+export async function extendSessionExpiry(token: string, days?: number): Promise<boolean> {
+  const db = getPrisma();
+  const sessionToken = hashToken(token);
+
+  try {
+    const session = await db.userSession.findFirst({
+      where: { sessionToken, isValid: true },
+    });
+
+    if (!session) return false;
+
+    // Determine extension duration
+    const extensionDays = days || (session.isMobile ? SESSION_EXPIRY_MOBILE_DAYS : SESSION_EXPIRY_DESKTOP_DAYS);
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + extensionDays);
+
+    await db.userSession.update({
+      where: { id: session.id },
+      data: {
+        expiresAt: newExpiresAt,
+        lastActivityAt: new Date()
+      },
+    });
+
+    console.log(`[SessionService] 🔄 Session extended by ${extensionDays} days`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Refresh token rotation - Generate new refresh token while keeping session valid
+ * Used by mobile apps to maintain long-term sessions securely
+ */
+export async function rotateRefreshToken(currentRefreshToken: string): Promise<{
+  newRefreshToken: string;
+  expiresAt: Date;
+} | null> {
+  const db = getPrisma();
+  const refreshTokenHash = hashToken(currentRefreshToken);
+
+  try {
+    const session = await db.userSession.findFirst({
+      where: { refreshToken: refreshTokenHash, isValid: true },
+    });
+
+    if (!session) return null;
+
+    // Generate new refresh token
+    const newRefreshToken = randomBytes(32).toString('hex');
+    const newRefreshTokenHash = hashToken(newRefreshToken);
+
+    // Extend expiry based on device type
+    const extensionDays = session.isMobile ? SESSION_EXPIRY_MOBILE_DAYS : SESSION_EXPIRY_DESKTOP_DAYS;
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + extensionDays);
+
+    await db.userSession.update({
+      where: { id: session.id },
+      data: {
+        refreshToken: newRefreshTokenHash,
+        expiresAt: newExpiresAt,
+        lastActivityAt: new Date()
+      },
+    });
+
+    console.log(`[SessionService] 🔑 Refresh token rotated - session extended by ${extensionDays} days`);
+    return {
+      newRefreshToken,
+      expiresAt: newExpiresAt
+    };
+  } catch (error) {
+    console.error('[SessionService] ❌ Failed to rotate refresh token:', error);
+    return null;
   }
 }
 
@@ -410,7 +531,32 @@ export class SessionService {
     return markSessionTrusted(sessionId);
   }
 
+  async extendExpiry(token: string, days?: number): Promise<boolean> {
+    return extendSessionExpiry(token, days);
+  }
+
+  async rotateRefresh(currentRefreshToken: string): Promise<{ newRefreshToken: string; expiresAt: Date } | null> {
+    return rotateRefreshToken(currentRefreshToken);
+  }
+
   generateToken(): string {
     return generateSessionToken();
+  }
+
+  /**
+   * Get session configuration info (for debugging/admin)
+   */
+  getSessionConfig(): {
+    mobileDays: number;
+    desktopDays: number;
+    trustedDays: number;
+    maxSessions: number;
+  } {
+    return {
+      mobileDays: SESSION_EXPIRY_MOBILE_DAYS,
+      desktopDays: SESSION_EXPIRY_DESKTOP_DAYS,
+      trustedDays: SESSION_EXPIRY_TRUSTED_DAYS,
+      maxSessions: MAX_SESSIONS_PER_USER
+    };
   }
 }

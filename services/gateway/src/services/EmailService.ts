@@ -282,10 +282,14 @@ export class EmailService {
   private fromEmail: string;
   private fromName: string;
   private defaultLanguage: SupportedLanguage = 'fr';
+  private brandLogoUrl: string;
+  private frontendUrl: string;
 
   constructor() {
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
+    this.brandLogoUrl = process.env.BRAND_LOGO_URL || 'https://meeshy.me/images/meeshy-logo.png';
+    this.frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
     this.initializeProviders();
   }
 
@@ -478,7 +482,79 @@ export class EmailService {
 
     const content = this.getMagicLinkTranslations(lang);
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>✨ Meeshy</h1></div><div class="content"><p>${content.greeting} <strong>${data.name}</strong>,</p><p>${content.intro}</p><div style="text-align:center"><a href="${data.magicLink}" class="button">${content.buttonText}</a></div><div class="warning"><strong>⏰ ${content.expiryTitle}</strong><br>${content.expiryText}</div><div class="info"><strong>📍 ${content.requestFrom}</strong> ${data.location}<br><strong>🕐 ${content.requestAt}</strong> ${dateFormatted}</div><p style="color:#6b7280;font-size:14px">${content.notYou}</p><p>${content.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${content.subject}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5">
+  <div class="container" style="max-width:600px;margin:0 auto;padding:20px">
+    <!-- Header with Logo -->
+    <div class="header" style="background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
+      </a>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">🔐 ${content.title}</h1>
+      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content" style="background:#ffffff;padding:40px 30px;border-radius:0 0 12px 12px;box-shadow:0 4px 6px rgba(0,0,0,0.1)">
+      <p style="font-size:16px;color:#374151">${content.greeting} <strong style="color:#6366F1">${data.name}</strong>,</p>
+      <p style="font-size:16px;color:#374151;line-height:1.6">${content.intro}</p>
+
+      <!-- CTA Button -->
+      <div style="text-align:center;margin:30px 0">
+        <a href="${data.magicLink}" class="button" style="display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:16px 40px;text-decoration:none;border-radius:10px;font-weight:bold;font-size:18px;box-shadow:0 4px 14px rgba(99,102,241,0.4)">
+          ✨ ${content.buttonText}
+        </a>
+      </div>
+
+      <!-- Warning Box -->
+      <div class="warning" style="background:#fef2f2;border-left:4px solid #ef4444;padding:16px;margin:25px 0;border-radius:0 8px 8px 0">
+        <strong style="color:#dc2626">⏰ ${content.expiryTitle}</strong>
+        <p style="margin:8px 0 0;color:#7f1d1d;font-size:14px">${content.expiryText}</p>
+      </div>
+
+      <!-- Security Info Box -->
+      <div class="info" style="background:#EEF2FF;border-left:4px solid #6366F1;padding:16px;margin:20px 0;border-radius:0 8px 8px 0">
+        <p style="margin:0;font-size:14px;color:#4338ca">
+          <strong>📍 ${content.requestFrom}</strong> ${data.location}<br>
+          <strong>🕐 ${content.requestAt}</strong> ${dateFormatted}
+        </p>
+      </div>
+
+      <!-- Fallback Link -->
+      <p style="color:#6b7280;font-size:12px;word-break:break-all;margin-top:20px">
+        ${content.fallbackText}<br>
+        <a href="${data.magicLink}" style="color:#6366F1">${data.magicLink}</a>
+      </p>
+
+      <!-- Security Note -->
+      <p style="color:#9ca3af;font-size:13px;margin-top:25px;padding-top:20px;border-top:1px solid #e5e7eb">
+        ${content.notYou}
+      </p>
+
+      <p style="color:#374151;font-size:14px;margin-top:20px">${content.footer}</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer" style="margin-top:30px;padding:20px;text-align:center">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
+      </a>
+      <p style="font-size:12px;color:#9ca3af;margin:15px 0 0">${copyright}</p>
+      <p style="font-size:11px;color:#d1d5db;margin:10px 0 0">
+        <a href="${this.frontendUrl}/privacy" style="color:#9ca3af;text-decoration:none">${content.privacy}</a> •
+        <a href="${this.frontendUrl}/terms" style="color:#9ca3af;text-decoration:none">${content.terms}</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
     const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: content.subject, html, text });
@@ -489,54 +565,70 @@ export class EmailService {
       fr: {
         subject: '🔐 Votre lien de connexion Meeshy',
         title: 'Connexion Meeshy',
+        subtitle: 'Connexion sécurisée en un clic',
         greeting: 'Bonjour',
-        intro: 'Cliquez sur le bouton ci-dessous pour vous connecter. Ce lien est valide pendant 1 minute seulement.',
+        intro: 'Cliquez sur le bouton ci-dessous pour vous connecter instantanément à votre compte Meeshy. Ce lien est valide pendant 1 minute seulement.',
         buttonText: 'Se connecter',
         expiryTitle: 'Lien à usage unique',
-        expiryText: 'Ce lien expire dans 1 minute et ne peut être utilisé qu\'une seule fois.',
+        expiryText: 'Ce lien expire dans 1 minute et ne peut être utilisé qu\'une seule fois. Pour votre sécurité, ne le partagez avec personne.',
         requestFrom: 'Demande depuis:',
         requestAt: 'Demandé le:',
-        notYou: 'Si vous n\'avez pas demandé ce lien, ignorez simplement cet email.',
-        footer: 'L\'équipe Meeshy'
+        fallbackText: 'Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur:',
+        notYou: 'Si vous n\'avez pas demandé ce lien, vous pouvez ignorer cet email en toute sécurité. Votre compte reste protégé.',
+        footer: 'L\'équipe Meeshy',
+        privacy: 'Confidentialité',
+        terms: 'Conditions'
       },
       en: {
         subject: '🔐 Your Meeshy login link',
         title: 'Meeshy Login',
+        subtitle: 'Secure one-click sign in',
         greeting: 'Hello',
-        intro: 'Click the button below to sign in. This link is valid for 1 minute only.',
+        intro: 'Click the button below to instantly sign in to your Meeshy account. This link is valid for 1 minute only.',
         buttonText: 'Sign in',
         expiryTitle: 'One-time use link',
-        expiryText: 'This link expires in 1 minute and can only be used once.',
+        expiryText: 'This link expires in 1 minute and can only be used once. For your security, do not share it with anyone.',
         requestFrom: 'Request from:',
         requestAt: 'Requested at:',
-        notYou: 'If you did not request this link, simply ignore this email.',
-        footer: 'The Meeshy Team'
+        fallbackText: 'If the button doesn\'t work, copy and paste this link into your browser:',
+        notYou: 'If you did not request this link, you can safely ignore this email. Your account remains protected.',
+        footer: 'The Meeshy Team',
+        privacy: 'Privacy',
+        terms: 'Terms'
       },
       es: {
         subject: '🔐 Tu enlace de inicio de sesión de Meeshy',
         title: 'Inicio de sesión en Meeshy',
+        subtitle: 'Inicio de sesión seguro con un clic',
         greeting: 'Hola',
-        intro: 'Haz clic en el botón de abajo para iniciar sesión. Este enlace es válido solo por 1 minuto.',
+        intro: 'Haz clic en el botón de abajo para iniciar sesión instantáneamente en tu cuenta Meeshy. Este enlace es válido solo por 1 minuto.',
         buttonText: 'Iniciar sesión',
         expiryTitle: 'Enlace de un solo uso',
-        expiryText: 'Este enlace expira en 1 minuto y solo puede usarse una vez.',
+        expiryText: 'Este enlace expira en 1 minuto y solo puede usarse una vez. Por tu seguridad, no lo compartas con nadie.',
         requestFrom: 'Solicitud desde:',
         requestAt: 'Solicitado el:',
-        notYou: 'Si no solicitaste este enlace, simplemente ignora este correo.',
-        footer: 'El equipo de Meeshy'
+        fallbackText: 'Si el botón no funciona, copia y pega este enlace en tu navegador:',
+        notYou: 'Si no solicitaste este enlace, puedes ignorar este correo con seguridad. Tu cuenta permanece protegida.',
+        footer: 'El equipo de Meeshy',
+        privacy: 'Privacidad',
+        terms: 'Términos'
       },
       pt: {
         subject: '🔐 Seu link de login Meeshy',
         title: 'Login Meeshy',
+        subtitle: 'Login seguro com um clique',
         greeting: 'Olá',
-        intro: 'Clique no botão abaixo para entrar. Este link é válido por apenas 1 minuto.',
+        intro: 'Clique no botão abaixo para entrar instantaneamente na sua conta Meeshy. Este link é válido por apenas 1 minuto.',
         buttonText: 'Entrar',
         expiryTitle: 'Link de uso único',
-        expiryText: 'Este link expira em 1 minuto e só pode ser usado uma vez.',
+        expiryText: 'Este link expira em 1 minuto e só pode ser usado uma vez. Para sua segurança, não compartilhe com ninguém.',
         requestFrom: 'Solicitação de:',
         requestAt: 'Solicitado em:',
-        notYou: 'Se você não solicitou este link, simplesmente ignore este e-mail.',
-        footer: 'A equipe Meeshy'
+        fallbackText: 'Se o botão não funcionar, copie e cole este link no seu navegador:',
+        notYou: 'Se você não solicitou este link, pode ignorar este e-mail com segurança. Sua conta permanece protegida.',
+        footer: 'A equipe Meeshy',
+        privacy: 'Privacidade',
+        terms: 'Termos'
       }
     };
     return translations[language] || translations['en'];
