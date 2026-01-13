@@ -176,6 +176,10 @@ export interface Message {
   readonly deliveredCount: number;
   readonly readCount: number;
 
+  // ===== REACTION SUMMARY (denormalized) =====
+  readonly reactionSummary?: Record<string, number>; // { "❤️": 5, "👍": 3 }
+  readonly reactionCount: number;
+
   // ===== E2EE / ENCRYPTION =====
   readonly encryptedContent?: string;       // Base64 encoded ciphertext
   readonly encryptionMode?: EncryptionMode; // 'server', 'e2ee', 'hybrid', null

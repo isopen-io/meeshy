@@ -129,6 +129,12 @@ export interface GatewayMessage {
   /** Nombre de participants ayant lu le message */
   readonly readCount?: number;
 
+  // ===== RÉACTIONS (dénormalisées pour performance) =====
+  /** Comptage des réactions par emoji: { "❤️": 5, "👍": 3, "🔥": 1 } */
+  readonly reactionSummary?: Record<string, number>;
+  /** Nombre total de réactions */
+  readonly reactionCount?: number;
+
   // ===== CHIFFREMENT (E2EE) =====
   readonly isEncrypted?: boolean;
   readonly encryptionMode?: 'e2ee' | 'server' | 'hybrid';
