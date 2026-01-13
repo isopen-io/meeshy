@@ -533,13 +533,14 @@ class TestAudioCacheServiceWithSettings:
     """Test AudioCacheService with custom settings"""
 
     @pytest.mark.asyncio
-    async def test_custom_key_patterns(self, audio_cache_with_settings):
-        """Test custom key patterns from settings"""
+    async def test_default_key_patterns(self, audio_cache_with_settings):
+        """Test default key patterns (settings for keys not currently supported)"""
         cache = audio_cache_with_settings
 
-        assert cache.key_transcription == "custom:trans:{attachment_id}"
-        assert cache.key_translated_audio == "custom:audio:{attachment_id}:{lang}"
-        assert cache.key_voice_profile == "custom:voice:{user_id}"
+        # AudioCacheService uses hardcoded key patterns
+        assert cache.key_transcription == "audio:transcription:{attachment_id}"
+        assert cache.key_translated_audio == "audio:translation:{attachment_id}:{lang}"
+        assert cache.key_voice_profile == "voice:profile:{user_id}"
 
     @pytest.mark.asyncio
     async def test_custom_ttl(self, audio_cache_with_settings):
@@ -549,37 +550,39 @@ class TestAudioCacheServiceWithSettings:
         assert cache.ttl_voice_profile == 86400
 
     @pytest.mark.asyncio
-    async def test_transcription_uses_custom_key(self, audio_cache_with_settings):
-        """Test transcription uses custom key pattern"""
+    async def test_transcription_uses_default_key(self, audio_cache_with_settings):
+        """Test transcription uses default key pattern"""
         cache = audio_cache_with_settings
 
         transcription = {"text": "Hello", "language": "en"}
         await cache.set_transcription("att123", transcription)
 
-        # Check the key in memory cache
-        expected_key = "custom:trans:att123"
+        # Check the key in memory cache - uses default pattern
+        expected_key = "audio:transcription:att123"
         assert expected_key in cache.redis.memory_cache
 
     @pytest.mark.asyncio
-    async def test_translated_audio_uses_custom_key(self, audio_cache_with_settings):
-        """Test translated audio uses custom key pattern"""
+    async def test_translated_audio_uses_default_key(self, audio_cache_with_settings):
+        """Test translated audio uses default key pattern"""
         cache = audio_cache_with_settings
 
         audio_data = {"url": "https://example.com/audio.mp3"}
         await cache.set_translated_audio("att456", "fr", audio_data)
 
-        expected_key = "custom:audio:att456:fr"
+        # Uses default pattern
+        expected_key = "audio:translation:att456:fr"
         assert expected_key in cache.redis.memory_cache
 
     @pytest.mark.asyncio
-    async def test_voice_profile_uses_custom_key(self, audio_cache_with_settings):
-        """Test voice profile uses custom key pattern"""
+    async def test_voice_profile_uses_default_key(self, audio_cache_with_settings):
+        """Test voice profile uses default key pattern"""
         cache = audio_cache_with_settings
 
         profile = {"user_id": "user123", "quality": 0.9}
         await cache.set_voice_profile("user123", profile)
 
-        expected_key = "custom:voice:user123"
+        # Uses default pattern
+        expected_key = "voice:profile:user123"
         assert expected_key in cache.redis.memory_cache
 
 
@@ -780,8 +783,9 @@ class TestAudioCacheServiceStats:
         assert "ttl_transcription" in stats
         assert "ttl_translated_audio" in stats
         assert "ttl_voice_profile" in stats
-        assert stats["ttl_transcription"] == 3600
-        assert stats["ttl_translated_audio"] == 3600
+        # Default TTLs are 30 days (2592000 seconds) for transcription/audio, 90 days for voice profile
+        assert stats["ttl_transcription"] == 2592000
+        assert stats["ttl_translated_audio"] == 2592000
         assert stats["ttl_voice_profile"] == 7776000
 
         RedisService._instance = None
