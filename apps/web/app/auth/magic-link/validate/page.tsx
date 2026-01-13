@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
 import { magicLinkService } from '@/services/magic-link.service';
+import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { CheckCircle, XCircle, Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
 
 // Composants inline légers
@@ -74,10 +75,10 @@ function MagicLinkValidateContent() {
         if (response.success && response.data) {
           // Vérifier si 2FA est requis
           if (response.data.requires2FA) {
-            // Stocker le token temporaire pour la vérification 2FA
-            sessionStorage.setItem('2fa_temp_token', response.data.twoFactorToken || '');
-            sessionStorage.setItem('2fa_user_id', response.data.user?.id || '');
-            sessionStorage.setItem('2fa_username', response.data.user?.username || '');
+            // Stocker le token temporaire pour la vérification 2FA - utilise les clés centralisées
+            sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN, response.data.twoFactorToken || '');
+            sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID, response.data.user?.id || '');
+            sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME, response.data.user?.username || '');
             setState('requires2fa');
             return;
           }
