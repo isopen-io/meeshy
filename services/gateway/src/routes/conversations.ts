@@ -14,6 +14,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { messageValidationHook } from '../middleware/rate-limiter';
+import { validatePagination, buildPaginationMeta } from '../utils/pagination';
 import {
   conversationSchema,
   conversationMinimalSchema,
@@ -1102,9 +1103,12 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { limit = '20', offset = '0', before } = request.query;
+      const { limit: limitStr = '20', offset: offsetStr = '0', before } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+
+      // Valider et parser les paramètres de pagination
+      const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
 
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(id);
@@ -1137,13 +1141,21 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           where: { id: before },
           select: { createdAt: true }
         });
-        
+
         if (beforeMessage) {
           whereClause.createdAt = {
             lt: beforeMessage.createdAt
           };
         }
       }
+
+      // Compter le total des messages (pour pagination)
+      const totalCount = await prisma.message.count({
+        where: {
+          conversationId: conversationId,
+          isDeleted: false
+        }
+      });
 
       const messages = await prisma.message.findMany({
         where: whereClause,
@@ -1286,8 +1298,8 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           }
         },
         orderBy: { createdAt: 'desc' },
-        take: Math.min(parseInt(limit), 50), // Max 50 messages
-        skip: before ? 0 : parseInt(offset)
+        take: limit, // Max 50 messages (validé par validatePagination)
+        skip: before ? 0 : offset
       });
 
       // Optimisation : Récupérer les préférences linguistiques seulement si nécessaire
@@ -1363,13 +1375,16 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Construire les métadonnées de pagination standard
+      const paginationMeta = buildPaginationMeta(totalCount, offset, limit, messages.length);
+
       reply.send({
         success: true,
         data: {
           messages: messagesWithAllTranslations,
-          hasMore: messages.length === parseInt(limit),
           userLanguage: userPreferredLanguage
-        }
+        },
+        pagination: paginationMeta
       });
 
     } catch (error) {
