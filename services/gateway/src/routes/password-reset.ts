@@ -20,8 +20,8 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, 'Reset token is required'),
-  newPassword: z.string().min(12, 'Password must be at least 12 characters').max(128),
-  confirmPassword: z.string().min(12, 'Password confirmation is required').max(128),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(128),
+  confirmPassword: z.string().min(8, 'Password confirmation is required').max(128),
   twoFactorCode: z.string().regex(/^[0-9]{6}$/, '2FA code must be 6 digits').optional(),
   deviceFingerprint: z.string().optional()
 }).refine(data => data.newPassword === data.confirmPassword, {
@@ -143,7 +143,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 12 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least 8 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -158,14 +158,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 12,
+            minLength: 8,
             maxLength: 128,
-            description: 'New password (minimum 12 characters, must include uppercase, lowercase, digit, and special character)',
+            description: 'New password (minimum 8 characters, must include uppercase, lowercase, digit, and special character)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 12,
+            minLength: 8,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'

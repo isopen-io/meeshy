@@ -260,6 +260,18 @@ describe('AuthService', () => {
             { phoneNumber: '+testuser' }
           ],
           isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
         }
       });
       expect(mockBcryptCompare).toHaveBeenCalledWith('password123', mockUser.password);
@@ -383,6 +395,18 @@ describe('AuthService', () => {
             { phoneNumber: '+testuser' }
           ],
           isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
         }
       });
     });
@@ -618,6 +642,18 @@ describe('AuthService', () => {
         where: {
           id: 'user-123',
           isActive: true
+        },
+        include: {
+          userFeature: {
+            select: {
+              twoFactorEnabledAt: true,
+              autoTranslateEnabled: true,
+              translateToSystemLanguage: true,
+              translateToRegionalLanguage: true,
+              useCustomDestination: true,
+              encryptionPreference: true
+            }
+          }
         }
       });
     });
