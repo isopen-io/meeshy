@@ -124,10 +124,12 @@ export function useConversationMessages(
       }
 
 
+      // Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
       const response = await apiService.get<{
         success: boolean;
-        data: { messages: Message[]; userLanguage?: string };
+        data: Message[];  // Directement les messages
         pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
+        meta?: { userLanguage?: string };
       }>(
         endpoint,
         {
@@ -145,8 +147,8 @@ export function useConversationMessages(
         throw new Error('Erreur lors du chargement des messages');
       }
 
-      const newMessages = data.data.messages || [];
-      // Utiliser le format de pagination standard (pagination au niveau root)
+      // data.data est directement Message[] (format optimisé)
+      const newMessages = data.data || [];
       const hasMoreMessages = data.pagination?.hasMore ?? false;
 
       // Log des traductions reçues pour debugging
