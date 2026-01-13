@@ -474,6 +474,15 @@ model Message {
   readCount        Int       @default(0)
 
   // ============================================
+  // REACTION SUMMARY (denormalized for performance)
+  // Updated when reactions are added/removed
+  // ============================================
+  /// Aggregated reaction counts by emoji: { "❤️": 5, "👍": 3, "🔥": 1 }
+  reactionSummary Json?
+  /// Total reaction count (denormalized for quick access)
+  reactionCount   Int  @default(0)
+
+  // ============================================
   // E2EE / ENCRYPTION FIELDS
   // ============================================
   /// Encrypted content (base64 encoded ciphertext)

@@ -1078,7 +1078,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
           offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
           before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
-          include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include reactions (default true)' },
+          include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' }
@@ -1111,7 +1111,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         limit: limitStr = '20',
         offset: offsetStr = '0',
         before,
-        include_reactions: includeReactionsStr = 'true',
+        include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
         include_status: includeStatusStr = 'false',
         include_replies: includeRepliesStr = 'true'
@@ -1208,6 +1208,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         readByAllAt: true,
         deliveredCount: true,
         readCount: true,
+
+        // ===== RÉACTIONS (dénormalisées - toujours incluses) =====
+        reactionSummary: true,
+        reactionCount: true,
 
         // ===== CHIFFREMENT =====
         isEncrypted: true,
@@ -1466,6 +1470,10 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           readByAllAt: message.readByAllAt,
           deliveredCount: message.deliveredCount,
           readCount: message.readCount,
+
+          // Réactions (dénormalisées - toujours incluses)
+          reactionSummary: message.reactionSummary,
+          reactionCount: message.reactionCount,
 
           // Chiffrement
           isEncrypted: message.isEncrypted,
