@@ -23,11 +23,34 @@ import pytest
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+
+# Check if FastAPI is real or mocked (conftest.py mocks it for non-API tests)
+def _is_fastapi_available():
+    """Check if real FastAPI is available (not mocked by conftest)"""
+    try:
+        import fastapi
+        from unittest.mock import MagicMock as MM
+        if isinstance(fastapi.APIRouter, MM):
+            return False
+        if not hasattr(fastapi, '__version__'):
+            return False
+        return True
+    except (ImportError, AttributeError):
+        return False
+
+FASTAPI_AVAILABLE = _is_fastapi_available()
+
+# Import FastAPI test client - only if FastAPI is real
+if FASTAPI_AVAILABLE:
+    from fastapi import HTTPException
+    from fastapi.testclient import TestClient
+else:
+    HTTPException = Exception
+    TestClient = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -37,6 +60,13 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # FIXTURES
 # ============================================================================
+
+# Skip all tests in this module if FastAPI is mocked
+pytestmark = pytest.mark.skipif(
+    not FASTAPI_AVAILABLE,
+    reason="FastAPI not available (mocked by conftest)"
+)
+
 
 @pytest.fixture(autouse=True)
 def reset_health_module():

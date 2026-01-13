@@ -647,6 +647,27 @@ class TestAnalyticsService:
 # TESTS VOICE API ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Check if FastAPI is a real module or mocked
+def _is_fastapi_available():
+    """Check if real FastAPI is available (not mocked)"""
+    try:
+        import fastapi
+        # If it's a MagicMock, the APIRouter would be a MagicMock too
+        # Real APIRouter is a class, not a MagicMock
+        from unittest.mock import MagicMock
+        if isinstance(fastapi.APIRouter, MagicMock):
+            return False
+        # Also verify we can actually use the module
+        if not hasattr(fastapi, '__version__'):
+            return False
+        return True
+    except (ImportError, AttributeError):
+        return False
+
+
+FASTAPI_AVAILABLE = _is_fastapi_available()
+
+
 class TestVoiceAPIRouter:
     """Tests pour le routeur Voice API"""
 
@@ -695,6 +716,7 @@ class TestVoiceAPIRouter:
             "analytics_service": analytics_service
         }
 
+    @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI not available (mocked)")
     def test_router_creation(self, mock_services):
         """Test la création du routeur"""
         from api.voice_api import create_voice_api_router
@@ -704,6 +726,7 @@ class TestVoiceAPIRouter:
         assert router is not None
         assert router.prefix == "/api/v1"
 
+    @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI not available (mocked)")
     def test_router_has_endpoints(self, mock_services):
         """Test que le routeur a les endpoints attendus"""
         from api.voice_api import create_voice_api_router
@@ -736,6 +759,7 @@ class TestVoiceAPIRouter:
         for endpoint in expected_endpoints:
             assert any(endpoint in route for route in routes), f"Missing endpoint: {endpoint}"
 
+    @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI not available (mocked)")
     @pytest.mark.asyncio
     async def test_health_endpoint(self, mock_services):
         """Test l'endpoint health"""
@@ -755,6 +779,7 @@ class TestVoiceAPIRouter:
         assert data["status"] == "healthy"
         assert "services" in data
 
+    @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI not available (mocked)")
     @pytest.mark.asyncio
     async def test_languages_endpoint(self, mock_services):
         """Test l'endpoint languages"""
