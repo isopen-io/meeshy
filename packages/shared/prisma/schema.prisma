@@ -517,6 +517,14 @@ model MessageTranslation {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // Source language - stored explicitly for translator service compatibility
+  // Can also be derived from message.originalLanguage
+  sourceLanguage    String?
+
+  // Cache key for optimized lookups (format: messageId_sourceLang_targetLang_model)
+  // Optional - populated by translator service
+  cacheKey          String?
+
   // Encryption fields for secure conversations (server/hybrid modes)
   // Translations inherit encryption from parent message
   isEncrypted       Boolean @default(false)
@@ -524,7 +532,6 @@ model MessageTranslation {
   encryptionIv      String? // Base64 encoded IV (12 bytes for AES-GCM)
   encryptionAuthTag String? // Base64 encoded auth tag (16 bytes)
 
-  // Source language is derived from message.originalLanguage
   message Message @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   // Contrainte d'unicité: une seule traduction par message et langue cible
