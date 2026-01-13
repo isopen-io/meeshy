@@ -220,6 +220,10 @@ export function normalizeMessage(rawMessage: unknown): Message {
     deliveredCount: Number(raw.deliveredCount || 0),
     readCount: Number(raw.readCount || 0),
 
+    // Reaction summary
+    reactionCount: Number(raw.reactionCount || 0),
+    reactionSummary: (raw.reactionSummary as Record<string, number>) || undefined,
+
     // Encryption
     isEncrypted: Boolean(raw.isEncrypted),
     encryptionMode: raw.encryptionMode as 'server' | 'e2ee' | 'hybrid' | null | undefined,

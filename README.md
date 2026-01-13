@@ -92,30 +92,30 @@ Meeshy is a production-ready messaging platform that enables seamless cross-lang
 | Technology | Version | Justification |
 |------------|---------|---------------|
 | **Next.js** | `15.3.5` | App Router with RSC, SSR/SSG, optimized image handling, built-in API routes. Best-in-class React framework for production. |
-| **React** | `19.0.0` | Concurrent rendering, Server Components, Actions API. Latest stable with improved performance. |
-| **TypeScript** | `5.8.3` | Full type safety, enhanced IDE support, catch errors at compile time. |
-| **TailwindCSS** | `3.4.0` | Utility-first CSS with JIT compilation. Rapid prototyping, consistent design system. |
-| **Socket.io-client** | `4.8.1` | Reliable WebSocket with automatic reconnection, room support, binary streaming. |
-| **Zustand** | `5.0.8` | Lightweight state management (2KB). Simpler than Redux, perfect for React 19. |
+| **React** | `19.2.3` | Concurrent rendering, Server Components, Actions API. Latest stable with improved performance. |
+| **TypeScript** | `5.9.3` | Full type safety, enhanced IDE support, catch errors at compile time. |
+| **TailwindCSS** | `3.4.19` | Utility-first CSS with JIT compilation. Rapid prototyping, consistent design system. |
+| **Socket.io-client** | `4.8.3` | Reliable WebSocket with automatic reconnection, room support, binary streaming. |
+| **Zustand** | `5.0.10` | Lightweight state management (2KB). Simpler than Redux, perfect for React 19. |
 | **Radix UI** | `latest` | Unstyled, accessible primitives. WAI-ARIA compliant components. |
-| **Framer Motion** | `12.23.12` | Production-ready animations with gesture support. |
-| **Jest** | `30.0.4` | Modern testing with native ESM support, fast execution. |
+| **Framer Motion** | `12.26.1` | Production-ready animations with gesture support. |
+| **Jest** | `30.2.0` | Modern testing with native ESM support, fast execution. |
 
 ### Gateway Service - `services/gateway`
 
 | Technology | Version | Justification |
 |------------|---------|---------------|
-| **Fastify** | `5.6.1` | 2-3x faster than Express. Built-in schema validation, plugin architecture, TypeScript-first. |
-| **Prisma** | `6.13.0` | Type-safe ORM with auto-generated client. MongoDB support, migrations, query optimization. |
-| **Socket.io** | `4.8.1` | Real-time bidirectional communication. Room-based broadcasting, binary support. |
-| **MongoDB Driver** | `6.20.0` | Native driver for advanced queries, change streams, transactions. |
-| **ioredis** | `5.7.0` | High-performance Redis client with cluster support, Lua scripting, pipelining. |
-| **gRPC** | `1.13.4` | Efficient binary protocol for service-to-service. Protocol Buffers, streaming. |
+| **Fastify** | `5.6.2` | 2-3x faster than Express. Built-in schema validation, plugin architecture, TypeScript-first. |
+| **Prisma** | `6.19.1` | Type-safe ORM with auto-generated client. MongoDB support, migrations, query optimization. |
+| **Socket.io** | `4.8.3` | Real-time bidirectional communication. Room-based broadcasting, binary support. |
+| **MongoDB Driver** | `6.21.0` | Native driver for advanced queries, change streams, transactions. |
+| **ioredis** | `5.9.1` | High-performance Redis client with cluster support, Lua scripting, pipelining. |
+| **gRPC** | `1.14.3` | Efficient binary protocol for service-to-service. Protocol Buffers, streaming. |
 | **ZeroMQ** | `6.5.0` | Async messaging patterns (push/pull, pub/sub). Handles ML task queuing. |
-| **JSON Web Tokens** | `9.0.2` | Stateless authentication, RS256 signing support. |
+| **JSON Web Tokens** | `9.0.3` | Stateless authentication, RS256 signing support. |
 | **bcrypt** | `6.0.0` | Industry-standard password hashing with configurable work factor. |
 | **Firebase Admin** | `13.6.0` | Push notifications to iOS/Android devices. |
-| **Sharp** | `0.34.3` | High-performance image processing (resize, format conversion). |
+| **Sharp** | `0.34.5` | High-performance image processing (resize, format conversion). |
 
 ### Translator Service - `services/translator`
 
@@ -137,10 +137,10 @@ Meeshy is a production-ready messaging platform that enables seamless cross-lang
 
 | Technology | Version | Justification |
 |------------|---------|---------------|
-| **Prisma** | `6.19.0` | Single source of truth for database schema. Shared across services. |
+| **Prisma** | `6.19.1` | Single source of truth for database schema. Shared across services. |
 | **Zod** | `3.25.76` | Runtime validation matching TypeScript types. Schema inference. |
-| **TypeScript** | `5.8.3` | Shared type definitions across frontend and backend. |
-| **Signal Protocol** | `0.58.2` | Optional E2E encryption. Industry-standard secure messaging. |
+| **TypeScript** | `5.9.3` | Shared type definitions across frontend and backend. |
+| **Signal Protocol** | `0.58.3` | Optional E2E encryption. Industry-standard secure messaging. |
 
 ### Mobile - `apps/ios`
 
@@ -160,9 +160,9 @@ Meeshy is a production-ready messaging platform that enables seamless cross-lang
 | **Redis** | `8-alpine` | In-memory cache, session store, pub/sub. Sub-millisecond latency. |
 | **Traefik** | `3.x` | Dynamic reverse proxy with auto SSL. Docker-native. |
 | **Node.js** | `22.0+` | LTS with native ESM, fetch API, improved performance. |
-| **Python** | `3.11.13` | Required for ML libraries. Async support, type hints. |
+| **Python** | `3.11+` | Required for ML libraries. Async support, type hints. |
 | **pnpm** | `9.15.0` | Fast, disk-efficient package manager. Strict dependency resolution. |
-| **Turborepo** | `2.3.3` | Monorepo build orchestration. Remote caching, parallel execution. |
+| **Turborepo** | `2.7.4` | Monorepo build orchestration. Remote caching, parallel execution. |
 
 ---
 
@@ -303,11 +303,10 @@ meeshy/
 │   │   │   └── docker-compose.prod.yml
 │   │   ├── images/                 # Custom Dockerfiles
 │   │   ├── nginx/                  # Reverse proxy configs
-│   │   └── config/                 # Traefik, services
-│   ├── envs/                       # Environment files
-│   │   ├── .env.example
-│   │   └── .env.production
-│   └── kubernetes/                 # K8s manifests (planned)
+│   │   ├── caddy/                  # Caddy server configs
+│   │   └── scripts/                # Docker helper scripts
+│   └── envs/                       # Environment files
+│       └── .env.example
 │
 ├── scripts/                        # Build & deployment
 │   └── development/                # Local dev scripts
@@ -339,11 +338,8 @@ meeshy/
 git clone https://github.com/isopen-io/meeshy.git
 cd meeshy
 
-# Install dependencies
+# Install dependencies (Prisma client auto-generated via postinstall)
 pnpm install
-
-# Generate Prisma client
-pnpm generate
 
 # Start infrastructure (MongoDB, Redis)
 pnpm docker:up
@@ -376,6 +372,7 @@ pnpm dev                    # Start all services (Turborepo)
 pnpm dev:web                # Start frontend only
 pnpm dev:gateway            # Start gateway only
 pnpm dev:translator         # Start translator only
+pnpm start                  # Start all services in production mode
 
 # ─────────────────────────────────────────────────────────────
 # BUILD
@@ -383,6 +380,7 @@ pnpm dev:translator         # Start translator only
 pnpm build                  # Build all packages
 pnpm build:web              # Build frontend
 pnpm build:gateway          # Build gateway
+pnpm build:translator       # Build translator
 
 # ─────────────────────────────────────────────────────────────
 # TESTING
@@ -398,23 +396,18 @@ pnpm test:coverage          # With coverage reports
 # ─────────────────────────────────────────────────────────────
 pnpm lint                   # ESLint all packages
 pnpm type-check             # TypeScript validation
-pnpm format                 # Prettier formatting
-
-# ─────────────────────────────────────────────────────────────
-# DATABASE
-# ─────────────────────────────────────────────────────────────
-pnpm generate               # Generate Prisma client
-pnpm db:push                # Push schema to database
-pnpm db:studio              # Open Prisma Studio
 
 # ─────────────────────────────────────────────────────────────
 # DOCKER
 # ─────────────────────────────────────────────────────────────
-pnpm docker:up              # Start infrastructure
+pnpm docker:up              # Start infrastructure (docker-compose.yml)
 pnpm docker:down            # Stop all containers
 pnpm docker:logs            # View container logs
 pnpm docker:build           # Build custom images
+pnpm docker:dev             # Start dev infrastructure (docker-compose.dev.yml)
 ```
+
+> **Note**: Prisma client is auto-generated via `postinstall`. For manual database operations, use the scripts in the `packages/shared` directory.
 
 ---
 
@@ -422,10 +415,10 @@ pnpm docker:build           # Build custom images
 
 | Level | Framework | Scope | Location |
 |-------|-----------|-------|----------|
-| **Unit** | Jest / Pytest | Functions, utilities, services | `__tests__/unit/` |
-| **Integration** | Jest / Pytest | API endpoints, middleware | `__tests__/integration/` |
-| **E2E** | Playwright | User workflows | `tests/` (root) |
-| **Performance** | Custom | Load testing | `__tests__/performance/` |
+| **Unit** | Jest / Pytest | Functions, utilities, services | `apps/web/__tests__/`, `services/gateway/__tests__/` |
+| **Integration** | Jest / Pytest | API endpoints, middleware | `apps/web/__tests__/integration/` |
+| **E2E** | Playwright | User workflows | `tests/e2e/` (root) |
+| **Component** | React Testing Library | UI components | `apps/web/__tests__/components/` |
 
 ### Running Tests
 
@@ -433,10 +426,8 @@ pnpm docker:build           # Build custom images
 # All tests with coverage
 pnpm test:coverage
 
-# Watch mode (development)
-pnpm test:watch
-
 # Specific service
+pnpm test:web
 pnpm test:gateway
 pnpm test:translator
 ```
@@ -472,7 +463,7 @@ cp infrastructure/envs/.env.example .env
 pnpm docker:build
 
 # Images produced:
-# - isopen/meeshy-frontend:latest    (Next.js on Node.js 22)
+# - isopen/meeshy-web:latest         (Next.js on Node.js 22)
 # - isopen/meeshy-gateway:latest     (Fastify on Node.js 22)
 # - isopen/meeshy-translator:latest  (FastAPI on Python 3.11)
 ```
@@ -497,17 +488,17 @@ GitHub Actions workflows:
 | Component | Technology | Version |
 |-----------|------------|---------|
 | Frontend | Next.js | 15.3.5 |
-| Frontend | React | 19.0.0 |
-| Gateway | Fastify | 5.6.1 |
-| Gateway | Prisma | 6.13.0 |
-| Translator | FastAPI | 0.115.6 |
-| Translator | faster-whisper | 1.2.1 |
+| Frontend | React | 19.2.3 |
+| Gateway | Fastify | 5.6.2 |
+| Gateway | Prisma | 6.19.1 |
+| Translator | FastAPI | 0.115.x |
+| Translator | faster-whisper | 1.x |
 | Database | MongoDB | 8.0 |
 | Cache | Redis | 8-alpine |
 | Runtime | Node.js | 22.0+ |
-| Runtime | Python | 3.11.13 |
+| Runtime | Python | 3.11+ |
 | Package Manager | pnpm | 9.15.0 |
-| Build System | Turborepo | 2.3.3 |
+| Build System | Turborepo | 2.7.4 |
 
 ---
 
