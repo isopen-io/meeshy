@@ -49,6 +49,8 @@ class VoiceProfileAnalysisResult:
     fingerprint_id: Optional[str] = None
     signature_short: Optional[str] = None
     embedding_path: Optional[str] = None
+    embedding_data: Optional[str] = None  # Base64-encoded embedding binary (for Gateway storage)
+    embedding_dimension: int = 256  # Embedding vector dimension
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -240,6 +242,16 @@ class VoiceProfileHandler:
                 # Save to cache (embeddings stored as .pkl files)
                 await self.voice_clone_service._save_model_to_cache(model)
 
+                # Encode embedding as base64 for Gateway to store in MongoDB
+                embedding_data = None
+                embedding_dimension = 256
+                if model.embedding is not None:
+                    import numpy as np
+                    # Convert numpy array to bytes and then base64
+                    embedding_bytes = model.embedding.astype(np.float32).tobytes()
+                    embedding_data = base64.b64encode(embedding_bytes).decode('utf-8')
+                    embedding_dimension = len(model.embedding)
+
                 return VoiceProfileAnalysisResult(
                     success=True,
                     user_id=user_id,
@@ -250,7 +262,9 @@ class VoiceProfileHandler:
                     fingerprint=model.fingerprint.to_dict() if model.fingerprint else None,
                     fingerprint_id=model.fingerprint.fingerprint_id if model.fingerprint else None,
                     signature_short=model.fingerprint.signature_short if model.fingerprint else None,
-                    embedding_path=model.embedding_path
+                    embedding_path=model.embedding_path,
+                    embedding_data=embedding_data,
+                    embedding_dimension=embedding_dimension
                 ).to_dict()
 
             finally:
