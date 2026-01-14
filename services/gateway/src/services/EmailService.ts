@@ -82,7 +82,7 @@ export interface MagicLinkEmailData {
 // I18N TRANSLATIONS
 // ============================================================================
 
-type SupportedLanguage = 'fr' | 'en' | 'es' | 'pt';
+type SupportedLanguage = 'fr' | 'en' | 'es' | 'pt' | 'it' | 'de';
 
 interface EmailTranslations {
   common: {
@@ -270,6 +270,80 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action2: 'Verifique seus dispositivos conectados',
       action3: 'Ative a autenticação de dois fatores'
     }
+  },
+  it: {
+    common: {
+      greeting: 'Ciao',
+      footer: 'Il team Meeshy',
+      copyright: '© {year} Meeshy. Tutti i diritti riservati.'
+    },
+    verification: {
+      subject: 'Verifica la tua email - Meeshy',
+      title: 'Benvenuto su Meeshy!',
+      intro: 'Grazie per esserti registrato su Meeshy! Per attivare il tuo account, verifica il tuo indirizzo email:',
+      buttonText: 'Verifica la mia email',
+      expiry: 'Questo link scade tra {hours} ore.',
+      ignoreNote: 'Se non hai creato un account, ignora questa email'
+    },
+    passwordReset: {
+      subject: 'Reimposta la tua password - Meeshy',
+      title: 'Reimpostazione Password',
+      intro: 'Hai richiesto di reimpostare la tua password Meeshy:',
+      buttonText: 'Reimposta password',
+      expiry: 'Questo link scade tra {minutes} minuti.',
+      ignoreNote: 'Se non hai fatto questa richiesta, ignora questa email'
+    },
+    passwordChanged: {
+      subject: 'La tua password è stata modificata - Meeshy',
+      title: 'Password Modificata',
+      intro: 'La tua password Meeshy è stata modificata con successo.',
+      warning: 'Non sei stato tu? Contatta immediatamente il nostro supporto: security@meeshy.me'
+    },
+    securityAlert: {
+      subject: 'Avviso di sicurezza - Meeshy',
+      title: 'Avviso di sicurezza',
+      actions: 'Azioni consigliate:',
+      action1: 'Cambia immediatamente la tua password',
+      action2: 'Verifica i tuoi dispositivi connessi',
+      action3: "Attiva l'autenticazione a due fattori"
+    }
+  },
+  de: {
+    common: {
+      greeting: 'Hallo',
+      footer: 'Das Meeshy-Team',
+      copyright: '© {year} Meeshy. Alle Rechte vorbehalten.'
+    },
+    verification: {
+      subject: 'Bestätige deine E-Mail-Adresse - Meeshy',
+      title: 'Willkommen bei Meeshy!',
+      intro: 'Danke für deine Registrierung bei Meeshy! Um dein Konto zu aktivieren, bestätige bitte deine E-Mail-Adresse:',
+      buttonText: 'E-Mail bestätigen',
+      expiry: 'Dieser Link läuft in {hours} Stunden ab.',
+      ignoreNote: 'Wenn du kein Konto erstellt hast, ignoriere diese E-Mail'
+    },
+    passwordReset: {
+      subject: 'Passwort zurücksetzen - Meeshy',
+      title: 'Passwort zurücksetzen',
+      intro: 'Du hast angefordert, dein Meeshy-Passwort zurückzusetzen:',
+      buttonText: 'Passwort zurücksetzen',
+      expiry: 'Dieser Link läuft in {minutes} Minuten ab.',
+      ignoreNote: 'Wenn du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail'
+    },
+    passwordChanged: {
+      subject: 'Dein Passwort wurde geändert - Meeshy',
+      title: 'Passwort geändert',
+      intro: 'Dein Meeshy-Passwort wurde erfolgreich geändert.',
+      warning: 'Das warst nicht du? Kontaktiere sofort unseren Support: security@meeshy.me'
+    },
+    securityAlert: {
+      subject: 'Sicherheitswarnung - Meeshy',
+      title: 'Sicherheitswarnung',
+      actions: 'Empfohlene Maßnahmen:',
+      action1: 'Ändere sofort dein Passwort',
+      action2: 'Überprüfe deine verbundenen Geräte',
+      action3: 'Aktiviere die Zwei-Faktor-Authentifizierung'
+    }
   }
 };
 
@@ -281,7 +355,7 @@ export class EmailService {
   private providers: EmailProviderConfig[] = [];
   private fromEmail: string;
   private fromName: string;
-  private defaultLanguage: SupportedLanguage = 'fr';
+  private defaultLanguage: SupportedLanguage = 'en';
   private brandLogoUrl: string;
   private frontendUrl: string;
 
@@ -317,13 +391,13 @@ export class EmailService {
   private normalizeLanguage(language?: string): SupportedLanguage {
     if (!language) return this.defaultLanguage;
     const normalized = language.toLowerCase().substring(0, 2);
-    const supported: SupportedLanguage[] = ['fr', 'en', 'es', 'pt'];
+    const supported: SupportedLanguage[] = ['fr', 'en', 'es', 'pt', 'it', 'de'];
     return supported.includes(normalized as SupportedLanguage) ? (normalized as SupportedLanguage) : this.defaultLanguage;
   }
 
   private getLocale(language?: string): string {
     const lang = this.normalizeLanguage(language);
-    const locales: Record<SupportedLanguage, string> = { fr: 'fr-FR', en: 'en-US', es: 'es-ES', pt: 'pt-BR' };
+    const locales: Record<SupportedLanguage, string> = { fr: 'fr-FR', en: 'en-US', es: 'es-ES', pt: 'pt-BR', it: 'it-IT', de: 'de-DE' };
     return locales[lang];
   }
 
@@ -631,6 +705,40 @@ export class EmailService {
         footer: 'A equipe Meeshy',
         privacy: 'Privacidade',
         terms: 'Termos'
+      },
+      it: {
+        subject: '🔐 Il tuo link di accesso Meeshy',
+        title: 'Accesso Meeshy',
+        subtitle: 'Accesso sicuro con un clic',
+        greeting: 'Ciao',
+        intro: 'Clicca il pulsante qui sotto per accedere istantaneamente al tuo account Meeshy. Questo link è valido solo per 1 minuto.',
+        buttonText: 'Accedi',
+        expiryTitle: 'Link monouso',
+        expiryText: 'Questo link scade in 1 minuto e può essere usato solo una volta. Per la tua sicurezza, non condividerlo con nessuno.',
+        requestFrom: 'Richiesta da:',
+        requestAt: 'Richiesto il:',
+        fallbackText: 'Se il pulsante non funziona, copia e incolla questo link nel tuo browser:',
+        notYou: 'Se non hai richiesto questo link, puoi ignorare questa email in sicurezza. Il tuo account rimane protetto.',
+        footer: 'Il team Meeshy',
+        privacy: 'Privacy',
+        terms: 'Termini'
+      },
+      de: {
+        subject: '🔐 Dein Meeshy-Anmeldelink',
+        title: 'Meeshy-Anmeldung',
+        subtitle: 'Sichere Anmeldung mit einem Klick',
+        greeting: 'Hallo',
+        intro: 'Klicke auf den Button unten, um dich sofort bei deinem Meeshy-Konto anzumelden. Dieser Link ist nur 1 Minute gültig.',
+        buttonText: 'Anmelden',
+        expiryTitle: 'Einmaliger Link',
+        expiryText: 'Dieser Link läuft in 1 Minute ab und kann nur einmal verwendet werden. Zu deiner Sicherheit teile ihn mit niemandem.',
+        requestFrom: 'Anfrage von:',
+        requestAt: 'Angefordert am:',
+        fallbackText: 'Wenn der Button nicht funktioniert, kopiere und füge diesen Link in deinen Browser ein:',
+        notYou: 'Wenn du diesen Link nicht angefordert hast, kannst du diese E-Mail ignorieren. Dein Konto bleibt geschützt.',
+        footer: 'Das Meeshy-Team',
+        privacy: 'Datenschutz',
+        terms: 'AGB'
       }
     };
     return translations[language] || translations['en'];
