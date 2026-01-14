@@ -16,6 +16,7 @@ import { Check, X, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import { useBotProtection } from '@/hooks/use-bot-protection';
+import { useAuthFormStore } from '@/stores/auth-form-store';
 
 interface RegisterFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -25,9 +26,9 @@ interface RegisterFormProps {
   formPrefix?: string; // Préfixe unique pour les IDs de formulaire
 }
 
-export function RegisterForm({ 
-  onSuccess, 
-  disabled = false, 
+export function RegisterForm({
+  onSuccess,
+  disabled = false,
   linkId,
   onJoinSuccess,
   formPrefix = 'register'
@@ -35,13 +36,27 @@ export function RegisterForm({
   const router = useRouter();
   const { login } = useAuth();
   const { t } = useI18n('auth');
+
+  // Get shared identifier from login form
+  const { identifier: sharedIdentifier, setIdentifier } = useAuthFormStore();
+
+  // Determine if shared identifier is email or phone
+  const getInitialEmail = () => {
+    if (sharedIdentifier && sharedIdentifier.includes('@')) return sharedIdentifier;
+    return '';
+  };
+  const getInitialPhone = () => {
+    if (sharedIdentifier && !sharedIdentifier.includes('@') && /^\+?\d/.test(sharedIdentifier)) return sharedIdentifier;
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     username: linkId ? '' : '', // Pas de username pour les liens, sera généré
     password: '',
     firstName: '',
     lastName: '',
-    email: '',
-    phoneNumber: '',
+    email: getInitialEmail(),
+    phoneNumber: getInitialPhone(),
     systemLanguage: 'fr',
     regionalLanguage: 'en',
   });
@@ -52,6 +67,22 @@ export function RegisterForm({
   const { honeypotProps, validateSubmission } = useBotProtection({
     minSubmitTime: 3000, // 3 seconds minimum for registration (more fields to fill)
   });
+
+  // Sync email/phone changes to shared store
+  const handleEmailChangeWithSync = (value: string) => {
+    const cleanValue = value.replace(/\s/g, ''); // Remove spaces
+    setFormData(prev => ({ ...prev, email: cleanValue }));
+    validateEmailField(cleanValue);
+    if (cleanValue.includes('@')) setIdentifier(cleanValue);
+  };
+  const handlePhoneChangeWithSync = async (value: string) => {
+    // Format the phone number in real-time
+    const { formatPhoneNumberInput } = await import('@/utils/phone-validator');
+    const formatted = formatPhoneNumberInput(value);
+    setFormData(prev => ({ ...prev, phoneNumber: formatted }));
+    validatePhoneField(formatted);
+    if (/^\+?\d/.test(formatted)) setIdentifier(formatted);
+  };
 
   // État pour la validation du username
   const [usernameCheckStatus, setUsernameCheckStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
@@ -462,11 +493,7 @@ export function RegisterForm({
             type="email"
             placeholder={t('register.emailPlaceholder')}
             value={formData.email}
-            onChange={(e) => {
-              const value = e.target.value.replace(/\s/g, ''); // Supprimer tous les espaces
-              setFormData({ ...formData, email: value });
-              validateEmailField(value);
-            }}
+            onChange={(e) => handleEmailChangeWithSync(e.target.value)}
             onBlur={(e) => validateEmailField(e.target.value)}
             className={cn(
               "pr-10",
@@ -514,13 +541,7 @@ export function RegisterForm({
             type="tel"
             placeholder="+33612345678 ou 0033612345678"
             value={formData.phoneNumber}
-            onChange={(e) => {
-              // Format en temps réel
-              import('@/utils/phone-validator').then(({ formatPhoneNumberInput }) => {
-                const formatted = formatPhoneNumberInput(e.target.value);
-                setFormData({ ...formData, phoneNumber: formatted });
-              });
-            }}
+            onChange={(e) => handlePhoneChangeWithSync(e.target.value)}
             onBlur={(e) => validatePhoneField(e.target.value)}
             className={cn(
               "pr-10",
