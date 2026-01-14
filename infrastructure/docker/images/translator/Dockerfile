@@ -90,10 +90,12 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-cpu
 # =============================================================================
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime-gpu
 
-# Install Python 3.11 on CUDA base
+# Install Python 3.11 on CUDA base (including libpython for shared library support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.11 \
         python3.11-venv \
+        python3.11-dev \
+        libpython3.11 \
         python3-pip \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.11 /usr/bin/python \
@@ -107,6 +109,8 @@ FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS runtime-gpu-cu121
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.11 \
         python3.11-venv \
+        python3.11-dev \
+        libpython3.11 \
         python3-pip \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.11 /usr/bin/python \
@@ -124,6 +128,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         python3.11 \
         python3.11-venv \
+        python3.11-dev \
+        libpython3.11 \
         python3-pip \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.11 /usr/bin/python \
@@ -210,9 +216,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy Python packages from builder
+# Copy Python packages and shared libraries from builder
+# This ensures compatibility since builder uses python:3.11-slim (/usr/local/)
+# while GPU runtimes use Ubuntu's Python (/usr/)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/lib/libpython3.11.so* /usr/local/lib/
+
+# Update library cache to find libpython
+RUN ldconfig
 
 # Copy uv for potential runtime use
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
