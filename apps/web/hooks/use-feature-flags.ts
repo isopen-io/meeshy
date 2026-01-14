@@ -50,15 +50,15 @@ export function useFeatureFlags() {
   /**
    * Check if password reset is fully configured
    * This checks both the feature flag AND required configuration
+   * Note: hCaptcha is no longer required - using built-in bot protection instead
    */
   const isPasswordResetConfigured = (): boolean => {
     if (!flags.passwordReset) return false;
 
     // Check if required configuration exists
-    const hasCaptchaKey = !!process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
     const hasApiUrl = !!process.env.NEXT_PUBLIC_API_URL;
 
-    return hasCaptchaKey && hasApiUrl;
+    return hasApiUrl;
   };
 
   return {

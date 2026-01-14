@@ -19,6 +19,7 @@ import {
   initSessionService,
   SessionData
 } from './SessionService';
+import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 
 export interface LoginCredentials {
   username: string;
@@ -35,6 +36,8 @@ export interface RegisterData {
   phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
   systemLanguage?: string;
   regionalLanguage?: string;
+  phoneTransferToken?: string; // Token proving SMS verification for phone transfer
+  skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
 }
 
 export interface TokenPayload {
@@ -49,6 +52,24 @@ export interface AuthResult {
   session: SessionData;
   requires2FA?: boolean; // True if 2FA verification is needed
   twoFactorToken?: string; // Temporary token for 2FA flow
+}
+
+/**
+ * Result of user registration
+ * If phoneOwnershipConflict is true, the account was NOT created.
+ * The user must choose: login, continue without phone, or transfer.
+ */
+export interface RegisterResult {
+  user?: SocketIOUser; // undefined if phoneOwnershipConflict
+  phoneOwnershipConflict?: boolean; // True if phone belongs to another account (account NOT created)
+  phoneOwnerInfo?: {
+    maskedDisplayName: string;
+    maskedUsername: string;
+    maskedEmail: string;
+    avatarUrl?: string;
+    phoneNumber: string;
+    phoneCountryCode: string;
+  };
 }
 
 export class AuthService {
@@ -380,8 +401,9 @@ export class AuthService {
    * Créer un nouveau utilisateur
    * @param data - Données d'inscription
    * @param requestContext - Contexte de la requête (IP, user agent, géolocalisation)
+   * @returns RegisterResult with user, and optionally phoneTransferRequired info
    */
-  async register(data: RegisterData, requestContext?: RequestContext): Promise<SocketIOUser | null> {
+  async register(data: RegisterData, requestContext?: RequestContext): Promise<RegisterResult | null> {
     try {
       // Valider l'email avec Zod AVANT toute opération
       try {
@@ -418,28 +440,63 @@ export class AuthService {
         }
       }
 
-      // Vérifier si l'username, l'email ou le phoneNumber existe déjà (comparaison case-insensitive pour username et email)
-      const existingUser = await this.prisma.user.findFirst({
+      // Vérifier si l'username ou l'email existe déjà (pas le téléphone - géré séparément)
+      const existingUserByCredentials = await this.prisma.user.findFirst({
         where: {
           OR: [
             { username: { equals: normalizedUsername, mode: 'insensitive' } },
-            { email: { equals: normalizedEmail, mode: 'insensitive' } },
-            ...(cleanPhoneNumber ? [{ phoneNumber: cleanPhoneNumber }] : [])
+            { email: { equals: normalizedEmail, mode: 'insensitive' } }
           ]
         }
       });
 
-      if (existingUser) {
-        if (existingUser.username.toLowerCase() === normalizedUsername.toLowerCase()) {
+      if (existingUserByCredentials) {
+        if (existingUserByCredentials.username.toLowerCase() === normalizedUsername.toLowerCase()) {
           throw new Error('Nom d\'utilisateur déjà utilisé');
         }
-        if (existingUser.email.toLowerCase() === normalizedEmail.toLowerCase()) {
+        if (existingUserByCredentials.email.toLowerCase() === normalizedEmail.toLowerCase()) {
           throw new Error('Email déjà utilisé');
         }
-        if (cleanPhoneNumber && existingUser.phoneNumber === cleanPhoneNumber) {
-          throw new Error('Numéro de téléphone déjà utilisé');
-        }
         throw new Error('Utilisateur déjà existant');
+      }
+
+      // Vérifier si le téléphone appartient à un autre compte
+      // Si oui, on ne crée PAS le compte et on retourne les infos pour que l'utilisateur choisisse
+      // SAUF si skipPhoneConflictCheck=true (transfer token validated)
+      if (cleanPhoneNumber && !data.skipPhoneConflictCheck) {
+        const existingUserByPhone = await this.prisma.user.findFirst({
+          where: {
+            phoneNumber: cleanPhoneNumber,
+            isActive: true,
+            phoneVerifiedAt: { not: null } // Seuls les numéros vérifiés déclenchent le conflit
+          },
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            email: true,
+            avatar: true
+          }
+        });
+
+        if (existingUserByPhone) {
+          // Le numéro appartient à quelqu'un d'autre
+          // On NE crée PAS le compte - l'utilisateur doit choisir
+          console.log('[AUTH_SERVICE] 📱 Phone belongs to another user - returning conflict info (account NOT created)');
+          return {
+            phoneOwnershipConflict: true,
+            phoneOwnerInfo: {
+              maskedDisplayName: maskDisplayName(existingUserByPhone.displayName),
+              maskedUsername: maskUsername(existingUserByPhone.username),
+              maskedEmail: maskEmail(existingUserByPhone.email),
+              avatarUrl: existingUserByPhone.avatar || undefined,
+              phoneNumber: cleanPhoneNumber,
+              phoneCountryCode: phoneCountryCode || 'FR'
+            }
+          };
+        }
+      } else if (cleanPhoneNumber && data.skipPhoneConflictCheck) {
+        console.log('[AUTH_SERVICE] 📱 Skipping phone conflict check - transfer token validated');
       }
 
       // Hasher le mot de passe (bcrypt cost=12 for enhanced security)
@@ -452,6 +509,7 @@ export class AuthService {
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
       // Créer l'utilisateur avec les données normalisées et contexte d'inscription
+      // Note: Si phoneOwnershipConflict, on a déjà fait un early return plus haut
       const user = await this.prisma.user.create({
         data: {
           username: normalizedUsername,
@@ -461,6 +519,8 @@ export class AuthService {
           email: normalizedEmail,
           phoneNumber: cleanPhoneNumber,
           phoneCountryCode: phoneCountryCode,
+          // Mark phone as verified at registration (allows phone-based password reset)
+          phoneVerifiedAt: cleanPhoneNumber ? new Date() : null,
           systemLanguage: data.systemLanguage || 'fr',
           regionalLanguage: data.regionalLanguage || 'fr',
           displayName: normalizedDisplayName,
@@ -556,7 +616,11 @@ export class AuthService {
         // Ne pas faire échouer l'inscription si l'ajout à la conversation échoue
       }
 
-      return this.userToSocketIOUser(user);
+      // Retourner le résultat avec l'utilisateur créé
+      // Note: Si phoneOwnershipConflict existait, on a fait un early return plus haut
+      return {
+        user: this.userToSocketIOUser(user)
+      };
 
     } catch (error) {
       console.error('Error in register:', error);

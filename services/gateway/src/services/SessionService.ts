@@ -338,12 +338,87 @@ export async function cleanupExpiredSessions(): Promise<number> {
 }
 
 /**
+ * Context for marking session as trusted (for audit logging)
+ */
+export interface MarkSessionTrustedContext {
+  userId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  source?: 'magic_link' | '2fa_verification' | 'login' | 'admin';
+}
+
+/**
+ * Log security event to database
+ */
+async function logSecurityEvent(
+  db: PrismaClient,
+  eventType: 'SESSION_TRUSTED' | 'SESSION_TRUSTED_FAILED',
+  userId: string,
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+  status: 'SUCCESS' | 'FAILED',
+  context?: MarkSessionTrustedContext,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await db.securityEvent.create({
+      data: {
+        userId,
+        eventType,
+        severity,
+        status,
+        description: `Session trust ${status === 'SUCCESS' ? 'enabled' : 'failed'} via ${context?.source || 'unknown'}`,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        ipAddress: context?.ipAddress || null,
+        userAgent: context?.userAgent?.substring(0, 500) || null,
+      }
+    });
+  } catch (error) {
+    // Don't fail the main operation if audit logging fails
+    console.error('[SessionService] Failed to log security event:', error);
+  }
+}
+
+/**
  * Mark a session as trusted (e.g., after 2FA verification)
  * Trusted sessions get extended expiry (1 year by default)
+ *
+ * @param sessionId - The session ID to mark as trusted
+ * @param context - Optional context for audit logging
  */
-export async function markSessionTrusted(sessionId: string): Promise<boolean> {
+export async function markSessionTrusted(
+  sessionId: string,
+  context?: MarkSessionTrustedContext
+): Promise<boolean> {
   const db = getPrisma();
+
+  // Validate sessionId
+  if (!sessionId || typeof sessionId !== 'string') {
+    console.error('[SessionService] ❌ markSessionTrusted: Invalid sessionId provided');
+    return false;
+  }
+
   try {
+    // Verify session exists first
+    const existingSession = await db.userSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true, userId: true, isTrusted: true, isValid: true }
+    });
+
+    if (!existingSession) {
+      console.error(`[SessionService] ❌ markSessionTrusted: Session not found - sessionId: ${sessionId}`);
+      return false;
+    }
+
+    if (!existingSession.isValid) {
+      console.warn(`[SessionService] ⚠️ markSessionTrusted: Session is invalid - sessionId: ${sessionId}`);
+      return false;
+    }
+
+    if (existingSession.isTrusted) {
+      console.log(`[SessionService] ℹ️ markSessionTrusted: Session already trusted - sessionId: ${sessionId}`);
+      return true; // Already trusted, consider this a success
+    }
+
     // Extend expiry for trusted sessions
     const newExpiresAt = new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + SESSION_EXPIRY_TRUSTED_DAYS);
@@ -355,9 +430,29 @@ export async function markSessionTrusted(sessionId: string): Promise<boolean> {
         expiresAt: newExpiresAt
       },
     });
+
+    // Log security event to database
+    const userId = context?.userId || existingSession.userId;
+    await logSecurityEvent(db, 'SESSION_TRUSTED', userId, 'LOW', 'SUCCESS', context, {
+      sessionId,
+      source: context?.source,
+      expiresAt: newExpiresAt.toISOString(),
+      trustedDays: SESSION_EXPIRY_TRUSTED_DAYS
+    });
+
     console.log(`[SessionService] ✅ Session marked trusted - extended to ${SESSION_EXPIRY_TRUSTED_DAYS} days`);
     return true;
-  } catch {
+
+  } catch (error) {
+    // Log failure to database
+    const userId = context?.userId || 'unknown';
+    await logSecurityEvent(db, 'SESSION_TRUSTED_FAILED', userId, 'MEDIUM', 'FAILED', context, {
+      sessionId,
+      source: context?.source,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+
+    console.error(`[SessionService] ❌ markSessionTrusted failed:`, error instanceof Error ? error.message : error);
     return false;
   }
 }
@@ -495,77 +590,18 @@ function mapSessionToData(session: any, isCurrentSession: boolean): SessionData 
 }
 
 /**
- * SessionService class wrapper (for dependency injection)
+ * Get session configuration info (for debugging/admin)
  */
-export class SessionService {
-  constructor(prismaClient?: PrismaClient) {
-    if (prismaClient) {
-      initSessionService(prismaClient);
-    }
-  }
-
-  async create(input: CreateSessionInput): Promise<SessionData> {
-    return createSession(input);
-  }
-
-  async validate(token: string): Promise<SessionData | null> {
-    return validateSession(token);
-  }
-
-  async getUserSessions(userId: string, currentToken?: string): Promise<SessionData[]> {
-    return getUserSessions(userId, currentToken);
-  }
-
-  async invalidate(sessionId: string, reason?: string): Promise<boolean> {
-    return invalidateSession(sessionId, reason);
-  }
-
-  async invalidateAll(userId: string, exceptToken?: string, reason?: string): Promise<number> {
-    return invalidateAllSessions(userId, exceptToken, reason);
-  }
-
-  async revoke(userId: string, sessionId: string): Promise<boolean> {
-    return revokeSession(userId, sessionId);
-  }
-
-  async logout(token: string): Promise<boolean> {
-    return logout(token);
-  }
-
-  async cleanup(): Promise<number> {
-    return cleanupExpiredSessions();
-  }
-
-  async markTrusted(sessionId: string): Promise<boolean> {
-    return markSessionTrusted(sessionId);
-  }
-
-  async extendExpiry(token: string, days?: number): Promise<boolean> {
-    return extendSessionExpiry(token, days);
-  }
-
-  async rotateRefresh(currentRefreshToken: string): Promise<{ newRefreshToken: string; expiresAt: Date } | null> {
-    return rotateRefreshToken(currentRefreshToken);
-  }
-
-  generateToken(): string {
-    return generateSessionToken();
-  }
-
-  /**
-   * Get session configuration info (for debugging/admin)
-   */
-  getSessionConfig(): {
-    mobileDays: number;
-    desktopDays: number;
-    trustedDays: number;
-    maxSessions: number;
-  } {
-    return {
-      mobileDays: SESSION_EXPIRY_MOBILE_DAYS,
-      desktopDays: SESSION_EXPIRY_DESKTOP_DAYS,
-      trustedDays: SESSION_EXPIRY_TRUSTED_DAYS,
-      maxSessions: MAX_SESSIONS_PER_USER
-    };
-  }
+export function getSessionConfig(): {
+  mobileDays: number;
+  desktopDays: number;
+  trustedDays: number;
+  maxSessions: number;
+} {
+  return {
+    mobileDays: SESSION_EXPIRY_MOBILE_DAYS,
+    desktopDays: SESSION_EXPIRY_DESKTOP_DAYS,
+    trustedDays: SESSION_EXPIRY_TRUSTED_DAYS,
+    maxSessions: MAX_SESSIONS_PER_USER
+  };
 }

@@ -11,42 +11,42 @@ datasource db {
 
 /// Utilisateur enregistré de la plateforme
 model User {
-  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
-  username                    String    @unique
-  firstName                   String
-  lastName                    String
-  bio                         String    @default("")
-  email                       String    @unique
-  phoneNumber                 String?
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username                  String   @unique
+  firstName                 String
+  lastName                  String
+  bio                       String   @default("")
+  email                     String   @unique
+  phoneNumber               String?
   /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
-  phoneCountryCode            String?
-  password                    String
-  displayName                 String?
+  phoneCountryCode          String?
+  password                  String
+  displayName               String?
   /// User profile picture
-  avatar                      String?
+  avatar                    String?
   /// User profile banner/cover image
-  banner                      String?
-  isOnline                    Boolean   @default(false)
+  banner                    String?
+  isOnline                  Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
-  lastActiveAt                DateTime  @default(now())
+  lastActiveAt              DateTime @default(now())
   /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
-  timezone                    String?
+  timezone                  String?
   /// Array of blocked user IDs for quick access
-  blockedUserIds              String[]  @default([]) @db.ObjectId
+  blockedUserIds            String[] @default([]) @db.ObjectId
   // ============================================
   // LANGUAGE CONFIGURATION
   // ============================================
   /// User's primary system language (ISO 639-1)
-  systemLanguage              String    @default("en")
+  systemLanguage            String   @default("en")
   /// User's secondary regional language (ISO 639-1)
-  regionalLanguage            String?
+  regionalLanguage          String?
   /// Custom destination language for translations (if set, takes priority)
-  customDestinationLanguage   String?
+  customDestinationLanguage String?
 
   /// USER, ADMIN, MODO, AUDIT, ANALYST, BIGBOSS
-  role                        String    @default("USER")
-  isActive                    Boolean   @default(true)
-  deactivatedAt               DateTime?
+  role          String    @default("USER")
+  isActive      Boolean   @default(true)
+  deactivatedAt DateTime?
 
   // Security & verification fields (DateTime? non-null = vérifié/activé)
   emailVerifiedAt         DateTime?
@@ -55,9 +55,14 @@ model User {
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
-  twoFactorSecret         String? // TOTP secret (base32 encoded)
-  twoFactorBackupCodes    String[] @default([]) // Hashed backup codes for 2FA recovery
-  twoFactorPendingSecret  String? // Temporary secret during 2FA setup (before confirmation)
+
+  /// Phone Transfer Tracking (audit trail)
+  phoneTransferredFromUserId String?   @db.ObjectId // ID de l'ancien compte d'où le numéro a été transféré
+  phoneTransferredAt         DateTime? // Date du transfert de numéro
+
+  twoFactorSecret        String? // TOTP secret (base32 encoded)
+  twoFactorBackupCodes   String[] @default([]) // Hashed backup codes for 2FA recovery
+  twoFactorPendingSecret String? // Temporary secret during 2FA setup (before confirmation)
 
   // Account Lockout
   failedLoginAttempts Int       @default(0)
@@ -145,11 +150,12 @@ model User {
   communityPrefs         UserCommunityPreferences[]
 
   // Password Reset & Magic Link Relations
-  passwordResetTokens PasswordResetToken[]
-  magicLinkTokens     MagicLinkToken[]
-  passwordHistory     PasswordHistory[]
-  securityEvents      SecurityEvent[]
-  sessions            UserSession[]
+  passwordResetTokens      PasswordResetToken[]
+  phonePasswordResetTokens PhonePasswordResetToken[]
+  magicLinkTokens          MagicLinkToken[]
+  passwordHistory          PasswordHistory[]
+  securityEvents           SecurityEvent[]
+  sessions                 UserSession[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -460,7 +466,7 @@ model Message {
   /// Aggregated reaction counts by emoji: { "❤️": 5, "👍": 3, "🔥": 1 }
   reactionSummary Json?
   /// Total reaction count (denormalized for quick access)
-  reactionCount   Int  @default(0)
+  reactionCount   Int   @default(0)
 
   // ============================================
   // E2EE / ENCRYPTION FIELDS
@@ -1064,7 +1070,7 @@ model UserFeature {
   /// Authentification à deux facteurs activée
   twoFactorEnabledAt   DateTime?
   /// Préférence de chiffrement: disabled, optional, always
-  encryptionPreference String @default("optional")
+  encryptionPreference String    @default("optional")
 
   // ============================================
   // TEXT TRANSLATION FEATURES
@@ -1076,13 +1082,13 @@ model UserFeature {
   // TRANSLATION DESTINATION PREFERENCES
   // ============================================
   /// Activer la traduction automatique
-  autoTranslateEnabled      Boolean @default(true)
+  autoTranslateEnabled        Boolean @default(true)
   /// Traduire vers la langue système
-  translateToSystemLanguage Boolean @default(true)
+  translateToSystemLanguage   Boolean @default(true)
   /// Traduire vers la langue régionale
   translateToRegionalLanguage Boolean @default(false)
   /// Utiliser une langue de destination personnalisée
-  useCustomDestination      Boolean @default(false)
+  useCustomDestination        Boolean @default(false)
 
   // ============================================
   // AUDIO TRANSCRIPTION FEATURES
@@ -1177,8 +1183,8 @@ model Community {
   updatedAt   DateTime  @updatedAt
 
   members             CommunityMember[]
-  creator             User                         @relation("CommunityCreator", fields: [createdBy], references: [id])
-  sharedConversations ConversationShare[]          @relation("CommunityShares")
+  creator             User                       @relation("CommunityCreator", fields: [createdBy], references: [id])
+  sharedConversations ConversationShare[]        @relation("CommunityShares")
   Conversation        Conversation[]
   userPreferences     UserCommunityPreferences[]
 }
@@ -1728,6 +1734,41 @@ model PasswordResetToken {
   @@index([createdAt])
 }
 
+/// Phone Password Reset Token - For password reset via SMS verification
+/// Security: User must verify identity (username + email) before receiving SMS code
+model PhonePasswordResetToken {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// SHA-256 hash of the SMS code (NOT the code itself)
+  codeHash String
+
+  /// Expiry & Usage
+  expiresAt DateTime // 10 minutes from creation
+  usedAt    DateTime? // Null if not used yet
+  isRevoked Boolean   @default(false)
+
+  /// Verification flow step: IDENTITY_PENDING | CODE_PENDING | COMPLETED
+  verificationStep   String    @default("IDENTITY_PENDING")
+  identityVerifiedAt DateTime? // When username + email were verified
+  identityAttempts   Int       @default(0) // Failed identity verification attempts (max 3)
+  codeAttempts       Int       @default(0) // Failed code verification attempts (max 5)
+
+  /// Request Metadata (for anomaly detection)
+  ipAddress   String?
+  userAgent   String?
+  geoLocation String? // "City, Country"
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
 /// Magic Link Token - Stores hashed tokens for passwordless login
 /// Token expires after 1 minute for security
 model MagicLinkToken {
@@ -1749,6 +1790,9 @@ model MagicLinkToken {
   deviceFingerprint String?
   geoLocation       String? // "City, Country"
   geoCoordinates    String? // "lat,lon"
+
+  /// Remember Device preference (stored server-side for security, not in client sessionStorage)
+  rememberDevice Boolean @default(false)
 
   createdAt DateTime @default(now())
 

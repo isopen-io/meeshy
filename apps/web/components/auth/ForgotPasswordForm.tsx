@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { passwordResetService } from '@/services/password-reset.service';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { useI18n } from '@/hooks/useI18n';
+import { useBotProtection } from '@/hooks/use-bot-protection';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -32,83 +33,13 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
   } = usePasswordResetStore();
 
   const [email, setEmail] = useState(storedEmail || '');
-  const [captchaToken, setCaptchaToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [captchaLoaded, setCaptchaLoaded] = useState(false);
-  const [captchaError, setCaptchaError] = useState<string | null>(null);
 
-  // Load hCaptcha script
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Check if hCaptcha script is already loaded
-    if (window.hcaptcha) {
-      setCaptchaLoaded(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://js.hcaptcha.com/1/api.js';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setCaptchaLoaded(true);
-    script.onerror = () => {
-      setCaptchaError(t('forgotPassword.errors.captchaLoadFailed') || 'Failed to load CAPTCHA');
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      // Cleanup: remove script on unmount
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [t]);
-
-  // Initialize hCaptcha widget when loaded
-  useEffect(() => {
-    if (!captchaLoaded || !window.hcaptcha) return;
-
-    try {
-      // Render hCaptcha widget
-      const siteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
-      if (!siteKey) {
-        console.error('[ForgotPasswordForm] Missing NEXT_PUBLIC_HCAPTCHA_SITE_KEY');
-        setCaptchaError(t('forgotPassword.errors.captchaNotConfigured') || 'CAPTCHA not configured');
-        return;
-      }
-
-      const widgetId = window.hcaptcha.render('hcaptcha-container', {
-        sitekey: siteKey,
-        callback: (token: string) => {
-          setCaptchaToken(token);
-          setCaptchaError(null);
-        },
-        'error-callback': () => {
-          setCaptchaError(t('forgotPassword.errors.captchaFailed') || 'CAPTCHA verification failed');
-        },
-        'expired-callback': () => {
-          setCaptchaToken('');
-          toast.warning(t('forgotPassword.captchaExpired') || 'CAPTCHA expired, please verify again');
-        },
-      });
-
-      return () => {
-        if (window.hcaptcha && widgetId) {
-          try {
-            window.hcaptcha.remove(widgetId);
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-        }
-      };
-    } catch (error) {
-      console.error('[ForgotPasswordForm] Error initializing hCaptcha:', error);
-      setCaptchaError(t('forgotPassword.errors.captchaInitFailed') || 'Failed to initialize CAPTCHA');
-    }
-  }, [captchaLoaded, t]);
+  // Bot protection (replaces hCaptcha)
+  const { honeypotProps, validateSubmission, reset: resetBotProtection } = useBotProtection({
+    minSubmitTime: 2000, // 2 seconds minimum before submit
+  });
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -119,7 +50,15 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
     e.preventDefault();
     setLocalError(null);
 
-    // Validation
+    // Bot protection validation
+    const { isHuman, botError } = validateSubmission();
+    if (!isHuman) {
+      setLocalError(botError);
+      toast.error(botError);
+      return;
+    }
+
+    // Email validation
     if (!email.trim()) {
       setLocalError(t('forgotPassword.errors.emailRequired') || 'Email is required');
       return;
@@ -130,11 +69,6 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
       return;
     }
 
-    if (!captchaToken) {
-      setLocalError(t('forgotPassword.errors.captchaRequired') || 'Please complete the CAPTCHA verification');
-      return;
-    }
-
     // Submit request
     setIsLoading(true);
     setIsRequestingReset(true);
@@ -142,13 +76,16 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
     try {
       const response = await passwordResetService.requestReset({
         email: email.trim(),
-        captchaToken,
+        // No captcha token needed anymore
       });
 
       // Store email and set reset requested
       setStoredEmail(email.trim());
       setResetRequested(true);
       setSuccessMessage(response.message);
+
+      // Reset bot protection for next attempt
+      resetBotProtection();
 
       // Show success toast
       toast.success(t('forgotPassword.success.emailSent') || 'Password reset link sent');
@@ -176,6 +113,9 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
 
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-6', className)}>
+      {/* Honeypot field - invisible to humans, bots will fill it */}
+      <input {...honeypotProps} />
+
       {/* Email Input */}
       <div className="space-y-2">
         <Label htmlFor="email" className="text-sm font-medium">
@@ -201,26 +141,6 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
         </p>
       </div>
 
-      {/* hCaptcha Widget */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">
-          {t('forgotPassword.captchaLabel') || 'Verification'}
-        </Label>
-        <div id="hcaptcha-container" className="flex justify-center" />
-        {captchaError && (
-          <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            {captchaError}
-          </p>
-        )}
-        {!captchaLoaded && !captchaError && (
-          <div className="flex items-center justify-center p-4 text-sm text-gray-500">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            {t('forgotPassword.loadingCaptcha') || 'Loading verification...'}
-          </div>
-        )}
-      </div>
-
       {/* Error Alert */}
       {localError && (
         <Alert variant="destructive">
@@ -233,7 +153,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
       <Button
         type="submit"
         className="w-full h-11 font-semibold"
-        disabled={isLoading || !captchaToken || !email.trim()}
+        disabled={isLoading || !email.trim()}
       >
         {isLoading ? (
           <>
@@ -260,17 +180,4 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
       </div>
     </form>
   );
-}
-
-// TypeScript declarations for hCaptcha
-declare global {
-  interface Window {
-    hcaptcha?: {
-      render: (container: string | HTMLElement, options: any) => string;
-      remove: (widgetId: string) => void;
-      reset: (widgetId?: string) => void;
-      execute: (widgetId?: string) => void;
-      getResponse: (widgetId?: string) => string;
-    };
-  }
 }

@@ -8,7 +8,7 @@ import { buildApiUrl } from '@/lib/config';
 
 export interface ForgotPasswordRequest {
   email: string;
-  captchaToken: string;
+  captchaToken?: string; // Optional - rate limiting provides protection
 }
 
 export interface ForgotPasswordResponse {
@@ -58,15 +58,20 @@ class PasswordResetService {
    */
   async requestReset(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
     try {
+      // Build request body - only include captchaToken if provided
+      const requestBody: { email: string; captchaToken?: string } = {
+        email: request.email,
+      };
+      if (request.captchaToken) {
+        requestBody.captchaToken = request.captchaToken;
+      }
+
       const response = await fetch(buildApiUrl('/auth/forgot-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: request.email,
-          captchaToken: request.captchaToken,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -192,9 +197,10 @@ class PasswordResetService {
       errors.push('Password must contain at least one number');
     }
 
-    if (!/[^a-zA-Z0-9]/.test(password)) {
-      errors.push('Password must contain at least one special character');
-    }
+    // Special character is optional (bonus for stronger password)
+    // if (!/[^a-zA-Z0-9]/.test(password)) {
+    //   errors.push('Password must contain at least one special character');
+    // }
 
     return {
       isValid: errors.length === 0,

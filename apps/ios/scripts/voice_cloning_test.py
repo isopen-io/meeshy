@@ -83,6 +83,12 @@ DEFAULT_PHRASES = {
     'zh': "你好，我正在用这个参考短语测试语音克隆系统。",
     'ko': "안녕하세요, 이 참조 문구로 음성 복제 시스템을 테스트하고 있습니다.",
     'ru': "Привет, я тестирую систему клонирования голоса с этой референсной фразой.",
+    # African languages
+    'ln': "Mbote, nazali komeka système ya clonage vocal na phrase oyo ya référence.",
+    'sw': "Habari, ninajaribu mfumo wa kunakili sauti kwa kutumia kifungu hiki cha marejeleo.",
+    'yo': "Mo n ṣe idanwo eto tí n ṣe àdàkọ ohùn pẹ̀lú gbólóhùn ìtọ́kasí yìí.",
+    'ha': "Ina gwada tsarin kwafin murya da wannan jumlar tunani.",
+    'am': "ሰላም፣ ይህን የማጣቀሻ ዓረፍተ ነገር በመጠቀም የድምፅ ክሎኒንግ ሥርዓትን እየሞከርኩ ነው።",
 }
 
 # Supported languages
@@ -92,13 +98,25 @@ SUPPORTED_LANGUAGES = {
     'ru': 'Russian', 'nl': 'Dutch', 'cs': 'Czech', 'ar': 'Arabic',
     'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean', 'hu': 'Hungarian',
     'hi': 'Hindi', 'sv': 'Swedish', 'da': 'Danish', 'fi': 'Finnish',
-    'no': 'Norwegian', 'he': 'Hebrew', 'el': 'Greek'
+    'no': 'Norwegian', 'he': 'Hebrew', 'el': 'Greek',
+    # MMS-supported African languages
+    'ln': 'Lingala', 'sw': 'Swahili', 'yo': 'Yoruba', 'ha': 'Hausa',
+    'ig': 'Igbo', 'zu': 'Zulu', 'xh': 'Xhosa', 'am': 'Amharic',
+    # Cameroonian languages (MMS TTS)
+    'bas': 'Basaa', 'ksf': 'Bafia', 'nnh': 'Ngiemboon'
+}
+
+# Languages only supported by MMS TTS (not Chatterbox/XTTS)
+MMS_ONLY_LANGUAGES = {
+    'ln', 'yo', 'ha', 'ig', 'zu', 'xh', 'am',  # African
+    'bas', 'ksf', 'nnh'  # Cameroonian
 }
 
 
 class Engine(Enum):
     CHATTERBOX = "chatterbox"
     XTTS = "xtts"
+    MMS = "mms"  # Meta MMS TTS - supports 1100+ languages including Lingala
 
 
 @dataclass
@@ -640,10 +658,133 @@ class XTTSVoiceCloner:
         return "XTTS-v2"
 
 
+class MMSVoiceCloner:
+    """
+    Meta MMS TTS voice cloner - supports 1100+ languages including Lingala.
+
+    Uses the ttsmms library which downloads models directly from Facebook.
+    Note: MMS TTS does NOT support voice cloning from reference audio.
+    It generates speech in the target language using a pre-trained voice.
+    """
+
+    # MMS uses ISO 639-3 codes (3 letters)
+    LANGUAGE_CODE_MAP = {
+        # African languages
+        'ln': 'lin',   # Lingala
+        'sw': 'swh',   # Swahili
+        'yo': 'yor',   # Yoruba
+        'ha': 'hau',   # Hausa
+        'ig': 'ibo',   # Igbo
+        'zu': 'zul',   # Zulu
+        'xh': 'xho',   # Xhosa
+        'am': 'amh',   # Amharic
+        # Cameroonian languages
+        'bas': 'bas',  # Basaa
+        'ksf': 'ksf',  # Bafia
+        'nnh': 'nnh',  # Ngiemboon
+        # Common languages
+        'en': 'eng',   # English
+        'fr': 'fra',   # French
+        'es': 'spa',   # Spanish
+        'de': 'deu',   # German
+        'pt': 'por',   # Portuguese
+        'ar': 'ara',   # Arabic
+        'zh': 'cmn',   # Chinese Mandarin
+        'ja': 'jpn',   # Japanese
+        'ko': 'kor',   # Korean
+        'ru': 'rus',   # Russian
+        'hi': 'hin',   # Hindi
+    }
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        self.models = {}  # Cache TTS instances by language
+        self.model_dirs = {}  # Cache model directories
+        self._generation_lock = threading.Lock()
+        self._models_dir = OUTPUT_DIR / "mms_models"
+        self._models_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_mms_code(self, lang: str) -> str:
+        """Convert ISO 639-1/2 to MMS language code (ISO 639-3)."""
+        return self.LANGUAGE_CODE_MAP.get(lang, lang)
+
+    def load(self, language: str):
+        """Load MMS model for specific language using ttsmms."""
+        mms_code = self._get_mms_code(language)
+
+        if mms_code in self.models:
+            return
+
+        print(f"\n  Loading MMS TTS for {language} ({mms_code})...")
+
+        try:
+            from ttsmms import download, TTS
+
+            # Download model if not already downloaded
+            model_dir = self._models_dir / mms_code
+            if not model_dir.exists():
+                print(f"    Downloading model for {mms_code}...")
+                download(mms_code, str(self._models_dir))
+
+            # Initialize TTS
+            self.models[mms_code] = TTS(str(model_dir))
+            self.model_dirs[mms_code] = model_dir
+
+            print(f"  MMS TTS ({mms_code}) loaded!")
+        except ImportError:
+            raise ImportError(
+                f"ttsmms not installed. Install with: pip install ttsmms"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"MMS TTS for {language} ({mms_code}) not available: {e}\n"
+                f"This language may not be supported for TTS."
+            )
+
+    def clone(self, reference_path: str, text: str, output_path: str,
+              language: str = 'en', **kwargs) -> str:
+        """
+        Generate speech in target language.
+
+        Note: MMS does not support voice cloning from reference audio.
+        The reference_path is ignored - this is TTS only.
+        """
+        mms_code = self._get_mms_code(language)
+
+        with self._generation_lock:
+            self.load(language)
+
+            tts = self.models[mms_code]
+
+            # Generate speech and save to file
+            tts.synthesis(text, wav_path=output_path)
+
+        return output_path
+
+    @property
+    def name(self) -> str:
+        return "MMS TTS (Meta)"
+
+
 def get_cloner(engine: Engine):
     """Get voice cloner instance (singleton)."""
     if engine == Engine.CHATTERBOX:
         return ChatterboxVoiceCloner()
+    elif engine == Engine.MMS:
+        return MMSVoiceCloner()
     return XTTSVoiceCloner()
 
 
@@ -977,11 +1118,22 @@ Examples:
   # Use most recent voice (no recording)
   python voice_cloning_test.py --targets en,es --text "Hello world"
 
+  # Generate Lingala speech with MMS TTS (auto-selected for MMS-only languages)
+  python voice_cloning_test.py --targets ln --text "Mbote, ndeko" --engine mms
+
+  # MMS TTS for other African languages
+  python voice_cloning_test.py --targets ln,sw,yo --text "Hello friend" --engine mms
+
   # Show history
   python voice_cloning_test.py --list-history
 
   # Clear history
   python voice_cloning_test.py --clear-history
+
+Engines:
+  - chatterbox: Best quality, 23 languages (default)
+  - xtts: XTTS-v2, 17 languages
+  - mms: Meta MMS TTS, 1100+ languages (Lingala, Yoruba, etc.)
 
 Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}
 """
@@ -989,7 +1141,8 @@ Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}
 
     # Engine
     parser.add_argument('--engine', '-E', default='chatterbox',
-                        choices=['chatterbox', 'xtts'])
+                        choices=['chatterbox', 'xtts', 'mms'],
+                        help='TTS engine (mms for Lingala/African languages)')
 
     # Audio input
     parser.add_argument('--record', '-r', type=float, default=0,
@@ -1040,8 +1193,12 @@ Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}
     # Handle special commands
     if args.list_languages:
         print("\nSupported Languages:")
+        print("  Code  Name             Engine")
+        print("  " + "-" * 40)
         for code, name in sorted(SUPPORTED_LANGUAGES.items()):
-            print(f"  {code:4s}  {name}")
+            engine_tag = "(MMS only)" if code in MMS_ONLY_LANGUAGES else ""
+            print(f"  {code:4s}  {name:16s} {engine_tag}")
+        print("\n  Note: MMS-only languages require --engine mms")
         return
 
     if args.list_history:
@@ -1052,12 +1209,31 @@ Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}
         history_manager.clear_history()
         return
 
+    # Parse target languages
+    target_languages = [l.strip() for l in args.targets.split(',')]
+
+    # Determine engine (auto-select MMS for MMS-only languages)
+    engine_choice = args.engine
+    mms_only_targets = [l for l in target_languages if l in MMS_ONLY_LANGUAGES]
+
+    if mms_only_targets and engine_choice != 'mms':
+        print(f"\n  Note: {', '.join(mms_only_targets)} require MMS engine.")
+        print("  Auto-switching to MMS TTS...")
+        engine_choice = 'mms'
+
+    if engine_choice == 'chatterbox':
+        engine = Engine.CHATTERBOX
+    elif engine_choice == 'mms':
+        engine = Engine.MMS
+    else:
+        engine = Engine.XTTS
+
     # Build config
     config = CloningConfig(
-        engine=Engine.CHATTERBOX if args.engine == 'chatterbox' else Engine.XTTS,
+        engine=engine,
         exaggeration=args.exaggeration,
         cfg_weight=args.cfg,
-        target_languages=[l.strip() for l in args.targets.split(',')],
+        target_languages=target_languages,
         source_language=args.source_lang,
         play_results=args.play,
         output_dir=Path(args.output_dir),

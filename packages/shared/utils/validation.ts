@@ -274,6 +274,7 @@ export const AuthSchemas = {
   login: z.object({
     username: z.string().min(2).max(50),
     password: z.string().min(1),
+    rememberDevice: z.boolean().optional().default(false), // Trust this device for longer sessions (365 days)
   }),
 
   // Register request
@@ -291,6 +292,7 @@ export const AuthSchemas = {
     phoneCountryCode: z.string().length(2).optional(),
     systemLanguage: z.string().min(2).max(5).default('fr'),
     regionalLanguage: z.string().min(2).max(5).default('fr'),
+    phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
   }),
 
   // Refresh token
@@ -1911,6 +1913,8 @@ export const securityEventTypeEnum = z.enum([
   'SESSION_CREATED',
   'SESSION_TERMINATED',
   'SESSION_SUSPICIOUS',
+  'SESSION_TRUSTED',
+  'SESSION_TRUSTED_FAILED',
   // Account events
   'ACCOUNT_LOCKED',
   'ACCOUNT_UNLOCKED',

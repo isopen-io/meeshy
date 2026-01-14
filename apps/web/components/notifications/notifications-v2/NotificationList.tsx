@@ -22,7 +22,10 @@ export function NotificationList({
   hasMore = false,
   isLoading = false,
   emptyMessage = 'No notifications',
-  onNotificationClick
+  onNotificationClick,
+  onRead,
+  onDelete,
+  onAfterNavigation
 }: NotificationListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -96,7 +99,9 @@ export function NotificationList({
           <NotificationItem
             key={notification.id}
             notification={notification}
-            onClick={onNotificationClick}
+            onRead={onRead}
+            onDelete={onDelete}
+            onAfterNavigation={onAfterNavigation}
           />
         ))}
 

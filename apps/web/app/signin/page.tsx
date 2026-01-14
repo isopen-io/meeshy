@@ -14,6 +14,27 @@ import { SUPPORTED_LANGUAGES } from '@/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { LargeLogo } from '@/components/branding';
 import { authManager } from '@/services/auth-manager.service';
+import { PhoneExistsModal } from '@/components/auth/PhoneExistsModal';
+
+// Types for the phone ownership conflict response
+interface PhoneOwnerInfo {
+  maskedDisplayName: string;
+  maskedUsername: string;
+  maskedEmail: string;
+  avatarUrl?: string;
+  phoneNumber: string;
+  phoneCountryCode: string;
+}
+
+interface PendingRegistration {
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+  systemLanguage?: string;
+  regionalLanguage?: string;
+}
 
 function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateToken?: string } = {}) {
   const [formData, setFormData] = useState({
@@ -40,6 +61,12 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  // Phone ownership conflict modal state (account NOT created yet)
+  const [showPhoneExistsModal, setShowPhoneExistsModal] = useState(false);
+  const [phoneOwnerInfo, setPhoneOwnerInfo] = useState<PhoneOwnerInfo | null>(null);
+  const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n('auth');
@@ -203,6 +230,80 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
     return () => clearTimeout(timer);
   }, [formData.email]);
 
+  /**
+   * Perform the actual registration API call
+   * @param registrationData - The registration data to send
+   * @param options - Optional: phoneTransferToken if transferring phone
+   */
+  const performRegistration = async (
+    registrationData: typeof formData,
+    options?: { phoneTransferToken?: string }
+  ): Promise<{ success: boolean; user?: any; token?: string; error?: string }> => {
+    const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
+    const body: any = { ...registrationData };
+
+    // If we have a transfer token, include it
+    if (options?.phoneTransferToken) {
+      body.phoneTransferToken = options.phoneTransferToken;
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.error || 'Erreur lors de l\'inscription' };
+    }
+
+    // Check for phone ownership conflict (account NOT created)
+    if (data.success && data.data?.phoneOwnershipConflict) {
+      return {
+        success: false,
+        error: 'phone_ownership_conflict',
+        ...data.data, // includes phoneOwnerInfo and pendingRegistration
+      };
+    }
+
+    if (data.success && data.data?.user && data.data?.token) {
+      return { success: true, user: data.data.user, token: data.data.token };
+    }
+
+    return { success: false, error: 'Erreur lors de l\'inscription' };
+  };
+
+  /**
+   * Complete registration and redirect to dashboard
+   */
+  const completeRegistrationAndRedirect = async (user: any, token: string) => {
+    authManager.setCredentials(user, token);
+
+    if (affiliateToken) {
+      try {
+        await fetch(buildApiUrl('/affiliate/register'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: affiliateToken,
+            referredUserId: user.id
+          })
+        });
+
+        localStorage.removeItem('meeshy_affiliate_token');
+        document.cookie = 'meeshy_affiliate_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      } catch (affiliateError) {
+        console.error('[SIGNIN_PAGE] Erreur enregistrement affiliation:', affiliateError);
+      }
+    }
+
+    toast.success(t('register.success.registrationSuccess'));
+    const redirectUrl = returnUrl || '/dashboard';
+    window.location.href = redirectUrl;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -240,33 +341,29 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
     setIsLoading(true);
 
     try {
-      const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const result = await performRegistration(formData) as any;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        let errorMessage = errorData.error || t('register.errors.registrationError');
+      if (result.error === 'phone_ownership_conflict') {
+        // Phone belongs to another account - show modal
+        // Account was NOT created
+        setPhoneOwnerInfo(result.phoneOwnerInfo);
+        setPendingRegistration(result.pendingRegistration);
+        setShowPhoneExistsModal(true);
+        setIsLoading(false);
+        return;
+      }
 
-        if (response.status === 400) {
-          if (errorData.error) {
-            if (errorData.error.includes('email') || errorData.error.includes('Email')) {
-              errorMessage = t('register.errors.emailExists');
-            } else if (errorData.error.includes('username') || errorData.error.includes('utilisateur')) {
-              errorMessage = t('register.errors.usernameExists');
-            } else if (errorData.error.includes('phone') || errorData.error.includes('téléphone')) {
-              errorMessage = t('register.errors.phoneExists');
-            } else {
-              errorMessage = t('register.errors.invalidData');
-            }
+      if (!result.success) {
+        let errorMessage = result.error || t('register.errors.registrationError');
+
+        if (result.error) {
+          if (result.error.includes('email') || result.error.includes('Email')) {
+            errorMessage = t('register.errors.emailExists');
+          } else if (result.error.includes('username') || result.error.includes('utilisateur')) {
+            errorMessage = t('register.errors.usernameExists');
+          } else if (result.error.includes('phone') || result.error.includes('téléphone')) {
+            errorMessage = t('register.errors.phoneExists');
           }
-        } else if (response.status === 500) {
-          errorMessage = t('register.errors.serverError');
         }
 
         toast.error(errorMessage);
@@ -274,44 +371,102 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
         return;
       }
 
-      const data = await response.json();
+      // Success - complete registration
+      await completeRegistrationAndRedirect(result.user, result.token);
 
-      if (data.success && data.data?.user && data.data?.token) {
-        authManager.setCredentials(data.data.user, data.data.token);
-
-        if (affiliateToken) {
-          try {
-            await fetch(buildApiUrl('/affiliate/register'), {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                token: affiliateToken,
-                referredUserId: data.data.user.id
-              })
-            });
-
-            localStorage.removeItem('meeshy_affiliate_token');
-            document.cookie = 'meeshy_affiliate_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          } catch (affiliateError) {
-            console.error('[SIGNIN_PAGE] Erreur enregistrement affiliation:', affiliateError);
-          }
-        }
-
-        toast.success(t('register.success.registrationSuccess'));
-        const redirectUrl = returnUrl || '/dashboard';
-        window.location.href = redirectUrl;
-      } else {
-        toast.error(t('register.errors.registrationError'));
-        setIsLoading(false);
-      }
     } catch (error) {
       console.error('[SIGNIN_PAGE] Erreur:', error);
       const errorMsg = error instanceof Error
         ? `${t('register.errors.networkError')}: ${error.message}`
         : t('register.errors.networkError');
       toast.error(errorMsg);
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Handle "Continue without phone" from modal
+   * Re-register without the phone number
+   */
+  const handleContinueWithoutPhone = async (registration: PendingRegistration) => {
+    setIsLoading(true);
+    setShowPhoneExistsModal(false);
+
+    try {
+      // Re-register WITHOUT the phone number
+      const registrationWithoutPhone = {
+        username: registration.username,
+        password: registration.password,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        email: registration.email,
+        phoneNumber: '', // Empty phone number
+        systemLanguage: registration.systemLanguage || 'fr',
+        regionalLanguage: registration.regionalLanguage || 'en',
+      };
+
+      const result = await performRegistration(registrationWithoutPhone);
+
+      if (!result.success) {
+        toast.error(result.error || t('register.errors.registrationError'));
+        setIsLoading(false);
+        return;
+      }
+
+      await completeRegistrationAndRedirect(result.user!, result.token!);
+
+    } catch (error) {
+      console.error('[SIGNIN_PAGE] Erreur lors de l\'inscription sans téléphone:', error);
+      toast.error(t('register.errors.registrationError'));
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Handle "Phone transferred" from modal
+   * Re-register WITH the phone transfer token
+   */
+  const handlePhoneTransferred = async (registration: PendingRegistration, phoneTransferToken: string) => {
+    setIsLoading(true);
+    setShowPhoneExistsModal(false);
+
+    try {
+      if (!phoneTransferToken) {
+        // If no transfer token, register without phone
+        console.warn('[SIGNIN_PAGE] No transfer token available, registering without phone');
+        await handleContinueWithoutPhone(registration);
+        return;
+      }
+
+      console.log('[SIGNIN_PAGE] Re-registering with phone transfer token');
+
+      // Re-register WITH the phone transfer token
+      const registrationWithTransfer = {
+        username: registration.username,
+        password: registration.password,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        email: registration.email,
+        phoneNumber: phoneOwnerInfo?.phoneNumber || '',
+        systemLanguage: registration.systemLanguage || 'fr',
+        regionalLanguage: registration.regionalLanguage || 'en',
+      };
+
+      const result = await performRegistration(registrationWithTransfer, {
+        phoneTransferToken,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || t('register.errors.registrationError'));
+        setIsLoading(false);
+        return;
+      }
+
+      await completeRegistrationAndRedirect(result.user!, result.token!);
+
+    } catch (error) {
+      console.error('[SIGNIN_PAGE] Erreur lors de l\'inscription avec transfert:', error);
+      toast.error(t('register.errors.registrationError'));
       setIsLoading(false);
     }
   };
@@ -564,6 +719,18 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
           </CardContent>
         </Card>
       </div>
+
+      {/* Phone Exists Modal - Account NOT yet created */}
+      {phoneOwnerInfo && pendingRegistration && (
+        <PhoneExistsModal
+          isOpen={showPhoneExistsModal}
+          onClose={() => setShowPhoneExistsModal(false)}
+          phoneOwnerInfo={phoneOwnerInfo}
+          pendingRegistration={pendingRegistration}
+          onContinueWithoutPhone={handleContinueWithoutPhone}
+          onPhoneTransferred={handlePhoneTransferred}
+        />
+      )}
     </div>
   );
 }

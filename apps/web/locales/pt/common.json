@@ -144,6 +144,16 @@
         "message": "Se você acha que deveria ter acesso a este recurso, tente fazer login ou entre em contato com o administrador."
       }
     },
+    "redirecting": "Redirecionando...",
+    "featureGate": {
+      "title": "Funcionalidade temporariamente indisponível",
+      "passwordResetDisabled": "A redefinição de senha está temporariamente indisponível. Por favor, entre em contato com o suporte se precisar de ajuda para acessar sua conta.",
+      "alternativeOptions": "Opções alternativas:",
+      "contactSupport": "Entrar em contato com nossa equipe de suporte",
+      "tryAgainLater": "Tentar novamente mais tarde",
+      "checkAnnouncements": "Verificar nossos anúncios para atualizações",
+      "backToHome": "Voltar para o início"
+    },
     "messages": {
       "messageSent": "Mensagem enviada!",
       "sendError": "Erro ao enviar mensagem",

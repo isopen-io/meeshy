@@ -39,6 +39,7 @@ export function NotificationBell({
     isLoading,
     hasMore,
     fetchMore,
+    markAsRead,
     markAllAsRead
   } = useNotificationsManagerRQ();
 
@@ -73,12 +74,17 @@ export function NotificationBell({
   };
 
   /**
-   * Gère le clic sur une notification
+   * Gère le marquage comme lu d'une notification
    */
-  const handleNotificationClick = (notification: any) => {
-    // Fermer le dropdown
+  const handleMarkAsRead = async (notificationId: string) => {
+    await markAsRead(notificationId);
+  };
+
+  /**
+   * Ferme le dropdown après navigation
+   */
+  const handleAfterNavigation = () => {
     setIsOpen(false);
-    // La navigation est gérée par NotificationItem
   };
 
   return (
@@ -160,7 +166,8 @@ export function NotificationBell({
               hasMore={hasMore}
               isLoading={isLoading}
               emptyMessage={searchQuery ? "Aucune notification trouvée" : "Vous n'avez aucune notification"}
-              onNotificationClick={handleNotificationClick}
+              onRead={handleMarkAsRead}
+              onAfterNavigation={handleAfterNavigation}
               compact
             />
           </div>

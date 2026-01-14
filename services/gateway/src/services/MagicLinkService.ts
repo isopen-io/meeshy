@@ -16,7 +16,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RedisWrapper } from './RedisWrapper';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
-import { SessionService } from './SessionService';
+import { createSession, initSessionService, generateSessionToken } from './SessionService';
 
 const TOKEN_EXPIRY_MINUTES = 1; // 1 minute as per requirement
 const MAX_REQUESTS_PER_HOUR = 3;
@@ -26,6 +26,7 @@ export interface MagicLinkRequest {
   deviceFingerprint?: string;
   ipAddress: string;
   userAgent: string;
+  rememberDevice?: boolean; // Stored server-side for security
 }
 
 export interface MagicLinkValidation {
@@ -38,9 +39,11 @@ export class MagicLinkService {
     private prisma: PrismaClient,
     private redis: RedisWrapper,
     private emailService: EmailService,
-    private geoIPService: GeoIPService,
-    private sessionService: SessionService
-  ) {}
+    private geoIPService: GeoIPService
+  ) {
+    // Initialize session service with prisma
+    initSessionService(prisma);
+  }
 
   /**
    * Request a magic link to be sent to the user's email
@@ -49,7 +52,7 @@ export class MagicLinkService {
   async requestMagicLink(
     request: MagicLinkRequest
   ): Promise<{ success: boolean; message: string }> {
-    const { email, deviceFingerprint, ipAddress, userAgent } = request;
+    const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice } = request;
     const normalizedEmail = email.toLowerCase().trim();
 
     try {
@@ -116,7 +119,8 @@ export class MagicLinkService {
           geoLocation: geoData?.location || 'Unknown',
           geoCoordinates: geoData?.latitude && geoData?.longitude
             ? `${geoData.latitude},${geoData.longitude}`
-            : null
+            : null,
+          rememberDevice: rememberDevice || false // Store server-side for security
         }
       });
 
@@ -152,6 +156,7 @@ export class MagicLinkService {
     token?: string;
     sessionToken?: string;
     session?: any;
+    rememberDevice?: boolean; // Retrieved from server-side storage
   }> {
     const { token, requestContext } = validation;
 
@@ -229,8 +234,8 @@ export class MagicLinkService {
       );
 
       // 9. Create session with full device tracking
-      const sessionToken = crypto.randomBytes(32).toString('hex');
-      const session = await this.sessionService.create({
+      const sessionToken = generateSessionToken();
+      const session = await createSession({
         userId: user.id,
         token: sessionToken,
         requestContext
@@ -290,7 +295,8 @@ export class MagicLinkService {
         user: socketIOUser,
         token: jwtToken,
         sessionToken,
-        session
+        session,
+        rememberDevice: magicLinkToken.rememberDevice // Retrieved from server-side storage
       };
 
     } catch (error) {
@@ -380,8 +386,7 @@ export function createMagicLinkService(
   prisma: PrismaClient,
   redis: RedisWrapper,
   emailService: EmailService,
-  geoIPService: GeoIPService,
-  sessionService: SessionService
+  geoIPService: GeoIPService
 ): MagicLinkService {
-  return new MagicLinkService(prisma, redis, emailService, geoIPService, sessionService);
+  return new MagicLinkService(prisma, redis, emailService, geoIPService);
 }

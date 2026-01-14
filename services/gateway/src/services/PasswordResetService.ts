@@ -32,7 +32,7 @@ const MIN_PASSWORD_SCORE = 3; // zxcvbn score (0-4)
 
 export interface PasswordResetRequest {
   email: string;
-  captchaToken: string;
+  captchaToken?: string; // Optional - rate limiting provides protection
   deviceFingerprint?: string;
   ipAddress: string;
   userAgent: string;
@@ -71,13 +71,17 @@ export class PasswordResetService {
     console.log('[PasswordResetService] 📧 BYPASS_CAPTCHA:', process.env.BYPASS_CAPTCHA);
 
     try {
-      // 1. Verify CAPTCHA
-      const isCaptchaValid = await this.verifyCaptcha(captchaToken, ipAddress);
-      console.log('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
-      if (!isCaptchaValid) {
-        console.log('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
-        // Return generic response (don't reveal CAPTCHA failure)
-        return this.genericSuccessResponse();
+      // 1. Verify CAPTCHA (optional - rate limiting middleware handles most protection)
+      if (captchaToken) {
+        const isCaptchaValid = await this.verifyCaptcha(captchaToken, ipAddress);
+        console.log('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
+        if (!isCaptchaValid) {
+          console.log('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
+          // Return generic response (don't reveal CAPTCHA failure)
+          return this.genericSuccessResponse();
+        }
+      } else {
+        console.log('[PasswordResetService] 📧 No CAPTCHA token - relying on rate limiting');
       }
 
       // 2. Rate limiting
@@ -628,9 +632,10 @@ export class PasswordResetService {
       errors.push('one digit');
     }
 
-    if (!/[^a-zA-Z0-9]/.test(password)) {
-      errors.push('one special character');
-    }
+    // Special character is optional (bonus for stronger password)
+    // if (!/[^a-zA-Z0-9]/.test(password)) {
+    //   errors.push('one special character');
+    // }
 
     // Use zxcvbn for advanced strength checking
     const result = zxcvbn(password);

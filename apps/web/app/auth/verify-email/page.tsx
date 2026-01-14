@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
@@ -75,7 +75,7 @@ const LoadingSpinner = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { t } = useI18n('auth');
+  const { t, isLoading: isI18nLoading } = useI18n('auth');
 
   const token = searchParams.get('token');
   const email = searchParams.get('email');
@@ -84,12 +84,23 @@ function VerifyEmailContent() {
   const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
 
-  // Vérifier l'email au montage
+  // Helper function to get translation with proper fallback
+  const getText = useCallback((key: string, fallback: string): string => {
+    const translated = t(key);
+    // If translation returns the key itself, use fallback
+    return translated === key ? fallback : translated;
+  }, [t]);
+
+  // Vérifier l'email au montage (attendre que les traductions soient chargées)
   useEffect(() => {
+    // Attendre que les traductions soient chargées
+    if (isI18nLoading) return;
+
     const verifyEmail = async () => {
       if (!token || !email) {
-        setError(t('verifyEmail.errors.invalidLink') || 'Lien de vérification invalide ou incomplet.');
+        setError(getText('verifyEmail.errors.invalidLink', 'Lien de vérification invalide ou incomplet.'));
         setIsVerifying(false);
         return;
       }
@@ -111,21 +122,21 @@ function VerifyEmailContent() {
         if (response.ok && data.success) {
           console.log('[VERIFY_EMAIL] ✅ Email vérifié avec succès');
           setIsVerified(true);
-          toast.success(t('verifyEmail.success') || 'Email vérifié avec succès !');
+          toast.success(getText('verifyEmail.success', 'Email vérifié avec succès !'));
         } else {
           console.error('[VERIFY_EMAIL] ❌ Échec:', data.error);
-          setError(data.error || t('verifyEmail.errors.verificationFailed') || 'La vérification a échoué.');
+          setError(data.error || getText('verifyEmail.errors.verificationFailed', 'La vérification a échoué.'));
         }
       } catch (err) {
         console.error('[VERIFY_EMAIL] Erreur réseau:', err);
-        setError(t('verifyEmail.errors.networkError') || 'Erreur de connexion. Veuillez réessayer.');
+        setError(getText('verifyEmail.errors.networkError', 'Erreur de connexion. Veuillez réessayer.'));
       } finally {
         setIsVerifying(false);
       }
     };
 
     verifyEmail();
-  }, [token, email, t]);
+  }, [token, email, getText, isI18nLoading]);
 
   // Renvoyer l'email de vérification
   const handleResend = async () => {
@@ -145,20 +156,20 @@ function VerifyEmailContent() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        toast.success(t('verifyEmail.resendSuccess') || 'Un nouvel email de vérification a été envoyé.');
+        toast.success(getText('verifyEmail.resendSuccess', 'Un nouvel email de vérification a été envoyé.'));
       } else {
-        toast.error(data.error || t('verifyEmail.errors.resendFailed') || 'Impossible d\'envoyer l\'email.');
+        toast.error(data.error || getText('verifyEmail.errors.resendFailed', 'Impossible d\'envoyer l\'email.'));
       }
     } catch (err) {
       console.error('[VERIFY_EMAIL] Erreur renvoi:', err);
-      toast.error(t('verifyEmail.errors.networkError') || 'Erreur de connexion.');
+      toast.error(getText('verifyEmail.errors.networkError', 'Erreur de connexion.'));
     } finally {
       setIsResending(false);
     }
   };
 
-  // État de chargement
-  if (isVerifying) {
+  // État de chargement (inclut le chargement des traductions)
+  if (isVerifying || isI18nLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
@@ -174,7 +185,7 @@ function VerifyEmailContent() {
               <div className="space-y-2">
                 <LoadingSpinner />
                 <p className="text-gray-600 dark:text-gray-400">
-                  {t('verifyEmail.verifying') || 'Vérification en cours...'}
+                  {getText('verifyEmail.verifying', 'Vérification en cours...')}
                 </p>
               </div>
             </div>
@@ -183,6 +194,18 @@ function VerifyEmailContent() {
       </div>
     );
   }
+
+  // Auto-redirect countdown after verification
+  useEffect(() => {
+    if (!isVerified) return;
+
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => setRedirectCountdown(redirectCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      router.push('/login');
+    }
+  }, [isVerified, redirectCountdown, router]);
 
   // État de succès
   if (isVerified) {
@@ -200,25 +223,25 @@ function VerifyEmailContent() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-green-700 dark:text-green-400">
-                  {t('verifyEmail.successTitle') || 'Email vérifié !'}
+                  {getText('verifyEmail.successTitle', 'Email vérifié !')}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('verifyEmail.successDescription') || 'Votre adresse email a été vérifiée avec succès.'}
+                  {getText('verifyEmail.successDescription', 'Votre adresse email a été vérifiée avec succès.')}
                 </p>
               </div>
 
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  {t('verifyEmail.welcomeMessage') || 'Bienvenue dans la communauté Meeshy ! Vous pouvez maintenant discuter avec le monde entier.'}
+                  {getText('verifyEmail.welcomeMessage', 'Bienvenue dans la communauté Meeshy ! Vous pouvez maintenant discuter avec le monde entier.')}
                 </p>
               </div>
 
-              <div className="space-y-3 pt-2">
-                <SimpleButton onClick={() => router.push('/dashboard')}>
-                  {t('verifyEmail.goToChat') || 'Commencer à discuter'}
-                </SimpleButton>
-                <SimpleButton variant="secondary" onClick={() => router.push('/login')}>
-                  {t('verifyEmail.goToLogin') || 'Se connecter'}
+              <div className="pt-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  {getText('verifyEmail.redirecting', 'Redirection dans')} {redirectCountdown}s...
+                </p>
+                <SimpleButton onClick={() => router.push('/login')}>
+                  {getText('verifyEmail.goToLogin', 'Se connecter maintenant')}
                 </SimpleButton>
               </div>
             </div>
@@ -243,10 +266,10 @@ function VerifyEmailContent() {
             </div>
             <div>
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {t('verifyEmail.errorTitle') || 'Vérification échouée'}
+                {getText('verifyEmail.errorTitle', 'Vérification échouée')}
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                {t('verifyEmail.errorDescription') || 'Nous n\'avons pas pu vérifier votre adresse email.'}
+                {getText('verifyEmail.errorDescription', 'Nous n\'avons pas pu vérifier votre adresse email.')}
               </p>
             </div>
 
@@ -258,7 +281,7 @@ function VerifyEmailContent() {
             {email && (
               <div className="space-y-3">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('verifyEmail.resendHint') || 'Le lien a peut-être expiré. Vous pouvez demander un nouveau lien.'}
+                  {getText('verifyEmail.resendHint', 'Le lien a peut-être expiré. Vous pouvez demander un nouveau lien.')}
                 </p>
 
                 <SimpleButton
@@ -269,17 +292,17 @@ function VerifyEmailContent() {
                   {isResending ? (
                     <span className="flex items-center justify-center space-x-2">
                       <LoadingSpinner size="sm" />
-                      <span>{t('verifyEmail.sending') || 'Envoi en cours...'}</span>
+                      <span>{getText('verifyEmail.sending', 'Envoi en cours...')}</span>
                     </span>
                   ) : (
-                    t('verifyEmail.resendButton') || 'Renvoyer l\'email de vérification'
+                    getText('verifyEmail.resendButton', 'Renvoyer l\'email de vérification')
                   )}
                 </SimpleButton>
               </div>
             )}
 
             <SimpleButton variant="ghost" onClick={() => router.push('/login')}>
-              {t('verifyEmail.backToLogin') || 'Retour à la connexion'}
+              {getText('verifyEmail.backToLogin', 'Retour à la connexion')}
             </SimpleButton>
           </div>
         </SimpleCard>

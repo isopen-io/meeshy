@@ -1,6 +1,9 @@
 # Voice Cloning Test - Unified Requirements
 # ==========================================
-# Supports both Chatterbox TTS and XTTS-v2 engines
+# Supports three TTS engines:
+#   - Chatterbox TTS: Best quality, 23 languages (MIT license)
+#   - XTTS-v2: Good quality, 17 languages (Coqui license)
+#   - MMS TTS: 1100+ languages including African languages (CC-BY-NC 4.0)
 #
 # Installation with uv (recommended - much faster):
 #   uv venv --python 3.11 .venv
@@ -19,7 +22,7 @@
 #       Python <3.12 required for XTTS (Coqui TTS)
 
 # ===================
-# PyTorch (installed via TTS engines)
+# PyTorch (required by all engines)
 # ===================
 torch>=2.0.0
 torchaudio>=2.0.0
@@ -27,16 +30,26 @@ torchaudio>=2.0.0
 # ===================
 # TTS Engines
 # ===================
-# Chatterbox TTS (MIT license, commercial use allowed)
+
+# --- Chatterbox TTS (MIT license, commercial use allowed) ---
+# Best quality voice cloning, supports 23 languages
 # Option 1: Install from PyPI (may not have latest multilingual)
 # chatterbox-tts>=0.1.6
 
 # Option 2: Install from GitHub (recommended for multilingual support)
 chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git
 
-# XTTS-v2 / Coqui TTS (Coqui Public License - check for commercial use)
-# Uncomment to install XTTS support:
+# --- XTTS-v2 / Coqui TTS (Coqui Public License) ---
+# Good quality, 17 languages. Uncomment to install:
 # TTS>=0.22.0
+
+# --- MMS TTS - Meta Multilingual Speech (CC-BY-NC 4.0) ---
+# Supports 1100+ languages including:
+#   - Lingala (ln), Swahili (sw), Yoruba (yo), Hausa (ha)
+#   - Basaa (bas), Bafia (ksf), Ngiemboon (nnh)
+#   - And many more African, Asian, and other languages
+# Downloads models directly from Facebook's servers
+ttsmms>=1.3
 
 # ===================
 # Audio Processing

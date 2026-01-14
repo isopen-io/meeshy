@@ -9,8 +9,9 @@ import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { passwordResetService } from '@/services/password-reset.service';
-import { Mail, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
+import { Mail, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Clock, Loader2, Phone } from 'lucide-react';
 import { toast } from 'sonner';
+import { PhoneResetFlow } from '@/components/auth/PhoneResetFlow';
 
 function CheckEmailContent() {
   const router = useRouter();
@@ -22,6 +23,7 @@ function CheckEmailContent() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [showCaptcha, setShowCaptcha] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  const [showPhoneReset, setShowPhoneReset] = useState(false);
 
   // Redirect if no reset was requested
   useEffect(() => {
@@ -150,132 +152,160 @@ function CheckEmailContent() {
           <LargeLogo href="/" />
         </div>
 
-        {/* Check Email Card */}
-        <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-6">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+        {/* Content - Phone Reset OR Email Check */}
+        {showPhoneReset ? (
+          /* Phone Reset Flow - replaces entire card */
+          <PhoneResetFlow onClose={() => setShowPhoneReset(false)} />
+        ) : (
+          /* Email Check Card */
+          <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                  <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
               </div>
-            </div>
-            <CardTitle className="text-2xl">
-              {t('checkEmail.title') || 'Check Your Email'}
-            </CardTitle>
-            <CardDescription className="text-base mt-2">
-              {t('checkEmail.description') ||
-                'We have sent a password reset link to your email address'}
-            </CardDescription>
-          </CardHeader>
+              <CardTitle className="text-2xl">
+                {t('checkEmail.title') || 'Check Your Email'}
+              </CardTitle>
+              <CardDescription className="text-base mt-2">
+                {t('checkEmail.description') ||
+                  'We have sent a password reset link to your email address'}
+              </CardDescription>
+            </CardHeader>
 
-          <CardContent className="space-y-6">
-            {/* Email Address Display */}
-            <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-              <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <AlertDescription className="ml-2">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  {t('checkEmail.emailSentTo') || 'Email sent to'}:{' '}
-                  <span className="font-semibold">{email}</span>
+            <CardContent className="space-y-6">
+              {/* Email Address Display */}
+              <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertDescription className="ml-2">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    {t('checkEmail.emailSentTo') || 'Email sent to'}:{' '}
+                    <span className="font-semibold">{email}</span>
+                  </p>
+                </AlertDescription>
+              </Alert>
+
+              {/* Instructions */}
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <span>{t('checkEmail.step1') || 'Check your inbox for an email from Meeshy'}</span>
                 </p>
-              </AlertDescription>
-            </Alert>
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <span>
+                    {t('checkEmail.step2') || 'Click the password reset link in the email'}
+                  </span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <span>{t('checkEmail.step3') || 'Create a new secure password'}</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+                  <span>
+                    {t('checkEmail.expiry') ||
+                      'The reset link will expire in 15 minutes for security'}
+                  </span>
+                </p>
+              </div>
 
-            {/* Instructions */}
-            <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-              <p className="flex items-start gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                <span>{t('checkEmail.step1') || 'Check your inbox for an email from Meeshy'}</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                <span>
-                  {t('checkEmail.step2') || 'Click the password reset link in the email'}
-                </span>
-              </p>
-              <p className="flex items-start gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                <span>{t('checkEmail.step3') || 'Create a new secure password'}</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
-                <span>
-                  {t('checkEmail.expiry') ||
-                    'The reset link will expire in 15 minutes for security'}
-                </span>
-              </p>
-            </div>
+              {/* Spam Warning */}
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="ml-2 text-sm">
+                  {t('checkEmail.spamWarning') ||
+                    "Can't find the email? Check your spam or junk folder"}
+                </AlertDescription>
+              </Alert>
 
-            {/* Spam Warning */}
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="ml-2 text-sm">
-                {t('checkEmail.spamWarning') ||
-                  "Can't find the email? Check your spam or junk folder"}
-              </AlertDescription>
-            </Alert>
-
-            {/* Resend Section */}
-            {showCaptcha ? (
-              <div className="space-y-4">
-                <div id="resend-hcaptcha-container" className="flex justify-center" />
-                <div className="flex gap-3">
+              {/* Back to Login | Resend Email */}
+              {showCaptcha ? (
+                <div className="space-y-4">
+                  <div id="resend-hcaptcha-container" className="flex justify-center" />
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowCaptcha(false)}
+                      className="flex-1"
+                    >
+                      {t('checkEmail.cancel') || 'Annuler'}
+                    </Button>
+                    <Button
+                      onClick={handleResendEmail}
+                      disabled={isResending || !captchaToken}
+                      className="flex-1"
+                    >
+                      {isResending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {t('checkEmail.resending') || 'Sending...'}
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="mr-2 h-4 w-4" />
+                          {t('checkEmail.confirmResend') || 'Send Email'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    onClick={() => router.push('/login')}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    {t('checkEmail.backToLogin') || 'Back to Login'}
+                  </Button>
+                  <div className="h-8 w-px bg-gray-200 dark:bg-gray-700" />
                   <Button
                     variant="outline"
-                    onClick={() => setShowCaptcha(false)}
-                    className="flex-1"
-                  >
-                    {t('common.cancel') || 'Cancel'}
-                  </Button>
-                  <Button
                     onClick={handleResendEmail}
-                    disabled={isResending || !captchaToken}
+                    disabled={isResending || resendCooldown > 0}
                     className="flex-1"
                   >
-                    {isResending ? (
+                    {resendCooldown > 0 ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {t('checkEmail.resending') || 'Sending...'}
+                        <Clock className="mr-2 h-4 w-4" />
+                        {t('checkEmail.resendWait') || `Resend in ${resendCooldown}s`}
                       </>
                     ) : (
                       <>
-                        <Mail className="mr-2 h-4 w-4" />
-                        {t('checkEmail.confirmResend') || 'Send Email'}
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        {t('checkEmail.resendButton') || 'Resend Email'}
                       </>
                     )}
                   </Button>
                 </div>
+              )}
+
+              {/* Phone Reset Option */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white dark:bg-gray-800 px-2 text-gray-500">
+                    {t('checkEmail.orUse') || 'ou utilisez'}
+                  </span>
+                </div>
               </div>
-            ) : (
+
               <Button
-                variant="outline"
-                onClick={handleResendEmail}
-                disabled={isResending || resendCooldown > 0}
+                variant="secondary"
+                onClick={() => setShowPhoneReset(true)}
                 className="w-full"
               >
-                {resendCooldown > 0 ? (
-                  <>
-                    <Clock className="mr-2 h-4 w-4" />
-                    {t('checkEmail.resendWait') || `Resend in ${resendCooldown}s`}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    {t('checkEmail.resendButton') || 'Resend Email'}
-                  </>
-                )}
+                <Phone className="mr-2 h-4 w-4" />
+                {t('checkEmail.resetByPhone') || 'Réinitialiser par téléphone'}
               </Button>
-            )}
-
-            {/* Back to Login */}
-            <Button
-              variant="ghost"
-              onClick={() => router.push('/login')}
-              className="w-full"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              {t('checkEmail.backToLogin') || 'Back to Login'}
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Support Link */}
         <div className="text-center text-sm text-gray-500 dark:text-gray-400">

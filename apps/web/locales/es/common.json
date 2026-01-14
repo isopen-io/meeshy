@@ -144,6 +144,16 @@
         "message": "Si cree que debería tener acceso a este recurso, intente iniciar sesión o contacte al administrador."
       }
     },
+    "redirecting": "Redirigiendo...",
+    "featureGate": {
+      "title": "Función temporalmente no disponible",
+      "passwordResetDisabled": "El restablecimiento de contraseña no está disponible temporalmente. Por favor, contacte con soporte si necesita ayuda para acceder a su cuenta.",
+      "alternativeOptions": "Opciones alternativas:",
+      "contactSupport": "Contactar con nuestro equipo de soporte",
+      "tryAgainLater": "Intentar de nuevo más tarde",
+      "checkAnnouncements": "Consultar nuestros anuncios para actualizaciones",
+      "backToHome": "Volver al inicio"
+    },
     "messages": {
       "messageSent": "¡Mensaje enviado!",
       "sendError": "Error al enviar el mensaje",

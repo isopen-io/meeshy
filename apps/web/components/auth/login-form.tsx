@@ -9,8 +9,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { User } from '@/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
-import { Eye, EyeOff, User as UserIcon, Lock } from 'lucide-react';
+import { Eye, EyeOff, User as UserIcon, Lock, Shield } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { useFeatureFlags } from '@/hooks/use-feature-flags';
+import { useBotProtection } from '@/hooks/use-bot-protection';
 
 interface LoginFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -24,16 +27,30 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
+    rememberDevice: false,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Bot protection
+  const { honeypotProps, validateSubmission } = useBotProtection({
+    minSubmitTime: 1500, // 1.5 seconds minimum for login
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Réinitialiser l'erreur précédente
     setError(null);
+
+    // Bot protection validation
+    const { isHuman, botError } = validateSubmission();
+    if (!isHuman) {
+      setError(botError);
+      toast.error(botError);
+      return;
+    }
 
     // Validation des champs
     if (!formData.username.trim() || !formData.password.trim()) {
@@ -59,6 +76,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         body: JSON.stringify({
           username: formData.username.trim(),
           password: formData.password.trim(),
+          rememberDevice: formData.rememberDevice,
         }),
       });
 
@@ -172,6 +190,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {/* Honeypot field - invisible to humans, bots will fill it */}
+      <input {...honeypotProps} />
+
       {/* Message d'erreur visible */}
       {error && (
         <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
@@ -228,6 +249,25 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             </a>
           </div>
         )}
+      </div>
+
+      {/* Remember device checkbox */}
+      <div className="flex items-center space-x-2 py-1">
+        <Checkbox
+          id="remember-device"
+          checked={formData.rememberDevice}
+          onCheckedChange={(checked) =>
+            setFormData({ ...formData, rememberDevice: checked === true })
+          }
+          disabled={isLoading}
+        />
+        <Label
+          htmlFor="remember-device"
+          className="text-sm font-medium leading-none cursor-pointer flex items-center gap-1.5 text-gray-700 dark:text-gray-300"
+        >
+          <Shield className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+          {t('login.rememberDevice')}
+        </Label>
       </div>
 
       <Button
