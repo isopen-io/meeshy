@@ -1,6 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService, LoginCredentials, RegisterData } from '../services/AuthService';
+import { PhoneTransferService } from '../services/PhoneTransferService';
+import { SmsService } from '../services/SmsService';
+import { RedisWrapper } from '../services/RedisWrapper';
 import { SocketIOUser } from '@meeshy/shared/types';
+import {
+  createLoginRateLimiter,
+  createRegisterRateLimiter,
+  createAuthGlobalRateLimiter,
+  createPhoneTransferRateLimiter,
+  createPhoneTransferCodeRateLimiter,
+  createPhoneTransferResendRateLimiter
+} from '../utils/rate-limiter.js';
 import {
   userSchema,
   sessionSchema,
@@ -25,12 +36,31 @@ import {
 } from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
 import { getRequestContext } from '../services/GeoIPService';
+import { markSessionTrusted } from '../services/SessionService';
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Créer une instance du service d'authentification
   const authService = new AuthService(
     (fastify as any).prisma,
     process.env.JWT_SECRET || 'meeshy-secret-key-dev'
+  );
+
+  // Initialize rate limiters (use Redis if available for distributed rate limiting)
+  const redis = (fastify as any).redis;
+  const loginRateLimiter = createLoginRateLimiter(redis);
+  const registerRateLimiter = createRegisterRateLimiter(redis);
+  const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
+  const phoneTransferRateLimiter = createPhoneTransferRateLimiter(redis);
+  const phoneTransferCodeRateLimiter = createPhoneTransferCodeRateLimiter(redis);
+  const phoneTransferResendRateLimiter = createPhoneTransferResendRateLimiter(redis);
+
+  // Initialize PhoneTransferService for registration phone transfer
+  const redisWrapper = new RedisWrapper(redis);
+  const smsService = new SmsService();
+  const phoneTransferService = new PhoneTransferService(
+    (fastify as any).prisma,
+    redisWrapper,
+    smsService
   );
 
   // Route de connexion - using shared schemas from @meeshy/shared/types
@@ -59,16 +89,27 @@ export async function authRoutes(fastify: FastifyInstance) {
           }
         },
         401: errorResponseSchema,
+        429: {
+          description: 'Too many login attempts',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string' },
+            error: { type: 'string' },
+            retryAfter: { type: 'number' }
+          }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: [loginRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Valider les données avec Zod
       const validatedData = validateSchema(AuthSchemas.login, request.body, 'login');
-      const { username, password } = validatedData;
-      console.log('[AUTH] Tentative de connexion pour:', username);
+      const { username, password, rememberDevice } = validatedData;
+      console.log('[AUTH] Tentative de connexion pour:', username, '| Remember device:', rememberDevice);
 
       // Capturer le contexte de la requête (IP, géolocalisation, user agent)
       const requestContext = await getRequestContext(request);
@@ -89,6 +130,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       const { user, sessionToken, session, requires2FA, twoFactorToken } = authResult;
 
       // If 2FA is required, return partial response
+      // Client must send rememberDevice back during 2FA completion
       if (requires2FA) {
         console.log('[AUTH] 🔐 2FA requis pour:', user.username);
         return reply.send({
@@ -96,6 +138,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           data: {
             requires2FA: true,
             twoFactorToken, // Client stores this temporarily
+            rememberDevice, // Client sends this back during 2FA completion
             user: {
               id: user.id,
               username: user.username,
@@ -111,6 +154,19 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
 
       console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
+
+      // Mark session as trusted if user opted in (extends session to 365 days)
+      if (rememberDevice && session.id) {
+        const marked = await markSessionTrusted(session.id, {
+          userId: user.id,
+          ipAddress: requestContext.ip,
+          userAgent: requestContext.userAgent,
+          source: 'login'
+        });
+        if (!marked) {
+          console.warn('[AUTH] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
+        }
+      }
 
       // Générer le JWT token
       const jwtToken = authService.generateToken(user);
@@ -177,9 +233,10 @@ export async function authRoutes(fastify: FastifyInstance) {
             osName: session.osName,
             location: session.location,
             isMobile: session.isMobile,
+            isTrusted: rememberDevice || false,
             createdAt: session.createdAt
           },
-          expiresIn: 24 * 60 * 60 // 24 heures en secondes
+          expiresIn: rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60 // 1 an si trusted, sinon 24h
         }
       });
 
@@ -197,7 +254,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Route de connexion 2FA - Complete login with 2FA code
   fastify.post<{
-    Body: { twoFactorToken: string; code: string }
+    Body: { twoFactorToken: string; code: string; rememberDevice?: boolean }
   }>('/login/2fa', {
     schema: {
       description: 'Complete login with 2FA verification. Called after initial login returns requires2FA: true.',
@@ -208,7 +265,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         required: ['twoFactorToken', 'code'],
         properties: {
           twoFactorToken: { type: 'string', description: 'Temporary token from initial login' },
-          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' }
+          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' },
+          rememberDevice: { type: 'boolean', description: 'Remember device for long session (365 days)', default: false }
         }
       },
       response: {
@@ -236,7 +294,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
-      const { twoFactorToken, code } = request.body;
+      const { twoFactorToken, code, rememberDevice } = request.body;
 
       if (!twoFactorToken || !code) {
         return reply.status(400).send({
@@ -262,7 +320,24 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       console.log('[AUTH] ✅ Connexion 2FA réussie pour:', user.username);
 
+      // Mark session as trusted AFTER 2FA verification (if user opted in)
+      // This is the secure way - only mark trusted after both password AND 2FA are verified
+      if (rememberDevice && session.id) {
+        const marked = await markSessionTrusted(session.id, {
+          userId: user.id,
+          ipAddress: requestContext.ip,
+          userAgent: requestContext.userAgent,
+          source: '2fa_verification'
+        });
+        if (!marked) {
+          console.warn('[AUTH] ⚠️ Échec du marquage session trusted après 2FA - voir logs SECURITY_AUDIT_ERROR');
+        }
+      }
+
       const jwtToken = authService.generateToken(user);
+
+      // Calculate expiration based on rememberDevice
+      const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
 
       return reply.send({
         success: true,
@@ -310,9 +385,10 @@ export async function authRoutes(fastify: FastifyInstance) {
             osName: session.osName,
             location: session.location,
             isMobile: session.isMobile,
+            isTrusted: rememberDevice || false,
             createdAt: session.createdAt
           },
-          expiresIn: 24 * 60 * 60
+          expiresIn
         }
       });
 
@@ -349,21 +425,93 @@ export async function authRoutes(fastify: FastifyInstance) {
           }
         },
         400: validationErrorResponseSchema,
+        429: {
+          description: 'Too many registration attempts',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string' },
+            error: { type: 'string' },
+            retryAfter: { type: 'number' }
+          }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: [registerRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Valider les données avec Zod
-      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register');
+      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
+        phoneTransferToken?: string;
+      };
 
       // Capturer le contexte de la requête (IP, géolocalisation, user agent)
       const requestContext = await getRequestContext(request);
       console.log('[AUTH] Inscription depuis:', requestContext.ip, requestContext.geoData?.location || 'Local');
 
+      // Check if phoneTransferToken is provided (user already verified SMS for phone transfer)
+      let phoneTransferValidated = false;
+      if (validatedData.phoneTransferToken) {
+        console.log('[AUTH] 📱 Phone transfer token provided - validating...');
+        const transferData = await phoneTransferService.getTransferDataByToken(validatedData.phoneTransferToken);
+
+        if (!transferData.valid) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Token de transfert invalide ou expiré',
+            code: 'INVALID_TRANSFER_TOKEN'
+          });
+        }
+
+        console.log('[AUTH] 📱 Phone transfer token valid - phone:', transferData.phoneNumber);
+        phoneTransferValidated = true;
+        // Set flag to skip phone conflict check in AuthService
+        (validatedData as any).skipPhoneConflictCheck = true;
+      }
+
       // Créer l'utilisateur avec Prisma et contexte d'inscription
-      const user = await authService.register(validatedData as RegisterData, requestContext);
+      const result = await authService.register(validatedData as RegisterData, requestContext);
+
+      if (!result) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Erreur lors de la création du compte'
+        });
+      }
+
+      // Si conflit de propriété du téléphone, le compte n'est PAS créé
+      // Retourner les infos pour que l'utilisateur choisisse
+      if (result.phoneOwnershipConflict && result.phoneOwnerInfo) {
+        console.log('[AUTH] 📱 Phone ownership conflict - account NOT created');
+        return reply.send({
+          success: true,
+          data: {
+            phoneOwnershipConflict: true,
+            phoneOwnerInfo: {
+              maskedDisplayName: result.phoneOwnerInfo.maskedDisplayName,
+              maskedUsername: result.phoneOwnerInfo.maskedUsername,
+              maskedEmail: result.phoneOwnerInfo.maskedEmail,
+              avatarUrl: result.phoneOwnerInfo.avatarUrl,
+              phoneNumber: result.phoneOwnerInfo.phoneNumber,
+              phoneCountryCode: result.phoneOwnerInfo.phoneCountryCode
+            },
+            // Inclure les données d'inscription pour les réutiliser après choix
+            pendingRegistration: {
+              username: validatedData.username,
+              email: validatedData.email,
+              firstName: validatedData.firstName,
+              lastName: validatedData.lastName,
+              password: validatedData.password, // Le frontend stockera temporairement
+              systemLanguage: validatedData.systemLanguage,
+              regionalLanguage: validatedData.regionalLanguage
+            }
+          }
+        });
+      }
+
+      const { user } = result;
 
       if (!user) {
         return reply.status(400).send({
@@ -372,64 +520,85 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Execute phone transfer if transfer token was validated
+      if (phoneTransferValidated && validatedData.phoneTransferToken) {
+        console.log('[AUTH] 📱 Executing phone transfer for new user:', user.id);
+        const transferResult = await phoneTransferService.executeRegistrationTransfer(
+          validatedData.phoneTransferToken,
+          user.id,
+          requestContext.ip || 'unknown'
+        );
+
+        if (!transferResult.success) {
+          console.error('[AUTH] ❌ Phone transfer failed:', transferResult.error);
+          // Note: Account is created but phone transfer failed
+          // We continue with registration but log the error
+        } else {
+          console.log('[AUTH] ✅ Phone transfer completed successfully');
+        }
+      }
+
       // Générer le token
       const token = authService.generateToken(user);
 
+      // Construire la réponse
+      const responseData: any = {
+        user: {
+          // Identité de base
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          displayName: user.displayName,
+          bio: user.bio,
+          avatar: user.avatar,
+          phoneNumber: user.phoneNumber,
+
+          // Rôle et statut
+          role: user.role,
+          isActive: user.isActive,
+          deactivatedAt: user.deactivatedAt,
+
+          // Paramètres de traduction
+          systemLanguage: user.systemLanguage,
+          regionalLanguage: user.regionalLanguage,
+          customDestinationLanguage: user.customDestinationLanguage,
+          autoTranslateEnabled: user.autoTranslateEnabled,
+          translateToSystemLanguage: user.translateToSystemLanguage,
+          translateToRegionalLanguage: user.translateToRegionalLanguage,
+          useCustomDestination: user.useCustomDestination,
+
+          // Statut de présence
+          isOnline: user.isOnline,
+          lastActiveAt: user.lastActiveAt,
+
+          // Sécurité visible (statuts de vérification)
+          emailVerifiedAt: user.emailVerifiedAt,
+          phoneVerifiedAt: user.phoneVerifiedAt,
+          twoFactorEnabledAt: user.twoFactorEnabledAt,
+          lastPasswordChange: user.lastPasswordChange,
+
+          // Tracking des connexions (pour dashboard sécurité)
+          lastLoginIp: user.lastLoginIp,
+          lastLoginLocation: user.lastLoginLocation,
+          lastLoginDevice: user.lastLoginDevice,
+
+          // Métadonnées
+          profileCompletionRate: user.profileCompletionRate,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+
+          // Permissions calculées
+          permissions: user.permissions
+        },
+        token,
+        expiresIn: 24 * 60 * 60
+      };
+
       reply.send({
         success: true,
-        data: {
-          user: {
-            // Identité de base
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            displayName: user.displayName,
-            bio: user.bio,
-            avatar: user.avatar,
-            phoneNumber: user.phoneNumber,
-
-            // Rôle et statut
-            role: user.role,
-            isActive: user.isActive,
-            deactivatedAt: user.deactivatedAt,
-
-            // Paramètres de traduction
-            systemLanguage: user.systemLanguage,
-            regionalLanguage: user.regionalLanguage,
-            customDestinationLanguage: user.customDestinationLanguage,
-            autoTranslateEnabled: user.autoTranslateEnabled,
-            translateToSystemLanguage: user.translateToSystemLanguage,
-            translateToRegionalLanguage: user.translateToRegionalLanguage,
-            useCustomDestination: user.useCustomDestination,
-
-            // Statut de présence
-            isOnline: user.isOnline,
-            lastActiveAt: user.lastActiveAt,
-
-            // Sécurité visible (statuts de vérification)
-            emailVerifiedAt: user.emailVerifiedAt,
-            phoneVerifiedAt: user.phoneVerifiedAt,
-            twoFactorEnabledAt: user.twoFactorEnabledAt,
-            lastPasswordChange: user.lastPasswordChange,
-
-            // Tracking des connexions (pour dashboard sécurité)
-            lastLoginIp: user.lastLoginIp,
-            lastLoginLocation: user.lastLoginLocation,
-            lastLoginDevice: user.lastLoginDevice,
-
-            // Métadonnées
-            profileCompletionRate: user.profileCompletionRate,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-
-            // Permissions calculées
-            permissions: user.permissions
-          },
-          token,
-          expiresIn: 24 * 60 * 60
-        }
+        data: responseData
       });
 
     } catch (error) {
@@ -1332,6 +1501,529 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la validation de la session'
+      });
+    }
+  });
+
+  // ============================================================================
+  // Phone Transfer Routes (for registration with existing phone number)
+  // ============================================================================
+
+  /**
+   * Check if phone number belongs to another account
+   * Used during registration to detect if phone transfer is needed
+   */
+  fastify.post('/phone-transfer/check', {
+    schema: {
+      description: 'Check if a phone number is already associated with another account',
+      tags: ['auth'],
+      summary: 'Check phone ownership',
+      body: {
+        type: 'object',
+        required: ['phoneNumber'],
+        properties: {
+          phoneNumber: { type: 'string', description: 'Phone number to check' },
+          countryCode: { type: 'string', description: 'ISO country code (e.g., FR, US)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                exists: { type: 'boolean', description: 'Whether the phone belongs to another account' },
+                maskedInfo: {
+                  type: 'object',
+                  properties: {
+                    displayName: { type: 'string' },
+                    username: { type: 'string' },
+                    email: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { phoneNumber, countryCode } = request.body as { phoneNumber: string; countryCode?: string };
+
+      // Normalize phone number
+      const { normalizePhoneWithCountry } = await import('../utils/normalize');
+      const normalized = normalizePhoneWithCountry(phoneNumber, countryCode || 'FR');
+
+      if (!normalized || !normalized.isValid) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Numéro de téléphone invalide'
+        });
+      }
+
+      const result = await phoneTransferService.checkPhoneOwnership(normalized.phoneNumber);
+
+      return reply.send({
+        success: true,
+        data: {
+          exists: result.exists,
+          maskedInfo: result.maskedInfo
+        }
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur check phone:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification du numéro'
+      });
+    }
+  });
+
+  /**
+   * Initiate phone transfer - sends SMS to current owner
+   */
+  fastify.post('/phone-transfer/initiate', {
+    schema: {
+      description: 'Initiate phone number transfer by sending SMS verification to current owner',
+      tags: ['auth'],
+      summary: 'Initiate phone transfer',
+      body: {
+        type: 'object',
+        required: ['phoneNumber', 'newUserId'],
+        properties: {
+          phoneNumber: { type: 'string', description: 'Phone number to transfer' },
+          phoneCountryCode: { type: 'string', description: 'ISO country code' },
+          newUserId: { type: 'string', description: 'ID of the new user (just registered)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                transferId: { type: 'string', description: 'Transfer session ID' },
+                maskedOwnerInfo: {
+                  type: 'object',
+                  properties: {
+                    displayName: { type: 'string' },
+                    username: { type: 'string' },
+                    email: { type: 'string' }
+                  }
+                }
+              }
+            },
+            error: { type: 'string' }
+          }
+        },
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { phoneNumber, phoneCountryCode, newUserId } = request.body as {
+        phoneNumber: string;
+        phoneCountryCode?: string;
+        newUserId: string;
+      };
+
+      // Normalize phone number
+      const { normalizePhoneWithCountry } = await import('../utils/normalize');
+      const normalized = normalizePhoneWithCountry(phoneNumber, phoneCountryCode || 'FR');
+
+      if (!normalized || !normalized.isValid) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Numéro de téléphone invalide'
+        });
+      }
+
+      const requestContext = await getRequestContext(request);
+
+      const result = await phoneTransferService.initiateTransfer({
+        phoneNumber: normalized.phoneNumber,
+        phoneCountryCode: normalized.countryCode,
+        newUserId,
+        ipAddress: requestContext.ip,
+        userAgent: requestContext.userAgent || 'Unknown'
+      });
+
+      if (!result.success) {
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          transferId: result.transferId,
+          maskedOwnerInfo: result.maskedOwnerInfo
+        }
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur initiate transfer:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de l\'initiation du transfert'
+      });
+    }
+  });
+
+  /**
+   * Verify SMS code and complete transfer
+   */
+  fastify.post('/phone-transfer/verify', {
+    schema: {
+      description: 'Verify SMS code and complete phone number transfer',
+      tags: ['auth'],
+      summary: 'Verify phone transfer',
+      body: {
+        type: 'object',
+        required: ['transferId', 'code'],
+        properties: {
+          transferId: { type: 'string', description: 'Transfer session ID' },
+          code: { type: 'string', description: '6-digit SMS verification code' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                transferred: { type: 'boolean', description: 'Whether transfer was successful' }
+              }
+            },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferCodeRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { transferId, code } = request.body as { transferId: string; code: string };
+      const requestContext = await getRequestContext(request);
+
+      const result = await phoneTransferService.verifyAndTransfer({
+        transferId,
+        code,
+        ipAddress: requestContext.ip
+      });
+
+      if (!result.success) {
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          transferred: result.transferred
+        }
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur verify transfer:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification du transfert'
+      });
+    }
+  });
+
+  /**
+   * Resend SMS code for transfer
+   */
+  fastify.post('/phone-transfer/resend', {
+    schema: {
+      description: 'Resend SMS verification code for phone transfer',
+      tags: ['auth'],
+      summary: 'Resend transfer code',
+      body: {
+        type: 'object',
+        required: ['transferId'],
+        properties: {
+          transferId: { type: 'string', description: 'Transfer session ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferResendRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { transferId } = request.body as { transferId: string };
+      const requestContext = await getRequestContext(request);
+
+      const result = await phoneTransferService.resendCode(transferId, requestContext.ip);
+
+      if (!result.success) {
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      return reply.send({
+        success: true
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur resend transfer code:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors du renvoi du code'
+      });
+    }
+  });
+
+  /**
+   * Cancel pending transfer
+   */
+  fastify.post('/phone-transfer/cancel', {
+    schema: {
+      description: 'Cancel a pending phone transfer',
+      tags: ['auth'],
+      summary: 'Cancel phone transfer',
+      body: {
+        type: 'object',
+        required: ['transferId'],
+        properties: {
+          transferId: { type: 'string', description: 'Transfer session ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' }
+          }
+        }
+      },
+      security: []
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { transferId } = request.body as { transferId: string };
+      await phoneTransferService.cancelTransfer(transferId);
+      return reply.send({ success: true });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur cancel transfer:', error);
+      return reply.send({ success: true }); // Don't fail on cancel
+    }
+  });
+
+  // ============================================================================
+  // Phone Transfer for Registration (account NOT yet created)
+  // ============================================================================
+
+  /**
+   * Initiate phone transfer for registration - account does NOT exist yet
+   * Sends SMS to verify phone ownership before creating the account
+   */
+  fastify.post('/phone-transfer/initiate-registration', {
+    schema: {
+      description: 'Initiate phone transfer during registration (account not created yet)',
+      tags: ['auth'],
+      summary: 'Initiate registration phone transfer',
+      body: {
+        type: 'object',
+        required: ['phoneNumber', 'pendingUsername', 'pendingEmail'],
+        properties: {
+          phoneNumber: { type: 'string', description: 'Phone number to transfer' },
+          phoneCountryCode: { type: 'string', description: 'ISO country code' },
+          pendingUsername: { type: 'string', description: 'Username for the pending registration' },
+          pendingEmail: { type: 'string', description: 'Email for the pending registration' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                transferId: { type: 'string', description: 'Transfer session ID' }
+              }
+            },
+            error: { type: 'string' }
+          }
+        },
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { phoneNumber, phoneCountryCode, pendingUsername, pendingEmail } = request.body as {
+        phoneNumber: string;
+        phoneCountryCode?: string;
+        pendingUsername: string;
+        pendingEmail: string;
+      };
+
+      // Normalize phone number
+      const { normalizePhoneWithCountry } = await import('../utils/normalize');
+      const normalized = normalizePhoneWithCountry(phoneNumber, phoneCountryCode || 'FR');
+
+      if (!normalized || !normalized.isValid) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Numéro de téléphone invalide'
+        });
+      }
+
+      const requestContext = await getRequestContext(request);
+
+      // Use a special "registration" flow where we don't have a newUserId yet
+      // We'll create a temporary session with pending registration data
+      const result = await phoneTransferService.initiateTransferForRegistration({
+        phoneNumber: normalized.phoneNumber,
+        phoneCountryCode: normalized.countryCode,
+        pendingUsername,
+        pendingEmail,
+        ipAddress: requestContext.ip,
+        userAgent: requestContext.userAgent || 'Unknown'
+      });
+
+      if (!result.success) {
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          transferId: result.transferId
+        }
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur initiate registration transfer:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de l\'initiation du transfert'
+      });
+    }
+  });
+
+  /**
+   * Verify SMS code for registration transfer
+   * Returns a transferToken to use when calling /register
+   */
+  fastify.post('/phone-transfer/verify-registration', {
+    schema: {
+      description: 'Verify SMS code for registration phone transfer',
+      tags: ['auth'],
+      summary: 'Verify registration phone transfer',
+      body: {
+        type: 'object',
+        required: ['transferId', 'code'],
+        properties: {
+          transferId: { type: 'string', description: 'Transfer session ID' },
+          code: { type: 'string', description: '6-digit SMS verification code' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                verified: { type: 'boolean', description: 'Whether verification succeeded' },
+                transferToken: { type: 'string', description: 'Token to use in /register call' }
+              }
+            },
+            error: { type: 'string' }
+          }
+        },
+        500: errorResponseSchema
+      },
+      security: []
+    },
+    preHandler: [phoneTransferCodeRateLimiter.middleware()]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { transferId, code } = request.body as { transferId: string; code: string };
+      const requestContext = await getRequestContext(request);
+
+      const result = await phoneTransferService.verifyForRegistration({
+        transferId,
+        code,
+        ipAddress: requestContext.ip
+      });
+
+      if (!result.success) {
+        return reply.status(400).send({
+          success: false,
+          error: result.error
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          verified: result.verified,
+          transferToken: result.transferToken
+        }
+      });
+    } catch (error) {
+      console.error('[AUTH] ❌ Erreur verify registration transfer:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la vérification'
       });
     }
   });

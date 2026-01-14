@@ -165,6 +165,8 @@ export interface NotificationItemProps {
   onRead?: (id: string) => void;
   onDelete?: (id: string) => void;
   onClick?: (notification: Notification) => void;
+  /** Callback after navigation occurs (e.g., to close dropdown) */
+  onAfterNavigation?: () => void;
   showActions?: boolean;
   compact?: boolean;
 }
@@ -176,6 +178,12 @@ export interface NotificationListProps {
   isLoading?: boolean;
   emptyMessage?: string;
   onNotificationClick?: (notification: Notification) => void;
+  /** Callback when a notification is marked as read */
+  onRead?: (notificationId: string) => void;
+  /** Callback when a notification is deleted */
+  onDelete?: (notificationId: string) => void;
+  /** Callback after navigation occurs */
+  onAfterNavigation?: () => void;
   /** Render in compact mode */
   compact?: boolean;
 }

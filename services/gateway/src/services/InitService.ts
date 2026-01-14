@@ -155,11 +155,13 @@ export class InitService {
         customDestinationLanguage
       };
 
-      const user = await this.authService.register(userData);
+      const result = await this.authService.register(userData);
 
-      if (!user) {
+      if (!result || !result.user) {
         throw new Error('Échec de la création de l\'utilisateur Bigboss');
       }
+
+      const user = result.user;
 
       // Mettre à jour le rôle vers BIGBOSS (fixe)
       await this.prisma.user.update({
@@ -232,15 +234,15 @@ export class InitService {
           customDestinationLanguage
         };
 
-        const user = await this.authService.register(userData);
+        const result = await this.authService.register(userData);
 
-        if (!user) {
+        if (!result || !result.user) {
           throw new Error('Échec de la création de l\'utilisateur Admin');
         }
 
         // Mettre à jour le rôle vers ADMIN (fixe)
         await this.prisma.user.update({
-          where: { id: user.id },
+          where: { id: result.user.id },
           data: { role: UserRoleEnum.ADMIN }
         });
       }
@@ -329,11 +331,13 @@ export class InitService {
         customDestinationLanguage
       };
 
-      const user = await this.authService.register(userData);
+      const result = await this.authService.register(userData);
 
-      if (!user) {
+      if (!result || !result.user) {
         throw new Error('Échec de la création de l\'utilisateur André Tabeth');
       }
+
+      const user = result.user;
 
       // Mettre à jour le rôle vers la valeur configurée
       await this.prisma.user.update({

@@ -11,6 +11,7 @@ export interface MagicLinkRequest {
 export interface MagicLinkValidation {
   token: string;
   deviceFingerprint?: string;
+  // rememberDevice is retrieved server-side for security
 }
 
 // Interface utilisateur Magic Link
@@ -113,8 +114,10 @@ class MagicLinkService {
 
   /**
    * Demande l'envoi d'un Magic Link par email
+   * @param email - User's email address
+   * @param rememberDevice - Whether to remember device for long session (stored server-side)
    */
-  async requestMagicLink(email: string): Promise<MagicLinkRequestResponse> {
+  async requestMagicLink(email: string, rememberDevice: boolean = false): Promise<MagicLinkRequestResponse> {
     try {
       const response = await fetch(buildApiUrl('/auth/magic-link/request'), {
         method: 'POST',
@@ -124,6 +127,7 @@ class MagicLinkService {
         body: JSON.stringify({
           email: email.toLowerCase().trim(),
           deviceFingerprint: this.getDeviceFingerprint(),
+          rememberDevice, // Stored server-side for security (not in sessionStorage)
         }),
       });
 
@@ -140,6 +144,8 @@ class MagicLinkService {
 
   /**
    * Valide un token Magic Link et authentifie l'utilisateur
+   * @param token - The magic link token
+   * Note: rememberDevice is retrieved from server-side storage (set during request)
    */
   async validateMagicLink(token: string): Promise<MagicLinkValidateResponse> {
     try {
@@ -151,6 +157,7 @@ class MagicLinkService {
         body: JSON.stringify({
           token,
           deviceFingerprint: this.getDeviceFingerprint(),
+          // rememberDevice is retrieved server-side for security
         }),
       });
 

@@ -15,6 +15,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { Check, X, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
+import { useBotProtection } from '@/hooks/use-bot-protection';
 
 interface RegisterFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -46,6 +47,11 @@ export function RegisterForm({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Bot protection
+  const { honeypotProps, validateSubmission } = useBotProtection({
+    minSubmitTime: 3000, // 3 seconds minimum for registration (more fields to fill)
+  });
 
   // État pour la validation du username
   const [usernameCheckStatus, setUsernameCheckStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
@@ -160,6 +166,13 @@ export function RegisterForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Bot protection validation
+    const { isHuman, botError } = validateSubmission();
+    if (!isHuman) {
+      toast.error(botError);
+      return;
+    }
 
     // Validation différente selon le mode
     if (linkId) {
@@ -347,6 +360,9 @@ export function RegisterForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col" autoComplete="off">
+      {/* Honeypot field - invisible to humans, bots will fill it */}
+      <input {...honeypotProps} />
+
       {/* Contenu des champs */}
       <div className="space-y-4 py-4">
         <div className="grid grid-cols-2 gap-4">

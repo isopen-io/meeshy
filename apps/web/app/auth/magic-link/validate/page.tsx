@@ -9,6 +9,8 @@ import { magicLinkService } from '@/services/magic-link.service';
 import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { CheckCircle, XCircle, Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
 
+// rememberDevice is now retrieved server-side for security (no more sessionStorage)
+
 // Composants inline légers
 const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
   <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 ${className}`}>
@@ -70,6 +72,8 @@ function MagicLinkValidateContent() {
       }
 
       try {
+        // rememberDevice is retrieved server-side from the magic link token
+        // This prevents client-side manipulation via sessionStorage
         const response = await magicLinkService.validateMagicLink(token);
 
         if (response.success && response.data) {

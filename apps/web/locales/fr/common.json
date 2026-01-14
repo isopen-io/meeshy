@@ -144,6 +144,16 @@
         "message": "Si vous pensez devoir avoir accès à cette ressource, essayez de vous connecter ou contactez l'administrateur."
       }
     },
+    "redirecting": "Redirection...",
+    "featureGate": {
+      "title": "Fonctionnalité temporairement indisponible",
+      "passwordResetDisabled": "La réinitialisation du mot de passe est temporairement indisponible. Veuillez contacter le support si vous avez besoin d'aide pour accéder à votre compte.",
+      "alternativeOptions": "Options alternatives :",
+      "contactSupport": "Contacter notre équipe de support",
+      "tryAgainLater": "Réessayer plus tard",
+      "checkAnnouncements": "Consulter nos annonces pour les mises à jour",
+      "backToHome": "Retour à l'accueil"
+    },
     "messages": {
       "messageSent": "Message envoyé !",
       "sendError": "Erreur lors de l'envoi du message",

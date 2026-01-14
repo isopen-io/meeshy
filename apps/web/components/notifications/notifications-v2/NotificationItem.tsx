@@ -32,6 +32,7 @@ export function NotificationItem({
   onRead,
   onDelete,
   onClick,
+  onAfterNavigation,
   showActions = true,
   compact = false
 }: NotificationItemProps) {
@@ -50,14 +51,19 @@ export function NotificationItem({
    * Gère le clic sur la notification
    */
   const handleClick = () => {
-    if (onClick) {
-      onClick(notification);
-    } else if (link) {
-      // Marquer comme lue avant la navigation
-      if (!notification.isRead && onRead) {
-        onRead(notification.id);
-      }
+    // Marquer comme lue si nécessaire
+    if (!notification.isRead && onRead) {
+      onRead(notification.id);
+    }
+
+    // Naviguer si un lien existe
+    if (link) {
       router.push(link);
+      // Fermer le dropdown après navigation
+      onAfterNavigation?.();
+    } else if (onClick) {
+      // Fallback pour les notifications sans lien
+      onClick(notification);
     }
   };
 

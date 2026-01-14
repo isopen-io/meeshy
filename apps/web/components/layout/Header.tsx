@@ -233,6 +233,27 @@ export function Header({
                   className="min-w-[150px]"
                 />
 
+                {/* Bouton de partage */}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const shareUrl = window.location.origin;
+                    const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'Meeshy',
+                        text: shareText,
+                        url: shareUrl
+                      }).catch(console.error);
+                    } else {
+                      navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                    }
+                  }}
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  {t('share')}
+                </Button>
+
                 <Link href="/login">
                   <Button variant="outline">
                     <LogIn className="h-4 w-4 mr-2" />
@@ -252,11 +273,11 @@ export function Header({
             {mode === 'default' && !user && (
               <>
                 {/* Sélecteur de langue pour les utilisateurs non connectés */}
-                <LanguageFlagSelector
+                <LanguageSelector
                   value={currentInterfaceLanguage}
                   onValueChange={handleLanguageChange}
                   interfaceOnly={true}
-                  showLanguageName={true}
+                  className="min-w-[150px]"
                 />
 
                 {/* Bouton de partage simple (sans affiliation) */}
@@ -264,7 +285,7 @@ export function Header({
                   variant="ghost"
                   onClick={() => {
                     const shareUrl = window.location.origin;
-                    const shareText = 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                    const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
                     if (navigator.share) {
                       navigator.share({
                         title: 'Meeshy',
@@ -465,6 +486,29 @@ export function Header({
                     </div>
                   </div>
 
+                  {/* Bouton de partage en mobile */}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      const shareUrl = window.location.origin;
+                      const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                      if (navigator.share) {
+                        navigator.share({
+                          title: 'Meeshy',
+                          text: shareText,
+                          url: shareUrl
+                        }).catch(console.error);
+                      } else {
+                        navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    {t('share')}
+                  </Button>
+
                   {anonymousChatLink && (
                     <Button
                       variant="outline"
@@ -502,15 +546,37 @@ export function Header({
                       <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('interfaceLanguage')}</span>
                     </div>
                     <div className="px-2">
-                      <LanguageFlagSelector
+                      <LanguageSelector
                         value={currentInterfaceLanguage}
                         onValueChange={handleLanguageChange}
                         interfaceOnly={true}
                         className="w-full"
-                        showLanguageName={true}
                       />
                     </div>
                   </div>
+
+                  {/* Bouton de partage en mobile */}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      const shareUrl = window.location.origin;
+                      const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                      if (navigator.share) {
+                        navigator.share({
+                          title: 'Meeshy',
+                          text: shareText,
+                          url: shareUrl
+                        }).catch(console.error);
+                      } else {
+                        navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+                      }
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    {t('share')}
+                  </Button>
 
                   <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
                     <Button variant="outline" className="w-full justify-start">

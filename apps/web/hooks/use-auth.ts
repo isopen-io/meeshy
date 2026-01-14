@@ -140,20 +140,40 @@ export function useAuth() {
       return;
     }
 
-    // Routes publiques (pas de vérification nécessaire)
-    const publicRoutes = ['/', '/login', '/signin', '/register', '/partners', '/privacy', '/contact', '/about', '/terms'];
+    // Routes publiques statiques (pas de vérification nécessaire)
+    const publicRoutes = [
+      '/',
+      '/login',
+      '/signin',
+      '/register',
+      '/partners',
+      '/privacy',
+      '/contact',
+      '/about',
+      '/terms',
+      '/forgot-password',
+      '/forgot-password/check-email',
+      '/reset-password',
+      '/auth-status'
+    ];
     const isPublicRoute = publicRoutes.includes(pathname);
 
+    // Routes d'authentification publiques (patterns dynamiques)
+    const isAuthRoute = pathname.startsWith('/auth/'); // /auth/verify-email, /auth/verify-phone, /auth/magic-link, /auth/verify-2fa, etc.
+
     // Routes de tracking (/l/[token]) - PUBLIQUES, accessibles à tous
-    const isTrackingRoute = pathname.startsWith('/l/');
+    const isTrackingRoute = pathname.startsWith('/l/') || pathname.startsWith('/links/tracked/');
+
+    // Routes d'affiliation (/signin/affiliate/[token]) - PUBLIQUES
+    const isAffiliateRoute = pathname.startsWith('/signin/affiliate/');
 
     // Routes de jointure (accessibles sans authentification)
     const isJoinRoute = pathname.startsWith('/join/');
-    
+
     // Routes de chat partagé (nécessitent une session active)
     const isSharedChatRoute = pathname.startsWith('/chat/');
-    
-    if (isPublicRoute) {
+
+    if (isPublicRoute || isAuthRoute || isAffiliateRoute) {
       // Route publique, pas de vérification
       devLog('[USE_AUTH] Route publique, pas de redirection automatique');
       return;
@@ -161,7 +181,7 @@ export function useAuth() {
 
     if (isTrackingRoute) {
       // Route de tracking, accessible à tous sans authentification
-      devLog('[USE_AUTH] Route de tracking /l/[token], pas de redirection');
+      devLog('[USE_AUTH] Route de tracking, pas de redirection');
       return;
     }
 

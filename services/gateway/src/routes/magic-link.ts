@@ -4,15 +4,17 @@ import { MagicLinkService } from '../services/MagicLinkService';
 import { RedisWrapper } from '../services/RedisWrapper';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
-import { SessionService } from '../services/SessionService';
+import { initSessionService, markSessionTrusted } from '../services/SessionService';
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
-  email: z.string().email('Invalid email address').max(255)
+  email: z.string().email('Invalid email address').max(255),
+  rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
 });
 
 const validateMagicLinkSchema = z.object({
   token: z.string().min(1, 'Token is required')
+  // rememberDevice is retrieved from server-side storage, not from client
 });
 
 export async function magicLinkRoutes(fastify: FastifyInstance) {
@@ -20,14 +22,15 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
   const redisWrapper = new RedisWrapper();
   const emailService = new EmailService();
   const geoIPService = new GeoIPService();
-  const sessionService = new SessionService(fastify.prisma);
+
+  // Initialize session service for the routes
+  initSessionService(fastify.prisma);
 
   const magicLinkService = new MagicLinkService(
     fastify.prisma,
     redisWrapper,
     emailService,
-    geoIPService,
-    sessionService
+    geoIPService
   );
 
   /**
@@ -48,6 +51,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             format: 'email',
             description: 'Email address associated with the account',
             example: 'user@example.com'
+          },
+          rememberDevice: {
+            type: 'boolean',
+            description: 'Remember device for long session (365 days). Stored server-side for security.',
+            default: false
           }
         }
       },
@@ -82,17 +90,18 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { email } = validationResult.data;
+      const { email, rememberDevice } = validationResult.data;
 
       // Get request context
       const requestContext = await getRequestContext(request);
 
-      // Request magic link
+      // Request magic link - rememberDevice is stored server-side with the token
       const result = await magicLinkService.requestMagicLink({
         email,
         ipAddress: requestContext.ip,
         userAgent: requestContext.userAgent,
-        deviceFingerprint: (request.body as any)?.deviceFingerprint
+        deviceFingerprint: (request.body as any)?.deviceFingerprint,
+        rememberDevice // Stored server-side for security
       });
 
       return reply.send(result);
@@ -224,6 +233,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             type: 'string',
             description: 'Magic link token from email'
           }
+          // rememberDevice is retrieved from server-side storage (set during request)
         }
       },
       response: {
@@ -285,6 +295,26 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Use rememberDevice from SERVER-SIDE storage (not from client request)
+      // This prevents client-side manipulation via sessionStorage
+      const rememberDevice = result.rememberDevice || false;
+
+      // If remember device is enabled, mark session as trusted (365 days)
+      if (rememberDevice && result.session?.id) {
+        const marked = await markSessionTrusted(result.session.id, {
+          userId: result.user?.id,
+          ipAddress: requestContext.ip,
+          userAgent: requestContext.userAgent,
+          source: 'magic_link'
+        });
+        if (!marked) {
+          console.warn('[MagicLink Route] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
+        }
+      }
+
+      // Calculate expiration time
+      const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60; // 365 days or 24 hours
+
       // Return success with user data
       return reply.send({
         success: true,
@@ -292,8 +322,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           user: result.user,
           token: result.token,
           sessionToken: result.sessionToken,
-          session: result.session,
-          expiresIn: 86400 // 24 hours
+          session: { ...result.session, isTrusted: rememberDevice },
+          expiresIn
         }
       });
 

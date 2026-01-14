@@ -43,6 +43,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
   const [isVerifying, setIsVerifying] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   const [tokenValid, setTokenValid] = useState(false);
+  const [showVerifiedBanner, setShowVerifiedBanner] = useState(true);
 
   // Verify token on mount
   useEffect(() => {
@@ -84,6 +85,16 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
 
     verifyToken();
   }, [token, setRequires2FA, t]);
+
+  // Auto-hide the verified banner after 3 seconds
+  useEffect(() => {
+    if (tokenValid && showVerifiedBanner) {
+      const timer = setTimeout(() => {
+        setShowVerifiedBanner(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [tokenValid, showVerifiedBanner]);
 
   const validateForm = (): boolean => {
     // Check password filled
@@ -231,13 +242,15 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
   // Show reset password form
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-6', className)}>
-      {/* Success banner (token verified) */}
-      <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-        <AlertDescription className="ml-2 text-green-700 dark:text-green-300">
-          {t('resetPassword.tokenVerified') || 'Reset link verified. Please enter your new password.'}
-        </AlertDescription>
-      </Alert>
+      {/* Success banner (token verified) - auto-hides after 3 seconds */}
+      {showVerifiedBanner && (
+        <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 animate-in fade-in duration-300">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="ml-2 text-green-700 dark:text-green-300">
+            {t('resetPassword.tokenVerified') || 'Identity verified. Please enter your new password.'}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* New Password */}
       <div className="space-y-2">

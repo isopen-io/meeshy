@@ -1,7 +1,7 @@
 # Makefile pour Meeshy - Développement Local et Docker
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
-.PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-network setup-hosts \
+.PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-secrets setup-network setup-hosts \
         _generate-certs _copy-certs-to-docker _ensure-docker-running _wait-docker-stable _docker-down-if-running _ensure-ports-free \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
@@ -55,6 +55,7 @@ COMPOSE_FILE := $(COMPOSE_DEV)
 COMPOSE_SCRIPTS := $(COMPOSE_DIR)/scripts
 CERTS_DIR := $(COMPOSE_DIR)/certs
 ENV_FILE := infrastructure/envs/.env.example
+SECRETS_FILE := infrastructure/envs/.env.secrets
 
 # OS Detection
 UNAME_S := $(shell uname -s 2>/dev/null || echo "Windows")
@@ -277,6 +278,25 @@ setup-env: ## 📝 Créer les fichiers .env pour le développement local
 		$(TRANSLATOR_DIR)/models
 	@echo "  $(GREEN)✓ Dossiers locaux créés$(NC)"
 
+setup-secrets: ## 🔐 Configurer le fichier de secrets (API keys, etc.)
+	@echo "$(BLUE)🔐 Configuration des secrets...$(NC)"
+	@if [ -f "$(SECRETS_FILE)" ]; then \
+		echo "  $(GREEN)✓ Fichier secrets existe déjà: $(SECRETS_FILE)$(NC)"; \
+		echo "  $(DIM)   Modifiez-le directement pour mettre à jour les clés$(NC)"; \
+	else \
+		cp infrastructure/envs/.env.secrets.example $(SECRETS_FILE); \
+		echo "  $(GREEN)✓ Fichier secrets créé: $(SECRETS_FILE)$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)📝 Éditez $(SECRETS_FILE) pour ajouter vos clés API:$(NC)"; \
+		echo "   - BREVO_API_KEY (email/SMS)"; \
+		echo "   - SENDGRID_API_KEY"; \
+		echo "   - TWILIO_* (SMS)"; \
+		echo "   - HCAPTCHA_* (captcha)"; \
+		echo "   - etc."; \
+		echo ""; \
+		echo "$(DIM)   Ce fichier est ignoré par git (vos secrets sont en sécurité)$(NC)"; \
+	fi
+
 _generate-backend-env: ## Generate backend .env (gateway + translator)
 	@echo "$(CYAN)Generating backend .env files...$(NC)"
 	@# Gateway .env
@@ -327,7 +347,7 @@ _generate-backend-env: ## Generate backend .env (gateway + translator)
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== EMAIL CONFIGURATION =====" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
-	@echo "EMAIL_FROM_NAME=Meeshy" >> $(GATEWAY_DIR)/.env
+	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_VERIFICATION_TOKEN_EXPIRY=86400" >> $(GATEWAY_DIR)/.env
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== EMAIL PROVIDERS (Multi-Provider with Fallback) =====" >> $(GATEWAY_DIR)/.env
@@ -1054,6 +1074,50 @@ _generate-env-local: ## Générer les fichiers .env pour le domaine local
 	@echo "PUBLIC_URL=https://gate.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@# Email config
+	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
+	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
+	@echo "BYPASS_CAPTCHA=true" >> $(GATEWAY_DIR)/.env
+	@# Load secrets from .env.secrets if exists (for _generate-env-local)
+	@if [ -f "$(SECRETS_FILE)" ]; then \
+		echo "  $(CYAN)🔐 Chargement des secrets depuis $(SECRETS_FILE)...$(NC)"; \
+		. $(SECRETS_FILE) 2>/dev/null; \
+		echo "# ===== SECRETS (from .env.secrets) =====" >> $(GATEWAY_DIR)/.env; \
+		echo "BREVO_API_KEY=$${BREVO_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "SENDGRID_API_KEY=$${SENDGRID_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "MAILGUN_API_KEY=$${MAILGUN_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "MAILGUN_DOMAIN=$${MAILGUN_DOMAIN:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_ACCOUNT_SID=$${TWILIO_ACCOUNT_SID:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_AUTH_TOKEN=$${TWILIO_AUTH_TOKEN:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_PHONE_NUMBER=$${TWILIO_PHONE_NUMBER:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "VONAGE_API_KEY=$${VONAGE_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "VONAGE_API_SECRET=$${VONAGE_API_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "HCAPTCHA_SECRET=$${HCAPTCHA_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "HCAPTCHA_SITE_KEY=$${HCAPTCHA_SITE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "GEOIP_LICENSE_KEY=$${GEOIP_LICENSE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TURN_SECRET=$${TURN_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_PROJECT_ID=$${FIREBASE_PROJECT_ID:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_CLIENT_EMAIL=$${FIREBASE_CLIENT_EMAIL:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_PRIVATE_KEY=$${FIREBASE_PRIVATE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_ADMIN_CREDENTIALS_PATH=$${FIREBASE_ADMIN_CREDENTIALS_PATH:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "# ===== ENCRYPTION =====" >> $(GATEWAY_DIR)/.env; \
+		echo "ATTACHMENT_MASTER_KEY=$${ATTACHMENT_MASTER_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "# ===== FIREBASE (Frontend) =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_API_KEY=$${NEXT_PUBLIC_FIREBASE_API_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_APP_ID=$${NEXT_PUBLIC_FIREBASE_APP_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_VAPID_KEY=$${NEXT_PUBLIC_FIREBASE_VAPID_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "# ===== CAPTCHA (Frontend) =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_HCAPTCHA_SITE_KEY=$${HCAPTCHA_SITE_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "# ===== FEATURE FLAGS =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_ENABLE_PASSWORD_RESET=$${NEXT_PUBLIC_ENABLE_PASSWORD_RESET:-true}" >> $(WEB_DIR)/.env; \
+	else \
+		echo "  $(YELLOW)⚠️  Pas de fichier secrets ($(SECRETS_FILE))$(NC)"; \
+		echo "  $(DIM)   Créez-le avec: cp infrastructure/envs/.env.secrets.example $(SECRETS_FILE)$(NC)"; \
+	fi
 	@# Translator .env
 	@echo "ENVIRONMENT=development" > $(TRANSLATOR_DIR)/.env
 	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(TRANSLATOR_DIR)/.env
@@ -1238,28 +1302,41 @@ setup-certs-network: ## 🔐 Générer certificats pour accès réseau (HOST=smp
 		echo "$(RED)❌ mkcert non installé. Installez-le avec: brew install mkcert$(NC)"; \
 		exit 1; \
 	fi
-	@mkcert -install 2>/dev/null || true
-	@mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR)
-	@echo "  $(YELLOW)Génération des certificats pour: localhost, $(HOST_IP), $(HOST), *.$(LOCAL_DOMAIN), smpdev02.local, smpdev02.home, meeshy$(NC)"
-	@cd $(WEB_DIR)/.cert && mkcert \
-		-key-file localhost-key.pem \
-		-cert-file localhost.pem \
-		localhost \
-		127.0.0.1 \
-		::1 \
-		$(HOST_IP) \
-		$(HOST) \
-		"*.$(LOCAL_DOMAIN)" \
-		$(LOCAL_DOMAIN) \
-		smpdev02.local \
-		"*.smpdev02.local" \
-		smpdev02.home \
-		"*.smpdev02.home" \
-		meeshy \
-		"*.meeshy"
-	@cp -f $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true
-	@cp -f $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true
-	@echo "  $(GREEN)✓ Certificats générés$(NC)"
+	@# Vérifier si les certificats existent déjà et contiennent le HOST actuel
+	@NEED_REGEN=0; \
+	if [ ! -f "$(WEB_DIR)/.cert/localhost.pem" ]; then \
+		echo "  $(YELLOW)→ Certificats non trouvés, génération nécessaire$(NC)"; \
+		NEED_REGEN=1; \
+	elif ! openssl x509 -in "$(WEB_DIR)/.cert/localhost.pem" -text -noout 2>/dev/null | grep -q "$(HOST)"; then \
+		echo "  $(YELLOW)→ Certificats existants ne contiennent pas $(HOST), régénération nécessaire$(NC)"; \
+		NEED_REGEN=1; \
+	else \
+		echo "  $(GREEN)✓ Certificats existants valides pour $(HOST)$(NC)"; \
+	fi; \
+	if [ $$NEED_REGEN -eq 1 ]; then \
+		mkcert -install 2>/dev/null || true; \
+		mkdir -p $(WEB_DIR)/.cert $(CERTS_DIR); \
+		echo "  $(YELLOW)Génération des certificats pour: localhost, $(HOST_IP), $(HOST), *.$(LOCAL_DOMAIN), smpdev02.local, smpdev02.home, meeshy$(NC)"; \
+		cd $(WEB_DIR)/.cert && mkcert \
+			-key-file localhost-key.pem \
+			-cert-file localhost.pem \
+			localhost \
+			127.0.0.1 \
+			::1 \
+			$(HOST_IP) \
+			$(HOST) \
+			"*.$(LOCAL_DOMAIN)" \
+			$(LOCAL_DOMAIN) \
+			smpdev02.local \
+			"*.smpdev02.local" \
+			smpdev02.home \
+			"*.smpdev02.home" \
+			meeshy \
+			"*.meeshy"; \
+		cp -f $(WEB_DIR)/.cert/localhost.pem $(CERTS_DIR)/cert.pem 2>/dev/null || true; \
+		cp -f $(WEB_DIR)/.cert/localhost-key.pem $(CERTS_DIR)/key.pem 2>/dev/null || true; \
+		echo "  $(GREEN)✓ Certificats générés$(NC)"; \
+	fi
 
 _generate-env-network:
 	@echo "$(BLUE)📝 Génération des fichiers .env pour le réseau...$(NC)"
@@ -1290,6 +1367,50 @@ _generate-env-network:
 	@echo "PUBLIC_URL=https://$(HOST):3000" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(HOST):3100" >> $(GATEWAY_DIR)/.env
 	@echo "CORS_ORIGINS=https://localhost:3100,https://$(HOST_IP):3100,https://$(HOST):3100,https://$(LOCAL_DOMAIN):3100" >> $(GATEWAY_DIR)/.env
+	@# Email config
+	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
+	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
+	@echo "BYPASS_CAPTCHA=true" >> $(GATEWAY_DIR)/.env
+	@# Load secrets from .env.secrets if exists (for _generate-env-network)
+	@if [ -f "$(SECRETS_FILE)" ]; then \
+		echo "  $(CYAN)🔐 Chargement des secrets depuis $(SECRETS_FILE)...$(NC)"; \
+		. $(SECRETS_FILE) 2>/dev/null; \
+		echo "# ===== SECRETS (from .env.secrets) =====" >> $(GATEWAY_DIR)/.env; \
+		echo "BREVO_API_KEY=$${BREVO_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "SENDGRID_API_KEY=$${SENDGRID_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "MAILGUN_API_KEY=$${MAILGUN_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "MAILGUN_DOMAIN=$${MAILGUN_DOMAIN:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_ACCOUNT_SID=$${TWILIO_ACCOUNT_SID:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_AUTH_TOKEN=$${TWILIO_AUTH_TOKEN:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TWILIO_PHONE_NUMBER=$${TWILIO_PHONE_NUMBER:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "VONAGE_API_KEY=$${VONAGE_API_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "VONAGE_API_SECRET=$${VONAGE_API_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "HCAPTCHA_SECRET=$${HCAPTCHA_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "HCAPTCHA_SITE_KEY=$${HCAPTCHA_SITE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "GEOIP_LICENSE_KEY=$${GEOIP_LICENSE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "TURN_SECRET=$${TURN_SECRET:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_PROJECT_ID=$${FIREBASE_PROJECT_ID:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_CLIENT_EMAIL=$${FIREBASE_CLIENT_EMAIL:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_PRIVATE_KEY=$${FIREBASE_PRIVATE_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "FIREBASE_ADMIN_CREDENTIALS_PATH=$${FIREBASE_ADMIN_CREDENTIALS_PATH:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "# ===== ENCRYPTION =====" >> $(GATEWAY_DIR)/.env; \
+		echo "ATTACHMENT_MASTER_KEY=$${ATTACHMENT_MASTER_KEY:-}" >> $(GATEWAY_DIR)/.env; \
+		echo "# ===== FIREBASE (Frontend) =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_API_KEY=$${NEXT_PUBLIC_FIREBASE_API_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_APP_ID=$${NEXT_PUBLIC_FIREBASE_APP_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_VAPID_KEY=$${NEXT_PUBLIC_FIREBASE_VAPID_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:-}" >> $(WEB_DIR)/.env; \
+		echo "# ===== CAPTCHA (Frontend) =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_HCAPTCHA_SITE_KEY=$${HCAPTCHA_SITE_KEY:-}" >> $(WEB_DIR)/.env; \
+		echo "# ===== FEATURE FLAGS =====" >> $(WEB_DIR)/.env; \
+		echo "NEXT_PUBLIC_ENABLE_PASSWORD_RESET=$${NEXT_PUBLIC_ENABLE_PASSWORD_RESET:-true}" >> $(WEB_DIR)/.env; \
+	else \
+		echo "  $(YELLOW)⚠️  Pas de fichier secrets ($(SECRETS_FILE))$(NC)"; \
+		echo "  $(DIM)   Créez-le avec: cp infrastructure/envs/.env.secrets.example $(SECRETS_FILE)$(NC)"; \
+	fi
 	@# Translator .env
 	@echo "ENVIRONMENT=development" > $(TRANSLATOR_DIR)/.env
 	@echo "DATABASE_URL=mongodb://localhost:27017/meeshy?replicaSet=rs0&directConnection=true" >> $(TRANSLATOR_DIR)/.env

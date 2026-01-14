@@ -144,6 +144,16 @@
         "message": "If you think you should have access to this resource, try logging in or contact the administrator."
       }
     },
+    "redirecting": "Redirecting...",
+    "featureGate": {
+      "title": "Feature Temporarily Unavailable",
+      "passwordResetDisabled": "Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.",
+      "alternativeOptions": "Alternative Options:",
+      "contactSupport": "Contact our support team",
+      "tryAgainLater": "Try again later",
+      "checkAnnouncements": "Check our announcements for updates",
+      "backToHome": "Back to Home"
+    },
     "messages": {
       "messageSent": "Message sent!",
       "sendError": "Error sending message",

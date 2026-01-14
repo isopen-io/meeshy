@@ -336,3 +336,251 @@ export function createCustomRateLimiter(
 ): RateLimiter {
   return new RateLimiter(config, redis);
 }
+
+// ============================================
+// AUTHENTICATION RATE LIMITERS
+// ============================================
+
+/**
+ * Rate limiter for login attempts
+ * 5 attempts per 15 minutes per IP to prevent brute force
+ */
+export function createLoginRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      keyPrefix: 'auth:login',
+      message: 'Trop de tentatives de connexion. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => {
+        // Use IP + partial email hash to prevent distributed attacks
+        const ip = request.ip || 'unknown';
+        const body = request.body as any;
+        const identifier = body?.username || body?.email || '';
+        return `ip:${ip}:${identifier.substring(0, 3)}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for registration attempts
+ * 3 attempts per hour per IP to prevent mass account creation
+ */
+export function createRegisterRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 60 * 60 * 1000, // 1 hour
+      keyPrefix: 'auth:register',
+      message: 'Trop de tentatives d\'inscription. Veuillez réessayer dans une heure.',
+      keyGenerator: (request) => {
+        return `ip:${request.ip || 'unknown'}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for password reset requests (short-term)
+ * 3 attempts per 30 minutes per IP/email to prevent rapid spam
+ */
+export function createPasswordResetRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 30 * 60 * 1000, // 30 minutes
+      keyPrefix: 'auth:password-reset',
+      message: 'Trop de demandes de réinitialisation. Veuillez réessayer dans 30 minutes.',
+      keyGenerator: (request) => {
+        const ip = request.ip || 'unknown';
+        const body = request.body as any;
+        const email = body?.email || '';
+        // Combine IP and email to limit both
+        return `ip:${ip}:email:${email.toLowerCase()}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for password reset email resend (daily limit)
+ * 3 resends per 24 hours per email to prevent email abuse
+ */
+export function createPasswordResetDailyRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 24 * 60 * 60 * 1000, // 24 hours
+      keyPrefix: 'auth:password-reset-daily',
+      message: 'Vous avez atteint la limite de 3 demandes de réinitialisation par jour. Veuillez réessayer demain.',
+      keyGenerator: (request) => {
+        const body = request.body as any;
+        const email = (body?.email || '').toLowerCase().trim();
+        // Key by email only to track daily limit per user
+        return `email:${email}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Global auth rate limiter for all auth endpoints
+ * 20 requests per minute per IP
+ */
+export function createAuthGlobalRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 20,
+      windowMs: 60 * 1000, // 1 minute
+      keyPrefix: 'auth:global',
+      message: 'Trop de requêtes d\'authentification. Veuillez patienter.',
+      keyGenerator: (request) => {
+        return `ip:${request.ip || 'unknown'}`;
+      }
+    },
+    redis
+  );
+}
+
+// ============================================
+// PHONE PASSWORD RESET RATE LIMITERS
+// ============================================
+
+/**
+ * Rate limiter for phone reset lookup
+ * 3 lookups per hour per IP to prevent phone number enumeration
+ */
+export function createPhoneResetLookupRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 60 * 60 * 1000, // 1 hour
+      keyPrefix: 'auth:phone-reset-lookup',
+      message: 'Trop de tentatives de recherche par téléphone. Veuillez réessayer dans une heure.',
+      keyGenerator: (request) => {
+        return `ip:${request.ip || 'unknown'}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for phone reset identity verification
+ * 3 attempts per 15 minutes per token
+ */
+export function createPhoneResetIdentityRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      keyPrefix: 'auth:phone-reset-identity',
+      message: 'Trop de tentatives de vérification d\'identité. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as any;
+        const tokenId = body?.tokenId || '';
+        return `token:${tokenId}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for phone reset code verification
+ * 5 attempts per 10 minutes per token
+ */
+export function createPhoneResetCodeRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 10 * 60 * 1000, // 10 minutes
+      keyPrefix: 'auth:phone-reset-code',
+      message: 'Trop de tentatives de code SMS. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as any;
+        const tokenId = body?.tokenId || '';
+        return `token:${tokenId}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for SMS code resend
+ * 1 resend per minute per token
+ */
+export function createPhoneResetResendRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 1,
+      windowMs: 60 * 1000, // 1 minute
+      keyPrefix: 'auth:phone-reset-resend',
+      message: 'Veuillez attendre avant de renvoyer un nouveau code SMS.',
+      keyGenerator: (request) => {
+        const body = request.body as any;
+        const tokenId = body?.tokenId || '';
+        return `token:${tokenId}`;
+      }
+    },
+    redis
+  );
+}
+
+// ============================================================================
+// Phone Transfer Rate Limiters (for registration phone transfer)
+// ============================================================================
+
+/**
+ * Rate limiter for phone transfer initiation
+ * Limit: 3 requests per hour per IP
+ */
+export function createPhoneTransferRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 3,
+      windowMs: 60 * 60 * 1000, // 1 hour
+      keyPrefix: 'auth:phone-transfer',
+      message: 'Trop de demandes de transfert de numéro. Veuillez réessayer plus tard.'
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for phone transfer code verification
+ * 5 attempts per 10 minutes per IP
+ */
+export function createPhoneTransferCodeRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 10 * 60 * 1000, // 10 minutes
+      keyPrefix: 'auth:phone-transfer-code',
+      message: 'Trop de tentatives de vérification. Veuillez réessayer dans 10 minutes.'
+    },
+    redis
+  );
+}
+
+/**
+ * Rate limiter for phone transfer SMS resend
+ * 1 request per minute per IP
+ */
+export function createPhoneTransferResendRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 1,
+      windowMs: 60 * 1000, // 1 minute
+      keyPrefix: 'auth:phone-transfer-resend',
+      message: 'Veuillez attendre avant de renvoyer un nouveau code.'
+    },
+    redis
+  );
+}
