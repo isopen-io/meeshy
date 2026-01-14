@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-DOCKER_IMAGE="${DOCKER_IMAGE:-isopen/meeshy-frontend}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-isopen/meeshy-web}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile.optimized}"
 

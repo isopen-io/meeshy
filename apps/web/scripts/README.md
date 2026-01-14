@@ -106,7 +106,7 @@ Actions:
 PUSH=false PLATFORMS=linux/arm64 ./scripts/docker-build-optimized.sh
 
 # Test
-docker run -p 3100:80 isopen/meeshy-frontend:latest
+docker run -p 3100:80 isopen/meeshy-web:latest
 ```
 
 ### Production (Multi-plateforme)
@@ -146,7 +146,7 @@ docker run -p 3100:80 isopen/meeshy-frontend:latest
 
 | Variable | Défaut | Description |
 |----------|--------|-------------|
-| `DOCKER_IMAGE` | `isopen/meeshy-frontend` | Nom de l'image |
+| `DOCKER_IMAGE` | `isopen/meeshy-web` | Nom de l'image |
 | `DOCKER_TAG` | `latest` | Tag de l'image |
 | `PLATFORMS` | `linux/arm64,linux/amd64` | Plateformes cibles |
 | `DOCKERFILE` | `Dockerfile.optimized` | Fichier Dockerfile |

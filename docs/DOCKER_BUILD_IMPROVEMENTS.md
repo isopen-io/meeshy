@@ -30,7 +30,7 @@ All Docker builds now include:
 #### Unified Tag Format
 All images now use `v` prefix:
 - `isopen/meeshy-gateway:v1.0.1`
-- `isopen/meeshy-frontend:v1.0.1`
+- `isopen/meeshy-web:v1.0.1`
 - `isopen/meeshy-translator:v1.0.2`
 
 #### New Targets

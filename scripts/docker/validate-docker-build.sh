@@ -296,14 +296,14 @@ main() {
     case "$target" in
         --all|all)
             validate_image "${DOCKER_REGISTRY}/meeshy-gateway:v${GATEWAY_VERSION}" "gateway"
-            validate_image "${DOCKER_REGISTRY}/meeshy-frontend:v${FRONTEND_VERSION}" "frontend"
+            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${FRONTEND_VERSION}" "frontend"
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"
             ;;
         gateway)
             validate_image "${DOCKER_REGISTRY}/meeshy-gateway:v${GATEWAY_VERSION}" "gateway"
             ;;
         frontend|web)
-            validate_image "${DOCKER_REGISTRY}/meeshy-frontend:v${FRONTEND_VERSION}" "frontend"
+            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${FRONTEND_VERSION}" "frontend"
             ;;
         translator)
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"

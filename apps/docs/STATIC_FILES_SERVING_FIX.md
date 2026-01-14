@@ -6,7 +6,7 @@ Les avatars uploadés en production sont bien stockés dans le conteneur fronten
 
 ```bash
 # Les fichiers existent
-docker exec meeshy-frontend ls -la /app/public/i/p/2025/10/
+docker exec meeshy-web ls -la /app/public/i/p/2025/10/
 # → avatar_1760877849690_827t7v.jpg ✅
 
 # Mais retournent 404
@@ -86,10 +86,10 @@ Gérer tous les uploads (avatars + attachments) via le gateway Fastify.
 cd frontend
 
 # Build de la nouvelle image avec la route API
-docker build --platform linux/amd64 -t isopen/meeshy-frontend:latest .
+docker build --platform linux/amd64 -t isopen/meeshy-web:latest .
 
 # Push sur Docker Hub
-docker push isopen/meeshy-frontend:latest
+docker push isopen/meeshy-web:latest
 ```
 
 ### 2. Déploiement en production
@@ -189,10 +189,10 @@ Pour améliorer les performances à long terme :
 cd frontend
 
 # Build local
-docker build -t meeshy-frontend-test .
+docker build -t meeshy-web-test .
 
 # Lancer en local
-docker run -p 3100:80 -v $(pwd)/public/i:/app/public/i meeshy-frontend-test
+docker run -p 3100:80 -v $(pwd)/public/i:/app/public/i meeshy-web-test
 
 # Tester
 curl -I http://localhost:3100/i/p/2025/10/test.jpg
@@ -215,7 +215,7 @@ ab -n 1000 -c 10 https://meeshy.me/_next/static/...
 Les erreurs sont loggées dans les logs Next.js :
 
 ```bash
-docker logs meeshy-frontend 2>&1 | grep "Error serving static file"
+docker logs meeshy-web 2>&1 | grep "Error serving static file"
 ```
 
 ### Métriques à surveiller
@@ -234,7 +234,7 @@ cd /opt/meeshy
 
 # Revenir à l'image précédente
 docker compose -f docker-compose.traefik.yml down frontend
-docker pull isopen/meeshy-frontend:previous-tag
+docker pull isopen/meeshy-web:previous-tag
 docker compose -f docker-compose.traefik.yml up -d frontend
 ```
 

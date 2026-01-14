@@ -411,7 +411,7 @@ DOCKER_BUILDKIT=1
 DOCKER_DEFAULT_PLATFORM=linux/amd64
 TRANSLATOR_IMAGE=isopen/meeshy-translator:latest
 GATEWAY_IMAGE=isopen/meeshy-gateway:latest
-FRONTEND_IMAGE=isopen/meeshy-frontend:latest
+FRONTEND_IMAGE=isopen/meeshy-web:latest
 
 # ===== PERFORMANCE OPTIMIZATION =====
 PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256

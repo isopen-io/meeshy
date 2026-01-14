@@ -54,8 +54,8 @@ Sans volume Docker persistant :
 
 ```yaml
 frontend:
-  image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
-  container_name: meeshy-frontend
+  image: ${FRONTEND_IMAGE:-isopen/meeshy-web:latest}
+  container_name: meeshy-web
   restart: unless-stopped
   # ... autres configurations ...
   volumes:
@@ -117,7 +117,7 @@ docker compose -f docker-compose.traefik.yml stop frontend
 docker compose -f docker-compose.traefik.yml up -d frontend
 
 # Vérifier que le volume est bien monté
-docker inspect meeshy-frontend | grep -A 5 Mounts
+docker inspect meeshy-web | grep -A 5 Mounts
 ```
 
 Résultat attendu :
@@ -139,8 +139,8 @@ Si des avatars existent déjà dans le conteneur frontend avant la mise en place
 
 ```bash
 # Copier les avatars existants vers le volume
-docker exec meeshy-frontend sh -c "cp -r /app/public/i/* /tmp/"
-docker cp meeshy-frontend:/tmp/. /var/lib/docker/volumes/meeshy_frontend_uploads/_data/
+docker exec meeshy-web sh -c "cp -r /app/public/i/* /tmp/"
+docker cp meeshy-web:/tmp/. /var/lib/docker/volumes/meeshy_frontend_uploads/_data/
 
 # Ou depuis un backup local
 docker cp frontend/public/i/. root@157.230.15.51:/var/lib/docker/volumes/meeshy_frontend_uploads/_data/
@@ -150,13 +150,13 @@ docker cp frontend/public/i/. root@157.230.15.51:/var/lib/docker/volumes/meeshy_
 
 ```bash
 # 1. Vérifier qu'un avatar existe
-docker exec meeshy-frontend ls -lh /app/public/i/p/2025/10/
+docker exec meeshy-web ls -lh /app/public/i/p/2025/10/
 
 # 2. Redémarrer le conteneur
 docker compose -f docker-compose.traefik.yml restart frontend
 
 # 3. Vérifier que l'avatar est toujours présent
-docker exec meeshy-frontend ls -lh /app/public/i/p/2025/10/
+docker exec meeshy-web ls -lh /app/public/i/p/2025/10/
 
 # 4. Tester l'accès via l'URL
 curl -I https://meeshy.me/i/p/2025/10/avatar_XXXXXX.jpg
@@ -175,7 +175,7 @@ docker volume ls | grep frontend_uploads
 ### 2. Vérifier les permissions
 
 ```bash
-docker exec meeshy-frontend ls -ld /app/public/i
+docker exec meeshy-web ls -ld /app/public/i
 # Devrait afficher: drwxr-xr-x avec owner node ou root
 ```
 
@@ -252,7 +252,7 @@ Une amélioration future pourrait centraliser tous les uploads (avatars et attac
 - [ ] Modifier `docker-compose.traefik.yml` (ajout du volume frontend_uploads)
 - [ ] Déployer sur le serveur de production
 - [ ] Recréer le service frontend avec `docker compose up -d frontend`
-- [ ] Vérifier que le volume est monté : `docker inspect meeshy-frontend`
+- [ ] Vérifier que le volume est monté : `docker inspect meeshy-web`
 - [ ] Migrer les avatars existants si nécessaire
 - [ ] Tester l'upload d'un nouvel avatar
 - [ ] Tester la persistance après redémarrage

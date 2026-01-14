@@ -251,7 +251,7 @@ services:
   # FRONTEND - Next.js (profile: full)
   # ===========================================================================
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:latest}
     container_name: meeshy-dev-frontend
     restart: unless-stopped
     profiles: ["full"]

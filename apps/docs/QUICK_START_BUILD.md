@@ -73,10 +73,10 @@ cd frontend
 PUSH=false PLATFORMS=linux/arm64 ./scripts/docker-build-optimized.sh
 
 # Test de l'image
-docker run -p 3100:80 isopen/meeshy-frontend:latest
+docker run -p 3100:80 isopen/meeshy-web:latest
 
 # Si OK, push manuellement
-docker push isopen/meeshy-frontend:latest
+docker push isopen/meeshy-web:latest
 ```
 
 ## 📊 Commandes NPM/PNPM
@@ -179,7 +179,7 @@ pnpm run docker:build
 ```bash
 docker logout
 docker login
-# Vérifiez que vous avez les droits sur isopen/meeshy-frontend
+# Vérifiez que vous avez les droits sur isopen/meeshy-web
 ```
 
 ### Erreur "failed to solve with frontend dockerfile.v0"?
@@ -214,10 +214,10 @@ PUSH=false PLATFORMS=linux/arm64 ./scripts/docker-build-optimized.sh
 PUSH=false ./scripts/docker-build-optimized.sh
 
 # Tester
-docker run -p 3100:80 isopen/meeshy-frontend:latest
+docker run -p 3100:80 isopen/meeshy-web:latest
 
 # Si OK, push
-docker push isopen/meeshy-frontend:latest
+docker push isopen/meeshy-web:latest
 ```
 
 ### Utiliser un tag spécifique

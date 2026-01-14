@@ -241,8 +241,8 @@ pnpm run build  # ✅ Compilation réussie
 cd frontend
 docker buildx build --platform linux/arm64,linux/amd64 \
   --progress=plain \
-  -t isopen/meeshy-frontend:v1.8.6 \
-  -t isopen/meeshy-frontend:latest \
+  -t isopen/meeshy-web:v1.8.6 \
+  -t isopen/meeshy-web:latest \
   . --push --no-cache
 ```
 

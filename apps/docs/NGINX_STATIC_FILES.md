@@ -263,7 +263,7 @@ docker exec meeshy-static-files sh -c 'echo > /var/log/nginx/error.log'
 
 ```bash
 # 1. Vérifier que le fichier existe
-docker exec meeshy-frontend ls -la /app/public/i/p/2025/10/avatar_xxx.jpg
+docker exec meeshy-web ls -la /app/public/i/p/2025/10/avatar_xxx.jpg
 
 # 2. Vérifier que le volume est monté
 docker inspect meeshy-static-files | grep Mounts -A 10

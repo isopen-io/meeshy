@@ -216,7 +216,7 @@ echo -e "${YELLOW}🚀 ÉTAPE 5/5: BUILD DE L'IMAGE${NC}"
 echo -e "${BLUE}═════════════════════════════════════════════════${NC}\n"
 
 # Configuration
-DOCKER_IMAGE="${DOCKER_IMAGE:-isopen/meeshy-frontend}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-isopen/meeshy-web}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 PLATFORMS="${PLATFORMS:-linux/arm64,linux/amd64}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile.optimized}"

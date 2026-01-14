@@ -2,39 +2,39 @@
   "engine": "chatterbox",
   "reference": {
     "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/original_voice.wav",
-    "text": "Bonjour, je teste le clonage",
+    "text": "Bonjour, ma voicière maintenant de référence et je parle à tout le temps, puis plus vite et je marque une pause. Aujourd'hui nous sommes le 15 janvier de 1026, il est 12h, je lis des chiffres 1, 2, 10, 20.",
     "language": "fr",
-    "pitch_hz": 73.94556728256975
+    "pitch_hz": 90.86494447659544
   },
   "settings": {
-    "exaggeration": 0.5,
+    "exaggeration": 0.4,
     "cfg_weight": 0.3
   },
-  "total_time": 87.95562386512756,
+  "total_time": 189.56061220169067,
   "translations": {
     "en": {
-      "text": "Hello, I am testing cloning",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_en.wav",
-      "similarity": 0.8794801516235093,
-      "time": 21.379674911499023
+      "text": "Hello, my now reference here and I talk to all the time, then faster and I pause. Today is January 15, 1026, it's 12 p.m., I read numbers 1, 2, 10, 20.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_en.wav",
+      "similarity": 0.9552790936235771,
+      "time": 53.631940841674805
     },
     "de": {
-      "text": "Hallo, ich teste das Klonen",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_de.wav",
-      "similarity": 0.9109240379321647,
-      "time": 49.33961319923401
+      "text": "Hallo, ich verweise jetzt hier und ich rede die ganze Zeit, dann schneller und ich mache eine Pause. Heute ist der 15. Januar 1026, es ist 12 Uhr, ich lese die Nummern 1, 2, 10, 20.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_de.wav",
+      "similarity": 0.9205174222550153,
+      "time": 125.78849625587463
     },
     "es": {
-      "text": "Hola, estoy probando la clonación.",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_es.wav",
-      "similarity": 0.8864809516325307,
-      "time": 40.60531401634216
+      "text": "Hola, mi referencia ahora aquí y hablo todo el tiempo, luego más rápido y hago una pausa. Hoy es 15 de enero de 1026, son las 12 de la noche, leo los números 1, 2, 10, 20.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_es.wav",
+      "similarity": 0.9714136069056496,
+      "time": 100.87981104850769
     },
     "it": {
-      "text": "Ciao, sto testando la clonazione",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/cloned_it.wav",
-      "similarity": 0.8548427839614605,
-      "time": 37.224852085113525
+      "text": "Ciao, il mio riferimento ora è qui e parlo continuamente, poi più velocemente e mi fermo. Oggi è il 15 gennaio 1026, sono le 12, leggo i numeri 1, 2, 10, 20.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_it.wav",
+      "similarity": 0.9224957166257068,
+      "time": 60.31873106956482
     }
   }
 }

@@ -870,6 +870,8 @@ generate: ## Générer les clients Prisma (JS + Python) et builder shared
 
 build: ## Builder tous les services (TypeScript)
 	@echo "$(BLUE)🔨 Build de tous les services...$(NC)"
+	@echo "  → Prisma generate..."
+	@cd $(SHARED_DIR) && npx prisma generate 2>/dev/null || true
 	@echo "  → Shared..."
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run build 2>/dev/null || true
 	@echo "  → Gateway..."
@@ -1997,14 +1999,14 @@ build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator 
 	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-frontend: _prepare-docker-build ## Builder l'image Frontend
-	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION))...$(NC)"
+	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION))...$(NC)"
 	@docker build \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg VCS_REF="$(VCS_REF)" \
 		--build-arg VERSION="$(FRONTEND_VERSION)" \
 		--build-arg PACKAGE_MANAGER=bun \
-		-t $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) \
-		-t $(DOCKER_REGISTRY)/meeshy-frontend:latest \
+		-t $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) \
+		-t $(DOCKER_REGISTRY)/meeshy-web:latest \
 		-f $(INFRA_DIR)/docker/images/web/Dockerfile .
 	@echo "$(GREEN)✅ Image Frontend buildée: v$(FRONTEND_VERSION)$(NC)"
 
@@ -2037,8 +2039,8 @@ push-translator: ## Push l'image Translator vers Docker Hub
 
 push-frontend: ## Push l'image Frontend vers Docker Hub
 	@echo "$(BLUE)📤 Push de l'image Frontend v$(FRONTEND_VERSION)...$(NC)"
-	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION)
-	@docker push $(DOCKER_REGISTRY)/meeshy-frontend:latest
+	@docker push $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION)
+	@docker push $(DOCKER_REGISTRY)/meeshy-web:latest
 	@echo "$(GREEN)✅ Frontend pushée: v$(FRONTEND_VERSION)$(NC)"
 
 push-all: push-gateway push-translator push-frontend ## Push toutes les images vers Docker Hub
@@ -2046,7 +2048,7 @@ push-all: push-gateway push-translator push-frontend ## Push toutes les images v
 	@echo "$(GREEN)✅ Toutes les images pushées vers $(DOCKER_REGISTRY)$(NC)"
 	@echo "   - $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION)"
 	@echo "   - $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)"
-	@echo "   - $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION)"
 
 # Build + Push en une commande
 release: build-all-docker push-all ## Builder et pusher toutes les images
@@ -2068,7 +2070,7 @@ security-scan: ## Scanner les vulnérabilités des images Docker
 	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) || true
 	@echo ""
 	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
-	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) || true
+	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) || true
 	@echo ""
 	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
 	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) || true
@@ -2080,7 +2082,7 @@ validate-images: ## Valider les labels et métadonnées des images (rapide)
 	@docker inspect $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
 	@echo ""
 	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
-	@docker inspect $(DOCKER_REGISTRY)/meeshy-frontend:v$(FRONTEND_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
+	@docker inspect $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
 	@echo ""
 	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
 	@docker inspect $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
