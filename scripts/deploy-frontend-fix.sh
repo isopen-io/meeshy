@@ -20,7 +20,7 @@ echo ""
 echo "🔨 Build de l'image frontend..."
 cd "$PROJECT_ROOT/frontend"
 
-docker build --platform linux/amd64 -t isopen/meeshy-frontend:latest .
+docker build --platform linux/amd64 -t isopen/meeshy-web:latest .
 
 if [ $? -ne 0 ]; then
     echo "❌ Erreur lors du build de l'image"
@@ -32,7 +32,7 @@ echo ""
 
 # 2. Push sur Docker Hub
 echo "📤 Push de l'image sur Docker Hub..."
-docker push isopen/meeshy-frontend:latest
+docker push isopen/meeshy-web:latest
 
 if [ $? -ne 0 ]; then
     echo "❌ Erreur lors du push de l'image"
@@ -57,7 +57,7 @@ echo "⏳ Attente du démarrage (20 secondes)..."
 sleep 20
 
 echo "🔍 Vérification du statut..."
-docker ps | grep meeshy-frontend
+docker ps | grep meeshy-web
 
 echo "✅ Déploiement terminé"
 ENDSSH

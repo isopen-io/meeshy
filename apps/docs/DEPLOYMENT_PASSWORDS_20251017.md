@@ -39,7 +39,7 @@ meeshy-database      Up (healthy)
 meeshy-redis         Up (healthy)
 meeshy-gateway       Up (healthy)
 meeshy-translator    Up (healthy)
-meeshy-frontend      Up (healthy)
+meeshy-web      Up (healthy)
 meeshy-nosqlclient   Up (healthy)
 meeshy-p3x-redis-ui  Up (unhealthy - normal, interface Redis)
 ```

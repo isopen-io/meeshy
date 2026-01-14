@@ -115,7 +115,7 @@ check_health() {
     cd "$PROJECT_DIR"
     
     # Vérifier les conteneurs
-    local containers=("meeshy-traefik" "meeshy-database" "meeshy-redis" "meeshy-translator" "meeshy-gateway" "meeshy-frontend")
+    local containers=("meeshy-traefik" "meeshy-database" "meeshy-redis" "meeshy-translator" "meeshy-gateway" "meeshy-web")
     local healthy_containers=0
     local total_containers=${#containers[@]}
     
@@ -207,7 +207,7 @@ export_status_json() {
 EOF
 
     # Ajouter les informations des conteneurs
-    local containers=("meeshy-traefik" "meeshy-database" "meeshy-redis" "meeshy-translator" "meeshy-gateway" "meeshy-frontend")
+    local containers=("meeshy-traefik" "meeshy-database" "meeshy-redis" "meeshy-translator" "meeshy-gateway" "meeshy-web")
     local first=true
     
     for container in "${containers[@]}"; do

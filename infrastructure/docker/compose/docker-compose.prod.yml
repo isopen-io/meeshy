@@ -328,8 +328,8 @@ services:
   # FRONTEND - Next.js (meeshy.me)
   # ===========================================================================
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
-    container_name: meeshy-frontend
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:latest}
+    container_name: meeshy-web
     restart: unless-stopped
     environment:
       - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-meeshy.me}
@@ -383,7 +383,7 @@ volumes:
   gateway_uploads:
     name: meeshy-gateway-uploads
   frontend_uploads:
-    name: meeshy-frontend-uploads
+    name: meeshy-web-uploads
 
 # =============================================================================
 # NETWORKS

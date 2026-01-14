@@ -380,7 +380,7 @@ services:
   # FRONTEND - Next.js (meeshy.local) [profile: full]
   # ===========================================================================
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:latest}
     container_name: meeshy-local-frontend
     restart: unless-stopped
     profiles: ["full"]

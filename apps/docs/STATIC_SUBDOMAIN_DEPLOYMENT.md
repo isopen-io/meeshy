@@ -83,10 +83,10 @@ dig static.meeshy.me +short
 cd /Users/smpceo/Documents/Services/Meeshy/meeshy/frontend
 
 # Build de la nouvelle image
-docker build --platform linux/amd64 -t isopen/meeshy-frontend:latest .
+docker build --platform linux/amd64 -t isopen/meeshy-web:latest .
 
 # Push sur Docker Hub
-docker push isopen/meeshy-frontend:latest
+docker push isopen/meeshy-web:latest
 
 # Déploiement en production
 ssh root@157.230.15.51
@@ -152,7 +152,7 @@ Si vous voulez migrer les anciens avatars vers le nouveau format :
 ssh root@157.230.15.51
 
 # Se connecter au conteneur frontend
-docker exec -it meeshy-frontend sh
+docker exec -it meeshy-web sh
 
 # Déplacer les fichiers
 cd /app/public/i
@@ -212,7 +212,7 @@ ssh root@157.230.15.51 'docker inspect meeshy-static-files | grep -A 3 Health'
 ssh root@157.230.15.51 'docker system df -v | grep frontend_uploads'
 
 # Nombre de fichiers
-ssh root@157.230.15.51 'docker exec meeshy-frontend find /app/public/i -type f | wc -l'
+ssh root@157.230.15.51 'docker exec meeshy-web find /app/public/i -type f | wc -l'
 ```
 
 ## Rollback (si nécessaire)

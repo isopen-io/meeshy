@@ -31,7 +31,46 @@
           "timestamp": "2026-01-13T11:41:48.583553"
         }
       }
+    },
+    {
+      "id": "20260114_102536_fr",
+      "timestamp": "20260114_102536",
+      "source_lang": "fr",
+      "reference": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_102536_fr/reference.wav",
+      "translations": {}
+    },
+    {
+      "id": "20260114_121224_fr",
+      "timestamp": "20260114_121224",
+      "source_lang": "fr",
+      "reference": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/reference.wav",
+      "translations": {
+        "en": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_en.wav",
+          "text": "Hello, my now reference here and I talk to all the time, then faster and I pause. Today is January 15, 1026, it's 12 p.m., I read numbers 1, 2, 10, 20.",
+          "similarity": 0.9552790936235771,
+          "timestamp": "2026-01-14T12:13:23.992583"
+        },
+        "de": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_de.wav",
+          "text": "Hallo, ich verweise jetzt hier und ich rede die ganze Zeit, dann schneller und ich mache eine Pause. Heute ist der 15. Januar 1026, es ist 12 Uhr, ich lese die Nummern 1, 2, 10, 20.",
+          "similarity": 0.9205174222550153,
+          "timestamp": "2026-01-14T12:14:36.214490"
+        },
+        "es": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_es.wav",
+          "text": "Hola, mi referencia ahora aquí y hablo todo el tiempo, luego más rápido y hago una pausa. Hoy es 15 de enero de 1026, son las 12 de la noche, leo los números 1, 2, 10, 20.",
+          "similarity": 0.9714136069056496,
+          "timestamp": "2026-01-14T12:15:06.510773"
+        },
+        "it": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_it.wav",
+          "text": "Ciao, il mio riferimento ora è qui e parlo continuamente, poi più velocemente e mi fermo. Oggi è il 15 gennaio 1026, sono le 12, leggo i numeri 1, 2, 10, 20.",
+          "similarity": 0.9224957166257068,
+          "timestamp": "2026-01-14T12:15:38.172579"
+        }
+      }
     }
   ],
-  "latest_voice": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260113_114018_fr/reference.wav"
+  "latest_voice": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/reference.wav"
 }

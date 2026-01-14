@@ -310,7 +310,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: meeshy-frontend
+    container_name: meeshy-web
     restart: unless-stopped
     ports:
       - '3000:3000'

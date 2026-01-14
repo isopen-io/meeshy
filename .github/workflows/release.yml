@@ -123,7 +123,7 @@ jobs:
           - service: web
             context: .
             dockerfile: ./infrastructure/docker/images/web/Dockerfile
-            image: meeshy-frontend
+            image: meeshy-web
           - service: gateway
             context: .
             dockerfile: ./infrastructure/docker/images/gateway/Dockerfile
@@ -193,7 +193,7 @@ jobs:
             ### Docker Images
 
             ```bash
-            docker pull isopen/meeshy-frontend:${{ needs.version.outputs.tag }}
+            docker pull isopen/meeshy-web:${{ needs.version.outputs.tag }}
             docker pull isopen/meeshy-gateway:${{ needs.version.outputs.tag }}
             docker pull isopen/meeshy-translator:${{ needs.version.outputs.tag }}
             ```

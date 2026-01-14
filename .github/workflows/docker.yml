@@ -154,7 +154,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && MATRIX+=','
-            MATRIX+='{"service":"web","context":".","dockerfile":"./infrastructure/docker/images/web/Dockerfile","image":"meeshy-frontend","version":"'$VERSION'"}'
+            MATRIX+='{"service":"web","context":".","dockerfile":"./infrastructure/docker/images/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
             FIRST=false
           fi
 
