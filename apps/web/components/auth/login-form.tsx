@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { useBotProtection } from '@/hooks/use-bot-protection';
+import { useAuthFormStore } from '@/stores/auth-form-store';
 
 interface LoginFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -24,6 +25,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const { login } = useAuth();
   const { t } = useI18n('auth');
   const { isPasswordResetConfigured } = useFeatureFlags();
+  const { identifier, setIdentifier } = useAuthFormStore();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -32,6 +34,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Initialize username from shared store
+  useEffect(() => {
+    if (identifier && !formData.username) {
+      setFormData(prev => ({ ...prev, username: identifier }));
+    }
+  }, [identifier]);
+
+  // Save username to store when it changes
+  const handleUsernameChange = (value: string) => {
+    setFormData({ ...formData, username: value });
+    setIdentifier(value);
+  };
 
   // Bot protection
   const { honeypotProps, validateSubmission } = useBotProtection({
@@ -208,7 +223,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           type="text"
           placeholder="Pseudonyme ou numéro de téléphone"
           value={formData.username}
-          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+          onChange={(e) => handleUsernameChange(e.target.value)}
           disabled={isLoading}
           required
           className="pl-10 h-11"

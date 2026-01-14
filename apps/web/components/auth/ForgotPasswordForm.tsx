@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { passwordResetService } from '@/services/password-reset.service';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
+import { useAuthFormStore } from '@/stores/auth-form-store';
 import { useI18n } from '@/hooks/useI18n';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { toast } from 'sonner';
@@ -32,9 +33,25 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
     setIsRequestingReset,
   } = usePasswordResetStore();
 
-  const [email, setEmail] = useState(storedEmail || '');
+  // Get shared identifier from login/register forms
+  const { identifier: sharedIdentifier, setIdentifier } = useAuthFormStore();
+
+  // Initialize email from stored email or shared identifier (if it looks like an email)
+  const getInitialEmail = () => {
+    if (storedEmail) return storedEmail;
+    if (sharedIdentifier && sharedIdentifier.includes('@')) return sharedIdentifier;
+    return '';
+  };
+
+  const [email, setEmail] = useState(getInitialEmail());
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Sync email changes to shared store
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    setIdentifier(value);
+  };
 
   // Bot protection (replaces hCaptcha)
   const { honeypotProps, validateSubmission, reset: resetBotProtection } = useBotProtection({
@@ -129,7 +146,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
           type="email"
           placeholder={t('forgotPassword.emailPlaceholder') || 'your.email@example.com'}
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => handleEmailChange(e.target.value)}
           disabled={isLoading}
           required
           autoComplete="email"
