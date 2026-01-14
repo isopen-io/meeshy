@@ -2,39 +2,39 @@
   "engine": "chatterbox",
   "reference": {
     "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/original_voice.wav",
-    "text": "Bonjour, ma voicière maintenant de référence et je parle à tout le temps, puis plus vite et je marque une pause. Aujourd'hui nous sommes le 15 janvier de 1026, il est 12h, je lis des chiffres 1, 2, 10, 20.",
+    "text": "Bonjour je m'appelle Léon Siopage, j'ai 24 ans. Je suis originaire de Lyon, je fais de l'informatique. Et je ne me sais pas.",
     "language": "fr",
-    "pitch_hz": 90.86494447659544
+    "pitch_hz": 87.53143176763366
   },
   "settings": {
-    "exaggeration": 0.4,
+    "exaggeration": 0.1,
     "cfg_weight": 0.3
   },
-  "total_time": 189.56061220169067,
+  "total_time": 175.00926113128662,
   "translations": {
     "en": {
-      "text": "Hello, my now reference here and I talk to all the time, then faster and I pause. Today is January 15, 1026, it's 12 p.m., I read numbers 1, 2, 10, 20.",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_en.wav",
-      "similarity": 0.9552790936235771,
-      "time": 53.631940841674805
+      "text": "Hello, my name is Léon Siopage, I am 24 years old. I am originally from Lyon, I work in IT. And I don't know myself.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_en.wav",
+      "similarity": 0.971554909164511,
+      "time": 68.98856806755066
     },
     "de": {
-      "text": "Hallo, ich verweise jetzt hier und ich rede die ganze Zeit, dann schneller und ich mache eine Pause. Heute ist der 15. Januar 1026, es ist 12 Uhr, ich lese die Nummern 1, 2, 10, 20.",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_de.wav",
-      "similarity": 0.9205174222550153,
-      "time": 125.78849625587463
+      "text": "Hallo, mein Name ist Léon Siopage, ich bin 24 Jahre alt. Ich komme ursprünglich aus Lyon und arbeite in der IT. Und ich weiß es selbst nicht.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_de.wav",
+      "similarity": 0.9233628799302089,
+      "time": 128.35161018371582
     },
     "es": {
-      "text": "Hola, mi referencia ahora aquí y hablo todo el tiempo, luego más rápido y hago una pausa. Hoy es 15 de enero de 1026, son las 12 de la noche, leo los números 1, 2, 10, 20.",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_es.wav",
-      "similarity": 0.9714136069056496,
-      "time": 100.87981104850769
+      "text": "Hola, mi nombre es Léon Siopage, tengo 24 años. Soy originaria de Lyon, trabajo en TI. Y yo mismo no lo sé.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_es.wav",
+      "similarity": 0.9709672711881752,
+      "time": 76.52672719955444
     },
     "it": {
-      "text": "Ciao, il mio riferimento ora è qui e parlo continuamente, poi più velocemente e mi fermo. Oggi è il 15 gennaio 1026, sono le 12, leggo i numeri 1, 2, 10, 20.",
-      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/cloned_it.wav",
-      "similarity": 0.9224957166257068,
-      "time": 60.31873106956482
+      "text": "Ciao, mi chiamo Léon Siopage, ho 24 anni. Sono originario di Lione, lavoro nel settore informatico. E non conosco me stesso.",
+      "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_it.wav",
+      "similarity": 0.9898302193055579,
+      "time": 43.21530508995056
     }
   }
 }
