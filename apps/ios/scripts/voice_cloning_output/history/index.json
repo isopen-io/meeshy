@@ -70,7 +70,39 @@
           "timestamp": "2026-01-14T12:15:38.172579"
         }
       }
+    },
+    {
+      "id": "20260114_140132_fr",
+      "timestamp": "20260114_140132",
+      "source_lang": "fr",
+      "reference": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/reference.wav",
+      "translations": {
+        "en": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_en.wav",
+          "text": "Hello, my name is Léon Siopage, I am 24 years old. I am originally from Lyon, I work in IT. And I don't know myself.",
+          "similarity": 0.971554909164511,
+          "timestamp": "2026-01-14T14:02:47.246801"
+        },
+        "de": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_de.wav",
+          "text": "Hallo, mein Name ist Léon Siopage, ich bin 24 Jahre alt. Ich komme ursprünglich aus Lyon und arbeite in der IT. Und ich weiß es selbst nicht.",
+          "similarity": 0.9233628799302089,
+          "timestamp": "2026-01-14T14:03:47.103411"
+        },
+        "es": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_es.wav",
+          "text": "Hola, mi nombre es Léon Siopage, tengo 24 años. Soy originaria de Lyon, trabajo en TI. Y yo mismo no lo sé.",
+          "similarity": 0.9709672711881752,
+          "timestamp": "2026-01-14T14:04:05.128426"
+        },
+        "it": {
+          "path": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/cloned_it.wav",
+          "text": "Ciao, mi chiamo Léon Siopage, ho 24 anni. Sono originario di Lione, lavoro nel settore informatico. E non conosco me stesso.",
+          "similarity": 0.9898302193055579,
+          "timestamp": "2026-01-14T14:04:31.785595"
+        }
+      }
     }
   ],
-  "latest_voice": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_121224_fr/reference.wav"
+  "latest_voice": "/Users/smpceo/Documents/v2_meeshy/apps/ios/scripts/voice_cloning_output/history/20260114_140132_fr/reference.wav"
 }
