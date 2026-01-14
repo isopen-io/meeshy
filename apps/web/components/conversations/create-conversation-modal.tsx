@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { conversationsService } from '@/services/conversations.service';
+import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 import { Check, X, Users, User as UserIcon, Building2, Hash, Search, Plus, Sparkles, UserPlus, Globe, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
