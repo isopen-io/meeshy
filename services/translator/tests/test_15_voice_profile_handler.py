@@ -456,6 +456,7 @@ async def test_analyze_success_flow(handler, sample_audio_base64):
     mock_model.quality_score = 0.85
     mock_model.total_duration_ms = 15000
     mock_model.embedding_path = "/path/to/embedding.pkl"
+    mock_model.embedding = None  # Set to None to avoid MagicMock issues with .astype().tobytes()
     mock_model.voice_characteristics = MagicMock()
     mock_model.voice_characteristics.to_dict = MagicMock(return_value={'pitch': 120})
     mock_model.fingerprint = MagicMock()

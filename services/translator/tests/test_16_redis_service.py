@@ -315,8 +315,8 @@ class TestAudioCacheService:
         assert "ttl_transcription" in stats
         assert "ttl_translated_audio" in stats
         assert "ttl_voice_profile" in stats
-        assert stats["ttl_transcription"] == 3600
-        assert stats["ttl_voice_profile"] == 7776000
+        assert stats["ttl_transcription"] == 2592000  # 30 days (updated from 1 hour)
+        assert stats["ttl_voice_profile"] == 7776000  # 90 days
 
     @pytest.mark.asyncio
     async def test_custom_ttl(self, audio_cache_service):
