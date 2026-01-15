@@ -1,5 +1,8 @@
 {
   "conversations": {
+    "common": {
+      "loading": "Loading..."
+    },
     "title": "Conversations",
     "conversations": "Conversations",
     "andMe": "and me",

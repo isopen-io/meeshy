@@ -1,5 +1,8 @@
 {
   "conversations": {
+    "common": {
+      "loading": "Carregando..."
+    },
     "title": "Conversas",
     "conversations": "Conversas",
     "andMe": "e eu",
