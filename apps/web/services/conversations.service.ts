@@ -541,13 +541,11 @@ export class ConversationsService {
       // Convertir page en offset pour le backend
       const offset = (page - 1) * limit;
 
-      // Structure du backend: { success: true, data: { messages: [...], hasMore: boolean } }
+      // Structure MessagesListResponse: { success, data: Message[], pagination, meta }
+      // Aligné avec @meeshy/shared/types/api-responses.ts
       const response = await apiService.get<{
         success: boolean;
-        data: {
-          messages: unknown[];
-          hasMore: boolean;
-        };
+        data: unknown[];  // Array de messages direct
         pagination?: PaginationMeta;
         meta?: { userLanguage?: string };
       }>(`/conversations/${conversationId}/messages`, { offset, limit }, {
@@ -558,7 +556,7 @@ export class ConversationsService {
       this.pendingRequests.delete(requestKey);
 
       // Vérifier la structure de la réponse
-      if (!response.data?.success || !response.data?.data?.messages) {
+      if (!response.data?.success || !Array.isArray(response.data?.data)) {
         console.warn('⚠️ Structure de réponse inattendue:', response.data);
         return {
           messages: [],
@@ -567,18 +565,16 @@ export class ConversationsService {
         };
       }
 
-      // Extraire les messages depuis data.messages
-      const messagesArray = response.data.data.messages || [];
-      const transformedMessages = messagesArray.map(msg => this.transformMessageData(msg));
+      // data est directement le tableau de messages
+      const transformedMessages = response.data.data.map(msg => this.transformMessageData(msg));
 
-      // Utiliser hasMore du backend
-      const hasMore = response.data.data.hasMore ?? false;
+      // Utiliser pagination du backend
       const pagination = response.data.pagination;
 
       return {
         messages: transformedMessages,
         total: pagination?.total ?? transformedMessages.length,
-        hasMore: hasMore,
+        hasMore: pagination?.hasMore ?? false,
         pagination,
       };
     } catch (error) {
