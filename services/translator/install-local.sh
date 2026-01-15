@@ -1,41 +1,65 @@
 #!/bin/bash
 
-# Script d'installation locale pour le translator (sans Prisma)
-# Utilise Python 3.12 et installe toutes les dépendances sauf Prisma
+# =============================================================================
+# Script d'installation locale pour le translator
+# =============================================================================
+# Utilise Python 3.11/3.12 et installe toutes les dépendances
+# Génère le schéma Prisma Python à partir du schéma shared
 
-echo "🐍 Installation des dépendances Python locales (sans Prisma)..."
+set -e
 
-# Vérifier que Python 3.12 est disponible
-if ! command -v python3.12 &> /dev/null; then
-    echo "❌ Python 3.12 n'est pas installé"
-    echo "💡 Installez Python 3.12 avec: brew install python@3.12"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+echo "🐍 Installation des dépendances Python locales..."
+
+# Vérifier Python disponible (3.11 ou 3.12)
+PYTHON_CMD=""
+if command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+elif command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+else
+    echo "❌ Python 3.11 ou 3.12 n'est pas installé"
+    echo "💡 Installez Python avec: brew install python@3.11"
     exit 1
 fi
 
-# Créer l'environnement virtuel avec Python 3.12
-echo "📦 Création de l'environnement virtuel avec Python 3.12..."
+echo "   Utilisation de: ${PYTHON_CMD}"
+
+# Créer l'environnement virtuel
+echo "📦 Création de l'environnement virtuel..."
 rm -rf .venv
-python3.12 -m venv .venv
+${PYTHON_CMD} -m venv .venv
 source .venv/bin/activate
 
 # Mettre à jour pip
 echo "⬆️ Mise à jour de pip..."
 pip install --upgrade pip
 
-# Installer les dépendances (sans Prisma)
+# Installer les dépendances
 echo "📚 Installation des dépendances Python..."
 pip install -r requirements.txt
 
-# Installer des alternatives à Prisma pour MongoDB
-echo "🍃 Installation des alternatives MongoDB..."
-pip install motor pymongo
+# Installer Prisma et alternatives MongoDB
+echo "🍃 Installation de Prisma et MongoDB..."
+pip install prisma motor pymongo
 
+# Générer le schéma Prisma Python à partir du schéma shared
+echo "🔄 Synchronisation du schéma Prisma..."
+"${REPO_ROOT}/scripts/sync-prisma-schema-for-python.sh" "${SCRIPT_DIR}/schema.prisma"
+
+# Générer le client Prisma
+echo "⚙️ Génération du client Prisma Python..."
+prisma generate --schema="${SCRIPT_DIR}/schema.prisma" || {
+    echo "⚠️  Prisma generate a échoué (bug connu v0.15.0 sur macOS)"
+    echo "   Le client sera généré au runtime ou utilisez Docker"
+}
+
+echo ""
 echo "✅ Installation terminée !"
 echo ""
 echo "💡 Pour utiliser le translator:"
 echo "   1. Mode Docker (recommandé): ./dev-docker.sh"
-echo "   2. Mode local (sans Prisma): source .venv/bin/activate && python src/main.py"
-echo ""
-echo "⚠️  Note: Prisma ne fonctionne pas localement à cause d'un bug dans v0.15.0"
-echo "   Utilisez Docker pour un environnement complet avec Prisma"
+echo "   2. Mode local: source .venv/bin/activate && python src/main.py"
 
