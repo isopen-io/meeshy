@@ -12,6 +12,28 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
+ * Vérifie si une chaîne ressemble à un numéro de téléphone
+ * Retourne false pour les emails et usernames évidents
+ */
+export function looksLikePhoneNumber(value: string): boolean {
+  if (!value || value.trim() === '') {
+    return false;
+  }
+
+  const trimmed = value.trim();
+
+  // Si contient un @, c'est un email
+  if (trimmed.includes('@')) {
+    return false;
+  }
+
+  // Un numéro de téléphone commence par + ou un chiffre
+  // et contient principalement des chiffres, espaces, tirets, parenthèses
+  const phonePattern = /^[+\d][\d\s\-().]*$/;
+  return phonePattern.test(trimmed) && trimmed.replace(/\D/g, '').length >= 6;
+}
+
+/**
  * Résultat de la normalisation du téléphone
  */
 export interface PhoneNormalizationResult {
@@ -96,6 +118,11 @@ export function validatePhoneNumber(phoneNumber: string, countryCode?: string): 
  */
 export function normalizePhoneNumber(phoneNumber: string, defaultCountry: string = 'FR'): string {
   if (!phoneNumber || phoneNumber.trim() === '') {
+    return '';
+  }
+
+  // Éviter de parser des emails ou usernames
+  if (!looksLikePhoneNumber(phoneNumber)) {
     return '';
   }
 
