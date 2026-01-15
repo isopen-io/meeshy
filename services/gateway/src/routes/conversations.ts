@@ -1091,13 +1091,29 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       response: {
         200: {
           type: 'object',
+          description: 'MessagesListResponse - aligned with @meeshy/shared/types/api-responses.ts',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
+              type: 'array',
+              description: 'Array of messages directly',
+              items: messageSchema
+            },
+            pagination: {
               type: 'object',
+              description: 'Pagination metadata',
               properties: {
-                messages: { type: 'array', items: messageSchema },
+                total: { type: 'integer', description: 'Total number of messages in conversation' },
+                offset: { type: 'integer', description: 'Current offset' },
+                limit: { type: 'integer', description: 'Page size limit' },
                 hasMore: { type: 'boolean', description: 'Whether more messages are available' }
+              }
+            },
+            meta: {
+              type: 'object',
+              description: 'Response metadata',
+              properties: {
+                userLanguage: { type: 'string', description: 'User preferred language for translations' }
               }
             }
           }
