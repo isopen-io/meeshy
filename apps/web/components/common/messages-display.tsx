@@ -212,17 +212,19 @@ export function MessagesDisplay({
   // Messages à afficher - transformer les messages pour BubbleMessage
   const displayMessages = useMemo(() => {
     const messagesToUse = translatedMessages.length > 0 ? translatedMessages : messages;
-    
-    
+
     // Transform messages to match BubbleMessage expected format
-    const transformedMessages = messagesToUse.map(message => ({
-      ...message,
-      originalContent: message.content, // BubbleMessage expects originalContent
-      originalLanguage: message.originalLanguage || 'fr', // Ensure originalLanguage exists
-      translations: message.translations || [], // Ensure translations array exists
-      readStatus: (message as any).status || [] // Map status to readStatus
-    }));
-    
+    // Filtrer les messages sans ID valide pour éviter les warnings React key
+    const transformedMessages = messagesToUse
+      .filter(message => message && message.id)  // Exclure les messages sans ID
+      .map(message => ({
+        ...message,
+        originalContent: message.content, // BubbleMessage expects originalContent
+        originalLanguage: message.originalLanguage || 'fr', // Ensure originalLanguage exists
+        translations: message.translations || [], // Ensure translations array exists
+        readStatus: (message as any).status || [] // Map status to readStatus
+      }));
+
     return reverseOrder ? [...transformedMessages].reverse() : transformedMessages;
   }, [messages, translatedMessages, reverseOrder]);
 
