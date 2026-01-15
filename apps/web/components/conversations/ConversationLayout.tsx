@@ -1612,7 +1612,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
               onStartCall={handleStartCall}
               onOpenGallery={() => setGalleryOpen(true)}
               t={t}
-              showBackButton={!!selectedConversationId}
+              showBackButton={!!selectedConversation}
             />
             {/* Indicateur de connexion en mobile */}
             {!connectionStatus.isConnected && (
@@ -1774,10 +1774,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         )}
 
         {/* Zone de conversation principale - Desktop uniquement */}
-        <main 
+        <main
           className={cn(
             "flex flex-col min-w-0",
-            selectedConversationId ? "w-full h-full" : "flex-1 h-full"
+            selectedConversation ? "w-full h-full" : "flex-1 h-full"
           )}
           role="main"
           aria-label={selectedConversation ? t('conversationLayout.conversationWith', { name: selectedConversation.title }) : t('conversationLayout.selectConversation')}
@@ -1801,7 +1801,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                   onStartCall={handleStartCall}
                   onOpenGallery={() => setGalleryOpen(true)}
                   t={t}
-                  showBackButton={!!selectedConversationId}
+                  showBackButton={!!selectedConversation}
                 />
                 {/* Indicateur de connexion en desktop */}
                 {!connectionStatus.isConnected && (
