@@ -476,7 +476,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{t('register.checkingSession') || 'Vérification de session...'}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{t('register.checkingSession')}</p>
         </div>
       </div>
     );
@@ -516,7 +516,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     const value = e.target.value.replace(/[^a-zA-Z0-9_-]/g, '');
                     setFormData({ ...formData, username: value });
                   }}
-                  placeholder="Pseudonyme (min. 4 caractères, lettres/chiffres/_/-)"
+                  placeholder={t('register.usernamePlaceholder')}
                   disabled={isLoading}
                   required
                   className="pl-10 h-11"
@@ -541,7 +541,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Mot de passe (min. 8 caractères)"
+                    placeholder={t('register.passwordPlaceholder')}
                     disabled={isLoading}
                     required
                     className="pl-10 h-11"
@@ -554,7 +554,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirmer le mot de passe"
+                    placeholder={t('register.confirmPasswordPlaceholder')}
                     disabled={isLoading}
                     required
                     className="pl-10 h-11"
@@ -571,7 +571,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    placeholder="Prénom"
+                    placeholder={t('register.firstNamePlaceholder')}
                     disabled={isLoading}
                     required
                     className="pl-10 h-11"
@@ -584,7 +584,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    placeholder="Nom"
+                    placeholder={t('register.lastNamePlaceholder')}
                     disabled={isLoading}
                     required
                     className="pl-10 h-11"
@@ -601,7 +601,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="Email (nom@exemple.com)"
+                    placeholder={t('register.emailPlaceholder')}
                     disabled={isLoading}
                     required
                     className="pl-10 h-11"
@@ -623,7 +623,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                     type="tel"
                     value={formData.phoneNumber}
                     onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    placeholder="Téléphone (ex: +33612345678)"
+                    placeholder={t('register.phonePlaceholder')}
                     disabled={isLoading}
                     className="pl-10 h-11"
                   />
@@ -635,13 +635,13 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
                     <Globe className="h-4 w-4 text-gray-400" />
-                    <span>Langue système</span>
+                    <span>{t('register.systemLanguageLabel')}</span>
                   </label>
                   <LanguageSelect
                     languages={SUPPORTED_LANGUAGES}
                     value={formData.systemLanguage}
                     onValueChange={(value) => setFormData({ ...formData, systemLanguage: value })}
-                    placeholder="Sélectionner..."
+                    placeholder={t('register.selectPlaceholder')}
                     disabled={isLoading}
                     className="pl-3"
                   />
@@ -649,13 +649,13 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
                     <Globe className="h-4 w-4 text-gray-400" />
-                    <span>Langue régionale</span>
+                    <span>{t('register.regionalLanguageLabel')}</span>
                   </label>
                   <LanguageSelect
                     languages={SUPPORTED_LANGUAGES}
                     value={formData.regionalLanguage}
                     onValueChange={(value) => setFormData({ ...formData, regionalLanguage: value })}
-                    placeholder="Sélectionner..."
+                    placeholder={t('register.selectPlaceholder')}
                     disabled={isLoading}
                     className="pl-3"
                   />
@@ -672,13 +672,13 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                   className="mt-0.5"
                 />
                 <label htmlFor="acceptTerms" className="text-xs text-gray-600 dark:text-gray-400 cursor-pointer leading-tight">
-                  J'accepte les{' '}
+                  {t('register.acceptTerms')}{' '}
                   <a href="/terms" target="_blank" className="text-blue-600 hover:underline">
-                    conditions
+                    {t('register.termsOfService')}
                   </a>
-                  {' et la '}
+                  {' '}{t('register.and')}{' '}
                   <a href="/privacy" target="_blank" className="text-blue-600 hover:underline">
-                    politique de confidentialité
+                    {t('register.privacyPolicy')}
                   </a>
                 </label>
               </div>
@@ -692,7 +692,7 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Création en cours...</span>
+                    <span>{t('register.creating')}</span>
                   </div>
                 ) : (
                   <div className="flex items-center space-x-2">
@@ -735,16 +735,21 @@ function SigninPageContent({ affiliateToken: propAffiliateToken }: { affiliateTo
   );
 }
 
+function LoadingFallback() {
+  const { t } = useI18n('auth');
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+      <div className="text-center space-y-3">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('register.loading')}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function SigninPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Chargement...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoadingFallback />}>
       <SigninPageContent />
     </Suspense>
   );
