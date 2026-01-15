@@ -182,7 +182,7 @@ export class PasswordResetService {
             ipAddress,
             userAgent,
             deviceFingerprint,
-            geoLocation: geoData ? `${geoData.city}, ${geoData.country}` : null,
+            geoLocation: geoData?.location || null,
             geoCoordinates: geoData ? `${geoData.latitude},${geoData.longitude}` : null
           }
         });
@@ -200,7 +200,7 @@ export class PasswordResetService {
         await this.logSecurityEvent(user.id, 'PASSWORD_RESET_REQUEST', 'MEDIUM', {
           email: user.email,
           ipAddress,
-          geoLocation: geoData ? `${geoData.city}, ${geoData.country}` : null
+          geoLocation: geoData?.location || null
         });
 
         // 15. Send reset email (with unhashed token)
@@ -346,14 +346,14 @@ export class PasswordResetService {
         user.id,
         deviceFingerprint || '',
         ipAddress,
-        geoData ? `${geoData.city}, ${geoData.country}` : ''
+        geoData?.location || ''
       );
 
       if (anomaly.isAnomaly) {
         await this.logSecurityEvent(user.id, 'SUSPICIOUS_PASSWORD_RESET', 'CRITICAL', {
           reason: anomaly.reason,
           ipAddress,
-          geoLocation: geoData ? `${geoData.city}, ${geoData.country}` : null
+          geoLocation: geoData?.location || null
         });
         // Send security alert email
         await this.emailService.sendSecurityAlertEmail({
@@ -380,7 +380,7 @@ export class PasswordResetService {
             lockedUntil: null,
             lockedReason: null,
             lastLoginIp: ipAddress,
-            lastLoginLocation: geoData ? `${geoData.city}, ${geoData.country}` : null,
+            lastLoginLocation: geoData?.location || null,
             lastLoginDevice: deviceFingerprint || null
           }
         });
@@ -416,7 +416,7 @@ export class PasswordResetService {
       // 14. Log successful reset
       await this.logSecurityEvent(user.id, 'PASSWORD_RESET_SUCCESS', 'MEDIUM', {
         ipAddress,
-        geoLocation: geoData ? `${geoData.city}, ${geoData.country}` : null
+        geoLocation: geoData?.location || null
       });
 
       // 15. Send confirmation email
@@ -425,7 +425,7 @@ export class PasswordResetService {
         name: `${user.firstName} ${user.lastName}`,
         timestamp: new Date().toISOString(),
         ipAddress,
-        location: geoData ? `${geoData.city}, ${geoData.country}` : 'Unknown'
+        location: geoData?.location || 'Unknown'
       });
 
       return {
