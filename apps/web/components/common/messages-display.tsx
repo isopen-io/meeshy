@@ -214,9 +214,17 @@ export function MessagesDisplay({
     const messagesToUse = translatedMessages.length > 0 ? translatedMessages : messages;
 
     // Transform messages to match BubbleMessage expected format
-    // Filtrer les messages sans ID valide pour éviter les warnings React key
+    // Filtrer les messages sans ID valide et dédupliquer par ID
+    const seenIds = new Set<string>();
     const transformedMessages = messagesToUse
-      .filter(message => message && message.id)  // Exclure les messages sans ID
+      .filter(message => {
+        // Exclure les messages sans ID valide
+        if (!message || !message.id) return false;
+        // Exclure les doublons (garder le premier)
+        if (seenIds.has(message.id)) return false;
+        seenIds.add(message.id);
+        return true;
+      })
       .map(message => ({
         ...message,
         originalContent: message.content, // BubbleMessage expects originalContent
