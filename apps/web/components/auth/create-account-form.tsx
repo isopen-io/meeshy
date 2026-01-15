@@ -95,6 +95,7 @@ export function CreateAccountForm({ linkId, onSuccess }: CreateAccountFormProps)
                 onChange={(e) => updateFormData('firstName', e.target.value)}
                 required
                 placeholder={t('register.firstNamePlaceholder')}
+                autoComplete="given-name"
               />
             </div>
             <div className="space-y-2">
@@ -105,6 +106,7 @@ export function CreateAccountForm({ linkId, onSuccess }: CreateAccountFormProps)
                 onChange={(e) => updateFormData('lastName', e.target.value)}
                 required
                 placeholder={t('register.lastNamePlaceholder')}
+                autoComplete="family-name"
               />
             </div>
           </div>
@@ -118,6 +120,8 @@ export function CreateAccountForm({ linkId, onSuccess }: CreateAccountFormProps)
               onChange={(e) => updateFormData('email', e.target.value)}
               required
               placeholder={t('register.emailPlaceholder')}
+              autoComplete="email"
+              spellCheck={false}
             />
           </div>
 
@@ -126,9 +130,11 @@ export function CreateAccountForm({ linkId, onSuccess }: CreateAccountFormProps)
             <Input
               id="create-account-phoneNumber"
               type="tel"
+              inputMode="tel"
               value={formData.phoneNumber}
               onChange={(e) => updateFormData('phoneNumber', e.target.value)}
               placeholder={t('register.phonePlaceholder')}
+              autoComplete="tel"
             />
           </div>
 
@@ -141,6 +147,7 @@ export function CreateAccountForm({ linkId, onSuccess }: CreateAccountFormProps)
               onChange={(e) => updateFormData('password', e.target.value)}
               required
               placeholder={t('register.passwordPlaceholder')}
+              autoComplete="new-password"
             />
             <p className="text-xs text-gray-500">
               {t('register.passwordHelp')}
