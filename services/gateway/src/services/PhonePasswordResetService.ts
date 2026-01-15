@@ -243,7 +243,7 @@ export class PhonePasswordResetService {
           verificationStep: 'IDENTITY_PENDING',
           ipAddress,
           userAgent,
-          geoLocation: geoData ? `${geoData.city}, ${geoData.country}` : null
+          geoLocation: geoData?.location || null
         }
       });
 
