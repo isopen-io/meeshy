@@ -181,13 +181,20 @@ export class ConversationStatsService {
       }
     } else {
       const members = await prisma.conversationMember.findMany({
-        where: { conversationId: realConversationId, isActive: true },
+        where: {
+          conversationId: realConversationId,
+          isActive: true,
+          user: { isNot: null }  // Exclure les membres avec user supprimé
+        },
         select: { user: { select: { id: true, systemLanguage: true } } }
       }).catch(() => [] as any[]);
       participantCount = members.length;
       for (const m of members) {
-        const lang = m.user.systemLanguage;
-        participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
+        // Sécurité supplémentaire si user est null
+        if (m.user) {
+          const lang = m.user.systemLanguage;
+          participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
+        }
       }
     }
 
