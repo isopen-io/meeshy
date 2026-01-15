@@ -429,9 +429,16 @@ export class ConversationsService {
   }
 
   /**
-   * Obtenir toutes les conversations de l'utilisateur (avec pagination optionnelle)
+   * Obtenir toutes les conversations de l'utilisateur (avec pagination et filtres optionnels)
+   * OPTIMIZED: Added type and withUserId filters to avoid loading all conversations
    */
-  async getConversations(options: { limit?: number; offset?: number; skipCache?: boolean } = {}): Promise<{
+  async getConversations(options: {
+    limit?: number;
+    offset?: number;
+    skipCache?: boolean;
+    type?: 'direct' | 'group' | 'anonymous' | 'broadcast';
+    withUserId?: string;
+  } = {}): Promise<{
     conversations: Conversation[];
     pagination: {
       limit: number;
@@ -440,10 +447,10 @@ export class ConversationsService {
       hasMore: boolean;
     };
   }> {
-    const { limit = 20, offset = 0, skipCache = false } = options;
-    
-    // Vérifier le cache (seulement pour la première page sans offset)
-    if (!skipCache && offset === 0 && this.isCacheValid()) {
+    const { limit = 20, offset = 0, skipCache = false, type, withUserId } = options;
+
+    // Vérifier le cache (seulement pour la première page sans offset et sans filtres)
+    if (!skipCache && offset === 0 && !type && !withUserId && this.isCacheValid()) {
       return {
         conversations: this.conversationsCache!.data,
         pagination: {
@@ -454,9 +461,17 @@ export class ConversationsService {
         }
       };
     }
-    
-    const response = await apiService.get<{ 
-      success: boolean; 
+
+    // Build query params
+    const queryParams: Record<string, string> = {
+      limit: limit.toString(),
+      offset: offset.toString()
+    };
+    if (type) queryParams.type = type;
+    if (withUserId) queryParams.withUserId = withUserId;
+
+    const response = await apiService.get<{
+      success: boolean;
       data: unknown[];
       pagination?: {
         limit: number;
@@ -464,7 +479,7 @@ export class ConversationsService {
         total: number;
         hasMore: boolean;
       };
-    }>('/conversations', { limit: limit.toString(), offset: offset.toString() });
+    }>('/conversations', queryParams);
     
     if (!response.data.success || !Array.isArray(response.data.data)) {
       throw new Error('Format de réponse invalide pour les conversations');
@@ -771,10 +786,10 @@ export class ConversationsService {
       };
     } catch (error) {
       console.error('Erreur lors de la récupération de tous les participants:', error);
-      // En cas d'erreur, retourner au moins les participants authentifiés
-      const authenticatedParticipants = await this.getParticipants(conversationId);
+      // OPTIMIZED: Return empty arrays instead of making a 2nd request that will likely fail too
+      // The caller should handle the empty state appropriately
       return {
-        authenticatedParticipants,
+        authenticatedParticipants: [],
         anonymousParticipants: []
       };
     }
@@ -963,31 +978,25 @@ export class ConversationsService {
 
   /**
    * Obtenir toutes les conversations directes avec un utilisateur spécifique
+   * OPTIMIZED: Uses backend filtering instead of loading all conversations
    */
   async getConversationsWithUser(userId: string): Promise<Conversation[]> {
     try {
-      // Récupérer toutes les conversations de l'utilisateur courant
-      const { conversations } = await this.getConversations({ skipCache: true });
-
-      // Filtrer pour ne garder que les conversations directes avec cet utilisateur
-      const directConversations = conversations.filter(conv => {
-        // Vérifier que c'est une conversation directe
-        if (conv.type !== 'direct') return false;
-
-        // Vérifier que l'utilisateur ciblé fait partie des participants
-        const hasTargetUser = conv.participants?.some(p => p.userId === userId);
-
-        return hasTargetUser;
+      // OPTIMIZED: Use backend filters to only fetch relevant conversations
+      const { conversations } = await this.getConversations({
+        skipCache: true,
+        type: 'direct',
+        withUserId: userId
       });
 
-      // Trier par date de dernière activité (plus récente en premier)
-      directConversations.sort((a, b) => {
+      // Sort by last activity (most recent first)
+      conversations.sort((a, b) => {
         const dateA = a.lastActivityAt || a.updatedAt || a.createdAt;
         const dateB = b.lastActivityAt || b.updatedAt || b.createdAt;
         return new Date(dateB).getTime() - new Date(dateA).getTime();
       });
 
-      return directConversations;
+      return conversations;
     } catch (error) {
       console.error('Erreur lors de la récupération des conversations avec l\'utilisateur:', error);
       return [];

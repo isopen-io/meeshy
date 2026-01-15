@@ -36,24 +36,36 @@ class ApiService {
   }
 
   /**
-   * Vérifie si le token est proche de l'expiration (dans les 5 minutes)
-   * et le rafraîchit préventivement si nécessaire
+   * Vérifie si le token est proche de l'expiration
+   * - Si expiré: bloque et rafraîchit
+   * - Si expire bientôt (< 5min): rafraîchit en arrière-plan (non-bloquant)
+   * OPTIMIZED: Évite de bloquer chaque requête pour un refresh préventif
    */
   private async ensureTokenFresh(): Promise<void> {
     const token = authManager.getAuthToken();
     if (!token) return;
 
-    // Vérifier si le token expire bientôt (dans les 5 minutes)
     const payload = authManager.decodeJWT(token);
     if (!payload || !payload.exp) return;
 
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = payload.exp - now;
 
-    // Si le token expire dans moins de 5 minutes, le rafraîchir
-    if (expiresIn < 300) {
-      console.log('[API_SERVICE] Token expires soon, refreshing...');
+    // Si le token est déjà expiré, on DOIT attendre le refresh
+    if (expiresIn <= 0) {
+      console.log('[API_SERVICE] Token expired, blocking for refresh...');
       await this.refreshAuthToken();
+      return;
+    }
+
+    // Si le token expire dans moins de 5 minutes mais est encore valide,
+    // déclencher le refresh en arrière-plan (non-bloquant)
+    if (expiresIn < 300 && !this.isRefreshing) {
+      console.log('[API_SERVICE] Token expires soon, refreshing in background...');
+      // Ne pas await - refresh en arrière-plan
+      this.refreshAuthToken().catch(err => {
+        console.warn('[API_SERVICE] Background token refresh failed:', err);
+      });
     }
   }
 

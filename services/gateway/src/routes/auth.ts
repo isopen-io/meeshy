@@ -155,21 +155,25 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
 
-      // Mark session as trusted if user opted in (extends session to 365 days)
+      // Générer le JWT token (synchrone, ne bloque pas)
+      const jwtToken = authService.generateToken(user);
+
+      // OPTIMIZED: Mark session as trusted in background (non-blocking)
+      // This doesn't affect the response, so we don't need to await it
       if (rememberDevice && session.id) {
-        const marked = await markSessionTrusted(session.id, {
+        markSessionTrusted(session.id, {
           userId: user.id,
           ipAddress: requestContext.ip,
           userAgent: requestContext.userAgent,
           source: 'login'
+        }).then(marked => {
+          if (!marked) {
+            console.warn('[AUTH] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
+          }
+        }).catch(err => {
+          console.error('[AUTH] ⚠️ Erreur lors du marquage session trusted:', err);
         });
-        if (!marked) {
-          console.warn('[AUTH] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
-        }
       }
-
-      // Générer le JWT token
-      const jwtToken = authService.generateToken(user);
 
       // Retourner les informations utilisateur complètes, tokens et session
       reply.send({
@@ -320,21 +324,25 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       console.log('[AUTH] ✅ Connexion 2FA réussie pour:', user.username);
 
-      // Mark session as trusted AFTER 2FA verification (if user opted in)
-      // This is the secure way - only mark trusted after both password AND 2FA are verified
+      // Générer le JWT token (synchrone)
+      const jwtToken = authService.generateToken(user);
+
+      // OPTIMIZED: Mark session as trusted in background (non-blocking)
+      // This is done AFTER 2FA verification for security, but doesn't block the response
       if (rememberDevice && session.id) {
-        const marked = await markSessionTrusted(session.id, {
+        markSessionTrusted(session.id, {
           userId: user.id,
           ipAddress: requestContext.ip,
           userAgent: requestContext.userAgent,
           source: '2fa_verification'
+        }).then(marked => {
+          if (!marked) {
+            console.warn('[AUTH] ⚠️ Échec du marquage session trusted après 2FA - voir logs SECURITY_AUDIT_ERROR');
+          }
+        }).catch(err => {
+          console.error('[AUTH] ⚠️ Erreur lors du marquage session trusted après 2FA:', err);
         });
-        if (!marked) {
-          console.warn('[AUTH] ⚠️ Échec du marquage session trusted après 2FA - voir logs SECURITY_AUDIT_ERROR');
-        }
       }
-
-      const jwtToken = authService.generateToken(user);
 
       // Calculate expiration based on rememberDevice
       const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
@@ -931,6 +939,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       const { normalizePhoneNumber } = await import('../utils/normalize');
       const result: {
         usernameAvailable?: boolean;
+        suggestions?: string[];
         emailAvailable?: boolean;
         phoneNumberAvailable?: boolean;
       } = {};
@@ -947,6 +956,34 @@ export async function authRoutes(fastify: FastifyInstance) {
           }
         });
         result.usernameAvailable = !existingUser;
+
+        if (existingUser) {
+          const suggestions: string[] = [];
+          let attempts = 0;
+          // Generate up to 3 suggestions
+          while (suggestions.length < 3 && attempts < 10) {
+            const suffix = Math.floor(Math.random() * 9999) + 1;
+            const candidate = `${normalizedUsername}${suffix}`;
+            
+            const check = await prisma.user.findFirst({
+              where: {
+                username: {
+                  equals: candidate,
+                  mode: 'insensitive'
+                }
+              }
+            });
+            
+            if (!check && !suggestions.includes(candidate)) {
+              suggestions.push(candidate);
+            }
+            attempts++;
+          }
+          
+          if (suggestions.length > 0) {
+            result.suggestions = suggestions;
+          }
+        }
       }
 
       // Vérifier l'email (comparaison case-insensitive)
