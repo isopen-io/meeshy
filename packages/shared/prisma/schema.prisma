@@ -228,6 +228,8 @@ model Conversation {
 
   /// Server encryption key ID (for server mode only)
   serverEncryptionKeyId String?
+  /// Relation to ServerEncryptionKey for optimized queries
+  serverEncryptionKey   ServerEncryptionKey? @relation(fields: [serverEncryptionKeyId], references: [id])
 
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
@@ -2047,6 +2049,9 @@ model ServerEncryptionKey {
 
   /// Whether the key is active (can be used for decryption)
   isActive Boolean @default(true)
+
+  /// Relation inverse - conversations using this key
+  conversations Conversation[]
 
   @@index([conversationId])
   @@index([userId])

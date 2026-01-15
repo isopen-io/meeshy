@@ -402,7 +402,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir toutes les conversations de l'utilisateur
-  fastify.get<{ Querystring: { limit?: string; offset?: string; includeCount?: string } }>('/conversations', {
+  fastify.get<{ Querystring: { limit?: string; offset?: string; includeCount?: string; type?: string; withUserId?: string } }>('/conversations', {
     schema: {
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
@@ -412,7 +412,9 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         properties: {
           limit: { type: 'string', description: 'Maximum number of conversations to return (max 50, default 15)' },
           offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
-          includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' }
+          includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
+          type: { type: 'string', enum: ['direct', 'group', 'anonymous', 'broadcast'], description: 'Filter by conversation type' },
+          withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' }
         }
       },
       response: {
@@ -423,7 +425,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       }
     },
     preValidation: [optionalAuth]
-  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; includeCount?: string } }>, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; includeCount?: string; type?: string; withUserId?: string } }>, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
 
@@ -442,26 +444,51 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       const offset = parseInt(request.query.offset || '0', 10);
       const includeCount = request.query.includeCount === 'true';
 
+      // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
+      const typeFilter = request.query.type;
+      const withUserId = request.query.withUserId;
+
       // First, get all valid user IDs to filter orphaned members
       const validUserIds = await prisma.user.findMany({
         select: { id: true }
       }).then(users => new Set(users.map(u => u.id)));
 
-      const conversations = await prisma.conversation.findMany({
-        where: {
-          OR: [
-            // Conversations dont l'utilisateur est membre
-            {
-              members: {
-                some: {
-                  userId: userId,
-                  isActive: true
-                }
-              }
-            }
-          ],
-          isActive: true
+      // Build the where clause with optional filters
+      const whereClause: any = {
+        members: {
+          some: {
+            userId: userId,
+            isActive: true
+          }
         },
+        isActive: true
+      };
+
+      // Add type filter if specified
+      if (typeFilter) {
+        whereClause.type = typeFilter;
+      }
+
+      // Add withUserId filter - find conversations where BOTH users are members
+      if (withUserId) {
+        whereClause.members = {
+          every: {
+            OR: [
+              { userId: userId, isActive: true },
+              { userId: withUserId, isActive: true }
+            ]
+          }
+        };
+        // Override to use AND with both conditions
+        whereClause.AND = [
+          { members: { some: { userId: userId, isActive: true } } },
+          { members: { some: { userId: withUserId, isActive: true } } }
+        ];
+        delete whereClause.members;
+      }
+
+      const conversations = await prisma.conversation.findMany({
+        where: whereClause,
         skip: offset,
         take: limit,
         select: {
@@ -612,20 +639,9 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       let hasMore = true;
 
       if (includeCount || offset === 0) {
+        // OPTIMIZED: Use same whereClause for count to match filtered results
         totalCount = await prisma.conversation.count({
-          where: {
-            OR: [
-              {
-                members: {
-                  some: {
-                    userId: userId,
-                    isActive: true
-                  }
-                }
-              }
-            ],
-            isActive: true
-          }
+          where: whereClause
         });
         hasMore = offset + conversations.length < totalCount;
       } else {
@@ -1925,26 +1941,41 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // ÉTAPE 3: Mettre à jour les messageIds des TrackingLinks
+      // ÉTAPE 3: Opérations post-création en PARALLÈLE (indépendantes)
+      // OPTIMIZED: Ces 3 opérations n'ont pas de dépendances entre elles
+      const postCreateOperations: Promise<void>[] = [];
+
+      // 3a. Mettre à jour les messageIds des TrackingLinks
       if (trackingLinks.length > 0) {
         const tokens = trackingLinks.map(link => link.token);
-        await trackingLinkService.updateTrackingLinksMessageId(tokens, message.id);
+        postCreateOperations.push(
+          trackingLinkService.updateTrackingLinksMessageId(tokens, message.id).then(() => {})
+        );
       }
 
-      // Mettre à jour le timestamp de la conversation
-      await prisma.conversation.update({
-        where: { id: conversationId }, // Utiliser l'ID résolu
-        data: { lastMessageAt: new Date() }
-      });
+      // 3b. Mettre à jour le timestamp de la conversation
+      postCreateOperations.push(
+        prisma.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: new Date() }
+        }).then(() => {})
+      );
 
-      // Marquer le message comme lu pour l'expéditeur (nouveau système de curseur)
-      try {
-        const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
-        const readStatusService = new MessageReadStatusService(prisma);
-        await readStatusService.markMessagesAsRead(userId, conversationId, message.id);
-      } catch (err) {
-        console.warn('[GATEWAY] Error marking message as read for sender:', err);
-      }
+      // 3c. Marquer le message comme lu pour l'expéditeur
+      postCreateOperations.push(
+        (async () => {
+          try {
+            const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
+            const readStatusService = new MessageReadStatusService(prisma);
+            await readStatusService.markMessagesAsRead(userId, conversationId, message.id);
+          } catch (err) {
+            console.warn('[GATEWAY] Error marking message as read for sender:', err);
+          }
+        })()
+      );
+
+      // Attendre toutes les opérations en parallèle
+      await Promise.all(postCreateOperations);
 
       // TRAITEMENT DES MENTIONS ET NOTIFICATIONS
       const mentionService = (fastify as any).mentionService;
@@ -1992,14 +2023,13 @@ export async function conversationRoutes(fastify: FastifyInstance) {
 
                 console.log(`[GATEWAY REST] ✅ ${validationResult.validUserIds.length} mention(s) créée(s)`);
 
-                // Envoyer les notifications de mention
-                const sender = await prisma.user.findUnique({
-                  where: { id: userId },
-                  select: { username: true, displayName: true, avatar: true }
-                });
-
-                if (sender) {
-                  const conversation = await prisma.conversation.findUnique({
+                // OPTIMIZED: Charger sender et conversation en PARALLÈLE
+                const [sender, conversationForNotif] = await Promise.all([
+                  prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { username: true, displayName: true, avatar: true }
+                  }),
+                  prisma.conversation.findUnique({
                     where: { id: conversationId },
                     select: {
                       title: true,
@@ -2009,27 +2039,28 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                         select: { userId: true }
                       }
                     }
-                  });
+                  })
+                ]);
 
-                  if (conversation) {
-                    const memberIds = conversation.members.map((m: any) => m.userId);
+                if (sender && conversationForNotif) {
+                  const conversation = conversationForNotif;
+                  const memberIds = conversation.members.map((m: any) => m.userId);
 
-                    // PERFORMANCE: Créer toutes les notifications de mention en batch
-                    const count = await notificationService.createMentionNotificationsBatch(
-                      validationResult.validUserIds,
-                      {
-                        senderId: userId,
-                        senderUsername: sender.displayName || sender.username,
-                        senderAvatar: sender.avatar || undefined,
-                        messageContent: processedContent,
-                        conversationId,
-                        conversationTitle: conversation.title,
-                        messageId: message.id
-                      },
-                      memberIds
-                    );
-                    console.log(`[GATEWAY REST] 📩 ${count} notifications de mention créées en batch`);
-                  }
+                  // PERFORMANCE: Créer toutes les notifications de mention en batch
+                  const count = await notificationService.createMentionNotificationsBatch(
+                    validationResult.validUserIds,
+                    {
+                      senderId: userId,
+                      senderUsername: sender.displayName || sender.username,
+                      senderAvatar: sender.avatar || undefined,
+                      messageContent: processedContent,
+                      conversationId,
+                      conversationTitle: conversation.title,
+                      messageId: message.id
+                    },
+                    memberIds
+                  );
+                  console.log(`[GATEWAY REST] 📩 ${count} notifications de mention créées en batch`);
                 }
               }
             }

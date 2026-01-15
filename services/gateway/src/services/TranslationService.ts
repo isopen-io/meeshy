@@ -92,28 +92,25 @@ export class TranslationService extends EventEmitter {
   /**
    * Get the encryption key for a conversation from ServerEncryptionKey table
    * Returns the decrypted key for use in translation encryption
+   * OPTIMIZED: Uses Prisma relation to fetch in a single query (JOIN)
    */
   private async _getConversationEncryptionKey(conversationId: string): Promise<{ keyId: string; key: Buffer } | null> {
     try {
-      // First get the conversation to find its serverEncryptionKeyId
+      // OPTIMIZED: Single query with include instead of 2 sequential queries
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { serverEncryptionKeyId: true, encryptionMode: true }
+        select: {
+          serverEncryptionKeyId: true,
+          encryptionMode: true,
+          serverEncryptionKey: true // JOIN via Prisma relation
+        }
       });
 
-      if (!conversation?.serverEncryptionKeyId) {
+      if (!conversation?.serverEncryptionKeyId || !conversation.serverEncryptionKey) {
         return null;
       }
 
-      // Get the encrypted key from database
-      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
-        where: { id: conversation.serverEncryptionKeyId }
-      });
-
-      if (!keyRecord) {
-        logger.warn('Server encryption key not found', { keyId: conversation.serverEncryptionKeyId });
-        return null;
-      }
+      const keyRecord = conversation.serverEncryptionKey;
 
       // Decrypt the key using master key
       const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;

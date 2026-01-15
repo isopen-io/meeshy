@@ -2338,7 +2338,19 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
           case 'reports_sent':
             // Compter les signalements envoyes par les utilisateurs
-            const usersWithReportsSent = await fastify.prisma.user.findMany({
+            // OPTIMIZED: Use groupBy instead of N+1 queries
+            const reportsSentGrouped = await fastify.prisma.report.groupBy({
+              by: ['reporterId'],
+              _count: { id: true },
+              where: startDate ? { createdAt: { gte: startDate } } : {},
+              orderBy: { _count: { id: 'desc' } },
+              take: limitNum
+            });
+
+            // Get user details for the top reporters
+            const reporterIds = reportsSentGrouped.map(r => r.reporterId);
+            const reporterUsers = await fastify.prisma.user.findMany({
+              where: { id: { in: reporterIds } },
               select: {
                 id: true,
                 username: true,
@@ -2347,73 +2359,92 @@ export async function adminRoutes(fastify: FastifyInstance) {
               }
             });
 
-            // Pour chaque utilisateur, compter les reports crees
-            const reportsSentCount = await Promise.all(
-              usersWithReportsSent.map(async (u) => {
-                const reportCount = await fastify.prisma.report.count({
-                  where: {
-                    reporterId: u.id,
-                    ...(startDate ? { createdAt: { gte: startDate } } : {})
-                  }
-                });
-                return {
-                  id: u.id,
-                  username: u.username,
-                  displayName: u.displayName,
-                  avatar: u.avatar,
-                  count: reportCount
-                };
-              })
-            );
+            // Create a map for quick lookup
+            const reporterUserMap = new Map(reporterUsers.map(u => [u.id, u]));
 
-            rankings = reportsSentCount
-              .sort((a, b) => b.count - a.count)
-              .slice(0, limitNum);
+            rankings = reportsSentGrouped
+              .map(r => {
+                const user = reporterUserMap.get(r.reporterId);
+                return user ? {
+                  id: user.id,
+                  username: user.username,
+                  displayName: user.displayName,
+                  avatar: user.avatar,
+                  count: r._count.id
+                } : null;
+              })
+              .filter((r): r is NonNullable<typeof r> => r !== null);
             break;
 
           case 'reports_received':
             // Compter les signalements recus (sur les messages de l'utilisateur)
-            const usersWithReportsReceived = await fastify.prisma.user.findMany({
+            // OPTIMIZED: Get all reports on messages first, then aggregate by sender
+            const reportsOnMessages = await fastify.prisma.report.findMany({
+              where: {
+                reportedType: 'message',
+                ...(startDate ? { createdAt: { gte: startDate } } : {})
+              },
+              select: {
+                reportedEntityId: true
+              }
+            });
+
+            // Get message IDs that have reports
+            const reportedMessageIds = reportsOnMessages.map(r => r.reportedEntityId);
+
+            // Get messages with their senders
+            const messagesWithSenders = await fastify.prisma.message.findMany({
+              where: {
+                id: { in: reportedMessageIds },
+                isDeleted: false
+              },
+              select: {
+                id: true,
+                senderId: true
+              }
+            });
+
+            // Count reports per sender
+            const reportsCountBySender = new Map<string, number>();
+            for (const msg of messagesWithSenders) {
+              const currentCount = reportsCountBySender.get(msg.senderId) || 0;
+              // Count how many reports this message has
+              const msgReportCount = reportsOnMessages.filter(r => r.reportedEntityId === msg.id).length;
+              reportsCountBySender.set(msg.senderId, currentCount + msgReportCount);
+            }
+
+            // Get top senders with most reports
+            const topReportedSenderIds = Array.from(reportsCountBySender.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, limitNum)
+              .map(([senderId]) => senderId);
+
+            // Get user details for top reported senders
+            const reportedSenderUsers = await fastify.prisma.user.findMany({
+              where: { id: { in: topReportedSenderIds } },
               select: {
                 id: true,
                 username: true,
                 displayName: true,
-                avatar: true,
-                sentMessages: {
-                  select: {
-                    id: true
-                  },
-                  where: {
-                    isDeleted: false
-                  }
-                }
+                avatar: true
               }
             });
 
-            // Pour chaque utilisateur, compter les reports sur leurs messages
-            const reportsCount = await Promise.all(
-              usersWithReportsReceived.map(async (u) => {
-                const messageIds = u.sentMessages.map(m => m.id);
-                const reportCount = await fastify.prisma.report.count({
-                  where: {
-                    reportedType: 'message',
-                    reportedEntityId: { in: messageIds },
-                    ...(startDate ? { createdAt: { gte: startDate } } : {})
-                  }
-                });
-                return {
-                  id: u.id,
-                  username: u.username,
-                  displayName: u.displayName,
-                  avatar: u.avatar,
-                  count: reportCount
-                };
-              })
-            );
+            const reportedUserMap = new Map(reportedSenderUsers.map(u => [u.id, u]));
 
-            rankings = reportsCount
-              .sort((a, b) => b.count - a.count)
-              .slice(0, limitNum);
+            rankings = topReportedSenderIds
+              .map(senderId => {
+                const user = reportedUserMap.get(senderId);
+                const count = reportsCountBySender.get(senderId) || 0;
+                return user ? {
+                  id: user.id,
+                  username: user.username,
+                  displayName: user.displayName,
+                  avatar: user.avatar,
+                  count
+                } : null;
+              })
+              .filter((r): r is NonNullable<typeof r> => r !== null);
             break;
 
           case 'friend_requests_sent':
