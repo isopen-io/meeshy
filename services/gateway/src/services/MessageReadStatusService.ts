@@ -7,7 +7,36 @@
  * - AttachmentStatusEntry: statut par attachment par utilisateur (audio écouté, vidéo vue, etc.)
  */
 
-import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Message, Prisma } from '@meeshy/shared/prisma/client';
+
+// Helper pour retry des transactions en cas de deadlock (P2034)
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 50
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+
+      // P2034 = Transaction deadlock/write conflict
+      if (error?.code === 'P2034' && attempt < maxRetries - 1) {
+        // Exponential backoff avec jitter
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
 
 export class MessageReadStatusService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -147,8 +176,8 @@ export class MessageReadStatusService {
       const now = new Date();
       const finalMessageId = messageId;
 
-      // TRANSACTION: Opérations atomiques pour cursor + status
-      await this.prisma.$transaction(async (tx) => {
+      // TRANSACTION: Opérations atomiques pour cursor + status (avec retry pour deadlock)
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         // Mettre à jour le curseur (pour unread count rapide)
         await tx.conversationReadCursor.upsert({
           where: {
@@ -187,7 +216,7 @@ export class MessageReadStatusService {
             receivedAt: now
           }
         });
-      });
+      }));
 
       // Recalculer et mettre à jour le unreadCount (hors transaction pour performance)
       await this.updateUnreadCount(userId, conversationId);
@@ -264,8 +293,8 @@ export class MessageReadStatusService {
 
       const messageIds = unreadMessages.map(m => m.id);
 
-      // TRANSACTION: Curseur + status entries atomiques
-      await this.prisma.$transaction(async (tx) => {
+      // TRANSACTION: Curseur + status entries atomiques (avec retry pour deadlock)
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         // Mettre à jour le curseur
         await tx.conversationReadCursor.upsert({
           where: {
@@ -318,7 +347,7 @@ export class MessageReadStatusService {
             );
           }
         }
-      });
+      }));
 
       if (messageIds.length === 0) {
         console.log(`✅ [MessageReadStatus] No messages to mark as read for user ${userId}`);
@@ -699,7 +728,7 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
-      await this.prisma.$transaction(async (tx) => {
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         await tx.attachmentStatusEntry.upsert({
           where: {
             attachment_user_status: { attachmentId, userId }
@@ -725,7 +754,7 @@ export class MessageReadStatusService {
             listenedComplete: options?.complete
           }
         });
-      });
+      }));
 
       // Mettre à jour les champs dénormalisés sur l'attachment (hors transaction)
       await this.updateAttachmentComputedStatus(attachmentId);
@@ -762,7 +791,7 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
-      await this.prisma.$transaction(async (tx) => {
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         await tx.attachmentStatusEntry.upsert({
           where: {
             attachment_user_status: { attachmentId, userId }
@@ -788,7 +817,7 @@ export class MessageReadStatusService {
             watchedComplete: options?.complete
           }
         });
-      });
+      }));
 
       // Mettre à jour les champs dénormalisés sur l'attachment (hors transaction)
       await this.updateAttachmentComputedStatus(attachmentId);
@@ -824,7 +853,7 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
-      await this.prisma.$transaction(async (tx) => {
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         await tx.attachmentStatusEntry.upsert({
           where: {
             attachment_user_status: { attachmentId, userId }
@@ -844,7 +873,7 @@ export class MessageReadStatusService {
             wasZoomed: options?.wasZoomed
           }
         });
-      });
+      }));
 
       // Mettre à jour les champs dénormalisés sur l'attachment (hors transaction)
       await this.updateAttachmentComputedStatus(attachmentId);
@@ -876,7 +905,7 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
-      await this.prisma.$transaction(async (tx) => {
+      await withRetry(() => this.prisma.$transaction(async (tx) => {
         await tx.attachmentStatusEntry.upsert({
           where: {
             attachment_user_status: { attachmentId, userId }
@@ -892,7 +921,7 @@ export class MessageReadStatusService {
             downloadedAt: now
           }
         });
-      });
+      }));
 
       // Mettre à jour les champs dénormalisés sur l'attachment (hors transaction)
       await this.updateAttachmentComputedStatus(attachmentId);
