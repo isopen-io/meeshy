@@ -307,7 +307,11 @@ export function PhoneExistsModal({
             <div className="space-y-4 py-4">
               {/* Code Input */}
               <div className="flex justify-center">
+                <label htmlFor="phone-exists-code" className="sr-only">
+                  Code de vérification à 6 chiffres
+                </label>
                 <Input
+                  id="phone-exists-code"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -316,8 +320,12 @@ export function PhoneExistsModal({
                   onChange={(e) => handleCodeChange(e.target.value)}
                   placeholder="000000"
                   className="text-center text-2xl tracking-widest font-mono w-48 h-14"
-                  autoFocus
+                  autoComplete="one-time-code"
+                  aria-describedby="phone-exists-code-desc"
                 />
+                <span id="phone-exists-code-desc" className="sr-only">
+                  Entrez le code à 6 chiffres envoyé par SMS
+                </span>
               </div>
 
               {/* Verify Button */}

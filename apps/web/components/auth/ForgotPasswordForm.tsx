@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -150,7 +151,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
           disabled={isLoading}
           required
           autoComplete="email"
-          autoFocus
+          spellCheck={false}
           className="h-11"
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -187,13 +188,12 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
 
       {/* Back to Login Link */}
       <div className="text-center">
-        <button
-          type="button"
-          onClick={() => router.push('/login')}
-          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline transition-colors"
+        <Link
+          href="/login"
+          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
         >
           {t('forgotPassword.backToLogin') || 'Back to Login'}
-        </button>
+        </Link>
       </div>
     </form>
   );

@@ -71,6 +71,8 @@ export function JoinConversationForm({ onSuccess }: JoinConversationFormProps) {
           onChange={(e) => setLinkId(e.target.value)}
           disabled={isLoading}
           required
+          autoComplete="off"
+          spellCheck={false}
         />
       </div>
 

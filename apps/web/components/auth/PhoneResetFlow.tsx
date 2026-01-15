@@ -44,10 +44,12 @@ const OTPInput = ({
   value,
   onChange,
   disabled = false,
+  id = 'otp-input',
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  id?: string;
 }) => {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const CODE_LENGTH = 6;
@@ -85,13 +87,14 @@ const OTPInput = ({
   };
 
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex justify-center gap-2" role="group" aria-label="Code de vérification à 6 chiffres">
       {Array.from({ length: CODE_LENGTH }).map((_, index) => (
         <input
           key={index}
           ref={(el) => {
             inputRefs.current[index] = el;
           }}
+          id={`${id}-${index}`}
           type="text"
           inputMode="numeric"
           maxLength={1}
@@ -100,6 +103,8 @@ const OTPInput = ({
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
+          aria-label={`Chiffre ${index + 1} sur 6`}
+          autoComplete="one-time-code"
           className="w-12 h-14 text-center text-2xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
         />
       ))}
@@ -459,15 +464,17 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
 
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>{t('phoneReset.phoneLabel') || 'Num\u00e9ro de t\u00e9l\u00e9phone'}</Label>
+                <Label htmlFor="phone-reset-number">{t('phoneReset.phoneLabel') || 'Numéro de téléphone'}</Label>
                 <div className="flex gap-2">
+                  <label htmlFor="phone-reset-country" className="sr-only">Indicatif pays</label>
                   <select
+                    id="phone-reset-country"
                     value={selectedCountry.code}
                     onChange={(e) => {
                       const country = COUNTRY_CODES.find((c) => c.code === e.target.value);
                       if (country) setSelectedCountry(country);
                     }}
-                    className="w-24 px-2 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
+                    className="w-24 px-2 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {COUNTRY_CODES.map((country) => (
                       <option key={country.code} value={country.code}>
@@ -476,12 +483,15 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                     ))}
                   </select>
                   <Input
+                    id="phone-reset-number"
                     type="tel"
+                    inputMode="tel"
                     value={localPhoneNumber}
                     onChange={(e) => setLocalPhoneNumber(e.target.value)}
                     placeholder="6 12 34 56 78"
                     className="flex-1"
                     disabled={isPhoneLookupLoading}
+                    autoComplete="tel"
                   />
                 </div>
               </div>
@@ -545,30 +555,35 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
 
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label>{t('phoneReset.usernameLabel') || 'Nom d\'utilisateur complet'}</Label>
+                  <Label htmlFor="phone-reset-username">{t('phoneReset.usernameLabel') || 'Nom d\'utilisateur complet'}</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                     <Input
+                      id="phone-reset-username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder={t('phoneReset.usernamePlaceholder') || 'Entrez votre pseudo complet'}
                       className="pl-10"
                       disabled={isIdentityVerifying}
+                      autoComplete="username"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{t('phoneReset.emailLabel') || 'Adresse email compl\u00e8te'}</Label>
+                  <Label htmlFor="phone-reset-email">{t('phoneReset.emailLabel') || 'Adresse email complète'}</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                     <Input
+                      id="phone-reset-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t('phoneReset.emailPlaceholder') || 'Entrez votre email complet'}
                       className="pl-10"
                       disabled={isIdentityVerifying}
+                      autoComplete="email"
+                      spellCheck={false}
                     />
                   </div>
                 </div>
@@ -636,7 +651,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
             </CardHeader>
 
             <CardContent className="space-y-6">
-              <OTPInput value={code} onChange={setCode} disabled={isCodeVerifying} />
+              <OTPInput value={code} onChange={setCode} disabled={isCodeVerifying} id="phone-reset-code" />
 
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                 <Clock className="h-4 w-4" />
@@ -677,9 +692,9 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
                 ) : (
                   <button
                     onClick={handleResendCode}
-                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center justify-center gap-1 mx-auto"
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center justify-center gap-1 mx-auto rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
                     {t('phoneReset.resendCode') || 'Renvoyer le code'}
                   </button>
                 )}

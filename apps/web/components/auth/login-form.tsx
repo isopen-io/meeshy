@@ -210,30 +210,39 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       {/* Message d'erreur visible */}
       {error && (
-        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+        <div role="alert" className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
           <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
         </div>
       )}
 
       {/* Nom d'utilisateur avec icône intégrée */}
-      <div className="relative">
-        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input
-          id="login-form-username"
-          type="text"
-          placeholder="Pseudonyme ou numéro de téléphone"
-          value={formData.username}
-          onChange={(e) => handleUsernameChange(e.target.value)}
-          disabled={isLoading}
-          required
-          className="pl-10 h-11"
-        />
+      <div className="space-y-1">
+        <Label htmlFor="login-form-username" className="sr-only">
+          {t('login.usernameLabel') || 'Pseudonyme ou numéro de téléphone'}
+        </Label>
+        <div className="relative">
+          <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
+          <Input
+            id="login-form-username"
+            type="text"
+            placeholder="Pseudonyme ou numéro de téléphone"
+            value={formData.username}
+            onChange={(e) => handleUsernameChange(e.target.value)}
+            disabled={isLoading}
+            required
+            autoComplete="username"
+            className="pl-10 h-11"
+          />
+        </div>
       </div>
 
       {/* Mot de passe avec icône intégrée et toggle */}
-      <div>
+      <div className="space-y-1">
+        <Label htmlFor="login-form-password" className="sr-only">
+          {t('login.passwordLabel') || 'Mot de passe'}
+        </Label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
           <Input
             id="login-form-password"
             type={showPassword ? 'text' : 'password'}
@@ -242,15 +251,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             disabled={isLoading}
             required
+            autoComplete="current-password"
             className="pl-10 pr-10 h-11"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label={showPassword ? 'Masquer' : 'Afficher'}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
           </button>
         </div>
         {/* Forgot password lien compact */}
@@ -280,7 +290,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           htmlFor="remember-device"
           className="text-sm font-medium leading-none cursor-pointer flex items-center gap-1.5 text-gray-700 dark:text-gray-300"
         >
-          <Shield className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+          <Shield className="h-3.5 w-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
           {t('login.rememberDevice')}
         </Label>
       </div>
