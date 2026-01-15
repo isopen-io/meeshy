@@ -547,7 +547,7 @@ export class ConversationsService {
         data: unknown[];  // Directement les messages
         pagination?: PaginationMeta;
         meta?: { userLanguage?: string };
-      }>(`/conversations/${conversationId}/messages`, { offset, limit }, {
+      }>(`/api/conversations/${conversationId}/messages`, { offset, limit }, {
         signal: controller.signal
       });
 
