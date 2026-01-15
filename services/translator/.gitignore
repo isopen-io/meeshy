@@ -7,6 +7,10 @@ dev.db
 startup_*.log
 test_db_connection.py
 
+# Generated Prisma schema (synced from packages/shared/prisma/schema.prisma)
+# Use scripts/sync-prisma-schema-for-python.sh to regenerate
+schema.prisma
+
 # Generated Prisma client
 generated/
 
