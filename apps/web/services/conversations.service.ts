@@ -541,10 +541,13 @@ export class ConversationsService {
       // Convertir page en offset pour le backend
       const offset = (page - 1) * limit;
 
-      // Format optimisé: data = Message[] directement, meta = { userLanguage }
+      // Structure du backend: { success: true, data: { messages: [...], hasMore: boolean } }
       const response = await apiService.get<{
         success: boolean;
-        data: unknown[];  // Directement les messages
+        data: {
+          messages: unknown[];
+          hasMore: boolean;
+        };
         pagination?: PaginationMeta;
         meta?: { userLanguage?: string };
       }>(`/conversations/${conversationId}/messages`, { offset, limit }, {
@@ -555,7 +558,7 @@ export class ConversationsService {
       this.pendingRequests.delete(requestKey);
 
       // Vérifier la structure de la réponse
-      if (!response.data?.success || !response.data?.data) {
+      if (!response.data?.success || !response.data?.data?.messages) {
         console.warn('⚠️ Structure de réponse inattendue:', response.data);
         return {
           messages: [],
@@ -564,16 +567,18 @@ export class ConversationsService {
         };
       }
 
-      // data est directement le tableau de messages (format optimisé)
-      const transformedMessages = (response.data.data || []).map(msg => this.transformMessageData(msg));
+      // Extraire les messages depuis data.messages
+      const messagesArray = response.data.data.messages || [];
+      const transformedMessages = messagesArray.map(msg => this.transformMessageData(msg));
 
-      // Utiliser les métadonnées de pagination du backend
+      // Utiliser hasMore du backend
+      const hasMore = response.data.data.hasMore ?? false;
       const pagination = response.data.pagination;
 
       return {
         messages: transformedMessages,
         total: pagination?.total ?? transformedMessages.length,
-        hasMore: pagination?.hasMore ?? false,
+        hasMore: hasMore,
         pagination,
       };
     } catch (error) {
