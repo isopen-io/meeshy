@@ -13,6 +13,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 
@@ -502,47 +503,47 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
  * Hook for notification preferences only
  */
 export const useNotificationPreferences = () => {
-  return useUserPreferencesStore(state => ({
+  return useUserPreferencesStore(useShallow(state => ({
     preferences: state.notifications,
     update: state.updateNotifications,
     sync: state.syncNotifications,
     canReceive: state.canReceiveNotification,
     isInDnd: state.isInDndPeriod,
-  }));
+  })));
 };
 
 /**
  * Hook for encryption preferences only
  */
 export const useEncryptionPreferences = () => {
-  return useUserPreferencesStore(state => ({
+  return useUserPreferencesStore(useShallow(state => ({
     preferences: state.encryption,
     update: state.updateEncryption,
     updateLocalSettings: state.updateEncryptionLocalSettings,
     sync: state.syncEncryption,
     shouldShowWarning: state.shouldShowEncryptionWarning,
-  }));
+  })));
 };
 
 /**
  * Hook for privacy preferences only
  */
 export const usePrivacyPreferences = () => {
-  return useUserPreferencesStore(state => ({
+  return useUserPreferencesStore(useShallow(state => ({
     preferences: state.privacy,
     update: state.updatePrivacy,
     sync: state.syncPrivacy,
-  }));
+  })));
 };
 
 /**
  * Hook for language preferences only
  */
 export const useLanguagePreferencesFromStore = () => {
-  return useUserPreferencesStore(state => ({
+  return useUserPreferencesStore(useShallow(state => ({
     preferences: state.language,
     update: state.updateLanguage,
-  }));
+  })));
 };
 
 // ============================================================================
