@@ -77,7 +77,7 @@ export function PhoneExistsModal({
   // Handle "Recover my account" - go to login/reset password
   const handleRecoverAccount = () => {
     onClose();
-    router.push('/signin');
+    router.push('/login');
   };
 
   // Handle "Continue without phone" - create account without phone

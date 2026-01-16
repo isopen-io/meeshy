@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -159,7 +159,7 @@ const MaskedText = ({ text, prefix = '' }: { text: string; prefix?: string }) =>
 // Identity Verification Card
 const IdentityCard = ({ maskedUserInfo }: { maskedUserInfo: MaskedUserInfo }) => {
   return (
-    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-center">
+    <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border border-white/30 dark:border-gray-600/50 rounded-xl p-4 text-center">
       {/* Avatar */}
       <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-3 overflow-hidden">
         {maskedUserInfo.avatarUrl ? (
@@ -252,6 +252,22 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
   const validateUsername = (username: string): boolean => {
     const trimmed = username.trim();
     return trimmed.length >= 2 && trimmed.length <= 30;
+  };
+
+  // Check if error requires session reset
+  const isSessionExpiredError = (errorCode: string): boolean => {
+    return ['invalid_token', 'token_expired', 'invalid_step'].includes(errorCode);
+  };
+
+  // Handle session expired - reset flow completely
+  const handleSessionExpired = () => {
+    setMaskedUserInfo(null);
+    setPhoneResetTokenId('');
+    setPhoneResetStep('phone_input');
+    setUsername('');
+    setEmail('');
+    setCode('');
+    setLocalPhoneNumber('');
   };
 
   // Translate error code using i18n with French fallbacks
@@ -356,6 +372,12 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         setResendCooldown(60);
         toast.success(t('phoneReset.codeSent') || 'Code SMS envoyé !');
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          toast.error(translateErrorCode(result.error));
+          return;
+        }
         // Translate error code from service
         setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.identityFailed') || 'Vérification échouée');
         if (result.attemptsRemaining !== undefined) {
@@ -391,6 +413,12 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         toast.success(t('phoneReset.success') || 'Vérification réussie !');
         router.push(`/reset-password?token=${result.resetToken}`);
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          toast.error(translateErrorCode(result.error));
+          return;
+        }
         // Translate error code from service
         setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.codeFailed') || 'Code invalide');
         setCode('');
@@ -416,6 +444,12 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         toast.success(t('phoneReset.codeResent') || 'Nouveau code envoyé !');
         setCode('');
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          toast.error(translateErrorCode(result.error));
+          return;
+        }
         // Translate error code from service
         toast.error(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.resendFailed') || 'Impossible de renvoyer');
       }
@@ -713,9 +747,5 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
     }
   };
 
-  return (
-    <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-      {renderStep()}
-    </Card>
-  );
+  return <>{renderStep()}</>;
 }

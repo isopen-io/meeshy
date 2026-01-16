@@ -195,7 +195,7 @@ function LandingPageContent() {
             </Link>
 
             {/* Bouton Inscription */}
-            <Link href="/signin">
+            <Link href="/signup">
               <Button size="lg" className="flex items-center space-x-2">
                 <UserPlus className="h-5 w-5" />
                 <span>{t('hero.startFree')}</span>
@@ -368,7 +368,7 @@ function LandingPageContent() {
           </p>
           
           {/* Bouton qui redirige vers la page d'inscription */}
-          <Link href="/signin">
+          <Link href="/signup">
             <Button 
               size="lg" 
               variant="secondary" 

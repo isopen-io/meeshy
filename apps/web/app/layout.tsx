@@ -11,7 +11,7 @@ import { ErrorBoundary } from "@/components/common";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
 import { defaultFont, getAllFontVariables } from "@/lib/fonts";
-import { preloadCriticalComponents } from "@/lib/lazy-components";
+import { CriticalPreloader } from "@/components/common/CriticalPreloader";
 import { CallManager } from "@/components/video-call";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
@@ -74,14 +74,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Preload des composants critiques après le rendu initial
-  if (typeof window !== 'undefined') {
-    setTimeout(preloadCriticalComponents, 0);
-  }
-
   return (
     <html lang="fr">
       <body className={`${getAllFontVariables()} antialiased font-nunito`}>
+        {/* Preload des composants critiques (Client Component) */}
+        <CriticalPreloader />
+
         {/* Google Analytics - Tracking sur toutes les pages */}
         <GoogleAnalytics />
 

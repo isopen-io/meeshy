@@ -28,6 +28,7 @@ import {
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
+import { preloadRouteModules } from '@/lib/lazy-components';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -227,6 +228,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 variant="ghost"
                 className={`w-full ${isSidebarOpen ? 'justify-start' : 'justify-center'} h-10`}
                 onClick={() => router.push('/dashboard')}
+                onMouseEnter={() => preloadRouteModules('/dashboard')}
+                onFocus={() => preloadRouteModules('/dashboard')}
               >
                 <Home className="w-5 h-5" />
                 {isSidebarOpen && <span className="ml-3">Retour dashboard</span>}
@@ -236,13 +239,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
               {filteredNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.href;
-                
+
                 return (
                   <Button
                     key={item.href}
                     variant={isActive ? "default" : "ghost"}
                     className={`w-full ${isSidebarOpen ? 'justify-start' : 'justify-center'} h-10`}
                     onClick={() => router.push(item.href)}
+                    onMouseEnter={() => preloadRouteModules(item.href)}
+                    onFocus={() => preloadRouteModules(item.href)}
                   >
                     <Icon className="w-5 h-5" />
                     {isSidebarOpen && <span className="ml-3">{item.label}</span>}

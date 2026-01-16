@@ -1057,10 +1057,10 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           disabled={!isComposingEnabled}
           size="sm"
           variant="ghost"
-          className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0"
-          title="Enregistrer un message vocal"
+          className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          aria-label="Enregistrer un message vocal"
         >
-          <Mic className={`h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] ${showAudioRecorder ? 'text-blue-600' : 'text-gray-600'}`} />
+          <Mic className={`h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] ${showAudioRecorder ? 'text-blue-600' : 'text-gray-600'}`} aria-hidden="true" />
         </Button>
 
         {/* Bouton d'attachement (Document) - Agrandi pour mobile */}
@@ -1069,16 +1069,16 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           disabled={!isComposingEnabled || isUploading || isCompressing}
           size="sm"
           variant="ghost"
-          className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0"
-          title={isCompressing ? 'Compression en cours...' : isUploading ? 'Upload en cours...' : 'Ajouter des fichiers'}
+          className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          aria-label={isCompressing ? 'Compression en cours' : isUploading ? 'Upload en cours' : 'Ajouter des fichiers'}
         >
           {isCompressing || isUploading ? (
-            <Loader2 className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-blue-600 animate-spin" />
+            <Loader2 className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-blue-600 animate-spin" aria-hidden="true" />
           ) : (
-            <Paperclip className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-gray-600" />
+            <Paperclip className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-gray-600" aria-hidden="true" />
           )}
           {selectedFiles.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] rounded-full h-3.5 w-3.5 flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] rounded-full h-3.5 w-3.5 flex items-center justify-center" aria-label={`${selectedFiles.length} fichiers sélectionnés`}>
               {selectedFiles.length}
             </span>
           )}
@@ -1114,10 +1114,10 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           onClick={handleSendMessage}
           disabled={(!value.trim() && selectedFiles.length === 0 && uploadedAttachments.length === 0) || value.length > maxMessageLength || !isComposingEnabled || isUploading || isCompressing || isRecording || (selectedFiles.length + uploadedAttachments.length) > 50}
           size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white h-6 w-6 sm:h-9 sm:w-9 p-0 rounded-full shadow-lg hover:shadow-xl transition-all duration-200"
-          title={isCompressing ? "Compression en cours..." : isRecording ? "Arrêtez l'enregistrement avant d'envoyer" : "Envoyer le message"}
+          className="bg-blue-600 hover:bg-blue-700 text-white h-6 w-6 sm:h-9 sm:w-9 p-0 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          aria-label={isCompressing ? "Compression en cours" : isRecording ? "Arrêtez l'enregistrement avant d'envoyer" : "Envoyer le message"}
         >
-          <Send className="h-3 w-3 sm:h-5 sm:w-5" />
+          <Send className="h-3 w-3 sm:h-5 sm:w-5" aria-hidden="true" />
         </Button>
       </div>
 
@@ -1130,6 +1130,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         onChange={handleFileInputChange}
         accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip"
         capture={undefined}
+        aria-label="Sélectionner des fichiers à joindre (images, vidéos, audio, PDF, documents)"
       />
     </div>
   );

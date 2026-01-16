@@ -1,272 +1,54 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import { LoginForm } from '@/components/auth/login-form';
+import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/hooks/use-auth';
-import { LargeLogo } from '@/components/branding';
-import { authManager, SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
-import { buildApiUrl } from '@/lib/config';
-import { Mail, Lock, Sparkles } from 'lucide-react';
+import { authManager } from '@/services/auth-manager.service';
+import { Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-// Composants inline légers pour éviter les imports lourds
-const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 ${className}`}>
-    {children}
-  </div>
-);
-
-const SimpleButton = ({
-  children,
-  onClick,
-  disabled = false,
-  type = 'button',
-  variant = 'primary',
-  className = ''
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  type?: 'button' | 'submit';
-  variant?: 'primary' | 'secondary' | 'outline';
-  className?: string;
-}) => {
-  const baseStyles = 'w-full font-medium py-2.5 px-4 rounded-md transition-colors flex items-center justify-center gap-2';
-  const variantStyles = {
-    primary: 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white',
-    secondary: 'bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white',
-    outline: 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
-  };
-
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseStyles} ${variantStyles[variant]} ${className}`}
-    >
-      {children}
-    </button>
-  );
-};
-
-const SimpleInput = ({
-  type = 'text',
-  value,
-  onChange,
-  placeholder,
-  disabled = false,
-  className = '',
-  icon: Icon
-}: {
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-  icon?: React.ComponentType<{ className?: string }>;
-}) => (
-  <div className="relative">
-    {Icon && (
-      <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-    )}
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      className={`w-full px-3 py-2.5 ${Icon ? 'pl-10' : ''} bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 ${className}`}
-    />
-  </div>
-);
-
-const Divider = ({ text }: { text: string }) => (
-  <div className="relative my-6">
-    <div className="absolute inset-0 flex items-center">
-      <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-    </div>
-    <div className="relative flex justify-center text-sm">
-      <span className="px-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-        {text}
-      </span>
-    </div>
-  </div>
-);
-
-function QuickLoginPageContent() {
+function LoginPageContent() {
   const { t } = useI18n('auth');
-  const { login: authLogin, isAuthenticated, isChecking } = useAuth();
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const { isAuthenticated, isChecking } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl');
 
-  // Rediriger si déjà authentifié
+  // Redirect if already authenticated
   useEffect(() => {
     if (!isChecking && isAuthenticated) {
-      // CORRECTION MAJEURE: Redirection intelligente selon le type d'utilisateur
-      // Pour les utilisateurs anonymes : rediriger vers leur conversation
-      // Pour les membres : rediriger vers / ou returnUrl
       const anonymousSession = authManager.getAnonymousSession();
       if (anonymousSession) {
-        // Utilisateur anonyme - rediriger vers la conversation du lien utilisé
         const shareLinkId = localStorage.getItem('anonymous_current_share_link') ||
                            localStorage.getItem('anonymous_current_link_id');
-
         if (shareLinkId) {
           router.replace(`/chat/${shareLinkId}`);
           return;
         }
       }
-
-      // Utilisateur membre authentifié - redirection normale
-      const redirectUrl = returnUrl || '/dashboard';
-      router.replace(redirectUrl);
+      router.replace(returnUrl || '/dashboard');
     }
   }, [isAuthenticated, isChecking, returnUrl, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Réinitialiser l'erreur précédente
-    setError(null);
-
-    // Validation des champs
-    if (!formData.username.trim() || !formData.password.trim()) {
-      const errorMsg = t('login.validation.required');
-      setError(errorMsg);
-      console.warn('[LOGIN] Validation échouée: champs requis vides');
-      return;
-    }
-
-    setIsLoading(true);
-    console.log('[LOGIN] Tentative de connexion pour:', formData.username.trim());
-
-    try {
-      // Construire l'URL de l'API
-      const apiUrl = buildApiUrl('/auth/login');
-      console.log('[LOGIN] URL API:', apiUrl);
-
-      // Effectuer la requête de connexion
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: formData.username.trim(),
-          password: formData.password.trim()
-        }),
-      });
-
-      console.log('[LOGIN] Réponse HTTP:', response.status, response.statusText);
-
-      // Gérer les erreurs HTTP
-      if (!response.ok) {
-        let errorMessage = t('login.errors.loginFailed');
-
-        if (response.status === 401) {
-          errorMessage = t('login.errors.invalidCredentials');
-          console.error('[LOGIN] Échec 401: Identifiants invalides');
-        } else if (response.status === 500) {
-          errorMessage = t('login.errors.serverError');
-          console.error('[LOGIN] Échec 500: Erreur serveur');
-        } else if (response.status === 400) {
-          errorMessage = t('login.errors.loginFailed');
-          console.error('[LOGIN] Échec 400: Données invalides');
-        } else if (response.status >= 400) {
-          errorMessage = t('login.errors.unknownError');
-          console.error('[LOGIN] Échec', response.status, ':', response.statusText);
-        }
-
-        setError(errorMessage);
-        toast.error(errorMessage);
-        setIsLoading(false);
-        return;
-      }
-
-      // Parser la réponse JSON
-      const data = await response.json();
-      console.log('[LOGIN] Données reçues:', {
-        success: data.success,
-        hasToken: !!data.data?.token,
-        hasUser: !!data.data?.user,
-        requires2FA: data.data?.requires2FA
-      });
-
-      // Vérifier si 2FA est requis
-      if (data.success && data.data?.requires2FA) {
-        console.log('[LOGIN] 2FA requis, redirection vers la page de vérification');
-
-        // Stocker le token temporaire pour la vérification 2FA - utilise les clés centralisées
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN, data.data.twoFactorToken);
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID, data.data.user?.id || '');
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME, data.data.user?.username || formData.username);
-
-        // Rediriger vers la page de vérification 2FA
-        const verifyUrl = `/auth/verify-2fa${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`;
-        router.push(verifyUrl);
-        return;
-      }
-
-      // Vérifier le succès de la connexion
-      if (data.success && data.data?.token) {
-        console.log('[LOGIN] Connexion réussie pour utilisateur:', data.data.user?.username);
-
-        // Mettre à jour le store d'authentification
-        authLogin(data.data.user, data.data.token);
-
-        // Toast de succès
-        toast.success(t('login.success.loginSuccess'));
-
-        // Redirection
-        const redirectUrl = returnUrl || '/dashboard';
-        console.log('[LOGIN] Redirection vers:', redirectUrl);
-
-        // Utiliser router.replace pour éviter les problèmes de timing
-        router.replace(redirectUrl);
-      } else {
-        // Réponse invalide ou erreur métier
-        const errorMsg = data.error || t('login.errors.loginFailed');
-        console.error('[LOGIN] Échec de connexion:', errorMsg);
-        setError(errorMsg);
-        toast.error(errorMsg);
-        setIsLoading(false);
-      }
-    } catch (error) {
-      // Erreur réseau ou autre erreur inattendue
-      console.error('[LOGIN] Erreur réseau ou exception:', error);
-      const errorMsg = error instanceof Error
-        ? `${t('login.errors.networkError')}: ${error.message}`
-        : t('login.errors.networkError');
-      setError(errorMsg);
-      toast.error(errorMsg);
-      setIsLoading(false);
-    }
-  };
-
-  // État de chargement unifié (h-12 w-12)
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{t('login.verifyingAuth')}</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+          className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
+        />
       </div>
     );
   }
 
   if (isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
         <div className="text-center space-y-4">
           <LargeLogo href="/" />
           <p className="text-gray-600 dark:text-gray-400">{t('login.redirecting')}</p>
@@ -276,126 +58,152 @@ function QuickLoginPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Header minimaliste */}
-        <div className="text-center space-y-3">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
+
+      {/* Animated decorative blobs */}
+      <motion.div
+        animate={{
+          scale: [1, 1.2, 1],
+          x: [0, 30, 0],
+          y: [0, -20, 0],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 dark:from-blue-600/20 dark:to-indigo-700/20 rounded-full blur-3xl"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          x: [0, -20, 0],
+          y: [0, 30, 0],
+        }}
+        transition={{
+          duration: 10,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 1,
+        }}
+        className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 dark:from-cyan-600/20 dark:to-blue-700/20 rounded-full blur-3xl"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.3, 1],
+          x: [0, 20, 0],
+          y: [0, -30, 0],
+        }}
+        transition={{
+          duration: 12,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 2,
+        }}
+        className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-purple-400/30 to-violet-500/30 dark:from-purple-600/20 dark:to-violet-700/20 rounded-full blur-3xl"
+      />
+
+      {/* Main content */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-6"
+        >
           <LargeLogo href="/" />
-          <p className="text-gray-600 dark:text-gray-400">{t('login.subtitle')}</p>
-        </div>
+        </motion.div>
 
-        {/* Formulaire simplifié */}
-        <SimpleCard className="p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('login.title')}</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">{t('login.formDescription')}</p>
-          </div>
-
-          {/* Message d'erreur visible */}
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('login.usernameLabel')}
-              </label>
-              <SimpleInput
-                type="text"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                placeholder={t('login.usernamePlaceholder')}
-                disabled={isLoading}
-                icon={Mail}
-              />
+        {/* Form card with glass effect */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="w-full max-w-md"
+        >
+          <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {t('login.title')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                {t('login.formDescription')}
+              </p>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('login.passwordLabel')}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => router.push('/forgot-password')}
-                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-                >
-                  {t('login.forgotPassword')}
-                </button>
+            {/* Login Form */}
+            <LoginForm />
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200 dark:border-gray-700" />
               </div>
-              <SimpleInput
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder={t('login.passwordPlaceholder')}
-                disabled={isLoading}
-                icon={Lock}
-              />
+              <div className="relative flex justify-center text-sm">
+                <span className="px-3 bg-white/70 dark:bg-gray-900/70 text-gray-500 dark:text-gray-400">
+                  {t('login.orContinueWith')}
+                </span>
+              </div>
             </div>
 
-            <SimpleButton type="submit" disabled={isLoading} variant="primary">
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>{t('login.loggingIn')}</span>
-                </>
-              ) : (
-                t('login.loginButton')
-              )}
-            </SimpleButton>
-          </form>
-
-          {/* Séparateur */}
-          <Divider text={t('login.orContinueWith')} />
-
-          {/* Bouton Magic Link */}
-          <SimpleButton
-            variant="secondary"
-            onClick={() => router.push('/auth/magic-link' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
-          >
-            <Sparkles className="h-4 w-4" />
-            {t('login.magicLinkButton')}
-          </SimpleButton>
-
-          {/* Lien vers inscription */}
-          <div className="text-center pt-6">
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
-              {t('login.noAccount')}{' '}
-              <button
-                type="button"
-                onClick={() => router.push('/signin' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
-                className="text-blue-600 hover:text-blue-700 font-medium underline"
-              >
-                {t('login.registerLink')}
-              </button>
-            </p>
+            {/* Magic Link Button */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push('/auth/magic-link' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {t('login.magicLinkButton')}
+            </Button>
           </div>
-        </SimpleCard>
+        </motion.div>
+
+        {/* Footer links */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="mt-8 text-center text-sm text-muted-foreground"
+        >
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            <a href="/terms" className="hover:text-foreground transition-colors">
+              {t('register.termsOfService')}
+            </a>
+            <span className="hidden sm:inline">•</span>
+            <a href="/privacy" className="hover:text-foreground transition-colors">
+              {t('register.privacyPolicy')}
+            </a>
+            <span className="hidden sm:inline">•</span>
+            <a href="/contact" className="hover:text-foreground transition-colors">
+              {t('register.contactUs')}
+            </a>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
 }
 
 function LoadingFallback() {
-  const { t } = useI18n('auth');
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{t('login.loading')}</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+        className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
+      />
     </div>
   );
 }
 
-export default function QuickLoginPage() {
+export default function LoginPage() {
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <QuickLoginPageContent />
+      <LoginPageContent />
     </Suspense>
   );
 }

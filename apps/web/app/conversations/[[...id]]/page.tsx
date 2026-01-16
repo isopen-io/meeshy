@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { AuthGuard } from '@/components/auth/auth-guard';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 import { ConversationLayout } from '@/components/conversations/ConversationLayout';
 import { useI18n } from '@/hooks/useI18n';
 import { useParams } from 'next/navigation';

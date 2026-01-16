@@ -44,13 +44,17 @@ export function ConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
             {cancelText}
           </Button>
           <Button
             onClick={handleConfirm}
             variant={variant === 'destructive' ? 'destructive' : 'default'}
-            className={variant === 'destructive' ? 'bg-red-600 hover:bg-red-700' : ''}
+            className={`focus-visible:ring-2 focus-visible:ring-offset-2 ${variant === 'destructive' ? 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-500' : 'focus-visible:ring-primary'}`}
           >
             {confirmText}
           </Button>

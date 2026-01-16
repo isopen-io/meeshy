@@ -1,15 +1,13 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Globe, Heart, Target, Lightbulb, Mail } from 'lucide-react';
 import Link from 'next/link';
-import { useI18n } from '@/hooks/useI18n';
+import { getAboutTranslations } from '@/lib/i18n-server';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
-export default function AboutPage() {
-  const { t } = useI18n('about');
+export default async function AboutPage() {
+  const { t } = await getAboutTranslations();
 
   return (
     <>

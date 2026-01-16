@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { motion } from 'framer-motion';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { PhoneResetFlow } from '@/components/auth/PhoneResetFlow';
 import { LargeLogo } from '@/components/branding';
@@ -18,98 +18,180 @@ function ForgotPasswordContent() {
 
   return (
     <FeatureGate feature="passwordReset" showMessage={true}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <LargeLogo href="/" />
-          <p className="text-gray-600 dark:text-gray-400 text-lg mt-2">
-            {t('forgotPassword.subtitle') || 'Reset your password securely'}
-          </p>
-        </div>
+      <div className="min-h-screen relative overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
 
-        {/* Tab buttons */}
-        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-          <button
-            onClick={() => setActiveMethod('email')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all duration-200",
-              activeMethod === 'email'
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            )}
+        {/* Animated decorative blobs */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-amber-400/30 to-orange-500/30 dark:from-amber-600/20 dark:to-orange-700/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.1, 1],
+            x: [0, -20, 0],
+            y: [0, 30, 0],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1,
+          }}
+          className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-rose-400/30 to-pink-500/30 dark:from-rose-600/20 dark:to-pink-700/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.3, 1],
+            x: [0, 20, 0],
+            y: [0, -30, 0],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2,
+          }}
+          className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-yellow-400/30 to-amber-500/30 dark:from-yellow-600/20 dark:to-amber-700/20 rounded-full blur-3xl"
+        />
+
+        {/* Main content */}
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6"
           >
-            <Mail className="h-4 w-4" />
-            <span>{t('forgotPassword.tabEmail') || 'By email'}</span>
-          </button>
-          <button
-            onClick={() => setActiveMethod('phone')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all duration-200",
-              activeMethod === 'phone'
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            )}
+            <LargeLogo href="/" />
+          </motion.div>
+
+          {/* Tab buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="w-full max-w-md mb-4"
           >
-            <Phone className="h-4 w-4" />
-            <span>{t('forgotPassword.tabPhone') || 'By phone'}</span>
-          </button>
-        </div>
-
-        {/* Content based on active method */}
-        {activeMethod === 'email' ? (
-          <>
-            {/* Forgot Password Card - Email */}
-            <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-              <CardHeader className="text-center pb-6">
-                <CardTitle className="flex items-center justify-center space-x-2 text-2xl">
-                  <KeyRound className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  <span>{t('forgotPassword.title') || 'Forgot Password'}</span>
-                </CardTitle>
-                <CardDescription className="text-base">
-                  {t('forgotPassword.description') ||
-                    'Enter your email address and we will send you a link to reset your password'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ForgotPasswordForm />
-              </CardContent>
-            </Card>
-
-            {/* Security Note */}
-            <div className="text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
-              <p>
-                {t('forgotPassword.securityNote') ||
-                  'For security reasons, we will send a password reset link to your email address. The link will expire in 15 minutes.'}
-              </p>
-              <p>
-                {t('forgotPassword.privacyNote') ||
-                  'We will never ask for your password via email or phone.'}
-              </p>
+            <div className="flex backdrop-blur-xl bg-white/50 dark:bg-gray-900/50 rounded-xl p-1 border border-white/20 dark:border-gray-700/30">
+              <button
+                onClick={() => setActiveMethod('email')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
+                  activeMethod === 'email'
+                    ? "bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                )}
+              >
+                <Mail className="h-4 w-4" aria-hidden="true" />
+                <span>{t('forgotPassword.tabEmail') || 'Par email'}</span>
+              </button>
+              <button
+                onClick={() => setActiveMethod('phone')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
+                  activeMethod === 'phone'
+                    ? "bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                )}
+              >
+                <Phone className="h-4 w-4" aria-hidden="true" />
+                <span>{t('forgotPassword.tabPhone') || 'Par téléphone'}</span>
+              </button>
             </div>
-          </>
-        ) : (
-          /* Phone Reset Flow */
-          <PhoneResetFlow onClose={() => setActiveMethod('email')} />
-        )}
+          </motion.div>
+
+          {/* Form card with glass effect */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-full max-w-md"
+          >
+            {activeMethod === 'email' ? (
+              <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+                {/* Header */}
+                <div className="text-center mb-6">
+                  <div className="flex justify-center mb-4">
+                    <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                      <KeyRound className="h-7 w-7 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                    </div>
+                  </div>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {t('forgotPassword.title') || 'Mot de passe oublié'}
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2">
+                    {t('forgotPassword.description') || 'Entrez votre email pour recevoir un lien de réinitialisation'}
+                  </p>
+                </div>
+
+                <ForgotPasswordForm />
+
+                {/* Security Note */}
+                <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <p>{t('forgotPassword.securityNote') || 'Le lien expirera dans 15 minutes.'}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+                <PhoneResetFlow onClose={() => setActiveMethod('email')} />
+              </div>
+            )}
+          </motion.div>
+
+          {/* Footer links */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="mt-8 text-center text-sm text-muted-foreground"
+          >
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+              <a href="/terms" className="hover:text-foreground transition-colors">
+                {t('register.termsOfService') || 'Conditions'}
+              </a>
+              <span className="hidden sm:inline">•</span>
+              <a href="/privacy" className="hover:text-foreground transition-colors">
+                {t('register.privacyPolicy') || 'Confidentialité'}
+              </a>
+              <span className="hidden sm:inline">•</span>
+              <a href="/contact" className="hover:text-foreground transition-colors">
+                {t('register.contactUs') || 'Contact'}
+              </a>
+            </div>
+          </motion.div>
+        </div>
       </div>
-    </div>
     </FeatureGate>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+        className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full"
+      />
+    </div>
   );
 }
 
 export default function ForgotPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-          <div className="text-center space-y-3">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingFallback />}>
       <ForgotPasswordContent />
     </Suspense>
   );

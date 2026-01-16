@@ -3,7 +3,7 @@ import type { ApiResponse, PaginationMeta } from '@meeshy/shared/types';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import bcrypt from 'bcryptjs';
-import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
+import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../utils/normalize';
 import { buildPaginationMeta } from '../utils/pagination';
 import {
   updateUserProfileSchema,
@@ -37,80 +37,8 @@ function validatePagination(
 }
 
 export async function userRoutes(fastify: FastifyInstance) {
-  // Route pour verifier la disponibilite d'un username
-  fastify.get('/users/check-username/:username', {
-    schema: {
-      description: 'Check if a username is available for registration. Verifies uniqueness across both registered users and anonymous participants.',
-      tags: ['users'],
-      summary: 'Check username availability',
-      params: {
-        type: 'object',
-        required: ['username'],
-        properties: {
-          username: { type: 'string', minLength: 2, maxLength: 16, description: 'Username to check' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                available: { type: 'boolean', description: 'Whether the username is available' },
-                username: { type: 'string', description: 'Normalized username that was checked' }
-              }
-            }
-          }
-        },
-        500: errorResponseSchema
-      }
-    }
-  }, async (request, reply) => {
-    try {
-      const { username } = request.params as { username: string };
-
-      // Normaliser le username pour la verification
-      const normalizedUsername = normalizeUsername(username);
-
-      // Verifier si le username existe deja dans la table User
-      const existingUser = await fastify.prisma.user.findFirst({
-        where: {
-          username: {
-            equals: normalizedUsername,
-            mode: 'insensitive'
-          }
-        }
-      });
-
-      // Verifier si le username existe dans la table AnonymousParticipant
-      const existingAnonymous = await fastify.prisma.anonymousParticipant.findFirst({
-        where: {
-          username: {
-            equals: normalizedUsername,
-            mode: 'insensitive'
-          }
-        }
-      });
-
-      const isAvailable = !existingUser && !existingAnonymous;
-
-      return reply.send({
-        success: true,
-        data: {
-          available: isAvailable,
-          username: normalizedUsername
-        }
-      });
-    } catch (error) {
-      console.error('[USERS] Error checking username availability:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to check username availability'
-      });
-    }
-  });
+  // NOTE: Username availability check has been moved to /auth/check-availability
+  // which supports username, email, and phone number checks in a unified API
 
   // Route de test simple
   fastify.get('/users/me/test', {

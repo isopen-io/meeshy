@@ -257,7 +257,15 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                       }
                     }}
                     onClick={() => handleReactionClick(reaction.emoji)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleReactionClick(reaction.emoji);
+                      }
+                    }}
                     disabled={isLoading}
+                    aria-pressed={hasUserReacted}
+                    aria-label={hasUserReacted ? t('removeReaction', { emoji: reaction.emoji }) : t('addReactionEmoji', { emoji: reaction.emoji })}
                     style={{
                       width: '20px',
                       height: '20px',
@@ -272,6 +280,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                       'transition-all duration-200',
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       'hover:shadow-lg hover:scale-110',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                       'p-0',
                       hasUserReacted
                         ? 'border-primary ring-1 ring-primary/30 shadow-primary/20'
@@ -375,6 +384,12 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                 damping: 30,
               }}
               onClick={onAddReactionClick}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onAddReactionClick?.();
+                }
+              }}
               style={{
                 width: '16px',
                 height: '16px',
@@ -389,6 +404,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                 'hover:bg-secondary hover:border-primary/50',
                 'hover:shadow-sm active:shadow-none',
                 'transition-all duration-200',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                 'p-0'
               )}
               aria-label={t('add')}
@@ -403,6 +419,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                aria-hidden="true"
               >
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />

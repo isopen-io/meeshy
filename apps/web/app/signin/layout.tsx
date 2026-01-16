@@ -1,25 +1,16 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
-import { buildOgMetadata } from '@/lib/og-images';
 
+// Redirection vers /signup - ce layout est gardé pour la rétrocompatibilité
 export const metadata: Metadata = {
   title: 'Inscription - Meeshy',
   description: 'Créez votre compte Meeshy et rejoignez la communauté mondiale de messagerie multilingue en temps réel.',
-  openGraph: {
-    ...buildOgMetadata('signin', {
-      title: 'Inscription - Meeshy',
-      description: 'Créez votre compte Meeshy et rejoignez la communauté mondiale de messagerie multilingue en temps réel.',
-      url: '/signin',
-    }),
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Inscription - Meeshy',
-    description: 'Créez votre compte Meeshy et rejoignez la communauté mondiale de messagerie multilingue en temps réel.',
-    creator: '@meeshy_app',
+  robots: {
+    index: false, // Ne pas indexer - redirection vers /signup
+    follow: true,
   },
   alternates: {
-    canonical: '/signin',
+    canonical: '/signup',
   },
 };
 

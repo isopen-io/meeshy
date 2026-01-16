@@ -61,11 +61,14 @@ enum UserEndpoints: APIEndpoint, Sendable {
         case .registerDeviceToken, .unregisterDeviceToken:
             return "\(EnvironmentConfig.apiPath)/users/register-device-token"
         case .checkUsernameAvailability(let username):
-            return "\(EnvironmentConfig.apiPath)/auth/check-username/\(username)"
+            // Use unified check-availability API
+            return "\(EnvironmentConfig.apiPath)/auth/check-availability?username=\(username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username)"
         case .checkEmailAvailability(let email):
-            return "\(EnvironmentConfig.apiPath)/auth/check-email/\(email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email)"
+            // Use unified check-availability API
+            return "\(EnvironmentConfig.apiPath)/auth/check-availability?email=\(email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? email)"
         case .checkPhoneAvailability(let phone):
-            return "\(EnvironmentConfig.apiPath)/auth/check-phone/\(phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? phone)"
+            // Use unified check-availability API
+            return "\(EnvironmentConfig.apiPath)/auth/check-availability?phoneNumber=\(phone.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? phone)"
         }
     }
 

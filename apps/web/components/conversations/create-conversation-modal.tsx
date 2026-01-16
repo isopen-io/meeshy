@@ -525,7 +525,7 @@ export function CreateConversationModal({
       <DialogContent className="max-w-3xl w-[95vw] max-h-[95vh] p-0 sm:max-w-3xl sm:w-[90vw] sm:max-h-[90vh] md:max-h-[85vh] flex flex-col dark:bg-gray-900 dark:border-gray-800">
         <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6 pb-4 border-b dark:border-gray-800">
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg dark:text-gray-100">
-            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
             {t('createConversationModal.title')}
           </DialogTitle>
           <DialogDescription className="dark:text-gray-400">
@@ -539,7 +539,7 @@ export function CreateConversationModal({
           {/* User Selection with Input Field - Always visible */}
           <div>
             <Label className="text-sm font-medium flex items-center gap-2 mb-2 dark:text-gray-200">
-              <UserPlus className="h-4 w-4" />
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
               {t('createConversationModal.members.title')}
             </Label>
             <Input
@@ -547,6 +547,7 @@ export function CreateConversationModal({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
+              aria-label={t('createConversationModal.members.searchPlaceholder')}
             />
             
             {/* User Search Results */}
@@ -561,17 +562,27 @@ export function CreateConversationModal({
                     {filteredUsers.map((user) => (
                       <div
                         key={user.id}
+                        role="button"
+                        tabIndex={0}
                         className={cn(
-                          "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted/50",
+                          "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                           selectedUsers.some(u => u.id === user.id) && "bg-primary/10 border border-primary/20"
                         )}
                         onClick={() => {
                           toggleUserSelection(user);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleUserSelection(user);
+                          }
+                        }}
+                        aria-pressed={selectedUsers.some(u => u.id === user.id)}
+                        aria-label={`${selectedUsers.some(u => u.id === user.id) ? 'Désélectionner' : 'Sélectionner'} ${getUserDisplayName(user)}`}
                       >
                         <div className="relative flex-shrink-0">
                           <Avatar className="h-8 w-8">
-                            <AvatarImage src={user.avatar} />
+                            <AvatarImage src={user.avatar} alt="" />
                             <AvatarFallback>
                               {getUserDisplayName(user).charAt(0).toUpperCase()}
                             </AvatarFallback>
@@ -594,6 +605,7 @@ export function CreateConversationModal({
                             "h-4 w-4",
                             selectedUsers.some(u => u.id === user.id) ? "opacity-100 text-primary" : "opacity-0"
                           )}
+                          aria-hidden="true"
                         />
                       </div>
                     ))}
@@ -647,10 +659,10 @@ export function CreateConversationModal({
                     <button
                       type="button"
                       onClick={() => toggleUserSelection(user)}
-                      className="ml-1 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                      className="ml-1 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
                       aria-label={`Retirer ${getUserDisplayName(user)}`}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </Badge>
                 ))}
@@ -674,9 +686,10 @@ export function CreateConversationModal({
                   variant={conversationType === 'direct' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setConversationType('direct')}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-pressed={conversationType === 'direct'}
                 >
-                  <UserIcon className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" aria-hidden="true" />
                   {t('createConversationModal.conversationTypes.direct')}
                 </Button>
               )}
@@ -687,9 +700,10 @@ export function CreateConversationModal({
                   variant={conversationType === 'group' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setConversationType('group')}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-pressed={conversationType === 'group'}
                 >
-                  <Users className="h-4 w-4" />
+                  <Users className="h-4 w-4" aria-hidden="true" />
                   {t('createConversationModal.conversationTypes.group')}
                 </Button>
               )}
@@ -699,9 +713,10 @@ export function CreateConversationModal({
                 variant={conversationType === 'public' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setConversationType('public')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                aria-pressed={conversationType === 'public'}
               >
-                <Globe className="h-4 w-4" />
+                <Globe className="h-4 w-4" aria-hidden="true" />
                 {t('createConversationModal.conversationTypes.public')}
               </Button>
             </div>
@@ -711,7 +726,7 @@ export function CreateConversationModal({
           {(conversationType === 'group' || conversationType === 'public') && (
             <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-primary/5 to-secondary/5">
               <div className="flex items-center gap-2 mb-2">
-                <Hash className="h-4 w-4 text-primary" />
+                <Hash className="h-4 w-4 text-primary" aria-hidden="true" />
                 <span className="font-medium">{t('createConversationModal.conversationDetails.title')}</span>
               </div>
 
@@ -733,7 +748,7 @@ export function CreateConversationModal({
               
               <div>
                 <Label htmlFor="identifier" className="text-sm font-medium flex items-center gap-2">
-                  <Hash className="h-4 w-4" />
+                  <Hash className="h-4 w-4" aria-hidden="true" />
                   {t('createConversationModal.conversationDetails.identifier')} <span className="text-red-500">{t('createConversationModal.conversationDetails.identifierRequired')}</span>
                 </Label>
                 <div className="mt-1">
@@ -788,7 +803,7 @@ export function CreateConversationModal({
             <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
+                  <Building2 className="h-4 w-4" aria-hidden="true" />
                   <Label htmlFor="community-toggle" className="text-sm font-medium cursor-pointer">
                     {t('createConversationModal.community.addToCommunity')}
                   </Label>
@@ -808,6 +823,7 @@ export function CreateConversationModal({
                     value={communitySearchQuery}
                     onChange={(e) => setCommunitySearchQuery(e.target.value)}
                     className="w-full"
+                    aria-label={t('createConversationModal.community.searchPlaceholder')}
                   />
                   
                   {/* Community Search Results */}
@@ -822,26 +838,36 @@ export function CreateConversationModal({
                           {filteredCommunities.map((community) => (
                             <div
                               key={community.id}
+                              role="button"
+                              tabIndex={0}
                               className={cn(
-                                "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted/50",
+                                "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                                 selectedCommunity === community.id && "bg-primary/10 border border-primary/20"
                               )}
                               onClick={() => {
                                 setSelectedCommunity(community.id === selectedCommunity ? '' : community.id);
                               }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedCommunity(community.id === selectedCommunity ? '' : community.id);
+                                }
+                              }}
+                              aria-pressed={selectedCommunity === community.id}
+                              aria-label={`${selectedCommunity === community.id ? 'Désélectionner' : 'Sélectionner'} ${community.name}`}
                             >
                               <Avatar className="h-8 w-8">
                                 <AvatarFallback>
-                                  <Building2 className="h-4 w-4" />
+                                  <Building2 className="h-4 w-4" aria-hidden="true" />
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-sm">{community.name}</span>
                                   {community.isPrivate ? (
-                                    <Lock className="h-3 w-3 text-muted-foreground" />
+                                    <Lock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                                   ) : (
-                                    <Globe className="h-3 w-3 text-muted-foreground" />
+                                    <Globe className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                                   )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
@@ -853,6 +879,7 @@ export function CreateConversationModal({
                                   "h-4 w-4",
                                   selectedCommunity === community.id ? "opacity-100 text-primary" : "opacity-0"
                                 )}
+                                aria-hidden="true"
                               />
                             </div>
                           ))}
@@ -879,16 +906,17 @@ export function CreateConversationModal({
               <CollapsibleTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full flex items-center justify-between p-4 hover:bg-muted/50"
+                  className="w-full flex items-center justify-between p-4 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-expanded={isPreviewOpen}
                 >
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                    <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
                     <span className="font-medium">Récapitulatif de la conversation</span>
                   </div>
                   {isPreviewOpen ? (
-                    <ChevronUp className="h-4 w-4" />
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
                   ) : (
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </CollapsibleTrigger>
@@ -918,10 +946,10 @@ export function CreateConversationModal({
                 (conversationType !== 'direct' && !customIdentifier.trim()) ||
                 (conversationType !== 'direct' && !validateIdentifier(customIdentifier))
               }
-              className="flex-1 w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-11"
+              className="flex-1 w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              <Sparkles className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-              {isCreating ? t('createConversationModal.actions.creating') : 
+              <Sparkles className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+              {isCreating ? t('createConversationModal.actions.creating') :
                 conversationType === 'direct' ? t('createConversationModal.actions.createDirectConversation') :
                 conversationType === 'public' ? t('createConversationModal.actions.createPublicConversation') :
                 t('createConversationModal.actions.createGroupConversation')}
@@ -929,7 +957,7 @@ export function CreateConversationModal({
             <Button
               onClick={handleClose}
               variant="outline"
-              className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-11"
+              className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               {t('createConversationModal.actions.cancel')}
             </Button>

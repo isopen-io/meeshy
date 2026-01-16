@@ -71,7 +71,8 @@ enum AuthEndpoints: APIEndpoint, Sendable {
         case .getLinkInfo(let linkId):
             return "\(EnvironmentConfig.apiPath)/anonymous/link/\(linkId)"
         case .checkUsername(let username):
-            return "\(EnvironmentConfig.apiPath)/users/check-username/\(username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username)"
+            // Use unified check-availability API
+            return "\(EnvironmentConfig.apiPath)/auth/check-availability?username=\(username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username)"
         case .refreshAnonymousSession:
             return "\(EnvironmentConfig.apiPath)/anonymous/refresh"
         case .leaveAnonymousSession:

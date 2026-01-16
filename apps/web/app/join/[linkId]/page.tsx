@@ -232,13 +232,13 @@ export default function JoinConversationPage() {
     usernameCheckTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          buildApiUrl(`/users/check-username/${encodeURIComponent(anonymousForm.username.trim())}`)
+          buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(anonymousForm.username.trim())}`)
         );
 
         if (response.ok) {
           const result = await response.json();
           if (result.success) {
-            setUsernameCheckStatus(result.available ? 'available' : 'taken');
+            setUsernameCheckStatus(result.data?.usernameAvailable ? 'available' : 'taken');
           } else {
             setUsernameCheckStatus('idle');
           }

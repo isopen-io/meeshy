@@ -132,6 +132,9 @@ export function LazyModalWrapper({ children, fallback }: LazyWrapperProps) {
 // PRELOADING UTILITIES
 // =============================================================================
 
+// Cache pour éviter de précharger plusieurs fois le même module
+const preloadedModules = new Set<string>();
+
 // Preload des composants critiques
 export function preloadCriticalComponents() {
   // Preload des composants les plus utilisés après le chargement initial
@@ -143,14 +146,93 @@ export function preloadCriticalComponents() {
 
 // Preload des composants selon l'interaction utilisateur
 export function preloadOnHover(componentName: string) {
+  // Éviter les préchargements multiples
+  if (preloadedModules.has(componentName)) return Promise.resolve();
+  preloadedModules.add(componentName);
+
   const preloadMap: Record<string, () => Promise<any>> = {
     'create-conversation': () => import('@/components/conversations/create-conversation-modal'),
     'config-modal': () => import('@/components/settings/config-modal'),
     'login-form': () => import('@/components/auth/login-form'),
     'register-form': () => import('@/components/auth/register-form'),
+    'conversation-details': () => import('@/components/conversations/conversation-details-sidebar'),
   };
 
   return preloadMap[componentName]?.();
+}
+
+// =============================================================================
+// ROUTE PRELOADING - Précharger les pages au hover
+// =============================================================================
+
+/**
+ * Map des routes vers leurs modules à précharger
+ * Inclut les composants principaux de chaque page
+ */
+const routePreloadMap: Record<string, () => Promise<any>[]> = {
+  '/dashboard': () => [
+    import('@/app/dashboard/page'),
+  ],
+  '/conversations': () => [
+    import('@/components/conversations/ConversationLayout'),
+    import('@/components/common/bubble-stream-page'),
+  ],
+  '/groups': () => [
+    import('@/app/groups/page'),
+  ],
+  '/contacts': () => [
+    import('@/app/contacts/page'),
+  ],
+  '/settings': () => [
+    import('@/app/settings/page'),
+  ],
+  '/admin': () => [
+    import('@/components/admin/AdminLayout'),
+    import('@/components/admin/Charts'),
+  ],
+  '/u': () => [
+    import('@/app/u/page'),
+  ],
+  '/links': () => [
+    import('@/app/links/page'),
+  ],
+  '/search': () => [
+    import('@/app/search/page'),
+  ],
+};
+
+/**
+ * Précharge les modules d'une route spécifique
+ * @param route - La route à précharger (ex: '/dashboard')
+ */
+export function preloadRouteModules(route: string): void {
+  // Éviter les préchargements multiples
+  const cacheKey = `route:${route}`;
+  if (preloadedModules.has(cacheKey)) return;
+  preloadedModules.add(cacheKey);
+
+  const preloadFn = routePreloadMap[route];
+  if (preloadFn) {
+    // Précharger de manière non-bloquante
+    Promise.all(preloadFn()).catch(() => {
+      // Ignorer les erreurs de préchargement silencieusement
+    });
+  }
+}
+
+/**
+ * Crée les handlers pour le préchargement au hover/focus
+ * Utilisable sur n'importe quel élément navigable
+ *
+ * @example
+ * const preloadHandlers = createPreloadHandlers('/dashboard');
+ * <button {...preloadHandlers} onClick={() => router.push('/dashboard')}>
+ */
+export function createPreloadHandlers(route: string) {
+  return {
+    onMouseEnter: () => preloadRouteModules(route),
+    onFocus: () => preloadRouteModules(route),
+  };
 }
 
 // =============================================================================

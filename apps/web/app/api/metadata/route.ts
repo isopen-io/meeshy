@@ -65,7 +65,7 @@ async function generateAffiliateMetadata(
           title: `Rejoignez Meeshy avec ${affiliateUser.firstName} ${affiliateUser.lastName}`,
           description: `Connectez-vous avec ${affiliateUser.firstName} et des milliers d'utilisateurs du monde entier sur Meeshy, la plateforme de messagerie multilingue en temps réel. Traduction automatique, conversations globales et plus encore !`,
           image: getOgImageUrl('affiliate', frontendUrl),
-          url: `${frontendUrl}/signin?affiliate=${affiliateToken}`,
+          url: `${frontendUrl}/signup?affiliate=${affiliateToken}`,
           type: 'website',
           siteName: 'Meeshy',
           locale: 'fr_FR'

@@ -1,15 +1,13 @@
-'use client';
-
-import { useI18n } from '@/hooks/useI18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Handshake, Mail, ExternalLink, Building2, GraduationCap, Users, Shield, Zap, HeartHandshake, Globe, BookOpen, Briefcase } from 'lucide-react';
 import Link from 'next/link';
+import { getPartnersTranslations } from '@/lib/i18n-server';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
-export default function PartnersPage() {
-  const { t } = useI18n('partners');
+export default async function PartnersPage() {
+  const { t } = await getPartnersTranslations();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

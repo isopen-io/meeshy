@@ -1,30 +1,18 @@
-'use client';
-
-import { useI18n } from '@/hooks/useI18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Printer, FileText, Mail } from 'lucide-react';
+import { FileText, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { getTermsTranslations } from '@/lib/i18n-server';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { PrintButton } from '@/components/common/PrintButton';
 
-export default function TermsPage() {
-  const { t, tArray, isLoading } = useI18n('terms');
+export default async function TermsPage() {
+  const { t, tArray } = await getTermsTranslations();
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // Pre-load arrays for server rendering
+  const accountResponsibilities = tArray('account.responsibilities');
+  const usageProhibited = tArray('usage.prohibited');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -35,10 +23,7 @@ export default function TermsPage() {
       <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-end">
-            <Button onClick={handlePrint} variant="outline" className="flex items-center space-x-2">
-              <Printer className="h-4 w-4" />
-              <span>{t('print')}</span>
-            </Button>
+            <PrintButton label={t('print')} />
           </div>
         </div>
       </div>
@@ -53,7 +38,7 @@ export default function TermsPage() {
             </div>
             <p className="text-gray-600 dark:text-gray-400">{t('lastUpdated')}</p>
           </CardHeader>
-          
+
           <CardContent className="prose prose-lg max-w-none p-8">
             {/* 1. Acceptance */}
             <section className="mb-8">
@@ -77,8 +62,8 @@ export default function TermsPage() {
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 <p className="mb-4">{t('account.intro')}</p>
                 <ul className="list-disc pl-6 space-y-2">
-                  {tArray('account.responsibilities').map((item: string, index: number) => (
-                    <li key={index}>{item}</li>
+                  {accountResponsibilities.map((item, index) => (
+                    <li key={`account-${index}`}>{item}</li>
                   ))}
                 </ul>
               </div>
@@ -90,8 +75,8 @@ export default function TermsPage() {
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 <p className="mb-4">{t('usage.intro')}</p>
                 <ul className="list-disc pl-6 space-y-2">
-                  {tArray('usage.prohibited').map((item: string, index: number) => (
-                    <li key={index}>{item}</li>
+                  {usageProhibited.map((item, index) => (
+                    <li key={`usage-${index}`}>{item}</li>
                   ))}
                 </ul>
               </div>
@@ -139,18 +124,18 @@ export default function TermsPage() {
               </p>
             </section>
 
-            {/* 11. Contact */}
+            {/* 10. Contact */}
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">{t('title')}</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">{t('contact.title')}</h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                {t('intro')}
+                {t('contact.intro')}
               </p>
               <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
                 <p className="text-gray-700 dark:text-gray-300 mb-2">
-                  <strong>{t('email')}</strong>
+                  <strong>{t('contact.email')}</strong>
                 </p>
                 <p className="text-gray-700 dark:text-gray-300">
-                  <strong>{t('address')}</strong>
+                  <strong>{t('contact.address')}</strong>
                 </p>
               </div>
             </section>
@@ -185,23 +170,6 @@ export default function TermsPage() {
           </div>
         </div>
       </div>
-
-      {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          body {
-            background: white !important;
-          }
-          .container {
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
 
       {/* Footer */}
       <Footer />

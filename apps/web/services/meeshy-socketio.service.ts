@@ -113,6 +113,7 @@ class MeeshySocketIOService {
   private reactionAddedListeners: Set<(data: any) => void> = new Set();
   private reactionRemovedListeners: Set<(data: any) => void> = new Set();
   private conversationJoinedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
+  private readStatusListeners: Set<(data: { conversationId: string; userId: string; type: 'read' | 'received'; updatedAt: Date }) => void> = new Set();
 
   // Amélioration: Gestion des traductions en batch et mise en cache
   private translationCache: Map<string, any> = new Map(); // Cache pour éviter les traductions redondantes
@@ -702,6 +703,11 @@ class MeeshySocketIOService {
 
       // Notify all listeners
       this.conversationJoinedListeners.forEach(listener => listener(data));
+    });
+
+    // Événement de mise à jour du statut de lecture (read receipts)
+    this.socket.on(SERVER_EVENTS.READ_STATUS_UPDATED, (data: { conversationId: string; userId: string; type: 'read' | 'received'; updatedAt: Date }) => {
+      this.readStatusListeners.forEach(listener => listener(data));
     });
 
     // Événements de frappe - réception immédiate sans timeout automatique

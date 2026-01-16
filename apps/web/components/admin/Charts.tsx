@@ -1,27 +1,63 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend
-} from 'recharts';
 import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 
+// Re-export types from implementation
+export type {
+  TimeSeriesDataPoint,
+  DataKeyConfig,
+  TimeSeriesChartProps,
+  DonutDataPoint,
+  DonutChartProps
+} from './ChartsImpl';
+
 // ======================
-// StatsGrid Components
+// Loading Skeleton for Charts
+// ======================
+
+function ChartSkeleton({ height = 300 }: { height?: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+        <div className="h-4 w-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse mt-2" />
+      </CardHeader>
+      <CardContent>
+        <div
+          className="w-full bg-gray-100 dark:bg-gray-800 rounded animate-pulse"
+          style={{ height }}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ======================
+// Dynamic Imports for Heavy Chart Components (~300KB saved)
+// ======================
+
+export const TimeSeriesChart = dynamic(
+  () => import('./ChartsImpl').then((mod) => mod.TimeSeriesChart),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={300} />
+  }
+);
+
+export const DonutChart = dynamic(
+  () => import('./ChartsImpl').then((mod) => mod.DonutChart),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={300} />
+  }
+);
+
+// ======================
+// StatsGrid Components (lightweight, no dynamic import needed)
 // ======================
 
 export interface StatItem {
@@ -117,274 +153,6 @@ export function StatsGrid({ stats, columns = 4 }: StatsGridProps) {
         <StatCard key={index} stat={stat} />
       ))}
     </div>
-  );
-}
-
-// ======================
-// TimeSeriesChart Component
-// ======================
-
-export interface TimeSeriesDataPoint {
-  [key: string]: string | number;
-}
-
-export interface DataKeyConfig {
-  key: string;
-  name: string;
-  color: string;
-}
-
-export interface TimeSeriesChartProps {
-  data: TimeSeriesDataPoint[];
-  title: string;
-  subtitle?: string;
-  description?: string;
-  dataKey?: string;
-  dataKeys?: DataKeyConfig[];
-  xAxisKey?: string;
-  color?: string;
-  height?: number;
-  showArea?: boolean;
-}
-
-export function TimeSeriesChart({
-  data,
-  title,
-  subtitle,
-  description,
-  dataKey = 'value',
-  dataKeys,
-  xAxisKey = 'name',
-  color = '#3b82f6',
-  height = 300,
-  showArea = true
-}: TimeSeriesChartProps) {
-  const displayDescription = subtitle || description;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
-          {title}
-        </CardTitle>
-        {displayDescription && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{displayDescription}</p>
-        )}
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={height}>
-          {showArea ? (
-            <AreaChart data={data}>
-              <defs>
-                {dataKeys ? (
-                  dataKeys.map((dk) => (
-                    <linearGradient key={dk.key} id={`colorGradient-${dk.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={dk.color} stopOpacity={0.8} />
-                      <stop offset="95%" stopColor={dk.color} stopOpacity={0.1} />
-                    </linearGradient>
-                  ))
-                ) : (
-                  <linearGradient id={`colorGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.8} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0.1} />
-                  </linearGradient>
-                )}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-              <XAxis
-                dataKey={xAxisKey}
-                className="text-xs text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <YAxis
-                className="text-xs text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem'
-                }}
-              />
-              {dataKeys ? (
-                dataKeys.map((dk) => (
-                  <Area
-                    key={dk.key}
-                    type="monotone"
-                    dataKey={dk.key}
-                    name={dk.name}
-                    stroke={dk.color}
-                    strokeWidth={2}
-                    fill={`url(#colorGradient-${dk.key})`}
-                  />
-                ))
-              ) : (
-                <Area
-                  type="monotone"
-                  dataKey={dataKey}
-                  stroke={color}
-                  strokeWidth={2}
-                  fill={`url(#colorGradient-${dataKey})`}
-                />
-              )}
-              {dataKeys && <Legend />}
-            </AreaChart>
-          ) : (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-              <XAxis
-                dataKey={xAxisKey}
-                className="text-xs text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <YAxis
-                className="text-xs text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem'
-                }}
-              />
-              {dataKeys ? (
-                dataKeys.map((dk) => (
-                  <Line
-                    key={dk.key}
-                    type="monotone"
-                    dataKey={dk.key}
-                    name={dk.name}
-                    stroke={dk.color}
-                    strokeWidth={2}
-                    dot={{ fill: dk.color, r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                ))
-              ) : (
-                <Line
-                  type="monotone"
-                  dataKey={dataKey}
-                  stroke={color}
-                  strokeWidth={2}
-                  dot={{ fill: color, r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              )}
-              {dataKeys && <Legend />}
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ======================
-// DonutChart Component
-// ======================
-
-export interface DonutDataPoint {
-  name: string;
-  value: number;
-  color: string;
-}
-
-export interface DonutChartProps {
-  data: DonutDataPoint[];
-  title: string;
-  subtitle?: string;
-  description?: string;
-  height?: number;
-  innerRadius?: number;
-  outerRadius?: number;
-  showLegend?: boolean;
-}
-
-export function DonutChart({
-  data,
-  title,
-  subtitle,
-  description,
-  height = 300,
-  innerRadius = 60,
-  outerRadius = 80,
-  showLegend = true
-}: DonutChartProps) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  const displayDescription = subtitle || description;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
-          {title}
-        </CardTitle>
-        {displayDescription && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{displayDescription}</p>
-        )}
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={height}>
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={innerRadius}
-              outerRadius={outerRadius}
-              paddingAngle={2}
-              dataKey="value"
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              labelLine={false}
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem'
-              }}
-              formatter={(value: number) => [
-                `${value} (${((value / total) * 100).toFixed(1)}%)`,
-                ''
-              ]}
-            />
-            {showLegend && <Legend />}
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* Légende personnalisée */}
-        <div className="mt-4 space-y-2">
-          {data.map((item, index) => (
-            <div key={index} className="flex items-center justify-between text-sm">
-              <div className="flex items-center space-x-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-gray-700 dark:text-gray-300">{item.name}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold text-gray-900 dark:text-gray-100">
-                  {item.value}
-                </span>
-                <Badge variant="outline" className="text-xs">
-                  {((item.value / total) * 100).toFixed(1)}%
-                </Badge>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

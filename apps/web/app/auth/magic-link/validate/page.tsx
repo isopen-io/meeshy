@@ -91,10 +91,10 @@ function MagicLinkValidateContent() {
           setState('success');
           toast.success(t('login.success.loginSuccess'));
 
-          // Redirection après un court délai
+          // Redirection avec rechargement complet pour s'assurer que l'état auth est chargé
           setTimeout(() => {
             const redirectUrl = returnUrl || '/dashboard';
-            router.replace(redirectUrl);
+            window.location.href = redirectUrl;
           }, 1500);
         } else {
           setState('error');

@@ -307,7 +307,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       <div className="pt-2 text-center text-sm text-gray-600 dark:text-gray-400">
         <span>{t('login.noAccount')} </span>
         <a
-          href="/signin"
+          href="/signup"
           className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
         >
           {t('login.registerLink')}
