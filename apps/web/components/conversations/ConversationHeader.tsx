@@ -561,10 +561,10 @@ export function ConversationHeader({
             size="icon"
             variant="ghost"
             onClick={onBackToList}
-            className="flex-shrink-0 h-9 w-9 mt-0.5"
+            className="flex-shrink-0 h-9 w-9 mt-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label={t('conversationHeader.backToList') || 'Retour à la liste'}
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Button>
         )}
 
@@ -615,7 +615,7 @@ export function ConversationHeader({
                 role="img"
                 aria-label={t('conversationHeader.anonymousUser') || 'Utilisateur anonyme'}
               >
-                <Ghost className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <Ghost className="h-5 w-5 text-purple-600 dark:text-purple-400" aria-hidden="true" />
               </div>
             ) : (
               <>
@@ -752,7 +752,7 @@ export function ConversationHeader({
                   size="icon"
                   variant="ghost"
                   onClick={onStartCall}
-                  className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-blue-500 hover:text-white transition-colors"
+                  className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-blue-500 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   aria-label={t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}
                 >
                   <Video className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
@@ -804,7 +804,7 @@ export function ConversationHeader({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 sm:h-9 sm:w-9"
+              className="h-8 w-8 sm:h-9 sm:w-9 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               aria-label={t('conversationHeader.menuActions') || 'Menu des actions'}
             >
               <MoreVertical className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
@@ -813,13 +813,13 @@ export function ConversationHeader({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={onOpenDetails}>
-              <Info className="h-4 w-4 mr-2" />
+              <Info className="h-4 w-4 mr-2" aria-hidden="true" />
               {t('conversationDetails.title')}
             </DropdownMenuItem>
 
             {onOpenGallery && (
               <DropdownMenuItem onClick={onOpenGallery}>
-                <Image className="h-4 w-4 mr-2" />
+                <Image className="h-4 w-4 mr-2" aria-hidden="true" />
                 {t('conversationHeader.viewImages') || 'Voir les images'}
               </DropdownMenuItem>
             )}
@@ -828,24 +828,24 @@ export function ConversationHeader({
 
             {/* User Preferences */}
             <DropdownMenuItem onClick={handleTogglePin} disabled={isLoadingPreferences}>
-              <Pin className={cn("h-4 w-4 mr-2", isPinned && "fill-current")} />
+              <Pin className={cn("h-4 w-4 mr-2", isPinned && "fill-current")} aria-hidden="true" />
               {t(isPinned ? 'conversationHeader.unpin' : 'conversationHeader.pin')}
             </DropdownMenuItem>
 
             <DropdownMenuItem onClick={handleToggleMute} disabled={isLoadingPreferences}>
               {isMuted ? (
-                <Bell className="h-4 w-4 mr-2" />
+                <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
               ) : (
-                <BellOff className="h-4 w-4 mr-2" />
+                <BellOff className="h-4 w-4 mr-2" aria-hidden="true" />
               )}
               {t(isMuted ? 'conversationHeader.unmute' : 'conversationHeader.mute')}
             </DropdownMenuItem>
 
             <DropdownMenuItem onClick={handleToggleArchive} disabled={isLoadingPreferences}>
               {isArchived ? (
-                <ArchiveRestore className="h-4 w-4 mr-2" />
+                <ArchiveRestore className="h-4 w-4 mr-2" aria-hidden="true" />
               ) : (
-                <Archive className="h-4 w-4 mr-2" />
+                <Archive className="h-4 w-4 mr-2" aria-hidden="true" />
               )}
               {t(isArchived ? 'conversationHeader.unarchive' : 'conversationHeader.archive')}
             </DropdownMenuItem>
@@ -853,7 +853,7 @@ export function ConversationHeader({
             <DropdownMenuSeparator />
 
             <DropdownMenuItem onClick={handleShareConversation}>
-              <Share2 className="h-4 w-4 mr-2" />
+              <Share2 className="h-4 w-4 mr-2" aria-hidden="true" />
               {t('conversationHeader.share') || 'Partager'}
             </DropdownMenuItem>
           </DropdownMenuContent>

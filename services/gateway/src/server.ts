@@ -71,6 +71,7 @@ import { passwordResetRoutes } from './routes/password-reset';
 import { twoFactorRoutes } from './routes/two-factor';
 import { magicLinkRoutes } from './routes/magic-link';
 import userDeletionsRoutes from './routes/user-deletions';
+import { pushTokenRoutes } from './routes/push-tokens';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -788,7 +789,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });
-    
+
+    // Register push notification token routes (device registration for APNS/FCM/VoIP)
+    await this.server.register(pushTokenRoutes, { prefix: API_PREFIX });
+
     // Register user preferences routes with /api prefix
     await this.server.register(userPreferencesRoutes, { prefix: API_PREFIX });
 

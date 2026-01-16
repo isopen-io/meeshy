@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { useAuthFormStore } from '@/stores/auth-form-store';
-import { passwordResetService } from '@/services/password-reset.service';
+import { magicLinkService } from '@/services/magic-link.service';
 import { phonePasswordResetService } from '@/services/phone-password-reset.service';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import {
@@ -167,18 +167,44 @@ export function AccountRecoveryModal({
     minSubmitTime: 2000,
   });
 
-  // Reset on open
+  // Check if error requires session reset
+  const isSessionExpiredError = (errorCode: string): boolean => {
+    return ['invalid_token', 'token_expired', 'invalid_step'].includes(errorCode);
+  };
+
+  // Handle session expired - reset flow completely
+  const handleSessionExpired = () => {
+    setTokenId('');
+    setStep('choice');
+    setGuessUsername('');
+    setGuessEmail('');
+    setOtpCode('');
+    setError(null);
+    toast.error(t('phoneReset.errors.tokenExpired') || 'Session expirée. Veuillez recommencer.');
+  };
+
+  // Reset on open and set initial step based on existingAccount type
   useEffect(() => {
     if (isOpen) {
-      setStep('choice');
       setError(null);
       setRecoveryEmail(email);
       setRecoveryPhone(phone);
       setGuessUsername('');
       setGuessEmail('');
       setOtpCode('');
+      setTokenId('');
+
+      // Set initial step based on existing account type
+      // User still needs to click the button to trigger the action
+      if (existingAccount?.type === 'email') {
+        setStep('email');
+      } else if (existingAccount?.type === 'phone') {
+        setStep('phone');
+      } else {
+        setStep('choice');
+      }
     }
-  }, [isOpen, email, phone]);
+  }, [isOpen, email, phone, existingAccount?.type]);
 
   // Cooldown timer
   useEffect(() => {
@@ -188,7 +214,7 @@ export function AccountRecoveryModal({
     }
   }, [resendCooldown]);
 
-  // Handle email recovery
+  // Handle email recovery via Magic Link
   const handleEmailRecovery = async () => {
     const { isHuman, botError } = validateSubmission();
     if (!isHuman) {
@@ -205,14 +231,27 @@ export function AccountRecoveryModal({
     setError(null);
 
     try {
-      await passwordResetService.requestReset({ email: recoveryEmail.trim() });
-      setStoredEmail(recoveryEmail.trim());
-      setResetRequested(true);
-      resetBotProtection();
-      toast.success(t('forgotPassword.success.emailSent'));
-      setStep('success');
+      console.log('[AccountRecovery] Sending magic link request for:', recoveryEmail.trim());
+      const result = await magicLinkService.requestMagicLink(recoveryEmail.trim(), true);
+      console.log('[AccountRecovery] Magic link response:', result);
+
+      if (result.success) {
+        setStoredEmail(recoveryEmail.trim());
+        resetBotProtection();
+        toast.success(t('magicLink.success.title') || 'Magic Link envoyé !');
+        setStep('success');
+      } else {
+        console.error('[AccountRecovery] Magic link error:', result.error);
+        // Handle rate limiting with translated message
+        if (result.error === 'RATE_LIMITED') {
+          setError(t('magicLink.errors.rateLimited') || 'Trop de tentatives. Veuillez réessayer dans environ une heure.');
+        } else {
+          setError(result.error || t('magicLink.errors.requestFailed'));
+        }
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('forgotPassword.errors.requestFailed'));
+      console.error('[AccountRecovery] Magic link exception:', err);
+      setError(err instanceof Error ? err.message : t('magicLink.errors.requestFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -275,6 +314,11 @@ export function AccountRecoveryModal({
         setResendCooldown(60);
         toast.success(t('phoneReset.codeSent'));
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          return;
+        }
         setError(result.error || t('phoneReset.errors.identityFailed'));
       }
     } catch (err) {
@@ -305,6 +349,11 @@ export function AccountRecoveryModal({
         router.push(`/reset-password?token=${result.resetToken}`);
         onClose();
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          return;
+        }
         setError(result.error || t('phoneReset.errors.codeFailed'));
         setOtpCode('');
       }
@@ -326,6 +375,11 @@ export function AccountRecoveryModal({
         setOtpCode('');
         toast.success(t('phoneReset.codeResent'));
       } else {
+        // Check if session expired - reset flow
+        if (result.error && isSessionExpiredError(result.error)) {
+          handleSessionExpired();
+          return;
+        }
         toast.error(result.error || t('phoneReset.errors.resendFailed'));
       }
     } catch (err) {
@@ -380,7 +434,7 @@ export function AccountRecoveryModal({
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="p-4 rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200 dark:border-violet-800"
+                className="p-4 rounded-2xl backdrop-blur-sm bg-gradient-to-r from-violet-50/80 to-purple-50/80 dark:from-violet-900/30 dark:to-purple-900/30 border border-violet-200/50 dark:border-violet-700/50"
               >
                 <div className="flex items-center gap-4">
                   {existingAccount.avatarUrl ? (
@@ -485,26 +539,26 @@ export function AccountRecoveryModal({
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30"
+                className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/30"
               >
-                <Mail className="w-8 h-8 text-white" />
+                <Sparkles className="w-8 h-8 text-white" />
               </motion.div>
-              <h3 className="text-xl font-bold">{t('forgotPassword.title')}</h3>
+              <h3 className="text-xl font-bold">{t('magicLink.title') || 'Connexion par Magic Link'}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                {t('forgotPassword.description')}
+                {t('magicLink.description') || 'Recevez un lien de connexion instantané par email'}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="recovery-email" className="text-sm font-medium">{t('forgotPassword.emailLabel')}</label>
+              <label htmlFor="recovery-email" className="text-sm font-medium">{t('magicLink.emailLabel') || 'Adresse email'}</label>
               <Input
                 id="recovery-email"
                 type="email"
                 value={recoveryEmail}
                 onChange={(e) => setRecoveryEmail(e.target.value)}
-                placeholder={t('forgotPassword.emailPlaceholder')}
+                placeholder={t('magicLink.emailPlaceholder') || 'votre@email.com'}
                 disabled={isLoading}
-                className="h-12 border-2 border-cyan-200 dark:border-cyan-800 focus:border-cyan-500"
+                className="h-12 border-2 border-violet-200 dark:border-violet-800 focus:border-violet-500"
                 autoComplete="email"
                 spellCheck={false}
               />
@@ -534,14 +588,14 @@ export function AccountRecoveryModal({
               <Button
                 onClick={handleEmailRecovery}
                 disabled={isLoading || !recoveryEmail.includes('@')}
-                className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600"
+                className="flex-1 bg-gradient-to-r from-violet-500 to-purple-600"
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                  <ArrowRight className="w-4 h-4 mr-2" />
+                  <Sparkles className="w-4 h-4 mr-2" />
                 )}
-                {t('forgotPassword.submitButton')}
+                {t('magicLink.sendButton') || 'Envoyer le Magic Link'}
               </Button>
             </div>
           </motion.div>
@@ -827,24 +881,27 @@ export function AccountRecoveryModal({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-lg shadow-green-500/30"
+              className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/30"
             >
-              <CheckCircle className="w-10 h-10 text-white" />
+              <Mail className="w-10 h-10 text-white" />
             </motion.div>
             <div>
-              <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                {t('forgotPassword.success.emailSent')}
+              <h3 className="text-xl font-bold text-violet-600 dark:text-violet-400">
+                {t('magicLink.success.title') || 'Magic Link envoyé !'}
               </h3>
               <p className="text-sm text-muted-foreground mt-2">
-                {t('checkEmail.description')}
+                {t('magicLink.success.description') || 'Consultez votre boîte email et cliquez sur le lien pour vous connecter instantanément.'}
               </p>
             </div>
             <Button
-              onClick={onClose}
-              className="bg-gradient-to-r from-emerald-500 to-green-600"
+              onClick={() => {
+                onClose();
+                router.push('/login');
+              }}
+              className="bg-gradient-to-r from-violet-500 to-purple-600"
             >
               <Sparkles className="w-4 h-4 mr-2" />
-              {t('register.wizard.understood')}
+              {t('register.wizard.understood') || "J'ai compris"}
             </Button>
           </motion.div>
         );
@@ -857,6 +914,13 @@ export function AccountRecoveryModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md overflow-hidden">
+        {/* Hidden DialogTitle and DialogDescription for accessibility */}
+        <DialogTitle className="sr-only">
+          {t('register.wizard.recoverAccount') || 'Récupération de compte'}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {t('register.wizard.recoverAccountDescription') || 'Récupérez l\'accès à votre compte existant'}
+        </DialogDescription>
         <AnimatePresence mode="wait">
           {renderContent()}
         </AnimatePresence>

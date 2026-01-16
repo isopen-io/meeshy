@@ -157,7 +157,7 @@ export function Header({
                             <LogIn className="h-4 w-4 mr-2" />
                             {t('login')}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push('/signin')}>
+                          <DropdownMenuItem onClick={() => router.push('/signup')}>
                             <UserPlus className="h-4 w-4 mr-2" />
                             {t('signUp')}
                           </DropdownMenuItem>
@@ -260,7 +260,7 @@ export function Header({
                     {t('login')}
                   </Button>
                 </Link>
-                <Link href="/signin">
+                <Link href="/signup">
                   <Button>
                     <UserPlus className="h-4 w-4 mr-2" />
                     {t('signUp')}
@@ -307,7 +307,7 @@ export function Header({
                     {t('login')}
                   </Button>
                 </Link>
-                <Link href="/signin">
+                <Link href="/signup">
                   <Button>
                     <UserPlus className="h-4 w-4 mr-2" />
                     {t('signUp')}
@@ -373,7 +373,7 @@ export function Header({
                           <Button 
                             className="w-full justify-start"
                             onClick={() => {
-                              router.push('/signin');
+                              router.push('/signup');
                               setIsMobileMenuOpen(false);
                             }}
                           >

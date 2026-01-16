@@ -159,30 +159,38 @@ export default function LinksPage() {
       const token = authManager.getAuthToken();
       const offset = append ? shareLinksOffset : 0;
 
-      // Charger les liens de partage avec pagination
-      const shareLinksResponse = await fetch(
-        buildApiUrl(`/api/links/my-links?limit=${LINKS_PER_PAGE}&offset=${offset}`),
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      // Fonction interne pour charger les share links
+      const fetchShareLinks = async () => {
+        const shareLinksResponse = await fetch(
+          buildApiUrl(`/api/links/my-links?limit=${LINKS_PER_PAGE}&offset=${offset}`),
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
 
-      if (shareLinksResponse.ok) {
-        const data = await shareLinksResponse.json();
-        if (append) {
-          setLinks(prev => [...prev, ...(data.data || [])]);
+        if (shareLinksResponse.ok) {
+          const data = await shareLinksResponse.json();
+          if (append) {
+            setLinks(prev => [...prev, ...(data.data || [])]);
+          } else {
+            setLinks(data.data || []);
+          }
+          setHasMoreShareLinks(data.pagination?.hasMore || false);
+          setShareLinksOffset(offset + (data.data?.length || 0));
         } else {
-          setLinks(data.data || []);
+          toast.error(t('errors.loadFailed'));
         }
-        setHasMoreShareLinks(data.pagination?.hasMore || false);
-        setShareLinksOffset(offset + (data.data?.length || 0));
-      } else {
-        toast.error(t('errors.loadFailed'));
-      }
+      };
 
-      // Charger aussi les liens trackés
+      // Chargement initial: parallel loading des deux types de liens
+      // Chargement append: seulement les share links
       if (!append) {
-        await loadTrackingLinks(false);
+        await Promise.all([
+          fetchShareLinks(),
+          loadTrackingLinks(false)
+        ]);
+      } else {
+        await fetchShareLinks();
       }
     } catch (error) {
       console.error('Erreur lors du chargement des liens:', error);

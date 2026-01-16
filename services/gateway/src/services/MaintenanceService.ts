@@ -78,7 +78,7 @@ export class MaintenanceService {
       const offlineThreshold = new Date();
       offlineThreshold.setMinutes(offlineThreshold.getMinutes() - this.OFFLINE_THRESHOLD_MINUTES);
 
-      // Trouver tous les utilisateurs marqués comme en ligne mais inactifs depuis plus de 5 minutes
+      // Trouver tous les utilisateurs marqués comme en ligne mais inactifs depuis plus de 30 minutes
       const inactiveUsers = await this.prisma.user.findMany({
         where: {
           isOnline: true,

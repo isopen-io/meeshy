@@ -2,135 +2,253 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { motion } from 'framer-motion';
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { ShieldCheck, AlertCircle } from 'lucide-react';
 import { FeatureGate } from '@/components/auth/FeatureGate';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const { t } = useI18n('auth');
-
   const token = searchParams.get('token');
 
   // Show error if no token in URL
   if (!token) {
     return (
       <FeatureGate feature="passwordReset" showMessage={true}>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
-          {/* Header */}
-          <div className="text-center">
-            <LargeLogo href="/" />
-          </div>
+        <div className="min-h-screen relative overflow-hidden">
+          {/* Animated gradient background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
 
-          {/* Error Card */}
-          <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-            <CardHeader className="text-center pb-6">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                  <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+          {/* Animated decorative blobs - red tones for error */}
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              x: [0, 30, 0],
+              y: [0, -20, 0],
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-red-400/30 to-rose-500/30 dark:from-red-600/20 dark:to-rose-700/20 rounded-full blur-3xl"
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.1, 1],
+              x: [0, -20, 0],
+              y: [0, 30, 0],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1,
+            }}
+            className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-orange-400/30 to-red-500/30 dark:from-orange-600/20 dark:to-red-700/20 rounded-full blur-3xl"
+          />
+
+          {/* Main content */}
+          <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+            {/* Logo */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mb-6"
+            >
+              <LargeLogo href="/" />
+            </motion.div>
+
+            {/* Error card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="w-full max-w-md"
+            >
+              <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+                {/* Header */}
+                <div className="text-center mb-6">
+                  <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                      <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" aria-hidden="true" />
+                    </div>
+                  </div>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {t('resetPassword.errors.invalidLink') || 'Lien invalide'}
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2">
+                    {t('resetPassword.errors.invalidLinkDescription') || 'Le lien de réinitialisation est invalide ou manquant'}
+                  </p>
+                </div>
+
+                {/* Error message */}
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-6">
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {t('resetPassword.errors.noToken') || 'Aucun token trouvé dans l\'URL. Utilisez le lien de votre email.'}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                    {t('resetPassword.errors.noTokenHelp') || 'Cliquez sur le lien dans l\'email ou demandez un nouveau lien.'}
+                  </p>
+                  <Button asChild className="w-full">
+                    <Link href="/forgot-password">
+                      {t('resetPassword.requestNewLink') || 'Demander un nouveau lien'}
+                    </Link>
+                  </Button>
                 </div>
               </div>
-              <CardTitle className="text-2xl">
-                {t('resetPassword.errors.invalidLink') || 'Invalid Reset Link'}
-              </CardTitle>
-              <CardDescription className="text-base mt-2">
-                {t('resetPassword.errors.invalidLinkDescription') ||
-                  'The password reset link is invalid or missing'}
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {t('resetPassword.errors.noToken') ||
-                    'No reset token found in the URL. Please use the link from your email.'}
-                </AlertDescription>
-              </Alert>
-
-              <div className="text-center space-y-3">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('resetPassword.errors.noTokenHelp') ||
-                    'Please click the reset link from the email we sent you, or request a new password reset.'}
-                </p>
-                <a
-                  href="/forgot-password"
-                  className="inline-block w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors"
-                >
-                  {t('resetPassword.requestNewLink') || 'Request New Reset Link'}
-                </a>
-              </div>
-            </CardContent>
-          </Card>
+            </motion.div>
+          </div>
         </div>
-      </div>
       </FeatureGate>
     );
   }
 
   return (
     <FeatureGate feature="passwordReset" showMessage={true}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <LargeLogo href="/" />
-          <p className="text-gray-600 dark:text-gray-400 text-lg mt-2">
-            {t('resetPassword.subtitle') || 'Create a new secure password'}
-          </p>
-        </div>
+      <div className="min-h-screen relative overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
 
-        {/* Reset Password Card */}
-        <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-6">
-            <CardTitle className="flex items-center justify-center space-x-2 text-2xl">
-              <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <span>{t('resetPassword.title') || 'Reset Password'}</span>
-            </CardTitle>
-            <CardDescription className="text-base">
-              {t('resetPassword.description') ||
-                'Enter your new password below. Make sure it is strong and secure.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResetPasswordForm token={token} />
-          </CardContent>
-        </Card>
+        {/* Animated decorative blobs - green tones for success/security */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-emerald-400/30 to-teal-500/30 dark:from-emerald-600/20 dark:to-teal-700/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.1, 1],
+            x: [0, -20, 0],
+            y: [0, 30, 0],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1,
+          }}
+          className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-emerald-500/30 dark:from-cyan-600/20 dark:to-emerald-700/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.3, 1],
+            x: [0, 20, 0],
+            y: [0, -30, 0],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2,
+          }}
+          className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-green-400/30 to-emerald-500/30 dark:from-green-600/20 dark:to-emerald-700/20 rounded-full blur-3xl"
+        />
 
-        {/* Security Tips */}
-        <div className="text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
-          <p>
-            {t('resetPassword.securityTip1') ||
-              'Use a unique password that you have not used before'}
-          </p>
-          <p>
-            {t('resetPassword.securityTip2') ||
-              'We recommend using a password manager to generate and store secure passwords'}
-          </p>
+        {/* Main content */}
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6"
+          >
+            <LargeLogo href="/" />
+          </motion.div>
+
+          {/* Form card with glass effect */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-full max-w-md"
+          >
+            <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+              {/* Header */}
+              <div className="text-center mb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                    <ShieldCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  </div>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('resetPassword.title') || 'Nouveau mot de passe'}
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  {t('resetPassword.description') || 'Choisissez un nouveau mot de passe sécurisé'}
+                </p>
+              </div>
+
+              <ResetPasswordForm token={token} />
+
+              {/* Security Tips */}
+              <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p>{t('resetPassword.securityTip1') || 'Utilisez un mot de passe unique'}</p>
+                <p>{t('resetPassword.securityTip2') || 'Nous recommandons un gestionnaire de mots de passe'}</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Footer links */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="mt-8 text-center text-sm text-muted-foreground"
+          >
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+              <a href="/terms" className="hover:text-foreground transition-colors">
+                {t('register.termsOfService') || 'Conditions'}
+              </a>
+              <span className="hidden sm:inline">•</span>
+              <a href="/privacy" className="hover:text-foreground transition-colors">
+                {t('register.privacyPolicy') || 'Confidentialité'}
+              </a>
+              <span className="hidden sm:inline">•</span>
+              <a href="/contact" className="hover:text-foreground transition-colors">
+                {t('register.contactUs') || 'Contact'}
+              </a>
+            </div>
+          </motion.div>
         </div>
       </div>
-    </div>
     </FeatureGate>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+        className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full"
+      />
+    </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-          <div className="text-center space-y-3">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingFallback />}>
       <ResetPasswordContent />
     </Suspense>
   );

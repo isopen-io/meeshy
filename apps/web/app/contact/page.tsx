@@ -1,15 +1,13 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, Train, Bus, Car, Mail, Clock } from 'lucide-react';
 import Link from 'next/link';
-import { useI18n } from '@/hooks/useI18n';
+import { getContactTranslations } from '@/lib/i18n-server';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
-export default function ContactPage() {
-  const { t } = useI18n('contact');
+export default async function ContactPage() {
+  const { t } = await getContactTranslations();
 
   return (
     <>

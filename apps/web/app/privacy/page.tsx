@@ -1,30 +1,22 @@
-'use client';
-
-import { useI18n } from '@/hooks/useI18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Printer, Shield, Mail } from '@/lib/icons';
+import { Shield, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { getPrivacyTranslations } from '@/lib/i18n-server';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { PrintButton } from '@/components/common/PrintButton';
 
-export default function PrivacyPage() {
-  const { t, tArray, isLoading } = useI18n('privacy');
+export default async function PrivacyPage() {
+  const { t, tArray } = await getPrivacyTranslations();
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // Pre-load arrays for server rendering
+  const personalItems = tArray('dataCollection.personal.items');
+  const translationItems = tArray('dataCollection.translation.items');
+  const technicalItems = tArray('dataCollection.technical.items');
+  const usageItems = tArray('usage.items') as unknown as Array<{ title: string; description: string }>;
+  const sharingCases = tArray('sharing.cases');
+  const rightsList = tArray('rights.list');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -35,10 +27,7 @@ export default function PrivacyPage() {
       <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-end">
-            <Button onClick={handlePrint} variant="outline" className="flex items-center space-x-2">
-              <Printer className="h-4 w-4" />
-              <span>{t('print')}</span>
-            </Button>
+            <PrintButton label={t('print')} />
           </div>
         </div>
       </div>
@@ -53,7 +42,7 @@ export default function PrivacyPage() {
             </div>
             <p className="text-gray-600">{t('lastUpdated')}</p>
           </CardHeader>
-          
+
           <CardContent className="prose prose-lg max-w-none p-8">
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('introduction.title')}</h2>
@@ -67,22 +56,22 @@ export default function PrivacyPage() {
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 <h3 className="text-lg font-medium mb-2">{t('dataCollection.personal.title')}</h3>
                 <ul className="list-disc pl-6 space-y-1 mb-4">
-                  {tArray('dataCollection.personal.items').map((item: string, index: number) => (
-                    <li key={index}>{item}</li>
+                  {personalItems.map((item, index) => (
+                    <li key={`personal-${index}`}>{item}</li>
                   ))}
                 </ul>
-                
+
                 <h3 className="text-lg font-medium mb-2">{t('dataCollection.translation.title')}</h3>
                 <ul className="list-disc pl-6 space-y-1 mb-4">
-                  {tArray('dataCollection.translation.items').map((item: string, index: number) => (
-                    <li key={index}>{item}</li>
+                  {translationItems.map((item, index) => (
+                    <li key={`translation-${index}`}>{item}</li>
                   ))}
                 </ul>
-                
+
                 <h3 className="text-lg font-medium mb-2">{t('dataCollection.technical.title')}</h3>
                 <ul className="list-disc pl-6 space-y-1">
-                  {tArray('dataCollection.technical.items').map((item: string, index: number) => (
-                    <li key={index}>{item}</li>
+                  {technicalItems.map((item, index) => (
+                    <li key={`technical-${index}`}>{item}</li>
                   ))}
                 </ul>
               </div>
@@ -92,8 +81,8 @@ export default function PrivacyPage() {
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('usage.title')}</h2>
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 <ul className="list-disc pl-6 space-y-2">
-                  {tArray('usage.items').map((item: any, index: number) => (
-                    <li key={index}><strong>{item.title}</strong> {item.description}</li>
+                  {usageItems.map((item, index) => (
+                    <li key={`usage-${index}`}><strong>{item.title}</strong> {item.description}</li>
                   ))}
                 </ul>
               </div>
@@ -106,12 +95,12 @@ export default function PrivacyPage() {
                 <p className="mb-4">
                   {t('protection.local.content')}
                 </p>
-                
+
                 <h3 className="text-lg font-medium mb-2">{t('protection.encryption.title')}</h3>
                 <p className="mb-4">
                   {t('protection.encryption.content')}
                 </p>
-                
+
                 <h3 className="text-lg font-medium mb-2">{t('protection.storage.title')}</h3>
                 <p>
                   {t('protection.storage.content')}
@@ -125,8 +114,8 @@ export default function PrivacyPage() {
                 {t('sharing.intro')}
               </p>
               <ul className="list-disc pl-6 space-y-1 mt-4">
-                {tArray('sharing.cases').map((case_: string, index: number) => (
-                  <li key={index}>{case_}</li>
+                {sharingCases.map((case_, index) => (
+                  <li key={`sharing-${index}`}>{case_}</li>
                 ))}
               </ul>
             </section>
@@ -136,8 +125,8 @@ export default function PrivacyPage() {
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 <p className="mb-4">{t('rights.intro')}</p>
                 <ul className="list-disc pl-6 space-y-1">
-                  {tArray('rights.list').map((right: string, index: number) => (
-                    <li key={index}>{right}</li>
+                  {rightsList.map((right, index) => (
+                    <li key={`right-${index}`}>{right}</li>
                   ))}
                 </ul>
                 <p className="mt-4">
@@ -163,8 +152,8 @@ export default function PrivacyPage() {
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('contact.title')}</h2>
               <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg space-y-2">
-                <p className="text-gray-700">{t('contact.address')}</p>
-                <p className="text-gray-700">{t('contact.email')}</p>
+                <p className="text-gray-700 dark:text-gray-300">{t('contact.address')}</p>
+                <p className="text-gray-700 dark:text-gray-300">{t('contact.email')}</p>
               </div>
             </section>
           </CardContent>
@@ -193,23 +182,6 @@ export default function PrivacyPage() {
           </div>
         </div>
       </div>
-
-      {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          body {
-            background: white !important;
-          }
-          .container {
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
 
       {/* Footer */}
       <Footer />

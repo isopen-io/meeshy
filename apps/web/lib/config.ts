@@ -243,9 +243,9 @@ export const getBackendUrl = (): string => {
     // Priorité 2: Dériver l'URL du gateway depuis l'origine actuelle
     const hostname = window.location.hostname;
 
-    // Si on accède via IP, utiliser HTTP direct avec port 3000 (gateway)
+    // Si on accède via IP ou localhost, utiliser HTTP direct avec port 3000 (gateway)
     // Ex: https://192.168.1.171 -> http://192.168.1.171:3000
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
       return trimSlashes(`http://${hostname}:3000`);
     }
 
@@ -288,9 +288,9 @@ export const getWebSocketUrl = (): string => {
     // Priorité 2: Dériver l'URL WebSocket depuis l'origine actuelle
     const hostname = window.location.hostname;
 
-    // Si on accède via IP, utiliser WS direct avec port 3000 (gateway)
+    // Si on accède via IP ou localhost, utiliser WS direct avec port 3000 (gateway)
     // Ex: https://192.168.1.171 -> ws://192.168.1.171:3000
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
       return trimSlashes(`ws://${hostname}:3000`);
     }
 

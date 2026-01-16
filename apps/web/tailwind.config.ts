@@ -22,6 +22,18 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        inter: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        nunito: ['var(--font-nunito)', 'system-ui', 'sans-serif'],
+        poppins: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
+        'open-sans': ['var(--font-open-sans)', 'system-ui', 'sans-serif'],
+        lato: ['var(--font-lato)', 'system-ui', 'sans-serif'],
+        'comic-neue': ['var(--font-comic-neue)', 'cursive'],
+        lexend: ['var(--font-lexend)', 'system-ui', 'sans-serif'],
+        roboto: ['var(--font-roboto)', 'system-ui', 'sans-serif'],
+        'geist-sans': ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+        'geist-mono': ['var(--font-geist-mono)', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

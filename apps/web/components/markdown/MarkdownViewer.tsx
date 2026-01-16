@@ -5,8 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import {
   Download,
@@ -20,6 +19,24 @@ import {
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
+
+// ======================
+// Dynamic Import for Syntax Highlighter (~150KB saved)
+// ======================
+
+const CodeHighlighter = dynamic(
+  () => import('./CodeHighlighter').then((mod) => mod.CodeHighlighter),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-md my-2 p-4 bg-gray-100 dark:bg-gray-800 animate-pulse">
+        <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+        <div className="h-4 w-1/2 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+        <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-700 rounded" />
+      </div>
+    )
+  }
+);
 
 interface MarkdownViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -140,16 +157,12 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
                   }
 
                   return !inline && language ? (
-                    <SyntaxHighlighter
-                      style={isDark ? vscDarkPlus : vs}
+                    <CodeHighlighter
                       language={language}
-                      PreTag="div"
-                      className="rounded-md my-2 text-xs"
-                      showLineNumbers={true}
-                      {...props}
+                      isDark={isDark}
                     >
                       {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
+                    </CodeHighlighter>
                   ) : (
                     <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
                       {children}

@@ -181,9 +181,9 @@ function Verify2FAPageContent() {
 
         toast.success(t('login.success.loginSuccess'));
 
-        // Redirection
+        // Redirection avec rechargement complet pour s'assurer que l'état auth est chargé
         const redirectUrl = returnUrl || '/dashboard';
-        router.replace(redirectUrl);
+        window.location.href = redirectUrl;
       } else {
         setError(response.error || t('twoFactor.verify.errors.invalidCode'));
         setIsLoading(false);

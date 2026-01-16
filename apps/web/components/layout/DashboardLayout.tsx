@@ -41,6 +41,7 @@ import { useUser, useIsAuthChecking } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppStore } from '@/stores/app-store';
 import { authManager } from '@/services/auth-manager.service';
+import { preloadRouteModules } from '@/lib/lazy-components';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -213,48 +214,80 @@ export function DashboardLayout({
                 </DropdownMenuTrigger>
                 
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+                  <DropdownMenuItem
+                    onClick={() => router.push('/dashboard')}
+                    onMouseEnter={() => preloadRouteModules('/dashboard')}
+                    onFocus={() => preloadRouteModules('/dashboard')}
+                  >
                     <Home className="mr-2 h-4 w-4" />
                     <span>{t('navigation.dashboard')}</span>
                   </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => router.push('/conversations')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/conversations')}
+                    onMouseEnter={() => preloadRouteModules('/conversations')}
+                    onFocus={() => preloadRouteModules('/conversations')}
+                  >
                     <MessageSquare className="mr-2 h-4 w-4" />
                     <span>{t('navigation.conversations')}</span>
                   </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => router.push('/groups')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/groups')}
+                    onMouseEnter={() => preloadRouteModules('/groups')}
+                    onFocus={() => preloadRouteModules('/groups')}
+                  >
                     <Users className="mr-2 h-4 w-4" />
                     <span>{t('navigation.communities')}</span>
                   </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => router.push('/contacts')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/contacts')}
+                    onMouseEnter={() => preloadRouteModules('/contacts')}
+                    onFocus={() => preloadRouteModules('/contacts')}
+                  >
                     <UserPlus className="mr-2 h-4 w-4" />
                     <span>{t('navigation.contacts')}</span>
                   </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => router.push('/links')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/links')}
+                    onMouseEnter={() => preloadRouteModules('/links')}
+                    onFocus={() => preloadRouteModules('/links')}
+                  >
                     <LinkIcon className="mr-2 h-4 w-4" />
                     <span>{t('navigation.links')}</span>
                   </DropdownMenuItem>
-                  
+
                   <DropdownMenuSeparator />
-                  
-                  <DropdownMenuItem onClick={() => router.push('/u')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/u')}
+                    onMouseEnter={() => preloadRouteModules('/u')}
+                    onFocus={() => preloadRouteModules('/u')}
+                  >
                     <UserIcon className="mr-2 h-4 w-4" />
                     <span>{t('navigation.profile')}</span>
                   </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => router.push('/settings')}>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push('/settings')}
+                    onMouseEnter={() => preloadRouteModules('/settings')}
+                    onFocus={() => preloadRouteModules('/settings')}
+                  >
                     <Settings className="mr-2 h-4 w-4" />
                     <span>{t('navigation.settings')}</span>
                   </DropdownMenuItem>
-                  
+
                   {/* Lien Admin - Affiché seulement si l'utilisateur a les permissions */}
                   {(user as any).permissions?.canAccessAdmin && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => router.push('/admin')}>
+                      <DropdownMenuItem
+                        onClick={() => router.push('/admin')}
+                        onMouseEnter={() => preloadRouteModules('/admin')}
+                        onFocus={() => preloadRouteModules('/admin')}
+                      >
                         <Shield className="mr-2 h-4 w-4" />
                         <span>{t('navigation.admin')}</span>
                       </DropdownMenuItem>

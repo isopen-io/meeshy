@@ -53,7 +53,8 @@ export const SERVER_EVENTS = {
   CALL_ENDED: 'call:ended',
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
-  CALL_ERROR: 'call:error'
+  CALL_ERROR: 'call:error',
+  READ_STATUS_UPDATED: 'read-status:updated'
 } as const;
 
 // Événements du client vers le serveur
@@ -228,6 +229,16 @@ export interface ReactionSyncEventData {
   readonly userReactions: readonly string[];
 }
 
+/**
+ * Données pour l'événement de mise à jour du statut de lecture
+ */
+export interface ReadStatusUpdatedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly type: 'read' | 'received';
+  readonly updatedAt: Date;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -260,6 +271,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent) => void;
   [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: CallMediaToggleEvent) => void;
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
+  [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
 }
 
 /**

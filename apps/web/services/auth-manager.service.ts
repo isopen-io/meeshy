@@ -163,7 +163,45 @@ class AuthManager {
     useAuthStore.getState().setUser(user);
     useAuthStore.getState().setTokens(authToken, refreshToken, expiresIn);
 
+    // 3. Créer le cookie de session pour le middleware (Conditional Loading)
+    this.setSessionCookie(user);
+
     if (process.env.NODE_ENV === 'development') {
+    }
+  }
+
+  /**
+   * Crée un cookie de session pour le middleware Next.js
+   * Permet au middleware de vérifier les permissions admin AVANT le chargement du bundle
+   * Ce cookie est léger et contient uniquement les infos nécessaires pour le routing
+   *
+   * @param user - Utilisateur connecté
+   */
+  private setSessionCookie(user: User): void {
+    if (typeof document === 'undefined') return;
+
+    try {
+      // Données minimales pour le middleware (role + permissions admin)
+      const sessionData = {
+        userId: user.id,
+        role: user.role,
+        canAccessAdmin: user.permissions?.canAccessAdmin || false,
+      };
+
+      // Encoder en base64 pour éviter les problèmes de caractères spéciaux
+      const encodedData = btoa(JSON.stringify(sessionData));
+
+      // Cookie valide 7 jours (sera rafraîchi à chaque login)
+      const maxAge = 7 * 24 * 60 * 60;
+      const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
+
+      document.cookie = `meeshy_session=${encodedData}; max-age=${maxAge}; path=/; samesite=lax${secure}`;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AUTH_MANAGER] Session cookie set for middleware');
+      }
+    } catch (error) {
+      console.warn('[AUTH_MANAGER] Could not set session cookie:', error);
     }
   }
 

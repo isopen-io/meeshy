@@ -145,6 +145,7 @@ export function useAuth() {
       '/',
       '/login',
       '/signin',
+      '/signup',
       '/register',
       '/partners',
       '/privacy',
@@ -347,8 +348,11 @@ export function useAuth() {
 
     setAuthState(newAuthState);
     setUserRef.current(null);
-    router.push('/');
-  }, [router]);
+
+    // Utiliser window.location.href pour forcer un rechargement complet
+    // Cela garantit que l'état d'authentification est correctement réinitialisé
+    window.location.href = '/';
+  }, []);
 
   // Rejoindre une conversation anonymement
   const joinAnonymously = useCallback((participant: any, sessionToken: string, conversationShareLinkId?: string) => {

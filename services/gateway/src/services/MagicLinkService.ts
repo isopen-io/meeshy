@@ -19,7 +19,8 @@ import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 
 const TOKEN_EXPIRY_MINUTES = 1; // 1 minute as per requirement
-const MAX_REQUESTS_PER_HOUR = 3;
+// Higher limit in development for testing, strict in production
+const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
 
 export interface MagicLinkRequest {
   email: string;
@@ -51,7 +52,7 @@ export class MagicLinkService {
    */
   async requestMagicLink(
     request: MagicLinkRequest
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean; message: string; error?: string }> {
     const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice } = request;
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -59,9 +60,14 @@ export class MagicLinkService {
       // 1. Check rate limit
       const isRateLimited = await this.checkRateLimit(normalizedEmail, ipAddress);
       if (isRateLimited) {
-        // Still return success to prevent enumeration
+        // Rate limiting can be signaled without revealing if email exists
+        // because it's checked BEFORE user lookup
         console.warn('[MagicLink] Rate limit exceeded for:', normalizedEmail);
-        return { success: true, message: 'If an account exists, a login link has been sent.' };
+        return {
+          success: false,
+          message: 'Too many requests. Please try again in about an hour.',
+          error: 'RATE_LIMITED'
+        };
       }
 
       // 2. Find user by email

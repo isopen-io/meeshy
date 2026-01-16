@@ -141,8 +141,8 @@ export const MessageActionsBar = memo(function MessageActionsBar({
             {translationError && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center text-red-500">
-                    <AlertTriangle className="h-3.5 w-3.5" />
+                  <div className="flex items-center text-red-500" role="alert" aria-label={translationError}>
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -364,16 +364,22 @@ export const MessageActionsBar = memo(function MessageActionsBar({
             className="w-64 p-2"
           >
             {/* Grille 6x5 de réactions fréquentes */}
-            <div className="grid grid-cols-6 gap-1 mb-2">
+            <div className="grid grid-cols-6 gap-1 mb-2" role="grid" aria-label={t('quickReactions')}>
               {FREQUENT_REACTIONS.map((emoji, index) => (
                 <motion.button
                   key={`${emoji}-${index}`}
                   onClick={() => handleQuickReaction(emoji)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleQuickReaction(emoji);
+                    }
+                  }}
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.9 }}
                   transition={{ duration: 0.1 }}
-                  className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-                  title={emoji}
+                  className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  aria-label={`Réagir avec ${emoji}`}
                 >
                   {emoji}
                 </motion.button>

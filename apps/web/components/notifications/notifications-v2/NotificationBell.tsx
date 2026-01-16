@@ -96,12 +96,13 @@ export function NotificationBell({
           onClick={handleClick}
           className={cn(
             'relative',
+            'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
             animated && displayCount > 0 && 'animate-pulse',
             className
           )}
           aria-label={`Notifications (${displayCount} non lues)`}
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-5 w-5" aria-hidden="true" />
 
           {/* Badge compteur */}
           {showBadge && displayCount > 0 && (
@@ -112,6 +113,7 @@ export function NotificationBell({
                 'ring-2 ring-background',
                 animated && 'animate-pulse'
               )}
+              aria-hidden="true"
             >
               {displayCount > 99 ? '99+' : displayCount}
             </span>
@@ -147,13 +149,14 @@ export function NotificationBell({
           {/* Filtre de recherche */}
           <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-700">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
               <Input
                 type="text"
                 placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
+                aria-label="Rechercher dans les notifications"
               />
             </div>
           </div>
@@ -213,12 +216,13 @@ export function NotificationBellSimple({
       onClick={onClick}
       className={cn(
         'relative',
+        'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         animated && displayCount > 0 && 'animate-pulse',
         className
       )}
       aria-label={`Notifications (${displayCount} non lues)`}
     >
-      <Bell className="h-5 w-5" />
+      <Bell className="h-5 w-5" aria-hidden="true" />
 
       {showBadge && displayCount > 0 && (
         <span
@@ -228,6 +232,7 @@ export function NotificationBellSimple({
             'ring-2 ring-background',
             animated && 'animate-pulse'
           )}
+          aria-hidden="true"
         >
           {displayCount > 99 ? '99+' : displayCount}
         </span>

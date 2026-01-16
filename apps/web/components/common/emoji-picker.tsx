@@ -331,52 +331,58 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       <div className="p-3 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
               type="text"
               placeholder={t('picker.search')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 pr-8 h-9 text-sm"
+              aria-label={t('picker.search')}
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label={t('picker.clearSearch') || 'Effacer la recherche'}
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
           </div>
-          
+
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 hover:bg-secondary rounded-md transition-colors"
+              className="p-2 hover:bg-secondary rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label="Fermer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>
 
         {/* Catégories tabs */}
         {!searchQuery && (
-          <div className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide" role="tablist" aria-label={t('picker.categories.label') || 'Catégories d\'emojis'}>
             {EMOJI_CATEGORIES.map((category) => (
               <button
                 key={category.id}
                 onClick={() => setActiveCategory(category.id)}
+                role="tab"
+                aria-selected={activeCategory === category.id}
+                aria-controls={`emoji-panel-${category.id}`}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-xs font-medium',
                   'transition-all duration-200 flex-shrink-0',
                   'hover:bg-secondary',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                   activeCategory === category.id
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-secondary/50 text-muted-foreground'
                 )}
               >
-                <span className="mr-1.5">{category.icon}</span>
+                <span className="mr-1.5" aria-hidden="true">{category.icon}</span>
                 {category.label}
               </button>
             ))}
@@ -395,7 +401,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                   <h3 className="text-xs font-semibold text-muted-foreground mb-2 px-1">
                     {category.icon} {category.label}
                   </h3>
-                  <div className="grid grid-cols-8 gap-1">
+                  <div className="grid grid-cols-8 gap-1" role="grid">
                     {category.emojis.map((emoji, index) => (
                       <motion.button
                         key={`${category.id}-${emoji}-${index}`}
@@ -405,11 +411,18 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                         whileTap={{ scale: 0.9 }}
                         transition={{ duration: 0.1 }}
                         onClick={() => handleEmojiClick(emoji)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleEmojiClick(emoji);
+                          }
+                        }}
+                        aria-label={`Sélectionner ${emoji}`}
                         className={cn(
                           'w-9 h-9 flex items-center justify-center',
                           'rounded-md text-xl',
                           'hover:bg-secondary transition-colors',
-                          'focus:outline-none focus:ring-2 focus:ring-primary'
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
                         )}
                       >
                         {emoji}
@@ -436,7 +449,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <div className="grid grid-cols-8 gap-1">
+                    <div className="grid grid-cols-8 gap-1" role="tabpanel" id={`emoji-panel-${category.id}`}>
                       {category.emojis.map((emoji, index) => (
                         <motion.button
                           key={`${category.id}-${emoji}-${index}`}
@@ -444,16 +457,23 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                           animate={{ opacity: 1, scale: 1 }}
                           whileHover={{ scale: 1.2 }}
                           whileTap={{ scale: 0.9 }}
-                          transition={{ 
+                          transition={{
                             opacity: { delay: index * 0.01 },
                             scale: { duration: 0.1 }
                           }}
                           onClick={() => handleEmojiClick(emoji)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleEmojiClick(emoji);
+                            }
+                          }}
+                          aria-label={`Sélectionner ${emoji}`}
                           className={cn(
                             'w-9 h-9 flex items-center justify-center',
                             'rounded-md text-xl',
                             'hover:bg-secondary transition-colors',
-                            'focus:outline-none focus:ring-2 focus:ring-primary'
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
                           )}
                         >
                           {emoji}

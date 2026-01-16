@@ -89,12 +89,17 @@ export function RegisterForm({
   const usernameCheckTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // État pour la validation de l'email
-  const [emailValidationStatus, setEmailValidationStatus] = useState<'idle' | 'invalid' | 'valid'>('idle');
+  const [emailValidationStatus, setEmailValidationStatus] = useState<'idle' | 'checking' | 'invalid' | 'valid' | 'taken'>('idle');
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
+  const emailCheckTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // État pour la validation du téléphone
-  const [phoneValidationStatus, setPhoneValidationStatus] = useState<'idle' | 'invalid' | 'valid'>('idle');
+  const [phoneValidationStatus, setPhoneValidationStatus] = useState<'idle' | 'checking' | 'invalid' | 'valid' | 'taken'>('idle');
   const [phoneErrorMessage, setPhoneErrorMessage] = useState<string>('');
+  const phoneCheckTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce delay for availability checks (2 seconds)
+  const AVAILABILITY_CHECK_DEBOUNCE = 2000;
 
   const validateUsername = (username: string) => {
     // Validation: longueur entre 2 et 16 caractères
@@ -164,17 +169,17 @@ export function RegisterForm({
     // Indiquer qu'on est en train de vérifier
     setUsernameCheckStatus('checking');
 
-    // Debounce: attendre 500ms avant de lancer la vérification
+    // Debounce: attendre 2 secondes avant de lancer la vérification
     usernameCheckTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          buildApiUrl(`/users/check-username/${encodeURIComponent(formData.username.trim())}`)
+          buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(formData.username.trim())}`)
         );
 
         if (response.ok) {
           const result = await response.json();
           if (result.success) {
-            setUsernameCheckStatus(result.available ? 'available' : 'taken');
+            setUsernameCheckStatus(result.data?.usernameAvailable ? 'available' : 'taken');
           } else {
             setUsernameCheckStatus('idle');
           }
@@ -185,7 +190,7 @@ export function RegisterForm({
         console.error('Erreur vérification username:', error);
         setUsernameCheckStatus('idle');
       }
-    }, 500);
+    }, AVAILABILITY_CHECK_DEBOUNCE);
 
     // Cleanup
     return () => {
@@ -194,6 +199,144 @@ export function RegisterForm({
       }
     };
   }, [formData.username, linkId, disabled]);
+
+  // Vérification de disponibilité de l'email avec debounce de 2 secondes
+  useEffect(() => {
+    if (disabled) return;
+
+    // Clear le timeout précédent
+    if (emailCheckTimeout.current) {
+      clearTimeout(emailCheckTimeout.current);
+    }
+
+    // Si l'email est vide ou invalide (format), reset le statut
+    if (!formData.email.trim()) {
+      setEmailValidationStatus('idle');
+      setEmailErrorMessage('');
+      return;
+    }
+
+    // Vérifier d'abord le format
+    const formatError = getEmailValidationError(formData.email);
+    if (formatError) {
+      setEmailValidationStatus('invalid');
+      setEmailErrorMessage(formatError);
+      return;
+    }
+
+    // Format valide, indiquer qu'on vérifie la disponibilité
+    setEmailValidationStatus('checking');
+    setEmailErrorMessage('');
+
+    // Debounce: attendre 2 secondes avant de lancer la vérification
+    emailCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          buildApiUrl(`/auth/check-availability?email=${encodeURIComponent(formData.email.trim())}`)
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            if (result.data?.emailAvailable) {
+              setEmailValidationStatus('valid');
+              setEmailErrorMessage('');
+            } else {
+              setEmailValidationStatus('taken');
+              setEmailErrorMessage(t('register.errors.emailExists'));
+            }
+          } else {
+            setEmailValidationStatus('valid');
+            setEmailErrorMessage('');
+          }
+        } else {
+          setEmailValidationStatus('valid');
+          setEmailErrorMessage('');
+        }
+      } catch (error) {
+        console.error('Erreur vérification email:', error);
+        setEmailValidationStatus('valid');
+        setEmailErrorMessage('');
+      }
+    }, AVAILABILITY_CHECK_DEBOUNCE);
+
+    // Cleanup
+    return () => {
+      if (emailCheckTimeout.current) {
+        clearTimeout(emailCheckTimeout.current);
+      }
+    };
+  }, [formData.email, disabled, t]);
+
+  // Vérification de disponibilité du téléphone avec debounce de 2 secondes
+  useEffect(() => {
+    if (disabled) return;
+
+    // Clear le timeout précédent
+    if (phoneCheckTimeout.current) {
+      clearTimeout(phoneCheckTimeout.current);
+    }
+
+    // Si le téléphone est vide, reset le statut
+    if (!formData.phoneNumber.trim()) {
+      setPhoneValidationStatus('invalid');
+      setPhoneErrorMessage(t('register.validation.phoneRequired'));
+      return;
+    }
+
+    // Vérifier d'abord le format avec validation asynchrone
+    import('@/utils/phone-validator').then(async ({ getPhoneValidationError, translatePhoneError }) => {
+      const errorKey = getPhoneValidationError(formData.phoneNumber);
+      if (errorKey) {
+        setPhoneValidationStatus('invalid');
+        setPhoneErrorMessage(translatePhoneError(errorKey, t));
+        return;
+      }
+
+      // Format valide, indiquer qu'on vérifie la disponibilité
+      setPhoneValidationStatus('checking');
+      setPhoneErrorMessage('');
+
+      // Debounce: attendre 2 secondes avant de lancer la vérification
+      phoneCheckTimeout.current = setTimeout(async () => {
+        try {
+          const response = await fetch(
+            buildApiUrl(`/auth/check-availability?phone=${encodeURIComponent(formData.phoneNumber.trim())}`)
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              if (result.data?.phoneAvailable) {
+                setPhoneValidationStatus('valid');
+                setPhoneErrorMessage('');
+              } else {
+                setPhoneValidationStatus('taken');
+                setPhoneErrorMessage(t('register.errors.phoneExists'));
+              }
+            } else {
+              setPhoneValidationStatus('valid');
+              setPhoneErrorMessage('');
+            }
+          } else {
+            setPhoneValidationStatus('valid');
+            setPhoneErrorMessage('');
+          }
+        } catch (error) {
+          console.error('Erreur vérification téléphone:', error);
+          setPhoneValidationStatus('valid');
+          setPhoneErrorMessage('');
+        }
+      }, AVAILABILITY_CHECK_DEBOUNCE);
+    });
+
+    // Cleanup
+    return () => {
+      if (phoneCheckTimeout.current) {
+        clearTimeout(phoneCheckTimeout.current);
+      }
+    };
+  }, [formData.phoneNumber, disabled, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -361,16 +504,15 @@ export function RegisterForm({
             const currentPath = window.location.pathname;
 
             console.log('[REGISTER_FORM] Redirection après inscription...');
-            // Petit délai pour permettre à l'état d'être mis à jour
-            setTimeout(() => {
-              if (currentPath === '/') {
-                console.log('[REGISTER_FORM] Rechargement de la page d\'accueil');
-                window.location.reload();
-              } else {
-                console.log('[REGISTER_FORM] Redirection vers dashboard');
-                router.push('/dashboard');
-              }
-            }, 100);
+            // Utiliser window.location.href pour forcer un rechargement complet
+            // Cela garantit que l'état d'authentification est correctement chargé
+            if (currentPath === '/') {
+              console.log('[REGISTER_FORM] Rechargement de la page d\'accueil');
+              window.location.reload();
+            } else {
+              console.log('[REGISTER_FORM] Redirection vers dashboard');
+              window.location.href = '/dashboard';
+            }
           }
         } else {
           const errorMsg = t('register.errors.registrationError');
@@ -406,6 +548,7 @@ export function RegisterForm({
               value={formData.firstName}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
               disabled={isLoading || disabled}
+              autoComplete="given-name"
               required
             />
           </div>
@@ -418,6 +561,7 @@ export function RegisterForm({
               value={formData.lastName}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
               disabled={isLoading || disabled}
+              autoComplete="family-name"
               required
             />
           </div>
@@ -451,7 +595,7 @@ export function RegisterForm({
               required
             />
             {/* Indicateur de statut */}
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
               {usernameCheckStatus === 'checking' && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
               )}
@@ -471,14 +615,14 @@ export function RegisterForm({
             {t('register.usernameHelp')} (2-16 caractères)
           </p>
           {usernameCheckStatus === 'available' && (
-            <p className="text-xs text-green-600 flex items-center gap-1">
-              <Check className="h-3 w-3" />
+            <p className="text-xs text-green-600 flex items-center gap-1" aria-live="polite">
+              <Check className="h-3 w-3" aria-hidden="true" />
               Nom d'utilisateur disponible
             </p>
           )}
           {usernameCheckStatus === 'taken' && (
-            <p className="text-xs text-red-500 flex items-center gap-1">
-              <X className="h-3 w-3" />
+            <p className="text-xs text-red-500 flex items-center gap-1" role="alert">
+              <X className="h-3 w-3" aria-hidden="true" />
               Ce nom d'utilisateur est déjà pris
             </p>
           )}
@@ -501,10 +645,12 @@ export function RegisterForm({
               emailValidationStatus === 'invalid' && "border-red-500 focus-visible:ring-red-500"
             )}
             disabled={isLoading || disabled}
+            autoComplete="email"
+            spellCheck="false"
             required
           />
           {/* Indicateur de statut */}
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
             {emailValidationStatus === 'valid' && (
               <div className="flex items-center justify-center h-5 w-5 rounded-full bg-green-500">
                 <Check className="h-3 w-3 text-white" />
@@ -518,14 +664,14 @@ export function RegisterForm({
           </div>
         </div>
         {emailValidationStatus === 'valid' && (
-          <p className="text-xs text-green-600 flex items-center gap-1">
-            <Check className="h-3 w-3" />
+          <p className="text-xs text-green-600 flex items-center gap-1" aria-live="polite">
+            <Check className="h-3 w-3" aria-hidden="true" />
             Email valide
           </p>
         )}
         {emailValidationStatus === 'invalid' && emailErrorMessage && (
-          <p className="text-xs text-red-500 flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
+          <p className="text-xs text-red-500 flex items-center gap-1" role="alert">
+            <AlertCircle className="h-3 w-3" aria-hidden="true" />
             {emailErrorMessage}
           </p>
         )}
@@ -533,12 +679,13 @@ export function RegisterForm({
 
       <div className="space-y-2">
         <Label htmlFor={`${formPrefix}-phoneNumber`}>
-          {t('register.phoneLabel')} <span className="text-red-500">*</span>
+          {t('register.phoneLabel')} <span className="text-red-500" aria-hidden="true">*</span>
         </Label>
         <div className="relative">
           <Input
             id={`${formPrefix}-phoneNumber`}
             type="tel"
+            inputMode="tel"
             placeholder="+33612345678 ou 0033612345678"
             value={formData.phoneNumber}
             onChange={(e) => handlePhoneChangeWithSync(e.target.value)}
@@ -551,10 +698,11 @@ export function RegisterForm({
             minLength={8}
             maxLength={15}
             disabled={isLoading || disabled}
+            autoComplete="tel"
             required
           />
           {/* Indicateur de statut */}
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
             {phoneValidationStatus === 'valid' && (
               <div className="flex items-center justify-center h-5 w-5 rounded-full bg-green-500">
                 <Check className="h-3 w-3 text-white" />
@@ -571,14 +719,14 @@ export function RegisterForm({
           {t('register.validation.phoneHelp')}
         </p>
         {phoneValidationStatus === 'valid' && (
-          <p className="text-xs text-green-600 flex items-center gap-1">
-            <Check className="h-3 w-3" />
+          <p className="text-xs text-green-600 flex items-center gap-1" aria-live="polite">
+            <Check className="h-3 w-3" aria-hidden="true" />
             {t('register.validation.phoneValid')}
           </p>
         )}
         {phoneValidationStatus === 'invalid' && phoneErrorMessage && (
-          <p className="text-xs text-red-500 flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
+          <p className="text-xs text-red-500 flex items-center gap-1" role="alert">
+            <AlertCircle className="h-3 w-3" aria-hidden="true" />
             {phoneErrorMessage}
           </p>
         )}
@@ -594,16 +742,17 @@ export function RegisterForm({
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             disabled={isLoading || disabled}
+            autoComplete="new-password"
             required
             className="pr-10"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
           </button>
         </div>
       </div>
@@ -653,8 +802,8 @@ export function RegisterForm({
             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
           >
             {t('register.loginLink')}
-          </a> -  <a 
-            href="/signin" 
+          </a> -  <a
+            href="/signup"
             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
           >
             {t('login.registerLink')}

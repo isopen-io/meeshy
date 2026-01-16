@@ -4,6 +4,11 @@ generator client {
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
+// Python client generator (disabled - requires prisma-client-py installed)
+// generator client_py {
+//   provider = "prisma-client-py"
+// }
+
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
@@ -156,6 +161,7 @@ model User {
   passwordHistory          PasswordHistory[]
   securityEvents           SecurityEvent[]
   sessions                 UserSession[]
+  pushTokens               PushToken[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -214,10 +220,10 @@ model Conversation {
   // ============================================
   // E2EE / ENCRYPTION FIELDS
   // ============================================
-  /// Encryption mode: null (disabled), 'server' (server-side), 'e2ee' (end-to-end)
+  /// Encryption mode: null (disabled), "server" (server-side), "e2ee" (end-to-end)
   encryptionMode String?
 
-  /// Encryption protocol: 'aes-256-gcm' (server), 'signal_v3' (e2ee)
+  /// Encryption protocol: "aes-256-gcm" (server), "signal_v3" (e2ee)
   encryptionProtocol String?
 
   /// When encryption was enabled (immutable once set)
@@ -482,7 +488,7 @@ model Message {
   /// Flag indicating if message is encrypted
   isEncrypted Boolean @default(false)
 
-  /// Encryption mode: 'e2ee' (end-to-end), 'server' (server-side), 'hybrid'
+  /// Encryption mode: "e2ee" (end-to-end), "server" (server-side), "hybrid".
   encryptionMode String?
 
   // Status tracking (per-user per-message)
@@ -654,7 +660,7 @@ model MessageAttachment {
   /// Whether this attachment is encrypted
   isEncrypted Boolean @default(false)
 
-  /// Encryption mode: 'e2ee' (end-to-end), 'server' (server-side), 'hybrid'
+  /// Encryption mode: "e2ee" (end-to-end), "server" (server-side), "hybrid".
   encryptionMode String?
 
   /// Base64-encoded initialization vector (12 bytes for AES-GCM)
@@ -1677,7 +1683,7 @@ model UserCommunityPreferences {
   /// Hide community from list without leaving
   isHidden Boolean @default(false)
 
-  /// Notification level: 'all', 'mentions', 'none'
+  /// Notification level: "all", "mentions", "none"
   notificationLevel String @default("all")
 
   /// Custom display name override
@@ -2092,10 +2098,10 @@ model DMASession {
   /// Remote party's last DH ratchet key (base64 encoded)
   dhRatchetRemoteKey String?
 
-  /// Session type: 'signal_protocol_x3dh', 'mls_group', etc.
+  /// Session type: "signal_protocol_x3dh", "mls_group", etc.
   sessionType String @default("signal_protocol_x3dh")
 
-  /// Session state: 'pending', 'established', 'expired', 'revoked'
+  /// Session state: "pending", "established", "expired", "revoked"
   sessionState String @default("pending")
 
   /// Message counters for Double Ratchet
@@ -2128,7 +2134,7 @@ model DMAEnrollment {
   /// External platform identifier (WhatsApp internal ID, Messenger ID)
   whatsappInternalId String @unique
 
-  /// Platform type: 'whatsapp', 'messenger', 'imessage'
+  /// Platform type: "whatsapp", "messenger", "imessage"
   platform String @default("whatsapp")
 
   /// Identity key (public part, base64 encoded, 32 bytes)
@@ -2146,7 +2152,7 @@ model DMAEnrollment {
   /// Registration ID for this enrollment
   registrationId Int @default(0)
 
-  /// Enrollment status: 'active', 'revoked', 'expired'
+  /// Enrollment status: "active", "revoked", "expired"
   status String @default("active")
 
   /// Timestamps
@@ -2428,4 +2434,64 @@ model UserMessageDeletion {
   @@unique([userId, messageId])
   @@index([userId])
   @@index([messageId])
+}
+
+/// =====================================================
+/// PUSH NOTIFICATION TOKENS - Device registration for push notifications
+/// =====================================================
+
+/// Stores push notification tokens for mobile/web devices
+/// Supports APNS (iOS), FCM (Firebase - iOS/Android/Web), and VoIP (iOS calls)
+model PushToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+
+  /// The push notification token from the device
+  token     String
+
+  /// Token type: apns (Apple Push), fcm (Firebase Cloud Messaging), voip (Apple VoIP Push)
+  type      String   @default("fcm")
+
+  /// Platform: ios, android, web
+  platform  String
+
+  /// Unique device identifier (for managing multiple devices per user)
+  deviceId  String?
+
+  /// Device name/model for user identification (e.g., "iPhone 15 Pro", "Pixel 8")
+  deviceName String?
+
+  /// App version when token was registered (for compatibility tracking)
+  appVersion String?
+
+  /// App bundle ID (e.g., "com.meeshy.app", "com.meeshy.app.voip")
+  bundleId   String?
+
+  /// Whether this token is currently active/valid
+  isActive  Boolean  @default(true)
+
+  /// Last time this token was successfully used to send a notification
+  lastUsedAt DateTime?
+
+  /// Number of consecutive failed delivery attempts (for cleanup)
+  failedAttempts Int @default(0)
+
+  /// Last error message if delivery failed
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Ensure unique token per user per type (user can have apns + fcm + voip)
+  @@unique([userId, token, type])
+  /// Index for efficient lookup by token (for unregistration)
+  @@index([token])
+  /// Index for finding all tokens for a user
+  @@index([userId])
+  /// Index for cleanup queries (inactive or failed tokens)
+  @@index([isActive, failedAttempts])
+  /// Index for platform-specific queries
+  @@index([platform, type])
 }

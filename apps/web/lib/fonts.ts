@@ -1,7 +1,80 @@
 /**
- * Configuration des polices - Version sans Google Fonts pour CI
- * Utilise des polices système avec fallbacks
+ * Configuration des polices avec next/font/google
+ * Optimisé pour: preload automatique, self-hosting, zero layout shift
  */
+import {
+  Inter,
+  Nunito,
+  Poppins,
+  Open_Sans,
+  Lato,
+  Comic_Neue,
+  Lexend,
+  Roboto,
+} from 'next/font/google';
+
+// Instances de polices avec next/font (self-hosted, preloaded)
+const inter = Inter({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const nunito = Nunito({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-nunito',
+  display: 'swap',
+});
+
+const poppins = Poppins({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
+
+const openSans = Open_Sans({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-open-sans',
+  display: 'swap',
+});
+
+const lato = Lato({
+  weight: ['400', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-lato',
+  display: 'swap',
+});
+
+const comicNeue = Comic_Neue({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  variable: '--font-comic-neue',
+  display: 'swap',
+});
+
+const lexend = Lexend({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-lexend',
+  display: 'swap',
+});
+
+const roboto = Roboto({
+  weight: ['400', '500', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-roboto',
+  display: 'swap',
+});
+
+// Geist-like font configuration (using CSS variables with fallback)
+// These are placeholder objects that just provide the variable property
+const geistSans = {
+  variable: '--font-geist-sans',
+};
+
+const geistMono = {
+  variable: '--font-geist-mono',
+};
 
 // Types et configuration
 export type FontFamily =
@@ -27,23 +100,6 @@ export interface FontConfig {
   ageGroup: 'kids' | 'teens' | 'adults' | 'all';
   accessibility: 'high' | 'medium' | 'low';
 }
-
-// Font instances with CSS variables (system font fallbacks)
-const createFontConfig = (variable: string) => ({
-  variable,
-  className: variable.replace('--', ''),
-});
-
-const inter = createFontConfig('--font-inter');
-const nunito = createFontConfig('--font-nunito');
-const poppins = createFontConfig('--font-poppins');
-const openSans = createFontConfig('--font-open-sans');
-const lato = createFontConfig('--font-lato');
-const comicNeue = createFontConfig('--font-comic-neue');
-const lexend = createFontConfig('--font-lexend');
-const roboto = createFontConfig('--font-roboto');
-const geistSans = createFontConfig('--font-geist-sans');
-const geistMono = createFontConfig('--font-geist-mono');
 
 // Police par défaut - Nunito (la plus utilisée pour les jeunes)
 export const defaultFont = nunito;
