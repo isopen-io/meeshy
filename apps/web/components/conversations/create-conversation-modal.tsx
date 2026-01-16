@@ -187,14 +187,15 @@ export function CreateConversationModal({
 
   // Recherche d'utilisateurs
   const searchUsers = useCallback(async (query: string) => {
-    if (!query.trim()) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery || trimmedQuery.length < 2) {
       setAvailableUsers([]);
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await apiService.get<{ success: boolean; data: User[] }>(`/users/search?q=${encodeURIComponent(query)}`);
+      const response = await apiService.get<{ success: boolean; data: User[] }>(`/users/search?q=${encodeURIComponent(trimmedQuery)}`);
 
       // L'API retourne { success: true, data: [...] }
       // apiService enveloppe ça dans { data: { success: true, data: [...] } }
