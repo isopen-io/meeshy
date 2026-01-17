@@ -57,7 +57,7 @@ export function ResponsiveTabs({
             <TabsTrigger
               key={item.value}
               value={item.value}
-              className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
+              className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-[color,background-color] flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
             >
               {item.icon}
               <span className="text-xs md:text-sm">{item.label}</span>

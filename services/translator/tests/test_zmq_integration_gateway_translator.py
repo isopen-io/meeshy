@@ -602,18 +602,22 @@ class TestRealTranslatorIntegration:
         Gateway → ZMQ → Translator (transcription + traduction + TTS) → ZMQ → Gateway
 
         Note: Ce test est très lent sur CPU (~10 min pour audio de 10s).
-        Utilisez GPU/MPS pour accélérer significativement.
+        Configurez VOICE_CLONE_DEVICE=mps pour utiliser Apple Silicon.
         """
-        import torch
-        has_gpu = torch.cuda.is_available() or torch.backends.mps.is_available()
+        import os
 
         server, push_port, sub_port, ml_service_working = translator_server
 
         if not ml_service_working:
             pytest.skip("Service ML non fonctionnel - test de traduction audio skippé")
 
+        # Vérifier le device réellement utilisé (pas juste la disponibilité)
+        voice_device = os.getenv("VOICE_CLONE_DEVICE", "cpu")
+        tts_device = os.getenv("TTS_DEVICE", "auto")
+        uses_gpu = voice_device in ["cuda", "mps"] or tts_device in ["cuda", "mps"]
+
         # Timeout adapté: 10 min CPU, 2 min GPU
-        timeout_seconds = 120.0 if has_gpu else 600.0
+        timeout_seconds = 120.0 if uses_gpu else 600.0
 
         config = GatewaySimulatorConfig(
             push_port=push_port,

@@ -11,6 +11,7 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZMQTranslationClient } from './ZmqTranslationClient';
 import { logger } from '../utils/logger';
@@ -259,14 +260,14 @@ export class AudioTranslateService extends EventEmitter {
       let taskId: string;
 
       try {
-        // Construire la requête selon le mode
+        // Construire la requête selon le mode (fichier OU base64)
+        // Le ZMQ client envoie toujours en multipart binaire
         taskId = await this.zmqClient.sendTranscriptionOnlyRequest({
           messageId,
           attachmentId: options.attachmentId,
-          // Mode 1: Chemin du fichier (pour attachments)
+          // Mode 1: Chemin du fichier (pour attachments existants)
           audioPath: options.audioPath,
-          audioUrl: options.audioPath,
-          // Mode 2: Audio en base64 (pour transcription directe)
+          // Mode 2: Audio en base64 (pour transcription directe API)
           audioData: options.audioBase64,
           audioFormat: options.audioFormat,
         });
@@ -336,8 +337,9 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Construire le chemin audio
-      const audioPath = `uploads/attachments${attachment.fileUrl.replace('/api/v1/attachments/file', '')}`;
+      // Construire le chemin ABSOLU audio (décoder l'URL encodée)
+      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
+      const audioPath = path.resolve(process.cwd(), relativePath);
 
       // Transcrire avec sauvegarde
       const result = await this.transcribeOnly('system', {
@@ -477,8 +479,9 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Lire le fichier audio
-      const audioPath = attachment.filePath || `uploads/attachments${attachment.fileUrl.replace('/api/v1/attachments/file', '')}`;
+      // Lire le fichier audio (décoder l'URL encodée et convertir en chemin absolu)
+      const relativePath = attachment.filePath || `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
+      const audioPath = path.isAbsolute(relativePath) ? relativePath : path.resolve(process.cwd(), relativePath);
 
       // Traduire avec sauvegarde
       const result = await this.translateSync(attachment.uploadedBy || 'system', {

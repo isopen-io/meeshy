@@ -1,82 +1,8 @@
 /**
- * Markdown Parser Constants
- * - Security limits
- * - Regex patterns
- * - Emoji mappings
+ * Markdown Parser - Emoji Shortcode Map
+ *
+ * 200+ emoji shortcodes for inline emoji replacement
  */
-
-// ============================================================================
-// SECURITY LIMITS
-// ============================================================================
-
-export const MAX_CONTENT_LENGTH = 1024 * 1024; // 1MB
-export const MAX_URL_LENGTH = 2048;
-export const MAX_HEADING_LEVEL = 6;
-export const MAX_NESTED_LISTS = 10;
-export const MAX_TABLE_CELLS = 100;
-
-// ============================================================================
-// CACHE CONFIGURATION
-// ============================================================================
-
-export const MAX_CACHE_SIZE = 100;
-export const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// ============================================================================
-// REGEX PATTERNS - Pre-compiled for performance
-// ============================================================================
-
-export const PATTERNS = {
-  // Emoji
-  emoji: /^:([a-zA-Z0-9_+-]{1,50}):/,
-
-  // Images
-  image: /^!\[([^\]]{0,200})\]\(([^)]{1,2048})\)/,
-
-  // Links
-  link: /^\[([^\]]{1,500})\]\(([^)]{1,2048})\)/,
-
-  // Auto-link URLs
-  autoUrl: /^(https?:\/\/[^\s<>()[\]]{1,2048})/,
-
-  // Inline code
-  inlineCode: /^`([^`]{1,500})`/,
-
-  // Bold (** or __)
-  boldStar: /^\*\*([^*]{1,500})\*\*/,
-  boldUnderscore: /^__([^_]{1,500})__/,
-
-  // Strikethrough
-  strikethrough: /^~~([^~]{1,500})~~/,
-
-  // Italic (* or _)
-  italicStar: /^\*([^*]{1,500})\*/,
-  italicUnderscore: /^_([^_]{1,500})_/,
-
-  // Block elements
-  heading: /^(#{1,6})\s+(.{1,500})$/,
-  taskList: /^[-*]\s+\[([ xX])\]\s+(.{1,1000})$/,
-  unorderedList: /^[-*]\s+/,
-  orderedList: /^\d+\.\s+/,
-  blockquote: /^>\s*/,
-  horizontalRule: /^(-{3,}|\*{3,}|_{3,})$/,
-  codeBlock: /^```(\w{1,20})?$/,
-
-  // Table
-  tableLine: /^\|.+\|$/,
-  tableSeparator: /^\|[\s:-]+\|$/,
-
-  // URL protocols
-  meeshyUrl: /(m\+[A-Z0-9]{1,100})/gi,
-  safeProtocols: /^(https?|mailto|tel|m\+):/i,
-  relativeUrl: /^(\/|\.\/|\.\.\/)/,
-  dangerousProtocols: /^(javascript|data|vbscript|file|about):/i,
-  meeshyToken: /^m\+[A-Z0-9]{1,100}$/i,
-};
-
-// ============================================================================
-// EMOJI MAP - 200+ emoji shortcodes
-// ============================================================================
 
 export const EMOJI_MAP: Record<string, string> = {
   // Smileys & Emotion

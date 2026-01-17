@@ -5,6 +5,11 @@ import type { NextConfig } from "next";
 
 // const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
+// Bundle Analyzer - activé uniquement avec ANALYZE=true
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
@@ -119,4 +124,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

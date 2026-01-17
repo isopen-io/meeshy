@@ -59,6 +59,9 @@ except ImportError:
 import base64
 from services.redis_service import get_audio_cache_service, AudioCacheService
 
+# Import unified voice models
+from models.voice_models import VoiceCharacteristics
+
 
 @dataclass
 class VoiceFingerprint:
@@ -303,96 +306,9 @@ class VoiceFingerprint:
         return len(self.embedding_vector) > 0
 
 
-@dataclass
-class VoiceCharacteristics:
-    """Caractéristiques détaillées d'une voix extraites de l'audio"""
-    # Pitch (fréquence fondamentale)
-    pitch_mean_hz: float = 0.0          # Pitch moyen en Hz
-    pitch_std_hz: float = 0.0           # Écart-type du pitch
-    pitch_min_hz: float = 0.0           # Pitch minimum
-    pitch_max_hz: float = 0.0           # Pitch maximum
-    pitch_range_hz: float = 0.0         # Étendue du pitch (max - min)
-
-    # Classification vocale
-    voice_type: str = "unknown"          # "high_female", "medium_female", "low_female", "high_male", "medium_male", "low_male", "child"
-    estimated_gender: str = "unknown"    # "male", "female", "child", "unknown"
-    estimated_age_range: str = "unknown" # "child", "teen", "adult", "senior"
-
-    # Caractéristiques spectrales
-    brightness: float = 0.0             # Centroïde spectral moyen (Hz)
-    spectral_centroid_hz: float = 0.0   # Centroïde spectral (Hz)
-    spectral_bandwidth_hz: float = 0.0  # Largeur de bande spectrale (Hz)
-    warmth: float = 0.0                 # Énergie basses fréquences
-    breathiness: float = 0.0            # Niveau de souffle dans la voix
-    nasality: float = 0.0               # Niveau de nasalité
-
-    # Prosodie
-    speech_rate_wpm: float = 0.0        # Mots par minute estimés
-    speaking_rate_wpm: float = 0.0      # Alias pour compatibilité
-    energy_mean: float = 0.0            # Énergie moyenne (volume)
-    energy_std: float = 0.0             # Variation d'énergie
-    silence_ratio: float = 0.0          # Ratio de silence
-    confidence: float = 0.0             # Niveau de confiance de l'analyse
-
-    # Qualité technique
-    sample_rate: int = 0                # Taux d'échantillonnage
-    bit_depth: int = 0                  # Profondeur de bits
-    channels: int = 1                   # Nombre de canaux
-    codec: str = ""                     # Codec audio détecté
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "pitch": {
-                "mean_hz": round(self.pitch_mean_hz, 2),
-                "std_hz": round(self.pitch_std_hz, 2),
-                "min_hz": round(self.pitch_min_hz, 2),
-                "max_hz": round(self.pitch_max_hz, 2)
-            },
-            "classification": {
-                "voice_type": self.voice_type,
-                "estimated_gender": self.estimated_gender,
-                "estimated_age_range": self.estimated_age_range
-            },
-            "spectral": {
-                "brightness": round(self.brightness, 2),
-                "warmth": round(self.warmth, 2),
-                "breathiness": round(self.breathiness, 2),
-                "nasality": round(self.nasality, 2)
-            },
-            "prosody": {
-                "speech_rate_wpm": round(self.speech_rate_wpm, 1),
-                "energy_mean": round(self.energy_mean, 4),
-                "energy_std": round(self.energy_std, 4),
-                "silence_ratio": round(self.silence_ratio, 3)
-            },
-            "technical": {
-                "sample_rate": self.sample_rate,
-                "bit_depth": self.bit_depth,
-                "channels": self.channels,
-                "codec": self.codec
-            }
-        }
-
-    def generate_fingerprint(
-        self,
-        audio_duration_ms: int = 0,
-        embedding: np.ndarray = None
-    ) -> 'VoiceFingerprint':
-        """
-        Génère une empreinte vocale unique à partir de ces caractéristiques.
-
-        Args:
-            audio_duration_ms: Durée de l'audio source en millisecondes
-            embedding: Vecteur d'embedding optionnel (OpenVoice)
-
-        Returns:
-            VoiceFingerprint: Empreinte vocale unique avec signature et checksum
-        """
-        return VoiceFingerprint.generate_from_characteristics(
-            self,
-            audio_duration_ms=audio_duration_ms,
-            embedding=embedding
-        )
+# NOTE: VoiceCharacteristics est maintenant importé de models.voice_models
+# Le modèle unifié utilise des noms courts (pitch_mean) avec des alias @property
+# pour les noms longs (pitch_mean_hz), assurant la compatibilité.
 
 
 @dataclass

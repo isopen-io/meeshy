@@ -374,6 +374,8 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
               <Label htmlFor="settings-firstName" className="text-sm sm:text-base">{t('profile.personalInfo.firstName')}</Label>
               <Input
                 id="settings-firstName"
+                name="firstName"
+                autoComplete="given-name"
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
                 placeholder={t('profile.personalInfo.firstName')}
@@ -384,6 +386,8 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
               <Label htmlFor="settings-lastName" className="text-sm sm:text-base">{t('profile.personalInfo.lastName')}</Label>
               <Input
                 id="settings-lastName"
+                name="lastName"
+                autoComplete="family-name"
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
                 placeholder={t('profile.personalInfo.lastName')}
@@ -396,6 +400,8 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             <Label htmlFor="settings-displayName" className="text-sm sm:text-base">{t('profile.personalInfo.displayName')}</Label>
             <Input
               id="settings-displayName"
+              name="displayName"
+              autoComplete="nickname"
               value={formData.displayName}
               onChange={(e) => handleInputChange('displayName', e.target.value)}
               placeholder={t('profile.personalInfo.displayNamePlaceholder')}
@@ -408,7 +414,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
               <Label htmlFor="settings-email" className="text-sm sm:text-base">{t('profile.personalInfo.email')}</Label>
               <Input
                 id="settings-email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 placeholder={t('profile.personalInfo.emailPlaceholder')}
@@ -420,7 +428,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
               <Label htmlFor="settings-phoneNumber" className="text-sm sm:text-base">{t('profile.personalInfo.phoneNumber')}</Label>
               <Input
                 id="settings-phoneNumber"
+                name="phoneNumber"
                 type="tel"
+                autoComplete="tel"
                 value={formData.phoneNumber}
                 onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
                 placeholder={t('profile.personalInfo.phoneNumberPlaceholder')}
@@ -508,6 +518,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             <div className="relative">
               <Input
                 id="current-password"
+                name="current-password"
                 type={showPasswords.current ? 'text' : 'password'}
                 value={passwordData.currentPassword}
                 onChange={(e) => handlePasswordInputChange('currentPassword', e.target.value)}
@@ -542,6 +553,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             <div className="relative">
               <Input
                 id="new-password"
+                name="new-password"
                 type={showPasswords.new ? 'text' : 'password'}
                 value={passwordData.newPassword}
                 onChange={(e) => handlePasswordInputChange('newPassword', e.target.value)}
@@ -579,6 +591,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             <div className="relative">
               <Input
                 id="confirm-password"
+                name="confirm-password"
                 type={showPasswords.confirm ? 'text' : 'password'}
                 value={passwordData.confirmPassword}
                 onChange={(e) => handlePasswordInputChange('confirmPassword', e.target.value)}
