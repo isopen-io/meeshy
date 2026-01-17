@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ResponsiveLayout } from '@/components/layout';
+// ResponsiveLayout n'existe plus - utiliser un div wrapper à la place
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -23,13 +23,14 @@ import {
   Video,
   Info
 } from 'lucide-react';
-import { User as UserType, SUPPORTED_LANGUAGES, LanguageCode } from '@/types';
+import { User as UserType, SUPPORTED_LANGUAGES } from '@/types';
 import { FontSelector } from '@/components/settings/font-selector';
 import { LanguageSelector } from '@/components/settings/language-selector';
 import { toast } from 'sonner';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
 import { authManager } from '@/services/auth-manager.service';
+import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 interface SettingsLayoutProps {
   currentUser: UserType;
@@ -44,8 +45,9 @@ interface SettingsSection {
 }
 
 export function SettingsLayout({ currentUser, initialTab = 'profile' }: SettingsLayoutProps) {
-
   const { t } = useI18n('settings');
+  const reducedMotion = useReducedMotion();
+
   // États principaux
   const [selectedSection, setSelectedSection] = useState<string>(initialTab);
   const [localSettings, setLocalSettings] = useState<Partial<UserType>>({});
@@ -154,18 +156,36 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
     setHasChanges(true);
   }, []);
 
+  // Handler pour la navigation clavier
+  const handleSectionKeyDown = useCallback((e: React.KeyboardEvent, sectionId: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      SoundFeedback.playNavigate();
+      setSelectedSection(sectionId);
+    }
+  }, []);
+
   // Contenu de la sidebar
   const sidebarContent = (
-    <div className="space-y-2">
+    <div className="space-y-2" role="tablist" aria-label={t('navigation.settingsSections', 'Sections des paramètres')}>
       {settingsSections.map((section) => {
         const IconComponent = section.icon;
+        const isSelected = selectedSection === section.id;
         return (
-          <Card 
+          <Card
             key={section.id}
-            className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-              selectedSection === section.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            role="tab"
+            tabIndex={0}
+            aria-selected={isSelected}
+            aria-controls={`settings-panel-${section.id}`}
+            className={`cursor-pointer ${reducedMotion ? '' : 'transition-colors'} hover:bg-gray-50 dark:hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 outline-none ${
+              isSelected ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : ''
             }`}
-            onClick={() => setSelectedSection(section.id)}
+            onClick={() => {
+              SoundFeedback.playNavigate();
+              setSelectedSection(section.id);
+            }}
+            onKeyDown={(e) => handleSectionKeyDown(e, section.id)}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center">
@@ -251,9 +271,9 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                     <div>
                       <Label htmlFor="systemLanguage" className="text-sm">Langue du système</Label>
                       <LanguageSelector
-                        value={localSettings.systemLanguage}
+                        value={localSettings.systemLanguage || ''}
                         onValueChange={(value) => updateSetting('systemLanguage', value)}
-                        languages={SUPPORTED_LANGUAGES}
+                        languages={[...SUPPORTED_LANGUAGES]}
                         placeholder="Choisir la langue du système"
                         className="mt-1"
                       />
@@ -262,9 +282,9 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                     <div>
                       <Label htmlFor="regionalLanguage" className="text-sm">Langue régionale</Label>
                       <LanguageSelector
-                        value={localSettings.regionalLanguage}
+                        value={localSettings.regionalLanguage || ''}
                         onValueChange={(value) => updateSetting('regionalLanguage', value)}
-                        languages={SUPPORTED_LANGUAGES}
+                        languages={[...SUPPORTED_LANGUAGES]}
                         placeholder="Choisir la langue régionale"
                         className="mt-1"
                       />
@@ -333,7 +353,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                     <LanguageSelector
                       value={localSettings.customDestinationLanguage || ''}
                       onValueChange={(value) => updateSetting('customDestinationLanguage', value)}
-                      languages={SUPPORTED_LANGUAGES}
+                      languages={[...SUPPORTED_LANGUAGES]}
                       placeholder="Choisir une langue de destination"
                       className="mt-1"
                     />
@@ -546,7 +566,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
   const selectedSectionData = settingsSections.find(s => s.id === selectedSection);
 
   return (
-    <ResponsiveLayout>
+    <div className="h-screen">
       <div className="h-full flex bg-background">
         {/* Sidebar */}
         <div className="w-80 border-r bg-card/50 flex flex-col">
@@ -574,6 +594,6 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
           </div>
         </div>
       </div>
-    </ResponsiveLayout>
+    </div>
   );
 }

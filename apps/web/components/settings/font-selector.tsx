@@ -2,7 +2,9 @@
  * Composant de sélection de police pour les paramètres utilisateur
  */
 
-import React from 'react';
+'use client';
+
+import React, { useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -10,37 +12,52 @@ import { Badge } from "@/components/ui/badge";
 import { Palette, RotateCcw, Check } from "lucide-react";
 import { useFontPreference } from '@/hooks/use-font-preference';
 import { availableFonts, FontFamily, getRecommendedFonts } from '@/lib/fonts';
+import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 interface FontSelectorProps {
   className?: string;
 }
 
 export function FontSelector({ className }: FontSelectorProps) {
-  const { 
-    currentFont, 
-    changeFontFamily, 
-    resetToDefault, 
-    isLoading, 
-    error, 
-    fontConfig 
+  const reducedMotion = useReducedMotion();
+  const {
+    currentFont,
+    changeFontFamily,
+    resetToDefault,
+    isLoading,
+    error,
+    fontConfig
   } = useFontPreference();
 
   const recommendedFonts = getRecommendedFonts();
   const otherFonts = availableFonts.filter(font => !font.recommended);
 
-  const handleFontChange = (fontId: FontFamily) => {
+  const handleFontChange = useCallback((fontId: FontFamily) => {
+    SoundFeedback.playClick();
     changeFontFamily(fontId);
-  };
+  }, [changeFontFamily]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, fontId: FontFamily) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleFontChange(fontId);
+    }
+  }, [handleFontChange]);
 
   const FontCard = ({ font }: { font: typeof availableFonts[0] }) => {
     const isSelected = currentFont === font.id;
-    
+
     return (
-      <Card 
-        className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+      <Card
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
+        aria-label={`${font.name} - ${font.description}`}
+        className={`cursor-pointer transition-all ${reducedMotion ? '' : 'duration-200'} hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none ${
           isSelected ? 'ring-2 ring-primary shadow-md' : 'hover:ring-1 hover:ring-muted-foreground'
         }`}
         onClick={() => handleFontChange(font.id)}
+        onKeyDown={(e) => handleKeyDown(e, font.id)}
       >
         <CardContent className="p-4">
           {/* En-tête de la carte */}
@@ -109,8 +126,9 @@ export function FontSelector({ className }: FontSelectorProps) {
     return (
       <Card className={className}>
         <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="flex items-center justify-center" role="status" aria-label="Chargement des polices">
+            <div className={`${reducedMotion ? '' : 'animate-spin'} rounded-full h-8 w-8 border-b-2 border-primary`}></div>
+            <span className="sr-only">Chargement...</span>
           </div>
         </CardContent>
       </Card>

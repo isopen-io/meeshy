@@ -1,0 +1,2216 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Mic,
+  MicOff,
+  Play,
+  Pause,
+  RotateCcw,
+  Check,
+  Loader2,
+  AlertCircle,
+  Trash2,
+  Globe,
+  User,
+  Settings,
+  Save,
+  RotateCw
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { apiService, TIMEOUT_VOICE_PROFILE } from '@/services/api.service';
+import { useI18n } from '@/hooks/useI18n';
+import { cn } from '@/lib/utils';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS ACCESSIBILITE ET FEEDBACK
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Hook pour detecter prefers-reduced-motion (Web Interface Guidelines)
+ * Respecte les preferences utilisateur pour les animations
+ */
+function useReducedMotion(): boolean {
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  return reducedMotion;
+}
+
+/**
+ * Utilitaire pour feedback sonore (Web Audio API)
+ * Sons courts et non-intrusifs pour les actions
+ */
+const SoundFeedback = {
+  audioContext: null as AudioContext | null,
+
+  getContext(): AudioContext {
+    if (!this.audioContext) {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return this.audioContext;
+  },
+
+  // Son de debut d'enregistrement (ton montant)
+  playRecordingStart() {
+    try {
+      const ctx = this.getContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } catch { /* Ignore audio errors */ }
+  },
+
+  // Son de fin d'enregistrement (ton descendant)
+  playRecordingStop() {
+    try {
+      const ctx = this.getContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } catch { /* Ignore audio errors */ }
+  },
+
+  // Son de succes (deux tons joyeux)
+  playSuccess() {
+    try {
+      const ctx = this.getContext();
+      // Premier ton
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      gain1.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.15);
+      // Second ton
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+      gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc2.start(ctx.currentTime + 0.12);
+      osc2.stop(ctx.currentTime + 0.35);
+    } catch { /* Ignore audio errors */ }
+  },
+
+  // Son d'erreur (ton grave)
+  playError() {
+    try {
+      const ctx = this.getContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    } catch { /* Ignore audio errors */ }
+  }
+};
+import type {
+  VoiceProfileDetails,
+  VoiceProfileConsentRequest,
+  BrowserTranscription,
+  VoiceProfileSegment,
+  VoiceCloningUserSettings,
+  VoiceCloningQualityPreset,
+  VoicePreviewSample
+} from '@meeshy/shared/types/voice-api';
+import { DEFAULT_VOICE_CLONING_SETTINGS } from '@meeshy/shared/types/voice-api';
+
+// Types pour Web Speech API (non inclus dans TypeScript par défaut)
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string;
+  readonly message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
+// Textes de lecture selon la langue
+const READING_TEXTS: Record<string, string> = {
+  // Langues européennes
+  fr: "Bonjour, je suis en train de créer mon profil vocal pour Meeshy. Cette phrase permettra de cloner ma voix dans différentes langues. J'aime communiquer avec des personnes du monde entier et cette technologie va m'aider à le faire plus facilement.",
+  en: "Hello, I am creating my voice profile for Meeshy. This sentence will allow my voice to be cloned in different languages. I love communicating with people from around the world and this technology will help me do it more easily.",
+  es: "Hola, estoy creando mi perfil de voz para Meeshy. Esta frase permitirá clonar mi voz en diferentes idiomas. Me encanta comunicarme con personas de todo el mundo y esta tecnología me ayudará a hacerlo más fácilmente.",
+  de: "Hallo, ich erstelle gerade mein Stimmprofil für Meeshy. Dieser Satz ermöglicht es, meine Stimme in verschiedenen Sprachen zu klonen. Ich kommuniziere gerne mit Menschen aus der ganzen Welt und diese Technologie wird mir dabei helfen.",
+  pt: "Olá, estou criando meu perfil de voz para o Meeshy. Esta frase permitirá clonar minha voz em diferentes idiomas. Adoro me comunicar com pessoas de todo o mundo e essa tecnologia vai me ajudar a fazer isso mais facilmente.",
+  it: "Ciao, sto creando il mio profilo vocale per Meeshy. Questa frase permetterà di clonare la mia voce in diverse lingue. Amo comunicare con persone di tutto il mondo e questa tecnologia mi aiuterà a farlo più facilmente.",
+  nl: "Hallo, ik maak mijn stemprofiel aan voor Meeshy. Deze zin maakt het mogelijk om mijn stem te klonen in verschillende talen. Ik communiceer graag met mensen van over de hele wereld en deze technologie zal me daarbij helpen.",
+  ru: "Привет, я создаю свой голосовой профиль для Meeshy. Это предложение позволит клонировать мой голос на разных языках. Мне нравится общаться с людьми со всего мира, и эта технология поможет мне делать это легче.",
+  // Langues asiatiques
+  zh: "你好，我正在为Meeshy创建我的语音档案。这句话将允许我的声音被克隆成不同的语言。我喜欢与来自世界各地的人交流，这项技术将帮助我更轻松地做到这一点。",
+  ja: "こんにちは、Meeshyのボイスプロファイルを作成しています。このフレーズにより、私の声を様々な言語でクローンすることができます。世界中の人々とコミュニケーションを取るのが大好きで、この技術がそれをより簡単にしてくれます。",
+  ko: "안녕하세요, 저는 Meeshy를 위해 음성 프로필을 만들고 있습니다. 이 문장을 통해 제 목소리를 다양한 언어로 복제할 수 있습니다. 저는 전 세계 사람들과 소통하는 것을 좋아하고, 이 기술이 그것을 더 쉽게 해줄 것입니다.",
+  ar: "مرحباً، أقوم بإنشاء ملفي الصوتي لـ Meeshy. ستسمح هذه الجملة باستنساخ صوتي بلغات مختلفة. أحب التواصل مع أشخاص من جميع أنحاء العالم وستساعدني هذه التقنية على القيام بذلك بسهولة أكبر.",
+  // Langues africaines (MMS-TTS pipeline hybride)
+  sw: "Habari, ninaunda wasifu wangu wa sauti kwa Meeshy. Sentensi hii itaruhusu sauti yangu kuigwa katika lugha tofauti. Napenda kuwasiliana na watu kutoka duniani kote na teknolojia hii itanisaidia kufanya hivyo kwa urahisi zaidi.",
+  am: "ሰላም፣ ለMeeshy የድምፄን መገለጫ እየፈጠርኩ ነው። ይህ ዓረፍተ ነገር ድምፄን በተለያዩ ቋንቋዎች እንዲባዛ ያስችላል። ከዓለም ዙሪያ ካሉ ሰዎች ጋር መግባባት እወዳለሁ እናም ይህ ቴክኖሎጂ ይህን በቀላሉ እንድሰራ ይረዳኛል።",
+  ha: "Sannu, ina ƙirƙirar bayanin muryata don Meeshy. Wannan jimla za ta ba da damar kwafin muryata cikin harsuna daban-daban. Ina son sadarwa da mutane daga ko'ina cikin duniya kuma wannan fasaha za ta taimake ni yin hakan cikin sauƙi.",
+  yo: "Pẹlẹ o, mo n ṣẹda profaili ohùn mi fun Meeshy. Gbolohun yii yoo gba laaye lati ṣe ẹda ohùn mi ni awọn ede oriṣiriṣi. Mo fẹran lati ba awọn eniyan lati gbogbo agbaye sọrọ ati pe imọ-ẹrọ yii yoo ran mi lọwọ lati ṣe eyi ni irọrun.",
+  zu: "Sawubona, ngidala iphrofayili yami yezwi ku-Meeshy. Lo musho uzovumela izwi lami lilinganiswe ngezilimi ezahlukene. Ngiyathanda ukuxhumana nabantu abavela emhlabeni wonke futhi le theknoloji izongisiza ngikwenze lokhu kalula.",
+  ln: "Mbote, nazali kosala profil ya mongongo na ngai mpo na Meeshy. Frazi oyo ekopesa nzela mongongo na ngai ezala kopanzama na minoko ndenge na ndenge. Nalingaka kosolola na bato ya mokili mobimba mpe teknoloji oyo ekosalisa ngai kosala yango na pɛtɛɛ.",
+};
+
+// Langues pour les aperçus de clonage
+const CLONE_PREVIEW_LANGUAGES = ['fr', 'en', 'es', 'de', 'pt', 'it', 'zh', 'ja'];
+
+// Configuration (doit correspondre à MIN_PROFILE_AUDIO_DURATION_MS côté serveur)
+const MIN_RECORDING_SECONDS = 10;
+const MAX_RECORDING_SECONDS = 21;
+const STOP_AFTER_SECONDS = 12;
+
+// IndexedDB pour persistance de l'audio entre les refreshs
+const VOICE_PROFILE_DB_NAME = 'meeshy-voice-profile';
+const VOICE_PROFILE_STORE_NAME = 'recordings';
+const VOICE_PROFILE_KEY = 'pending-recording';
+// IndexedDB pour les voice previews
+const VOICE_PREVIEWS_STORE_NAME = 'voicePreviews';
+
+interface StoredRecording {
+  audioBlob: Blob;
+  recordingTime: number;
+  browserTranscription: BrowserTranscription | null;
+  liveTranscript: string;
+  transcriptSegments: VoiceProfileSegment[];
+  savedAt: string;
+}
+
+// Interface pour les previews vocaux stockés localement
+interface StoredVoicePreview {
+  id: string; // `${userId}_${language}`
+  userId: string;
+  language: string;
+  originalText: string;
+  translatedText: string;
+  audioBlob: Blob;
+  audioFormat: string;
+  durationMs: number;
+  generatedAt: string;
+  profileVersion: number;
+}
+
+// Langues disponibles avec leurs noms
+// Inclut les langues africaines pour tester la pipeline hybride (MMS-TTS)
+const AVAILABLE_LANGUAGES: Array<{ code: string; name: string; nativeName: string; region?: string }> = [
+  // Langues européennes
+  { code: 'fr', name: 'French', nativeName: 'Français', region: 'europe' },
+  { code: 'en', name: 'English', nativeName: 'English', region: 'europe' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español', region: 'europe' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch', region: 'europe' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português', region: 'europe' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', region: 'europe' },
+  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', region: 'europe' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский', region: 'europe' },
+  // Langues asiatiques
+  { code: 'zh', name: 'Chinese', nativeName: '中文', region: 'asia' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語', region: 'asia' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어', region: 'asia' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية', region: 'asia' },
+  // Langues africaines (pour tester pipeline hybride MMS-TTS)
+  { code: 'sw', name: 'Swahili', nativeName: 'Kiswahili', region: 'africa' },
+  { code: 'am', name: 'Amharic', nativeName: 'አማርኛ', region: 'africa' },
+  { code: 'ha', name: 'Hausa', nativeName: 'Hausa', region: 'africa' },
+  { code: 'yo', name: 'Yoruba', nativeName: 'Yorùbá', region: 'africa' },
+  { code: 'zu', name: 'Zulu', nativeName: 'isiZulu', region: 'africa' },
+  { code: 'ln', name: 'Lingala', nativeName: 'Lingála', region: 'africa' },
+];
+
+// Ouvrir la base IndexedDB (version 2 pour le nouveau store)
+const openVoiceProfileDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(VOICE_PROFILE_DB_NAME, 2);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(VOICE_PROFILE_STORE_NAME)) {
+        db.createObjectStore(VOICE_PROFILE_STORE_NAME);
+      }
+      // Store pour les voice previews
+      if (!db.objectStoreNames.contains(VOICE_PREVIEWS_STORE_NAME)) {
+        const previewStore = db.createObjectStore(VOICE_PREVIEWS_STORE_NAME, { keyPath: 'id' });
+        previewStore.createIndex('userId', 'userId');
+        previewStore.createIndex('language', 'language');
+      }
+    };
+  });
+};
+
+// Sauvegarder l'enregistrement dans IndexedDB
+const saveRecordingToStorage = async (recording: StoredRecording): Promise<void> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PROFILE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(VOICE_PROFILE_STORE_NAME);
+    store.put(recording, VOICE_PROFILE_KEY);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    console.log('[VoiceProfile] Recording saved to IndexedDB');
+  } catch (err) {
+    console.error('[VoiceProfile] Error saving recording to IndexedDB:', err);
+  }
+};
+
+// Charger l'enregistrement depuis IndexedDB
+const loadRecordingFromStorage = async (): Promise<StoredRecording | null> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PROFILE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(VOICE_PROFILE_STORE_NAME);
+    const request = store.get(VOICE_PROFILE_KEY);
+    const result = await new Promise<StoredRecording | null>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    if (result) {
+      console.log('[VoiceProfile] Recording loaded from IndexedDB, saved at:', result.savedAt);
+    }
+    return result;
+  } catch (err) {
+    console.error('[VoiceProfile] Error loading recording from IndexedDB:', err);
+    return null;
+  }
+};
+
+// Supprimer l'enregistrement de IndexedDB
+const clearRecordingFromStorage = async (): Promise<void> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PROFILE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(VOICE_PROFILE_STORE_NAME);
+    store.delete(VOICE_PROFILE_KEY);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    console.log('[VoiceProfile] Recording cleared from IndexedDB');
+  } catch (err) {
+    console.error('[VoiceProfile] Error clearing recording from IndexedDB:', err);
+  }
+};
+
+// Convertir base64 en Blob
+const base64ToBlob = (base64: string, mimeType: string): Blob => {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
+};
+
+// Sauvegarder les voice previews dans IndexedDB
+const saveVoicePreviewsToStorage = async (
+  userId: string,
+  previews: VoicePreviewSample[],
+  profileVersion: number
+): Promise<void> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PREVIEWS_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(VOICE_PREVIEWS_STORE_NAME);
+
+    for (const preview of previews) {
+      const audioBlob = base64ToBlob(preview.audioBase64, `audio/${preview.audioFormat}`);
+      const record: StoredVoicePreview = {
+        id: `${userId}_${preview.language}`,
+        userId,
+        language: preview.language,
+        originalText: preview.originalText,
+        translatedText: preview.translatedText,
+        audioBlob,
+        audioFormat: preview.audioFormat,
+        durationMs: preview.durationMs,
+        generatedAt: preview.generatedAt,
+        profileVersion
+      };
+      store.put(record);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    console.log(`[VoiceProfile] Saved ${previews.length} voice previews to IndexedDB`);
+  } catch (err) {
+    console.error('[VoiceProfile] Error saving voice previews:', err);
+  }
+};
+
+// Charger les voice previews depuis IndexedDB
+const loadVoicePreviewsFromStorage = async (userId: string): Promise<StoredVoicePreview[]> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PREVIEWS_STORE_NAME, 'readonly');
+    const store = tx.objectStore(VOICE_PREVIEWS_STORE_NAME);
+    const index = store.index('userId');
+    const request = index.getAll(userId);
+
+    const result = await new Promise<StoredVoicePreview[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    console.log(`[VoiceProfile] Loaded ${result.length} voice previews from IndexedDB`);
+    return result;
+  } catch (err) {
+    console.error('[VoiceProfile] Error loading voice previews:', err);
+    return [];
+  }
+};
+
+// Supprimer les voice previews d'un utilisateur
+const clearVoicePreviewsFromStorage = async (userId: string): Promise<void> => {
+  try {
+    const db = await openVoiceProfileDB();
+    const tx = db.transaction(VOICE_PREVIEWS_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(VOICE_PREVIEWS_STORE_NAME);
+    const index = store.index('userId');
+    const request = index.getAllKeys(userId);
+
+    const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+
+    for (const key of keys) {
+      store.delete(key);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    console.log(`[VoiceProfile] Cleared ${keys.length} voice previews from IndexedDB`);
+  } catch (err) {
+    console.error('[VoiceProfile] Error clearing voice previews:', err);
+  }
+};
+
+// Use shared type from @meeshy/shared/types/voice-api
+// VoiceProfileDetails is imported above
+
+interface TranscriptionWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+}
+
+interface ClonePreview {
+  language: string;
+  audioUrl: string | null;
+  isGenerating: boolean;
+  error: string | null;
+}
+
+export function VoiceProfileSettings() {
+  const { t, locale } = useI18n('settings');
+  const reducedMotion = useReducedMotion();
+
+  // États de base
+  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<VoiceProfileDetails | null>(null);
+  const [hasConsent, setHasConsent] = useState(false);
+  const [hasVoiceCloningConsent, setHasVoiceCloningConsent] = useState(false);
+
+  // États d'enregistrement
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  // États de lecture/transcription
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [transcription, setTranscription] = useState<TranscriptionWord[]>([]);
+
+  // États de transcription en temps réel (Web Speech API)
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [browserTranscription, setBrowserTranscription] = useState<BrowserTranscription | null>(null);
+
+  // États de validation/création
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [clonePreviews, setClonePreviews] = useState<ClonePreview[]>([]);
+
+  // États pour les langues source et cibles des previews
+  const [sourceLanguage, setSourceLanguage] = useState<string>(locale || 'fr');
+  const [selectedPreviewLanguages, setSelectedPreviewLanguages] = useState<string[]>(['en', 'es', 'fr'].filter(l => l !== (locale || 'fr')));
+
+  // États pour les previews stockés en IndexedDB
+  const [storedPreviews, setStoredPreviews] = useState<StoredVoicePreview[]>([]);
+  const [playingPreviewLang, setPlayingPreviewLang] = useState<string | null>(null);
+  const [previewPlaybackTime, setPreviewPlaybackTime] = useState(0);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Memoize les URLs des previews pour éviter les fuites mémoire (Vercel Best Practices)
+  const previewAudioUrls = useMemo(() => {
+    const urls = new Map<string, string>();
+    storedPreviews.forEach(preview => {
+      urls.set(preview.language, URL.createObjectURL(preview.audioBlob));
+    });
+    return urls;
+  }, [storedPreviews]);
+
+  // Cleanup des URLs des previews au changement
+  useEffect(() => {
+    return () => {
+      previewAudioUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [previewAudioUrls]);
+
+  // État pour la waveform
+  const [waveformData, setWaveformData] = useState<number[]>([]);
+
+  // États pour les paramètres de clonage vocal
+  const [voiceCloningSettings, setVoiceCloningSettings] = useState<VoiceCloningUserSettings>(DEFAULT_VOICE_CLONING_SETTINGS);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const transcriptSegmentsRef = useRef<VoiceProfileSegment[]>([]);
+  const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hasRestoredRecordingRef = useRef(false);
+
+  // Langue source sélectionnée (pour l'enregistrement et la lecture du texte)
+  const readingText = READING_TEXTS[sourceLanguage] || READING_TEXTS['en'];
+
+  // Charger le profil existant
+  const loadProfile = useCallback(async () => {
+    console.log('[VoiceProfile] loadProfile called');
+    setIsLoading(true);
+    try {
+      // Charger le profil (inclut maintenant les consentements)
+      const profileRes = await apiService.get<{ success: boolean; data: VoiceProfileDetails }>('/voice/profile');
+      console.log('[VoiceProfile] API response:', profileRes);
+
+      // L'API retourne { success, data: { success, data: {...} } }
+      // apiService wrappe la réponse, donc on doit accéder à profileRes.data.data
+      // On caste explicitement en VoiceProfileDetails après vérification
+      const rawData = profileRes.data?.data || profileRes.data;
+      const profileData = rawData as VoiceProfileDetails;
+
+      if (profileRes.success && profileData) {
+        console.log('[VoiceProfile] Profile data:', profileData);
+        console.log('[VoiceProfile] consentStatus:', profileData.consentStatus);
+
+        // Set profile only if it exists
+        if (profileData.exists) {
+          setProfile(profileData);
+        } else {
+          setProfile(null);
+        }
+
+        // Extract consent from profile response
+        if (profileData.consentStatus) {
+          const hasRecording = !!profileData.consentStatus.voiceRecordingConsentAt;
+          const hasCloning = !!profileData.consentStatus.voiceCloningEnabledAt;
+          console.log('[VoiceProfile] Setting consents:', { hasRecording, hasCloning });
+          setHasConsent(hasRecording);
+          setHasVoiceCloningConsent(hasCloning);
+        } else {
+          console.log('[VoiceProfile] No consentStatus in response!');
+        }
+      } else {
+        console.log('[VoiceProfile] Response not successful or no data:', profileRes);
+      }
+    } catch (err: any) {
+      console.error('[VoiceProfile] Error loading:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Charger les paramètres de clonage vocal depuis l'API
+  const loadVoiceCloningSettings = useCallback(async () => {
+    try {
+      const response = await apiService.get<{ success: boolean; data: any }>('/user-features/configuration');
+      const configData = (response.data as any)?.data || response.data;
+
+      if (response.success && configData) {
+        setVoiceCloningSettings({
+          voiceCloningExaggeration: configData.voiceCloningExaggeration ?? DEFAULT_VOICE_CLONING_SETTINGS.voiceCloningExaggeration,
+          voiceCloningCfgWeight: configData.voiceCloningCfgWeight ?? DEFAULT_VOICE_CLONING_SETTINGS.voiceCloningCfgWeight,
+          voiceCloningTemperature: configData.voiceCloningTemperature ?? DEFAULT_VOICE_CLONING_SETTINGS.voiceCloningTemperature,
+          voiceCloningTopP: configData.voiceCloningTopP ?? DEFAULT_VOICE_CLONING_SETTINGS.voiceCloningTopP,
+          voiceCloningQualityPreset: configData.voiceCloningQualityPreset ?? DEFAULT_VOICE_CLONING_SETTINGS.voiceCloningQualityPreset,
+        });
+        setHasUnsavedChanges(false);
+      }
+    } catch (err) {
+      console.error('[VoiceProfile] Error loading cloning settings:', err);
+    }
+  }, []);
+
+  // Charger les paramètres quand le profil existe
+  useEffect(() => {
+    if (profile?.exists) {
+      loadVoiceCloningSettings();
+    }
+  }, [profile?.exists, loadVoiceCloningSettings]);
+
+  // Charger les voice previews stockés quand le profil existe
+  useEffect(() => {
+    const loadStoredPreviews = async () => {
+      if (profile?.userId) {
+        const previews = await loadVoicePreviewsFromStorage(profile.userId);
+        // Filtrer par version du profil pour s'assurer qu'ils sont à jour
+        const validPreviews = previews.filter(p => p.profileVersion === profile.version);
+        setStoredPreviews(validPreviews);
+
+        if (validPreviews.length !== previews.length) {
+          console.log('[VoiceProfile] Some previews outdated, clearing...');
+          // Supprimer les anciens previews
+          await clearVoicePreviewsFromStorage(profile.userId);
+          // Re-sauvegarder les valides
+          if (validPreviews.length > 0) {
+            for (const p of validPreviews) {
+              await saveVoicePreviewsToStorage(profile.userId, [{
+                language: p.language,
+                originalText: p.originalText,
+                translatedText: p.translatedText,
+                audioBase64: '', // Pas besoin, on a déjà le blob
+                audioFormat: p.audioFormat,
+                durationMs: p.durationMs,
+                generatedAt: p.generatedAt
+              }], profile.version);
+            }
+          }
+        }
+      }
+    };
+    loadStoredPreviews();
+  }, [profile?.userId, profile?.version]);
+
+  // Charger l'enregistrement persisté depuis IndexedDB au montage
+  useEffect(() => {
+    // Éviter le double appel en React Strict Mode
+    if (hasRestoredRecordingRef.current) return;
+
+    const loadStoredRecording = async () => {
+      const stored = await loadRecordingFromStorage();
+      if (stored && !hasRestoredRecordingRef.current) {
+        hasRestoredRecordingRef.current = true;
+        console.log('[VoiceProfile] Restoring recording from storage');
+        setAudioBlob(stored.audioBlob);
+        setAudioUrl(URL.createObjectURL(stored.audioBlob));
+        setRecordingTime(stored.recordingTime);
+        setBrowserTranscription(stored.browserTranscription);
+        setLiveTranscript(stored.liveTranscript);
+        transcriptSegmentsRef.current = stored.transcriptSegments;
+        toast.info('Enregistrement précédent restauré');
+      }
+    };
+    loadStoredRecording();
+  }, []);
+
+  // Sauvegarder l'enregistrement dans IndexedDB quand l'audioBlob change (après un enregistrement)
+  useEffect(() => {
+    if (audioBlob && recordingTime > 0 && !isRecording) {
+      // Sauvegarder l'audio dans IndexedDB
+      const saveToStorage = async () => {
+        await saveRecordingToStorage({
+          audioBlob,
+          recordingTime,
+          browserTranscription,
+          liveTranscript,
+          transcriptSegments: transcriptSegmentsRef.current,
+          savedAt: new Date().toISOString()
+        });
+      };
+      saveToStorage();
+    }
+  }, [audioBlob, recordingTime, isRecording, browserTranscription, liveTranscript]);
+
+  // Nettoyer les URLs d'audio
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      clonePreviews.forEach(p => {
+        if (p.audioUrl) URL.revokeObjectURL(p.audioUrl);
+      });
+    };
+  }, [audioUrl, clonePreviews]);
+
+  // Gestion de l'enregistrement avec Web Speech API
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      });
+
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = mediaRecorder;
+      transcriptSegmentsRef.current = [];
+      setLiveTranscript('');
+      setBrowserTranscription(null);
+
+      // Démarrer la reconnaissance vocale si disponible
+      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        const recognition = new SpeechRecognitionAPI();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = sourceLanguage === 'fr' ? 'fr-FR' : sourceLanguage === 'es' ? 'es-ES' : sourceLanguage === 'pt' ? 'pt-BR' : 'en-US';
+
+        let segmentStartTime = 0;
+
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+          let interimTranscript = '';
+          let finalTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              finalTranscript += result[0].transcript;
+              // Ajouter un segment avec timestamps approximatifs
+              const endTime = Date.now();
+              transcriptSegmentsRef.current.push({
+                text: result[0].transcript.trim(),
+                startMs: segmentStartTime,
+                endMs: endTime - (recognitionRef.current as any)?._startTime || endTime,
+                confidence: result[0].confidence || 0.8
+              });
+              segmentStartTime = endTime - (recognitionRef.current as any)?._startTime || 0;
+            } else {
+              interimTranscript += result[0].transcript;
+            }
+          }
+
+          // Mettre à jour le transcript en temps réel
+          const fullTranscript = transcriptSegmentsRef.current.map(s => s.text).join(' ') + ' ' + interimTranscript;
+          setLiveTranscript(fullTranscript.trim());
+        };
+
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+          console.warn('[VoiceProfile] Speech recognition error:', event.error);
+        };
+
+        (recognition as any)._startTime = Date.now();
+        recognition.start();
+        recognitionRef.current = recognition;
+      }
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      setRecordingTime(0);
+      setAudioBlob(null);
+      setAudioUrl(null);
+      setTranscription([]);
+
+      // Feedback sonore: debut enregistrement
+      SoundFeedback.playRecordingStart();
+
+      // Timer
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          const newTime = prev + 0.1;
+          // Auto-stop après MAX_RECORDING_SECONDS
+          if (newTime >= MAX_RECORDING_SECONDS) {
+            stopRecording();
+          }
+          return newTime;
+        });
+      }, 100);
+
+    } catch (err) {
+      console.error('[VoiceProfile] Error starting recording:', err);
+      toast.error(t('voiceProfile.errors.microphoneAccess', 'Impossible d\'accéder au microphone'));
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+
+      // Feedback sonore: fin enregistrement
+      SoundFeedback.playRecordingStop();
+
+      // Arrêter la reconnaissance vocale et créer la transcription finale
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+
+        // Créer la browserTranscription finale
+        const finalText = transcriptSegmentsRef.current.map(s => s.text).join(' ').trim();
+        if (finalText) {
+          const durationMs = recordingTime * 1000;
+          setBrowserTranscription({
+            text: finalText,
+            language: sourceLanguage,
+            confidence: transcriptSegmentsRef.current.length > 0
+              ? transcriptSegmentsRef.current.reduce((acc, s) => acc + s.confidence, 0) / transcriptSegmentsRef.current.length
+              : 0.8,
+            durationMs,
+            source: 'browser',
+            browserDetails: {
+              api: 'webSpeechApi',
+              userAgent: navigator.userAgent,
+              recognitionLang: recognitionRef.current.lang,
+              continuous: true,
+              interimResults: true
+            },
+            segments: transcriptSegmentsRef.current,
+            createdAt: new Date().toISOString()
+          });
+        }
+        recognitionRef.current = null;
+      }
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  };
+
+  const resetRecording = async () => {
+    setAudioBlob(null);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setRecordingTime(0);
+    setTranscription([]);
+    setClonePreviews([]);
+    setLiveTranscript('');
+    setBrowserTranscription(null);
+    setWaveformData([]);
+    transcriptSegmentsRef.current = [];
+    // Supprimer aussi de IndexedDB
+    await clearRecordingFromStorage();
+  };
+
+  // Supprimer l'audio sans reset complet (bouton dédié)
+  const deleteStoredAudio = async () => {
+    await clearRecordingFromStorage();
+    setAudioBlob(null);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setRecordingTime(0);
+    setWaveformData([]);
+    setLiveTranscript('');
+    setBrowserTranscription(null);
+    transcriptSegmentsRef.current = [];
+    toast.success('Audio supprimé');
+  };
+
+  // Analyser l'audio pour extraire les données de waveform
+  const analyzeAudioWaveform = useCallback(async (blob: Blob): Promise<number[]> => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Prendre le premier canal
+      const channelData = audioBuffer.getChannelData(0);
+
+      // Nombre de barres dans la waveform
+      const barCount = 100;
+      const samplesPerBar = Math.floor(channelData.length / barCount);
+      const waveform: number[] = [];
+
+      for (let i = 0; i < barCount; i++) {
+        let sum = 0;
+        const start = i * samplesPerBar;
+        for (let j = 0; j < samplesPerBar; j++) {
+          sum += Math.abs(channelData[start + j] || 0);
+        }
+        // Normaliser entre 0 et 1
+        waveform.push(sum / samplesPerBar);
+      }
+
+      // Normaliser par rapport au max
+      const max = Math.max(...waveform, 0.01);
+      const normalized = waveform.map(v => v / max);
+
+      await audioContext.close();
+      return normalized;
+    } catch (err) {
+      console.error('[VoiceProfile] Error analyzing waveform:', err);
+      return [];
+    }
+  }, []);
+
+  // Générer la waveform quand l'audioBlob change
+  useEffect(() => {
+    if (audioBlob) {
+      analyzeAudioWaveform(audioBlob).then(setWaveformData);
+    }
+  }, [audioBlob, analyzeAudioWaveform]);
+
+  // Gérer le clic sur la waveform pour naviguer
+  const handleWaveformClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!audioRef.current || !recordingTime) return;
+
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const progress = x / rect.width;
+    const newTime = progress * recordingTime;
+
+    audioRef.current.currentTime = newTime;
+    setPlaybackTime(newTime);
+  };
+
+  // Dessiner la waveform
+  useEffect(() => {
+    const canvas = waveformCanvasRef.current;
+    if (!canvas || waveformData.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
+    const barCount = waveformData.length;
+    const barWidth = width / barCount;
+    const barGap = 1;
+    const progress = recordingTime > 0 ? playbackTime / recordingTime : 0;
+
+    // Effacer le canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Dessiner chaque barre
+    for (let i = 0; i < barCount; i++) {
+      const barHeight = Math.max(2, waveformData[i] * (height - 4));
+      const x = i * barWidth;
+      const y = (height - barHeight) / 2;
+
+      // Couleur selon la progression
+      const barProgress = i / barCount;
+      if (barProgress <= progress) {
+        ctx.fillStyle = 'hsl(var(--primary))';
+      } else {
+        ctx.fillStyle = 'hsl(var(--muted-foreground) / 0.3)';
+      }
+
+      ctx.beginPath();
+      ctx.roundRect(x, y, barWidth - barGap, barHeight, 1);
+      ctx.fill();
+    }
+  }, [waveformData, playbackTime, recordingTime]);
+
+  // Lecture avec surlignage
+  const togglePlayback = () => {
+    if (!audioRef.current || !audioUrl) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  // Mise à jour du temps de lecture
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    const audio = audioRef.current;
+    const handleTimeUpdate = () => setPlaybackTime(audio.currentTime);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setPlaybackTime(0);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioUrl]);
+
+  // Création du profil vocal (avec transcription intégrée)
+  const createProfile = async () => {
+    if (!audioBlob || recordingTime < MIN_RECORDING_SECONDS) {
+      toast.error(t('voiceProfile.errors.tooShort', `L'enregistrement doit durer au moins ${MIN_RECORDING_SECONDS} secondes`));
+      return;
+    }
+
+    setIsCreatingProfile(true);
+    try {
+      // Convertir en base64
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      // Type pour la réponse (utilise les types partagés)
+      interface ProfileResponse extends VoiceProfileDetails {
+        transcription?: {
+          text: string;
+          language: string;
+          confidence: number;
+          durationMs: number;
+          source: string;
+          segments?: VoiceProfileSegment[];
+          browserDetails?: BrowserTranscription['browserDetails'];
+        };
+        voicePreviews?: VoicePreviewSample[];
+      }
+
+      // Construire le body de la requête
+      const requestBody: {
+        audioData: string;
+        audioFormat: string;
+        includeTranscription: boolean;
+        browserTranscription?: BrowserTranscription;
+        generateVoicePreviews?: boolean;
+        previewLanguages?: string[];
+        previewText?: string;
+      } = {
+        audioData: base64,
+        audioFormat: audioBlob.type.includes('webm') ? 'webm' : 'mp4',
+        // Demander transcription serveur seulement si pas de transcription navigateur
+        includeTranscription: !browserTranscription,
+        // Options de génération des previews vocaux
+        generateVoicePreviews: hasVoiceCloningConsent && selectedPreviewLanguages.length > 0,
+        previewLanguages: selectedPreviewLanguages,
+        previewText: browserTranscription?.text || liveTranscript || undefined
+      };
+
+      // Ajouter la transcription navigateur si disponible
+      if (browserTranscription) {
+        requestBody.browserTranscription = browserTranscription;
+        console.log('[VoiceProfile] Sending browser transcription:', browserTranscription.text.substring(0, 50) + '...');
+      }
+
+      console.log('[VoiceProfile] Requesting voice previews for languages:', selectedPreviewLanguages);
+
+      // Créer le profil avec transcription intégrée (timeout 5min car Whisper + voice cloning prennent du temps)
+      const response = await apiService.post<ProfileResponse>('/voice/profile/register', requestBody, { timeout: TIMEOUT_VOICE_PROFILE });
+
+      if (response.success && response.data) {
+        const profileData = response.data;
+        const transcriptionData = profileData.transcription;
+
+        // Créer le profil sans la transcription
+        const profileOnly: VoiceProfileDetails = {
+          profileId: profileData.profileId,
+          userId: profileData.userId,
+          qualityScore: profileData.qualityScore,
+          audioDurationMs: profileData.audioDurationMs,
+          audioCount: profileData.audioCount,
+          voiceCharacteristics: profileData.voiceCharacteristics,
+          signatureShort: profileData.signatureShort,
+          version: profileData.version,
+          createdAt: profileData.createdAt,
+          updatedAt: profileData.updatedAt,
+          expiresAt: profileData.expiresAt,
+          needsCalibration: profileData.needsCalibration,
+          exists: profileData.exists,
+          consentStatus: profileData.consentStatus
+        };
+        setProfile(profileOnly);
+        toast.success(t('voiceProfile.profileCreated', 'Profil vocal créé avec succès !'));
+        SoundFeedback.playSuccess();
+
+        // Profil créé avec succès - supprimer l'audio de IndexedDB
+        await clearRecordingFromStorage();
+
+        // Traiter la transcription retournée par l'API
+        if (transcriptionData) {
+          const { text, segments } = transcriptionData;
+
+          // Extraire les mots depuis les segments si disponibles
+          const words: TranscriptionWord[] = [];
+          if (segments && segments.length > 0) {
+            // Utiliser les segments pour créer les mots avec timestamps
+            for (const segment of segments) {
+              const segmentWords = segment.text.split(' ').filter((w: string) => w.trim());
+              const segmentDuration = (segment.endMs - segment.startMs) / 1000;
+              const wordDuration = segmentDuration / segmentWords.length;
+
+              segmentWords.forEach((word: string, i: number) => {
+                words.push({
+                  word,
+                  start: (segment.startMs / 1000) + (i * wordDuration),
+                  end: (segment.startMs / 1000) + ((i + 1) * wordDuration),
+                  confidence: segment.confidence
+                });
+              });
+            }
+          } else if (text) {
+            // Créer des mots simulés à partir du texte
+            const wordList = text.split(' ').filter((w: string) => w.trim());
+            const duration = recordingTime;
+            const wordDuration = duration / wordList.length;
+            wordList.forEach((word: string, i: number) => {
+              words.push({
+                word,
+                start: i * wordDuration,
+                end: (i + 1) * wordDuration,
+                confidence: 0.9
+              });
+            });
+          }
+
+          if (words.length > 0) {
+            setTranscription(words);
+          }
+        }
+
+        // Sauvegarder les voice previews retournés par l'API en IndexedDB
+        if (profileData.voicePreviews && profileData.voicePreviews.length > 0) {
+          console.log(`[VoiceProfile] Received ${profileData.voicePreviews.length} voice previews from API`);
+          await saveVoicePreviewsToStorage(
+            profileData.userId,
+            profileData.voicePreviews,
+            profileData.version || 1
+          );
+          // Charger les previews stockés pour l'affichage
+          const stored = await loadVoicePreviewsFromStorage(profileData.userId);
+          setStoredPreviews(stored);
+          toast.success(t('voiceProfile.previewsGenerated', `${profileData.voicePreviews.length} aperçus vocaux générés`));
+        } else {
+          // Fallback: générer les aperçus via la route de traduction (ancien comportement)
+          generateClonePreviews(base64);
+        }
+      } else {
+        throw new Error(response.error || 'Profile creation failed');
+      }
+    } catch (err: any) {
+      console.error('[VoiceProfile] Profile creation error:', err);
+      toast.error(err.message || t('voiceProfile.errors.creation', 'Erreur lors de la création du profil'));
+      SoundFeedback.playError();
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  };
+
+  // Génération des aperçus de clonage dans différentes langues
+  const generateClonePreviews = async (audioData: string) => {
+    // Vérifier si le clonage vocal est autorisé
+    if (!hasVoiceCloningConsent) {
+      console.log('[VoiceProfile] Voice cloning consent not granted, skipping previews');
+      return;
+    }
+
+    // Déterminer les langues à prévisualiser
+    let targetLanguages = CLONE_PREVIEW_LANGUAGES.filter(lang => lang !== sourceLanguage).slice(0, 4);
+
+    // S'assurer que FR et EN sont inclus s'ils ne sont pas la langue source
+    if (sourceLanguage !== 'fr' && !targetLanguages.includes('fr')) {
+      targetLanguages = ['fr', ...targetLanguages.slice(0, 3)];
+    }
+    if (sourceLanguage !== 'en' && !targetLanguages.includes('en')) {
+      if (!targetLanguages.includes('en')) {
+        targetLanguages = [...targetLanguages.slice(0, 3), 'en'];
+      }
+    }
+
+    // Initialiser les previews
+    const initialPreviews: ClonePreview[] = targetLanguages.map(lang => ({
+      language: lang,
+      audioUrl: null,
+      isGenerating: true,
+      error: null
+    }));
+    setClonePreviews(initialPreviews);
+
+    // Phrase de démonstration courte
+    const demoTexts: Record<string, string> = {
+      fr: "Bonjour, ceci est ma voix clonée en français.",
+      en: "Hello, this is my cloned voice in English.",
+      es: "Hola, esta es mi voz clonada en español.",
+      de: "Hallo, das ist meine geklonte Stimme auf Deutsch.",
+      pt: "Olá, esta é minha voz clonada em português.",
+      it: "Ciao, questa è la mia voce clonata in italiano.",
+      zh: "你好，这是我用中文克隆的声音。",
+      ja: "こんにちは、これは日本語で複製された私の声です。"
+    };
+
+    // Type pour la réponse de traduction
+    interface TranslateResponse {
+      translatedAudios?: Array<{
+        targetLanguage: string;
+        audioData?: string;
+        audioUrl?: string;
+      }>;
+      result?: {
+        translations?: Array<{
+          targetLanguage: string;
+          translatedAudio?: {
+            audioBase64?: string;
+            audioUrl?: string;
+          };
+        }>;
+      };
+    }
+
+    // Générer chaque aperçu en utilisant la route de traduction audio avec clonage
+    for (let i = 0; i < targetLanguages.length; i++) {
+      const lang = targetLanguages[i];
+      try {
+        // Utiliser la route de traduction avec clonage vocal
+        const response = await apiService.post<TranslateResponse>('/voice/translate', {
+          audioBase64: audioData,
+          targetLanguages: [lang],
+          sourceLanguage: sourceLanguage,
+          generateVoiceClone: true
+        });
+
+        if (response.success && response.data) {
+          // Chercher l'audio traduit dans la réponse
+          let audioUrl: string | null = null;
+
+          // Vérifier dans translatedAudios
+          const translatedAudio = response.data.translatedAudios?.find((a: { targetLanguage: string }) => a.targetLanguage === lang);
+          if (translatedAudio?.audioUrl) {
+            audioUrl = translatedAudio.audioUrl;
+          } else if (translatedAudio?.audioData) {
+            // Convertir base64 en blob
+            const binaryString = atob(translatedAudio.audioData);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let j = 0; j < binaryString.length; j++) {
+              bytes[j] = binaryString.charCodeAt(j);
+            }
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            audioUrl = URL.createObjectURL(blob);
+          }
+
+          // Vérifier aussi dans result.translations
+          if (!audioUrl && response.data.result?.translations) {
+            const translation = response.data.result.translations.find((t: { targetLanguage: string }) => t.targetLanguage === lang);
+            if (translation?.translatedAudio?.audioUrl) {
+              audioUrl = translation.translatedAudio.audioUrl;
+            } else if (translation?.translatedAudio?.audioBase64) {
+              const binaryString = atob(translation.translatedAudio.audioBase64);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let j = 0; j < binaryString.length; j++) {
+                bytes[j] = binaryString.charCodeAt(j);
+              }
+              const blob = new Blob([bytes], { type: 'audio/mp3' });
+              audioUrl = URL.createObjectURL(blob);
+            }
+          }
+
+          setClonePreviews(prev => prev.map(p =>
+            p.language === lang ? { ...p, audioUrl, isGenerating: false } : p
+          ));
+        } else {
+          throw new Error(response.error || 'Translation failed');
+        }
+      } catch (err: any) {
+        console.error(`[VoiceProfile] Clone preview error for ${lang}:`, err);
+        setClonePreviews(prev => prev.map(p =>
+          p.language === lang ? { ...p, isGenerating: false, error: err.message || 'Generation failed' } : p
+        ));
+      }
+    }
+  };
+
+  // Supprimer le profil
+  const deleteProfile = async () => {
+    if (!confirm(t('voiceProfile.confirmDelete', 'Êtes-vous sûr de vouloir supprimer votre profil vocal ?'))) {
+      return;
+    }
+
+    try {
+      const response = await apiService.delete<{ success: boolean }>('/voice/profile');
+      if (response.success) {
+        setProfile(null);
+        resetRecording();
+        toast.success(t('voiceProfile.profileDeleted', 'Profil vocal supprimé'));
+      }
+    } catch (err) {
+      console.error('[VoiceProfile] Delete error:', err);
+      toast.error(t('voiceProfile.errors.delete', 'Erreur lors de la suppression'));
+    }
+  };
+
+  // Mettre à jour les consentements
+  const updateConsent = async (type: 'recording' | 'cloning', value: boolean) => {
+    // Sauvegarder les valeurs précédentes pour le revert
+    const prevRecordingConsent = hasConsent;
+    const prevCloningConsent = hasVoiceCloningConsent;
+
+    try {
+      // Mise à jour optimiste de l'UI
+      if (type === 'recording') {
+        setHasConsent(value);
+        // Si on désactive l'enregistrement, désactiver aussi le clonage
+        if (!value) setHasVoiceCloningConsent(false);
+      } else {
+        setHasVoiceCloningConsent(value);
+      }
+
+      // Toujours envoyer les deux valeurs (voiceRecordingConsent est requis)
+      const body = {
+        voiceRecordingConsent: type === 'recording' ? value : prevRecordingConsent,
+        voiceCloningConsent: type === 'recording' && !value ? false : (type === 'cloning' ? value : prevCloningConsent)
+      };
+
+      console.log('[VoiceProfile] Sending consent update:', body);
+      const result = await apiService.post<{ consentUpdated: boolean }>('/voice/profile/consent', body);
+
+      if (result.success) {
+        console.log('[VoiceProfile] Consent updated successfully, reloading profile...');
+        // Recharger le profil pour confirmer la persistance
+        await loadProfile();
+        toast.success(t('voiceProfile.consentUpdated', 'Consentement mis à jour'));
+      } else {
+        throw new Error(result.error || 'Consent update failed');
+      }
+    } catch (err) {
+      console.error('[VoiceProfile] Consent error:', err);
+      // Revert aux valeurs précédentes
+      setHasConsent(prevRecordingConsent);
+      setHasVoiceCloningConsent(prevCloningConsent);
+      toast.error(t('voiceProfile.errors.consent', 'Erreur lors de la mise à jour du consentement'));
+    }
+  };
+
+  // Modifier un paramètre de clonage vocal
+  const updateCloningParam = <K extends keyof VoiceCloningUserSettings>(
+    key: K,
+    value: VoiceCloningUserSettings[K]
+  ) => {
+    setVoiceCloningSettings(prev => ({ ...prev, [key]: value }));
+    setHasUnsavedChanges(true);
+  };
+
+  // Sauvegarder les paramètres de clonage vocal
+  const saveVoiceCloningSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const response = await apiService.put<{ success: boolean; message?: string }>(
+        '/user-features/configuration',
+        voiceCloningSettings
+      );
+
+      if (response.success) {
+        setHasUnsavedChanges(false);
+        toast.success(t('voiceProfile.settings.saved', 'Paramètres de clonage sauvegardés'));
+      } else {
+        throw new Error(response.message || 'Erreur lors de la sauvegarde');
+      }
+    } catch (err: any) {
+      console.error('[VoiceProfile] Error saving cloning settings:', err);
+      toast.error(err.message || t('voiceProfile.errors.savingSettings', 'Erreur lors de la sauvegarde des paramètres'));
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  // Réinitialiser les paramètres aux valeurs par défaut
+  const resetToDefaults = () => {
+    setVoiceCloningSettings(DEFAULT_VOICE_CLONING_SETTINGS);
+    setHasUnsavedChanges(true);
+  };
+
+  // Obtenir le mot actuellement surligné
+  const getCurrentWordIndex = () => {
+    if (!transcription.length) return -1;
+    return transcription.findIndex(w => playbackTime >= w.start && playbackTime < w.end);
+  };
+
+  // Rendu conditionnel pendant le chargement
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className={cn("h-8 w-8 text-muted-foreground", !reducedMotion && "animate-spin")} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Noms des langues pour l'affichage
+  const languageNames: Record<string, string> = {
+    // Européennes
+    fr: 'Français',
+    en: 'English',
+    es: 'Español',
+    de: 'Deutsch',
+    pt: 'Português',
+    it: 'Italiano',
+    nl: 'Nederlands',
+    ru: 'Русский',
+    // Asiatiques
+    zh: '中文',
+    ja: '日本語',
+    ko: '한국어',
+    ar: 'العربية',
+    // Africaines (MMS-TTS)
+    sw: 'Kiswahili',
+    am: 'አማርኛ',
+    ha: 'Hausa',
+    yo: 'Yorùbá',
+    zu: 'isiZulu',
+    ln: 'Lingála'
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Consentements */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            {t('voiceProfile.consents.title', 'Consentements vocaux')}
+          </CardTitle>
+          <CardDescription>
+            {t('voiceProfile.consents.description', 'Autorisations requises pour créer et utiliser votre profil vocal')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label>{t('voiceProfile.consents.recording', 'Enregistrement vocal')}</Label>
+              <p className="text-sm text-muted-foreground">
+                {t('voiceProfile.consents.recordingDesc', 'Permet de créer un profil vocal à partir de votre voix')}
+              </p>
+            </div>
+            <Switch
+              checked={hasConsent}
+              onCheckedChange={(checked) => updateConsent('recording', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label>{t('voiceProfile.consents.cloning', 'Clonage vocal')}</Label>
+              <p className="text-sm text-muted-foreground">
+                {t('voiceProfile.consents.cloningDesc', 'Permet de cloner votre voix dans d\'autres langues')}
+              </p>
+            </div>
+            <Switch
+              checked={hasVoiceCloningConsent}
+              onCheckedChange={(checked) => updateConsent('cloning', checked)}
+              disabled={!hasConsent}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Profil existant */}
+      {profile && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Check className="h-5 w-5 text-green-500" />
+              {t('voiceProfile.existing.title', 'Profil vocal actif')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-muted-foreground">{t('voiceProfile.existing.quality', 'Qualité')}</Label>
+                <p className="font-medium">{profile.qualityScore}%</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">{t('voiceProfile.existing.duration', 'Durée audio')}</Label>
+                <p className="font-medium">{(profile.audioDurationMs / 1000).toFixed(1)}s</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">{t('voiceProfile.existing.version', 'Version')}</Label>
+                <p className="font-medium">v{profile.version}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">{t('voiceProfile.existing.expires', 'Expire')}</Label>
+                <p className="font-medium">
+                  {profile.expiresAt
+                    ? new Date(profile.expiresAt).toLocaleDateString()
+                    : t('voiceProfile.existing.noExpiry', 'Pas d\'expiration')
+                  }
+                </p>
+              </div>
+            </div>
+
+            {profile.needsCalibration && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {t('voiceProfile.existing.needsCalibration', 'Votre profil nécessite une mise à jour pour maintenir sa qualité.')}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button variant="destructive" onClick={deleteProfile} className="w-full">
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t('voiceProfile.existing.delete', 'Supprimer le profil vocal')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Paramètres de clonage vocal - affiché seulement si le profil vocal a été créé et analysé */}
+      {profile?.exists && hasVoiceCloningConsent && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              {t('voiceProfile.settings.title', 'Paramètres de clonage vocal')}
+            </CardTitle>
+            <CardDescription>
+              {t('voiceProfile.settings.description', 'Ajustez les paramètres pour personnaliser le rendu de votre voix clonée')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Preset de qualité */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>{t('voiceProfile.settings.qualityPreset', 'Preset de qualité')}</Label>
+                <Badge variant="outline">{voiceCloningSettings.voiceCloningQualityPreset}</Badge>
+              </div>
+              <Select
+                value={voiceCloningSettings.voiceCloningQualityPreset}
+                onValueChange={(value: VoiceCloningQualityPreset) => updateCloningParam('voiceCloningQualityPreset', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fast">
+                    {t('voiceProfile.settings.presetFast', '⚡ Rapide - Génération plus rapide')}
+                  </SelectItem>
+                  <SelectItem value="balanced">
+                    {t('voiceProfile.settings.presetBalanced', '⚖️ Équilibré - Recommandé')}
+                  </SelectItem>
+                  <SelectItem value="high_quality">
+                    {t('voiceProfile.settings.presetHighQuality', '✨ Haute qualité - Meilleur rendu')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Exagération */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label>{t('voiceProfile.settings.exaggeration', 'Expressivité')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceProfile.settings.exaggerationDesc', 'Amplifie les caractéristiques vocales')}
+                  </p>
+                </div>
+                <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {voiceCloningSettings.voiceCloningExaggeration.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[voiceCloningSettings.voiceCloningExaggeration]}
+                onValueChange={([value]) => updateCloningParam('voiceCloningExaggeration', value)}
+                min={0}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{t('voiceProfile.settings.natural', 'Naturel')}</span>
+                <span>{t('voiceProfile.settings.expressive', 'Expressif')}</span>
+              </div>
+            </div>
+
+            {/* CFG Weight */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label>{t('voiceProfile.settings.cfgWeight', 'Guidance (CFG)')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceProfile.settings.cfgWeightDesc', 'Fidélité au texte vs créativité. 0 = réduit le transfert d\'accent')}
+                  </p>
+                </div>
+                <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {voiceCloningSettings.voiceCloningCfgWeight.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[voiceCloningSettings.voiceCloningCfgWeight]}
+                onValueChange={([value]) => updateCloningParam('voiceCloningCfgWeight', value)}
+                min={0}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{t('voiceProfile.settings.creative', 'Créatif')}</span>
+                <span>{t('voiceProfile.settings.strict', 'Strict')}</span>
+              </div>
+            </div>
+
+            {/* Température */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label>{t('voiceProfile.settings.temperature', 'Température')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceProfile.settings.temperatureDesc', 'Variabilité de la génération')}
+                  </p>
+                </div>
+                <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {voiceCloningSettings.voiceCloningTemperature.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[voiceCloningSettings.voiceCloningTemperature]}
+                onValueChange={([value]) => updateCloningParam('voiceCloningTemperature', value)}
+                min={0.1}
+                max={2}
+                step={0.1}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{t('voiceProfile.settings.deterministic', 'Déterministe')}</span>
+                <span>{t('voiceProfile.settings.variable', 'Variable')}</span>
+              </div>
+            </div>
+
+            {/* Top-P */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label>{t('voiceProfile.settings.topP', 'Top-P (Nucleus)')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceProfile.settings.topPDesc', 'Filtrage des tokens improbables')}
+                  </p>
+                </div>
+                <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {voiceCloningSettings.voiceCloningTopP.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[voiceCloningSettings.voiceCloningTopP]}
+                onValueChange={([value]) => updateCloningParam('voiceCloningTopP', value)}
+                min={0.5}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{t('voiceProfile.settings.focused', 'Focalisé')}</span>
+                <span>{t('voiceProfile.settings.diverse', 'Diversifié')}</span>
+              </div>
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={resetToDefaults}
+                disabled={isSavingSettings}
+                className="flex-1"
+              >
+                <RotateCw className="h-4 w-4 mr-2" />
+                {t('voiceProfile.settings.reset', 'Réinitialiser')}
+              </Button>
+              <Button
+                onClick={saveVoiceCloningSettings}
+                disabled={isSavingSettings || !hasUnsavedChanges}
+                className="flex-1"
+              >
+                {isSavingSettings ? (
+                  <Loader2 className={cn("h-4 w-4 mr-2", !reducedMotion && "animate-spin")} />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                {t('voiceProfile.settings.save', 'Sauvegarder')}
+              </Button>
+            </div>
+
+            {hasUnsavedChanges && (
+              <p className="text-xs text-amber-500 text-center">
+                {t('voiceProfile.settings.unsavedChanges', '⚠️ Modifications non sauvegardées')}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Création de profil */}
+      {!profile && hasConsent && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mic className="h-5 w-5" />
+              {t('voiceProfile.create.title', 'Créer votre profil vocal')}
+            </CardTitle>
+            <CardDescription>
+              {t('voiceProfile.create.description', 'Lisez le texte ci-dessous à haute voix pour créer votre profil vocal')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Sélecteur de langue source */}
+            <div className="space-y-2">
+              <Label>{t('voiceProfile.create.sourceLanguage', 'Langue de lecture')}</Label>
+              <p className="text-sm text-muted-foreground">
+                {t('voiceProfile.create.sourceLanguageDesc', 'Sélectionnez la langue dans laquelle vous allez lire le texte')}
+              </p>
+              <Select
+                value={sourceLanguage}
+                onValueChange={(value) => {
+                  setSourceLanguage(value);
+                  // Mettre à jour les langues de preview pour exclure la langue source
+                  setSelectedPreviewLanguages(prev =>
+                    prev.filter(l => l !== value).length === 0
+                      ? AVAILABLE_LANGUAGES.filter(l => l.code !== value).slice(0, 3).map(l => l.code)
+                      : prev.filter(l => l !== value)
+                  );
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_LANGUAGES.map(lang => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.nativeName} ({lang.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sélecteur des langues de preview */}
+            {hasVoiceCloningConsent && (
+              <div className="space-y-2">
+                <Label>{t('voiceProfile.create.previewLanguages', 'Langues pour les aperçus vocaux')}</Label>
+                <p className="text-sm text-muted-foreground">
+                  {t('voiceProfile.create.previewLanguagesDesc', 'Sélectionnez les langues dans lesquelles générer des aperçus de votre voix clonée')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {AVAILABLE_LANGUAGES.filter(lang => lang.code !== sourceLanguage).map(lang => {
+                    const isSelected = selectedPreviewLanguages.includes(lang.code);
+                    return (
+                      <Button
+                        key={lang.code}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedPreviewLanguages(prev => prev.filter(l => l !== lang.code));
+                          } else if (selectedPreviewLanguages.length < 5) {
+                            setSelectedPreviewLanguages(prev => [...prev, lang.code]);
+                          } else {
+                            toast.error(t('voiceProfile.create.maxLanguages', 'Maximum 5 langues'));
+                          }
+                        }}
+                        className="transition-all"
+                      >
+                        {lang.nativeName}
+                        {isSelected && <Check className="h-3 w-3 ml-1" />}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {selectedPreviewLanguages.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceProfile.create.selectedLanguages', 'Langues sélectionnées:')} {selectedPreviewLanguages.map(l => {
+                      const lang = AVAILABLE_LANGUAGES.find(al => al.code === l);
+                      return lang?.nativeName || l;
+                    }).join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Texte à lire */}
+            <div className="p-4 bg-muted rounded-lg">
+              <Label className="text-xs text-muted-foreground mb-2 block">
+                {t('voiceProfile.create.readThis', 'Lisez ce texte à haute voix')} ({languageNames[sourceLanguage] || sourceLanguage})
+              </Label>
+              <p className="text-lg leading-relaxed">{readingText}</p>
+            </div>
+
+            {/* Contrôles d'enregistrement */}
+            <div className="flex flex-col items-center gap-4">
+              {/* Timer et indicateur */}
+              <div className="text-center">
+                <div className="text-4xl font-mono">
+                  {recordingTime.toFixed(1)}s
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {recordingTime < MIN_RECORDING_SECONDS
+                    ? t('voiceProfile.create.minDuration', `Minimum ${MIN_RECORDING_SECONDS} secondes`)
+                    : recordingTime >= STOP_AFTER_SECONDS
+                      ? t('voiceProfile.create.canStop', 'Vous pouvez arrêter maintenant')
+                      : t('voiceProfile.create.keepGoing', 'Continuez encore un peu...')
+                  }
+                </div>
+              </div>
+
+              {/* Barre de progression */}
+              <div className="w-full max-w-md">
+                <Progress
+                  value={(recordingTime / MAX_RECORDING_SECONDS) * 100}
+                  className={cn(
+                    "h-2",
+                    isRecording && !reducedMotion && "animate-pulse"
+                  )}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>0s</span>
+                  <span className="text-green-500">{MIN_RECORDING_SECONDS}s min</span>
+                  <span>{MAX_RECORDING_SECONDS}s max</span>
+                </div>
+              </div>
+
+              {/* Boutons */}
+              <div className="flex gap-4">
+                {!audioBlob ? (
+                  <Button
+                    size="lg"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isRecording && recordingTime < MIN_RECORDING_SECONDS}
+                    variant={isRecording ? "destructive" : "default"}
+                    className="min-w-[180px]"
+                  >
+                    {isRecording ? (
+                      <>
+                        <MicOff className="h-5 w-5 mr-2" />
+                        {t('voiceProfile.create.stopRecording', 'Arrêter')}
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="h-5 w-5 mr-2" />
+                        {t('voiceProfile.create.startRecording', 'Commencer')}
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={resetRecording}>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      {t('voiceProfile.create.retry', 'Recommencer')}
+                    </Button>
+                    <Button
+                      onClick={createProfile}
+                      disabled={isCreatingProfile}
+                    >
+                      {isCreatingProfile ? (
+                        <>
+                          <Loader2 className={cn("h-4 w-4 mr-2", !reducedMotion && "animate-spin")} />
+                          {t('voiceProfile.create.creating', 'Création...')}
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          {t('voiceProfile.create.createProfile', 'Créer le profil vocal')}
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Message d'attente pendant la création du profil */}
+              {isCreatingProfile && (
+                <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                  <Loader2 className={cn("h-4 w-4 text-blue-600", !reducedMotion && "animate-spin")} />
+                  <AlertDescription className="text-blue-800 dark:text-blue-200">
+                    <div className="space-y-2">
+                      <p className="font-medium">
+                        {t('voiceProfile.create.processingTitle', 'Analyse de votre voix en cours...')}
+                      </p>
+                      <p className="text-sm">
+                        {t('voiceProfile.create.processingMessage', 'Cette opération peut prendre jusqu\'à 5 minutes. Votre voix est analysée par notre IA pour créer un profil vocal unique.')}
+                      </p>
+                      <p className="text-sm text-blue-600 dark:text-blue-400">
+                        {t('voiceProfile.create.processingHint', 'Vous pouvez rester sur cette page ou revenir plus tard. Nous vous notifierons quand ce sera prêt.')}
+                      </p>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            {/* Lecteur audio avec waveform interactive */}
+            {audioUrl && (
+              <div className="space-y-4">
+                <audio ref={audioRef} src={audioUrl} />
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={togglePlayback}
+                    className="shrink-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={isPlaying ? t('voiceProfile.a11y.pause', 'Mettre en pause') : t('voiceProfile.a11y.play', 'Lire l\'enregistrement')}
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+
+                  {/* Waveform interactive */}
+                  <div className="flex-1 relative">
+                    <canvas
+                      ref={waveformCanvasRef}
+                      className="w-full h-12 cursor-pointer rounded-md bg-muted/50 hover:bg-muted/70 transition-colors"
+                      onClick={handleWaveformClick}
+                      role="slider"
+                      aria-label={t('voiceProfile.a11y.waveform', 'Forme d\'onde audio - cliquez pour naviguer')}
+                      aria-valuemin={0}
+                      aria-valuemax={Math.round(recordingTime)}
+                      aria-valuenow={Math.round(playbackTime)}
+                      aria-valuetext={`${playbackTime.toFixed(1)} ${t('voiceProfile.a11y.seconds', 'secondes')} sur ${recordingTime.toFixed(1)}`}
+                      tabIndex={0}
+                    />
+                    {waveformData.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className={cn("h-4 w-4 text-muted-foreground", !reducedMotion && "animate-spin")} />
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="text-sm text-muted-foreground whitespace-nowrap shrink-0">
+                    {playbackTime.toFixed(1)}s / {recordingTime.toFixed(1)}s
+                  </span>
+
+                  {/* Bouton supprimer l'audio */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={deleteStoredAudio}
+                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={t('voiceProfile.a11y.deleteAudio', 'Supprimer l\'enregistrement audio')}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Transcription avec surlignage */}
+                {transcription.length > 0 && (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      {t('voiceProfile.create.transcription', 'Transcription')}
+                    </Label>
+                    <p className="text-lg leading-relaxed">
+                      {transcription.map((word, i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "transition-colors duration-100",
+                            i === getCurrentWordIndex()
+                              ? "bg-primary text-primary-foreground rounded px-1"
+                              : playbackTime > word.end
+                                ? "text-muted-foreground"
+                                : ""
+                          )}
+                        >
+                          {word.word}{' '}
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Aperçus vocaux stockés en IndexedDB avec transcription synchronisée */}
+      {storedPreviews.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              {t('voiceProfile.clonePreviews.title', 'Votre voix dans d\'autres langues')}
+            </CardTitle>
+            <CardDescription>
+              {t('voiceProfile.clonePreviews.description', 'Écoutez un aperçu de votre voix clonée avec transcription synchronisée')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {storedPreviews.map((preview) => {
+              const isPlaying = playingPreviewLang === preview.language;
+              const audioUrl = previewAudioUrls.get(preview.language);
+              // Générer les segments de mots pour le surlignage
+              const words = preview.translatedText.split(/\s+/).filter(w => w.trim());
+              const wordDuration = preview.durationMs / 1000 / words.length;
+
+              return (
+                <div
+                  key={preview.language}
+                  className="p-4 border rounded-lg space-y-3"
+                >
+                  {/* En-tête avec langue et contrôles */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline">{preview.language.toUpperCase()}</Badge>
+                      <span className="font-medium">{languageNames[preview.language] || preview.language}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {(preview.durationMs / 1000).toFixed(1)}s
+                      </span>
+                      <Button
+                        variant={isPlaying ? "secondary" : "ghost"}
+                        size="icon"
+                        className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={isPlaying
+                          ? `${t('voiceProfile.a11y.pausePreview', 'Mettre en pause l\'aperçu')} ${languageNames[preview.language] || preview.language}`
+                          : `${t('voiceProfile.a11y.playPreview', 'Lire l\'aperçu')} ${languageNames[preview.language] || preview.language}`
+                        }
+                        onClick={() => {
+                          if (isPlaying) {
+                            // Arrêter la lecture
+                            if (previewAudioRef.current) {
+                              previewAudioRef.current.pause();
+                              previewAudioRef.current.currentTime = 0;
+                            }
+                            setPlayingPreviewLang(null);
+                            setPreviewPlaybackTime(0);
+                          } else {
+                            // Démarrer la lecture
+                            if (!audioUrl) return;
+                            setPlayingPreviewLang(preview.language);
+                            setPreviewPlaybackTime(0);
+                            const audio = new Audio(audioUrl);
+                            previewAudioRef.current = audio;
+
+                            audio.ontimeupdate = () => {
+                              setPreviewPlaybackTime(audio.currentTime);
+                            };
+                            audio.onended = () => {
+                              setPlayingPreviewLang(null);
+                              setPreviewPlaybackTime(0);
+                            };
+                            audio.play();
+                          }
+                        }}
+                      >
+                        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Texte original */}
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">{t('voiceProfile.clonePreviews.original', 'Original:')}</span>{' '}
+                    {preview.originalText.length > 100 ? preview.originalText.substring(0, 100) + '...' : preview.originalText}
+                  </div>
+
+                  {/* Texte traduit avec surlignage synchronisé */}
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm leading-relaxed">
+                      {words.map((word, i) => {
+                        const wordStart = i * wordDuration;
+                        const wordEnd = (i + 1) * wordDuration;
+                        const isCurrentWord = isPlaying && previewPlaybackTime >= wordStart && previewPlaybackTime < wordEnd;
+                        const isPastWord = isPlaying && previewPlaybackTime >= wordEnd;
+
+                        return (
+                          <span
+                            key={i}
+                            className={cn(
+                              "transition-colors duration-100",
+                              isCurrentWord
+                                ? "bg-primary text-primary-foreground rounded px-0.5"
+                                : isPastWord
+                                  ? "text-muted-foreground"
+                                  : ""
+                            )}
+                          >
+                            {word}{' '}
+                          </span>
+                        );
+                      })}
+                    </p>
+                  </div>
+
+                  {/* Barre de progression */}
+                  {isPlaying && (
+                    <Progress
+                      value={(previewPlaybackTime / (preview.durationMs / 1000)) * 100}
+                      className="h-1"
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Bouton pour régénérer les previews */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={async () => {
+                if (profile?.userId) {
+                  await clearVoicePreviewsFromStorage(profile.userId);
+                  setStoredPreviews([]);
+                  toast.info(t('voiceProfile.clonePreviews.cleared', 'Aperçus supprimés. Recréez votre profil pour en générer de nouveaux.'));
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t('voiceProfile.clonePreviews.regenerate', 'Supprimer les aperçus')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Aperçus de clonage en cours de génération (fallback) */}
+      {clonePreviews.length > 0 && storedPreviews.length === 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              {t('voiceProfile.clonePreviews.generating', 'Génération des aperçus...')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {clonePreviews.map((preview) => (
+                <div
+                  key={preview.language}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">{preview.language.toUpperCase()}</Badge>
+                    <span>{languageNames[preview.language] || preview.language}</span>
+                  </div>
+
+                  {preview.isGenerating ? (
+                    <Loader2 className={cn("h-4 w-4", !reducedMotion && "animate-spin")} aria-label={t('voiceProfile.a11y.generating', 'Génération en cours')} />
+                  ) : preview.error ? (
+                    <AlertCircle className="h-4 w-4 text-destructive" aria-label={t('voiceProfile.a11y.error', 'Erreur')} />
+                  ) : preview.audioUrl ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label={`${t('voiceProfile.a11y.playPreview', 'Lire l\'aperçu')} ${languageNames[preview.language] || preview.language}`}
+                      onClick={() => {
+                        const audio = new Audio(preview.audioUrl!);
+                        audio.play();
+                      }}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Message si pas de consentement */}
+      {!hasConsent && !profile && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {t('voiceProfile.noConsent', 'Activez le consentement d\'enregistrement vocal ci-dessus pour créer votre profil.')}
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}

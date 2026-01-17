@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/collapsible';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
+import type { ConversationType } from '@meeshy/shared/types';
 
 interface Community {
   id: string;
@@ -80,7 +81,7 @@ export function CreateConversationModal({
   const [isLoadingCommunities, setIsLoadingCommunities] = useState(false);
 
   // New modern UI states
-  const [conversationType, setConversationType] = useState<'direct' | 'group' | 'public'>('direct');
+  const [conversationType, setConversationType] = useState<ConversationType>('direct');
   const [step, setStep] = useState<'members' | 'details'>('members');
 
   // New state for community toggle and preview accordion

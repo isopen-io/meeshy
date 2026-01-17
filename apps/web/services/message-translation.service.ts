@@ -6,13 +6,14 @@
 import axios from 'axios';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from './auth-manager.service';
+import type { TranslationModel } from '@meeshy/shared/types';
 
 // === TYPES ET INTERFACES ===
 export interface ForceTranslationRequest {
   messageId: string;
   targetLanguage: string;
   sourceLanguage?: string; // Langue source du message original
-  model?: 'basic' | 'medium' | 'premium';
+  model?: TranslationModel;
 }
 
 export interface ForceTranslationResponse {

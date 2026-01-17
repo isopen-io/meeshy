@@ -7,8 +7,81 @@ import struct
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+
+# ═══════════════════════════════════════════════════════════════
+# REAL AUDIO FILES FOR TESTING
+# These are real voice clone samples used for integration tests
+# ═══════════════════════════════════════════════════════════════
+
+FIXTURES_DIR = Path(__file__).parent
+AUDIO_FIXTURES_DIR = FIXTURES_DIR / "audio"
+
+# Real voice clone samples per language
+VOICE_CLONE_SAMPLES = {
+    "de": AUDIO_FIXTURES_DIR / "cloned_de.wav",
+    "en": AUDIO_FIXTURES_DIR / "cloned_en.wav",
+    "es": AUDIO_FIXTURES_DIR / "cloned_es.wav",
+    "fr": AUDIO_FIXTURES_DIR / "cloned_fr.wav",
+    "it": AUDIO_FIXTURES_DIR / "cloned_it.wav",
+    "ja": AUDIO_FIXTURES_DIR / "cloned_ja.wav",
+    "pt": AUDIO_FIXTURES_DIR / "cloned_pt.wav",
+    "zh": AUDIO_FIXTURES_DIR / "cloned_zh.wav",
+}
+
+# Source voice sample for cloning
+VOICE_SAMPLE_PATH = AUDIO_FIXTURES_DIR / "voice_sample_chatterbox.wav"
+
+
+def get_voice_clone_sample(language: str) -> Optional[Path]:
+    """Get a real voice clone sample for testing.
+
+    Args:
+        language: ISO 639-1 language code (e.g., 'en', 'fr', 'de')
+
+    Returns:
+        Path to the audio file or None if not available
+    """
+    path = VOICE_CLONE_SAMPLES.get(language)
+    if path and path.exists():
+        return path
+    return None
+
+
+def get_voice_sample() -> Optional[Path]:
+    """Get the source voice sample for voice cloning tests.
+
+    Returns:
+        Path to the voice sample or None if not available
+    """
+    if VOICE_SAMPLE_PATH.exists():
+        return VOICE_SAMPLE_PATH
+    return None
+
+
+def get_available_voice_samples() -> List[str]:
+    """Get list of available voice sample languages.
+
+    Returns:
+        List of ISO 639-1 language codes
+    """
+    return [lang for lang, path in VOICE_CLONE_SAMPLES.items() if path.exists()]
+
+
+def load_voice_sample_bytes(language: str) -> Optional[bytes]:
+    """Load voice sample as bytes for testing.
+
+    Args:
+        language: ISO 639-1 language code
+
+    Returns:
+        Audio file bytes or None if not available
+    """
+    path = get_voice_clone_sample(language)
+    if path:
+        return path.read_bytes()
+    return None
 
 
 @dataclass

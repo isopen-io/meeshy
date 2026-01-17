@@ -4,6 +4,15 @@ Provides audio fixtures and mock data for testing
 """
 
 from .audio_fixtures import (
+    # Real audio fixtures
+    AUDIO_FIXTURES_DIR,
+    VOICE_CLONE_SAMPLES,
+    VOICE_SAMPLE_PATH,
+    get_voice_clone_sample,
+    get_voice_sample,
+    get_available_voice_samples,
+    load_voice_sample_bytes,
+    # Generated fixtures
     AudioFixture,
     AudioFixtureGenerator,
     SAMPLE_MOBILE_TRANSCRIPTIONS,
@@ -17,6 +26,15 @@ from .audio_fixtures import (
 )
 
 __all__ = [
+    # Real audio fixtures
+    "AUDIO_FIXTURES_DIR",
+    "VOICE_CLONE_SAMPLES",
+    "VOICE_SAMPLE_PATH",
+    "get_voice_clone_sample",
+    "get_voice_sample",
+    "get_available_voice_samples",
+    "load_voice_sample_bytes",
+    # Generated fixtures
     "AudioFixture",
     "AudioFixtureGenerator",
     "SAMPLE_MOBILE_TRANSCRIPTIONS",

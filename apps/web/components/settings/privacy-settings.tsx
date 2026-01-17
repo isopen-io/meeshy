@@ -7,6 +7,19 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Shield, Eye, Database, Download, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
+import { SoundFeedback } from '@/hooks/use-accessibility';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface PrivacyConfig {
   shareOnlineStatus: boolean;
@@ -20,6 +33,7 @@ interface PrivacyConfig {
 }
 
 export function PrivacySettings() {
+  const { t } = useI18n('settings');
   const [config, setConfig] = useState<PrivacyConfig>({
     shareOnlineStatus: true,
     shareTypingStatus: true,
@@ -42,10 +56,16 @@ export function PrivacySettings() {
     const newConfig = { ...config, [key]: value };
     setConfig(newConfig);
     localStorage.setItem('meeshy-privacy-config', JSON.stringify(newConfig));
-    toast.success('Paramètres de confidentialité mis à jour');
+    if (value) {
+      SoundFeedback.playToggleOn();
+    } else {
+      SoundFeedback.playToggleOff();
+    }
+    toast.success(t('privacy.settingsUpdated', 'Paramètres de confidentialité mis à jour'));
   };
 
   const exportData = () => {
+    SoundFeedback.playClick();
     // Simulation de l'export des données
     const userData = {
       profile: 'Données de profil...',
@@ -53,7 +73,7 @@ export function PrivacySettings() {
       translations: 'Cache de traduction...',
       settings: 'Paramètres utilisateur...',
     };
-    
+
     const blob = new Blob([JSON.stringify(userData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -61,16 +81,17 @@ export function PrivacySettings() {
     a.download = 'meeshy-data-export.json';
     a.click();
     URL.revokeObjectURL(url);
-    
-    toast.success('Données exportées avec succès');
+
+    SoundFeedback.playSuccess();
+    toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
   };
 
-  const deleteAllData = () => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer toutes vos données ? Cette action est irréversible.')) {
-      // Simulation de la suppression
-      localStorage.clear();
-      toast.success('Toutes les données ont été supprimées');
-    }
+  const handleDeleteAllData = () => {
+    // Cette fonction est appelée après confirmation dans l'AlertDialog
+    SoundFeedback.playClick();
+    localStorage.clear();
+    SoundFeedback.playSuccess();
+    toast.success(t('privacy.dataDeleted', 'Toutes les données ont été supprimées'));
   };
 
   return (
@@ -242,18 +263,41 @@ export function PrivacySettings() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-red-600">Supprimer toutes mes données</Label>
+            <Label className="text-red-600">{t('privacy.deleteData.title', 'Supprimer toutes mes données')}</Label>
             <p className="text-sm text-muted-foreground">
-              Supprime définitivement toutes vos données. Cette action est irréversible.
+              {t('privacy.deleteData.description', 'Supprime définitivement toutes vos données. Cette action est irréversible.')}
             </p>
-            <Button
-              variant="destructive"
-              onClick={deleteAllData}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Supprimer mes données
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
+                  onClick={() => SoundFeedback.playClick()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t('privacy.deleteData.button', 'Supprimer mes données')}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t('privacy.deleteData.confirmTitle', 'Êtes-vous absolument sûr ?')}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t('privacy.deleteData.confirmDescription', 'Cette action est irréversible. Toutes vos données personnelles, messages et paramètres seront définitivement supprimés de nos serveurs.')}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => SoundFeedback.playClick()}>
+                    {t('privacy.deleteData.cancel', 'Annuler')}
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAllData}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {t('privacy.deleteData.confirm', 'Oui, supprimer mes données')}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </CardContent>
       </Card>

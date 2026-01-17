@@ -23,7 +23,7 @@ interface UseI18nOptions {
 }
 
 interface UseI18nReturn {
-  t: (key: string, params?: Record<string, any>) => string;
+  t: (key: string, paramsOrFallback?: Record<string, any> | string) => string;
   tArray: (key: string) => string[];
   locale: string;
   setLocale: (locale: string) => void;
@@ -127,50 +127,58 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
   }, [currentInterfaceLanguage, namespace, loadTranslations]);
   
   // Fonction de traduction
-  const t = useCallback((key: string, params?: Record<string, any>): string => {
+  // Supporte deux signatures:
+  // - t(key, params) où params est un objet { name: "John" }
+  // - t(key, fallback) où fallback est un string à utiliser si la clé n'existe pas
+  const t = useCallback((key: string, paramsOrFallback?: Record<string, any> | string): string => {
+    // Déterminer si le second argument est un fallback string ou des params
+    const isFallback = typeof paramsOrFallback === 'string';
+    const fallback = isFallback ? paramsOrFallback : undefined;
+    const params = isFallback ? undefined : paramsOrFallback;
+
     // Ne pas afficher de warnings pendant le chargement initial
     const shouldWarn = process.env.NODE_ENV === 'development' && !isLoading;
-    
+
     // Debug: afficher l'état des translations seulement si elles sont censées être chargées
     if (shouldWarn && Object.keys(translations).length === 0) {
       console.warn(`[i18n] Translations object is empty for namespace "${namespace}"`);
     }
-    
+
     // Naviguer dans l'objet de traductions en utilisant la clé avec points
     const keys = key.split('.');
     let value: any = translations;
-    
+
     for (const k of keys) {
       if (value && typeof value === 'object' && k in value) {
         value = value[k];
       } else {
-        // Clé non trouvée - retourner la clé elle-même en mode développement
-        if (shouldWarn) {
+        // Clé non trouvée - retourner le fallback ou la clé elle-même
+        if (shouldWarn && !fallback) {
           console.warn(`[i18n] Missing translation key: ${namespace}.${key}`, {
             translationsKeys: Object.keys(translations),
             lookingFor: k,
             currentValue: value
           });
         }
-        return key;
+        return fallback || key;
       }
     }
-    
-    // Si la valeur n'est pas une string, retourner la clé
+
+    // Si la valeur n'est pas une string, retourner le fallback ou la clé
     if (typeof value !== 'string') {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === 'development' && !fallback) {
         console.warn(`[i18n] Translation key "${namespace}.${key}" is not a string:`, value);
       }
-      return key;
+      return fallback || key;
     }
-    
+
     // Remplacer les paramètres dans la traduction
     if (params) {
       return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
         return params[paramKey]?.toString() || match;
       });
     }
-    
+
     return value;
   }, [translations, namespace, isLoading]);
   

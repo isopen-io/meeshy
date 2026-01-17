@@ -45,11 +45,20 @@ export const usersService = {
 
   /**
    * Recherche des utilisateurs
+   * @param query - Query de recherche (minimum 2 caractères)
    */
   async searchUsers(query: string): Promise<ApiResponse<User[]>> {
-    console.log('[UsersService] searchUsers appelé avec query:', query);
+    const trimmedQuery = query?.trim() || '';
+
+    // Validation: minimum 2 caractères requis par l'API
+    if (trimmedQuery.length < 2) {
+      console.log('[UsersService] searchUsers ignoré - query trop courte:', trimmedQuery.length);
+      return { success: true, data: [] };
+    }
+
+    console.log('[UsersService] searchUsers appelé avec query:', trimmedQuery);
     try {
-      const url = `/users/search?q=${encodeURIComponent(query)}`;
+      const url = `/users/search?q=${encodeURIComponent(trimmedQuery)}`;
       console.log('[UsersService] URL de recherche:', url);
 
       const response = await apiService.get<User[]>(url);
@@ -120,7 +129,19 @@ export const usersService = {
     recentCommunities: any[];
   }>> {
     try {
-      const response = await apiService.get('/users/me/dashboard-stats');
+      const response = await apiService.get<{
+        stats: {
+          totalConversations: number;
+          totalCommunities: number;
+          totalMessages: number;
+          activeConversations: number;
+          translationsToday: number;
+          totalLinks: number;
+          lastUpdated: Date;
+        };
+        recentConversations: any[];
+        recentCommunities: any[];
+      }>('/users/me/dashboard-stats');
       return response;
     } catch (error) {
       console.error('Erreur lors de la récupération des statistiques du dashboard:', error);
@@ -134,7 +155,7 @@ export const usersService = {
   async getUserProfile(userId: string): Promise<ApiResponse<User>> {
     try {
       const response = await apiService.get<{ success: boolean; data: User }>(`/users/${userId}`);
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         throw new Error('User not found');
       }
       return {
@@ -154,7 +175,7 @@ export const usersService = {
   async getUserStats(userId: string): Promise<ApiResponse<UserStats>> {
     try {
       const response = await apiService.get<{ success: boolean; data: UserStats }>(`/users/${userId}/stats`);
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         throw new Error('Stats not found');
       }
       return {

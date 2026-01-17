@@ -24,6 +24,7 @@ import {
   Loader2, CheckCircle, AlertCircle, Shield, Sparkles, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { COUNTRY_CODES } from '@/constants/countries';
 
 interface ExistingAccountInfo {
   type: 'email' | 'phone';
@@ -40,21 +41,11 @@ interface AccountRecoveryModalProps {
   existingAccount: ExistingAccountInfo | null;
   email: string;
   phone: string;
+  /** Type de conflit détecté (basé sur les statuts de validation) - utilisé comme fallback si existingAccount est null */
+  conflictType?: 'email' | 'phone' | 'both' | null;
 }
 
 type RecoveryMethod = 'choice' | 'email' | 'phone' | 'phone_identity' | 'phone_code' | 'success';
-
-// Country codes
-const COUNTRY_CODES = [
-  { code: 'FR', dial: '+33', flag: '🇫🇷' },
-  { code: 'US', dial: '+1', flag: '🇺🇸' },
-  { code: 'GB', dial: '+44', flag: '🇬🇧' },
-  { code: 'DE', dial: '+49', flag: '🇩🇪' },
-  { code: 'ES', dial: '+34', flag: '🇪🇸' },
-  { code: 'IT', dial: '+39', flag: '🇮🇹' },
-  { code: 'BE', dial: '+32', flag: '🇧🇪' },
-  { code: 'CH', dial: '+41', flag: '🇨🇭' },
-];
 
 // OTP Input Component with modern styling
 const OTPInput = ({
@@ -136,6 +127,7 @@ export function AccountRecoveryModal({
   existingAccount,
   email,
   phone,
+  conflictType,
 }: AccountRecoveryModalProps) {
   const router = useRouter();
   const { t } = useI18n('auth');
@@ -183,9 +175,10 @@ export function AccountRecoveryModal({
     toast.error(t('phoneReset.errors.tokenExpired') || 'Session expirée. Veuillez recommencer.');
   };
 
-  // Reset on open and set initial step based on existingAccount type
+  // Reset on open/close and set initial step based on existingAccount type or conflictType
   useEffect(() => {
     if (isOpen) {
+      // Réinitialiser tous les états à l'ouverture
       setError(null);
       setRecoveryEmail(email);
       setRecoveryPhone(phone);
@@ -193,18 +186,37 @@ export function AccountRecoveryModal({
       setGuessEmail('');
       setOtpCode('');
       setTokenId('');
+      setResendCooldown(0);
+
+      // Déterminer le type de conflit - utiliser existingAccount si disponible, sinon conflictType
+      const accountType = existingAccount?.type || conflictType;
 
       // Set initial step based on existing account type
       // User still needs to click the button to trigger the action
-      if (existingAccount?.type === 'email') {
+      if (accountType === 'email') {
         setStep('email');
-      } else if (existingAccount?.type === 'phone') {
+      } else if (accountType === 'phone') {
         setStep('phone');
+      } else if (accountType === 'both') {
+        // Si les deux sont en conflit, montrer le choix
+        setStep('choice');
       } else {
         setStep('choice');
       }
+    } else {
+      // Réinitialiser l'état quand la modal se ferme pour éviter les états périmés
+      // Utiliser un petit délai pour que l'animation de fermeture se termine
+      const timeout = setTimeout(() => {
+        setStep('choice');
+        setError(null);
+        setOtpCode('');
+        setTokenId('');
+        setGuessUsername('');
+        setGuessEmail('');
+      }, 300);
+      return () => clearTimeout(timeout);
     }
-  }, [isOpen, email, phone, existingAccount?.type]);
+  }, [isOpen, email, phone, existingAccount?.type, conflictType]);
 
   // Cooldown timer
   useEffect(() => {

@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Lock } from 'lucide-react';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
+import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 
@@ -34,10 +35,16 @@ export function PasswordSettings() {
   };
 
   const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm') => {
+    const newValue = !showPasswords[field];
     setShowPasswords(prev => ({
       ...prev,
-      [field]: !prev[field]
+      [field]: newValue
     }));
+    if (newValue) {
+      SoundFeedback.playToggleOn();
+    } else {
+      SoundFeedback.playToggleOff();
+    }
   };
 
   const validateForm = (): boolean => {
@@ -136,8 +143,9 @@ export function PasswordSettings() {
             <button
               type="button"
               onClick={() => togglePasswordVisibility('current')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              tabIndex={-1}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+              aria-label={showPasswords.current ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+              aria-pressed={showPasswords.current}
             >
               {showPasswords.current ? (
                 <EyeOff className="h-4 w-4" />
@@ -166,8 +174,9 @@ export function PasswordSettings() {
             <button
               type="button"
               onClick={() => togglePasswordVisibility('new')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              tabIndex={-1}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+              aria-label={showPasswords.new ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+              aria-pressed={showPasswords.new}
             >
               {showPasswords.new ? (
                 <EyeOff className="h-4 w-4" />
@@ -199,8 +208,9 @@ export function PasswordSettings() {
             <button
               type="button"
               onClick={() => togglePasswordVisibility('confirm')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              tabIndex={-1}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+              aria-label={showPasswords.confirm ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+              aria-pressed={showPasswords.confirm}
             >
               {showPasswords.confirm ? (
                 <EyeOff className="h-4 w-4" />
@@ -213,10 +223,11 @@ export function PasswordSettings() {
 
         {/* Boutons d'action */}
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:space-x-4 pt-4">
-          <Button 
-            variant="outline" 
-            className="w-full sm:w-auto" 
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             onClick={() => {
+              SoundFeedback.playClick();
               setFormData({
                 currentPassword: '',
                 newPassword: '',
@@ -227,10 +238,13 @@ export function PasswordSettings() {
           >
             {t('security.password.cancel')}
           </Button>
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={() => {
+              SoundFeedback.playClick();
+              handleSave();
+            }}
             disabled={isLoading || !formData.currentPassword || !formData.newPassword || !formData.confirmPassword}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             {isLoading ? t('security.password.updating') : t('security.password.update')}
           </Button>

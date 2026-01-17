@@ -122,9 +122,17 @@ class GroupsService {
 
   /**
    * Recherche des utilisateurs pour invitation
+   * @param query - Query de recherche (minimum 2 caractères)
    */
   async searchUsers(query: string, excludeGroupId?: string): Promise<ApiResponse<User[]>> {
-    const params = { search: query, ...(excludeGroupId && { excludeGroup: excludeGroupId }) };
+    const trimmedQuery = query?.trim() || '';
+
+    // Validation: minimum 2 caractères requis par l'API
+    if (trimmedQuery.length < 2) {
+      return { data: [], status: 200 };
+    }
+
+    const params = { search: trimmedQuery, ...(excludeGroupId && { excludeGroup: excludeGroupId }) };
     return apiService.get<User[]>('/users/search', params);
   }
 

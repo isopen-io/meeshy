@@ -7,6 +7,7 @@ import { User } from '@/types';
 import { MessageSquare, Users, Hash, Building2, Lock, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
+import type { ConversationType } from '@meeshy/shared/types';
 
 interface ConversationPreviewProps {
   title: string;
@@ -17,7 +18,7 @@ interface ConversationPreviewProps {
     name: string;
     isPrivate: boolean;
   };
-  conversationType: 'direct' | 'group' | 'public';
+  conversationType: ConversationType;
   getUserAccentColor: (userId: string) => string;
 }
 

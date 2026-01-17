@@ -940,7 +940,8 @@ export function ConversationDetailsSidebar({
         const userLanguages: { [key: string]: Set<string> } = {};
         
         conversation.participants.forEach(participant => {
-          const lang = participant.user?.systemLanguage || 'fr';
+          const participantUser = (participant as any).user;
+          const lang = participantUser?.systemLanguage || 'fr';
           if (!userLanguages[lang]) {
             userLanguages[lang] = new Set();
           }
@@ -961,8 +962,11 @@ export function ConversationDetailsSidebar({
         
         // Calculer les utilisateurs actifs - toujours inclure l'utilisateur actuel
         const activeParticipants = conversation.participants
-          .filter(p => p.user && (p.user.isOnline || p.userId === currentUser.id))
-          .map(p => p.user)
+          .filter(p => {
+            const pUser = (p as any).user;
+            return pUser && (pUser.isOnline || p.userId === currentUser.id);
+          })
+          .map(p => (p as any).user)
           .filter(Boolean) as User[];
 
         // Vérifier si l'utilisateur actuel est déjà dans la liste, sinon l'ajouter au début
@@ -984,11 +988,12 @@ export function ConversationDetailsSidebar({
     }
 
     const otherParticipant = conv.participants?.find(p => p.userId !== currentUser.id);
-    if (otherParticipant && otherParticipant.user) {
+    const otherUser = (otherParticipant as any)?.user;
+    if (otherParticipant && otherUser) {
       // Prioriser le displayName, sinon prénom/nom, sinon username
-      return otherParticipant.user.displayName ||
-             `${otherParticipant.user.firstName || ''} ${otherParticipant.user.lastName || ''}`.trim() ||
-             otherParticipant.user.username;
+      return otherUser.displayName ||
+             `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.trim() ||
+             otherUser.username;
     }
 
     return conv.title || t('conversationDetails.conversation');
@@ -1033,22 +1038,23 @@ export function ConversationDetailsSidebar({
 
       setIsEditingName(false);
       toast.success(t('conversationDetails.nameUpdated'));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du nom:', error);
-      
+
       // Gestion d'erreur améliorée
       let errorMessage = t('conversationDetails.updateError');
-      
-      if (error.status === 409) {
+      const apiError = error as { status?: number };
+
+      if (apiError.status === 409) {
         errorMessage = t('conversationDetails.conversationExists');
-      } else if (error.status === 403) {
+      } else if (apiError.status === 403) {
         errorMessage = t('conversationDetails.noPermissionToModify');
-      } else if (error.status === 404) {
+      } else if (apiError.status === 404) {
         errorMessage = t('conversationDetails.conversationNotFound');
-      } else if (error.status === 400) {
+      } else if (apiError.status === 400) {
         errorMessage = t('conversationDetails.invalidData');
       }
-      
+
       toast.error(errorMessage);
       
       // Restaurer le nom original en cas d'erreur
@@ -1077,20 +1083,21 @@ export function ConversationDetailsSidebar({
 
       setIsEditingDescription(false);
       toast.success(t('conversationDetails.descriptionUpdated') || 'Description mise à jour avec succès');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour de la description:', error);
-      
+
       // Gestion d'erreur améliorée
       let errorMessage = t('conversationDetails.updateError');
-      
-      if (error.status === 403) {
+      const apiError = error as { status?: number };
+
+      if (apiError.status === 403) {
         errorMessage = t('conversationDetails.noPermissionToModify');
-      } else if (error.status === 404) {
+      } else if (apiError.status === 404) {
         errorMessage = t('conversationDetails.conversationNotFound');
-      } else if (error.status === 400) {
+      } else if (apiError.status === 400) {
         errorMessage = t('conversationDetails.invalidData');
       }
-      
+
       toast.error(errorMessage);
       
       // Restaurer la description originale en cas d'erreur
@@ -1137,7 +1144,7 @@ export function ConversationDetailsSidebar({
       const uploadResult = await AttachmentService.uploadFiles([file]);
 
       if (uploadResult.success && uploadResult.attachments.length > 0) {
-        const imageUrl = uploadResult.attachments[0].url;
+        const imageUrl = uploadResult.attachments[0].fileUrl;
 
         // Mettre à jour la conversation avec la nouvelle image
         const updatedData = { image: imageUrl, avatar: imageUrl };
