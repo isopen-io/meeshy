@@ -509,3 +509,82 @@
 .dark .input-glow:focus {
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
 }
+
+/* ========== PERFORMANCE OPTIMIZATIONS ========== */
+
+/**
+ * Content-visibility pour les listes de messages longues
+ * Améliore significativement les performances de rendu initial
+ * (rendering-content-visibility de Vercel React Best Practices)
+ */
+.message-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 80px;
+}
+
+.conversation-preview-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 72px;
+}
+
+/**
+ * Respect de prefers-reduced-motion
+ * (Web Interface Guidelines - Animation)
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-float,
+  .animate-shimmer,
+  .animate-gradient,
+  .animate-pulse-ring,
+  .translation-flip,
+  .translating {
+    animation: none !important;
+  }
+}
+
+/**
+ * Touch action pour éviter le délai de 300ms sur mobile
+ * (Web Interface Guidelines - Touch & Interaction)
+ */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="button"] {
+  touch-action: manipulation;
+}
+
+/**
+ * Amélioration de l'overscroll dans les modals/drawers
+ * (Web Interface Guidelines - Touch & Interaction)
+ */
+[role="dialog"],
+[role="alertdialog"],
+.modal-content,
+.drawer-content,
+.sidebar-content {
+  overscroll-behavior: contain;
+}
+
+/**
+ * Tabular numbers pour les colonnes de données
+ * (Web Interface Guidelines - Typography)
+ */
+.tabular-nums,
+.timestamp,
+.message-time,
+.notification-count {
+  font-variant-numeric: tabular-nums;
+}
