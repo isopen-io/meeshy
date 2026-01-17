@@ -8,7 +8,6 @@ export { useMessaging } from './use-messaging'; // Hook de haut niveau
 export { useMessageTranslation } from './useMessageTranslation'; // Pour traduction de messages API
 export { useI18n } from './useI18n'; // Pour traduction i18n interface
 export { useMessageTranslations } from './use-message-translations';
-export { useMessageLoader } from './use-message-loader';
 export { useConversationMessages } from './use-conversation-messages';
 
 // Langues unifiées
@@ -27,3 +26,20 @@ export { useAuthGuard } from './use-auth-guard';
 export { useEncryption, getEncryptionService } from './use-encryption';
 
 // Hooks legacy supprimés - migration vers les nouveaux hooks unifiés terminée
+
+// Hooks de conversation (extraits de ConversationLayout)
+export {
+  useConversationSelection,
+  useConversationUI,
+  useConversationTyping,
+  useComposerDrafts,
+  useMessageActions,
+} from './conversations';
+
+// Hooks de composer (extraits de MessageComposer)
+export {
+  useAttachmentUpload,
+  useAudioRecorder,
+  useMentions,
+  useTextareaAutosize,
+} from './composer';
