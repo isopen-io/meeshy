@@ -1,4 +1,8 @@
 {
+  "justNow": "à l'instant",
+  "minutesAgo": "il y a {minutes}min",
+  "hoursAgo": "il y a {hours}h",
+  "yesterday": "Hier {time}",
   "conversations": {
     "common": {
       "loading": "Chargement..."
@@ -121,7 +125,11 @@
       "muteError": "Erreur lors du changement des notifications",
       "archiveError": "Erreur lors de l'archivage",
       "startVideoCall": "Démarrer un appel vidéo",
-      "menuActions": "Actions"
+      "menuActions": "Actions",
+      "settings": "Paramètres",
+      "encryptionE2EE": "Chiffrement de bout en bout",
+      "encryptionHybrid": "Chiffrement hybride",
+      "encryptionServer": "Chiffrement serveur"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -231,7 +239,41 @@
       "groupConversation": "Conversation de groupe",
       "conversation": "Conversation",
       "linkCopied": "Lien de conversation copié !",
-      "copyError": "Erreur lors de la copie"
+      "copyError": "Erreur lors de la copie",
+      "myPreferences": "Mes préférences",
+      "configuration": "Configuration",
+      "organization": "Organisation",
+      "customization": "Personnalisation",
+      "pinDescription": "Garder en haut de la liste",
+      "muteDescription": "Désactiver les notifications",
+      "archiveDescription": "Masquer de la liste principale",
+      "categoryDescription": "Organiser par catégorie",
+      "selectCategory": "Sélectionner une catégorie...",
+      "addTag": "Ajouter un tag...",
+      "customNameHelp": "Visible uniquement par vous",
+      "preferencesSaved": "Préférences enregistrées",
+      "preferencesError": "Erreur lors de la sauvegarde des préférences",
+      "saving": "Enregistrement...",
+      "savePreferences": "Enregistrer mes préférences",
+      "basicInfo": "Informations",
+      "description": "Description",
+      "namePlaceholder": "Entrez un nom...",
+      "descriptionPlaceholder2": "Ajoutez une description...",
+      "security": "Sécurité",
+      "encryptionMode": "Mode de chiffrement",
+      "noEncryption": "Aucun chiffrement",
+      "e2ee": "Bout en bout (E2EE)",
+      "hybrid": "Hybride",
+      "serverEncryption": "Serveur",
+      "e2eeDescription": "Les messages sont chiffrés de bout en bout. Seuls les participants peuvent les lire.",
+      "hybridDescription": "Chiffrement côté serveur avec clés partagées.",
+      "serverDescription": "Les messages sont chiffrés sur le serveur.",
+      "noEncryptionDescription": "Les messages ne sont pas chiffrés.",
+      "currentStatus": "Statut actuel",
+      "directConversation": "Direct",
+      "configSaved": "Configuration enregistrée",
+      "configError": "Erreur lors de la sauvegarde de la configuration",
+      "saveConfig": "Enregistrer la configuration"
     },
     "conversationImage": {
       "title": "Changer l'image de la conversation",

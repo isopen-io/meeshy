@@ -218,6 +218,8 @@ function validatePagination(
 export default async function conversationPreferencesRoutes(fastify: FastifyInstance) {
 
   // ========== CONVERSATION PREFERENCES ==========
+  // NOTE: Pas besoin de WebSocket ici car chaque utilisateur modifie SES PROPRES préférences
+  // Le client met à jour son state local directement après l'appel API
 
   /**
    * GET /api/user-preferences/conversations/:conversationId

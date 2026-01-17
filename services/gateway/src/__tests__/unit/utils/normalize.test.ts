@@ -124,9 +124,10 @@ describe('normalizePhoneNumber', () => {
       expect(normalizePhoneNumber(undefined as unknown as string)).toBe('');
     });
 
-    it('should handle very short number with default country FR', () => {
-      // libphonenumber-js parses '123' with default country FR as French local number
-      expect(normalizePhoneNumber('123')).toBe('+33123');
+    it('should reject very short number (less than 6 digits)', () => {
+      // Numbers with less than 6 digits are not valid phone numbers
+      expect(normalizePhoneNumber('123')).toBe('');
+      expect(normalizePhoneNumber('12345')).toBe('');
     });
 
     it('should handle long international number with 00 prefix', () => {

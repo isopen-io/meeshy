@@ -17,7 +17,7 @@ import type {
 } from '@meeshy/shared/types';
 // EncryptionMode type - defined locally to avoid build order issues
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
-import { TranslationService } from './TranslationService';
+import { MessageTranslationService } from './MessageTranslationService';
 import { conversationStatsService } from './ConversationStatsService';
 import { TrackingLinkService } from './TrackingLinkService';
 import { MentionService } from './MentionService';
@@ -46,7 +46,7 @@ export class MessagingService {
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly translationService: TranslationService,
+    private readonly translationService: MessageTranslationService,
     notificationService?: NotificationService
   ) {
     this.trackingLinkService = new TrackingLinkService(prisma);

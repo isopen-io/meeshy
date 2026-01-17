@@ -16,12 +16,14 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import type { EncryptionPreference } from '@meeshy/shared/types';
 
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
 
-export type EncryptionPreference = 'disabled' | 'optional' | 'always';
+// Re-export from shared for backwards compatibility
+export type { EncryptionPreference } from '@meeshy/shared/types';
 
 export interface NotificationPreferences {
   // Global toggles

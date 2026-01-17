@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/AttachmentService.js';
-import { TranslationService } from '../services/TranslationService.js';
+import { MessageTranslationService } from '../services/MessageTranslationService.js';
 
 interface MessageParams {
   messageId: string;
@@ -23,7 +23,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
   // Instancier les services
   const attachmentService = new AttachmentService(prisma);
-  const translationService: TranslationService = (fastify as any).translationService;
+  const translationService: MessageTranslationService = (fastify as any).translationService;
   const socketIOHandler = fastify.socketIOHandler;
 
   // Middleware d'authentification requis pour les messages
@@ -295,7 +295,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         if (translationService) {
           await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
         } else {
-          console.warn('[MESSAGES] TranslationService non disponible, retraduction non effectuée');
+          console.warn('[MESSAGES] MessageTranslationService non disponible, retraduction non effectuée');
         }
 
       } catch (translationError) {

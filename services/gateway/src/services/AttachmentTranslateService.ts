@@ -11,8 +11,12 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { AudioTranslateService, AudioTranslationResult } from './AudioTranslateService';
+import { AudioTranslateService } from './AudioTranslateService';
 import { ZMQTranslationClient } from './ZmqTranslationClient';
+import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
+
+// Alias pour compatibilité
+type AudioTranslationResult = VoiceTranslationResult;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -70,12 +74,7 @@ export interface DocumentTranslationResult {
   }>;
 }
 
-export interface ServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  errorCode?: string;
-}
+// ServiceResult importé depuis shared
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SERVICE
@@ -88,7 +87,7 @@ export class AttachmentTranslateService {
 
   constructor(prisma: PrismaClient, zmqClient: ZMQTranslationClient) {
     this.prisma = prisma;
-    this.audioTranslateService = new AudioTranslateService(zmqClient);
+    this.audioTranslateService = new AudioTranslateService(prisma, zmqClient);
     this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
   }
 
@@ -172,8 +171,24 @@ export class AttachmentTranslateService {
     userId: string,
     jobId: string
   ): Promise<ServiceResult<{ status: string; progress?: number; result?: any }>> {
-    // Delegate to audio service for now (only audio supports async)
-    return this.audioTranslateService.getJobStatus(userId, jobId);
+    try {
+      // Delegate to audio service for now (only audio supports async)
+      const job = await this.audioTranslateService.getJobStatus(userId, jobId);
+      return {
+        success: true,
+        data: {
+          status: job.status,
+          progress: job.progress,
+          result: job.result
+        }
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to get job status',
+        errorCode: 'JOB_STATUS_ERROR'
+      };
+    }
   }
 
   /**
@@ -183,7 +198,19 @@ export class AttachmentTranslateService {
     userId: string,
     jobId: string
   ): Promise<ServiceResult<{ cancelled: boolean }>> {
-    return this.audioTranslateService.cancelJob(userId, jobId);
+    try {
+      const result = await this.audioTranslateService.cancelJob(userId, jobId);
+      return {
+        success: true,
+        data: { cancelled: result.success }
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to cancel job',
+        errorCode: 'JOB_CANCEL_ERROR'
+      };
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -330,67 +357,78 @@ export class AttachmentTranslateService {
 
     // Translate via AudioTranslateService (seulement les langues manquantes)
     // Transmettre le profil vocal de l'émetteur original pour le clonage vocal
-    const result = options.async
-      ? await this.audioTranslateService.translateAsync(userId, {
+    try {
+      if (options.async) {
+        // Async mode - returns job info
+        const asyncResult = await this.audioTranslateService.translateAsync(userId, {
           audioBase64,
-          targetLanguages: languagesToTranslate, // Seulement les nouvelles langues
+          targetLanguages: languagesToTranslate,
           sourceLanguage: options.sourceLanguage,
           generateVoiceClone: options.generateVoiceClone,
           webhookUrl: options.webhookUrl,
           priority: options.priority,
-          // Voice profile options (pour messages transférés - voix de l'émetteur original)
-          originalSenderId: originalSenderId || undefined,
-          existingVoiceProfile: voiceProfile || undefined,
-          useOriginalVoice
-        })
-      : await this.audioTranslateService.translateSync(userId, {
-          audioBase64,
-          targetLanguages: languagesToTranslate, // Seulement les nouvelles langues
-          sourceLanguage: options.sourceLanguage,
-          generateVoiceClone: options.generateVoiceClone,
-          // Voice profile options (pour messages transférés - voix de l'émetteur original)
           originalSenderId: originalSenderId || undefined,
           existingVoiceProfile: voiceProfile || undefined,
           useOriginalVoice
         });
 
-    if (!result.success) {
+        return {
+          success: true,
+          data: {
+            type: 'audio',
+            attachmentId: attachment.id,
+            result: asyncResult as AsyncJobSubmitResult
+          }
+        };
+      }
+
+      // Sync mode - returns full translation result
+      const syncResult = await this.audioTranslateService.translateSync(userId, {
+        audioBase64,
+        targetLanguages: languagesToTranslate,
+        sourceLanguage: options.sourceLanguage,
+        generateVoiceClone: options.generateVoiceClone,
+        originalSenderId: originalSenderId || undefined,
+        existingVoiceProfile: voiceProfile || undefined,
+        useOriginalVoice
+      });
+
+      // =========================================================================
+      // 4. MERGER LE CACHE + NOUVELLES TRADUCTIONS
+      // =========================================================================
+
+      // Si on a aussi des traductions en cache, les ajouter au résultat
+      let fullResult = syncResult as AudioTranslationResult;
+      if (existingTranslations.length > 0 && fullResult.translations) {
+        const cachedForRequest = existingTranslations
+          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .map(t => ({
+            targetLanguage: t.targetLanguage,
+            translatedText: t.translatedText,
+            audioUrl: t.audioUrl,
+            durationMs: t.durationMs,
+            voiceCloned: t.voiceCloned,
+            voiceQuality: t.voiceQuality
+          }));
+
+        fullResult.translations = [...fullResult.translations, ...cachedForRequest];
+      }
+
+      return {
+        success: true,
+        data: {
+          type: 'audio',
+          attachmentId: attachment.id,
+          result: fullResult
+        }
+      };
+    } catch (error: any) {
       return {
         success: false,
-        error: result.error,
-        errorCode: result.errorCode
+        error: error.message || 'Translation failed',
+        errorCode: 'TRANSLATION_ERROR'
       };
     }
-
-    // =========================================================================
-    // 4. MERGER LE CACHE + NOUVELLES TRADUCTIONS
-    // =========================================================================
-
-    // Si on a aussi des traductions en cache, les ajouter au résultat
-    if (existingTranslations.length > 0 && result.data && 'translations' in result.data) {
-      const fullResult = result.data as AudioTranslationResult;
-      const cachedForRequest = existingTranslations
-        .filter(t => options.targetLanguages.includes(t.targetLanguage))
-        .map(t => ({
-          targetLanguage: t.targetLanguage,
-          translatedText: t.translatedText,
-          audioUrl: t.audioUrl,
-          durationMs: t.durationMs,
-          voiceCloned: t.voiceCloned,
-          voiceQuality: t.voiceQuality
-        }));
-
-      fullResult.translations = [...fullResult.translations, ...cachedForRequest];
-    }
-
-    return {
-      success: true,
-      data: {
-        type: 'audio',
-        attachmentId: attachment.id,
-        result: result.data!
-      }
-    };
   }
 
   /**

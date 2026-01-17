@@ -39,6 +39,7 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
+import type { ConversationType } from '@meeshy/shared/types';
 
 interface Community {
   id: string;
@@ -53,7 +54,7 @@ interface Community {
 interface Conversation {
   id: string;
   title: string | null;
-  type: 'direct' | 'group' | 'public' | 'global';
+  type: ConversationType;
   lastMessageAt: Date | null;
   unreadCount: number;
   members?: Array<{
@@ -117,7 +118,8 @@ export function SearchPageContent() {
 
   // Effectuer la recherche
   const handleSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || trimmedQuery.length < 2) {
       setUsers([]);
       setConversations([]);
       setCommunities([]);
@@ -135,13 +137,13 @@ export function SearchPageContent() {
 
       // Rechercher en parallèle
       const [usersResponse, conversationsResponse, communitiesResponse] = await Promise.all([
-        fetch(`${buildApiUrl('/users/search')}?q=${encodeURIComponent(searchQuery)}`, {
+        fetch(`${buildApiUrl('/users/search')}?q=${encodeURIComponent(trimmedQuery)}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        fetch(`${buildApiUrl('/conversations/search')}?q=${encodeURIComponent(searchQuery)}`, {
+        fetch(`${buildApiUrl('/conversations/search')}?q=${encodeURIComponent(trimmedQuery)}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        fetch(`${buildApiUrl('/communities/search')}?q=${encodeURIComponent(searchQuery)}`, {
+        fetch(`${buildApiUrl('/communities/search')}?q=${encodeURIComponent(trimmedQuery)}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);

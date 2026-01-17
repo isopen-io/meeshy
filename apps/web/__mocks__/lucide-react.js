@@ -141,4 +141,67 @@ module.exports = {
   WrapText: createIcon('WrapText'),
   FileImage: createIcon('FileImage'),
   FileArchive: createIcon('FileArchive'),
+  KeyRound: createIcon('KeyRound'),
+  LogIn: createIcon('LogIn'),
+  UserMinus: createIcon('UserMinus'),
+  // Admin page icons
+  Trophy: createIcon('Trophy'),
+  Medal: createIcon('Medal'),
+  Award: createIcon('Award'),
+  Activity: createIcon('Activity'),
+  Reply: createIcon('Reply'),
+  AtSign: createIcon('AtSign'),
+  BarChart2: createIcon('BarChart2'),
+  MousePointerClick: createIcon('MousePointerClick'),
+  Users2: createIcon('Users2'),
+  UserCheck: createIcon('UserCheck'),
+  Crown: createIcon('Crown'),
+  LogOut: createIcon('LogOut'),
+  Menu: createIcon('Menu'),
+  Laptop: createIcon('Laptop'),
+  Edit2: createIcon('Edit2'),
+  Key: createIcon('Key'),
+  // Landing page icons
+  GraduationCap: createIcon('GraduationCap'),
+  Youtube: createIcon('Youtube'),
+  Twitter: createIcon('Twitter'),
+  Linkedin: createIcon('Linkedin'),
+  Instagram: createIcon('Instagram'),
+  Building: createIcon('Building'),
+  // Search page icons
+  MoreHorizontal: createIcon('MoreHorizontal'),
+  XOctagon: createIcon('XOctagon'),
+  // Settings page icons
+  SettingsIcon: createIcon('SettingsIcon'),
+  // Dashboard page icons
+  LayoutDashboard: createIcon('LayoutDashboard'),
+  FileAudio: createIcon('FileAudio'),
+  Repeat: createIcon('Repeat'),
+  // Tracking links page icons
+  BarChart: createIcon('BarChart'),
+  MousePointer: createIcon('MousePointer'),
+  TrendingFlat: createIcon('TrendingFlat'),
+  Earth: createIcon('Earth'),
+  Chrome: createIcon('Chrome'),
+  Safari: createIcon('Safari'),
+  Firefox: createIcon('Firefox'),
+  RefreshCcw: createIcon('RefreshCcw'),
+  // TikTok icon (custom)
+  TikTok: createIcon('TikTok'),
 };
+
+// Add a fallback for any icon not explicitly defined
+const handler = {
+  get: function(target, prop) {
+    if (prop in target) {
+      return target[prop];
+    }
+    // Return a dynamically created icon for any missing icon
+    if (typeof prop === 'string' && prop[0] === prop[0].toUpperCase()) {
+      return createIcon(prop);
+    }
+    return undefined;
+  }
+};
+
+module.exports = new Proxy(module.exports, handler);

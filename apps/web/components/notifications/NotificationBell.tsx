@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
 import { useNotifications } from '@/hooks/use-notifications';
-import { useRouter } from 'next/navigation';
 
 interface NotificationBellProps {
   className?: string;
@@ -13,33 +13,19 @@ interface NotificationBellProps {
   onClick?: () => void;
 }
 
-export function NotificationBell({ 
-  className = '', 
+export function NotificationBell({
+  className = '',
   showBadge = true,
-  onClick 
+  onClick
 }: NotificationBellProps) {
-  const router = useRouter();
   const { unreadCount, isConnected } = useNotifications();
 
-  const handleClick = () => {
-    if (onClick) {
-      onClick();
-    } else {
-      router.push('/notifications');
-    }
-  };
+  const ariaLabel = isConnected
+    ? `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`
+    : 'Notifications (hors ligne)';
 
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className={`relative focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${className}`}
-      onClick={handleClick}
-      aria-label={isConnected
-        ? `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`
-        : 'Notifications (hors ligne)'
-      }
-    >
+  const bellContent = (
+    <>
       <Bell className="h-4 w-4" aria-hidden="true" />
       {showBadge && unreadCount > 0 && (
         <Badge
@@ -50,6 +36,35 @@ export function NotificationBell({
           {unreadCount > 9 ? '9+' : unreadCount}
         </Badge>
       )}
+    </>
+  );
+
+  // Si onClick personnalisé, utiliser Button avec onClick
+  if (onClick) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={`relative focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${className}`}
+        onClick={onClick}
+        aria-label={ariaLabel}
+      >
+        {bellContent}
+      </Button>
+    );
+  }
+
+  // Par défaut, utiliser Link pour navigation instantanée
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      asChild
+      className={`relative focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${className}`}
+    >
+      <Link href="/notifications" aria-label={ariaLabel}>
+        {bellContent}
+      </Link>
     </Button>
   );
 }

@@ -39,8 +39,10 @@
     "picker": {
       "title": "Escolher emoji",
       "search": "Pesquisar emoji...",
+      "clearSearch": "Limpar pesquisa",
       "noResults": "Nenhum emoji encontrado para \"{query}\"",
       "categories": {
+        "label": "Categorias",
         "frequent": "Frequentes",
         "smileys": "Smileys",
         "gestures": "Gestos",

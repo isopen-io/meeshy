@@ -32,21 +32,24 @@ logger = logging.getLogger(__name__)
 
 # Import service with graceful fallback
 try:
-    from services.unified_tts_service import (
+    from services.tts_service import (
+        TTSService,
         UnifiedTTSService,
         TTSModel,
         TTSModelInfo,
         TTS_MODEL_INFO,
         ModelStatus,
+        TTSResult,
         UnifiedTTSResult,
         BaseTTSBackend,
         ChatterboxBackend,
+        get_tts_service,
         get_unified_tts_service,
         check_license_compliance
     )
     SERVICE_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"UnifiedTTSService not available: {e}")
+    logger.warning(f"TTSService not available: {e}")
     SERVICE_AVAILABLE = False
 
 

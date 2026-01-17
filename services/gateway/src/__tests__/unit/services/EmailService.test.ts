@@ -4,7 +4,7 @@
  * Tests:
  * - Provider initialization with environment variables
  * - Multi-provider fallback mechanism
- * - i18n translations (fr, en, es, pt)
+ * - i18n translations (fr, en, es, pt, it, de)
  * - Email verification sending
  * - Password reset email sending
  * - Password changed notification
@@ -206,7 +206,7 @@ describe('EmailService', () => {
       );
     });
 
-    it('should use French language by default', async () => {
+    it('should use English language by default', async () => {
       const { EmailService } = await getEmailServiceWithEnv({
         BREVO_API_KEY: 'test-brevo-key'
       });
@@ -221,10 +221,10 @@ describe('EmailService', () => {
         expiryHours: 24
       });
 
-      // French subject
+      // English subject (default language is now 'en')
       const callArgs = mockAxiosPost.mock.calls[0];
       const body = callArgs[1] as any;
-      expect(body.subject).toContain('Vérifi');
+      expect(body.subject).toContain('Verify');
     });
 
     it('should send in English when language is en', async () => {
@@ -351,7 +351,7 @@ describe('EmailService', () => {
   // ==============================================
 
   describe('i18n Translations', () => {
-    it('should send email in French by default', async () => {
+    it('should send email in English by default', async () => {
       const { EmailService } = await getEmailServiceWithEnv({
         BREVO_API_KEY: 'test-brevo-key'
       });
@@ -361,14 +361,15 @@ describe('EmailService', () => {
 
       await service.sendPasswordResetEmail({
         to: 'user@example.com',
-        name: 'Pierre',
+        name: 'John',
         resetLink: 'https://example.com/reset',
         expiryMinutes: 15
       });
 
+      // English content (default language is now 'en')
       const callArgs = mockAxiosPost.mock.calls[0];
       const body = callArgs[1] as any;
-      expect(body.htmlContent).toContain('Bonjour');
+      expect(body.htmlContent).toContain('Hello');
     });
 
     it('should send email in English when specified', async () => {
@@ -434,7 +435,7 @@ describe('EmailService', () => {
       expect(body.htmlContent).toContain('Olá');
     });
 
-    it('should fallback to French for unsupported language', async () => {
+    it('should fallback to English for unsupported language', async () => {
       const { EmailService } = await getEmailServiceWithEnv({
         BREVO_API_KEY: 'test-brevo-key'
       });
@@ -447,13 +448,13 @@ describe('EmailService', () => {
         name: 'Test User',
         resetLink: 'https://example.com/reset',
         expiryMinutes: 15,
-        language: 'de' // German not supported
+        language: 'ja' // Japanese not supported
       });
 
-      // Should use French as fallback
+      // Should use English as fallback (default language is now 'en')
       const callArgs = mockAxiosPost.mock.calls[0];
       const body = callArgs[1] as any;
-      expect(body.htmlContent).toContain('Bonjour');
+      expect(body.htmlContent).toContain('Hello');
     });
   });
 

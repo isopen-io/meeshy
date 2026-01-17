@@ -1,9 +1,9 @@
 /**
- * Integration tests for TranslationService
+ * Integration tests for MessageTranslationService
  *
  * These tests verify the integration between:
- * - TranslationService and the database (Prisma)
- * - TranslationService and ZMQ communication (mocked for local testing)
+ * - MessageTranslationService and the database (Prisma)
+ * - MessageTranslationService and ZMQ communication (mocked for local testing)
  * - Translation flow from message creation to translation storage
  *
  * To run these tests:
@@ -75,11 +75,11 @@ jest.mock('../../services/ZmqSingleton', () => ({
 }));
 
 // Import after mocking
-import { TranslationService, MessageData } from '../../services/TranslationService';
+import { MessageTranslationService, MessageData } from '../../services/MessageTranslationService';
 
-describe('TranslationService Integration Tests', () => {
+describe('MessageTranslationService Integration Tests', () => {
   let prisma: PrismaClient;
-  let translationService: TranslationService;
+  let translationService: MessageTranslationService;
   let testConversation: any;
   let testUser: any;
   let createdMessageIds: string[] = [];
@@ -126,7 +126,7 @@ describe('TranslationService Integration Tests', () => {
     mockZmqClient.removeAllListeners();
 
     // Create fresh service instance
-    translationService = new TranslationService(prisma);
+    translationService = new MessageTranslationService(prisma);
     await translationService.initialize();
 
     // Create test user if not exists
@@ -515,9 +515,9 @@ describe('TranslationService Integration Tests', () => {
   });
 });
 
-describe('TranslationService - Conversation Languages Integration', () => {
+describe('MessageTranslationService - Conversation Languages Integration', () => {
   let prisma: PrismaClient;
-  let translationService: TranslationService;
+  let translationService: MessageTranslationService;
   let testConversation: any;
   let testUsers: any[] = [];
   let createdMessageIds: string[] = [];
@@ -565,7 +565,7 @@ describe('TranslationService - Conversation Languages Integration', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockZmqClient.removeAllListeners();
-    translationService = new TranslationService(prisma);
+    translationService = new MessageTranslationService(prisma);
     await translationService.initialize();
   });
 

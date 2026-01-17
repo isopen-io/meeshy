@@ -50,10 +50,10 @@ except ImportError as e:
     logger.warning(f"TranscriptionService not available: {e}")
 
 try:
-    from services.unified_tts_service import UnifiedTTSService, TTSModel, UnifiedTTSResult
+    from services.tts_service import UnifiedTTSService, TTSModel, UnifiedTTSResult
     TTS_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"UnifiedTTSService not available: {e}")
+    logger.warning(f"TTSService not available: {e}")
 
 try:
     from services.translation_ml_service import TranslationMLService

@@ -3,12 +3,15 @@
  * Re-exports des types partagés pour éviter les conflits
  */
 
+import type { TranslationModel } from '@meeshy/shared/types';
+
 // Re-export des types existants
 export type { Message as BubbleMessage } from '@meeshy/shared/types';
 export type { MessageTranslation } from '@meeshy/shared/types/conversation';
 export type { BubbleTranslation as MessageVersion } from '@meeshy/shared/types';
 export type { User as MessageSender } from '@meeshy/shared/types';
 export type { AnonymousParticipant as AnonymousSender } from '@meeshy/shared/types';
+export type { TranslationModel } from '@meeshy/shared/types';
 
 // Types spécifiques au système de vues de messages
 export type MessageViewType = 'normal' | 'reaction-selection' | 'language-selection' | 'edit' | 'delete';
@@ -25,7 +28,7 @@ export interface EditMessageData {
 }
 
 export interface TranslationTier {
-  id: 'basic' | 'medium' | 'premium';
+  id: TranslationModel;
   name: string;
   description: string;
   languages: string[];
@@ -36,7 +39,7 @@ export interface LanguageOption {
   code: string;
   name: string;
   flag: string;
-  tier: TranslationTier['id'];
+  tier: TranslationModel;
 }
 
 export interface EmojiCategory {

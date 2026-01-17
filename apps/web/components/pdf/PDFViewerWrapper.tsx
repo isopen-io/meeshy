@@ -44,14 +44,6 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
     window.open(attachmentFileUrl, '_blank');
   };
 
-  const goToPreviousPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1));
-  };
-
-  const goToNextPage = () => {
-    setCurrentPage((prev) => (numPages > 0 ? Math.min(prev + 1, numPages) : prev + 1));
-  };
-
   // Truncate filename for mobile
   const truncateFilename = (filename: string, maxLength: number = 32): string => {
     if (filename.length <= maxLength) return filename;

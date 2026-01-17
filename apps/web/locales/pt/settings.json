@@ -17,6 +17,10 @@
     },
     "tabs": {
       "profile": "Perfil",
+      "notifications": "Notificações",
+      "privacy": "Privacidade",
+      "encryption": "Criptografia",
+      "audio": "Áudio",
       "translation": "Tradução",
       "security": "Segurança",
       "theme": "Tema",
@@ -227,17 +231,176 @@
       "description": "Configure suas preferências de idioma"
     },
     "notifications": {
-      "title": "Configurações de notificação",
+      "title": "Configurações de notificações",
       "description": "Gerencie suas preferências de notificação"
     },
     "privacy": {
       "title": "Configurações de privacidade",
       "description": "Controle suas configurações de privacidade e dados"
     },
+    "encryption": {
+      "title": "Configurações de criptografia",
+      "description": "Gerencie suas configurações de criptografia de ponta a ponta",
+      "status": {
+        "title": "Estado da criptografia",
+        "description": "Estado das suas chaves de criptografia de ponta a ponta",
+        "keysActive": "Chaves de criptografia ativas",
+        "keysNotGenerated": "Chaves não geradas",
+        "registrationId": "ID de registro",
+        "generateKeys": "Gere suas chaves para ativar a criptografia E2EE",
+        "generateButton": "Gerar chaves de criptografia",
+        "generating": "Gerando...",
+        "active": "Ativo",
+        "inactive": "Inativo",
+        "lastRotation": "Última rotação de chaves",
+        "keysGenerated": "Chaves de criptografia geradas com sucesso"
+      },
+      "newConversations": {
+        "title": "Novas conversas",
+        "description": "Configuração de criptografia padrão para novas conversas",
+        "defaultEnabled": "Criptografar por padrão",
+        "defaultEnabledDescription": "Ativar criptografia E2EE automaticamente para novas conversas",
+        "showIndicator": "Mostrar indicador",
+        "showIndicatorDescription": "Exibir ícone de criptografia em conversas seguras",
+        "encryptMedia": "Criptografar mídia",
+        "encryptMediaDescription": "Exigir criptografia para fotos, vídeos e arquivos"
+      },
+      "level": {
+        "title": "Nível de criptografia",
+        "description": "Escolha seu nível de proteção para mensagens",
+        "disabled": {
+          "label": "Desativado",
+          "description": "Sem criptografia de ponta a ponta. As mensagens são transmitidas em texto simples no servidor."
+        },
+        "optional": {
+          "label": "Opcional",
+          "description": "A criptografia E2EE é usada se o destinatário suportar. Recomendado para compatibilidade."
+        },
+        "always": {
+          "label": "Sempre",
+          "description": "Força a criptografia E2EE para todas as mensagens. Usuários sem chaves não poderão contatá-lo."
+        }
+      },
+      "about": {
+        "title": "Sobre a criptografia E2EE",
+        "description": "A criptografia de ponta a ponta (E2EE) garante que apenas você e seu destinatário possam ler suas mensagens. Nem mesmo os servidores do Meeshy podem descriptografar suas conversas.",
+        "protocol": "O Meeshy usa o protocolo Signal, reconhecido como um dos mais seguros do mundo.",
+        "features": {
+          "privateKeys": "Suas chaves privadas nunca saem do seu dispositivo",
+          "uniqueKeys": "Cada mensagem usa uma chave única",
+          "autoRotation": "A rotação automática de chaves reforça a segurança"
+        }
+      },
+      "actions": {
+        "save": "Salvar",
+        "saving": "Salvando...",
+        "preferencesUpdated": "Preferências de criptografia atualizadas"
+      },
+      "errors": {
+        "notAuthenticated": "Não autenticado",
+        "updateFailed": "Erro ao atualizar",
+        "generateFailed": "Erro ao gerar as chaves",
+        "networkError": "Erro de rede"
+      }
+    },
     "languageSelector": {
       "placeholder": "Selecionar um idioma...",
       "searchPlaceholder": "Pesquisar um idioma...",
       "noLanguageFound": "Nenhum idioma encontrado."
+    },
+    "audio": {
+      "consents": {
+        "title": "Consentimentos de áudio",
+        "description": "Permissões necessárias para recursos de áudio",
+        "voiceData": "Processamento de dados de voz",
+        "voiceDataDesc": "Permite o processamento das suas mensagens de áudio para transcrição",
+        "dataProcessing": "Processamento geral de dados",
+        "dataProcessingDesc": "Permite o processamento de dados para traduções"
+      },
+      "transcription": {
+        "title": "Transcrição de áudio",
+        "description": "Converter suas mensagens de áudio em texto",
+        "enable": "Ativar transcrição",
+        "enableDesc": "Permite transcrever mensagens de áudio para texto",
+        "source": "Fonte de transcrição",
+        "sourceAuto": "Automático (recomendado)",
+        "sourceServer": "Servidor (melhor qualidade)",
+        "sourceMobile": "Dispositivo (mais rápido)"
+      },
+      "translation": {
+        "title": "Tradução de áudio",
+        "description": "Traduzir automaticamente mensagens de áudio",
+        "text": "Tradução de texto",
+        "textDesc": "Traduzir mensagens de texto para seu idioma",
+        "audio": "Tradução de áudio",
+        "audioDesc": "Transcrever e traduzir mensagens de áudio",
+        "generateAudio": "Gerar áudio traduzido",
+        "generateAudioDesc": "Criar uma versão em áudio da tradução",
+        "format": "Formato de áudio"
+      },
+      "gdpr": {
+        "title": "Sobre seus dados",
+        "info": "Seus dados de áudio são processados em conformidade com a LGPD. A transcrição é realizada em nossos servidores seguros e os dados são excluídos de acordo com suas preferências de retenção."
+      },
+      "voiceProfile": {
+        "title": "Perfil de voz",
+        "description": "Crie seu perfil de voz para clonar sua voz em diferentes idiomas"
+      }
+    },
+    "voiceProfile": {
+      "consents": {
+        "title": "Consentimentos de voz",
+        "description": "Permissões necessárias para criar e usar seu perfil de voz",
+        "recording": "Gravação de voz",
+        "recordingDesc": "Permite criar um perfil de voz a partir da sua voz",
+        "cloning": "Clonagem de voz",
+        "cloningDesc": "Permite clonar sua voz em outros idiomas"
+      },
+      "existing": {
+        "title": "Perfil de voz ativo",
+        "quality": "Qualidade",
+        "duration": "Duração do áudio",
+        "version": "Versão",
+        "expires": "Expira",
+        "noExpiry": "Sem expiração",
+        "needsCalibration": "Seu perfil precisa de uma atualização para manter sua qualidade.",
+        "delete": "Excluir perfil de voz"
+      },
+      "create": {
+        "title": "Criar seu perfil de voz",
+        "description": "Leia o texto abaixo em voz alta para criar seu perfil de voz",
+        "readThis": "Leia este texto em voz alta",
+        "minDuration": "Mínimo {seconds} segundos",
+        "canStop": "Você pode parar agora",
+        "keepGoing": "Continue mais um pouco...",
+        "startRecording": "Iniciar",
+        "stopRecording": "Parar",
+        "retry": "Tentar novamente",
+        "transcribe": "Transcrever",
+        "transcribing": "Transcrevendo...",
+        "creating": "Criando...",
+        "createProfile": "Criar perfil",
+        "validate": "Validar e criar perfil",
+        "transcription": "Transcrição"
+      },
+      "clonePreviews": {
+        "title": "Sua voz em outros idiomas",
+        "description": "Ouça uma prévia da sua voz clonada em diferentes idiomas"
+      },
+      "errors": {
+        "microphoneAccess": "Não foi possível acessar o microfone",
+        "tooShort": "A gravação deve ter pelo menos {seconds} segundos",
+        "transcription": "Erro de transcrição",
+        "creation": "Erro ao criar o perfil",
+        "consent": "Erro ao atualizar o consentimento",
+        "delete": "Erro ao excluir o perfil"
+      },
+      "consentUpdated": "Consentimento atualizado",
+      "transcriptionComplete": "Transcrição completa",
+      "profileCreated": "Perfil de voz criado com sucesso!",
+      "profileDeleted": "Perfil de voz excluído",
+      "confirmDelete": "Tem certeza de que deseja excluir seu perfil de voz?",
+      "noConsent": "Ative o consentimento de gravação de voz acima para criar seu perfil."
     },
     "noUserConnected": "Nenhum usuário conectado"
   }

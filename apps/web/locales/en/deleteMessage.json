@@ -22,6 +22,7 @@
     "irreversibleAction": "Irreversible action",
     "deleteMessageWarning": "Warning: permanent message deletion",
     "itemsToDelete": "Items to delete",
-    "shortcutConfirm": "Shift+Enter"
+    "shortcutConfirm": "Shift+Enter",
+    "emptyMessage": "Empty message"
   }
 }

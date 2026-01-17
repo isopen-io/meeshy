@@ -90,6 +90,14 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
 }
 
+// Mock styled-jsx
+jest.mock('styled-jsx/style', () => ({
+  __esModule: true,
+  default: function MockStyle({ children }) {
+    return null
+  },
+}))
+
 // Suppress console errors during tests (optional)
 const originalError = console.error
 beforeAll(() => {

@@ -64,8 +64,8 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
     }
   }
 
-  // Si c'est un chemin relatif avec /api/attachments/file/, construire l'URL complète
-  if (relativePath.startsWith('/api/attachments/file/')) {
+  // Si c'est un chemin relatif avec /api/v1/attachments/file/ ou /api/attachments/file/, construire l'URL complète
+  if (relativePath.startsWith('/api/v1/attachments/file/') || relativePath.startsWith('/api/attachments/file/')) {
     return `${backendUrl}${relativePath}`;
   }
 

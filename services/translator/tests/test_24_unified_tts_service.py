@@ -41,24 +41,26 @@ logger = logging.getLogger(__name__)
 
 # Import service with graceful fallback
 try:
-    from services.unified_tts_service import (
+    from services.tts_service import (
+        TTSService,
         UnifiedTTSService,
         TTSModel,
         TTSModelInfo,
         TTS_MODEL_INFO,
         ModelStatus,
+        TTSResult,
         UnifiedTTSResult,
         BaseTTSBackend,
         ChatterboxBackend,
         HiggsAudioBackend,
         XTTSBackend,
+        get_tts_service,
         get_unified_tts_service,
         check_license_compliance,
-        _background_executor
     )
     SERVICE_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"UnifiedTTSService not available: {e}")
+    logger.warning(f"TTSService not available: {e}")
     SERVICE_AVAILABLE = False
 
 
@@ -397,7 +399,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend initialization"""
         logger.info("Test 24.14: ChatterboxBackend init")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu", turbo=False)
 
             assert backend.device == "cpu"
@@ -414,7 +416,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend turbo mode"""
         logger.info("Test 24.15: ChatterboxBackend turbo mode")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu", turbo=True)
 
             assert backend.turbo is True
@@ -426,7 +428,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend multilingual languages set"""
         logger.info("Test 24.16: ChatterboxBackend multilingual languages")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
 
             assert 'en' in backend.MULTILINGUAL_LANGUAGES
@@ -445,7 +447,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend close"""
         logger.info("Test 24.17: ChatterboxBackend close")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend.model = MagicMock()
             backend.model_multilingual = MagicMock()
@@ -466,7 +468,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend _get_device with auto on CPU"""
         logger.info("Test 24.18: ChatterboxBackend _get_device auto CPU")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="auto")
 
             mock_torch = MagicMock()
@@ -474,7 +476,7 @@ class TestChatterboxBackend:
             mock_torch.backends.mps.is_available.return_value = False
 
             with patch.dict('sys.modules', {'torch': mock_torch}):
-                with patch('services.unified_tts_service.torch', mock_torch, create=True):
+                with patch('services.tts_service.torch', mock_torch, create=True):
                     # Re-import to get the mocked torch
                     import importlib
                     device = backend._get_device()
@@ -488,7 +490,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend is_model_downloaded when not available"""
         logger.info("Test 24.19: ChatterboxBackend is_model_downloaded not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
 
@@ -502,7 +504,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend download when not available"""
         logger.info("Test 24.20: ChatterboxBackend download not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
 
@@ -517,7 +519,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend initialize when already initialized"""
         logger.info("Test 24.21: ChatterboxBackend initialize already initialized")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._initialized = True
 
@@ -532,7 +534,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend initialize when not available"""
         logger.info("Test 24.22: ChatterboxBackend initialize not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
             backend._initialized = False
@@ -548,7 +550,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend initialize_multilingual when already initialized"""
         logger.info("Test 24.23: ChatterboxBackend initialize_multilingual already initialized")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._initialized_multilingual = True
 
@@ -563,7 +565,7 @@ class TestChatterboxBackend:
         """Test ChatterboxBackend initialize_multilingual when not available"""
         logger.info("Test 24.24: ChatterboxBackend initialize_multilingual not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available_multilingual = False
             backend._initialized_multilingual = False
@@ -586,7 +588,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend initialization"""
         logger.info("Test 24.25: HiggsAudioBackend init")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
 
             assert backend.device == "cpu"
@@ -603,7 +605,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend close"""
         logger.info("Test 24.26: HiggsAudioBackend close")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
             backend.model = MagicMock()
             backend.tokenizer = MagicMock()
@@ -623,7 +625,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend download when not available"""
         logger.info("Test 24.27: HiggsAudioBackend download not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
             backend._available = False
 
@@ -638,7 +640,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend is_model_downloaded when not available"""
         logger.info("Test 24.28: HiggsAudioBackend is_model_downloaded not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
             backend._available = False
 
@@ -652,7 +654,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend initialize when already initialized"""
         logger.info("Test 24.29: HiggsAudioBackend initialize already initialized")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
             backend._initialized = True
 
@@ -667,7 +669,7 @@ class TestHiggsAudioBackend:
         """Test HiggsAudioBackend initialize when not available"""
         logger.info("Test 24.30: HiggsAudioBackend initialize not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = HiggsAudioBackend(device="cpu")
             backend._available = False
             backend._initialized = False
@@ -690,7 +692,7 @@ class TestXTTSBackend:
         """Test XTTSBackend initialization"""
         logger.info("Test 24.31: XTTSBackend init")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
 
             assert backend.device == "cpu"
@@ -706,7 +708,7 @@ class TestXTTSBackend:
         """Test XTTSBackend close"""
         logger.info("Test 24.32: XTTSBackend close")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend.model = MagicMock()
             backend._initialized = True
@@ -724,7 +726,7 @@ class TestXTTSBackend:
         """Test XTTSBackend download when not available"""
         logger.info("Test 24.33: XTTSBackend download not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend._available = False
 
@@ -739,7 +741,7 @@ class TestXTTSBackend:
         """Test XTTSBackend is_model_downloaded when not available"""
         logger.info("Test 24.34: XTTSBackend is_model_downloaded not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend._available = False
 
@@ -753,7 +755,7 @@ class TestXTTSBackend:
         """Test XTTSBackend initialize when already initialized"""
         logger.info("Test 24.35: XTTSBackend initialize already initialized")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend._initialized = True
 
@@ -768,7 +770,7 @@ class TestXTTSBackend:
         """Test XTTSBackend initialize when not available"""
         logger.info("Test 24.36: XTTSBackend initialize not available")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend._available = False
             backend._initialized = False
@@ -783,7 +785,7 @@ class TestXTTSBackend:
         """Test XTTSBackend is_model_downloaded checks multiple paths"""
         logger.info("Test 24.37: XTTSBackend is_model_downloaded paths")
 
-        with patch('services.unified_tts_service.get_settings', return_value=mock_settings):
+        with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = XTTSBackend(device="cpu")
             backend._available = True
 
@@ -811,7 +813,7 @@ class TestUnifiedTTSService:
         """Test singleton pattern"""
         logger.info("Test 24.38: Singleton pattern")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -833,7 +835,7 @@ class TestUnifiedTTSService:
         logger.info("Test 24.39: Service init with env model")
 
         with patch.dict(os.environ, {'TTS_MODEL': 'chatterbox-turbo'}):
-            with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+            with patch('services.tts_service.get_settings') as mock_get_settings:
                 mock_settings = MagicMock()
                 mock_settings.models_path = str(output_dir / "models")
                 mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -853,7 +855,7 @@ class TestUnifiedTTSService:
         logger.info("Test 24.40: Service init with invalid model")
 
         with patch.dict(os.environ, {'TTS_MODEL': 'invalid-model'}):
-            with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+            with patch('services.tts_service.get_settings') as mock_get_settings:
                 mock_settings = MagicMock()
                 mock_settings.models_path = str(output_dir / "models")
                 mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -872,7 +874,7 @@ class TestUnifiedTTSService:
         """Test _create_backend creates correct backend types"""
         logger.info("Test 24.41: Create backend")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -905,7 +907,7 @@ class TestUnifiedTTSService:
         """Test _create_backend raises ValueError for invalid model"""
         logger.info("Test 24.42: Create backend invalid model")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -927,7 +929,7 @@ class TestUnifiedTTSService:
         """Test _get_available_disk_space_gb"""
         logger.info("Test 24.43: Get available disk space")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -948,7 +950,7 @@ class TestUnifiedTTSService:
         """Test _can_download_model"""
         logger.info("Test 24.44: Can download model")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -976,7 +978,7 @@ class TestUnifiedTTSService:
         """Test get_model_status"""
         logger.info("Test 24.45: Get model status")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1010,7 +1012,7 @@ class TestUnifiedTTSService:
         """Test get_all_models_status"""
         logger.info("Test 24.46: Get all models status")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1043,7 +1045,7 @@ class TestUnifiedTTSService:
         """Test is_ready property"""
         logger.info("Test 24.47: is_ready property")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1075,7 +1077,7 @@ class TestUnifiedTTSService:
         """Test get_model_info"""
         logger.info("Test 24.48: Get model info")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1100,7 +1102,7 @@ class TestUnifiedTTSService:
         """Test get_available_models"""
         logger.info("Test 24.49: Get available models")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1125,7 +1127,7 @@ class TestUnifiedTTSService:
         """Test get_supported_languages"""
         logger.info("Test 24.50: Get supported languages")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1151,7 +1153,7 @@ class TestUnifiedTTSService:
         """Test get_stats"""
         logger.info("Test 24.51: Get stats")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1191,7 +1193,7 @@ class TestUnifiedTTSService:
         """Test get_stats with active backend"""
         logger.info("Test 24.52: Get stats with active backend")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1227,7 +1229,7 @@ class TestUnifiedTTSService:
         """Test close method"""
         logger.info("Test 24.53: Close method")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1258,7 +1260,7 @@ class TestUnifiedTTSService:
         """Test close cancels background downloads"""
         logger.info("Test 24.54: Close cancels downloads")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1286,7 +1288,7 @@ class TestUnifiedTTSService:
         """Test initialize with local model available"""
         logger.info("Test 24.55: Initialize with local model")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1317,7 +1319,7 @@ class TestUnifiedTTSService:
         """Test initialize when already initialized"""
         logger.info("Test 24.56: Initialize already initialized")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1344,7 +1346,7 @@ class TestUnifiedTTSService:
         """Test switch_model when model already active"""
         logger.info("Test 24.57: Switch model already active")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1371,7 +1373,7 @@ class TestUnifiedTTSService:
         """Test switch_model when model not available"""
         logger.info("Test 24.58: Switch model not available")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1403,7 +1405,7 @@ class TestUnifiedTTSService:
         """Test switch_model when not downloaded and insufficient disk space"""
         logger.info("Test 24.59: Switch model insufficient space")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1436,7 +1438,7 @@ class TestUnifiedTTSService:
         """Test synthesize_with_voice waits for backend"""
         logger.info("Test 24.60: Synthesize with voice no backend")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1466,7 +1468,7 @@ class TestUnifiedTTSService:
         """Test synthesize simple method"""
         logger.info("Test 24.61: Synthesize simple")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1503,7 +1505,7 @@ class TestUnifiedTTSService:
         """Test _convert_format"""
         logger.info("Test 24.62: Convert format")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1540,7 +1542,7 @@ class TestUnifiedTTSService:
         """Test _convert_format with error"""
         logger.info("Test 24.63: Convert format error")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1569,7 +1571,7 @@ class TestUnifiedTTSService:
         """Test _get_duration_ms"""
         logger.info("Test 24.64: Get duration ms")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1596,7 +1598,7 @@ class TestUnifiedTTSService:
         """Test _get_duration_ms with error"""
         logger.info("Test 24.65: Get duration ms error")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1679,7 +1681,7 @@ class TestGetUnifiedTTSService:
         """Test get_unified_tts_service helper"""
         logger.info("Test 24.70: get_unified_tts_service")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1710,7 +1712,7 @@ class TestFindLocalModel:
         """Test _find_local_model finds preferred model"""
         logger.info("Test 24.71: Find local model preferred")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1738,7 +1740,7 @@ class TestFindLocalModel:
         """Test _find_local_model falls back to Chatterbox"""
         logger.info("Test 24.72: Find local model fallback to Chatterbox")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1774,7 +1776,7 @@ class TestFindLocalModel:
         """Test _find_local_model when none available"""
         logger.info("Test 24.73: Find local model none available")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1810,7 +1812,7 @@ class TestLoadModel:
         """Test _load_model success"""
         logger.info("Test 24.74: Load model success")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1839,7 +1841,7 @@ class TestLoadModel:
         """Test _load_model failure"""
         logger.info("Test 24.75: Load model failure")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")
@@ -1866,7 +1868,7 @@ class TestLoadModel:
         """Test _load_model displays license warning"""
         logger.info("Test 24.76: Load model with license warning")
 
-        with patch('services.unified_tts_service.get_settings') as mock_get_settings:
+        with patch('services.tts_service.get_settings') as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.models_path = str(output_dir / "models")
             mock_settings.huggingface_cache_path = str(output_dir / "models" / "huggingface")

@@ -188,6 +188,11 @@ class Settings:
         """Chemin pour les modèles Whisper STT"""
         return os.path.join(self.models_path, "whisper")
 
+    @property
+    def voice_models_path(self) -> str:
+        """Chemin pour le cache des modèles vocaux utilisateur"""
+        return os.path.join(self.models_path, "voice_cache")
+
     def ensure_model_directories(self):
         """Crée les répertoires de modèles s'ils n'existent pas"""
         for path in [
@@ -195,7 +200,8 @@ class Settings:
             self.huggingface_cache_path,
             self.openvoice_checkpoints_path,
             self.xtts_models_path,
-            self.whisper_models_path
+            self.whisper_models_path,
+            self.voice_models_path
         ]:
             os.makedirs(path, exist_ok=True)
 
@@ -211,32 +217,22 @@ def get_settings():
 # Mappings des langues pour les modèles NLLB-200
 LANGUAGE_MAPPINGS = {
     # Codes ISO 639-1 vers codes NLLB-200
+
+    # === Langues Européennes ===
     'af': 'afr_Latn',      # Afrikaans
-    'ar': 'arb_Arab',      # Arabic
     'bg': 'bul_Cyrl',      # Bulgarian
-    'bn': 'ben_Beng',      # Bengali
     'cs': 'ces_Latn',      # Czech
     'da': 'dan_Latn',      # Danish
     'de': 'deu_Latn',      # German
     'el': 'ell_Grek',      # Greek
     'en': 'eng_Latn',      # English
     'es': 'spa_Latn',      # Spanish
-    'fa': 'pes_Arab',      # Persian
     'fi': 'fin_Latn',      # Finnish
     'fr': 'fra_Latn',      # French
-    'he': 'heb_Hebr',      # Hebrew
-    'hi': 'hin_Deva',      # Hindi
     'hr': 'hrv_Latn',      # Croatian
     'hu': 'hun_Latn',      # Hungarian
-    'hy': 'hye_Armn',      # Armenian
-    'id': 'ind_Latn',      # Indonesian
-    'ig': 'ibo_Latn',      # Igbo
     'it': 'ita_Latn',      # Italian
-    'ja': 'jpn_Jpan',      # Japanese
-    'ko': 'kor_Hang',      # Korean
-    'ln': 'lin_Latn',      # Lingala
     'lt': 'lit_Latn',      # Lithuanian
-    'ms': 'zsm_Latn',      # Malay
     'nl': 'nld_Latn',      # Dutch
     'no': 'nob_Latn',      # Norwegian Bokmål
     'pl': 'pol_Latn',      # Polish
@@ -244,13 +240,54 @@ LANGUAGE_MAPPINGS = {
     'ro': 'ron_Latn',      # Romanian
     'ru': 'rus_Cyrl',      # Russian
     'sv': 'swe_Latn',      # Swedish
-    'sw': 'swh_Latn',      # Swahili
-    'th': 'tha_Thai',      # Thai
     'tr': 'tur_Latn',      # Turkish
     'uk': 'ukr_Cyrl',      # Ukrainian
+
+    # === Langues Asiatiques ===
+    'ar': 'arb_Arab',      # Arabic
+    'bn': 'ben_Beng',      # Bengali
+    'fa': 'pes_Arab',      # Persian
+    'he': 'heb_Hebr',      # Hebrew
+    'hi': 'hin_Deva',      # Hindi
+    'hy': 'hye_Armn',      # Armenian
+    'id': 'ind_Latn',      # Indonesian
+    'ja': 'jpn_Jpan',      # Japanese
+    'ko': 'kor_Hang',      # Korean
+    'ms': 'zsm_Latn',      # Malay
+    'th': 'tha_Thai',      # Thai
     'ur': 'urd_Arab',      # Urdu
     'vi': 'vie_Latn',      # Vietnamese
     'zh': 'zho_Hans',      # Chinese (Simplified)
+
+    # === Langues Africaines (MMS TTS disponible) ===
+    'am': 'amh_Ethi',      # Amharic (Ethiopie)
+    'sw': 'swh_Latn',      # Swahili
+    'yo': 'yor_Latn',      # Yoruba (Nigeria)
+    'ha': 'hau_Latn',      # Hausa (Nigeria/Niger)
+    'rw': 'kin_Latn',      # Kinyarwanda (Rwanda)
+    'rn': 'run_Latn',      # Kirundi (Burundi)
+    'sn': 'sna_Latn',      # Shona (Zimbabwe)
+    'lg': 'lug_Latn',      # Luganda (Ouganda)
+    'om': 'gaz_Latn',      # Oromo (Ethiopie)
+    'ti': 'tir_Ethi',      # Tigrinya (Ethiopie/Erythree)
+    'ny': 'nya_Latn',      # Chichewa/Nyanja (Malawi)
+    'ee': 'ewe_Latn',      # Ewe (Ghana/Togo)
+    'ff': 'fuv_Latn',      # Fula/Fulani (Afrique de l'Ouest)
+    'mg': 'plt_Latn',      # Malagasy (Madagascar)
+    'so': 'som_Latn',      # Somali (Somalie)
+    'ts': 'tso_Latn',      # Tsonga (Afrique du Sud)
+    'bem': 'bem_Latn',     # Bemba (Zambie)
+
+    # === Langues Africaines (TTS MMS non disponible) ===
+    'ln': 'lin_Latn',      # Lingala (Congo)
+    'ig': 'ibo_Latn',      # Igbo (Nigeria)
+    'zu': 'zul_Latn',      # Zulu (Afrique du Sud)
+    'xh': 'xho_Latn',      # Xhosa (Afrique du Sud)
+    'wo': 'wol_Latn',      # Wolof (Senegal)
+    'tw': 'twi_Latn',      # Twi (Ghana)
+    'tn': 'tsn_Latn',      # Tswana (Botswana)
+    'st': 'sot_Latn',      # Southern Sotho (Lesotho)
+    'nso': 'nso_Latn',     # Northern Sotho/Sepedi (Afrique du Sud)
 }
 
 def get_model_language_code(iso_code: str) -> str:

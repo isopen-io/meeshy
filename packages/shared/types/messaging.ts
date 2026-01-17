@@ -1,6 +1,6 @@
 /**
  * Types pour le messaging - Phase 2.1
- * 
+ *
  * Interfaces de requête/réponse pour l'envoi de messages
  * Gateway WebSocket ↔ Frontend communication
  */
@@ -9,6 +9,12 @@ import type { ApiResponse } from './api-responses.js';
 import type { ConversationStats } from './conversation.js';
 import type { SocketIOMessage } from './socketio-events.js';
 import type { EncryptedPayload } from './encryption.js';
+
+// Import des types canoniques normalisés
+import type {
+  ProcessStatus,
+  DeliveryStatus as CanonicalDeliveryStatus,
+} from './status-types.js';
 
 // ===== TYPES D'AUTHENTIFICATION =====
 
@@ -128,13 +134,16 @@ export interface MessageRequest {
 
 /**
  * Statut du processus de traduction
+ * @see status-types.ts ProcessStatus pour le type canonique
  */
-export type TranslationProcessStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cached';
+export type TranslationProcessStatus = ProcessStatus | 'cached';
 
 /**
  * Statut de livraison d'un message
+ * Alias vers le type canonique pour rétrocompatibilité
+ * @see status-types.ts DeliveryStatus
  */
-export type DeliveryStatusType = 'sent' | 'delivered' | 'read' | 'failed';
+export type DeliveryStatusType = CanonicalDeliveryStatus;
 
 /**
  * Détails de livraison pour un destinataire

@@ -3,9 +3,136 @@
  * Tests the dispatcher that routes translation requests based on attachment type
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+// Mock fs.promises FIRST before imports
+jest.mock('fs', () => ({
+  promises: {
+    readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio-data'))
+  }
+}));
+
+// Mock AudioTranslateService
+const mockAudioTranslateService = {
+  translateSync: jest.fn(),
+  translateAsync: jest.fn(),
+  getJobStatus: jest.fn(),
+  cancelJob: jest.fn()
+};
+
+jest.mock('../../../services/AudioTranslateService', () => ({
+  AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
+}));
+
+// Mock Prisma
+jest.mock('@meeshy/shared/prisma/client', () => {
+  const mockPrisma = {
+    messageAttachment: {
+      findUnique: jest.fn()
+    },
+    conversationMember: {
+      findFirst: jest.fn()
+    },
+    messageTranslatedAudio: {
+      findMany: jest.fn(),
+      upsert: jest.fn()
+    },
+    messageAudioTranscription: {
+      findUnique: jest.fn(),
+      upsert: jest.fn()
+    },
+    userVoiceModel: {
+      findUnique: jest.fn()
+    }
+  };
+
+  return {
+    PrismaClient: jest.fn(() => mockPrisma)
+  };
+});
+
+import { AttachmentTranslateService } from '../../../services/AttachmentTranslateService';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEST HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const createMockAttachment = (overrides: Record<string, any> = {}) => ({
+  id: 'att-123',
+  mimeType: 'audio/webm',
+  filePath: 'audio/test.webm',
+  uploadedBy: 'user-123',
+  isForwarded: false,
+  forwardedFromAttachmentId: null,
+  duration: 3000,
+  message: {
+    id: 'msg-123',
+    conversationId: 'conv-123',
+    senderId: 'user-123'
+  },
+  ...overrides
+});
+
+const createMockTranscription = (overrides: Record<string, any> = {}) => ({
+  attachmentId: 'att-original',
+  messageId: 'msg-original',
+  transcribedText: 'Hello world',
+  language: 'en',
+  confidence: 0.95,
+  source: 'whisper',
+  segments: [],
+  audioDurationMs: 3000,
+  speakerCount: 1,
+  primarySpeakerId: null,
+  speakerAnalysis: null,
+  ...overrides
+});
+
+const createMockVoiceModel = (overrides: Record<string, any> = {}) => ({
+  profileId: 'vfp_user123',
+  userId: 'user123',
+  embedding: Buffer.from('mock-embedding'),
+  qualityScore: 0.9,
+  fingerprint: {},
+  voiceCharacteristics: {},
+  version: 1,
+  audioCount: 5,
+  totalDurationMs: 15000,
+  ...overrides
+});
+
+const createMockTranslatedAudio = (overrides: Record<string, any> = {}) => ({
+  attachmentId: 'att-123',
+  messageId: 'msg-123',
+  targetLanguage: 'fr',
+  translatedText: 'Bonjour le monde',
+  audioPath: '/audio/translated-fr.webm',
+  audioUrl: 'https://cdn.example.com/audio/translated-fr.webm',
+  durationMs: 3100,
+  voiceCloned: true,
+  voiceQuality: 0.92,
+  voiceModelId: 'vfp_user123',
+  ...overrides
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS
+// ═══════════════════════════════════════════════════════════════════════════
 
 describe('AttachmentTranslateService', () => {
+  let service: AttachmentTranslateService;
+  let prisma: any;
+  const mockZmqClient = {} as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = new PrismaClient();
+    service = new AttachmentTranslateService(prisma, mockZmqClient);
+  });
+
+  // =========================================================================
+  // ATTACHMENT TYPE DETECTION (existing tests)
+  // =========================================================================
+
   describe('Attachment Type Detection', () => {
     const getAttachmentType = (mimeType: string): string => {
       if (mimeType.startsWith('audio/')) return 'audio';
@@ -48,6 +175,855 @@ describe('AttachmentTranslateService', () => {
     });
   });
 
+  // =========================================================================
+  // translate() - MAIN METHOD
+  // =========================================================================
+
+  describe('translate()', () => {
+    describe('Error Handling', () => {
+      it('should return ATTACHMENT_NOT_FOUND when attachment does not exist', async () => {
+        prisma.messageAttachment.findUnique.mockResolvedValue(null);
+
+        const result = await service.translate('user-123', 'non-existent-att', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('ATTACHMENT_NOT_FOUND');
+        expect(result.error).toBe('Attachment not found');
+      });
+
+      it('should return ACCESS_DENIED when user has no access', async () => {
+        const attachment = createMockAttachment({
+          uploadedBy: 'other-user',
+          message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'other-user' }
+        });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.conversationMember.findFirst.mockResolvedValue(null);
+
+        const result = await service.translate('unauthorized-user', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('ACCESS_DENIED');
+        expect(result.error).toBe('Access denied to this attachment');
+      });
+
+      it('should return UNSUPPORTED_TYPE for unknown mime types', async () => {
+        const attachment = createMockAttachment({
+          mimeType: 'application/octet-stream'
+        });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('UNSUPPORTED_TYPE');
+        expect(result.error).toContain('Unsupported attachment type');
+      });
+    });
+
+    describe('Supported Types Routing', () => {
+      it('should route audio/* to translateAudio', async () => {
+        const attachment = createMockAttachment({ mimeType: 'audio/webm' });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+        mockAudioTranslateService.translateSync.mockResolvedValue({
+          translationId: 'trans-123',
+          originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+          translations: [{ targetLanguage: 'fr', translatedText: 'Bonjour', audioUrl: '/audio.webm', durationMs: 3100 }],
+          processingTimeMs: 1500
+        });
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data?.type).toBe('audio');
+      });
+
+      it('should return NOT_IMPLEMENTED for image/*', async () => {
+        const attachment = createMockAttachment({ mimeType: 'image/png' });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('NOT_IMPLEMENTED');
+      });
+
+      it('should return NOT_IMPLEMENTED for video/*', async () => {
+        const attachment = createMockAttachment({ mimeType: 'video/mp4' });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('NOT_IMPLEMENTED');
+      });
+
+      it('should return NOT_IMPLEMENTED for document types', async () => {
+        const attachment = createMockAttachment({ mimeType: 'application/pdf' });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('NOT_IMPLEMENTED');
+      });
+    });
+
+    describe('Access Verification', () => {
+      it('should allow access for attachment owner', async () => {
+        const attachment = createMockAttachment({
+          uploadedBy: 'user-123',
+          mimeType: 'image/png'
+        });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        // Access granted, but image translation not implemented
+        expect(result.errorCode).toBe('NOT_IMPLEMENTED');
+        expect(result.errorCode).not.toBe('ACCESS_DENIED');
+      });
+
+      it('should allow access for conversation member', async () => {
+        const attachment = createMockAttachment({
+          uploadedBy: 'other-user',
+          mimeType: 'image/png',
+          message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'other-user' }
+        });
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.conversationMember.findFirst.mockResolvedValue({
+          userId: 'user-123',
+          conversationId: 'conv-123',
+          isActive: true
+        });
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.errorCode).not.toBe('ACCESS_DENIED');
+      });
+    });
+  });
+
+  // =========================================================================
+  // translateAudio() - AUDIO TRANSLATION
+  // =========================================================================
+
+  describe('translateAudio()', () => {
+    beforeEach(() => {
+      prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+    });
+
+    describe('Cache Hit (all languages already translated)', () => {
+      it('should return cached translations without calling AudioTranslateService', async () => {
+        const attachment = createMockAttachment();
+        const cachedTranslations = [
+          createMockTranslatedAudio({ targetLanguage: 'fr' }),
+          createMockTranslatedAudio({ targetLanguage: 'es', translatedText: 'Hola mundo' })
+        ];
+
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue(cachedTranslations);
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr', 'es']
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data?.type).toBe('audio');
+        expect(mockAudioTranslateService.translateSync).not.toHaveBeenCalled();
+        expect(mockAudioTranslateService.translateAsync).not.toHaveBeenCalled();
+
+        const audioResult = result.data?.result as any;
+        expect(audioResult.translationId).toContain('cached_');
+        expect(audioResult.translations).toHaveLength(2);
+      });
+
+      it('should copy translations for forwarded attachments on cache hit', async () => {
+        const forwardedAttachment = createMockAttachment({
+          id: 'att-forwarded',
+          isForwarded: true,
+          forwardedFromAttachmentId: 'att-original',
+          message: { id: 'msg-forwarded', conversationId: 'conv-456', senderId: 'user-forwarder' }
+        });
+
+        const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'fr' })];
+
+        // First call: get forwarded attachment (for translate())
+        // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
+        // Third call: get original attachment in chain
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(forwardedAttachment)
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+
+        prisma.messageTranslatedAudio.findMany
+          .mockResolvedValueOnce(cachedTranslations) // For cache check
+          .mockResolvedValueOnce(cachedTranslations); // For _copyTranslationsForForward
+        prisma.messageAudioTranscription.findUnique.mockResolvedValue(null);
+        prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+
+        const result = await service.translate('user-forwarder', 'att-forwarded', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(true);
+        expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalled();
+      });
+    });
+
+    describe('Partial Cache (some languages in cache)', () => {
+      it('should only translate missing languages', async () => {
+        const attachment = createMockAttachment();
+        const cachedTranslations = [
+          createMockTranslatedAudio({ targetLanguage: 'fr' })
+        ];
+
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue(cachedTranslations);
+        mockAudioTranslateService.translateSync.mockResolvedValue({
+          translationId: 'trans-new',
+          originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+          translations: [{ targetLanguage: 'es', translatedText: 'Hola', audioUrl: '/audio-es.webm', durationMs: 3000 }],
+          processingTimeMs: 1000
+        });
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr', 'es']
+        });
+
+        expect(result.success).toBe(true);
+        expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+          'user-123',
+          expect.objectContaining({
+            targetLanguages: ['es'] // Only Spanish, French was cached
+          })
+        );
+
+        const audioResult = result.data?.result as any;
+        expect(audioResult.translations).toHaveLength(2); // Both fr (cached) and es (new)
+      });
+    });
+
+    describe('Sync vs Async Mode', () => {
+      it('should call translateSync when async is false', async () => {
+        const attachment = createMockAttachment();
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        mockAudioTranslateService.translateSync.mockResolvedValue({
+          translationId: 'trans-sync',
+          originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+          translations: [],
+          processingTimeMs: 1000
+        });
+
+        await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr'],
+          async: false
+        });
+
+        expect(mockAudioTranslateService.translateSync).toHaveBeenCalled();
+        expect(mockAudioTranslateService.translateAsync).not.toHaveBeenCalled();
+      });
+
+      it('should call translateAsync when async is true', async () => {
+        const attachment = createMockAttachment();
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        mockAudioTranslateService.translateAsync.mockResolvedValue({
+          jobId: 'job-123',
+          status: 'queued'
+        });
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr'],
+          async: true,
+          webhookUrl: 'https://example.com/webhook',
+          priority: 5
+        });
+
+        expect(mockAudioTranslateService.translateAsync).toHaveBeenCalled();
+        expect(mockAudioTranslateService.translateSync).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+
+        const asyncResult = result.data?.result as any;
+        expect(asyncResult.jobId).toBe('job-123');
+        expect(asyncResult.status).toBe('queued');
+      });
+    });
+
+    describe('Forwarded Attachments Support', () => {
+      it('should use original sender voice for forwarded attachments', async () => {
+        const forwardedAttachment = createMockAttachment({
+          id: 'att-forwarded',
+          isForwarded: true,
+          forwardedFromAttachmentId: 'att-original',
+          uploadedBy: 'user-forwarder',
+          message: { id: 'msg-fwd', conversationId: 'conv-123', senderId: 'user-forwarder' }
+        });
+
+        const voiceModel = createMockVoiceModel({ userId: 'user-original' });
+
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(forwardedAttachment)
+          .mockResolvedValueOnce({
+            forwardedFromAttachmentId: null,
+            message: { senderId: 'user-original' }
+          });
+
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
+        mockAudioTranslateService.translateSync.mockResolvedValue({
+          translationId: 'trans-123',
+          originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+          translations: [],
+          processingTimeMs: 1000
+        });
+
+        await service.translate('user-forwarder', 'att-forwarded', {
+          targetLanguages: ['fr'],
+          useOriginalVoice: true
+        });
+
+        expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+          'user-forwarder',
+          expect.objectContaining({
+            originalSenderId: 'user-original',
+            useOriginalVoice: true
+          })
+        );
+      });
+    });
+
+    describe('Translation Error Handling', () => {
+      it('should return TRANSLATION_ERROR when AudioTranslateService throws', async () => {
+        const attachment = createMockAttachment();
+        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        mockAudioTranslateService.translateSync.mockRejectedValue(new Error('Translation service unavailable'));
+
+        const result = await service.translate('user-123', 'att-123', {
+          targetLanguages: ['fr']
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe('TRANSLATION_ERROR');
+        expect(result.error).toBe('Translation service unavailable');
+      });
+    });
+  });
+
+  // =========================================================================
+  // _findOriginalAttachmentAndSender() - FORWARD CHAIN RESOLUTION
+  // =========================================================================
+
+  describe('_findOriginalAttachmentAndSender()', () => {
+    it('should return current attachment ID when not forwarded', async () => {
+      const attachment = createMockAttachment({
+        id: 'att-123',
+        forwardedFromAttachmentId: null,
+        message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'user-sender' }
+      });
+
+      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-sender', 'att-123', {
+        targetLanguages: ['fr']
+      });
+
+      // Should use the attachment's own sender
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-sender',
+        expect.objectContaining({
+          originalSenderId: 'user-sender'
+        })
+      );
+    });
+
+    it('should traverse one level of forwarding (A -> B)', async () => {
+      const attachmentB = createMockAttachment({
+        id: 'att-B',
+        forwardedFromAttachmentId: 'att-A',
+        message: { id: 'msg-B', conversationId: 'conv-123', senderId: 'user-B' }
+      });
+
+      const attachmentA = {
+        forwardedFromAttachmentId: null,
+        message: { senderId: 'user-A' }
+      };
+
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachmentB)
+        .mockResolvedValueOnce(attachmentA);
+
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-B', 'att-B', {
+        targetLanguages: ['fr']
+      });
+
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-B',
+        expect.objectContaining({
+          originalSenderId: 'user-A'
+        })
+      );
+    });
+
+    it('should traverse multiple levels of forwarding (A -> B -> C -> D)', async () => {
+      const attachmentD = createMockAttachment({
+        id: 'att-D',
+        forwardedFromAttachmentId: 'att-C',
+        message: { id: 'msg-D', conversationId: 'conv-123', senderId: 'user-D' }
+      });
+
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachmentD)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-B', message: { senderId: 'user-C' } })
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-A', message: { senderId: 'user-B' } })
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-A' } });
+
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-D', 'att-D', {
+        targetLanguages: ['fr']
+      });
+
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-D',
+        expect.objectContaining({
+          originalSenderId: 'user-A'
+        })
+      );
+    });
+
+    it('should protect against infinite loops (MAX_CHAIN_DEPTH = 10)', async () => {
+      const attachmentStart = createMockAttachment({
+        id: 'att-start',
+        forwardedFromAttachmentId: 'att-prev',
+        message: { id: 'msg-start', conversationId: 'conv-123', senderId: 'user-start' }
+      });
+
+      // Create a chain of 15 forwards (exceeds MAX_CHAIN_DEPTH of 10)
+      let callCount = 0;
+      prisma.messageAttachment.findUnique.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(attachmentStart);
+        }
+        if (callCount > 12) {
+          // Return an attachment without forward after MAX_CHAIN_DEPTH
+          return Promise.resolve({ forwardedFromAttachmentId: null, message: { senderId: 'user-end' } });
+        }
+        return Promise.resolve({
+          forwardedFromAttachmentId: `att-${callCount}`,
+          message: { senderId: `user-${callCount}` }
+        });
+      });
+
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      // Should not hang or crash
+      const result = await service.translate('user-start', 'att-start', {
+        targetLanguages: ['fr']
+      });
+
+      expect(result.success).toBe(true);
+      // The chain should be cut off at MAX_CHAIN_DEPTH
+    });
+  });
+
+  // =========================================================================
+  // _getVoiceProfile() - VOICE PROFILE RETRIEVAL
+  // =========================================================================
+
+  describe('_getVoiceProfile()', () => {
+    it('should return voice profile data when it exists', async () => {
+      const voiceModel = createMockVoiceModel({
+        userId: 'user-123',
+        profileId: 'vfp_user123',
+        embedding: Buffer.from('voice-embedding-data'),
+        qualityScore: 0.92,
+        fingerprint: { pitch: 150, tempo: 1.0 },
+        voiceCharacteristics: { gender: 'male', age: 30 },
+        version: 2,
+        audioCount: 10,
+        totalDurationMs: 30000
+      });
+
+      const attachment = createMockAttachment();
+      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-123', 'att-123', {
+        targetLanguages: ['fr']
+      });
+
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({
+          existingVoiceProfile: expect.objectContaining({
+            profileId: 'vfp_user123',
+            userId: 'user-123',
+            qualityScore: 0.92
+          })
+        })
+      );
+    });
+
+    it('should return null when voice profile does not exist', async () => {
+      const attachment = createMockAttachment();
+      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(null);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-123', 'att-123', {
+        targetLanguages: ['fr']
+      });
+
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({
+          existingVoiceProfile: undefined
+        })
+      );
+    });
+
+    it('should return null when voice model has no embedding', async () => {
+      const voiceModel = createMockVoiceModel({
+        embedding: null
+      });
+
+      const attachment = createMockAttachment();
+      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      await service.translate('user-123', 'att-123', {
+        targetLanguages: ['fr']
+      });
+
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({
+          existingVoiceProfile: undefined
+        })
+      );
+    });
+
+    it('should return null on DB error', async () => {
+      const attachment = createMockAttachment();
+      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
+      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.userVoiceModel.findUnique.mockRejectedValue(new Error('DB connection failed'));
+      mockAudioTranslateService.translateSync.mockResolvedValue({
+        translationId: 'trans-123',
+        originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
+        translations: [],
+        processingTimeMs: 1000
+      });
+
+      // Should not throw, should gracefully handle
+      const result = await service.translate('user-123', 'att-123', {
+        targetLanguages: ['fr']
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockAudioTranslateService.translateSync).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({
+          existingVoiceProfile: undefined
+        })
+      );
+    });
+  });
+
+  // =========================================================================
+  // _copyTranslationsForForward() - FORWARD TRANSLATION COPY
+  // =========================================================================
+
+  describe('_copyTranslationsForForward()', () => {
+    it('should copy transcription with transcribedText and audioDurationMs', async () => {
+      const forwardedAttachment = createMockAttachment({
+        id: 'att-forwarded',
+        isForwarded: true,
+        forwardedFromAttachmentId: 'att-original',
+        message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
+      });
+
+      const transcription = createMockTranscription({
+        attachmentId: 'att-original',
+        transcribedText: 'Hello world',
+        audioDurationMs: 3000
+      });
+
+      const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original' })];
+
+      // First call: get forwarded attachment (for translate())
+      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
+      // Third call: get original attachment in chain
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(forwardedAttachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+
+      prisma.messageTranslatedAudio.findMany
+        .mockResolvedValueOnce(cachedTranslations) // For cache check
+        .mockResolvedValueOnce(cachedTranslations); // For copying
+
+      prisma.messageAudioTranscription.findUnique.mockResolvedValue(transcription);
+      prisma.messageAudioTranscription.upsert.mockResolvedValue({});
+      prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+
+      await service.translate('user-forwarder', 'att-forwarded', {
+        targetLanguages: ['fr']
+      });
+
+      expect(prisma.messageAudioTranscription.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { attachmentId: 'att-forwarded' },
+          create: expect.objectContaining({
+            transcribedText: 'Hello world',
+            audioDurationMs: 3000,
+            source: 'forwarded:whisper'
+          })
+        })
+      );
+    });
+
+    it('should copy audio translations', async () => {
+      const forwardedAttachment = createMockAttachment({
+        id: 'att-forwarded',
+        isForwarded: true,
+        forwardedFromAttachmentId: 'att-original',
+        message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
+      });
+
+      const cachedTranslations = [
+        createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'fr' }),
+        createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'es' })
+      ];
+
+      // First call: get forwarded attachment (for translate())
+      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
+      // Third call: get original attachment in chain
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(forwardedAttachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+
+      prisma.messageTranslatedAudio.findMany
+        .mockResolvedValueOnce(cachedTranslations) // For cache check
+        .mockResolvedValueOnce(cachedTranslations); // For copying
+
+      prisma.messageAudioTranscription.findUnique.mockResolvedValue(null);
+      prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+
+      await service.translate('user-forwarder', 'att-forwarded', {
+        targetLanguages: ['fr', 'es']
+      });
+
+      expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            attachmentId_targetLanguage: {
+              attachmentId: 'att-forwarded',
+              targetLanguage: 'fr'
+            }
+          }
+        })
+      );
+    });
+
+    it('should handle errors gracefully during copy', async () => {
+      const forwardedAttachment = createMockAttachment({
+        id: 'att-forwarded',
+        isForwarded: true,
+        forwardedFromAttachmentId: 'att-original',
+        message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
+      });
+
+      const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original' })];
+
+      // First call: get forwarded attachment (for translate())
+      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
+      // Third call: get original attachment in chain
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(forwardedAttachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+
+      prisma.messageTranslatedAudio.findMany
+        .mockResolvedValueOnce(cachedTranslations) // For cache check
+        .mockRejectedValueOnce(new Error('DB error during copy')); // For copying - error
+
+      // Should not throw, should complete gracefully
+      const result = await service.translate('user-forwarder', 'att-forwarded', {
+        targetLanguages: ['fr']
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // getTranslationStatus() - ASYNC JOB STATUS
+  // =========================================================================
+
+  describe('getTranslationStatus()', () => {
+    it('should return job status from AudioTranslateService', async () => {
+      mockAudioTranslateService.getJobStatus.mockResolvedValue({
+        status: 'processing',
+        progress: 45,
+        result: null
+      });
+
+      const result = await service.getTranslationStatus('user-123', 'job-456');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({
+        status: 'processing',
+        progress: 45,
+        result: null
+      });
+      expect(mockAudioTranslateService.getJobStatus).toHaveBeenCalledWith('user-123', 'job-456');
+    });
+
+    it('should return completed status with result', async () => {
+      mockAudioTranslateService.getJobStatus.mockResolvedValue({
+        status: 'completed',
+        progress: 100,
+        result: {
+          translationId: 'trans-123',
+          translations: [{ targetLanguage: 'fr', translatedText: 'Bonjour' }]
+        }
+      });
+
+      const result = await service.getTranslationStatus('user-123', 'job-456');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.status).toBe('completed');
+      expect(result.data?.progress).toBe(100);
+      expect(result.data?.result).toBeDefined();
+    });
+
+    it('should return error on job status failure', async () => {
+      mockAudioTranslateService.getJobStatus.mockRejectedValue(new Error('Job not found'));
+
+      const result = await service.getTranslationStatus('user-123', 'invalid-job');
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe('JOB_STATUS_ERROR');
+      expect(result.error).toBe('Job not found');
+    });
+  });
+
+  // =========================================================================
+  // cancelTranslation() - ASYNC JOB CANCELLATION
+  // =========================================================================
+
+  describe('cancelTranslation()', () => {
+    it('should cancel job successfully', async () => {
+      mockAudioTranslateService.cancelJob.mockResolvedValue({ success: true });
+
+      const result = await service.cancelTranslation('user-123', 'job-456');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ cancelled: true });
+      expect(mockAudioTranslateService.cancelJob).toHaveBeenCalledWith('user-123', 'job-456');
+    });
+
+    it('should return cancelled: false when cancellation fails', async () => {
+      mockAudioTranslateService.cancelJob.mockResolvedValue({ success: false });
+
+      const result = await service.cancelTranslation('user-123', 'job-456');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ cancelled: false });
+    });
+
+    it('should return error when cancellation throws', async () => {
+      mockAudioTranslateService.cancelJob.mockRejectedValue(new Error('Cannot cancel completed job'));
+
+      const result = await service.cancelTranslation('user-123', 'job-456');
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe('JOB_CANCEL_ERROR');
+      expect(result.error).toBe('Cannot cancel completed job');
+    });
+  });
+
+  // =========================================================================
+  // EXISTING TESTS (Structure tests)
+  // =========================================================================
+
   describe('TranslateOptions Structure', () => {
     it('should have correct translate options structure', () => {
       const options = {
@@ -76,6 +1052,15 @@ describe('AttachmentTranslateService', () => {
       expect(options.webhookUrl).toMatch(/^https?:\/\//);
       expect(options.priority).toBeGreaterThanOrEqual(1);
       expect(options.priority).toBeLessThanOrEqual(10);
+    });
+
+    it('should support useOriginalVoice option', () => {
+      const options = {
+        targetLanguages: ['fr'],
+        useOriginalVoice: true
+      };
+
+      expect(options.useOriginalVoice).toBe(true);
     });
   });
 
@@ -120,7 +1105,7 @@ describe('AttachmentTranslateService', () => {
           translations: [
             {
               targetLanguage: 'fr',
-              translatedText: 'Arrêtez',
+              translatedText: 'Arretez',
               overlayImageUrl: '/attachments/overlay-123.png'
             }
           ]
@@ -141,7 +1126,7 @@ describe('AttachmentTranslateService', () => {
           translations: [
             {
               targetLanguage: 'es',
-              translatedText: 'Contenido del documento aquí',
+              translatedText: 'Contenido del documento aqui',
               translatedDocumentUrl: '/attachments/translated-doc.pdf'
             }
           ]

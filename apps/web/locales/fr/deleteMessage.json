@@ -22,6 +22,7 @@
     "irreversibleAction": "Action irréversible",
     "deleteMessageWarning": "Attention : suppression définitive du message",
     "itemsToDelete": "Éléments à supprimer",
-    "shortcutConfirm": "Maj+Entrée"
+    "shortcutConfirm": "Maj+Entrée",
+    "emptyMessage": "Message vide"
   }
 }

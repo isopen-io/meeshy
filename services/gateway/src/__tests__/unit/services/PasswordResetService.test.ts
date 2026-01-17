@@ -130,6 +130,7 @@ const mockGeoData = {
   region: 'NY',
   country: 'United States',
   countryCode: 'US',
+  location: 'New York, United States',
   latitude: 40.7128,
   longitude: -74.006,
   timezone: 'America/New_York'
@@ -632,8 +633,12 @@ describe('PasswordResetService', () => {
         expect(result.error).toContain('one digit');
       });
 
-      it('should reject password without special character', async () => {
+      it('should accept password without special character (special chars are optional)', async () => {
+        // Special characters are now optional in password validation
+        // The password should still pass basic requirements if it has:
+        // - 8+ chars, lowercase, uppercase, digit
         mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
+        mockPrisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
         const result = await service.completePasswordReset({
           ...validResetCompletion,
@@ -641,8 +646,9 @@ describe('PasswordResetService', () => {
           confirmPassword: 'NoSpecialChars123'
         });
 
+        // Password validation passes (no special char required), but token is invalid
         expect(result.success).toBe(false);
-        expect(result.error).toContain('one special character');
+        expect(result.error).toBe('Invalid or expired reset token');
       });
 
       it('should reject weak password based on zxcvbn score', async () => {

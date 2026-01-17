@@ -6,6 +6,9 @@
 import { EventEmitter } from 'events';
 import * as zmq from 'zeromq';
 import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import { existsSync, statSync } from 'fs';
+import path from 'path';
 
 // Types pour l'architecture PUB/SUB
 export interface TranslationRequest {
@@ -74,6 +77,42 @@ export type TranslationEvent = TranslationCompletedEvent | TranslationErrorEvent
 // AUDIO PROCESSING TYPES
 // ═══════════════════════════════════════════════════════════════
 
+// Seuil pour envoyer le fichier en base64 (5 MB)
+// Au-delà, le Translator téléchargera via audioUrl
+export const AUDIO_BASE64_SIZE_THRESHOLD = 5 * 1024 * 1024;
+
+// ═══════════════════════════════════════════════════════════════
+// ZMQ MULTIPART BINARY PROTOCOL
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Protocol ZMQ Multipart pour données binaires (audio, embeddings)
+ *
+ * Avantages:
+ * - Pas d'encodage/décodage base64 (économie CPU)
+ * - Réduction de 33% de la taille des données
+ * - Support natif ZMQ (performant)
+ *
+ * Format:
+ * - Frame 0: JSON metadata avec binaryFrames indiquant les indices
+ * - Frame 1+: Données binaires (audio, embedding, etc.)
+ *
+ * Rétrocompatibilité:
+ * - Si binaryFrames absent dans le JSON → ancien format base64
+ * - Si binaryFrames présent → nouveau format multipart
+ */
+export interface BinaryFrameInfo {
+  /** Index du frame contenant l'audio binaire (1-based, 0 = absent) */
+  audio?: number;
+  /** Index du frame contenant l'embedding pkl binaire (1-based, 0 = absent) */
+  embedding?: number;
+  /** Mime type de l'audio */
+  audioMimeType?: string;
+  /** Taille de l'audio en bytes */
+  audioSize?: number;
+  /** Taille de l'embedding en bytes */
+  embeddingSize?: number;
+}
+
 export interface AudioProcessRequest {
   type: 'audio_process';
   messageId: string;
@@ -81,7 +120,15 @@ export interface AudioProcessRequest {
   conversationId: string;
   senderId: string;
   audioUrl: string;
-  audioPath: string;
+  // audioPath est DEPRECATED - garder pour compatibilité mais préférer multipart binaire ou audioUrl
+  audioPath?: string;
+  // DEPRECATED: Préférer binaryFrames pour multipart
+  // Contenu audio en base64 (legacy, pour rétrocompatibilité)
+  audioBase64?: string;
+  audioMimeType?: string;
+  // NOUVEAU: Indique que les données binaires sont dans des frames ZMQ séparés
+  // Si présent, le Translator utilise recv_multipart() pour extraire les binaires
+  binaryFrames?: BinaryFrameInfo;
   audioDurationMs: number;
   mobileTranscription?: {
     text: string;
@@ -128,6 +175,32 @@ export interface AudioProcessRequest {
    * Par défaut: true
    */
   useOriginalVoice?: boolean;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VOICE CLONE PARAMETERS (Chatterbox TTS)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Paramètres de clonage vocal pour Chatterbox TTS
+   * Permet un contrôle fin de la génération vocale.
+   * Si non spécifiés, les paramètres sont auto-calculés basés sur l'analyse vocale.
+   */
+  voiceCloneParams?: {
+    /** Expressivité vocale (0.0-1.0). Défaut: auto-calculé */
+    exaggeration?: number;
+    /** Guidance du modèle (0.0-1.0). Défaut: auto-calculé */
+    cfgWeight?: number;
+    /** Température/Créativité (0.0-2.0). Défaut: 0.8 */
+    temperature?: number;
+    /** Pénalité de répétition (1.0-3.0). Défaut: 1.2 (mono) / 2.0 (multi) */
+    repetitionPenalty?: number;
+    /** Probabilité minimum (0.0-1.0). Défaut: 0.05 */
+    minP?: number;
+    /** Nucleus sampling (0.0-1.0). Défaut: 1.0 */
+    topP?: number;
+    /** Activer l'auto-optimisation. Défaut: true */
+    autoOptimize?: boolean;
+  };
 }
 
 export interface TranscriptionData {
@@ -172,6 +245,66 @@ export interface AudioProcessErrorEvent {
 }
 
 export type AudioEvent = AudioProcessCompletedEvent | AudioProcessErrorEvent;
+
+// ═══════════════════════════════════════════════════════════════
+// TRANSCRIPTION ONLY TYPES
+// ═══════════════════════════════════════════════════════════════
+
+export interface TranscriptionOnlyRequest {
+  type: 'transcription_only';
+  taskId: string;
+  messageId: string;
+  attachmentId?: string;  // Optionnel si audioData est fourni
+
+  // Option 1: Chemin du fichier audio (pour attachments existants)
+  audioPath?: string;
+  audioUrl?: string;
+
+  // Option 2: Audio en base64 (DEPRECATED - préférer binaryFrames)
+  audioData?: string;     // Audio encodé en base64
+  audioFormat?: string;   // Format: wav, mp3, ogg, webm, m4a
+
+  // Option 3: Audio binaire via ZMQ multipart (RECOMMANDÉ)
+  // Plus efficace que base64 (économise 33% de taille et CPU)
+  binaryFrames?: BinaryFrameInfo;
+
+  mobileTranscription?: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: string;
+    segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  };
+}
+
+export interface TranscriptionCompletedEvent {
+  type: 'transcription_completed';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  transcription: {
+    text: string;
+    language: string;
+    confidence: number;
+    durationMs: number;
+    source: string;
+    segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  };
+  processingTimeMs: number;
+  timestamp: number;
+}
+
+export interface TranscriptionErrorEvent {
+  type: 'transcription_error';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  error: string;
+  errorCode: string;
+  timestamp: number;
+}
+
+export type TranscriptionEvent = TranscriptionCompletedEvent | TranscriptionErrorEvent;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VOICE API TYPES
@@ -223,6 +356,11 @@ export interface VoiceProfileAnalyzeRequest {
   audio_format: string;  // wav, mp3, ogg
   is_update?: boolean;
   existing_fingerprint?: Record<string, any>;
+  include_transcription?: boolean;  // Request transcription along with profile analysis
+  // Voice preview generation options
+  generate_previews?: boolean;  // Generate voice previews in target languages
+  preview_languages?: string[];  // Target languages for previews (e.g., ['en', 'fr', 'es'])
+  preview_text?: string;  // Source text for previews (uses transcription if not provided)
 }
 
 export interface VoiceProfileVerifyRequest {
@@ -243,6 +381,33 @@ export interface VoiceProfileCompareRequest {
 
 export type VoiceProfileRequest = VoiceProfileAnalyzeRequest | VoiceProfileVerifyRequest | VoiceProfileCompareRequest;
 
+export interface VoiceProfileTranscription {
+  text: string;
+  language: string;
+  confidence: number;
+  duration_ms: number;
+  source: string;  // "whisper" or "mobile"
+  model?: string;
+  segments?: Array<{
+    text: string;
+    start_ms: number;
+    end_ms: number;
+    confidence: number;
+  }>;
+  processing_time_ms: number;
+}
+
+/** Voice preview sample returned from Translator */
+export interface VoicePreviewSampleZMQ {
+  language: string;
+  original_text: string;
+  translated_text: string;
+  audio_base64: string;
+  audio_format: string;
+  duration_ms: number;
+  generated_at: string;
+}
+
 export interface VoiceProfileAnalyzeResult {
   type: 'voice_profile_analyze_result';
   request_id: string;
@@ -258,6 +423,8 @@ export interface VoiceProfileAnalyzeResult {
   embedding_path?: string;
   embedding_data?: string;  // Base64-encoded embedding binary for MongoDB storage
   embedding_dimension?: number;  // Embedding vector dimension (default 256)
+  transcription?: VoiceProfileTranscription;  // Transcription data (if requested)
+  voice_previews?: VoicePreviewSampleZMQ[];  // Voice previews in target languages
   error?: string;
 }
 
@@ -314,8 +481,8 @@ export type VoiceEvent =
   | VoiceProfileCompareResult
   | VoiceProfileErrorEvent;
 
-// Combined event type for all ZMQ events (normalized: Translation, Audio, Voice)
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent;
+// Combined event type for all ZMQ events (normalized: Translation, Audio, Voice, Transcription)
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent;
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -687,6 +854,45 @@ export class ZMQTranslationClient extends EventEmitter {
 
         this.emit('voiceProfileError', profileError);
         this.pendingRequests.delete(profileError.request_id);
+
+      // ═══════════════════════════════════════════════════════════════
+      // TRANSCRIPTION ONLY EVENTS
+      // ═══════════════════════════════════════════════════════════════
+      } else if (event.type === 'transcription_completed') {
+        const transcriptionEvent = event as unknown as TranscriptionCompletedEvent;
+
+        logger.info(`📝 [GATEWAY] Transcription terminée: ${transcriptionEvent.messageId}`);
+        logger.info(`   📝 Texte: ${transcriptionEvent.transcription.text.substring(0, 50)}...`);
+        logger.info(`   🌍 Langue: ${transcriptionEvent.transcription.language}`);
+
+        // Émettre l'événement de succès transcription
+        this.emit('transcriptionCompleted', {
+          taskId: transcriptionEvent.taskId,
+          messageId: transcriptionEvent.messageId,
+          attachmentId: transcriptionEvent.attachmentId,
+          transcription: transcriptionEvent.transcription,
+          processingTimeMs: transcriptionEvent.processingTimeMs
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(transcriptionEvent.taskId);
+
+      } else if (event.type === 'transcription_error') {
+        const transcriptionError = event as unknown as TranscriptionErrorEvent;
+
+        logger.error(`❌ [GATEWAY] Transcription error: ${transcriptionError.messageId} - ${transcriptionError.error}`);
+
+        // Émettre l'événement d'erreur transcription
+        this.emit('transcriptionError', {
+          taskId: transcriptionError.taskId,
+          messageId: transcriptionError.messageId,
+          attachmentId: transcriptionError.attachmentId,
+          error: transcriptionError.error,
+          errorCode: transcriptionError.errorCode
+        });
+
+        // Nettoyer la requête en cours
+        this.pendingRequests.delete(transcriptionError.taskId);
       }
 
     } catch (error) {
@@ -770,6 +976,77 @@ export class ZMQTranslationClient extends EventEmitter {
    * 3. Cloner la voix de l'émetteur
    * 4. Générer des versions audio traduites
    */
+  /**
+   * Charge le fichier audio en binaire si:
+   * - Le fichier existe localement
+   * - La taille est inférieure au seuil (5MB par défaut)
+   *
+   * @returns { buffer: Buffer, mimeType: string, size: number } ou null si trop gros ou inaccessible
+   */
+  private async loadAudioAsBinary(audioPath?: string): Promise<{ buffer: Buffer; mimeType: string; size: number } | null> {
+    if (!audioPath) return null;
+
+    try {
+      // Vérifier si le fichier existe
+      if (!existsSync(audioPath)) {
+        logger.info(`[ZMQ-Client] Fichier audio non accessible localement: ${audioPath}`);
+        return null;
+      }
+
+      // Vérifier la taille
+      const stats = statSync(audioPath);
+      if (stats.size > AUDIO_BASE64_SIZE_THRESHOLD) {
+        logger.info(`[ZMQ-Client] Fichier trop gros pour transfert ZMQ (${(stats.size / 1024 / 1024).toFixed(2)}MB > ${AUDIO_BASE64_SIZE_THRESHOLD / 1024 / 1024}MB), Translator téléchargera via URL`);
+        return null;
+      }
+
+      // Lire le buffer brut (pas d'encodage base64!)
+      const buffer = await fs.readFile(audioPath);
+
+      // Déterminer le mime type
+      const ext = path.extname(audioPath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.wav': 'audio/wav',
+        '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/mp4',
+        '.ogg': 'audio/ogg',
+        '.webm': 'audio/webm',
+        '.aac': 'audio/aac',
+        '.flac': 'audio/flac'
+      };
+      const mimeType = mimeTypes[ext] || 'audio/wav';
+
+      logger.info(`[ZMQ-Client] Audio chargé en binaire: ${(stats.size / 1024).toFixed(1)}KB (${mimeType})`);
+
+      return { buffer, mimeType, size: stats.size };
+    } catch (error) {
+      logger.warning(`[ZMQ-Client] Erreur lecture fichier audio: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Envoie un message multipart ZMQ avec des frames binaires
+   * Frame 0: JSON metadata
+   * Frame 1+: Données binaires (audio, embedding, etc.)
+   */
+  private async sendMultipart(jsonPayload: object, binaryFrames: Buffer[]): Promise<void> {
+    if (!this.pushSocket) {
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    // Préparer les frames: JSON en premier, puis les binaires
+    const frames: Buffer[] = [
+      Buffer.from(JSON.stringify(jsonPayload), 'utf-8'),
+      ...binaryFrames
+    ];
+
+    // Envoyer en multipart
+    await this.pushSocket.send(frames);
+
+    logger.info(`[ZMQ-Client] Multipart envoyé: ${frames.length} frames, total ${frames.reduce((sum, f) => sum + f.length, 0)} bytes`);
+  }
+
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
     if (!this.pushSocket) {
       logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour audio process');
@@ -779,11 +1056,36 @@ export class ZMQTranslationClient extends EventEmitter {
     try {
       const taskId = randomUUID();
 
-      // Préparer le message de commande audio
+      // Tenter de charger l'audio en binaire si le fichier est accessible et petit
+      const audioData = await this.loadAudioAsBinary(request.audioPath);
+
+      // Préparer les frames binaires et les metadata
+      const binaryFrames: Buffer[] = [];
+      let binaryFrameInfo: BinaryFrameInfo | undefined;
+
+      if (audioData) {
+        // Mode multipart: envoyer l'audio en binaire (économise 33% vs base64)
+        binaryFrames.push(audioData.buffer);
+        binaryFrameInfo = {
+          audio: 1,  // L'audio est dans le frame 1 (0-indexed après le JSON)
+          audioMimeType: audioData.mimeType,
+          audioSize: audioData.size
+        };
+      }
+
+      // Préparer le message de commande audio (sans base64!)
       const requestMessage: AudioProcessRequest = {
         type: 'audio_process',
-        ...request
+        ...request,
+        // Pas de audioBase64 - on utilise binaryFrames à la place
+        audioBase64: undefined,
+        audioMimeType: audioData?.mimeType,
+        binaryFrames: binaryFrameInfo
       };
+
+      const transferMode = binaryFrameInfo
+        ? `multipart binaire (${(audioData!.size / 1024).toFixed(1)}KB)`
+        : `URL fetch (${request.audioUrl})`;
 
       logger.info('🎤 [GATEWAY] ENVOI AUDIO PROCESS:');
       logger.info(`   📋 taskId: ${taskId}`);
@@ -793,9 +1095,14 @@ export class ZMQTranslationClient extends EventEmitter {
       logger.info(`   📋 targetLanguages: [${request.targetLanguages.join(', ')}]`);
       logger.info(`   📋 audioDurationMs: ${request.audioDurationMs}`);
       logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
+      logger.info(`   📋 transferMode: ${transferMode}`);
 
-      // Envoyer via PUSH
-      await this.pushSocket.send(JSON.stringify(requestMessage));
+      // Envoyer via PUSH (multipart si binaires, sinon JSON simple)
+      if (binaryFrames.length > 0) {
+        await this.sendMultipart(requestMessage, binaryFrames);
+      } else {
+        await this.pushSocket.send(JSON.stringify(requestMessage));
+      }
 
       // Mettre à jour les statistiques
       this.stats.requests_sent++;
@@ -812,6 +1119,106 @@ export class ZMQTranslationClient extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ Erreur envoi audio process: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Envoie une requête de transcription seule au service translator.
+   * Retourne uniquement la transcription sans traduction ni TTS.
+   *
+   * Supporte trois modes:
+   * - audioPath + attachmentId: Pour attachments existants (Translator lit le fichier)
+   * - audioBinary + audioFormat: Pour audio binaire direct via ZMQ multipart (RECOMMANDÉ)
+   * - audioData + audioFormat: Pour audio en base64 (legacy, moins efficace)
+   */
+  async sendTranscriptionOnlyRequest(
+    request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>,
+    audioBinary?: Buffer  // Optionnel: audio en binaire pour multipart
+  ): Promise<string> {
+    if (!this.pushSocket) {
+      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour transcription only');
+      throw new Error('Socket PUSH non initialisé');
+    }
+
+    // Valider qu'on a une source audio
+    if (!request.audioPath && !request.audioData && !audioBinary) {
+      throw new Error('Either audioPath, audioData, or audioBinary must be provided');
+    }
+    if ((request.audioData || audioBinary) && !request.audioFormat) {
+      throw new Error('audioFormat is required when providing audio data');
+    }
+
+    try {
+      const taskId = randomUUID();
+
+      // Préparer les frames binaires si on a du binaire
+      const binaryFrames: Buffer[] = [];
+      let binaryFrameInfo: BinaryFrameInfo | undefined;
+
+      if (audioBinary) {
+        binaryFrames.push(audioBinary);
+        binaryFrameInfo = {
+          audio: 1,
+          audioMimeType: `audio/${request.audioFormat}`,
+          audioSize: audioBinary.length
+        };
+      }
+
+      // Préparer le message de commande transcription
+      const requestMessage: TranscriptionOnlyRequest = {
+        type: 'transcription_only',
+        taskId,
+        messageId: request.messageId,
+        attachmentId: request.attachmentId,
+        audioPath: request.audioPath,
+        audioUrl: request.audioUrl,
+        audioFormat: request.audioFormat,
+        mobileTranscription: request.mobileTranscription,
+        // Si on utilise multipart, pas besoin de audioData (base64)
+        audioData: audioBinary ? undefined : request.audioData,
+        binaryFrames: binaryFrameInfo
+      };
+
+      // Déterminer le mode de transfert pour le log
+      let transferMode: string;
+      if (audioBinary) {
+        transferMode = `multipart binaire (${(audioBinary.length / 1024).toFixed(1)}KB, format: ${request.audioFormat})`;
+      } else if (request.audioData) {
+        transferMode = `base64 (${(request.audioData.length * 0.75 / 1024).toFixed(1)}KB, format: ${request.audioFormat})`;
+      } else {
+        transferMode = `path (${request.audioPath})`;
+      }
+
+      logger.info('📝 [GATEWAY] ENVOI TRANSCRIPTION ONLY:');
+      logger.info(`   📋 taskId: ${taskId}`);
+      logger.info(`   📋 messageId: ${request.messageId}`);
+      logger.info(`   📋 attachmentId: ${request.attachmentId || 'N/A (direct audio)'}`);
+      logger.info(`   📋 transferMode: ${transferMode}`);
+      logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
+
+      // Envoyer via PUSH (multipart si binaires, sinon JSON simple)
+      if (binaryFrames.length > 0) {
+        await this.sendMultipart(requestMessage, binaryFrames);
+      } else {
+        await this.pushSocket.send(JSON.stringify(requestMessage));
+      }
+
+      // Mettre à jour les statistiques
+      this.stats.requests_sent++;
+
+      // Stocker la requête en cours pour traçabilité
+      this.pendingRequests.set(taskId, {
+        request: requestMessage as any,
+        timestamp: Date.now()
+      });
+
+      logger.info(`📤 [ZMQ-Client] Transcription only PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+
+      return taskId;
+
+    } catch (error) {
+      logger.error(`❌ Erreur envoi transcription only: ${error}`);
       throw error;
     }
   }

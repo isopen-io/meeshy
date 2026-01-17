@@ -35,6 +35,12 @@ interface ConfigurationBody {
   translatedAudioFormat?: 'mp3' | 'wav' | 'ogg';
   dataRetentionDays?: number;
   voiceDataRetentionDays?: number;
+  // Voice Cloning Parameters
+  voiceCloningExaggeration?: number;
+  voiceCloningCfgWeight?: number;
+  voiceCloningTemperature?: number;
+  voiceCloningTopP?: number;
+  voiceCloningQualityPreset?: 'fast' | 'balanced' | 'high_quality';
 }
 
 interface AgeVerificationBody {
@@ -737,7 +743,13 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
                 transcriptionSource: { type: 'string', enum: ['auto', 'mobile', 'server'] },
                 translatedAudioFormat: { type: 'string', enum: ['mp3', 'wav', 'ogg'] },
                 dataRetentionDays: { type: 'number' },
-                voiceDataRetentionDays: { type: 'number' }
+                voiceDataRetentionDays: { type: 'number' },
+                // Voice Cloning Parameters
+                voiceCloningExaggeration: { type: 'number' },
+                voiceCloningCfgWeight: { type: 'number' },
+                voiceCloningTemperature: { type: 'number' },
+                voiceCloningTopP: { type: 'number' },
+                voiceCloningQualityPreset: { type: 'string', enum: ['fast', 'balanced', 'high_quality'] }
               }
             }
           }
@@ -770,7 +782,13 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
               transcriptionSource: true,
               translatedAudioFormat: true,
               dataRetentionDays: true,
-              voiceDataRetentionDays: true
+              voiceDataRetentionDays: true,
+              // Voice Cloning Parameters
+              voiceCloningExaggeration: true,
+              voiceCloningCfgWeight: true,
+              voiceCloningTemperature: true,
+              voiceCloningTopP: true,
+              voiceCloningQualityPreset: true
             }
           }
         }
@@ -790,7 +808,13 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
           transcriptionSource: user.userFeature?.transcriptionSource || 'auto',
           translatedAudioFormat: user.userFeature?.translatedAudioFormat || 'mp3',
           dataRetentionDays: user.userFeature?.dataRetentionDays || 365,
-          voiceDataRetentionDays: user.userFeature?.voiceDataRetentionDays || 180
+          voiceDataRetentionDays: user.userFeature?.voiceDataRetentionDays || 180,
+          // Voice Cloning Parameters
+          voiceCloningExaggeration: user.userFeature?.voiceCloningExaggeration ?? 0.5,
+          voiceCloningCfgWeight: user.userFeature?.voiceCloningCfgWeight ?? 0.5,
+          voiceCloningTemperature: user.userFeature?.voiceCloningTemperature ?? 1.0,
+          voiceCloningTopP: user.userFeature?.voiceCloningTopP ?? 0.9,
+          voiceCloningQualityPreset: user.userFeature?.voiceCloningQualityPreset || 'balanced'
         }
       });
 
@@ -820,7 +844,13 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
           transcriptionSource: { type: 'string', enum: ['auto', 'mobile', 'server'] },
           translatedAudioFormat: { type: 'string', enum: ['mp3', 'wav', 'ogg'] },
           dataRetentionDays: { type: 'number', minimum: 30, maximum: 730 },
-          voiceDataRetentionDays: { type: 'number', minimum: 30, maximum: 365 }
+          voiceDataRetentionDays: { type: 'number', minimum: 30, maximum: 365 },
+          // Voice Cloning Parameters
+          voiceCloningExaggeration: { type: 'number', minimum: 0, maximum: 1 },
+          voiceCloningCfgWeight: { type: 'number', minimum: 0, maximum: 1 },
+          voiceCloningTemperature: { type: 'number', minimum: 0.1, maximum: 2 },
+          voiceCloningTopP: { type: 'number', minimum: 0, maximum: 1 },
+          voiceCloningQualityPreset: { type: 'string', enum: ['fast', 'balanced', 'high_quality'] }
         }
       },
       response: {
@@ -858,7 +888,13 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
         transcriptionSource,
         translatedAudioFormat,
         dataRetentionDays,
-        voiceDataRetentionDays
+        voiceDataRetentionDays,
+        // Voice Cloning Parameters
+        voiceCloningExaggeration,
+        voiceCloningCfgWeight,
+        voiceCloningTemperature,
+        voiceCloningTopP,
+        voiceCloningQualityPreset
       } = request.body;
 
       const updateData: Record<string, any> = {};
@@ -913,6 +949,62 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
         updatedFields.push('voiceDataRetentionDays');
       }
 
+      // Voice Cloning Parameters
+      if (voiceCloningExaggeration !== undefined) {
+        if (voiceCloningExaggeration < 0 || voiceCloningExaggeration > 1) {
+          return reply.status(400).send({
+            success: false,
+            message: 'voiceCloningExaggeration doit être entre 0 et 1'
+          });
+        }
+        updateData.voiceCloningExaggeration = voiceCloningExaggeration;
+        updatedFields.push('voiceCloningExaggeration');
+      }
+
+      if (voiceCloningCfgWeight !== undefined) {
+        if (voiceCloningCfgWeight < 0 || voiceCloningCfgWeight > 1) {
+          return reply.status(400).send({
+            success: false,
+            message: 'voiceCloningCfgWeight doit être entre 0 et 1'
+          });
+        }
+        updateData.voiceCloningCfgWeight = voiceCloningCfgWeight;
+        updatedFields.push('voiceCloningCfgWeight');
+      }
+
+      if (voiceCloningTemperature !== undefined) {
+        if (voiceCloningTemperature < 0.1 || voiceCloningTemperature > 2) {
+          return reply.status(400).send({
+            success: false,
+            message: 'voiceCloningTemperature doit être entre 0.1 et 2'
+          });
+        }
+        updateData.voiceCloningTemperature = voiceCloningTemperature;
+        updatedFields.push('voiceCloningTemperature');
+      }
+
+      if (voiceCloningTopP !== undefined) {
+        if (voiceCloningTopP < 0 || voiceCloningTopP > 1) {
+          return reply.status(400).send({
+            success: false,
+            message: 'voiceCloningTopP doit être entre 0 et 1'
+          });
+        }
+        updateData.voiceCloningTopP = voiceCloningTopP;
+        updatedFields.push('voiceCloningTopP');
+      }
+
+      if (voiceCloningQualityPreset !== undefined) {
+        if (!['fast', 'balanced', 'high_quality'].includes(voiceCloningQualityPreset)) {
+          return reply.status(400).send({
+            success: false,
+            message: 'voiceCloningQualityPreset invalide (fast, balanced, high_quality)'
+          });
+        }
+        updateData.voiceCloningQualityPreset = voiceCloningQualityPreset;
+        updatedFields.push('voiceCloningQualityPreset');
+      }
+
       if (Object.keys(updateData).length === 0) {
         return reply.status(400).send({
           success: false,
@@ -920,10 +1012,62 @@ export default async function userFeaturesRoutes(fastify: FastifyInstance) {
         });
       }
 
-      await fastify.prisma.user.update({
-        where: { id: userId },
-        data: updateData
-      });
+      // Séparer les champs User et UserFeature
+      const userFields: Record<string, any> = {};
+      const userFeatureFields: Record<string, any> = {};
+
+      // customDestinationLanguage est sur User
+      if (updateData.customDestinationLanguage !== undefined) {
+        userFields.customDestinationLanguage = updateData.customDestinationLanguage;
+      }
+
+      // Les autres champs sont sur UserFeature
+      if (updateData.transcriptionSource !== undefined) {
+        userFeatureFields.transcriptionSource = updateData.transcriptionSource;
+      }
+      if (updateData.translatedAudioFormat !== undefined) {
+        userFeatureFields.translatedAudioFormat = updateData.translatedAudioFormat;
+      }
+      if (updateData.dataRetentionDays !== undefined) {
+        userFeatureFields.dataRetentionDays = updateData.dataRetentionDays;
+      }
+      if (updateData.voiceDataRetentionDays !== undefined) {
+        userFeatureFields.voiceDataRetentionDays = updateData.voiceDataRetentionDays;
+      }
+
+      // Voice Cloning Parameters (tous sur UserFeature)
+      if (updateData.voiceCloningExaggeration !== undefined) {
+        userFeatureFields.voiceCloningExaggeration = updateData.voiceCloningExaggeration;
+      }
+      if (updateData.voiceCloningCfgWeight !== undefined) {
+        userFeatureFields.voiceCloningCfgWeight = updateData.voiceCloningCfgWeight;
+      }
+      if (updateData.voiceCloningTemperature !== undefined) {
+        userFeatureFields.voiceCloningTemperature = updateData.voiceCloningTemperature;
+      }
+      if (updateData.voiceCloningTopP !== undefined) {
+        userFeatureFields.voiceCloningTopP = updateData.voiceCloningTopP;
+      }
+      if (updateData.voiceCloningQualityPreset !== undefined) {
+        userFeatureFields.voiceCloningQualityPreset = updateData.voiceCloningQualityPreset;
+      }
+
+      // Mettre à jour User si nécessaire
+      if (Object.keys(userFields).length > 0) {
+        await fastify.prisma.user.update({
+          where: { id: userId },
+          data: userFields
+        });
+      }
+
+      // Mettre à jour UserFeature si nécessaire
+      if (Object.keys(userFeatureFields).length > 0) {
+        await fastify.prisma.userFeature.upsert({
+          where: { userId },
+          update: userFeatureFields,
+          create: { userId, ...userFeatureFields }
+        });
+      }
 
       return reply.send({
         success: true,

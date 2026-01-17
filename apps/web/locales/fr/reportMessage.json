@@ -49,6 +49,8 @@
         "label": "Autre",
         "description": "Autre raison"
       }
-    }
+    },
+    "success": "Signalement envoyé avec succès",
+    "error": "Erreur lors de l'envoi du signalement"
   }
 }

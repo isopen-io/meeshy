@@ -49,7 +49,7 @@ export interface AudioMetadata {
 
 export interface UploadResult {
   id: string;
-  messageId: string;
+  messageId: string | null;
   fileName: string;
   originalName: string;
   mimeType: string;
@@ -394,17 +394,19 @@ export class AttachmentService {
 
   /**
    * Génère une URL publique pour un fichier
+   * Note: Utilise /api/v1/ pour correspondre au préfixe API du gateway
    */
   getAttachmentUrl(filePath: string): string {
-    return `${this.publicUrl}/api/attachments/file/${encodeURIComponent(filePath)}`;
+    return `${this.publicUrl}/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
   }
 
   /**
    * Génère uniquement le chemin API relatif (sans domaine)
    * Utilisé pour le stockage en DB - permet de changer le domaine sans migration
+   * Note: Utilise /api/v1/ pour correspondre au préfixe API du gateway
    */
   getAttachmentPath(filePath: string): string {
-    return `/api/attachments/file/${encodeURIComponent(filePath)}`;
+    return `/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
   }
 
   /**
@@ -554,9 +556,9 @@ export class AttachmentService {
     const fileUrl = this.getAttachmentPath(filePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
 
-    // Pour messageId, générer un ObjectId temporaire si non fourni
-    // Cela évite l'erreur Prisma car messageId doit être un ObjectId valide
-    const tempMessageId = messageId || '000000000000000000000000'; // ObjectId temporaire valide (24 hex chars)
+    // messageId est nullable - on utilise null si non fourni
+    // L'attachment sera associé au message plus tard via associateAttachmentsToMessage()
+    const finalMessageId = messageId || null;
 
     // Préparer le champ metadata pour stocker audioEffectsTimeline et autres métadonnées supplémentaires
     const metadataJson = metadata.audioEffectsTimeline
@@ -574,7 +576,7 @@ export class AttachmentService {
     // Créer l'enregistrement en base de données
     const attachment = await this.prisma.messageAttachment.create({
       data: {
-        messageId: tempMessageId,
+        messageId: finalMessageId,
         fileName: path.basename(filePath),
         originalName: file.filename,
         mimeType: file.mimeType,
@@ -778,8 +780,8 @@ export class AttachmentService {
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
     const serverCopyUrl = serverCopyPath ? this.getAttachmentPath(serverCopyPath) : undefined;
 
-    // Prepare messageId
-    const tempMessageId = messageId || '000000000000000000000000';
+    // messageId est nullable - on utilise null si non fourni
+    const finalMessageId = messageId || null;
 
     // Prepare metadata JSON
     const metadataJson = metadata.audioEffectsTimeline
@@ -789,7 +791,7 @@ export class AttachmentService {
     // Create database record with encryption fields
     const attachment = await this.prisma.messageAttachment.create({
       data: {
-        messageId: tempMessageId,
+        messageId: finalMessageId,
         fileName: path.basename(filePath),
         originalName: file.filename,
         mimeType: file.mimeType,

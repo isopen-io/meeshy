@@ -220,7 +220,7 @@ def create_voice_api_router(
     router = APIRouter(prefix="/api/v1", tags=["Voice"])
 
     # Répertoires
-    UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', '/app/uploads'))
+    UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', './uploads'))
     OUTPUT_DIR = Path(os.getenv('AUDIO_OUTPUT_DIR', './audio_output'))
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,8 +245,28 @@ def create_voice_api_router(
         authorization: Optional[str] = Header(None)
     ):
         """
-        Traduire un audio de manière synchrone.
-        Retourne JSON avec les traductions et audio en base64.
+        Translate audio synchronously with voice cloning.
+
+        Performs the complete pipeline: transcription → translation → TTS with voice cloning.
+        Returns JSON with translations and audio URLs.
+
+        Args:
+            audio: Source audio file (multipart/form-data)
+            target_languages: Comma-separated target language codes (e.g., "en,fr,es")
+            source_language: Source language code (auto-detect if not provided)
+            generate_voice_clone: Clone the speaker's voice for TTS (default: True)
+            authorization: Bearer token for authentication
+
+        Returns:
+            TranslationResponse with original text, translations, and audio URLs
+
+        Example:
+            ```
+            curl -X POST /api/v1/voice/translate \\
+              -F "audio=@message.m4a" \\
+              -F "target_languages=en,fr" \\
+              -F "generate_voice_clone=true"
+            ```
         """
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
@@ -308,7 +328,21 @@ def create_voice_api_router(
         authorization: Optional[str] = Header(None)
     ):
         """
-        Traduire un audio et retourner directement le fichier audio.
+        Translate audio and return the translated audio file directly.
+
+        This endpoint performs the full pipeline (transcribe → translate → TTS)
+        and returns the generated audio file as a binary response.
+
+        Args:
+            audio: Source audio file to translate
+            target_language: Target language code (default: en)
+            source_language: Source language code (auto-detect if not provided)
+            generate_voice_clone: Clone the speaker's voice (default: True)
+            output_format: Output audio format: mp3, wav (default: mp3)
+            authorization: Bearer token for authentication
+
+        Returns:
+            Audio file (binary) with the translated speech
         """
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
@@ -353,8 +387,30 @@ def create_voice_api_router(
         authorization: Optional[str] = Header(None)
     ):
         """
-        Soumettre une traduction asynchrone.
-        Retourne un job_id pour suivre la progression.
+        Submit an asynchronous voice translation job.
+
+        For long audio files or batch processing. Returns a job_id to track progress.
+        Use GET /voice/job/{job_id} to check status.
+
+        Args:
+            audio: Source audio file (multipart/form-data)
+            target_languages: Comma-separated target language codes
+            source_language: Source language code (auto-detect if not provided)
+            generate_voice_clone: Clone the speaker's voice (default: True)
+            webhook_url: URL to call when job completes (optional)
+            priority: Job priority 0-3 (0=low, 1=normal, 2=high, 3=urgent)
+            authorization: Bearer token for authentication
+
+        Returns:
+            JobResponse with job_id and initial status
+
+        Example:
+            ```
+            curl -X POST /api/v1/voice/translate/async \\
+              -F "audio=@long_message.m4a" \\
+              -F "target_languages=en,fr,es,de" \\
+              -F "priority=2"
+            ```
         """
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
@@ -544,7 +600,32 @@ def create_voice_api_router(
         audio2: UploadFile = File(..., description="Second audio file"),
         detailed: bool = Form(False)
     ):
-        """Comparer deux voix et retourner un score de similarité."""
+        """
+        Compare two voice samples and return a similarity score.
+
+        Useful for speaker verification, voice profile quality assessment,
+        or detecting if two audio samples are from the same speaker.
+
+        Args:
+            audio1: First audio file (multipart/form-data)
+            audio2: Second audio file (multipart/form-data)
+            detailed: Return detailed component scores (default: False)
+
+        Returns:
+            VoiceComparisonResponse with:
+            - overall_score: 0.0-1.0 similarity score
+            - is_likely_same_speaker: Boolean prediction
+            - confidence: Confidence level of the prediction
+            - components: Detailed similarity breakdown (pitch, timbre, MFCC, energy)
+
+        Example:
+            ```
+            curl -X POST /api/v1/voice/compare \\
+              -F "audio1=@sample1.wav" \\
+              -F "audio2=@sample2.wav" \\
+              -F "detailed=true"
+            ```
+        """
         if not voice_analyzer:
             raise HTTPException(status_code=503, detail="Voice analyzer not available")
 
@@ -663,7 +744,30 @@ def create_voice_api_router(
         language: Optional[str] = Query(None),
         authorization: Optional[str] = Header(None)
     ):
-        """Récupérer l'historique des traductions."""
+        """
+        Get user's translation history with pagination.
+
+        Returns a paginated list of past translations with metadata.
+
+        Args:
+            page: Page number (default: 1)
+            limit: Items per page, 1-100 (default: 20)
+            language: Filter by target language code (optional)
+            authorization: Bearer token for authentication
+
+        Returns:
+            HistoryResponse with:
+            - entries: List of translation records
+            - total: Total number of records
+            - page: Current page number
+            - limit: Items per page
+
+        Example:
+            ```
+            curl -X GET "/api/v1/voice/history?page=1&limit=10&language=fr" \\
+              -H "Authorization: Bearer <token>"
+            ```
+        """
         if not analytics_service:
             raise HTTPException(status_code=503, detail="Analytics service not available")
 

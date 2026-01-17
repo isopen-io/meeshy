@@ -46,7 +46,8 @@ describe('getLanguageInfo', () => {
   it('should return correct info for supported language', () => {
     const info = getLanguageInfo('fr');
     expect(info.code).toBe('fr');
-    expect(info.name).toBe('Français');
+    expect(info.name).toBe('French');
+    expect(info.nativeName).toBe('Français');
     expect(info.flag).toBe('🇫🇷');
     expect(info.color).toBe('bg-blue-500');
   });
@@ -54,7 +55,7 @@ describe('getLanguageInfo', () => {
   it('should return French as default for undefined', () => {
     const info = getLanguageInfo(undefined);
     expect(info.code).toBe('fr');
-    expect(info.name).toBe('Français');
+    expect(info.name).toBe('French');
   });
 
   it('should return French as default for empty string', () => {
@@ -70,7 +71,7 @@ describe('getLanguageInfo', () => {
   it('should handle case insensitivity', () => {
     const info = getLanguageInfo('FR');
     expect(info.code).toBe('fr');
-    expect(info.name).toBe('Français');
+    expect(info.name).toBe('French');
   });
 
   it('should trim whitespace', () => {
@@ -92,16 +93,16 @@ describe('getLanguageInfo', () => {
 describe('getLanguageName', () => {
   it('should return language name for supported code', () => {
     expect(getLanguageName('en')).toBe('English');
-    expect(getLanguageName('fr')).toBe('Français');
-    expect(getLanguageName('de')).toBe('Deutsch');
+    expect(getLanguageName('fr')).toBe('French');
+    expect(getLanguageName('de')).toBe('German');
   });
 
   it('should return uppercase code for unsupported language', () => {
     expect(getLanguageName('xyz')).toBe('XYZ');
   });
 
-  it('should return Français for undefined', () => {
-    expect(getLanguageName(undefined)).toBe('Français');
+  it('should return French for undefined', () => {
+    expect(getLanguageName(undefined)).toBe('French');
   });
 });
 

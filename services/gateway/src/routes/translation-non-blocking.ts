@@ -252,7 +252,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
   const messagingService = (fastify as any).messagingService;
 
   if (!translationService) {
-    throw new Error('TranslationService not provided to translation routes');
+    throw new Error('MessageTranslationService not provided to translation routes');
   }
 
   if (!messagingService) {

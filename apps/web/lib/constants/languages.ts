@@ -1,25 +1,57 @@
 /**
- * Constants et utilitaires pour les langues supportées dans Meeshy
- * Module centralisé pour être réutilisé partout
+ * DEPRECATED: Ce fichier est conservé pour la compatibilité.
+ * Utilisez directement @meeshy/shared/utils/languages
+ *
+ * Re-exporte toutes les fonctions et types depuis le module partagé.
  */
 
-export const SUPPORTED_LANGUAGES = [
-  { code: 'fr', name: 'Français', flag: '🇫🇷', color: 'bg-blue-500' },
-  { code: 'en', name: 'English', flag: '🇬🇧', color: 'bg-red-500' },
-  { code: 'es', name: 'Español', flag: '🇪🇸', color: 'bg-yellow-500' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪', color: 'bg-gray-800' },
-  { code: 'pt', name: 'Português', flag: '🇵🇹', color: 'bg-green-500' },
-  { code: 'zh', name: '中文', flag: '🇨🇳', color: 'bg-red-600' },
-  { code: 'ja', name: '日本語', flag: '🇯🇵', color: 'bg-white border' },
-  { code: 'ar', name: 'العربية', flag: '🇸🇦', color: 'bg-green-600' },
-] as const;
+export {
+  // Types
+  type SupportedLanguageInfo,
+  type SupportedLanguageCode,
+  type LanguageStats,
+  type TTSEngine,
+  type STTEngine,
+  type LanguageRegion,
 
-export const MAX_MESSAGE_LENGTH = 2000;
-export const MAX_MESSAGE_LENGTH_MODERATOR = 4000; // Limite pour modérateurs et au-dessus
-export const TOAST_SHORT_DURATION = 2000;
-export const TOAST_LONG_DURATION = 3000;
-export const TOAST_ERROR_DURATION = 5000;
-export const TYPING_CANCELATION_DELAY = 2000; // Délai avant d'annuler l'indicateur de frappe
+  // Liste des langues
+  SUPPORTED_LANGUAGES,
+
+  // Fonctions de recherche
+  getLanguageInfo,
+  getLanguageName,
+  getLanguageFlag,
+  getLanguageColor,
+  getLanguageTranslateText,
+  isSupportedLanguage,
+  getSupportedLanguageCodes,
+
+  // Fonctions de filtrage par capacité
+  filterSupportedLanguages,
+  getLanguagesWithTTS,
+  getLanguagesWithSTT,
+  getLanguagesWithVoiceCloning,
+  getLanguagesWithTranslation,
+  getLanguagesByRegion,
+  getAfricanLanguages,
+  getMMSTTSLanguages,
+
+  // Statistiques
+  getLanguageStats,
+
+  // Constantes
+  MAX_MESSAGE_LENGTH,
+  TOAST_SHORT_DURATION,
+  TOAST_LONG_DURATION,
+  TOAST_ERROR_DURATION,
+  TYPING_CANCELATION_DELAY,
+} from '@meeshy/shared/utils/languages';
+
+// Alias pour compatibilité arrière
+export type SupportedLanguage = import('@meeshy/shared/utils/languages').SupportedLanguageInfo;
+
+// Constante supplémentaire pour les modérateurs (spécifique au frontend)
+export const MAX_MESSAGE_LENGTH_MODERATOR = 4000;
 
 /**
  * Obtient la limite de caractères pour un utilisateur en fonction de son rôle
@@ -28,56 +60,10 @@ export const TYPING_CANCELATION_DELAY = 2000; // Délai avant d'annuler l'indica
  */
 export function getMaxMessageLength(userRole?: string): number {
   const moderatorRoles = ['MODERATOR', 'MODO', 'ADMIN', 'BIGBOSS', 'AUDIT', 'ANALYST'];
-  
+
   if (userRole && moderatorRoles.includes(userRole.toUpperCase())) {
     return MAX_MESSAGE_LENGTH_MODERATOR;
   }
-  
-  return MAX_MESSAGE_LENGTH;
-}
 
-/**
- * Interface pour les statistiques de langues
- */
-export interface LanguageStats {
-  language: string;
-  flag: string;
-  count: number;
-  color: string;
-}
-
-/**
- * Type pour une langue supportée
- */
-export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
-
-/**
- * Obtient les informations d'une langue par son code
- */
-export function getLanguageInfo(code: string): SupportedLanguage | undefined {
-  return SUPPORTED_LANGUAGES.find(lang => lang.code === code);
-}
-
-/**
- * Obtient le nom d'une langue par son code
- */
-export function getLanguageName(code: string): string {
-  const lang = getLanguageInfo(code);
-  return lang?.name || code;
-}
-
-/**
- * Obtient le drapeau d'une langue par son code
- */
-export function getLanguageFlag(code: string): string {
-  const lang = getLanguageInfo(code);
-  return lang?.flag || '🌐';
-}
-
-/**
- * Obtient la couleur d'une langue par son code
- */
-export function getLanguageColor(code: string): string {
-  const lang = getLanguageInfo(code);
-  return lang?.color || 'bg-gray-500';
+  return 2000; // MAX_MESSAGE_LENGTH default
 }

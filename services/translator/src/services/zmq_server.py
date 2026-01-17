@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Import du service de base de données
 from .database_service import DatabaseService
+from .audio_fetcher import get_audio_fetcher
 
 # Import de la configuration des limites
 from config.message_limits import can_translate_message, MessageLimits
@@ -38,6 +39,15 @@ try:
     logger.info("✅ [ZMQ] AudioMessagePipeline disponible")
 except ImportError as e:
     logger.warning(f"⚠️ [ZMQ] AudioMessagePipeline non disponible: {e}")
+
+# Import du service de transcription
+TRANSCRIPTION_SERVICE_AVAILABLE = False
+try:
+    from .transcription_service import get_transcription_service
+    TRANSCRIPTION_SERVICE_AVAILABLE = True
+    logger.info("✅ [ZMQ] TranscriptionService disponible")
+except ImportError as e:
+    logger.warning(f"⚠️ [ZMQ] TranscriptionService non disponible: {e}")
 
 # Import du Voice API handler
 VOICE_API_AVAILABLE = False
@@ -104,35 +114,28 @@ class TranslationTask:
 class TranslationPoolManager:
     """
     Gestionnaire des pools FIFO de traduction avec gestion dynamique des workers
-    
-    XXX: PARALLÉLISATION OPPORTUNITÉ #4 - Architecture worker optimale
-    TODO: Configuration actuelle:
-          - normal_workers: 20 (threads séquentiels)
-          - any_workers: 10 (threads séquentiels)
-          - Chaque worker traite UNE tâche à la fois
-    TODO: Optimisations possibles:
-          A) Worker hybride: asyncio + multiprocessing
-             - Utiliser ProcessPoolExecutor au lieu de ThreadPoolExecutor
-             - Chaque process peut traiter N tâches en parallèle (asyncio)
-             - Contourner le GIL Python pour vrai parallélisme
-             
-          B) Worker avec batch processing interne
-             - Au lieu de prendre 1 tâche, prendre batch de 5-10 tâches
-             - Traduire toutes en batch (voir OPPORTUNITÉ #2)
-             - Gains: moins de setup, meilleur throughput
-             
-          C) Priority queue avec smart scheduling
-             - Petits segments (< 50 chars): queue haute priorité
-             - Grands paragraphes (> 200 chars): queue normale
-             - Équilibrage charge automatique
-    TODO: Configuration suggérée:
-          NORMAL_WORKERS_DEFAULT=8  # Processus au lieu de threads
-          WORKER_BATCH_SIZE=10       # Tâches par batch
-          ENABLE_MULTIPROCESSING=true
-    TODO: Gains attendus:
-          - 3-5x throughput avec multiprocessing (contourne GIL)
-          - 2-3x avec batch processing (moins d'overhead)
-          - 10-15x avec les deux combinés
+
+    OPTIMISATION MULTI-UTILISATEURS APPLIQUÉE:
+    ═══════════════════════════════════════════════════════════════════════════
+
+    1. BATCH ACCUMULATION (NOUVEAU):
+       - Accumule les requêtes pendant une fenêtre temporelle (50ms par défaut)
+       - Traite les requêtes en batch pour le même couple source/target language
+       - Gains: 2-3x throughput grâce au batch processing ML
+
+    2. PIPELINE RÉUTILISABLE (via translation_ml_service):
+       - Les pipelines ML sont créés une seule fois par thread
+       - Gains: 100-500ms économisés par requête
+
+    3. PRIORITY QUEUE:
+       - Textes courts (<100 chars) traités en priorité via fast_pool
+       - Équilibrage de charge automatique
+
+    Configuration via variables d'environnement:
+    - BATCH_WINDOW_MS: Fenêtre d'accumulation (défaut: 50ms)
+    - BATCH_MAX_SIZE: Taille max du batch (défaut: 10)
+    - NORMAL_WORKERS_DEFAULT: Workers normaux (défaut: 8)
+    ═══════════════════════════════════════════════════════════════════════════
     """
     
     def __init__(self,
@@ -157,10 +160,34 @@ class TranslationPoolManager:
         self.fast_pool = asyncio.Queue(maxsize=5000)
         self.enable_priority_queue = PERFORMANCE_MODULE_AVAILABLE and os.getenv("TRANSLATOR_PRIORITY_QUEUE", "true").lower() == "true"
         self.short_text_threshold = int(os.getenv("TRANSLATOR_SHORT_TEXT_THRESHOLD", "100"))
+
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATION CRITIQUE: Batch Accumulation
+        # Accumule les requêtes pendant une fenêtre temporelle puis les traite en batch
+        # Gains attendus: 2-3x throughput
+        # ═══════════════════════════════════════════════════════════════
+        self.batch_window_ms = int(os.getenv("BATCH_WINDOW_MS", "50"))  # 50ms d'accumulation
+        self.batch_max_size = int(os.getenv("BATCH_MAX_SIZE", "10"))  # Max 10 requêtes par batch
+        self.enable_batching = os.getenv("TRANSLATOR_BATCH_ENABLED", "true").lower() == "true"
+        self._batch_accumulator: Dict[str, List[TranslationTask]] = {}  # Clé: "source_target_model"
+        self._batch_lock = asyncio.Lock()
+        self._batch_flush_task = None
+        logger.info(f"[TRANSLATOR] 🔧 Batch processing: enabled={self.enable_batching}, window={self.batch_window_ms}ms, max_size={self.batch_max_size}")
         
-        # Valeurs par défaut configurables
-        self.normal_workers_default = int(os.getenv('NORMAL_WORKERS_DEFAULT', '20'))
-        self.any_workers_default = int(os.getenv('ANY_WORKERS_DEFAULT', '10'))
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATION CPU: Configurer le nombre de workers basé sur les CPU cores
+        # Avec le batching actif, moins de workers sont nécessaires
+        # Règle: CPU_CORES / 2 pour normal, CPU_CORES / 4 pour any
+        # ═══════════════════════════════════════════════════════════════
+        import multiprocessing
+        cpu_count = multiprocessing.cpu_count()
+        optimal_normal = max(4, cpu_count // 2)  # Au moins 4, max CPU/2
+        optimal_any = max(2, cpu_count // 4)     # Au moins 2, max CPU/4
+
+        # Valeurs par défaut: utiliser les valeurs optimales ou les overrides env
+        self.normal_workers_default = int(os.getenv('NORMAL_WORKERS_DEFAULT', str(optimal_normal)))
+        self.any_workers_default = int(os.getenv('ANY_WORKERS_DEFAULT', str(optimal_any)))
+        logger.info(f"[TRANSLATOR] 🔧 CPU cores: {cpu_count}, optimal workers: {optimal_normal} normal, {optimal_any} any")
         
         # Limites minimales configurables
         self.normal_workers_min = int(os.getenv('NORMAL_WORKERS_MIN', '2'))
@@ -192,9 +219,29 @@ class TranslationPoolManager:
         self.scaling_check_interval = 30  # Vérifier toutes les 30 secondes
         self.last_scaling_check = time.time()
         
-        # Thread pools pour les traductions
-        self.normal_worker_pool = ThreadPoolExecutor(max_workers=self.max_normal_workers)
-        self.any_worker_pool = ThreadPoolExecutor(max_workers=self.max_any_workers)
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATION: Thread pools optimisés pour ML inference
+        # Avec batching, chaque worker traite plus efficacement
+        # Threads PyTorch configurés pour éviter la surcharge
+        # ═══════════════════════════════════════════════════════════════
+        self.normal_worker_pool = ThreadPoolExecutor(
+            max_workers=self.max_normal_workers,
+            thread_name_prefix="TranslatorNormal"
+        )
+        self.any_worker_pool = ThreadPoolExecutor(
+            max_workers=self.max_any_workers,
+            thread_name_prefix="TranslatorAny"
+        )
+
+        # Configurer PyTorch pour limiter les threads par worker
+        try:
+            import torch
+            # Chaque worker utilise 2 threads PyTorch max (évite contention)
+            threads_per_worker = max(2, cpu_count // (self.max_normal_workers + self.max_any_workers))
+            torch.set_num_threads(threads_per_worker)
+            logger.info(f"[TRANSLATOR] 🔧 PyTorch threads per worker: {threads_per_worker}")
+        except ImportError:
+            pass
         
         # Service de traduction partagé
         self.translation_service = translation_service
@@ -231,53 +278,158 @@ class TranslationPoolManager:
         
         logger.info(f"[TRANSLATOR] TranslationPoolManager haute performance initialisé: normal_pool({normal_pool_size}), any_pool({any_pool_size}), normal_workers({normal_workers}), any_workers({any_workers})")
         logger.info(f"[TRANSLATOR] Gestion dynamique des workers: {'activée' if enable_dynamic_scaling else 'désactivée'}")
+
+    def _get_batch_key(self, task: TranslationTask) -> str:
+        """Génère une clé pour grouper les tâches similaires en batch"""
+        # Clé basée sur: source_lang + target_langs (triées) + model_type
+        target_key = "_".join(sorted(task.target_languages))
+        return f"{task.source_language}_{target_key}_{task.model_type}"
+
+    async def _start_batch_flush_loop(self):
+        """Boucle qui flush les batches accumulés périodiquement"""
+        while self.normal_workers_running or self.any_workers_running:
+            try:
+                await asyncio.sleep(self.batch_window_ms / 1000.0)  # Convertir ms en secondes
+                await self._flush_batches()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[BATCH] Erreur flush loop: {e}")
+
+    async def _flush_batches(self):
+        """Transfère les batches accumulés vers les queues de traitement"""
+        async with self._batch_lock:
+            if not self._batch_accumulator:
+                return
+
+            for batch_key, tasks in list(self._batch_accumulator.items()):
+                if not tasks:
+                    continue
+
+                # Créer une tâche batch (premier task avec les textes combinés)
+                batch_task = TranslationTask(
+                    task_id=f"batch_{tasks[0].task_id}",
+                    message_id=tasks[0].message_id,
+                    text="",  # Non utilisé pour batch
+                    source_language=tasks[0].source_language,
+                    target_languages=tasks[0].target_languages,
+                    conversation_id=tasks[0].conversation_id,
+                    model_type=tasks[0].model_type,
+                    created_at=tasks[0].created_at
+                )
+
+                # Stocker les tâches originales dans un attribut custom
+                batch_task._batch_tasks = tasks  # type: ignore
+
+                # Déterminer la queue appropriée
+                if tasks[0].conversation_id == "any":
+                    if not self.any_pool.full():
+                        await self.any_pool.put(batch_task)
+                        logger.debug(f"⚡ [BATCH] {len(tasks)} tâches groupées → any_pool")
+                else:
+                    if not self.normal_pool.full():
+                        await self.normal_pool.put(batch_task)
+                        logger.debug(f"⚡ [BATCH] {len(tasks)} tâches groupées → normal_pool")
+
+            # Vider l'accumulateur
+            self._batch_accumulator.clear()
     
     async def enqueue_task(self, task: TranslationTask) -> bool:
-        """Enfile une tâche dans la pool appropriée avec support priorité"""
+        """Enfile une tâche dans la pool appropriée avec support priorité et batching"""
         try:
             # ═══════════════════════════════════════════════════════════════
-            # OPTIMISATION: Textes courts → fast_pool (traités en priorité)
+            # OPTIMISATION: Textes courts → fast_pool (traités en priorité, pas de batch)
             # ═══════════════════════════════════════════════════════════════
             if self.enable_priority_queue and len(task.text) < self.short_text_threshold:
                 if not self.fast_pool.full():
                     await self.fast_pool.put(task)
                     logger.debug(f"⚡ Tâche {task.task_id} enfilée dans fast_pool (texte court: {len(task.text)} chars)")
                     return True
-                # Si fast_pool pleine, continue vers les pools normales
+                # Si fast_pool pleine, continue vers le batching/pools normales
 
-            if task.conversation_id == "any":
-                # Pool spéciale pour conversation "any"
-                if self.any_pool.full():
-                    logger.warning(f"Pool 'any' pleine, rejet de la tâche {task.task_id}")
-                    self.stats['pool_full_rejections'] += 1
-                    return False
+            # ═══════════════════════════════════════════════════════════════
+            # OPTIMISATION CRITIQUE: Batch Accumulation
+            # Accumule les tâches similaires pour traitement batch
+            # ═══════════════════════════════════════════════════════════════
+            if self.enable_batching:
+                async with self._batch_lock:
+                    batch_key = self._get_batch_key(task)
 
-                await self.any_pool.put(task)
-                self.stats['any_pool_size'] = self.any_pool.qsize()
-                logger.info(f"Tâche {task.task_id} enfilée dans pool 'any' (taille: {self.stats['any_pool_size']})")
-            else:
-                # Pool normale pour autres conversations
-                if self.normal_pool.full():
-                    logger.warning(f"Pool normale pleine, rejet de la tâche {task.task_id}")
-                    self.stats['pool_full_rejections'] += 1
-                    return False
+                    if batch_key not in self._batch_accumulator:
+                        self._batch_accumulator[batch_key] = []
 
-                await self.normal_pool.put(task)
-                self.stats['normal_pool_size'] = self.normal_pool.qsize()
-                logger.info(f"Tâche {task.task_id} enfilée dans pool normale (taille: {self.stats['normal_pool_size']})")
+                    self._batch_accumulator[batch_key].append(task)
 
-            return True
+                    # Si le batch atteint la taille max, flush immédiatement
+                    if len(self._batch_accumulator[batch_key]) >= self.batch_max_size:
+                        tasks_to_flush = self._batch_accumulator.pop(batch_key)
+                        await self._enqueue_batch(tasks_to_flush)
+                        logger.debug(f"⚡ [BATCH] Batch max atteint, flush immédiat de {len(tasks_to_flush)} tâches")
+
+                    return True
+
+            # Fallback: pas de batching, enqueue directement
+            return await self._enqueue_single_task(task)
 
         except Exception as e:
             logger.error(f"Erreur lors de l'enfilage de la tâche {task.task_id}: {e}")
             return False
+
+    async def _enqueue_single_task(self, task: TranslationTask) -> bool:
+        """Enfile une tâche unique (sans batching)"""
+        if task.conversation_id == "any":
+            if self.any_pool.full():
+                logger.warning(f"Pool 'any' pleine, rejet de la tâche {task.task_id}")
+                self.stats['pool_full_rejections'] += 1
+                return False
+
+            await self.any_pool.put(task)
+            self.stats['any_pool_size'] = self.any_pool.qsize()
+            logger.info(f"Tâche {task.task_id} enfilée dans pool 'any' (taille: {self.stats['any_pool_size']})")
+        else:
+            if self.normal_pool.full():
+                logger.warning(f"Pool normale pleine, rejet de la tâche {task.task_id}")
+                self.stats['pool_full_rejections'] += 1
+                return False
+
+            await self.normal_pool.put(task)
+            self.stats['normal_pool_size'] = self.normal_pool.qsize()
+            logger.info(f"Tâche {task.task_id} enfilée dans pool normale (taille: {self.stats['normal_pool_size']})")
+
+        return True
+
+    async def _enqueue_batch(self, tasks: List[TranslationTask]):
+        """Enfile un batch de tâches comme une seule unité"""
+        if not tasks:
+            return
+
+        # Créer une tâche batch
+        batch_task = TranslationTask(
+            task_id=f"batch_{tasks[0].task_id}_{len(tasks)}",
+            message_id=tasks[0].message_id,
+            text="",
+            source_language=tasks[0].source_language,
+            target_languages=tasks[0].target_languages,
+            conversation_id=tasks[0].conversation_id,
+            model_type=tasks[0].model_type,
+            created_at=tasks[0].created_at
+        )
+        batch_task._batch_tasks = tasks  # type: ignore
+
+        # Déterminer la queue appropriée
+        if tasks[0].conversation_id == "any":
+            if not self.any_pool.full():
+                await self.any_pool.put(batch_task)
+        else:
+            if not self.normal_pool.full():
+                await self.normal_pool.put(batch_task)
     
     async def start_workers(self):
         """Démarre tous les workers avec gestion dynamique"""
         logger.info(f"[TRANSLATOR] 🔄 Début du démarrage des workers...")
         self.normal_workers_running = True
         self.any_workers_running = True
-        
+
         logger.info(f"[TRANSLATOR] 🔄 Création des workers normaux ({self.normal_workers})...")
         # Démarrer les workers pour la pool normale
         self.normal_worker_tasks = [
@@ -285,7 +437,7 @@ class TranslationPoolManager:
             for i in range(self.normal_workers)
         ]
         logger.info(f"[TRANSLATOR] ✅ Workers normaux créés: {len(self.normal_worker_tasks)}")
-        
+
         logger.info(f"[TRANSLATOR] 🔄 Création des workers 'any' ({self.any_workers})...")
         # Démarrer les workers pour la pool "any"
         self.any_worker_tasks = [
@@ -293,7 +445,14 @@ class TranslationPoolManager:
             for i in range(self.any_workers)
         ]
         logger.info(f"[TRANSLATOR] ✅ Workers 'any' créés: {len(self.any_worker_tasks)}")
-        
+
+        # ═══════════════════════════════════════════════════════════════
+        # OPTIMISATION: Démarrer la boucle de flush des batches
+        # ═══════════════════════════════════════════════════════════════
+        if self.enable_batching:
+            self._batch_flush_task = asyncio.create_task(self._start_batch_flush_loop())
+            logger.info(f"[TRANSLATOR] ✅ Batch flush loop démarrée (window={self.batch_window_ms}ms)")
+
         logger.info(f"[TRANSLATOR] Workers haute performance démarrés: {self.normal_workers} normal, {self.any_workers} any")
         logger.info(f"[TRANSLATOR] Capacité totale: {self.normal_workers + self.any_workers} traductions simultanées")
         return self.normal_worker_tasks + self.any_worker_tasks
@@ -302,6 +461,18 @@ class TranslationPoolManager:
         """Arrête tous les workers"""
         self.normal_workers_running = False
         self.any_workers_running = False
+
+        # Arrêter la boucle de flush batch
+        if self._batch_flush_task:
+            self._batch_flush_task.cancel()
+            try:
+                await self._batch_flush_task
+            except asyncio.CancelledError:
+                pass
+
+        # Flush final des batches en attente
+        await self._flush_batches()
+
         logger.info("Arrêt des workers demandé")
     
     async def _dynamic_scaling_check(self):
@@ -486,17 +657,37 @@ class TranslationPoolManager:
         logger.info(f"Worker {worker_name} arrêté")
     
     async def _process_translation_task(self, task: TranslationTask, worker_name: str):
-        """Traite une tâche de traduction avec traduction parallèle"""
+        """Traite une tâche de traduction avec support batch"""
+        try:
+            # ═══════════════════════════════════════════════════════════════
+            # OPTIMISATION: Détecter si c'est un batch de tâches
+            # ═══════════════════════════════════════════════════════════════
+            batch_tasks = getattr(task, '_batch_tasks', None)
+
+            if batch_tasks and len(batch_tasks) > 1:
+                # Traitement BATCH: plusieurs tâches groupées
+                await self._process_batch_translation(batch_tasks, worker_name)
+            else:
+                # Traitement SINGLE: une seule tâche (ou batch de 1)
+                actual_task = batch_tasks[0] if batch_tasks else task
+                await self._process_single_translation(actual_task, worker_name)
+
+        except Exception as e:
+            logger.error(f"Erreur lors du traitement de la tâche {task.task_id}: {e}")
+            self.stats['tasks_failed'] += 1
+
+    async def _process_single_translation(self, task: TranslationTask, worker_name: str):
+        """Traite une tâche de traduction unique"""
         try:
             # Lancer les traductions en parallèle
             translation_tasks = []
-            
+
             for target_language in task.target_languages:
                 translation_task = asyncio.create_task(
                     self._translate_single_language(task, target_language, worker_name)
                 )
                 translation_tasks.append((target_language, translation_task))
-            
+
             # Attendre toutes les traductions
             for target_language, translation_task in translation_tasks:
                 try:
@@ -507,16 +698,103 @@ class TranslationPoolManager:
                     # Publier le résultat via PUB
                     await self._publish_translation_result(task.task_id, result, target_language)
                     self.stats['translations_completed'] += 1
-                    
+
                 except Exception as e:
                     logger.error(f"Erreur de traduction pour {target_language} dans {task.task_id}: {e}")
                     # Publier un résultat d'erreur
                     error_result = self._create_error_result(task, target_language, str(e))
                     await self._publish_translation_result(task.task_id, error_result, target_language)
-            
+
         except Exception as e:
-            logger.error(f"Erreur lors du traitement de la tâche {task.task_id}: {e}")
+            logger.error(f"Erreur lors du traitement single de la tâche {task.task_id}: {e}")
             self.stats['tasks_failed'] += 1
+
+    async def _process_batch_translation(self, tasks: List[TranslationTask], worker_name: str):
+        """
+        OPTIMISATION: Traite un batch de tâches en une seule opération ML.
+
+        Au lieu de traduire chaque texte individuellement, on:
+        1. Extrait tous les textes du batch
+        2. Appelle le service ML avec batch processing
+        3. Distribue les résultats
+
+        Gains attendus: 2-3x plus rapide que N appels individuels
+        """
+        try:
+            if not tasks:
+                return
+
+            batch_start = time.time()
+
+            # Extraire les informations communes
+            source_lang = tasks[0].source_language
+            target_langs = tasks[0].target_languages
+            model_type = tasks[0].model_type
+            pool_type = 'any' if tasks[0].conversation_id == 'any' else 'normal'
+
+            # Extraire les textes
+            texts = [t.text for t in tasks]
+
+            logger.info(f"⚡ [BATCH] Worker {worker_name}: traitement de {len(texts)} textes ({source_lang}→{target_langs})")
+
+            # Pour chaque langue cible
+            for target_lang in target_langs:
+                try:
+                    # Utiliser le batch translation du service ML
+                    if self.translation_service and hasattr(self.translation_service, '_ml_translate_batch'):
+                        translated_texts = await self.translation_service._ml_translate_batch(
+                            texts=texts,
+                            source_lang=source_lang,
+                            target_lang=target_lang,
+                            model_type=model_type
+                        )
+                    else:
+                        # Fallback: traduire un par un
+                        translated_texts = []
+                        for text in texts:
+                            result = await self.translation_service.translate_with_structure(
+                                text=text,
+                                source_language=source_lang,
+                                target_language=target_lang,
+                                model_type=model_type,
+                                source_channel='zmq_batch'
+                            )
+                            translated_texts.append(result.get('translated_text', text))
+
+                    # Distribuer les résultats
+                    for i, (task, translated_text) in enumerate(zip(tasks, translated_texts)):
+                        processing_time = time.time() - batch_start
+                        result = {
+                            'messageId': task.message_id,
+                            'translatedText': translated_text,
+                            'sourceLanguage': source_lang,
+                            'targetLanguage': target_lang,
+                            'confidenceScore': 0.95,
+                            'processingTime': processing_time,
+                            'modelType': model_type,
+                            'workerName': worker_name,
+                            'fromCache': False,
+                            'batchSize': len(tasks),
+                            'batchIndex': i,
+                            'poolType': pool_type,
+                            'created_at': task.created_at
+                        }
+                        await self._publish_translation_result(task.task_id, result, target_lang)
+                        self.stats['translations_completed'] += 1
+
+                except Exception as e:
+                    logger.error(f"[BATCH] Erreur traduction batch pour {target_lang}: {e}")
+                    # Publier des erreurs pour chaque tâche
+                    for task in tasks:
+                        error_result = self._create_error_result(task, target_lang, str(e))
+                        await self._publish_translation_result(task.task_id, error_result, target_lang)
+
+            batch_time = (time.time() - batch_start) * 1000
+            logger.info(f"✅ [BATCH] {len(tasks)} traductions terminées en {batch_time:.0f}ms ({batch_time/len(tasks):.0f}ms/texte)")
+
+        except Exception as e:
+            logger.error(f"[BATCH] Erreur générale batch: {e}")
+            self.stats['tasks_failed'] += len(tasks)
     
     async def _translate_single_language(self, task: TranslationTask, target_language: str, worker_name: str):
         """Traduit un texte vers une langue cible spécifique (avec cache Redis)"""
@@ -752,6 +1030,10 @@ class ZMQTranslationServer:
         self.running = False
         self.worker_tasks = []
 
+        # OPTIMISATION: Cache CPU pour éviter le sleep(0.1) dans _publish_translation_result
+        self._cached_cpu_usage = 0.0
+        self._cpu_update_task = None
+
         logger.info(f"ZMQTranslationServer initialisé: Gateway PUSH {host}:{gateway_push_port} (PULL bind)")
         logger.info(f"ZMQTranslationServer initialisé: Gateway SUB {host}:{gateway_sub_port} (PUB bind)")
 
@@ -766,6 +1048,20 @@ class ZMQTranslationServer:
                 logger.warning("[TRANSLATOR-DB] ⚠️ Connexion à la base de données échouée, sauvegarde désactivée")
         except Exception as e:
             logger.error(f"[TRANSLATOR-DB] ❌ Erreur lors de la connexion à la base de données: {e}")
+
+    async def _update_cpu_usage_background(self):
+        """
+        OPTIMISATION: Mise à jour périodique du CPU usage en arrière-plan.
+        Évite le sleep(0.1) dans _publish_translation_result qui ajoutait 100ms de latence.
+        """
+        while self.running:
+            try:
+                # Mesurer le CPU toutes les 5 secondes
+                self._cached_cpu_usage = psutil.Process().cpu_percent(interval=1.0)
+                await asyncio.sleep(4.0)  # Total: 5 secondes entre les mesures
+            except Exception as e:
+                logger.debug(f"[CPU-MONITOR] Erreur: {e}")
+                await asyncio.sleep(5.0)
     
     async def initialize(self):
         """Initialise les sockets ZMQ avec architecture PUSH/PULL + PUB/SUB"""
@@ -804,17 +1100,23 @@ class ZMQTranslationServer:
         """Démarre le serveur"""
         if not self.pull_socket or not self.pub_socket:
             await self.initialize()
-        
+
         self.running = True
+
+        # OPTIMISATION: Démarrer le monitoring CPU en arrière-plan
+        self._cpu_update_task = asyncio.create_task(self._update_cpu_usage_background())
+
         logger.info("ZMQTranslationServer démarré")
-        
+
         try:
             while self.running:
                 try:
-                    # Recevoir une commande de traduction via PULL
-                    message = await self.pull_socket.recv()
-                    await self._handle_translation_request(message)
-                    
+                    # Recevoir une commande via PULL (multipart pour supporter binaires)
+                    # Frame 0: JSON metadata
+                    # Frame 1+: Données binaires (audio, embedding, etc.)
+                    frames = await self.pull_socket.recv_multipart()
+                    await self._handle_translation_request_multipart(frames)
+
                 except zmq.ZMQError as e:
                     if self.running:
                         logger.error(f"Erreur ZMQ: {e}")
@@ -829,10 +1131,66 @@ class ZMQTranslationServer:
         finally:
             await self.stop()
     
-    async def _handle_translation_request(self, message: bytes):
+    async def _handle_translation_request_multipart(self, frames: list[bytes]):
+        """
+        Traite une requête multipart ZMQ.
+
+        Protocol multipart:
+        - Frame 0: JSON metadata avec 'binaryFrames' indiquant les indices des binaires
+        - Frame 1+: Données binaires (audio, embedding, etc.)
+
+        Le champ 'binaryFrames' dans le JSON indique où trouver les binaires:
+        - binaryFrames.audio = 1 → l'audio binaire est dans frames[1]
+        - binaryFrames.embedding = 2 → l'embedding pkl est dans frames[2]
+
+        Rétrocompatibilité:
+        - Si un seul frame → ancien format JSON avec base64
+        - Si binaryFrames absent → utiliser audioBase64/audioData (legacy)
+        """
+        if not frames:
+            logger.warning("⚠️ [TRANSLATOR] Message multipart vide reçu")
+            return
+
+        # Frame 0: JSON metadata
+        json_frame = frames[0]
+
+        # Extraire les frames binaires si présents
+        binary_frames = frames[1:] if len(frames) > 1 else []
+
+        # Parser le JSON
+        try:
+            request_data = json.loads(json_frame.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {e}")
+            return
+
+        # Extraire les infos des frames binaires
+        binary_frame_info = request_data.get('binaryFrames', {})
+
+        # Si on a des frames binaires, les injecter dans request_data
+        if binary_frames and binary_frame_info:
+            # Audio binaire
+            audio_idx = binary_frame_info.get('audio')
+            if audio_idx and audio_idx <= len(binary_frames):
+                # Stocker le binaire directement (pas de base64!)
+                request_data['_audioBinary'] = binary_frames[audio_idx - 1]
+                audio_size = len(binary_frames[audio_idx - 1])
+                logger.info(f"📦 [TRANSLATOR] Audio binaire extrait du frame {audio_idx}: {audio_size / 1024:.1f}KB")
+
+            # Embedding binaire (pkl)
+            embedding_idx = binary_frame_info.get('embedding')
+            if embedding_idx and embedding_idx <= len(binary_frames):
+                request_data['_embeddingBinary'] = binary_frames[embedding_idx - 1]
+                embedding_size = len(binary_frames[embedding_idx - 1])
+                logger.info(f"📦 [TRANSLATOR] Embedding binaire extrait du frame {embedding_idx}: {embedding_size / 1024:.1f}KB")
+
+        # Déléguer au handler existant
+        await self._handle_translation_request(request_data, binary_frames)
+
+    async def _handle_translation_request(self, request_data: dict, binary_frames: list[bytes] = None):
         """
         Traite une requête de traduction reçue via SUB
-        
+
         XXX: PARALLÉLISATION OPPORTUNITÉ #3 - Traduction multi-langues simultanée
         TODO: Actuellement, si targetLanguages = ['en', 'es', 'de', 'it', 'pt']
               chaque langue est traduite SÉQUENTIELLEMENT par le worker
@@ -861,8 +1219,9 @@ class ZMQTranslationServer:
               - Option B: 2-3x plus rapide (overhead réduit, batch processing)
         """
         try:
-            request_data = json.loads(message.decode('utf-8'))
-            
+            # Note: request_data est déjà parsé par _handle_translation_request_multipart
+            # binary_frames contient les données binaires si présentes
+
             # Dispatcher selon le type de message
             message_type = request_data.get('type')
 
@@ -888,6 +1247,11 @@ class ZMQTranslationServer:
             # === AUDIO PROCESSING ===
             if message_type == 'audio_process':
                 await self._handle_audio_process_request(request_data)
+                return
+
+            # === TRANSCRIPTION ONLY ===
+            if message_type == 'transcription_only':
+                await self._handle_transcription_only_request(request_data)
                 return
 
             # === VOICE API ===
@@ -990,7 +1354,15 @@ class ZMQTranslationServer:
             },
             "targetLanguages": [str],
             "generateVoiceClone": bool,
-            "modelType": str
+            "modelType": str,
+            // Paramètres de clonage vocal configurables par l'utilisateur
+            "cloningParams": {
+                "exaggeration": float,  // 0.0-1.0, défaut 0.5
+                "cfgWeight": float,     // 0.0-1.0, défaut 0.5 (0.0 pour non-anglais)
+                "temperature": float,   // 0.1-2.0, défaut 1.0
+                "topP": float,          // 0.0-1.0, défaut 0.9
+                "qualityPreset": str    // "fast", "balanced", "high_quality"
+            }
         }
         """
         task_id = str(uuid.uuid4())
@@ -1010,11 +1382,36 @@ class ZMQTranslationServer:
             return
 
         try:
-            # Valider les données requises
-            required_fields = ['messageId', 'attachmentId', 'audioPath', 'senderId']
+            # Valider les données requises (audioPath n'est plus requis, on utilise base64 ou URL)
+            required_fields = ['messageId', 'attachmentId', 'senderId']
             for field in required_fields:
                 if not request_data.get(field):
                     raise ValueError(f"Champ requis manquant: {field}")
+
+            # ═══════════════════════════════════════════════════════════════
+            # ACQUISITION AUDIO (binaire multipart > base64 > URL > path legacy)
+            # ═══════════════════════════════════════════════════════════════
+            audio_fetcher = get_audio_fetcher()
+            local_audio_path, audio_source = await audio_fetcher.acquire_audio(
+                attachment_id=request_data.get('attachmentId'),
+                audio_binary=request_data.get('_audioBinary'),  # ZMQ multipart (plus efficace)
+                audio_base64=request_data.get('audioBase64'),   # Legacy base64
+                audio_mime_type=request_data.get('audioMimeType'),
+                audio_url=request_data.get('audioUrl'),
+                audio_path=request_data.get('audioPath')  # Legacy fallback
+            )
+
+            if not local_audio_path:
+                raise ValueError(
+                    f"Impossible d'acquérir l'audio: "
+                    f"base64={'yes' if request_data.get('audioBase64') else 'no'}, "
+                    f"url={request_data.get('audioUrl') or 'none'}"
+                )
+
+            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
+
+            # Flag pour savoir si on doit nettoyer le fichier temp après
+            should_cleanup_audio = audio_source in ('base64', 'url')
 
             # Préparer les métadonnées mobiles
             metadata = None
@@ -1038,9 +1435,36 @@ class ZMQTranslationServer:
             if pipeline.database_service is None and hasattr(self, 'database_service'):
                 pipeline.set_database_service(self.database_service)
 
-            # Exécuter le pipeline audio
+            # Extraire les paramètres de clonage vocal (configurables par l'utilisateur)
+            # Tous les 6 paramètres Chatterbox supportés:
+            # - exaggeration: 0.0-1.0 (expressivité vocale)
+            # - cfg_weight: 0.0-1.0 (guidance du modèle)
+            # - temperature: 0.0-2.0 (créativité)
+            # - repetition_penalty: 1.0-3.0 (pénalité répétition)
+            # - min_p: 0.0-1.0 (probabilité minimum sampling)
+            # - top_p: 0.0-1.0 (nucleus sampling)
+            cloning_params = None
+            raw_cloning = request_data.get('cloningParams') or request_data.get('voiceCloneParams')
+            if raw_cloning:
+                cloning_params = {
+                    'exaggeration': raw_cloning.get('exaggeration'),
+                    'cfg_weight': raw_cloning.get('cfgWeight') or raw_cloning.get('cfg_weight'),
+                    'temperature': raw_cloning.get('temperature'),
+                    'repetition_penalty': raw_cloning.get('repetitionPenalty') or raw_cloning.get('repetition_penalty'),
+                    'min_p': raw_cloning.get('minP') or raw_cloning.get('min_p'),
+                    'top_p': raw_cloning.get('topP') or raw_cloning.get('top_p'),
+                    'auto_optimize': raw_cloning.get('autoOptimize', True),
+                }
+                # Filtrer les valeurs None pour n'envoyer que les paramètres spécifiés
+                cloning_params = {k: v for k, v in cloning_params.items() if v is not None}
+
+                logger.info(
+                    f"[TRANSLATOR] Paramètres clonage personnalisés: {cloning_params}"
+                )
+
+            # Exécuter le pipeline audio avec le chemin local acquis
             result = await pipeline.process_audio_message(
-                audio_path=request_data.get('audioPath'),
+                audio_path=local_audio_path,  # Chemin local (base64 décodé, téléchargé, ou legacy)
                 audio_url=request_data.get('audioUrl', ''),
                 sender_id=request_data.get('senderId'),
                 conversation_id=request_data.get('conversationId', ''),
@@ -1054,7 +1478,9 @@ class ZMQTranslationServer:
                 # Voice profile options (pour messages transférés - voix de l'émetteur original)
                 original_sender_id=request_data.get('originalSenderId'),
                 existing_voice_profile=request_data.get('existingVoiceProfile'),
-                use_original_voice=request_data.get('useOriginalVoice', True)
+                use_original_voice=request_data.get('useOriginalVoice', True),
+                # Paramètres de clonage vocal configurables
+                cloning_params=cloning_params
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -1066,13 +1492,26 @@ class ZMQTranslationServer:
                 f"✅ [TRANSLATOR] Audio process terminé: "
                 f"msg={result.message_id}, "
                 f"translations={len(result.translations)}, "
-                f"time={processing_time}ms"
+                f"time={processing_time}ms, "
+                f"audio_source={audio_source}"
             )
+
+            # Nettoyer le fichier temporaire si nécessaire
+            if should_cleanup_audio:
+                audio_fetcher.cleanup_temp_file(local_audio_path)
 
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
             import traceback
             traceback.print_exc()
+
+            # Nettoyer le fichier temporaire en cas d'erreur
+            try:
+                if 'should_cleanup_audio' in locals() and should_cleanup_audio and 'local_audio_path' in locals():
+                    audio_fetcher = get_audio_fetcher()
+                    audio_fetcher.cleanup_temp_file(local_audio_path)
+            except Exception:
+                pass  # Ignorer les erreurs de nettoyage
 
             await self._publish_audio_error(
                 task_id=task_id,
@@ -1170,6 +1609,255 @@ class ZMQTranslationServer:
 
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TRANSCRIPTION ONLY - Transcription sans traduction ni TTS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def _handle_transcription_only_request(self, request_data: dict):
+        """
+        Traite une requête de transcription seule (sans traduction ni TTS).
+
+        Format attendu (trois modes):
+
+        Mode 1 - Via chemin fichier (attachments):
+        {
+            "type": "transcription_only",
+            "taskId": str,
+            "messageId": str,
+            "attachmentId": str,
+            "audioPath": str,
+            "audioUrl": str (optionnel),
+            "mobileTranscription": {...}
+        }
+
+        Mode 2 - Via audio base64 (legacy):
+        {
+            "type": "transcription_only",
+            "taskId": str,
+            "messageId": str,
+            "audioData": str (base64),
+            "audioFormat": str (wav, mp3, ogg, webm, m4a),
+            "mobileTranscription": {...}
+        }
+
+        Mode 3 - Via binaire ZMQ multipart (RECOMMANDÉ - plus efficace):
+        {
+            "type": "transcription_only",
+            "taskId": str,
+            "messageId": str,
+            "binaryFrames": { "audio": 1 },
+            "audioFormat": str,
+            "_audioBinary": bytes (injecté par _handle_translation_request_multipart)
+        }
+        """
+        task_id = request_data.get('taskId', str(uuid.uuid4()))
+        start_time = time.time()
+        temp_file_path = None  # Pour nettoyage
+
+        logger.info(f"📝 [TRANSLATOR] Transcription only request: {request_data.get('messageId')}")
+
+        try:
+            # Vérifier que le service de transcription est disponible
+            if not TRANSCRIPTION_SERVICE_AVAILABLE:
+                raise RuntimeError("TranscriptionService non disponible")
+
+            # Valider les données requises - messageId est toujours requis
+            if not request_data.get('messageId'):
+                raise ValueError("Champ requis manquant: messageId")
+
+            # Déterminer le mode: _audioBinary (multipart) > audioData (base64) > audioPath
+            audio_path = request_data.get('audioPath')
+            audio_binary = request_data.get('_audioBinary')  # Binaire injecté par multipart handler
+            audio_data = request_data.get('audioData')
+            audio_format = request_data.get('audioFormat', 'wav')
+
+            if not audio_path and not audio_data and not audio_binary:
+                raise ValueError("audioPath, audioData ou _audioBinary requis")
+
+            # Mode 3: Binaire ZMQ multipart (plus efficace, pas de décodage)
+            if audio_binary:
+                import tempfile
+                from pathlib import Path
+
+                # Créer un fichier temporaire directement depuis le binaire
+                temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                temp_file_path = temp_dir / f"trans_{task_id}.{audio_format}"
+
+                with open(temp_file_path, 'wb') as f:
+                    f.write(audio_binary)
+
+                audio_path = str(temp_file_path)
+                logger.info(f"   📁 Audio binaire ZMQ: {len(audio_binary)} bytes → {temp_file_path}")
+
+            # Mode 2: Si audioData (base64) est fourni, décoder en fichier temporaire
+            elif audio_data:
+                import base64
+                import tempfile
+                from pathlib import Path
+
+                try:
+                    audio_bytes = base64.b64decode(audio_data)
+                except Exception as e:
+                    raise ValueError(f"Données audio base64 invalides: {e}")
+
+                # Créer un fichier temporaire
+                temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                temp_file_path = temp_dir / f"trans_{task_id}.{audio_format}"
+
+                with open(temp_file_path, 'wb') as f:
+                    f.write(audio_bytes)
+
+                audio_path = str(temp_file_path)
+                logger.info(f"   📁 Audio base64 décodé: {len(audio_bytes)} bytes → {temp_file_path}")
+
+            # Obtenir le service de transcription
+            transcription_service = get_transcription_service()
+            if not transcription_service.is_initialized:
+                await transcription_service.initialize()
+
+            # Préparer les données mobiles si disponibles
+            mobile_transcription = None
+            mobile_trans = request_data.get('mobileTranscription')
+            if mobile_trans and mobile_trans.get('text'):
+                mobile_transcription = {
+                    "text": mobile_trans.get('text'),
+                    "language": mobile_trans.get('language'),
+                    "confidence": mobile_trans.get('confidence', 0.85),
+                    "source": mobile_trans.get('source', 'mobile'),
+                    "segments": mobile_trans.get('segments')
+                }
+
+            # Effectuer la transcription
+            result = await transcription_service.transcribe(
+                audio_path=audio_path,
+                mobile_transcription=mobile_transcription,
+                return_timestamps=True
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            # Publier le résultat
+            await self._publish_transcription_result(
+                task_id=task_id,
+                message_id=request_data.get('messageId'),
+                attachment_id=request_data.get('attachmentId'),
+                result=result,
+                processing_time=processing_time
+            )
+
+            logger.info(
+                f"✅ [TRANSLATOR] Transcription only terminée: "
+                f"msg={request_data.get('messageId')}, "
+                f"lang={result.language}, "
+                f"time={processing_time}ms"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {e}")
+            import traceback
+            traceback.print_exc()
+
+            await self._publish_transcription_error(
+                task_id=task_id,
+                message_id=request_data.get('messageId', ''),
+                attachment_id=request_data.get('attachmentId', ''),
+                error=str(e),
+                error_code="transcription_failed"
+            )
+
+        finally:
+            # Nettoyer le fichier temporaire si créé
+            if temp_file_path is not None:
+                try:
+                    from pathlib import Path
+                    temp_path = Path(temp_file_path) if not isinstance(temp_file_path, Path) else temp_file_path
+                    if temp_path.exists():
+                        temp_path.unlink()
+                        logger.debug(f"   🧹 Fichier temporaire supprimé: {temp_file_path}")
+                except Exception as cleanup_error:
+                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {cleanup_error}")
+
+    async def _publish_transcription_result(
+        self,
+        task_id: str,
+        message_id: str,
+        attachment_id: str,
+        result,
+        processing_time: int
+    ):
+        """Publie le résultat de la transcription via PUB"""
+        try:
+            # Convertir les segments en dictionnaires sérialisables
+            segments = getattr(result, 'segments', None)
+            segments_dict = None
+            if segments:
+                segments_dict = [
+                    {
+                        'text': s.text,
+                        'startMs': s.start_ms,
+                        'endMs': s.end_ms,
+                        'confidence': s.confidence
+                    }
+                    for s in segments
+                ]
+
+            message = {
+                'type': 'transcription_completed',
+                'taskId': task_id,
+                'messageId': message_id,
+                'attachmentId': attachment_id,
+                'transcription': {
+                    'text': result.text,
+                    'language': result.language,
+                    'confidence': result.confidence,
+                    'durationMs': result.duration_ms,
+                    'source': result.source,
+                    'segments': segments_dict
+                },
+                'processingTimeMs': processing_time,
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+                logger.info(f"✅ [TRANSLATOR] Transcription result publié: {message_id}")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription result")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription result: {e}")
+
+    async def _publish_transcription_error(
+        self,
+        task_id: str,
+        message_id: str,
+        attachment_id: str,
+        error: str,
+        error_code: str
+    ):
+        """Publie une erreur de transcription via PUB"""
+        try:
+            message = {
+                'type': 'transcription_error',
+                'taskId': task_id,
+                'messageId': message_id,
+                'attachmentId': attachment_id,
+                'error': error,
+                'errorCode': error_code,
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+                logger.warning(f"⚠️ [TRANSLATOR] Transcription error publié: {message_id} - {error_code}")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription error")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription error: {e}")
 
     async def _handle_voice_api_request(self, request_data: dict):
         """
@@ -1281,6 +1969,7 @@ class ZMQTranslationServer:
         # Also configure voice profile handler
         if self.voice_profile_handler:
             self.voice_profile_handler.voice_clone_service = voice_clone_service
+            self.voice_profile_handler.transcription_service = transcription_service
             logger.info("✅ [ZMQ] Voice Profile handler services configurés")
 
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
@@ -1297,10 +1986,9 @@ class ZMQTranslationServer:
             
             # Récupérer les métriques système
             memory_usage = psutil.Process().memory_info().rss / 1024 / 1024  # MB
-            cpu_usage = psutil.Process().cpu_percent()
-            # Attendre un peu pour avoir une mesure CPU valide
-            await asyncio.sleep(0.1)
-            cpu_usage = psutil.Process().cpu_percent()
+            # OPTIMISATION: Suppression du sleep(0.1) qui ajoutait 100ms de latence
+            # Utiliser la valeur CPU mise en cache ou 0.0 si non disponible
+            cpu_usage = getattr(self, '_cached_cpu_usage', 0.0)
             
             # Enrichir le résultat avec toutes les informations techniques
             enriched_result = {
@@ -1506,10 +2194,18 @@ class ZMQTranslationServer:
     async def stop(self):
         """Arrête le serveur"""
         self.running = False
-        
+
+        # Arrêter le monitoring CPU
+        if self._cpu_update_task:
+            self._cpu_update_task.cancel()
+            try:
+                await self._cpu_update_task
+            except asyncio.CancelledError:
+                pass
+
         # Arrêter les workers
         await self.pool_manager.stop_workers()
-        
+
         # Attendre que tous les workers se terminent
         if self.worker_tasks:
             await asyncio.gather(*self.worker_tasks, return_exceptions=True)

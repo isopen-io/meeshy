@@ -433,7 +433,7 @@ export default function AdminAnonymousUsersPage() {
                           <p className="text-sm font-medium text-gray-500">Dernière activité</p>
                           <p className="text-sm flex items-center space-x-1">
                             <Clock className="h-3 w-3" />
-                            <span>{selectedUser.lastActivity ? formatDate(selectedUser.lastActivity) : 'Jamais'}</span>
+                            <span>{selectedUser.lastActiveAt ? formatDate(selectedUser.lastActiveAt) : 'Jamais'}</span>
                           </p>
                         </div>
                       </div>
@@ -469,9 +469,9 @@ export default function AdminAnonymousUsersPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">Voir l'historique</span>
-                          <Badge variant={selectedUser.canViewHistory ? "default" : "secondary"}>
-                            {selectedUser.canViewHistory ? 'Autorisé' : 'Refusé'}
+                          <span className="text-sm font-medium">En ligne</span>
+                          <Badge variant={selectedUser.isOnline ? "default" : "secondary"}>
+                            {selectedUser.isOnline ? 'Oui' : 'Non'}
                           </Badge>
                         </div>
                       </div>
@@ -494,7 +494,7 @@ export default function AdminAnonymousUsersPage() {
                         </div>
                         <div className="text-center p-4 bg-green-50 rounded-lg">
                           <p className="text-2xl font-bold text-green-600">
-                            {selectedUser._count.reactions || 0}
+                            {(selectedUser._count as Record<string, number>).reactions ?? 0}
                           </p>
                           <p className="text-sm text-gray-600">Réactions</p>
                         </div>
@@ -527,7 +527,7 @@ export default function AdminAnonymousUsersPage() {
                             </p>
                           </div>
                           <Badge variant="outline">
-                            {selectedUser.shareLink.isActive ? 'Actif' : 'Inactif'}
+                            {(selectedUser.shareLink as Record<string, unknown>).isActive ? 'Actif' : 'Inactif'}
                           </Badge>
                         </div>
                       </div>
@@ -542,14 +542,14 @@ export default function AdminAnonymousUsersPage() {
                                'Sans titre'}
                             </p>
                             <p className="text-sm text-gray-500">
-                              Type: {selectedUser.shareLink.conversation.type}
+                              Type: {String((selectedUser.shareLink.conversation as Record<string, unknown>).type ?? 'Standard')}
                             </p>
                           </div>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              router.push(`/admin/conversations?id=${selectedUser.shareLink.conversationId}`);
+                              router.push(`/admin/conversations?id=${selectedUser.shareLink.conversation.id}`);
                               setShowDetailsModal(false);
                             }}
                             className="flex items-center space-x-1"
@@ -585,7 +585,7 @@ export default function AdminAnonymousUsersPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            router.push(`/conversations/${selectedUser.shareLink.conversationId}`);
+                            router.push(`/conversations/${selectedUser.shareLink.conversation.id}`);
                             setShowDetailsModal(false);
                           }}
                           className="flex items-center space-x-1"

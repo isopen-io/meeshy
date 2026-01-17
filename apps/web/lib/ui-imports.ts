@@ -1,6 +1,20 @@
 /**
- * Imports UI optimisés pour améliorer les performances
- * Centralise les imports des composants UI pour un meilleur tree-shaking
+ * ⚠️ DEPRECATED: Ce fichier NE DOIT PLUS être utilisé
+ *
+ * PROBLÈME: Ce fichier était censé optimiser les imports mais fait l'inverse !
+ * - Il centralise tous les composants UI en un seul endroit
+ * - Cela EMPÊCHE le tree-shaking au lieu de l'améliorer
+ * - Ajoute ~100-150 KB de code non utilisé au bundle
+ *
+ * ✅ SOLUTION: Utilisez des imports directs
+ * import { Button } from '@/components/ui/button';
+ * import { Dialog, DialogContent } from '@/components/ui/dialog';
+ *
+ * ❌ N'UTILISEZ JAMAIS:
+ * import { Button, Dialog } from '@/lib/ui-imports';
+ *
+ * Ce fichier est conservé pour éviter les erreurs de build mais sera supprimé.
+ * Tous les nouveaux imports doivent être directs depuis @/components/ui/*
  */
 
 // Imports centralisés des composants Radix UI
@@ -108,18 +122,19 @@ export {
   CommandShortcut,
 } from '@/components/ui/command';
 
-export {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+// Context Menu - Not yet implemented
+// export {
+//   ContextMenu,
+//   ContextMenuContent,
+//   ContextMenuItem,
+//   ContextMenuLabel,
+//   ContextMenuSeparator,
+//   ContextMenuShortcut,
+//   ContextMenuSub,
+//   ContextMenuSubContent,
+//   ContextMenuSubTrigger,
+//   ContextMenuTrigger,
+// } from '@/components/ui/context-menu';
 
 export {
   HoverCard,
@@ -135,33 +150,35 @@ export {
   Label,
 } from '@/components/ui/label';
 
-export {
-  Menubar,
-  MenubarContent,
-  MenubarItem,
-  MenubarLabel,
-  MenubarMenu,
-  MenubarRadioGroup,
-  MenubarRadioItem,
-  MenubarSeparator,
-  MenubarShortcut,
-  MenubarSub,
-  MenubarSubContent,
-  MenubarSubTrigger,
-  MenubarTrigger,
-} from '@/components/ui/menubar';
+// Menubar - Not yet implemented
+// export {
+//   Menubar,
+//   MenubarContent,
+//   MenubarItem,
+//   MenubarLabel,
+//   MenubarMenu,
+//   MenubarRadioGroup,
+//   MenubarRadioItem,
+//   MenubarSeparator,
+//   MenubarShortcut,
+//   MenubarSub,
+//   MenubarSubContent,
+//   MenubarSubTrigger,
+//   MenubarTrigger,
+// } from '@/components/ui/menubar';
 
-export {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuIndicator,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  NavigationMenuViewport,
-  navigationMenuTriggerStyle,
-} from '@/components/ui/navigation-menu';
+// NavigationMenu - Not yet implemented
+// export {
+//   NavigationMenu,
+//   NavigationMenuContent,
+//   NavigationMenuIndicator,
+//   NavigationMenuItem,
+//   NavigationMenuLink,
+//   NavigationMenuList,
+//   NavigationMenuTrigger,
+//   NavigationMenuViewport,
+//   navigationMenuTriggerStyle,
+// } from '@/components/ui/navigation-menu';
 
 export {
   Popover,
@@ -173,10 +190,11 @@ export {
   Progress,
 } from '@/components/ui/progress';
 
-export {
-  RadioGroup,
-  RadioGroupItem,
-} from '@/components/ui/radio-group';
+// RadioGroup - Not yet implemented
+// export {
+//   RadioGroup,
+//   RadioGroupItem,
+// } from '@/components/ui/radio-group';
 
 export {
   ScrollArea,
@@ -198,9 +216,10 @@ export {
   Separator,
 } from '@/components/ui/separator';
 
-export {
-  Skeleton,
-} from '@/components/ui/skeleton';
+// Skeleton - Not yet implemented
+// export {
+//   Skeleton,
+// } from '@/components/ui/skeleton';
 
 export {
   Slider,
@@ -210,34 +229,37 @@ export {
   Switch,
 } from '@/components/ui/switch';
 
-export {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+// Table - Not yet implemented
+// export {
+//   Table,
+//   TableBody,
+//   TableCaption,
+//   TableCell,
+//   TableHead,
+//   TableHeader,
+//   TableRow,
+// } from '@/components/ui/table';
 
 export {
   Textarea,
 } from '@/components/ui/textarea';
 
-export {
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastDescription,
-  ToastProvider,
-  ToastTitle,
-  ToastViewport,
-} from '@/components/ui/toast';
+// Toast - Using sonner instead
+// export {
+//   Toast,
+//   ToastAction,
+//   ToastClose,
+//   ToastDescription,
+//   ToastProvider,
+//   ToastTitle,
+//   ToastViewport,
+// } from '@/components/ui/toast';
 
-export {
-  Toggle,
-  toggleVariants,
-} from '@/components/ui/toggle';
+// Toggle - Not yet implemented
+// export {
+//   Toggle,
+//   toggleVariants,
+// } from '@/components/ui/toggle';
 
 export {
   Tooltip,

@@ -7,7 +7,7 @@ import "../styles/custom-toast.css";
 import { Toaster } from "@/components/ui/sonner";
 import { StoreInitializer } from "@/stores";
 import { ThemeProvider, QueryProvider } from "@/components/providers";
-import { ErrorBoundary } from "@/components/common";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
 import { defaultFont, getAllFontVariables } from "@/lib/fonts";

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { TranslationService } from '../services/TranslationService';
+import { MessageTranslationService } from '../services/MessageTranslationService';
 import { TrackingLinkService } from '../services/TrackingLinkService';
 import { AttachmentService } from '../services/AttachmentService';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -248,7 +248,7 @@ async function ensureUniqueShareLinkIdentifier(prisma: any, baseIdentifier: stri
   }
 }
 
-// Prisma et TranslationService sont décorés et fournis par le serveur principal
+// Prisma et MessageTranslationService sont décorés et fournis par le serveur principal
 
 
 // Fonction utilitaire pour prédire le type de modèle
@@ -305,7 +305,7 @@ interface SearchQuery {
 export async function conversationRoutes(fastify: FastifyInstance) {
   // Récupérer prisma et le service de traduction décorés par le serveur
   const prisma = fastify.prisma;
-  const translationService: TranslationService = (fastify as any).translationService;
+  const translationService: MessageTranslationService = (fastify as any).translationService;
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = fastify.socketIOHandler;
@@ -2071,7 +2071,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Déclencher les traductions via le TranslationService (gère les langues des participants)
+      // Déclencher les traductions via le MessageTranslationService (gère les langues des participants)
       try {
         await translationService.handleNewMessage({
           id: message.id,
@@ -2083,7 +2083,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
           replyToId
         } as any);
       } catch (error) {
-        console.error('[GATEWAY] Error queuing translations via TranslationService:', error);
+        console.error('[GATEWAY] Error queuing translations via MessageTranslationService:', error);
         // Ne pas faire échouer l'envoi du message si la traduction échoue
       }
 
@@ -2695,7 +2695,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       try {
         console.log('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
-        const translationService: TranslationService = (fastify as any).translationService;
+        const translationService: MessageTranslationService = (fastify as any).translationService;
 
         // Invalider les traductions existantes en base de données
         const deletedCount = await prisma.messageTranslation.deleteMany({
@@ -3343,59 +3343,61 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       }
 
       // Construire les filtres dynamiquement
+      // NOTE: Ne pas filtrer par user.isActive pour éviter d'exclure des membres
+      // dont le compte utilisateur pourrait être temporairement désactivé
       const whereConditions: any = {
         conversationId: conversationId,
-        isActive: true,
-        user: {
-          isActive: true
-        }
+        isActive: true
       };
 
       // Filtre par statut en ligne
       if (onlineOnly === 'true') {
-        whereConditions.user.isOnline = true;
+        whereConditions.user = { ...whereConditions.user, isOnline: true };
       }
 
       // Filtre par rôle
       if (role) {
-        whereConditions.user.role = role.toUpperCase();
+        whereConditions.user = { ...whereConditions.user, role: role.toUpperCase() };
       }
 
       // Filtre par recherche (nom, prénom, username, email)
       if (search && search.trim().length > 0) {
         const searchTerm = search.trim();
-        whereConditions.user.OR = [
-          {
-            firstName: {
-              contains: searchTerm,
-              mode: 'insensitive'
+        whereConditions.user = {
+          ...whereConditions.user,
+          OR: [
+            {
+              firstName: {
+                contains: searchTerm,
+                mode: 'insensitive'
+              }
+            },
+            {
+              lastName: {
+                contains: searchTerm,
+                mode: 'insensitive'
+              }
+            },
+            {
+              username: {
+                contains: searchTerm,
+                mode: 'insensitive'
+              }
+            },
+            {
+              email: {
+                contains: searchTerm,
+                mode: 'insensitive'
+              }
+            },
+            {
+              displayName: {
+                contains: searchTerm,
+                mode: 'insensitive'
+              }
             }
-          },
-          {
-            lastName: {
-              contains: searchTerm,
-              mode: 'insensitive'
-            }
-          },
-          {
-            username: {
-              contains: searchTerm,
-              mode: 'insensitive'
-            }
-          },
-          {
-            email: {
-              contains: searchTerm,
-              mode: 'insensitive'
-            }
-          },
-          {
-            displayName: {
-              contains: searchTerm,
-              mode: 'insensitive'
-            }
-          }
-        ];
+          ]
+        };
       }
 
       // Récupérer les participants avec filtres

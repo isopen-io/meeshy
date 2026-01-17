@@ -55,6 +55,10 @@ except ImportError:
     PERF_OPTIMIZER_AVAILABLE = False
     logger.debug("[VOICE_CLONE] PerformanceOptimizer not available, using manual device selection")
 
+# Import Redis cache service for voice profile caching
+import base64
+from services.redis_service import get_audio_cache_service, AudioCacheService
+
 
 @dataclass
 class VoiceFingerprint:
@@ -307,6 +311,7 @@ class VoiceCharacteristics:
     pitch_std_hz: float = 0.0           # Écart-type du pitch
     pitch_min_hz: float = 0.0           # Pitch minimum
     pitch_max_hz: float = 0.0           # Pitch maximum
+    pitch_range_hz: float = 0.0         # Étendue du pitch (max - min)
 
     # Classification vocale
     voice_type: str = "unknown"          # "high_female", "medium_female", "low_female", "high_male", "medium_male", "low_male", "child"
@@ -315,15 +320,19 @@ class VoiceCharacteristics:
 
     # Caractéristiques spectrales
     brightness: float = 0.0             # Centroïde spectral moyen (Hz)
+    spectral_centroid_hz: float = 0.0   # Centroïde spectral (Hz)
+    spectral_bandwidth_hz: float = 0.0  # Largeur de bande spectrale (Hz)
     warmth: float = 0.0                 # Énergie basses fréquences
     breathiness: float = 0.0            # Niveau de souffle dans la voix
     nasality: float = 0.0               # Niveau de nasalité
 
     # Prosodie
     speech_rate_wpm: float = 0.0        # Mots par minute estimés
+    speaking_rate_wpm: float = 0.0      # Alias pour compatibilité
     energy_mean: float = 0.0            # Énergie moyenne (volume)
     energy_std: float = 0.0             # Variation d'énergie
     silence_ratio: float = 0.0          # Ratio de silence
+    confidence: float = 0.0             # Niveau de confiance de l'analyse
 
     # Qualité technique
     sample_rate: int = 0                # Taux d'échantillonnage
@@ -873,6 +882,8 @@ class VoiceAnalyzer:
     def _estimate_snr(self, audio: np.ndarray, sr: int) -> float:
         """Estime le rapport signal/bruit en dB"""
         try:
+            import librosa
+
             # Énergie du signal
             signal_power = np.mean(audio ** 2)
 
@@ -1572,8 +1583,8 @@ class VoiceCloneService:
         # Load centralized settings
         self._settings = get_settings()
 
-        # Configuration
-        self.voice_cache_dir = Path(voice_cache_dir or os.getenv('VOICE_MODEL_CACHE_DIR', '/app/voice_models'))
+        # Configuration - utiliser le chemin centralisé des settings
+        self.voice_cache_dir = Path(voice_cache_dir or os.getenv('VOICE_MODEL_CACHE_DIR', self._settings.voice_models_path))
 
         # Device detection: Use PerformanceOptimizer if available, else fallback to settings
         env_device = os.getenv('VOICE_CLONE_DEVICE', self._settings.voice_clone_device)
@@ -1585,8 +1596,11 @@ class VoiceCloneService:
             # Manual device selection or explicit device specified
             self.device = env_device if env_device != "auto" else "cpu"
 
-        # Service de persistance MongoDB
+        # Service de persistance MongoDB (optionnel, pour fallback)
         self.database_service = database_service
+
+        # Service de cache Redis pour les profils vocaux
+        self._audio_cache: Optional[AudioCacheService] = None
 
         # OpenVoice components
         self.tone_color_converter = None
@@ -1603,8 +1617,14 @@ class VoiceCloneService:
         self._initialized = True
 
     def set_database_service(self, database_service):
-        """Injecte le service de base de donnees MongoDB"""
+        """Injecte le service de base de donnees MongoDB (optionnel, fallback)"""
         self.database_service = database_service
+
+    def _get_audio_cache(self) -> AudioCacheService:
+        """Retourne le service de cache audio Redis (lazy init)"""
+        if self._audio_cache is None:
+            self._audio_cache = get_audio_cache_service(self._settings)
+        return self._audio_cache
 
     async def initialize(self) -> bool:
         """Initialise OpenVoice pour le clonage vocal"""
@@ -1647,17 +1667,73 @@ class VoiceCloneService:
         checkpoints_dir = self._settings.openvoice_checkpoints_path
         logger.info(f"[VOICE_CLONE] Chargement OpenVoice depuis {checkpoints_dir}")
 
-        # Vérifier que les checkpoints existent
+        # Chemins des fichiers requis (OpenVoice V2 les met dans converter/)
         checkpoints_path = Path(checkpoints_dir)
-        if not checkpoints_path.exists():
-            logger.warning(f"[VOICE_CLONE] ⚠️ Checkpoints OpenVoice non trouvés: {checkpoints_dir}")
-            logger.info("[VOICE_CLONE] 💡 Les checkpoints seront téléchargés automatiquement par OpenVoice")
+        converter_path = checkpoints_path / "converter"
+        config_path = converter_path / "config.json"
+        checkpoint_path = converter_path / "checkpoint.pth"
 
+        # Télécharger les checkpoints OpenVoice V2 s'ils n'existent pas
+        if not config_path.exists() or not checkpoint_path.exists():
+            logger.info("[VOICE_CLONE] 📥 Téléchargement des checkpoints OpenVoice V2...")
+            self._download_openvoice_checkpoints(checkpoints_path)
+
+        # Vérifier que les fichiers existent maintenant
+        if not config_path.exists():
+            raise FileNotFoundError(f"OpenVoice config.json non trouvé: {config_path}")
+
+        # ToneColorConverter attend le chemin vers config.json, pas le répertoire
         self.tone_color_converter = ToneColorConverter(
-            checkpoints_dir,
+            str(config_path),
             device=self.device
         )
+
+        # Charger le checkpoint
+        if checkpoint_path.exists():
+            self.tone_color_converter.load_ckpt(str(checkpoint_path))
+            logger.info(f"[VOICE_CLONE] ✅ Checkpoint chargé: {checkpoint_path}")
+
         self.se_extractor_module = se_extractor
+
+    def _download_openvoice_checkpoints(self, checkpoints_path: Path):
+        """Télécharge les checkpoints OpenVoice V2 depuis MyShell S3"""
+        import zipfile
+        import urllib.request
+        import tempfile
+
+        OPENVOICE_V2_URL = "https://myshell-public-repo-host.s3.amazonaws.com/openvoice/checkpoints_v2_0417.zip"
+
+        checkpoints_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # Télécharger le zip
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
+                tmp_path = tmp_file.name
+                logger.info(f"[VOICE_CLONE] Téléchargement depuis {OPENVOICE_V2_URL}...")
+                urllib.request.urlretrieve(OPENVOICE_V2_URL, tmp_path)
+
+            # Extraire le zip
+            logger.info(f"[VOICE_CLONE] Extraction vers {checkpoints_path}...")
+            with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+                # Le zip contient un dossier checkpoints_v2/, on extrait son contenu
+                for member in zip_ref.namelist():
+                    # Retirer le préfixe "checkpoints_v2/" du chemin
+                    if member.startswith("checkpoints_v2/"):
+                        target_path = member[len("checkpoints_v2/"):]
+                        if target_path:  # Ignorer le dossier racine
+                            source = zip_ref.read(member)
+                            dest_path = checkpoints_path / target_path
+                            dest_path.parent.mkdir(parents=True, exist_ok=True)
+                            if not member.endswith('/'):  # C'est un fichier
+                                dest_path.write_bytes(source)
+
+            # Nettoyer
+            Path(tmp_path).unlink(missing_ok=True)
+            logger.info("[VOICE_CLONE] ✅ Checkpoints OpenVoice V2 téléchargés")
+
+        except Exception as e:
+            logger.error(f"[VOICE_CLONE] ❌ Erreur téléchargement checkpoints: {e}")
+            raise
 
     async def get_or_create_voice_model(
         self,
@@ -2063,7 +2139,8 @@ class VoiceCloneService:
 
         try:
             loop = asyncio.get_event_loop()
-            embedding = await loop.run_in_executor(
+            # get_se retourne un tuple (embedding, audio_name)
+            result = await loop.run_in_executor(
                 None,
                 lambda: self.se_extractor_module.get_se(
                     audio_path,
@@ -2071,6 +2148,13 @@ class VoiceCloneService:
                     target_dir=str(target_dir)
                 )
             )
+            # Extraire l'embedding du tuple
+            embedding, _audio_name = result
+
+            # Convertir le tensor PyTorch en numpy array si nécessaire
+            if hasattr(embedding, 'cpu'):
+                embedding = embedding.cpu().detach().numpy()
+
             return embedding
         except Exception as e:
             logger.error(f"[VOICE_CLONE] ❌ Erreur extraction embedding: {e}")
@@ -2235,18 +2319,37 @@ class VoiceCloneService:
         return total
 
     async def _get_audio_duration_ms(self, audio_path: str) -> int:
-        """Récupère la durée d'un fichier audio en millisecondes"""
+        """Récupère la durée d'un fichier audio en millisecondes.
+
+        Utilise librosa en premier, puis pydub comme fallback pour les formats
+        non supportés par soundfile (ex: webm, mp4).
+        """
         if not AUDIO_PROCESSING_AVAILABLE:
             return 0
 
+        loop = asyncio.get_event_loop()
+
+        # Essayer d'abord avec librosa
         try:
             import librosa
-            loop = asyncio.get_event_loop()
             duration = await loop.run_in_executor(
                 None,
                 lambda: librosa.get_duration(path=audio_path)
             )
-            return int(duration * 1000)
+            if duration > 0:
+                return int(duration * 1000)
+        except Exception as e:
+            logger.debug(f"[VOICE_CLONE] librosa n'a pas pu lire {audio_path}: {e}")
+
+        # Fallback avec pydub (supporte plus de formats via ffmpeg)
+        try:
+            def get_duration_with_pydub():
+                audio = AudioSegment.from_file(audio_path)
+                return len(audio)  # pydub retourne déjà en ms
+
+            duration_ms = await loop.run_in_executor(None, get_duration_with_pydub)
+            logger.debug(f"[VOICE_CLONE] Durée obtenue via pydub: {duration_ms}ms")
+            return duration_ms
         except Exception as e:
             logger.warning(f"[VOICE_CLONE] Impossible de lire la durée de {audio_path}: {e}")
             return 0
@@ -2275,21 +2378,20 @@ class VoiceCloneService:
 
     async def _load_cached_model(self, user_id: str) -> Optional[VoiceModel]:
         """
-        Charge un modele vocal depuis MongoDB.
+        Charge un modele vocal depuis le cache Redis.
 
-        Note: Cache Redis desactive pour le moment (a activer si besoin de scaling).
+        Architecture: Redis est utilisé comme cache, Gateway gère la persistance MongoDB.
         """
-        if not self.database_service or not self.database_service.is_db_connected():
-            return None
-
         try:
-            db_profile = await self.database_service.get_voice_profile(user_id)
-            if db_profile:
-                model = self._db_profile_to_voice_model(db_profile)
-                logger.debug(f"[VOICE_CLONE] Modele charge depuis MongoDB: {user_id}")
+            audio_cache = self._get_audio_cache()
+            cached_profile = await audio_cache.get_voice_profile(user_id)
+
+            if cached_profile:
+                model = self._cache_profile_to_voice_model(cached_profile)
+                logger.debug(f"[VOICE_CLONE] Modele charge depuis cache Redis: {user_id}")
                 return model
         except Exception as e:
-            logger.warning(f"[VOICE_CLONE] Erreur lecture MongoDB pour {user_id}: {e}")
+            logger.warning(f"[VOICE_CLONE] Erreur lecture cache Redis pour {user_id}: {e}")
 
         return None
 
@@ -2334,22 +2436,77 @@ class VoiceCloneService:
 
         return model
 
+    def _cache_profile_to_voice_model(self, cached_profile: Dict[str, Any]) -> VoiceModel:
+        """Convertit un profil du cache Redis en VoiceModel"""
+        model = VoiceModel(
+            user_id=cached_profile["userId"],
+            embedding_path="",
+            audio_count=cached_profile.get("audioCount", 1),
+            total_duration_ms=cached_profile.get("totalDurationMs", 0),
+            quality_score=cached_profile.get("qualityScore", 0.5),
+            profile_id=cached_profile.get("profileId", ""),
+            version=cached_profile.get("version", 1),
+            source_audio_id="",
+            created_at=datetime.fromisoformat(cached_profile["createdAt"]) if cached_profile.get("createdAt") else datetime.now(),
+            updated_at=datetime.fromisoformat(cached_profile["updatedAt"]) if cached_profile.get("updatedAt") else datetime.now(),
+            next_recalibration_at=datetime.fromisoformat(cached_profile["nextRecalibrationAt"]) if cached_profile.get("nextRecalibrationAt") else None
+        )
+
+        # Charger l'embedding encodé en base64
+        if cached_profile.get("embeddingBase64"):
+            try:
+                embedding_bytes = base64.b64decode(cached_profile["embeddingBase64"])
+                model.embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+            except Exception as e:
+                logger.warning(f"[VOICE_CLONE] Erreur décodage embedding base64: {e}")
+
+        if cached_profile.get("voiceCharacteristics"):
+            vc_data = cached_profile["voiceCharacteristics"]
+            model.voice_characteristics = VoiceCharacteristics(
+                pitch_mean_hz=vc_data.get("pitch", {}).get("mean_hz", 0),
+                pitch_std_hz=vc_data.get("pitch", {}).get("std_hz", 0),
+                pitch_min_hz=vc_data.get("pitch", {}).get("min_hz", 0),
+                pitch_max_hz=vc_data.get("pitch", {}).get("max_hz", 0),
+                voice_type=vc_data.get("classification", {}).get("voice_type", "unknown"),
+                estimated_gender=vc_data.get("classification", {}).get("estimated_gender", "unknown"),
+                estimated_age_range=vc_data.get("classification", {}).get("estimated_age_range", "unknown"),
+                brightness=vc_data.get("spectral", {}).get("brightness", 0),
+                warmth=vc_data.get("spectral", {}).get("warmth", 0),
+                breathiness=vc_data.get("spectral", {}).get("breathiness", 0),
+                nasality=vc_data.get("spectral", {}).get("nasality", 0),
+                speech_rate_wpm=vc_data.get("prosody", {}).get("speech_rate_wpm", 0),
+                energy_mean=vc_data.get("prosody", {}).get("energy_mean", 0),
+                energy_std=vc_data.get("prosody", {}).get("energy_std", 0),
+                silence_ratio=vc_data.get("prosody", {}).get("silence_ratio", 0),
+            )
+
+        if cached_profile.get("fingerprint"):
+            model.fingerprint = VoiceFingerprint.from_dict(cached_profile["fingerprint"])
+
+        return model
+
     async def _load_embedding(self, model: VoiceModel) -> VoiceModel:
         """
-        Charge l'embedding d'un modele depuis MongoDB.
+        Charge l'embedding d'un modele depuis le cache Redis.
 
-        L'embedding binaire est stocke dans MongoDB (champ Bytes).
-        Redis ne stocke que les metadonnees JSON.
+        L'embedding est stocké encodé en base64 dans le cache Redis.
+        Architecture: Redis = cache, Gateway = persistance MongoDB.
         """
-        if self.database_service and self.database_service.is_db_connected():
-            try:
-                embedding_bytes = await self.database_service.get_voice_embedding(model.user_id)
-                if embedding_bytes:
-                    model.embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
-                    logger.debug(f"[VOICE_CLONE] Embedding charge depuis MongoDB: {model.user_id}")
-                    return model
-            except Exception as e:
-                logger.warning(f"[VOICE_CLONE] Erreur lecture embedding MongoDB: {e}")
+        # L'embedding est déjà chargé par _cache_profile_to_voice_model si disponible
+        if model.embedding is not None and len(model.embedding) > 0:
+            return model
+
+        # Fallback: essayer de recharger depuis le cache
+        try:
+            audio_cache = self._get_audio_cache()
+            cached_profile = await audio_cache.get_voice_profile(model.user_id)
+            if cached_profile and cached_profile.get("embeddingBase64"):
+                embedding_bytes = base64.b64decode(cached_profile["embeddingBase64"])
+                model.embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+                logger.debug(f"[VOICE_CLONE] Embedding chargé depuis cache Redis: {model.user_id}")
+                return model
+        except Exception as e:
+            logger.warning(f"[VOICE_CLONE] Erreur lecture embedding depuis cache Redis: {e}")
 
         # Default: embedding vide
         model.embedding = np.zeros(256, dtype=np.float32)
@@ -2357,48 +2514,52 @@ class VoiceCloneService:
 
     async def _save_model_to_cache(self, model: VoiceModel):
         """
-        Sauvegarde un modele vocal dans MongoDB.
+        Sauvegarde un modele vocal dans le cache Redis.
 
-        Stocke l'embedding binaire (numpy tobytes) + metadonnees JSON.
-        Note: Cache Redis desactive pour le moment.
+        Stocke l'embedding encodé en base64 + metadonnees JSON.
 
         ═══════════════════════════════════════════════════════════════════════
-        ARCHITECTURE NOTE:
-        Les profils vocaux sont une exception - ils PEUVENT être sauvegardés
-        par Translator car ils sont créés/gérés par ce service.
-        Cependant, pour les traductions de messages et attachments,
-        la persistance est la responsabilité de Gateway.
+        ARCHITECTURE:
+        Redis = cache pour accès rapide aux profils vocaux
+        Gateway = responsable de la persistance MongoDB
+        Le Translator met en cache pour réutiliser les embeddings existants.
         ═══════════════════════════════════════════════════════════════════════
         """
-        if not self.database_service or not self.database_service.is_db_connected():
-            logger.debug("[VOICE_CLONE] MongoDB non connecté, sauvegarde profil vocal ignorée")
-            return
-
         try:
-            embedding_bytes = None
+            audio_cache = self._get_audio_cache()
+
+            # Encoder l'embedding en base64 pour stockage JSON
+            embedding_b64 = None
             if model.embedding is not None:
                 embedding_bytes = model.embedding.astype(np.float32).tobytes()
+                embedding_b64 = base64.b64encode(embedding_bytes).decode('utf-8')
 
             voice_chars_dict = model.voice_characteristics.to_dict() if model.voice_characteristics else None
             fingerprint_dict = model.fingerprint.to_dict() if model.fingerprint else None
 
-            await self.database_service.save_voice_profile(
-                user_id=model.user_id,
-                embedding=embedding_bytes,
-                audio_count=model.audio_count,
-                total_duration_ms=model.total_duration_ms,
-                quality_score=model.quality_score,
-                profile_id=model.profile_id or None,
-                embedding_model="openvoice_v2",
-                embedding_dimension=len(model.embedding) if model.embedding is not None else 256,
-                voice_characteristics=voice_chars_dict,
-                fingerprint=fingerprint_dict,
-                signature_short=model.fingerprint.signature_short if model.fingerprint else None,
-            )
-            logger.info(f"[VOICE_CLONE] Modele sauvegarde dans MongoDB: {model.user_id}")
+            cache_profile = {
+                "userId": model.user_id,
+                "profileId": model.profile_id or "",
+                "embeddingBase64": embedding_b64,
+                "embeddingModel": "openvoice_v2",
+                "embeddingDimension": len(model.embedding) if model.embedding is not None else 256,
+                "audioCount": model.audio_count,
+                "totalDurationMs": model.total_duration_ms,
+                "qualityScore": model.quality_score,
+                "version": model.version,
+                "voiceCharacteristics": voice_chars_dict,
+                "fingerprint": fingerprint_dict,
+                "signatureShort": model.fingerprint.signature_short if model.fingerprint else None,
+                "createdAt": model.created_at.isoformat() if model.created_at else datetime.now().isoformat(),
+                "updatedAt": datetime.now().isoformat(),
+                "nextRecalibrationAt": model.next_recalibration_at.isoformat() if model.next_recalibration_at else None,
+            }
+
+            await audio_cache.set_voice_profile(model.user_id, cache_profile)
+            logger.info(f"[VOICE_CLONE] Modele sauvegarde dans cache Redis: {model.user_id}")
 
         except Exception as e:
-            logger.error(f"[VOICE_CLONE] Erreur sauvegarde MongoDB: {e}")
+            logger.error(f"[VOICE_CLONE] Erreur sauvegarde cache Redis: {e}")
 
     async def schedule_quarterly_recalibration(self):
         """
@@ -2447,61 +2608,61 @@ class VoiceCloneService:
 
     async def _list_all_cached_models(self) -> List[VoiceModel]:
         """
-        Liste tous les modeles vocaux depuis MongoDB.
+        Liste tous les modeles vocaux depuis le cache Redis.
 
         Note: Cette methode ne charge pas les embeddings pour des raisons de performance.
         Utiliser _load_embedding() si l'embedding est necessaire.
         """
         models = []
 
-        if self.database_service and self.database_service.is_db_connected():
-            try:
-                # Requete MongoDB pour tous les profils vocaux
-                profiles = await self.database_service.prisma.uservoicemodel.find_many()
-                for profile in profiles:
-                    db_dict = {
-                        "userId": profile.userId,
-                        "profileId": profile.profileId,
-                        "audioCount": profile.audioCount,
-                        "totalDurationMs": profile.totalDurationMs,
-                        "qualityScore": profile.qualityScore,
-                        "version": profile.version,
-                        "voiceCharacteristics": profile.voiceCharacteristics,
-                        "fingerprint": profile.fingerprint,
-                        "createdAt": profile.createdAt.isoformat() if profile.createdAt else None,
-                        "updatedAt": profile.updatedAt.isoformat() if profile.updatedAt else None,
-                        "nextRecalibrationAt": profile.nextRecalibrationAt.isoformat() if profile.nextRecalibrationAt else None,
-                    }
-                    model = self._db_profile_to_voice_model(db_dict)
-                    models.append(model)
-            except Exception as e:
-                logger.error(f"[VOICE_CLONE] Erreur listing modeles MongoDB: {e}")
+        try:
+            audio_cache = self._get_audio_cache()
+            # Lister toutes les clés de profils vocaux
+            profile_keys = await audio_cache.redis.keys("voice:profile:*")
+
+            for key in profile_keys:
+                try:
+                    data = await audio_cache.redis.get(key)
+                    if data:
+                        import json
+                        cached_profile = json.loads(data)
+                        model = self._cache_profile_to_voice_model(cached_profile)
+                        models.append(model)
+                except Exception as e:
+                    logger.warning(f"[VOICE_CLONE] Erreur lecture profil {key}: {e}")
+
+        except Exception as e:
+            logger.error(f"[VOICE_CLONE] Erreur listing modeles Redis: {e}")
 
         return models
 
     async def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du service"""
         models_count = 0
-        db_connected = False
+        cache_available = False
 
-        if self.database_service and self.database_service.is_db_connected():
-            db_connected = True
-            try:
-                models_count = await self.database_service.prisma.uservoicemodel.count()
-            except Exception as e:
-                logger.warning(f"[VOICE_CLONE] Erreur comptage modeles: {e}")
+        try:
+            audio_cache = self._get_audio_cache()
+            cache_stats = audio_cache.get_stats()
+            cache_available = cache_stats.get("redis_available", False) or cache_stats.get("memory_entries", 0) > 0
+
+            # Compter les modèles en cache
+            profile_keys = await audio_cache.redis.keys("voice:profile:*")
+            models_count = len(profile_keys)
+        except Exception as e:
+            logger.warning(f"[VOICE_CLONE] Erreur comptage modeles: {e}")
 
         return {
             "service": "VoiceCloneService",
             "initialized": self.is_initialized,
             "openvoice_available": OPENVOICE_AVAILABLE,
             "audio_processing_available": AUDIO_PROCESSING_AVAILABLE,
-            "storage": "MongoDB",
+            "storage": "Redis",
             "device": self.device,
             "voice_models_count": models_count,
             "min_audio_duration_ms": self.MIN_AUDIO_DURATION_MS,
             "max_age_days": self.VOICE_MODEL_MAX_AGE_DAYS,
-            "database_connected": db_connected,
+            "cache_available": cache_available,
         }
 
     # =========================================================================

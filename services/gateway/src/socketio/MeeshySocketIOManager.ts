@@ -6,7 +6,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { TranslationService, MessageData } from '../services/TranslationService';
+import { MessageTranslationService, MessageData } from '../services/MessageTranslationService';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -50,7 +50,7 @@ export interface TranslationNotification {
 export class MeeshySocketIOManager {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
   private prisma: PrismaClient;
-  private translationService: TranslationService;
+  private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
   private statusService: StatusService;
   private messagingService: MessagingService;
@@ -75,7 +75,7 @@ export class MeeshySocketIOManager {
 
   constructor(httpServer: HTTPServer, prisma: PrismaClient) {
     this.prisma = prisma;
-    this.translationService = new TranslationService(prisma);
+    this.translationService = new MessageTranslationService(prisma);
 
     // Créer l'AttachmentService pour le cleanup automatique
     const attachmentService = new AttachmentService(prisma);
@@ -171,7 +171,10 @@ export class MeeshySocketIOManager {
 
       // Écouter les événements de traduction prêtes
       this.translationService.on('translationReady', this._handleTranslationReady.bind(this));
-      
+
+      // Écouter les événements de traduction audio prêtes
+      this.translationService.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));
+
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
@@ -219,9 +222,9 @@ export class MeeshySocketIOManager {
       }, callback?: (response: SocketIOResponse<{ messageId: string }>) => void) => {
         try {
 
-          const userId = this.socketToUser.get(socket.id);
+          const userIdOrToken = this.socketToUser.get(socket.id);
 
-          if (!userId) {
+          if (!userIdOrToken) {
             console.error(`❌ [MESSAGE_SEND] Socket ${socket.id} non authentifié`);
             console.error(`  └─ Sockets connectés:`, Array.from(this.socketToUser.keys()).slice(0, 5));
 
@@ -235,6 +238,10 @@ export class MeeshySocketIOManager {
             return;
           }
 
+          // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+          const userResult = this._getConnectedUser(userIdOrToken);
+          const user = userResult?.user;
+          const userId = userResult?.realUserId || userIdOrToken;
 
           // Validation de la longueur du message
           const validation = validateMessageLength(data.content);
@@ -243,15 +250,14 @@ export class MeeshySocketIOManager {
               success: false,
               error: validation.error || 'Message invalide'
             };
-            
+
             if (callback) callback(errorResponse);
             socket.emit('error', { message: validation.error || 'Message invalide' });
             console.warn(`⚠️ [WEBSOCKET] Message rejeté pour ${userId}: ${validation.error}`);
             return;
           }
 
-          // Récupérer les informations de l'utilisateur pour déterminer s'il est anonyme
-          const user = this.connectedUsers.get(userId);
+          // Déterminer si l'utilisateur est anonyme
           const isAnonymous = user?.isAnonymous || false;
 
           // Envoi de message = activité détectable
@@ -449,17 +455,22 @@ export class MeeshySocketIOManager {
         replyToId?: string;
       }, callback?: (response: SocketIOResponse<{ messageId: string }>) => void) => {
         try {
-          const userId = this.socketToUser.get(socket.id);
-          if (!userId) {
+          const userIdOrToken = this.socketToUser.get(socket.id);
+          if (!userIdOrToken) {
             const errorResponse: SocketIOResponse<{ messageId: string }> = {
               success: false,
               error: 'User not authenticated'
             };
-            
+
             if (callback) callback(errorResponse);
             socket.emit('error', { message: 'User not authenticated' });
             return;
           }
+
+          // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+          const userResult = this._getConnectedUser(userIdOrToken);
+          const user = userResult?.user;
+          const userId = userResult?.realUserId || userIdOrToken;
 
           // Validation de la longueur du message (si du contenu texte est présent)
           if (data.content && data.content.trim()) {
@@ -469,7 +480,7 @@ export class MeeshySocketIOManager {
                 success: false,
                 error: validation.error || 'Message invalide'
               };
-              
+
               if (callback) callback(errorResponse);
               socket.emit('error', { message: validation.error || 'Message invalide' });
               console.warn(`⚠️ [WEBSOCKET] Message avec attachments rejeté pour ${userId}: ${validation.error}`);
@@ -479,7 +490,7 @@ export class MeeshySocketIOManager {
 
           // Vérifier que les attachments existent et appartiennent à l'utilisateur
           const attachmentService = new (await import('../services/AttachmentService')).AttachmentService(this.prisma);
-          
+
           for (const attachmentId of data.attachmentIds) {
             const attachment = await attachmentService.getAttachment(attachmentId);
             if (!attachment) {
@@ -490,7 +501,7 @@ export class MeeshySocketIOManager {
               if (callback) callback(errorResponse);
               return;
             }
-            
+
             // Vérifier que l'attachment appartient à l'utilisateur
             if (attachment.uploadedBy !== userId) {
               const errorResponse: SocketIOResponse<{ messageId: string }> = {
@@ -502,8 +513,7 @@ export class MeeshySocketIOManager {
             }
           }
 
-          // Récupérer les informations de l'utilisateur pour déterminer s'il est anonyme
-          const user = this.connectedUsers.get(userId);
+          // Déterminer si l'utilisateur est anonyme
           const isAnonymous = user?.isAnonymous || false;
 
           let anonymousDisplayName: string | undefined;
@@ -565,6 +575,65 @@ export class MeeshySocketIOManager {
           // Associer les attachments au message
           if (response.success && response.data?.id) {
             await attachmentService.associateAttachmentsToMessage(data.attachmentIds, response.data.id);
+
+            // ═══════════════════════════════════════════════════════════════
+            // AUDIO PROCESSING: Envoyer les attachements audio au Translator
+            // ═══════════════════════════════════════════════════════════════
+            try {
+              // Récupérer les détails des attachments pour vérifier s'il y a des audios
+              const attachmentsDetails = await this.prisma.messageAttachment.findMany({
+                where: { id: { in: data.attachmentIds } },
+                select: {
+                  id: true,
+                  mimeType: true,
+                  fileUrl: true,
+                  filePath: true,
+                  duration: true,
+                  metadata: true
+                }
+              });
+
+              // Filtrer les attachements audio
+              const audioAttachments = attachmentsDetails.filter(att =>
+                att.mimeType && att.mimeType.startsWith('audio/')
+              );
+
+              // Pour chaque audio, envoyer au Translator
+              for (const audioAtt of audioAttachments) {
+                console.log(`🎤 [WEBSOCKET] Envoi audio au Translator: ${audioAtt.id}`);
+
+                // Extraire la transcription mobile si présente dans les metadata
+                let mobileTranscription: any = undefined;
+                if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
+                  const metadata = audioAtt.metadata as any;
+                  if (metadata.transcription) {
+                    mobileTranscription = metadata.transcription;
+                    console.log(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
+                  }
+                }
+
+                // Envoyer au Translator pour transcription, traduction et clonage vocal
+                await this.translationService.processAudioAttachment({
+                  messageId: response.data.id,
+                  attachmentId: audioAtt.id,
+                  conversationId: data.conversationId,
+                  senderId: userId,
+                  audioUrl: audioAtt.fileUrl || '',
+                  audioPath: audioAtt.filePath || '',
+                  audioDurationMs: audioAtt.duration || 0,
+                  mobileTranscription: mobileTranscription,
+                  generateVoiceClone: true,
+                  modelType: 'medium'
+                });
+              }
+
+              if (audioAttachments.length > 0) {
+                console.log(`✅ [WEBSOCKET] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
+              }
+            } catch (audioError) {
+              console.error('⚠️ [WEBSOCKET] Erreur envoi audio au Translator:', audioError);
+              // Ne pas bloquer l'envoi du message si le traitement audio échoue
+            }
           }
 
           // Réponse via callback
@@ -1121,15 +1190,18 @@ export class MeeshySocketIOManager {
     replyToId?: string;
   }): Promise<{ messageId: string }> {
     try {
-      const userId = this.socketToUser.get(socket.id);
-      if (!userId) {
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
         socket.emit('error', { message: 'User not authenticated' });
         throw new Error('User not authenticated');
       }
-      
-      
+
+      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+      const userResult = this._getConnectedUser(userIdOrToken);
+      const connectedUser = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
+
       // Préparer les données du message
-      const connectedUser = this.connectedUsers.get(userId);
       const messageData: MessageData = {
         conversationId: data.conversationId,
         content: data.content,
@@ -1138,10 +1210,9 @@ export class MeeshySocketIOManager {
         messageType: data.messageType || 'text',
         replyToId: data.replyToId
       };
-      
+
       // Déterminer le type d'expéditeur
-      const user = this.connectedUsers.get(userId);
-      if (user?.isAnonymous) {
+      if (connectedUser?.isAnonymous) {
         messageData.anonymousSenderId = userId;
       } else {
         messageData.senderId = userId;
@@ -1427,28 +1498,124 @@ export class MeeshySocketIOManager {
     }
   }
 
+  /**
+   * Gère la réception d'une traduction audio prête depuis le Translator
+   * Diffuse l'événement AUDIO_TRANSLATION_READY aux clients de la conversation
+   */
+  private async _handleAudioTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    transcription?: {
+      text: string;
+      language: string;
+      confidence?: number;
+    };
+    translatedAudios: Array<{
+      language: string;
+      audioUrl: string;
+      audioDuration?: number;
+      voiceCloned: boolean;
+      modelUsed?: string;
+    }>;
+    processingTimeMs?: number;
+  }) {
+    try {
+      console.log(`🎵 [SocketIOManager] Audio translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+
+      // Récupérer la conversation du message pour broadcast
+      let conversationId: string | null = null;
+      try {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        conversationId = msg?.conversationId || null;
+      } catch (error) {
+        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour audio:`, error);
+      }
+
+      if (!conversationId) {
+        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message audio ${data.messageId}`);
+        return;
+      }
+
+      // Normaliser l'ID de conversation
+      const normalizedId = await this.normalizeConversationId(conversationId);
+      const roomName = `conversation_${normalizedId}`;
+      const roomClients = this.io.sockets.adapter.rooms.get(roomName);
+      const clientCount = roomClients ? roomClients.size : 0;
+
+      console.log(`📢 [SocketIOManager] Diffusion traduction audio vers room ${roomName} (${clientCount} clients)`);
+
+      // Préparer les données au format AudioTranslationReadyEventData
+      const audioTranslationData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: normalizedId,
+        transcription: data.transcription,
+        translatedAudios: data.translatedAudios,
+        processingTimeMs: data.processingTimeMs
+      };
+
+      // Diffuser dans la room de conversation
+      this.io.to(roomName).emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, audioTranslationData);
+
+      console.log(`✅ [SocketIOManager] Traduction audio diffusée: ${data.translatedAudios.length} audios traduits, transcription: ${data.transcription ? 'oui' : 'non'}`);
+
+    } catch (error) {
+      console.error(`❌ [SocketIOManager] Erreur envoi traduction audio:`, error);
+      this.stats.errors++;
+    }
+  }
+
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
     const targetUsers: SocketUser[] = [];
-    
+
     for (const [userId, user] of this.connectedUsers) {
       if (user.language === targetLanguage) {
         targetUsers.push(user);
       }
     }
-    
+
     return targetUsers;
   }
 
-  private async _handleDisconnection(socket: any) {
-    const userId = this.socketToUser.get(socket.id);
+  /**
+   * Récupère un utilisateur connecté par son ID ou sessionToken
+   * Pour les utilisateurs anonymes, socketToUser stocke le sessionToken
+   * mais connectedUsers utilise user.id comme clé
+   */
+  private _getConnectedUser(userIdOrToken: string): { user: SocketUser; realUserId: string } | null {
+    // Essayer d'abord la recherche directe par ID
+    const directUser = this.connectedUsers.get(userIdOrToken);
+    if (directUser) {
+      return { user: directUser, realUserId: userIdOrToken };
+    }
 
-    if (userId) {
-      const user = this.connectedUsers.get(userId);
+    // Si non trouvé, chercher par sessionToken (cas des utilisateurs anonymes)
+    for (const [realUserId, user] of this.connectedUsers) {
+      if (user.sessionToken === userIdOrToken) {
+        return { user, realUserId };
+      }
+    }
+
+    return null;
+  }
+
+  private async _handleDisconnection(socket: any) {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+
+    if (userIdOrToken) {
+      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+      const result = this._getConnectedUser(userIdOrToken);
+      const user = result?.user;
+      const userId = result?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
       // CORRECTION CRITIQUE: Ne supprimer que si c'est bien la socket active actuelle
       // (en cas de reconnexion rapide, une nouvelle socket peut avoir été créée)
-      const currentUser = this.connectedUsers.get(userId);
+      const currentUser = result?.user;
       if (currentUser && currentUser.socketId === socket.id) {
         // IMPORTANT: Automatically leave any active video/audio calls
         try {
@@ -1584,8 +1751,8 @@ export class MeeshySocketIOManager {
   }
 
   private async _handleTypingStart(socket: any, data: { conversationId: string }) {
-    const userId = this.socketToUser.get(socket.id);
-    if (!userId) {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) {
       console.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
       return;
     }
@@ -1594,12 +1761,13 @@ export class MeeshySocketIOManager {
       // Normaliser l'ID de conversation
       const normalizedId = await this.normalizeConversationId(data.conversationId);
 
-      // Récupérer l'utilisateur depuis connectedUsers (contient déjà isAnonymous)
-      const connectedUser = this.connectedUsers.get(userId);
-      if (!connectedUser) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userId);
+      // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
+      const result = this._getConnectedUser(userIdOrToken);
+      if (!result) {
+        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
         return;
       }
+      const { user: connectedUser, realUserId: userId } = result;
 
       // Typing = activité détectable
       // → Mettre à jour lastActiveAt (throttled à 5s)
@@ -1683,8 +1851,8 @@ export class MeeshySocketIOManager {
   }
 
   private async _handleTypingStop(socket: any, data: { conversationId: string }) {
-    const userId = this.socketToUser.get(socket.id);
-    if (!userId) {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) {
       console.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
       return;
     }
@@ -1693,12 +1861,13 @@ export class MeeshySocketIOManager {
       // Normaliser l'ID de conversation
       const normalizedId = await this.normalizeConversationId(data.conversationId);
 
-      // Récupérer l'utilisateur depuis connectedUsers (contient déjà isAnonymous)
-      const connectedUser = this.connectedUsers.get(userId);
-      if (!connectedUser) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userId);
+      // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
+      const result = this._getConnectedUser(userIdOrToken);
+      if (!result) {
+        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
         return;
       }
+      const { user: connectedUser, realUserId: userId } = result;
 
       // PRIVACY: Vérifier si l'utilisateur a activé showTypingIndicator
       // Note: On vérifie aussi pour typing:stop pour cohérence
@@ -2097,11 +2266,11 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     try {
 
-      const userId = this.socketToUser.get(socket.id);
+      const userIdOrToken = this.socketToUser.get(socket.id);
 
-      if (!userId) {
+      if (!userIdOrToken) {
         console.error('❌ [_handleReactionAdd] No userId found for socket:', socket.id);
-        
+
         const errorResponse: SocketIOResponse<any> = {
           success: false,
           error: 'User not authenticated'
@@ -2110,7 +2279,10 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      const user = this.connectedUsers.get(userId);
+      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+      const userResult = this._getConnectedUser(userIdOrToken);
+      const user = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
       const sessionToken = user?.sessionToken;
 
@@ -2219,8 +2391,8 @@ export class MeeshySocketIOManager {
     callback?: (response: SocketIOResponse<any>) => void
   ): Promise<void> {
     try {
-      const userId = this.socketToUser.get(socket.id);
-      if (!userId) {
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
         const errorResponse: SocketIOResponse<any> = {
           success: false,
           error: 'User not authenticated'
@@ -2229,7 +2401,10 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      const user = this.connectedUsers.get(userId);
+      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+      const userResult = this._getConnectedUser(userIdOrToken);
+      const user = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
       const sessionToken = user?.sessionToken;
 
@@ -2300,9 +2475,9 @@ export class MeeshySocketIOManager {
     callback?: (response: SocketIOResponse<any>) => void
   ): Promise<void> {
     try {
-      
-      const userId = this.socketToUser.get(socket.id);
-      if (!userId) {
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
         console.error(`❌ [REACTION_SYNC] Utilisateur non authentifié pour socket ${socket.id}`);
         const errorResponse: SocketIOResponse<any> = {
           success: false,
@@ -2312,7 +2487,10 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      const user = this.connectedUsers.get(userId);
+      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
+      const userResult = this._getConnectedUser(userIdOrToken);
+      const user = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
       const sessionToken = user?.sessionToken;
 

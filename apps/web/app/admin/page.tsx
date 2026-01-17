@@ -20,30 +20,9 @@ import {
 import { User, UserRoleEnum } from '@/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { toast } from 'sonner';
-import { adminService } from '@/services/admin.service';
+import { adminService, AdminDashboardData } from '@/services/admin.service';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 import { authManager } from '@/services/auth-manager.service';
-
-interface AdminStats {
-  totalUsers: number;
-  activeUsers: number;
-  inactiveUsers: number;
-  totalConversations: number;
-  totalCommunities: number;
-  totalMessages: number;
-  adminUsers: number;
-  totalAnonymousUsers: number;
-  activeAnonymousUsers: number;
-  inactiveAnonymousUsers: number;
-  totalShareLinks: number;
-  activeShareLinks: number;
-  totalTranslations?: number;
-  totalReports?: number;
-  totalInvitations?: number;
-  topLanguages?: Array<{ language: string; count: number }>;
-  usersByRole: Record<string, number>;
-  messagesByType: Record<string, number>;
-}
 
 interface UserCapabilities {
   role: string;
@@ -52,28 +31,10 @@ interface UserCapabilities {
   restrictions: string[];
 }
 
-interface DashboardData {
-  statistics: AdminStats;
-  recentActivity: {
-    newUsers: number;
-    newConversations: number;
-    newMessages: number;
-    newAnonymousUsers: number;
-  };
-  userInfo?: {
-    id: string;
-    username: string;
-    role: string;
-    [key: string]: any;
-  };
-  userPermissions: any;
-  timestamp: string;
-}
-
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadAdminStats = async () => {
@@ -175,7 +136,6 @@ const AdminDashboard: React.FC = () => {
   }
 
   const stats = dashboardData?.statistics;
-  const userInfo = dashboardData?.userInfo;
 
   return (
     <AdminLayout currentPage="/admin">
@@ -186,7 +146,7 @@ const AdminDashboard: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold">Bienvenue, {user.displayName || (user.firstName ? `${user.firstName} ${user.lastName}` : user.username)}</h1>
               <p className="text-purple-100 mt-1">
-                Niveau d&apos;accès: {userInfo?.role || user.role} - Administration Meeshy
+                Niveau d&apos;accès: {user.role} - Administration Meeshy
               </p>
             </div>
             <div className="text-right">

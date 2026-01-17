@@ -108,30 +108,81 @@ def create_audio_router(
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ─────────────────────────────────────────────────────
-    # ENDPOINT: Transcription (Compatible OpenAI API)
+    # ENDPOINT: Transcription (Compatible OpenAI API + Base64)
     # ─────────────────────────────────────────────────────
     @router.post("/audio/transcriptions", response_model=TranscriptionResponse)
     async def transcribe_audio(
-        file: UploadFile = File(..., description="Audio file to transcribe"),
+        file: Optional[UploadFile] = File(None, description="Audio file to transcribe"),
+        audio_base64: Optional[str] = Form(None, description="Audio encoded in base64 (alternative to file)"),
+        audio_format: Optional[str] = Form("wav", description="Audio format when using base64: wav, mp3, ogg, webm, m4a"),
         model: str = Form("large-v3", description="Whisper model to use"),
         language: Optional[str] = Form(None, description="Source language (auto-detect if not provided)")
     ):
         """
-        Transcribe audio to text using Whisper.
-        Compatible with OpenAI API format.
+        Transcribe audio to text using Whisper (OpenAI-compatible format).
+
+        Supports two input modes:
+        - **File upload**: Standard OpenAI-compatible multipart/form-data (file parameter)
+        - **Base64**: Audio encoded in base64 with audio_format specified
+
+        Args:
+            file: Audio file via multipart/form-data (OpenAI-compatible)
+            audio_base64: Audio data encoded in base64 (alternative to file)
+            audio_format: Format of base64 audio: wav, mp3, ogg, webm, m4a (default: wav)
+            model: Whisper model name (default: large-v3)
+            language: Source language code (auto-detect if not provided)
+
+        Returns:
+            TranscriptionResponse with:
+            - text: Transcribed text
+            - language: Detected or specified language
+            - confidence: Transcription confidence score
+            - duration_ms: Audio duration in milliseconds
+            - source: Transcription engine used
+
+        Example:
+            ```
+            # OpenAI-compatible file upload
+            curl -X POST /v1/audio/transcriptions \\
+              -F "file=@audio.m4a" \\
+              -F "model=large-v3"
+
+            # Using base64
+            curl -X POST /v1/audio/transcriptions \\
+              -F "audio_base64=<base64_data>" \\
+              -F "audio_format=wav"
+            ```
         """
         if not transcription_service:
             raise HTTPException(status_code=503, detail="Transcription service not available")
 
+        # Validation: au moins un mode d'input requis
+        if not file and not audio_base64:
+            raise HTTPException(
+                status_code=400,
+                detail="Either file or audio_base64 is required"
+            )
+
         temp_path = None
         try:
-            # Sauvegarder le fichier temporaire
-            suffix = Path(file.filename).suffix if file.filename else ".m4a"
-            temp_path = UPLOAD_DIR / f"temp_{uuid.uuid4()}{suffix}"
-
-            with open(temp_path, "wb") as f:
-                content = await file.read()
-                f.write(content)
+            # Mode 1: Fichier uploadé (OpenAI-compatible)
+            if file and file.filename:
+                suffix = Path(file.filename).suffix if file.filename else ".m4a"
+                temp_path = UPLOAD_DIR / f"temp_{uuid.uuid4()}{suffix}"
+                with open(temp_path, "wb") as f:
+                    content = await file.read()
+                    f.write(content)
+            # Mode 2: Base64
+            elif audio_base64:
+                if not audio_format:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="audio_format is required when using audio_base64"
+                    )
+                audio_bytes = base64.b64decode(audio_base64)
+                temp_path = UPLOAD_DIR / f"temp_{uuid.uuid4()}.{audio_format}"
+                with open(temp_path, "wb") as f:
+                    f.write(audio_bytes)
 
             # Transcrire
             result = await transcription_service.transcribe(
@@ -148,6 +199,8 @@ def create_audio_router(
                 source=result.source
             )
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Erreur transcription: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -167,9 +220,39 @@ def create_audio_router(
         voice_embedding: Optional[UploadFile] = File(None, description="Voice embedding file")
     ):
         """
-        Synthesize speech with optional voice cloning.
-        If voice_id is provided, uses cached voice model.
-        If voice_embedding is provided, uses that directly.
+        Synthesize speech from text with optional voice cloning.
+
+        Converts text to speech using the configured TTS engine (Chatterbox/MMS).
+        Optionally clones a user's voice for personalized output.
+
+        Args:
+            text: Text content to synthesize
+            language: Target language code (default: en)
+            voice_id: User ID to load cached voice model for cloning
+            voice_embedding: Voice embedding file for direct voice cloning
+
+        Returns:
+            Audio file (binary) with synthesized speech in MP3 format
+
+        Voice Cloning Priority:
+            1. If voice_id provided: Uses cached voice model
+            2. If voice_embedding provided: Uses uploaded embedding directly
+            3. Otherwise: Uses default TTS voice
+
+        Example:
+            ```
+            # Basic TTS
+            curl -X POST /v1/tts \\
+              -F "text=Hello world" \\
+              -F "language=en" \\
+              --output speech.mp3
+
+            # With voice cloning
+            curl -X POST /v1/tts \\
+              -F "text=Hello world" \\
+              -F "voice_id=user_123" \\
+              --output cloned_speech.mp3
+            ```
         """
         if not tts_service:
             raise HTTPException(status_code=503, detail="TTS service not available")
@@ -271,7 +354,36 @@ def create_audio_router(
         generate_voice_clone: bool = Form(True, description="Clone sender's voice")
     ):
         """
-        Complete pipeline: transcribe → translate → synthesize with voice cloning.
+        Process a voice message through the complete translation pipeline.
+
+        Full pipeline: Transcription → Translation → TTS with voice cloning.
+        Ideal for real-time voice message translation in chat applications.
+
+        Args:
+            audio: Voice message audio file (supports wav, mp3, m4a, ogg, webm)
+            user_id: Sender's user ID for voice profile lookup
+            conversation_id: Conversation ID for context (optional)
+            target_language: Target language code for translation
+            generate_voice_clone: Clone sender's voice for TTS (default: True)
+
+        Returns:
+            VoiceMessageResponse with:
+            - original_text: Transcribed text from source audio
+            - original_language: Detected source language
+            - translated_text: Translated text
+            - target_language: Target language code
+            - audio_url: URL to download translated audio
+            - processing_time_ms: Total processing time
+
+        Example:
+            ```
+            curl -X POST /v1/voice-message \\
+              -F "audio=@voice_message.m4a" \\
+              -F "user_id=user_123" \\
+              -F "conversation_id=conv_456" \\
+              -F "target_language=fr" \\
+              -F "generate_voice_clone=true"
+            ```
         """
         if not audio_pipeline:
             raise HTTPException(status_code=503, detail="Audio pipeline not available")

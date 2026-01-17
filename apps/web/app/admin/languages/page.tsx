@@ -109,7 +109,7 @@ export default function AdminLanguagesPage() {
       const response = await adminService.getDashboardStats();
 
       if (response.data) {
-        const stats = response.data.statistics || response.data.data?.statistics;
+        const stats = response.data.statistics;
         setLanguageData({
           topLanguages: stats?.topLanguages || [],
           totalMessages: stats?.totalMessages || 0,

@@ -2,6 +2,12 @@
 Service de transcription audio - Singleton
 Supporte les transcriptions mobiles (metadata) et serveur (Whisper)
 Architecture: Chargement non-bloquant, compatible avec le pattern du TranslationMLService
+
+INTEGRATION: Ce service utilise le ModelManager centralisé pour:
+- Gestion unifiée de la mémoire GPU/CPU
+- Éviction LRU automatique des modèles peu utilisés
+- Statistiques globales sur tous les modèles
+- Chemins de stockage standardisés
 """
 
 import os
@@ -12,6 +18,16 @@ import threading
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Import du ModelManager centralisé
+from .model_manager import (
+    get_model_manager,
+    get_model_paths,
+    register_stt_model,
+    get_stt_model,
+    STTBackend,
+    ModelType
+)
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -82,20 +98,30 @@ class TranscriptionService:
         self,
         model_size: str = "large-v3",
         device: str = "cpu",
-        compute_type: str = "float16",
+        compute_type: str = "int8",  # int8 pour CPU (float16 non supporté sur CPU Mac)
         models_path: Optional[str] = None
     ):
         if self._initialized:
             return
 
-        # Configuration
+        # Configuration - utilise les chemins centralisés du ModelManager
+        model_paths = get_model_paths()
         self.model_size = os.getenv('WHISPER_MODEL', model_size)
         self.device = os.getenv('WHISPER_DEVICE', device)
         self.compute_type = os.getenv('WHISPER_COMPUTE_TYPE', compute_type)
-        self.models_path = models_path or os.getenv('MODELS_PATH', '/app/models')
+        # Utilise le chemin centralisé pour Whisper (peut être override)
+        self.models_path = models_path or str(model_paths.stt_whisper)
+
+        # NOTE: Le modèle est maintenant géré par le ModelManager centralisé
+        # au lieu d'un attribut local. Cela permet:
+        # - Gestion mémoire unifiée
+        # - Éviction LRU automatique
+        # - Statistiques globales
+
+        # ID du modèle dans le ModelManager
+        self._model_id = f"stt_whisper_{self.model_size.replace('-', '_')}"
 
         # État
-        self.model = None
         self.is_initialized = False
         self._init_lock = asyncio.Lock()
 
@@ -120,19 +146,36 @@ class TranscriptionService:
                 self.is_initialized = True
                 return True
 
+            # Vérifier si déjà dans le ModelManager
+            existing = get_stt_model(self._model_id)
+            if existing is not None:
+                logger.info(f"[TRANSCRIPTION] ✅ Modèle Whisper déjà chargé via ModelManager")
+                self.is_initialized = True
+                return True
+
             try:
                 start_time = time.time()
                 logger.info(f"[TRANSCRIPTION] 🔄 Chargement du modèle Whisper {self.model_size}...")
 
                 # Charger le modèle dans un thread pour ne pas bloquer
                 loop = asyncio.get_event_loop()
-                self.model = await loop.run_in_executor(
+                model = await loop.run_in_executor(
                     None,
                     self._load_whisper_model
                 )
 
+                # Enregistrer dans le ModelManager centralisé
+                # Priority 1 = haute (STT est critique, ne pas évicté)
+                register_stt_model(
+                    model_id=self._model_id,
+                    model_object=model,
+                    backend=STTBackend.WHISPER_LARGE.value if "large" in self.model_size else STTBackend.WHISPER.value,
+                    model_name=f"Whisper-{self.model_size}",
+                    priority=1  # Haute priorité - ne pas évicter
+                )
+
                 load_time = time.time() - start_time
-                logger.info(f"[TRANSCRIPTION] ✅ Modèle Whisper chargé en {load_time:.2f}s")
+                logger.info(f"[TRANSCRIPTION] ✅ Modèle Whisper chargé et enregistré en {load_time:.2f}s")
 
                 self.is_initialized = True
                 return True
@@ -219,14 +262,17 @@ class TranscriptionService:
         # ─────────────────────────────────────────────────────
         # OPTION 2: Transcrire avec Whisper
         # ─────────────────────────────────────────────────────
-        if not self.model:
+        # Récupérer le modèle depuis le ModelManager
+        model = get_stt_model(self._model_id)
+        if model is None:
             if not WHISPER_AVAILABLE:
                 raise RuntimeError(
                     "Whisper non disponible et pas de transcription mobile fournie"
                 )
             # Initialiser si pas encore fait
             await self.initialize()
-            if not self.model:
+            model = get_stt_model(self._model_id)
+            if model is None:
                 raise RuntimeError("Échec de l'initialisation de Whisper")
 
         logger.info(f"[TRANSCRIPTION] 🎤 Transcription Whisper de: {audio_path}")
@@ -236,7 +282,7 @@ class TranscriptionService:
             loop = asyncio.get_event_loop()
             segments_raw, info = await loop.run_in_executor(
                 None,
-                lambda: self.model.transcribe(
+                lambda: model.transcribe(
                     audio_path,
                     beam_size=5,
                     word_timestamps=return_timestamps,
@@ -302,21 +348,41 @@ class TranscriptionService:
 
     async def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du service"""
-        return {
+        # Vérifier si le modèle est dans le ModelManager
+        model = get_stt_model(self._model_id)
+        model_info = get_model_manager().get_model_info(self._model_id)
+
+        stats = {
             "service": "TranscriptionService",
             "initialized": self.is_initialized,
             "whisper_available": WHISPER_AVAILABLE,
             "audio_processing_available": AUDIO_PROCESSING_AVAILABLE,
-            "model_loaded": self.model is not None,
+            "model_loaded": model is not None,
             "model_size": self.model_size,
             "device": self.device,
-            "compute_type": self.compute_type
+            "compute_type": self.compute_type,
+            "model_manager_integrated": True,
+            "model_id": self._model_id
         }
+
+        if model_info:
+            stats["model_info"] = {
+                "memory_mb": model_info.memory_bytes / 1024 / 1024,
+                "use_count": model_info.use_count,
+                "priority": model_info.priority
+            }
+
+        return stats
 
     async def close(self):
         """Libère les ressources"""
         logger.info("[TRANSCRIPTION] 🛑 Fermeture du service")
-        self.model = None
+        # NOTE: Le modèle est géré par le ModelManager centralisé
+        # On peut le décharger explicitement si besoin
+        manager = get_model_manager()
+        if manager.has_model(self._model_id):
+            manager.unload_model(self._model_id)
+            logger.info(f"[TRANSCRIPTION] Modèle {self._model_id} déchargé")
         self.is_initialized = False
 
 
