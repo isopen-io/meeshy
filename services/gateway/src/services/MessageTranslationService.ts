@@ -7,6 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './ZmqTranslationClient';
 import { ZMQSingleton } from './ZmqSingleton';
@@ -1328,15 +1329,14 @@ export class MessageTranslationService extends EventEmitter {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);
       }
 
-      // 3. Envoyer la requête au Translator
+      // 3. Envoyer la requête au Translator (multipart binaire, pas d'URL)
       // Note: On n'envoie le profil vocal que si le clonage est autorisé
       const taskId = await this.zmqClient.sendAudioProcessRequest({
         messageId: params.messageId,
         attachmentId: params.attachmentId,
         conversationId: params.conversationId,
         senderId: params.senderId,
-        audioUrl: params.audioUrl,
-        audioPath: params.audioPath,
+        audioPath: params.audioPath,  // Le fichier sera chargé et envoyé en binaire
         audioDurationMs: params.audioDurationMs,
         mobileTranscription: params.mobileTranscription,
         targetLanguages: targetLanguages,
@@ -1413,17 +1413,17 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`   📎 File: ${attachment.fileName}`);
       logger.info(`   ⏱️ Duration: ${attachment.duration}ms`);
 
-      // 2. Construire le chemin du fichier audio
-      // Le fileUrl est de la forme /api/v1/attachments/file/2026/01/.../audio.m4a
-      // On doit extraire le chemin relatif
-      const audioPath = `uploads/attachments${attachment.fileUrl.replace('/api/v1/attachments/file', '')}`;
+      // 2. Construire le chemin ABSOLU du fichier audio
+      // Le fileUrl est de la forme /api/v1/attachments/file/2026%2F01%2F.../audio.m4a (URL-encoded)
+      // On doit extraire le chemin relatif, le décoder, et le convertir en chemin absolu
+      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
+      const audioPath = path.resolve(process.cwd(), relativePath);
 
-      // 3. Envoyer la requête de transcription au Translator
+      // 3. Envoyer la requête de transcription au Translator (multipart binaire)
       const taskId = await this.zmqClient.sendTranscriptionOnlyRequest({
         messageId: attachment.messageId,
         attachmentId: attachment.id,
-        audioPath: audioPath,
-        audioUrl: attachment.fileUrl
+        audioPath: audioPath
       });
 
       logger.info(`   ✅ Transcription request sent: taskId=${taskId}`);
@@ -1585,8 +1585,9 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`   📎 File: ${attachment.fileName}`);
       logger.info(`   ⏱️ Duration: ${attachment.duration}ms`);
 
-      // 2. Construire le chemin du fichier audio
-      const audioPath = `uploads/attachments${attachment.fileUrl.replace('/api/v1/attachments/file', '')}`;
+      // 2. Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
+      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
+      const audioPath = path.resolve(process.cwd(), relativePath);
 
       // 3. Déterminer les langues cibles
       let targetLanguages = options.targetLanguages;

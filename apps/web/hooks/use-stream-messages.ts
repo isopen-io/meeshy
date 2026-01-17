@@ -13,7 +13,8 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { messageService } from '@/services/message.service';
 import { useReplyStore } from '@/stores/reply-store';
-import type { Message, User, UserRoleEnum } from '@meeshy/shared/types';
+import type { Message, User } from '@meeshy/shared/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
 
 interface UseStreamMessagesOptions {
   conversationId: string;

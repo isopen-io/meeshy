@@ -5,6 +5,7 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/MessageTranslationService';
 import { MaintenanceService } from '../services/MaintenanceService';
@@ -613,13 +614,19 @@ export class MeeshySocketIOManager {
                 }
 
                 // Envoyer au Translator pour transcription, traduction et clonage vocal
+                // Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
+                const relativePath = audioAtt.fileUrl
+                  ? `uploads/attachments${decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', ''))}`
+                  : audioAtt.filePath || '';
+                const audioPath = relativePath ? path.resolve(process.cwd(), relativePath) : '';
+
                 await this.translationService.processAudioAttachment({
                   messageId: response.data.id,
                   attachmentId: audioAtt.id,
                   conversationId: data.conversationId,
                   senderId: userId,
                   audioUrl: audioAtt.fileUrl || '',
-                  audioPath: audioAtt.filePath || '',
+                  audioPath: audioPath,
                   audioDurationMs: audioAtt.duration || 0,
                   mobileTranscription: mobileTranscription,
                   generateVoiceClone: true,

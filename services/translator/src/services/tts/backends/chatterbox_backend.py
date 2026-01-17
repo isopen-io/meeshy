@@ -77,15 +77,41 @@ class ChatterboxBackend(BaseTTSBackend):
         return self._available or self._available_multilingual
 
     def is_model_downloaded(self) -> bool:
-        """Vérifie si le modèle Chatterbox est téléchargé"""
+        """Vérifie si le modèle Chatterbox est téléchargé.
+
+        Vérifie dans l'ordre:
+        1. Le cache personnalisé (models/huggingface/)
+        2. Le cache global HuggingFace (~/.cache/huggingface/hub/)
+
+        Note: Chatterbox utilise tokenizer.json au lieu de config.json
+        """
         if not self._available:
             return False
 
         try:
             from huggingface_hub import try_to_load_from_cache
             model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
-            config_path = try_to_load_from_cache(model_id, "config.json")
-            return config_path is not None
+
+            # Chatterbox utilise tokenizer.json (pas config.json comme la plupart des modèles)
+            check_file = "tokenizer.json"
+
+            # 1. Vérifier le cache personnalisé
+            file_path = try_to_load_from_cache(
+                model_id,
+                check_file,
+                cache_dir=str(self._models_path)
+            )
+            if file_path is not None:
+                logger.debug(f"[TTS] Modèle Chatterbox trouvé dans cache personnalisé: {self._models_path}")
+                return True
+
+            # 2. Vérifier le cache global HuggingFace
+            file_path = try_to_load_from_cache(model_id, check_file)
+            if file_path is not None:
+                logger.debug(f"[TTS] Modèle Chatterbox trouvé dans cache global HuggingFace")
+                return True
+
+            return False
         except Exception as e:
             logger.debug(f"[TTS] Vérification cache Chatterbox: {e}")
             return False

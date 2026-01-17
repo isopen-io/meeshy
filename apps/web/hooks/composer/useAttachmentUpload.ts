@@ -266,7 +266,8 @@ export function useAttachmentUpload({
         }
       );
 
-      const attachments = response.attachments;
+      // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
+      const attachments = response.attachments || response.data?.attachments;
       if (response.success && attachments) {
         console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
         setUploadedAttachments(prev => [...prev, ...attachments]);

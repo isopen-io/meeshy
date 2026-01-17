@@ -1463,6 +1463,7 @@ class ZMQTranslationServer:
                 )
 
             # Exécuter le pipeline audio avec le chemin local acquis
+            logger.info(f"🔄 [TRANSLATOR] Démarrage pipeline audio: {task_id}")
             result = await pipeline.process_audio_message(
                 audio_path=local_audio_path,  # Chemin local (base64 décodé, téléchargé, ou legacy)
                 audio_url=request_data.get('audioUrl', ''),
@@ -1484,9 +1485,12 @@ class ZMQTranslationServer:
             )
 
             processing_time = int((time.time() - start_time) * 1000)
+            logger.info(f"✅ [TRANSLATOR] Pipeline terminé: {task_id}, {len(result.translations)} traductions, {processing_time}ms")
 
             # Publier le résultat
+            logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
             await self._publish_audio_result(task_id, result, processing_time)
+            logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
 
             logger.info(
                 f"✅ [TRANSLATOR] Audio process terminé: "

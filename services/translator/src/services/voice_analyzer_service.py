@@ -34,90 +34,11 @@ except ImportError as e:
     logger.warning(f"⚠️ [VOICE_ANALYZER] Dépendances manquantes: {e}")
     import numpy as np  # numpy minimal
 
+# Import de la classe unifiée
+from models.voice_models import VoiceCharacteristics
 
-@dataclass
-class VoiceCharacteristics:
-    """Caractéristiques vocales extraites"""
-    # Pitch analysis
-    pitch_mean: float = 0.0          # Hz - fréquence moyenne
-    pitch_std: float = 0.0           # Hz - variation du pitch
-    pitch_min: float = 0.0           # Hz - pitch minimum
-    pitch_max: float = 0.0           # Hz - pitch maximum
-    pitch_range: float = 0.0         # Hz - étendue du pitch
-
-    # Timbre analysis (spectral)
-    spectral_centroid: float = 0.0   # Hz - "brillance" du son
-    spectral_bandwidth: float = 0.0  # Hz - largeur spectrale
-    spectral_rolloff: float = 0.0    # Hz - fréquence rolloff
-    spectral_flatness: float = 0.0   # 0-1 - tonal vs bruit
-
-    # Energy analysis
-    rms_energy: float = 0.0          # Énergie RMS moyenne
-    energy_std: float = 0.0          # Variation d'énergie
-    dynamic_range: float = 0.0       # dB - dynamique
-
-    # Voice quality
-    harmonics_to_noise: float = 0.0  # Ratio harmoniques/bruit
-    jitter: float = 0.0              # Variation cycle à cycle
-    shimmer: float = 0.0             # Variation amplitude
-
-    # MFCC features (13 coefficients)
-    mfcc_mean: List[float] = field(default_factory=list)
-    mfcc_std: List[float] = field(default_factory=list)
-
-    # Classification
-    voice_type: str = "unknown"      # Classification vocale
-    gender_estimate: str = "unknown" # male/female/unknown
-    age_range: str = "unknown"       # child/young/adult/senior
-
-    # Metadata
-    duration_seconds: float = 0.0
-    sample_rate: int = 0
-    analysis_time_ms: int = 0
-    confidence: float = 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convertit en dictionnaire pour sérialisation"""
-        return {
-            "pitch": {
-                "mean": self.pitch_mean,
-                "std": self.pitch_std,
-                "min": self.pitch_min,
-                "max": self.pitch_max,
-                "range": self.pitch_range
-            },
-            "spectral": {
-                "centroid": self.spectral_centroid,
-                "bandwidth": self.spectral_bandwidth,
-                "rolloff": self.spectral_rolloff,
-                "flatness": self.spectral_flatness
-            },
-            "energy": {
-                "rms": self.rms_energy,
-                "std": self.energy_std,
-                "dynamic_range_db": self.dynamic_range
-            },
-            "quality": {
-                "harmonics_to_noise": self.harmonics_to_noise,
-                "jitter": self.jitter,
-                "shimmer": self.shimmer
-            },
-            "mfcc": {
-                "mean": self.mfcc_mean,
-                "std": self.mfcc_std
-            },
-            "classification": {
-                "voice_type": self.voice_type,
-                "gender_estimate": self.gender_estimate,
-                "age_range": self.age_range
-            },
-            "metadata": {
-                "duration_seconds": self.duration_seconds,
-                "sample_rate": self.sample_rate,
-                "analysis_time_ms": self.analysis_time_ms,
-                "confidence": self.confidence
-            }
-        }
+# Re-export pour compatibilité
+__all__ = ['VoiceCharacteristics', 'VoiceSimilarityResult', 'VoiceAnalyzerService']
 
 
 @dataclass

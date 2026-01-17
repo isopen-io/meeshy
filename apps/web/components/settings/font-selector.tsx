@@ -53,7 +53,7 @@ export function FontSelector({ className }: FontSelectorProps) {
         tabIndex={0}
         aria-pressed={isSelected}
         aria-label={`${font.name} - ${font.description}`}
-        className={`cursor-pointer transition-all ${reducedMotion ? '' : 'duration-200'} hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none ${
+        className={`cursor-pointer transition-shadow ${reducedMotion ? '' : 'duration-200'} hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none ${
           isSelected ? 'ring-2 ring-primary shadow-md' : 'hover:ring-1 hover:ring-muted-foreground'
         }`}
         onClick={() => handleFontChange(font.id)}

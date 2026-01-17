@@ -119,9 +119,12 @@ export interface AudioProcessRequest {
   attachmentId: string;
   conversationId: string;
   senderId: string;
-  audioUrl: string;
-  // audioPath est DEPRECATED - garder pour compatibilité mais préférer multipart binaire ou audioUrl
+  // audioPath: Le fichier sera chargé et envoyé en multipart binaire
+  // OBLIGATOIRE dans l'appel sendAudioProcessRequest() mais optionnel dans l'interface
+  // car le message envoyé au Translator ne contient pas le chemin (seulement binaryFrames)
   audioPath?: string;
+  // audioUrl est DEPRECATED - conservé pour rétrocompatibilité interface mais non utilisé
+  audioUrl?: string;
   // DEPRECATED: Préférer binaryFrames pour multipart
   // Contenu audio en base64 (legacy, pour rétrocompatibilité)
   audioBase64?: string;
@@ -1053,39 +1056,52 @@ export class ZMQTranslationClient extends EventEmitter {
       throw new Error('Socket PUSH non initialisé');
     }
 
+    // Valider qu'on a une source audio
+    if (!request.audioPath) {
+      throw new Error('audioPath must be provided');
+    }
+
     try {
       const taskId = randomUUID();
 
-      // Tenter de charger l'audio en binaire si le fichier est accessible et petit
+      // Charger l'audio en binaire (OBLIGATOIRE - pas de fallback URL)
       const audioData = await this.loadAudioAsBinary(request.audioPath);
-
-      // Préparer les frames binaires et les metadata
-      const binaryFrames: Buffer[] = [];
-      let binaryFrameInfo: BinaryFrameInfo | undefined;
-
-      if (audioData) {
-        // Mode multipart: envoyer l'audio en binaire (économise 33% vs base64)
-        binaryFrames.push(audioData.buffer);
-        binaryFrameInfo = {
-          audio: 1,  // L'audio est dans le frame 1 (0-indexed après le JSON)
-          audioMimeType: audioData.mimeType,
-          audioSize: audioData.size
-        };
+      if (!audioData) {
+        throw new Error(`Impossible de charger le fichier audio: ${request.audioPath}`);
       }
 
-      // Préparer le message de commande audio (sans base64!)
-      const requestMessage: AudioProcessRequest = {
-        type: 'audio_process',
-        ...request,
-        // Pas de audioBase64 - on utilise binaryFrames à la place
-        audioBase64: undefined,
-        audioMimeType: audioData?.mimeType,
-        binaryFrames: binaryFrameInfo
+      // Préparer les frames binaires
+      const binaryFrames: Buffer[] = [audioData.buffer];
+      const binaryFrameInfo: BinaryFrameInfo = {
+        audio: 1,  // L'audio est dans le frame 1 (0-indexed après le JSON)
+        audioMimeType: audioData.mimeType,
+        audioSize: audioData.size
       };
 
-      const transferMode = binaryFrameInfo
-        ? `multipart binaire (${(audioData!.size / 1024).toFixed(1)}KB)`
-        : `URL fetch (${request.audioUrl})`;
+      // Préparer le message de commande audio (SANS chemin ni URL!)
+      const requestMessage: AudioProcessRequest = {
+        type: 'audio_process',
+        messageId: request.messageId,
+        attachmentId: request.attachmentId,
+        conversationId: request.conversationId,
+        senderId: request.senderId,
+        // Pas de audioPath, audioUrl, audioBase64 - uniquement binaryFrames
+        audioUrl: '',  // Champ requis par interface mais non utilisé
+        audioMimeType: audioData.mimeType,
+        binaryFrames: binaryFrameInfo,
+        audioDurationMs: request.audioDurationMs,
+        mobileTranscription: request.mobileTranscription,
+        targetLanguages: request.targetLanguages,
+        generateVoiceClone: request.generateVoiceClone,
+        modelType: request.modelType,
+        // Champs voice profile (si fournis)
+        originalSenderId: request.originalSenderId,
+        existingVoiceProfile: request.existingVoiceProfile,
+        useOriginalVoice: request.useOriginalVoice,
+        voiceCloneParams: request.voiceCloneParams
+      };
+
+      const transferMode = `multipart binaire (${(audioData.size / 1024).toFixed(1)}KB, ${audioData.mimeType})`;
 
       logger.info('🎤 [GATEWAY] ENVOI AUDIO PROCESS:');
       logger.info(`   📋 taskId: ${taskId}`);
@@ -1097,12 +1113,8 @@ export class ZMQTranslationClient extends EventEmitter {
       logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
       logger.info(`   📋 transferMode: ${transferMode}`);
 
-      // Envoyer via PUSH (multipart si binaires, sinon JSON simple)
-      if (binaryFrames.length > 0) {
-        await this.sendMultipart(requestMessage, binaryFrames);
-      } else {
-        await this.pushSocket.send(JSON.stringify(requestMessage));
-      }
+      // Envoyer via PUSH en multipart (TOUJOURS)
+      await this.sendMultipart(requestMessage, binaryFrames);
 
       // Mettre à jour les statistiques
       this.stats.requests_sent++;
@@ -1127,68 +1139,79 @@ export class ZMQTranslationClient extends EventEmitter {
    * Envoie une requête de transcription seule au service translator.
    * Retourne uniquement la transcription sans traduction ni TTS.
    *
-   * Supporte trois modes:
-   * - audioPath + attachmentId: Pour attachments existants (Translator lit le fichier)
-   * - audioBinary + audioFormat: Pour audio binaire direct via ZMQ multipart (RECOMMANDÉ)
-   * - audioData + audioFormat: Pour audio en base64 (legacy, moins efficace)
+   * Envoie les données audio en multipart binaire via ZMQ.
+   * Supporte deux modes:
+   * - Mode fichier: audioPath fourni → charge le fichier
+   * - Mode base64: audioData fourni → décode en Buffer
    */
   async sendTranscriptionOnlyRequest(
-    request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>,
-    audioBinary?: Buffer  // Optionnel: audio en binaire pour multipart
+    request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>
   ): Promise<string> {
     if (!this.pushSocket) {
       logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour transcription only');
       throw new Error('Socket PUSH non initialisé');
     }
 
-    // Valider qu'on a une source audio
-    if (!request.audioPath && !request.audioData && !audioBinary) {
-      throw new Error('Either audioPath, audioData, or audioBinary must be provided');
-    }
-    if ((request.audioData || audioBinary) && !request.audioFormat) {
-      throw new Error('audioFormat is required when providing audio data');
+    // Valider qu'on a une source audio (fichier OU base64)
+    if (!request.audioPath && !request.audioData) {
+      throw new Error('Either audioPath or audioData (base64) must be provided');
     }
 
     try {
       const taskId = randomUUID();
 
-      // Préparer les frames binaires si on a du binaire
-      const binaryFrames: Buffer[] = [];
-      let binaryFrameInfo: BinaryFrameInfo | undefined;
+      let audioBuffer: Buffer;
+      let mimeType: string;
+      let audioSize: number;
 
-      if (audioBinary) {
-        binaryFrames.push(audioBinary);
-        binaryFrameInfo = {
-          audio: 1,
-          audioMimeType: `audio/${request.audioFormat}`,
-          audioSize: audioBinary.length
+      if (request.audioPath) {
+        // Mode fichier: charger depuis le disque
+        const audioData = await this.loadAudioAsBinary(request.audioPath);
+        if (!audioData) {
+          throw new Error(`Impossible de charger le fichier audio: ${request.audioPath}`);
+        }
+        audioBuffer = audioData.buffer;
+        mimeType = audioData.mimeType;
+        audioSize = audioData.size;
+      } else {
+        // Mode base64: décoder en Buffer (pas de fichier temporaire)
+        audioBuffer = Buffer.from(request.audioData!, 'base64');
+        audioSize = audioBuffer.length;
+
+        // Déterminer le mime type depuis audioFormat
+        const formatMimeTypes: Record<string, string> = {
+          'wav': 'audio/wav',
+          'mp3': 'audio/mpeg',
+          'm4a': 'audio/mp4',
+          'ogg': 'audio/ogg',
+          'webm': 'audio/webm',
+          'aac': 'audio/aac',
+          'flac': 'audio/flac'
         };
+        mimeType = formatMimeTypes[request.audioFormat || 'wav'] || 'audio/wav';
       }
 
-      // Préparer le message de commande transcription
+      // Préparer les frames binaires
+      const binaryFrames: Buffer[] = [audioBuffer];
+      const binaryFrameInfo: BinaryFrameInfo = {
+        audio: 1,
+        audioMimeType: mimeType,
+        audioSize: audioSize
+      };
+
+      // Préparer le message de commande transcription (sans chemin ni URL)
       const requestMessage: TranscriptionOnlyRequest = {
         type: 'transcription_only',
         taskId,
         messageId: request.messageId,
         attachmentId: request.attachmentId,
-        audioPath: request.audioPath,
-        audioUrl: request.audioUrl,
-        audioFormat: request.audioFormat,
+        audioFormat: mimeType.replace('audio/', ''),
         mobileTranscription: request.mobileTranscription,
-        // Si on utilise multipart, pas besoin de audioData (base64)
-        audioData: audioBinary ? undefined : request.audioData,
         binaryFrames: binaryFrameInfo
       };
 
-      // Déterminer le mode de transfert pour le log
-      let transferMode: string;
-      if (audioBinary) {
-        transferMode = `multipart binaire (${(audioBinary.length / 1024).toFixed(1)}KB, format: ${request.audioFormat})`;
-      } else if (request.audioData) {
-        transferMode = `base64 (${(request.audioData.length * 0.75 / 1024).toFixed(1)}KB, format: ${request.audioFormat})`;
-      } else {
-        transferMode = `path (${request.audioPath})`;
-      }
+      const sourceMode = request.audioPath ? 'fichier' : 'base64';
+      const transferMode = `multipart binaire (${(audioSize / 1024).toFixed(1)}KB, ${mimeType}, source: ${sourceMode})`;
 
       logger.info('📝 [GATEWAY] ENVOI TRANSCRIPTION ONLY:');
       logger.info(`   📋 taskId: ${taskId}`);
@@ -1197,12 +1220,8 @@ export class ZMQTranslationClient extends EventEmitter {
       logger.info(`   📋 transferMode: ${transferMode}`);
       logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
 
-      // Envoyer via PUSH (multipart si binaires, sinon JSON simple)
-      if (binaryFrames.length > 0) {
-        await this.sendMultipart(requestMessage, binaryFrames);
-      } else {
-        await this.pushSocket.send(JSON.stringify(requestMessage));
-      }
+      // Envoyer via PUSH en multipart
+      await this.sendMultipart(requestMessage, binaryFrames);
 
       // Mettre à jour les statistiques
       this.stats.requests_sent++;
