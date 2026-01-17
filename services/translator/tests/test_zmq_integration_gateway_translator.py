@@ -41,6 +41,17 @@ except ImportError:
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Import des fixtures audio réelles
+from fixtures.audio_fixtures import (
+    get_voice_sample,
+    get_voice_clone_sample,
+    load_voice_sample_bytes,
+    get_available_voice_samples,
+    VOICE_SAMPLE_PATH,
+    VOICE_CLONE_SAMPLES,
+    AudioFixtureGenerator
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # GATEWAY SIMULATOR - Simule le comportement de Gateway TypeScript
@@ -264,7 +275,16 @@ def generate_sample_wav_audio(duration_ms: int = 1000) -> bytes:
 
 @pytest.fixture
 def sample_audio():
-    """Génère un échantillon audio WAV pour les tests."""
+    """
+    Charge un vrai échantillon audio pour les tests.
+
+    Utilise voice_sample_chatterbox.wav si disponible,
+    sinon génère un audio synthétique comme fallback.
+    """
+    voice_sample = get_voice_sample()
+    if voice_sample and voice_sample.exists():
+        return voice_sample.read_bytes()
+    # Fallback sur audio généré si fichier absent (CI sans fixtures)
     return generate_sample_wav_audio(duration_ms=2000)
 
 
@@ -272,6 +292,32 @@ def sample_audio():
 def sample_audio_base64(sample_audio):
     """Retourne l'audio encodé en base64."""
     return base64.b64encode(sample_audio).decode('utf-8')
+
+
+@pytest.fixture
+def voice_clone_samples():
+    """
+    Retourne un dictionnaire des samples de voix clonées disponibles.
+
+    Returns:
+        Dict[str, bytes]: {language_code: audio_bytes}
+    """
+    samples = {}
+    for lang in get_available_voice_samples():
+        audio_bytes = load_voice_sample_bytes(lang)
+        if audio_bytes:
+            samples[lang] = audio_bytes
+    return samples
+
+
+@pytest.fixture
+def french_cloned_audio():
+    """Charge le sample de voix clonée française pour les tests."""
+    audio_bytes = load_voice_sample_bytes("fr")
+    if audio_bytes:
+        return audio_bytes
+    # Fallback
+    return generate_sample_wav_audio(duration_ms=2000)
 
 
 @pytest.fixture
