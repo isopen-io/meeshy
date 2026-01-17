@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { BubbleTranslation, User, Message } from '@meeshy/shared/types';
+import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
 
 interface BubbleStreamMessage extends Omit<Message, 'translations'> {
   location?: string;
@@ -128,7 +128,7 @@ export function useMessageTranslations({
             status: 'completed' as const,
             timestamp: currentTimestamp,
             confidence: t.confidenceScore || t.confidence || 0.9,
-            translationModel: t.translationModel as 'basic' | 'medium' | 'premium' | undefined,
+            translationModel: t.translationModel as TranslationModel | undefined,
             cached: t.cached || false
           };
 

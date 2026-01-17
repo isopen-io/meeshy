@@ -8,18 +8,18 @@ import {
   Globe,
   User as UserIcon,
   Palette,
-  Lock,
   Bell,
   Shield,
-  Key
+  Key,
+  Mic
 } from 'lucide-react';
 import { UserSettings } from './user-settings';
 import { LanguageSettings } from '@/components/translation/language-settings';
 import { ThemeSettings } from './theme-settings';
-import { PasswordSettings } from './password-settings';
 import { NotificationSettings } from './notification-settings';
 import { PrivacySettings } from './privacy-settings';
 import { EncryptionSettings } from './encryption-settings';
+import { AudioSettings } from './audio-settings';
 import { useI18n } from '@/hooks/useI18n';
 
 interface CompleteUserSettingsProps {
@@ -28,18 +28,32 @@ interface CompleteUserSettingsProps {
   children?: React.ReactNode;
 }
 
+const VALID_TABS = ['user', 'translation', 'theme', 'notifications', 'privacy', 'encryption', 'audio'];
+
+// Fonction pour obtenir le tab initial depuis le hash URL
+function getInitialTab(): string {
+  if (typeof window === 'undefined') return 'user';
+  const hash = window.location.hash.replace('#', '');
+  return VALID_TABS.includes(hash) ? hash : 'user';
+}
+
 export function CompleteUserSettings({ user, onUserUpdate, children }: CompleteUserSettingsProps) {
   const { t } = useI18n('settings');
-  const [activeTab, setActiveTab] = useState('user');
+  // Initialisation lazy pour lire le hash dès le premier render côté client
+  const [activeTab, setActiveTab] = useState(getInitialTab);
 
-  // Gérer l'ancrage URL pour les tabs
+  // Écouter les changements de hash (navigation par lien ou bouton retour)
   useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    const validTabs = ['user', 'translation', 'security', 'theme', 'notifications', 'privacy', 'encryption'];
-    if (hash && validTabs.includes(hash)) {
-      setActiveTab(hash);
-    }
-  }, []);
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (VALID_TABS.includes(hash) && hash !== activeTab) {
+        setActiveTab(hash);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeTab]);
 
   // Mettre à jour l'URL quand l'onglet change
   useEffect(() => {
@@ -75,6 +89,12 @@ export function CompleteUserSettings({ user, onUserUpdate, children }: CompleteU
       content: <EncryptionSettings />
     },
     {
+      value: "audio",
+      label: t('tabs.audio', 'Audio'),
+      icon: <Mic className="h-4 w-4" />,
+      content: <AudioSettings />
+    },
+    {
       value: "translation",
       label: t('tabs.translation'),
       icon: <Globe className="h-4 w-4" />,
@@ -91,12 +111,6 @@ export function CompleteUserSettings({ user, onUserUpdate, children }: CompleteU
           </CardContent>
         </Card>
       )
-    },
-    {
-      value: "security",
-      label: t('tabs.security'),
-      icon: <Lock className="h-4 w-4" />,
-      content: <PasswordSettings />
     },
     {
       value: "theme",

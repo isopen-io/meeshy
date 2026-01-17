@@ -114,10 +114,13 @@ export function ConfigModal({ isOpen, onClose, currentUser, onUserUpdate }: Conf
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Menu déroulant pour mobile et tablette */}
             <div className="lg:hidden p-3 sm:p-4 border-b bg-background flex-shrink-0">
-              <select 
-                value={activeTab} 
+              <label htmlFor="settings-tab-select" className="sr-only">Sélectionner une section</label>
+              <select
+                id="settings-tab-select"
+                value={activeTab}
                 onChange={(e) => setActiveTab(e.target.value)}
-                className="w-full p-2 sm:p-3 border rounded-lg bg-background text-sm sm:text-base"
+                className="w-full p-2 sm:p-3 border rounded-lg bg-background text-sm sm:text-base focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none"
+                aria-label="Section des paramètres"
               >
                 {tabs.map((tab) => (
                   <option key={tab.id} value={tab.id}>

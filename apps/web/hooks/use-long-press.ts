@@ -47,25 +47,25 @@ export function useLongPress<T extends HTMLElement = HTMLElement>(
     onProgress,
   } = options;
 
-  const timerRef = useRef<NodeJS.Timeout>();
-  const progressTimerRef = useRef<number>();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const progressTimerRef = useRef<number | null>(null);
   const isLongPressRef = useRef(false);
   const startTimeRef = useRef<number>(0);
-  const eventRef = useRef<React.TouchEvent<T> | React.MouseEvent<T>>();
+  const eventRef = useRef<React.TouchEvent<T> | React.MouseEvent<T> | null>(null);
   const positionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const clear = useCallback(() => {
-    if (timerRef.current !== undefined) {
+    if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
-      timerRef.current = undefined;
+      timerRef.current = null;
     }
-    if (progressTimerRef.current !== undefined) {
+    if (progressTimerRef.current !== null) {
       cancelAnimationFrame(progressTimerRef.current);
-      progressTimerRef.current = undefined;
+      progressTimerRef.current = null;
     }
     isLongPressRef.current = false;
     startTimeRef.current = 0;
-    eventRef.current = undefined;
+    eventRef.current = null;
   }, []);
 
   const updateProgress = useCallback(() => {

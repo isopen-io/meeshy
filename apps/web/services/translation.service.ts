@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import type { TranslationModel } from '@meeshy/shared/types';
 
 // === TYPES ET INTERFACES ===
 export interface TranslationResult {
@@ -22,7 +23,7 @@ export interface TranslationRequest {
   text: string;
   sourceLanguage: string;
   targetLanguage: string;
-  model?: 'basic' | 'medium' | 'premium';
+  model?: TranslationModel;
 }
 
 export interface TranslationError {
@@ -111,7 +112,7 @@ class TranslationService {
   /**
    * Traduit un texte avec détection automatique de langue
    */
-  async translateWithAutoDetect(text: string, targetLanguage: string, model: 'basic' | 'medium' | 'premium' = 'basic'): Promise<TranslationResult> {
+  async translateWithAutoDetect(text: string, targetLanguage: string, model: TranslationModel = 'basic'): Promise<TranslationResult> {
     try {
       const response = await axios.post(`${API_BASE_URL}/translate/auto`, {
         text,
@@ -207,7 +208,7 @@ export async function translateText(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
-  model: 'basic' | 'medium' | 'premium' = 'basic'
+  model: TranslationModel = 'basic'
 ): Promise<string> {
   const result = await translationService.translateText({
     text,

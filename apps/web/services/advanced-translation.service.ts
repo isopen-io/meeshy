@@ -10,7 +10,7 @@
         targetLanguage: t.targetLanguage,
         originalContent: '', // Pas disponible dans les données Socket.IO
         translatedContent: t.translatedContent,
-        translationModel: (t.translationModel as 'basic' | 'medium' | 'premium') || 'basic',
+        translationModel: (t.translationModel as TranslationModel) || 'basic',
         confidence: t.confidenceScore || 85,
         cached: t.cached || false,
         processingTime: 0, // Calculé localement
@@ -26,6 +26,7 @@
 
 import { EventEmitter } from 'events';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import type { TranslationModel, MessagePriority } from '@meeshy/shared/types';
 
 // Types de données de traduction
 export interface TranslationData {
@@ -34,7 +35,7 @@ export interface TranslationData {
   targetLanguage: string;
   originalContent: string;
   translatedContent: string;
-  translationModel: 'basic' | 'medium' | 'premium';
+  translationModel: TranslationModel;
   confidence: number;
   cached: boolean;
   processingTime: number;
@@ -46,7 +47,7 @@ interface BatchTranslationRequest {
   content: string;
   sourceLanguage: string;
   targetLanguages: string[];
-  priority: 'low' | 'normal' | 'high';
+  priority: MessagePriority;
   timestamp: number;
   userId?: string;
   conversationId?: string;
@@ -66,7 +67,7 @@ interface TranslationOptions {
   enableBatching?: boolean;
   batchSize?: number;
   batchTimeout?: number;
-  priority?: 'low' | 'normal' | 'high';
+  priority?: MessagePriority;
   retryAttempts?: number;
   cacheResults?: boolean;
 }
@@ -120,15 +121,15 @@ class AdvancedTranslationService extends EventEmitter {
         messageId: data.messageId,
         sourceLanguage: t.sourceLanguage || 'unknown',
         targetLanguage: t.targetLanguage,
-        originalContent: t.originalText || '',
-        translatedContent: t.translatedText,
-        translationModel: (t.translationModel as 'basic' | 'medium' | 'premium') || 'basic',
-        confidence: t.confidence || 85,
-        cached: t.fromCache || false,
-        processingTime: t.processingTimeMs || 0,
+        originalContent: '', // Not provided by socket event
+        translatedContent: t.translatedContent,
+        translationModel: (t.translationModel as TranslationModel) || 'basic',
+        confidence: t.confidenceScore || 85,
+        cached: t.cached || false,
+        processingTime: 0, // Not provided by socket event
         timestamp: Date.now()
       }));
-      
+
       this.handleTranslationResponse(data.messageId, convertedTranslations);
     });
   }

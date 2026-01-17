@@ -10,6 +10,7 @@ import { Area, Point } from 'react-easy-crop';
 import { getCroppedImg, cleanupObjectUrl } from '@/utils/image-crop';
 import { RotateCw, ZoomIn, Loader2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
+import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 interface AvatarCropDialogProps {
   open: boolean;
@@ -30,7 +31,8 @@ export function AvatarCropDialog({
   isUploading = false,
 }: AvatarCropDialogProps) {
   const { t } = useI18n('settings');
-  
+  const reducedMotion = useReducedMotion();
+
   // État du recadrage
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -204,17 +206,20 @@ export function AvatarCropDialog({
             {t('profile.cropAvatar.cancel') || 'Annuler'}
           </Button>
           <Button
-            onClick={handleCropImage}
+            onClick={() => {
+              SoundFeedback.playClick();
+              handleCropImage();
+            }}
             disabled={isProcessing || isUploading || !croppedAreaPixels}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             {(isProcessing || isUploading) && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className={`mr-2 h-4 w-4 ${reducedMotion ? '' : 'animate-spin'}`} />
             )}
-            {isUploading 
-              ? (t('profile.cropAvatar.uploading') || 'Téléchargement...') 
-              : isProcessing 
-                ? (t('profile.cropAvatar.processing') || 'Traitement...') 
+            {isUploading
+              ? (t('profile.cropAvatar.uploading') || 'Téléchargement...')
+              : isProcessing
+                ? (t('profile.cropAvatar.processing') || 'Traitement...')
                 : (t('profile.cropAvatar.saveAvatar') || 'Enregistrer')}
           </Button>
         </DialogFooter>

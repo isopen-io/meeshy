@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import type { Conversation } from '@meeshy/shared/types';
-import type { UserConversationPreferences } from '@/types/user-preferences';
+import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { communitiesService, type Community } from '@/services/communities.service';
 
 interface CommunityCarouselProps {

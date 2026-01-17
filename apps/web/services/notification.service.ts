@@ -395,6 +395,12 @@ class NotificationServiceWrapper {
       user_action: 0,
       conversation: 0,
       translation: 0
+    },
+    byPriority: {
+      low: 0,
+      normal: 0,
+      high: 0,
+      urgent: 0
     }
   };
   private callbacks: {
@@ -450,9 +456,9 @@ class NotificationServiceWrapper {
    * Mark a notification as read
    */
   async markAsRead(notificationId: string) {
-    const notification = this.notifications.find(n => n.id === notificationId);
-    if (notification) {
-      notification.isRead = true;
+    const index = this.notifications.findIndex(n => n.id === notificationId);
+    if (index !== -1) {
+      this.notifications[index] = { ...this.notifications[index], isRead: true } as Notification;
       this.updateCounts();
     }
     // Also call API
@@ -463,7 +469,7 @@ class NotificationServiceWrapper {
    * Mark all notifications as read
    */
   async markAllAsRead() {
-    this.notifications.forEach(n => { n.isRead = true; });
+    this.notifications = this.notifications.map(n => ({ ...n, isRead: true }) as Notification);
     this.updateCounts();
     return NotificationService.markAllAsRead();
   }
@@ -505,6 +511,12 @@ class NotificationServiceWrapper {
         user_action: this.notifications.filter(n => n.type === 'user_action').length,
         conversation: this.notifications.filter(n => n.type === 'conversation').length,
         translation: this.notifications.filter(n => n.type === 'translation').length
+      },
+      byPriority: {
+        low: this.notifications.filter(n => n.priority === 'low').length,
+        normal: this.notifications.filter(n => n.priority === 'normal').length,
+        high: this.notifications.filter(n => n.priority === 'high').length,
+        urgent: this.notifications.filter(n => n.priority === 'urgent').length
       }
     };
     this.callbacks.onCountsUpdated?.(this.counts);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { ArrowLeft, UserPlus, Info, MoreVertical, Link2, Video, Ghost, Share2, Image, Pin, Bell, BellOff, Archive, ArchiveRestore, Loader2, Lock, ShieldCheck, Shield } from 'lucide-react';
+import { ArrowLeft, UserPlus, Info, MoreVertical, Link2, Video, Ghost, Share2, Image, Pin, Bell, BellOff, Archive, ArchiveRestore, Loader2, Lock, LockOpen, Key, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -36,6 +36,7 @@ import { CreateLinkButton } from './create-link-button';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
+import { ConversationSettingsModal } from './ConversationSettingsModal';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
 import { userPreferencesService } from '@/services/user-preferences.service';
@@ -83,6 +84,9 @@ export function ConversationHeader({
   // État pour la gestion de l'upload d'image
   const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // État pour la modal de configuration
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // État pour les préférences utilisateur
   const [isPinned, setIsPinned] = useState(false);
@@ -429,6 +433,38 @@ export function ConversationHeader({
     return 'online'; // Pour les conversations de groupe, toujours afficher comme online
   }, [conversation, conversationParticipants, currentUser?.id, userStore, _lastStatusUpdate]);
 
+  // Obtenir l'icône d'encryption appropriée
+  const getEncryptionIcon = useCallback(() => {
+    const mode = conversation.encryptionMode;
+    if (!mode) return null;
+
+    switch (mode) {
+      case 'e2ee':
+        return {
+          icon: Lock,
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'bg-green-100 dark:bg-green-900/30',
+          label: t('conversationHeader.encryptionE2EE') || 'Chiffrement de bout en bout'
+        };
+      case 'hybrid':
+        return {
+          icon: LockOpen,
+          color: 'text-yellow-600 dark:text-yellow-400',
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+          label: t('conversationHeader.encryptionHybrid') || 'Chiffrement hybride'
+        };
+      case 'server':
+        return {
+          icon: Key,
+          color: 'text-blue-600 dark:text-blue-400',
+          bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+          label: t('conversationHeader.encryptionServer') || 'Chiffrement serveur'
+        };
+      default:
+        return null;
+    }
+  }, [conversation.encryptionMode, t]);
+
   // Handlers pour les préférences utilisateur
   const handleTogglePin = useCallback(async () => {
     try {
@@ -635,6 +671,32 @@ export function ConversationHeader({
               </>
             )
           )}
+          {/* Indicateur d'encryption sur l'avatar */}
+          {getEncryptionIcon() && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      "absolute -bottom-0.5 -left-0.5 w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-card",
+                      getEncryptionIcon()?.bgColor
+                    )}
+                    aria-label={getEncryptionIcon()?.label}
+                  >
+                    {(() => {
+                      const encryptionInfo = getEncryptionIcon();
+                      if (!encryptionInfo) return null;
+                      const IconComponent = encryptionInfo.icon;
+                      return <IconComponent className={cn("h-3 w-3", encryptionInfo.color)} aria-hidden="true" />;
+                    })()}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs font-medium">{getEncryptionIcon()?.label}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
 
         {/* Infos de la conversation */}
@@ -650,54 +712,6 @@ export function ConversationHeader({
                 getConversationName()
               )}
             </h2>
-            {/* Encryption indicator */}
-            {(conversation as any).encryptionMode && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={cn(
-                        "flex-shrink-0 p-1 rounded-full",
-                        (conversation as any).encryptionMode === 'e2ee'
-                          ? "text-green-600 dark:text-green-400"
-                          : (conversation as any).encryptionMode === 'hybrid'
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-amber-600 dark:text-amber-400"
-                      )}
-                      aria-label={`${t('conversationHeader.encrypted') || 'Encrypted'}: ${(conversation as any).encryptionMode?.toUpperCase()}`}
-                    >
-                      {(conversation as any).encryptionMode === 'e2ee' ? (
-                        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                      ) : (conversation as any).encryptionMode === 'hybrid' ? (
-                        <Shield className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <Lock className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <div className="text-xs">
-                      <p className="font-medium">
-                        {(conversation as any).encryptionMode === 'e2ee'
-                          ? (t('conversationHeader.e2eeEncryption') || 'End-to-End Encrypted')
-                          : (conversation as any).encryptionMode === 'hybrid'
-                            ? (t('conversationHeader.hybridEncryption') || 'Hybrid Encryption')
-                            : (t('conversationHeader.serverEncryption') || 'Server Encrypted')
-                        }
-                      </p>
-                      <p className="text-muted-foreground">
-                        {(conversation as any).encryptionMode === 'e2ee'
-                          ? (t('conversationHeader.e2eeDescription') || 'Only you and participants can read messages')
-                          : (conversation as any).encryptionMode === 'hybrid'
-                            ? (t('conversationHeader.hybridDescription') || 'E2EE with server-side translation support')
-                            : (t('conversationHeader.serverDescription') || 'Messages encrypted on server')
-                        }
-                      </p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
           </div>
 
           {/* Deuxième ligne : indicateur de frappe ou participants */}
@@ -824,6 +838,11 @@ export function ConversationHeader({
               </DropdownMenuItem>
             )}
 
+            <DropdownMenuItem onClick={() => setIsSettingsModalOpen(true)}>
+              <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
+              {t('conversationHeader.settings') || 'Paramètres'}
+            </DropdownMenuItem>
+
             <DropdownMenuSeparator />
 
             {/* User Preferences */}
@@ -867,6 +886,18 @@ export function ConversationHeader({
         onImageUploaded={handleImageUpload}
         isUploading={isUploadingImage}
         conversationTitle={conversation.title || conversation.id}
+      />
+
+      {/* Modal de configuration de la conversation */}
+      <ConversationSettingsModal
+        open={isSettingsModalOpen}
+        onOpenChange={setIsSettingsModalOpen}
+        conversation={conversation}
+        currentUserRole={getCurrentUserRole()}
+        onConversationUpdate={(updatedConv) => {
+          // Refresh page to show updated conversation
+          window.location.reload();
+        }}
       />
         </div>
       </div>

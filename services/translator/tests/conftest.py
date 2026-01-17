@@ -24,47 +24,56 @@ import json
 def _setup_module_mocks():
     """Setup mock modules for dependencies that may not be installed"""
 
-    # Mock zmq module
-    if 'zmq' not in sys.modules:
-        mock_zmq = MagicMock()
-        mock_zmq.PULL = 1
-        mock_zmq.PUSH = 2
-        mock_zmq.PUB = 3
-        mock_zmq.SUB = 4
-        mock_zmq.REQ = 5
-        mock_zmq.REP = 6
-        mock_zmq.DEALER = 7
-        mock_zmq.ROUTER = 8
-        mock_zmq.SUBSCRIBE = b''
-        mock_zmq.LINGER = 1
-        mock_zmq.RCVTIMEO = 2
-        mock_zmq.SNDTIMEO = 3
-        mock_zmq.IDENTITY = 4
-        mock_zmq.Context = MagicMock()
-        mock_zmq.ZMQError = Exception
-        mock_zmq.Again = Exception
-        sys.modules['zmq'] = mock_zmq
+    # Mock zmq module - only if not installed
+    try:
+        import zmq
+        import zmq.asyncio
+        # zmq is installed, don't mock it
+    except ImportError:
+        if 'zmq' not in sys.modules:
+            mock_zmq = MagicMock()
+            mock_zmq.PULL = 1
+            mock_zmq.PUSH = 2
+            mock_zmq.PUB = 3
+            mock_zmq.SUB = 4
+            mock_zmq.REQ = 5
+            mock_zmq.REP = 6
+            mock_zmq.DEALER = 7
+            mock_zmq.ROUTER = 8
+            mock_zmq.SUBSCRIBE = b''
+            mock_zmq.LINGER = 1
+            mock_zmq.RCVTIMEO = 2
+            mock_zmq.SNDTIMEO = 3
+            mock_zmq.IDENTITY = 4
+            mock_zmq.Context = MagicMock()
+            mock_zmq.ZMQError = Exception
+            mock_zmq.Again = Exception
+            sys.modules['zmq'] = mock_zmq
 
-        # Mock zmq.asyncio
-        mock_zmq_asyncio = MagicMock()
-        mock_zmq_asyncio.Context = MagicMock()
-        sys.modules['zmq.asyncio'] = mock_zmq_asyncio
+            # Mock zmq.asyncio
+            mock_zmq_asyncio = MagicMock()
+            mock_zmq_asyncio.Context = MagicMock()
+            sys.modules['zmq.asyncio'] = mock_zmq_asyncio
 
-    # Mock psutil module
-    if 'psutil' not in sys.modules:
-        mock_psutil = MagicMock()
-        mock_psutil.Process = MagicMock(return_value=MagicMock(
-            memory_info=MagicMock(return_value=MagicMock(rss=100*1024*1024)),
-            cpu_percent=MagicMock(return_value=10.0)
-        ))
-        mock_psutil.virtual_memory = MagicMock(return_value=MagicMock(
-            total=16*1024*1024*1024,
-            available=8*1024*1024*1024,
-            percent=50.0
-        ))
-        mock_psutil.cpu_percent = MagicMock(return_value=25.0)
-        mock_psutil.cpu_count = MagicMock(return_value=8)
-        sys.modules['psutil'] = mock_psutil
+    # Mock psutil module - only if not installed
+    try:
+        import psutil
+        # psutil is installed, don't mock it
+    except ImportError:
+        if 'psutil' not in sys.modules:
+            mock_psutil = MagicMock()
+            mock_psutil.Process = MagicMock(return_value=MagicMock(
+                memory_info=MagicMock(return_value=MagicMock(rss=100*1024*1024)),
+                cpu_percent=MagicMock(return_value=10.0)
+            ))
+            mock_psutil.virtual_memory = MagicMock(return_value=MagicMock(
+                total=16*1024*1024*1024,
+                available=8*1024*1024*1024,
+                percent=50.0
+            ))
+            mock_psutil.cpu_percent = MagicMock(return_value=25.0)
+            mock_psutil.cpu_count = MagicMock(return_value=8)
+            sys.modules['psutil'] = mock_psutil
 
     # Mock httpx module - only if not installed
     try:
@@ -80,13 +89,24 @@ def _setup_module_mocks():
             mock_httpx.TimeoutException = Exception
             sys.modules['httpx'] = mock_httpx
 
-    # Mock prisma module
-    if 'prisma' not in sys.modules:
-        mock_prisma = MagicMock()
-        mock_prisma.Prisma = MagicMock()
-        mock_prisma.Client = MagicMock()
-        sys.modules['prisma'] = mock_prisma
-        sys.modules['prisma.models'] = MagicMock()
+    # Mock prisma module - only if not installed
+    try:
+        from prisma import Prisma
+        # Prisma is installed, don't mock it
+    except ImportError:
+        if 'prisma' not in sys.modules:
+            # Créer un mock Prisma avec des méthodes async correctes
+            mock_prisma = MagicMock()
+
+            # Mock du client Prisma avec des méthodes async
+            mock_client = MagicMock()
+            mock_client.connect = AsyncMock(return_value=None)
+            mock_client.disconnect = AsyncMock(return_value=None)
+
+            mock_prisma.Prisma = MagicMock(return_value=mock_client)
+            mock_prisma.Client = MagicMock(return_value=mock_client)
+            sys.modules['prisma'] = mock_prisma
+            sys.modules['prisma.models'] = MagicMock()
 
     # Mock grpc modules
     if 'grpc' not in sys.modules:
@@ -97,14 +117,19 @@ def _setup_module_mocks():
         sys.modules['grpc'] = mock_grpc
         sys.modules['grpc.aio'] = mock_grpc.aio
 
-    # Mock redis module
-    if 'redis' not in sys.modules:
-        mock_redis = MagicMock()
-        mock_redis.asyncio = MagicMock()
-        mock_redis.Redis = MagicMock()
-        mock_redis.ConnectionError = Exception
-        sys.modules['redis'] = mock_redis
-        sys.modules['redis.asyncio'] = mock_redis.asyncio
+    # Mock redis module - only if not installed
+    try:
+        import redis.asyncio
+        # redis is installed, don't mock it
+    except ImportError:
+        if 'redis' not in sys.modules:
+            mock_redis = MagicMock()
+            mock_redis.asyncio = MagicMock()
+            mock_redis.asyncio.from_url = MagicMock(return_value=MagicMock())
+            mock_redis.Redis = MagicMock()
+            mock_redis.ConnectionError = Exception
+            sys.modules['redis'] = mock_redis
+            sys.modules['redis.asyncio'] = mock_redis.asyncio
 
     # Mock fastapi module - only if not installed
     try:
@@ -144,33 +169,41 @@ def _setup_module_mocks():
             mock_pydantic.root_validator = MagicMock()
             sys.modules['pydantic'] = mock_pydantic
 
-    # Mock transformers module
-    if 'transformers' not in sys.modules:
-        mock_transformers = MagicMock()
-        mock_transformers.AutoTokenizer = MagicMock()
-        mock_transformers.AutoModelForSeq2SeqLM = MagicMock()
-        mock_transformers.pipeline = MagicMock()
-        sys.modules['transformers'] = mock_transformers
+    # Mock transformers module - only if not installed
+    try:
+        import transformers
+        # transformers is installed, don't mock it
+    except ImportError:
+        if 'transformers' not in sys.modules:
+            mock_transformers = MagicMock()
+            mock_transformers.AutoTokenizer = MagicMock()
+            mock_transformers.AutoModelForSeq2SeqLM = MagicMock()
+            mock_transformers.pipeline = MagicMock()
+            sys.modules['transformers'] = mock_transformers
 
-    # Mock torch module
-    if 'torch' not in sys.modules:
-        mock_torch = MagicMock()
-        mock_torch.float32 = "float32"
-        mock_torch.float16 = "float16"
-        mock_torch.bfloat16 = "bfloat16"
-        mock_torch.int8 = "int8"
-        mock_torch.cuda = MagicMock()
-        mock_torch.cuda.is_available = MagicMock(return_value=False)
-        mock_torch.backends = MagicMock()
-        mock_torch.backends.mps = MagicMock()
-        mock_torch.backends.mps.is_available = MagicMock(return_value=False)
-        mock_torch.device = MagicMock()
-        mock_torch.no_grad = MagicMock()
-        mock_torch.inference_mode = MagicMock()
-        mock_torch.get_num_threads = MagicMock(return_value=4)
-        mock_torch.get_num_interop_threads = MagicMock(return_value=2)
-        mock_torch.Tensor = MagicMock()
-        sys.modules['torch'] = mock_torch
+    # Mock torch module - only if not installed
+    try:
+        import torch
+        # torch is installed, don't mock it
+    except ImportError:
+        if 'torch' not in sys.modules:
+            mock_torch = MagicMock()
+            mock_torch.float32 = "float32"
+            mock_torch.float16 = "float16"
+            mock_torch.bfloat16 = "bfloat16"
+            mock_torch.int8 = "int8"
+            mock_torch.cuda = MagicMock()
+            mock_torch.cuda.is_available = MagicMock(return_value=False)
+            mock_torch.backends = MagicMock()
+            mock_torch.backends.mps = MagicMock()
+            mock_torch.backends.mps.is_available = MagicMock(return_value=False)
+            mock_torch.device = MagicMock()
+            mock_torch.no_grad = MagicMock()
+            mock_torch.inference_mode = MagicMock()
+            mock_torch.get_num_threads = MagicMock(return_value=4)
+            mock_torch.get_num_interop_threads = MagicMock(return_value=2)
+            mock_torch.Tensor = MagicMock()
+            sys.modules['torch'] = mock_torch
 
     # Mock aiohttp module
     if 'aiohttp' not in sys.modules:

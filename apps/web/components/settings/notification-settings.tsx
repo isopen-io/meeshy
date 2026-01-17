@@ -12,10 +12,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Bell, MessageSquare, UserPlus, Settings, Clock, AtSign, Heart, PhoneMissed, Reply } from 'lucide-react';
+import { Bell, MessageSquare, UserPlus, Settings, Clock, AtSign, Heart, PhoneMissed, Reply, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 /**
  * Interface des préférences de notifications
@@ -66,6 +67,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
 };
 
 export function NotificationSettings() {
+  const reducedMotion = useReducedMotion();
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -156,8 +158,9 @@ export function NotificationSettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label="Chargement des préférences">
+        <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
+        <span className="sr-only">Chargement des préférences de notification...</span>
       </div>
     );
   }

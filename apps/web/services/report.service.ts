@@ -22,7 +22,7 @@ class ReportService {
       return (response.data as any).data;
     }
 
-    return response.data as Report;
+    return response.data?.data as Report;
   }
 
   /**
@@ -42,7 +42,7 @@ class ReportService {
       return (response.data as any).data;
     }
 
-    return response.data as Report;
+    return response.data?.data as Report;
   }
 
   /**
@@ -62,7 +62,7 @@ class ReportService {
       return (response.data as any).data;
     }
 
-    return response.data as Report;
+    return response.data?.data as Report;
   }
 
   /**
@@ -82,7 +82,7 @@ class ReportService {
       return (response.data as any).data;
     }
 
-    return response.data as Report;
+    return response.data?.data as Report;
   }
 }
 

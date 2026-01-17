@@ -358,7 +358,8 @@ export function CreateLinkModalV2({
 
   // Charger les utilisateurs disponibles (réutilise la logique du modal de création de conversation)
   const loadUsers = useCallback(async (searchQuery: string = '') => {
-    if (!searchQuery.trim()) {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || trimmedQuery.length < 2) {
       setAvailableUsers([]);
       return;
     }
@@ -366,7 +367,7 @@ export function CreateLinkModalV2({
     setIsLoadingUsers(true);
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`${API_ENDPOINTS.USER.SEARCH}?q=${encodeURIComponent(searchQuery)}`), {
+      const response = await fetch(buildApiUrl(`${API_ENDPOINTS.USER.SEARCH}?q=${encodeURIComponent(trimmedQuery)}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
       

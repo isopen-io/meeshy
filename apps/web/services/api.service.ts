@@ -3,9 +3,30 @@ import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
 import type { ApiResponse, ApiError } from '@meeshy/shared/types';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMEOUT CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+const TIMEOUT_DEFAULT = 40000;        // 40 seconds - standard requests
+const TIMEOUT_SLOW_CONNECTION = 60000; // 1 minute - slow network detected
+const TIMEOUT_VOICE_PROFILE = 300000;  // 5 minutes - voice profile creation (Whisper + cloning)
+
 interface ApiConfig {
   timeout: number;
   headers: Record<string, string>;
+}
+
+// Network Information API types (not in standard TypeScript)
+interface NetworkInformation {
+  effectiveType?: '2g' | '3g' | '4g' | 'slow-2g';
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+}
+
+interface NavigatorWithConnection extends Navigator {
+  connection?: NetworkInformation;
+  mozConnection?: NetworkInformation;
+  webkitConnection?: NetworkInformation;
 }
 
 class ApiServiceError extends Error {
@@ -27,12 +48,54 @@ class ApiService {
 
   constructor(config: Partial<ApiConfig> = {}) {
     this.config = {
-      timeout: 15000, // 15 seconds - augmenté pour les requêtes complexes (conversations, traductions)
+      timeout: TIMEOUT_DEFAULT,
       headers: {
         'Content-Type': 'application/json',
       },
       ...config,
     };
+  }
+
+  /**
+   * Détecte si la connexion réseau est lente
+   * Utilise Network Information API si disponible
+   */
+  private isSlowConnection(): boolean {
+    if (typeof navigator === 'undefined') return false;
+
+    const nav = navigator as NavigatorWithConnection;
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+
+    if (connection) {
+      // Slow connection types
+      if (connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g') {
+        return true;
+      }
+      // High RTT (> 500ms)
+      if (connection.rtt && connection.rtt > 500) {
+        return true;
+      }
+      // Low downlink (< 1 Mbps)
+      if (connection.downlink && connection.downlink < 1) {
+        return true;
+      }
+      // Data saver enabled
+      if (connection.saveData) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Retourne le timeout approprié selon la connexion
+   */
+  private getEffectiveTimeout(customTimeout?: number): number {
+    if (customTimeout !== undefined) {
+      return customTimeout;
+    }
+    return this.isSlowConnection() ? TIMEOUT_SLOW_CONNECTION : this.config.timeout;
   }
 
   /**
@@ -120,9 +183,10 @@ class ApiService {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit & { timeout?: number } = {},
     isRetry = false
   ): Promise<ApiResponse<T>> {
+    const requestTimeout = this.getEffectiveTimeout(options.timeout);
     // Vérifier et rafraîchir le token si nécessaire (sauf pour les endpoints d'auth)
     if (!endpoint.includes('/auth/') && !endpoint.includes('/anonymous/')) {
       await this.ensureTokenFresh();
@@ -149,7 +213,7 @@ class ApiService {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
 
     try {
       const response = await fetch(url, {
@@ -215,8 +279,8 @@ class ApiService {
       }
 
       if (error instanceof Error && error.name === 'AbortError') {
-        console.error('❌ [API-SERVICE] Timeout de la requête:', { endpoint: url, timeout: this.config.timeout });
-        throw new ApiServiceError(`Timeout de la requête (${this.config.timeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
+        console.error('❌ [API-SERVICE] Timeout de la requête:', { endpoint: url, timeout: requestTimeout });
+        throw new ApiServiceError(`Timeout de la requête (${requestTimeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
       }
 
       throw new ApiServiceError(
@@ -264,10 +328,11 @@ class ApiService {
     });
   }
 
-  async post<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, data?: unknown, options?: { timeout?: number }): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
+      timeout: options?.timeout,
     });
   }
 
@@ -406,6 +471,9 @@ class ApiService {
 export const apiService = new ApiService();
 export { ApiService, ApiServiceError };
 export type { ApiResponse, ApiError, ApiConfig };
+
+// Export timeout constants for long operations
+export { TIMEOUT_VOICE_PROFILE };
 
 // Re-export shared types for convenience
 export type { PaginationMeta } from '@meeshy/shared/types';

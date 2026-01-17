@@ -18,13 +18,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LanguageCode } from '@/types';
+import { SupportedLanguageInfo } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 
 interface LanguageSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
-  languages: LanguageCode[];
+  languages: SupportedLanguageInfo[];
   placeholder?: string;
   className?: string;
 }

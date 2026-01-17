@@ -85,7 +85,7 @@ export const mentionsService = {
 
       console.log('[MentionsService] Suggestions received:', response.data);
 
-      if (response.data.success && response.data.data) {
+      if (response.data?.success && response.data?.data) {
         return response.data.data;
       }
 
@@ -108,7 +108,7 @@ export const mentionsService = {
         `/mentions/messages/${messageId}`
       );
 
-      if (response.data.success && response.data.data) {
+      if (response.data?.success && response.data?.data) {
         return response.data.data;
       }
 
@@ -132,7 +132,7 @@ export const mentionsService = {
         { limit }
       );
 
-      if (response.data.success && response.data.data) {
+      if (response.data?.success && response.data?.data) {
         return response.data.data;
       }
 

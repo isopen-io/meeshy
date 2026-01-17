@@ -4,22 +4,24 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Key, RefreshCw, CheckCircle, AlertTriangle, Lock, ShieldOff, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Shield, Key, RefreshCw, CheckCircle, AlertTriangle, Lock, ShieldOff, ShieldCheck, MessageSquare, Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { authManager } from '@/services/auth-manager.service';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
 import {
   useUserPreferencesStore,
   useEncryptionPreferences,
   type EncryptionPreference,
 } from '@/stores';
+import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 export function EncryptionSettings() {
   const { t } = useI18n('settings');
+  const reducedMotion = useReducedMotion();
 
   // Use centralized store
   const {
@@ -129,8 +131,9 @@ export function EncryptionSettings() {
 
   if (!isInitialized || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label={t('encryption.loading', 'Chargement des paramètres de chiffrement')}>
+        <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
+        <span className="sr-only">{t('encryption.loading', 'Chargement...')}</span>
       </div>
     );
   }
@@ -186,13 +189,16 @@ export function EncryptionSettings() {
 
           {!encryptionData.hasSignalKeys && (
             <Button
-              onClick={generateKeys}
+              onClick={() => {
+                SoundFeedback.playClick();
+                generateKeys();
+              }}
               disabled={generatingKeys}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               {generatingKeys ? (
                 <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className={`h-4 w-4 mr-2 ${reducedMotion ? '' : 'animate-spin'}`} />
                   {t('encryption.status.generating')}
                 </>
               ) : (

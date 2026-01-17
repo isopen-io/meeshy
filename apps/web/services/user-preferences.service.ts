@@ -95,7 +95,7 @@ export class UserPreferencesService {
         `/api/user-preferences/conversations/${conversationId}`
       );
 
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         return null;
       }
 
@@ -124,7 +124,7 @@ export class UserPreferencesService {
         data: unknown[];
       }>('/api/user-preferences/conversations');
 
-      if (!response.data.success || !Array.isArray(response.data.data)) {
+      if (!response.data?.success || !Array.isArray(response.data?.data)) {
         return [];
       }
 
@@ -158,7 +158,7 @@ export class UserPreferencesService {
         data
       );
 
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         throw new Error('Échec de la mise à jour des préférences');
       }
 
@@ -258,7 +258,7 @@ export class UserPreferencesService {
   /**
    * Met à jour la catégorie d'une conversation
    */
-  async updateCategory(
+  async updateConversationCategory(
     conversationId: string,
     categoryId: string | null,
     orderInCategory?: number
@@ -325,7 +325,7 @@ export class UserPreferencesService {
         '/api/user-preferences/categories'
       );
 
-      if (!response.data.success || !Array.isArray(response.data.data)) {
+      if (!response.data?.success || !Array.isArray(response.data?.data)) {
         return [];
       }
 
@@ -353,7 +353,7 @@ export class UserPreferencesService {
         data: unknown;
       }>(`/api/user-preferences/categories/${categoryId}`);
 
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         return null;
       }
 
@@ -379,7 +379,7 @@ export class UserPreferencesService {
         data: unknown;
       }>('/api/user-preferences/categories', data);
 
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         throw new Error('Échec de la création de la catégorie');
       }
 
@@ -408,7 +408,7 @@ export class UserPreferencesService {
         data: unknown;
       }>(`/api/user-preferences/categories/${categoryId}`, data);
 
-      if (!response.data.success || !response.data.data) {
+      if (!response.data?.success || !response.data?.data) {
         throw new Error('Échec de la mise à jour de la catégorie');
       }
 

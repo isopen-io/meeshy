@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 import type {
   Message,
   MessageWithTranslations,
-  SocketIOUser as User
+  SocketIOUser as User,
+  ConversationType
 } from '@meeshy/shared/types';
 import { MessagesDisplay } from '@/components/common/messages-display';
 import { UserRoleEnum } from '@meeshy/shared/types';
@@ -23,7 +24,7 @@ interface ConversationMessagesProps {
   userLanguage: string;
   usedLanguages: string[];
   isMobile: boolean;
-  conversationType?: 'direct' | 'group' | 'public' | 'global';
+  conversationType?: ConversationType;
   userRole: UserRoleEnum;
   conversationId?: string;
   isAnonymous?: boolean; // Add isAnonymous for anonymous reactions
@@ -162,9 +163,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // 2. Il n'a pas de readStatus ou l'utilisateur n'est pas dans readStatus
       if (msg.senderId === currentUser.id) return false;
       
-      if (!msg.readStatus || msg.readStatus.length === 0) return true;
+      if (!(msg as any).readStatus || (msg as any).readStatus.length === 0) return true;
       
-      const userReadStatus = msg.readStatus.find(rs => rs.userId === currentUser.id);
+      const userReadStatus = (msg as any).readStatus.find((rs: any) => rs.userId === currentUser.id);
       return !userReadStatus || !userReadStatus.readAt;
     });
     
@@ -353,7 +354,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     )}>
       {/* Indicateur de chargement EN HAUT - Mode classique (scroll up = charger anciens) */}
       {scrollDirection === 'up' && isLoadingMore && hasMore && messages.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div key="loader-up-loading" className="flex justify-center py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
             <span>{(tCommon || t)('messages.loadingOlderMessages')}</span>
@@ -363,7 +364,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
       {/* Message "Tous les messages chargés" - Mode classique (scroll up) */}
       {scrollDirection === 'up' && !hasMore && !isLoadingMore && messages.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div key="loader-up-all-loaded" className="flex justify-center py-4">
           <div className="text-sm text-muted-foreground">
             {(tCommon || t)('messages.allMessagesLoaded')}
           </div>
@@ -398,7 +399,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           onNavigateToMessage={onNavigateToMessage}
           onImageClick={onImageClick}
           conversationType={conversationType || 'direct'}
-          userRole={userRole}
+          userRole={userRole as any}
           addTranslatingState={addTranslatingState}
           isTranslating={isTranslating}
         />
@@ -406,7 +407,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
       {/* Indicateur de chargement EN BAS - Mode BubbleStream (scroll down = charger anciens) */}
       {scrollDirection === 'down' && isLoadingMore && hasMore && messages.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div key="loader-down-loading" className="flex justify-center py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
             <span>{(tCommon || t)('messages.loadingOlderMessages')}</span>
@@ -416,7 +417,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
       {/* Message "Tous les messages chargés" - Mode BubbleStream (scroll down) */}
       {scrollDirection === 'down' && !hasMore && !isLoadingMore && messages.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div key="loader-down-all-loaded" className="flex justify-center py-4">
           <div className="text-sm text-muted-foreground">
             {(tCommon || t)('messages.allMessagesLoaded')}
           </div>

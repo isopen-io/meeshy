@@ -24,20 +24,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Country codes for phone input
-const COUNTRY_CODES = [
-  { code: 'FR', dial: '+33', flag: '\ud83c\uddeb\ud83c\uddf7', name: 'France' },
-  { code: 'US', dial: '+1', flag: '\ud83c\uddfa\ud83c\uddf8', name: '\u00c9tats-Unis' },
-  { code: 'GB', dial: '+44', flag: '\ud83c\uddec\ud83c\udde7', name: 'Royaume-Uni' },
-  { code: 'DE', dial: '+49', flag: '\ud83c\udde9\ud83c\uddea', name: 'Allemagne' },
-  { code: 'ES', dial: '+34', flag: '\ud83c\uddea\ud83c\uddf8', name: 'Espagne' },
-  { code: 'IT', dial: '+39', flag: '\ud83c\uddee\ud83c\uddf9', name: 'Italie' },
-  { code: 'PT', dial: '+351', flag: '\ud83c\uddf5\ud83c\uddf9', name: 'Portugal' },
-  { code: 'BE', dial: '+32', flag: '\ud83c\udde7\ud83c\uddea', name: 'Belgique' },
-  { code: 'CH', dial: '+41', flag: '\ud83c\udde8\ud83c\udded', name: 'Suisse' },
-  { code: 'CA', dial: '+1', flag: '\ud83c\udde8\ud83c\udde6', name: 'Canada' },
-];
+import { COUNTRY_CODES } from '@/constants/countries';
 
 // OTP Input Component
 const OTPInput = ({

@@ -10,12 +10,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User as UserType } from '@/types';
 import { getUserInitials } from '@/utils/user';
 import { toast } from 'sonner';
-import { Upload, Camera } from 'lucide-react';
-import { useI18n } from '@/hooks/useI18n';
+import { Upload, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 import { buildApiUrl } from '@/lib/config';
 import { validateAvatarFile } from '@/utils/avatar-upload';
 import { AvatarCropDialog } from './avatar-crop-dialog';
 import { authManager } from '@/services/auth-manager.service';
+import { Separator } from '@/components/ui/separator';
+import { SoundFeedback } from '@/hooks/use-accessibility';
 
 interface UserSettingsProps {
   user: UserType | null;
@@ -39,6 +41,19 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [showAvatarDialog, setShowAvatarDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Password form state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -195,6 +210,87 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Password handling functions
+  const handlePasswordInputChange = (field: string, value: string) => {
+    setPasswordData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm') => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
+  const validatePasswordForm = (): boolean => {
+    if (!passwordData.currentPassword) {
+      toast.error(t('security.password.errors.currentRequired'));
+      return false;
+    }
+
+    if (!passwordData.newPassword) {
+      toast.error(t('security.password.errors.newRequired'));
+      return false;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error(t('security.password.errors.mismatch'));
+      return false;
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      toast.error(t('security.password.errors.samePassword'));
+      return false;
+    }
+
+    return true;
+  };
+
+  const handlePasswordSave = async () => {
+    if (!validatePasswordForm()) {
+      return;
+    }
+
+    setIsPasswordLoading(true);
+    try {
+      const response = await fetch(buildApiUrl('/users/me/password'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authManager.getAuthToken()}`
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+          confirmPassword: passwordData.confirmPassword
+        })
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || t('security.password.errors.updateFailed'));
+      }
+
+      toast.success(responseData.message || t('security.password.updateSuccess'));
+
+      // Reset password form
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error) {
+      console.error('Password change error:', error);
+      toast.error(error instanceof Error ? error.message : t('security.password.errors.updateFailed'));
+    } finally {
+      setIsPasswordLoading(false);
     }
   };
 
@@ -387,6 +483,153 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
           </div>
 
+      </Card>
+
+      {/* Separator */}
+      <Separator className="my-6" />
+
+      {/* Security - Password Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <CardTitle className="text-lg sm:text-xl">{t('security.password.title')}</CardTitle>
+          </div>
+          <CardDescription className="text-sm sm:text-base">
+            {t('security.password.description')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 sm:space-y-6">
+          {/* Current password */}
+          <div className="space-y-2">
+            <Label htmlFor="current-password" className="text-sm sm:text-base">
+              {t('security.password.currentPassword')}
+            </Label>
+            <div className="relative">
+              <Input
+                id="current-password"
+                type={showPasswords.current ? 'text' : 'password'}
+                value={passwordData.currentPassword}
+                onChange={(e) => handlePasswordInputChange('currentPassword', e.target.value)}
+                placeholder={t('security.password.currentPasswordPlaceholder')}
+                className="w-full pr-10"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  SoundFeedback.playClick();
+                  togglePasswordVisibility('current');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+                aria-label={showPasswords.current ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+                aria-pressed={showPasswords.current}
+              >
+                {showPasswords.current ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* New password */}
+          <div className="space-y-2">
+            <Label htmlFor="new-password" className="text-sm sm:text-base">
+              {t('security.password.newPassword')}
+            </Label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showPasswords.new ? 'text' : 'password'}
+                value={passwordData.newPassword}
+                onChange={(e) => handlePasswordInputChange('newPassword', e.target.value)}
+                placeholder={t('security.password.newPasswordPlaceholder')}
+                className="w-full pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  SoundFeedback.playClick();
+                  togglePasswordVisibility('new');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+                aria-label={showPasswords.new ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+                aria-pressed={showPasswords.new}
+              >
+                {showPasswords.new ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {t('security.password.requirements')}
+            </p>
+          </div>
+
+          {/* Confirm new password */}
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password" className="text-sm sm:text-base">
+              {t('security.password.confirmPassword')}
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirm-password"
+                type={showPasswords.confirm ? 'text' : 'password'}
+                value={passwordData.confirmPassword}
+                onChange={(e) => handlePasswordInputChange('confirmPassword', e.target.value)}
+                placeholder={t('security.password.confirmPasswordPlaceholder')}
+                className="w-full pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  SoundFeedback.playClick();
+                  togglePasswordVisibility('confirm');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm outline-none"
+                aria-label={showPasswords.confirm ? t('security.password.hidePassword', 'Masquer le mot de passe') : t('security.password.showPassword', 'Afficher le mot de passe')}
+                aria-pressed={showPasswords.confirm}
+              >
+                {showPasswords.confirm ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:space-x-4 pt-4">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setPasswordData({
+                  currentPassword: '',
+                  newPassword: '',
+                  confirmPassword: '',
+                });
+              }}
+              disabled={isPasswordLoading}
+            >
+              {t('security.password.cancel')}
+            </Button>
+            <Button
+              onClick={handlePasswordSave}
+              disabled={isPasswordLoading || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+              className="w-full sm:w-auto"
+            >
+              {isPasswordLoading ? t('security.password.updating') : t('security.password.update')}
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Dialogue de recadrage d'avatar */}
