@@ -4,9 +4,22 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { VoiceAPIService, VoiceAPIError } from '../services/VoiceAPIService';
+import { AudioTranslateService, AudioTranslateError } from '../services/AudioTranslateService';
+import { MessageTranslationService } from '../services/MessageTranslationService';
 import { logger } from '../utils/logger';
-import type { VoiceAnalysisType, VoiceFeedbackType, VoiceStatsPeriod } from '@meeshy/shared/types';
+import type {
+  VoiceAnalysisType,
+  VoiceFeedbackType,
+  VoiceStatsPeriod,
+  VoiceTranslateBody,
+  VoiceTranslateAsyncBody,
+  VoiceTranscribeBody,
+  VoiceAnalyzeBody,
+  VoiceCompareBody,
+  VoiceFeedbackBody,
+  VoiceHistoryQuery,
+  VoiceStatsQuery
+} from '@meeshy/shared/types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -271,52 +284,20 @@ const supportedLanguageSchema = {
   }
 } as const;
 
-// Request body types
-interface TranslateBody {
-  audioBase64?: string;
-  targetLanguages: string[];
-  sourceLanguage?: string;
-  generateVoiceClone?: boolean;
-}
-
-interface TranslateAsyncBody extends TranslateBody {
-  webhookUrl?: string;
-  priority?: number;
-  callbackMetadata?: Record<string, any>;
-}
-
-interface AnalyzeBody {
-  audioBase64?: string;
-  analysisTypes?: VoiceAnalysisType[];
-}
-
-interface CompareBody {
-  audioBase64_1?: string;
-  audioBase64_2?: string;
-}
-
-interface FeedbackBody {
-  translationId: string;
-  rating: number;
-  feedbackType?: VoiceFeedbackType;
-  comment?: string;
-  metadata?: Record<string, any>;
-}
-
-interface HistoryQuery {
-  limit?: number;
-  offset?: number;
-  startDate?: string;
-  endDate?: string;
-}
-
-interface StatsQuery {
-  period?: VoiceStatsPeriod;
-}
+// Request body types - importés depuis shared
+// Aliases locaux pour compatibilité
+type TranslateBody = VoiceTranslateBody;
+type TranslateAsyncBody = VoiceTranslateAsyncBody;
+type TranscribeBody = VoiceTranscribeBody;
+type AnalyzeBody = VoiceAnalyzeBody;
+type CompareBody = VoiceCompareBody;
+type FeedbackBody = VoiceFeedbackBody;
+type HistoryQuery = VoiceHistoryQuery;
+type StatsQuery = VoiceStatsQuery;
 
 // Error response helper - returns standardized error format
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
-  if (error instanceof VoiceAPIError) {
+  if (error instanceof AudioTranslateError) {
     return reply.status(statusCode).send({
       success: false,
       error: error.code,
@@ -357,7 +338,8 @@ function isAdmin(request: FastifyRequest): boolean {
 
 export function registerVoiceRoutes(
   fastify: FastifyInstance,
-  voiceAPIService: VoiceAPIService
+  audioTranslateService: AudioTranslateService,
+  translationService?: MessageTranslationService
 ): void {
   const prefix = '/api/v1/voice';
 
@@ -367,27 +349,30 @@ export function registerVoiceRoutes(
 
   /**
    * POST /api/v1/voice/translate
-   * Synchronous voice translation - waits for result
+   * Flexible voice translation - accepts audioBase64 OR attachmentId
+   * Offers more options than /attachments/:id/translate
    */
   fastify.post(`${prefix}/translate`, {
     schema: {
-      description: 'Translate audio to one or more target languages with voice cloning support. This is a synchronous endpoint that waits for the translation to complete before returning. Audio is transcribed, translated, and optionally synthesized with voice cloning. Maximum audio duration depends on service configuration.',
+      description: 'Translate audio to one or more target languages with voice cloning support. Accepts either direct audio (audioBase64) or an existing attachment (attachmentId). When using attachmentId, returns existing translations if available.',
       tags: ['voice'],
-      summary: 'Synchronous voice translation',
+      summary: 'Translate audio (flexible input)',
       body: {
         type: 'object',
-        required: ['audioBase64', 'targetLanguages'],
         properties: {
           audioBase64: {
             type: 'string',
-            description: 'Base64-encoded audio file (wav, mp3, ogg, webm, m4a supported)',
-            example: 'UklGRiQAAABXQVZFZm10...'
+            description: 'Audio data in base64 format (alternative to attachmentId)'
+          },
+          attachmentId: {
+            type: 'string',
+            description: 'ID of an existing audio attachment (alternative to audioBase64)',
+            example: '507f1f77bcf86cd799439011'
           },
           targetLanguages: {
             type: 'array',
             items: { type: 'string' },
-            minItems: 1,
-            description: 'Array of target language codes (ISO 639-1: en, fr, es, de, etc.)',
+            description: 'Array of target language codes (ISO 639-1). Required.',
             example: ['en', 'es']
           },
           sourceLanguage: {
@@ -397,26 +382,40 @@ export function registerVoiceRoutes(
           },
           generateVoiceClone: {
             type: 'boolean',
-            default: false,
+            default: true,
             description: 'Whether to clone the original voice in the translated audio'
           }
         }
       },
       response: {
         200: {
-          description: 'Translation completed successfully',
+          description: 'Translation completed or processing started',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: voiceTranslationResultSchema
+            data: {
+              type: 'object',
+              properties: {
+                taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if already completed)' },
+                status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
+                attachment: { type: 'object', nullable: true },
+                transcription: { type: 'object', nullable: true },
+                translatedAudios: { type: 'array' },
+                result: voiceTranslationResultSchema
+              }
+            }
           }
         },
         400: {
-          description: 'Bad request - missing required fields or invalid audio',
+          description: 'Bad request - must provide audioBase64 or attachmentId',
           ...errorResponseSchema
         },
         401: {
           description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
         },
         500: {
@@ -425,31 +424,125 @@ export function registerVoiceRoutes(
         }
       }
     }
-  }, async (request: FastifyRequest<{ Body: TranslateBody }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{
+    Body: {
+      audioBase64?: string;
+      attachmentId?: string;
+      targetLanguages?: string[];
+      sourceLanguage?: string;
+      generateVoiceClone?: boolean;
+    }
+  }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
       return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
     }
 
     try {
-      const { audioBase64, targetLanguages, sourceLanguage, generateVoiceClone } = request.body;
+      const { audioBase64, attachmentId, targetLanguages, sourceLanguage, generateVoiceClone } = request.body;
 
-      if (!audioBase64 && !targetLanguages?.length) {
+      // Must provide either audioBase64 or attachmentId
+      if (!audioBase64 && !attachmentId) {
         return reply.status(400).send({
           success: false,
           error: 'INVALID_REQUEST',
-          message: 'audioBase64 and targetLanguages are required'
+          message: 'Must provide either audioBase64 or attachmentId'
         });
       }
 
-      const result = await voiceAPIService.translateSync(userId, {
-        audioBase64,
+      if (!targetLanguages || targetLanguages.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'targetLanguages is required'
+        });
+      }
+
+      // Mode 1: Direct audio via VoiceAPIService
+      if (audioBase64) {
+        const result = await audioTranslateService.translateSync(userId, {
+          audioBase64,
+          targetLanguages,
+          sourceLanguage,
+          generateVoiceClone: generateVoiceClone ?? true
+        });
+
+        return reply.status(200).send({
+          success: true,
+          data: {
+            taskId: null,
+            status: 'completed',
+            attachment: null,
+            transcription: result.originalAudio ? {
+              text: result.originalAudio.transcription,
+              language: result.originalAudio.language,
+              confidence: result.originalAudio.confidence,
+              durationMs: result.originalAudio.durationMs
+            } : null,
+            translatedAudios: result.translations || [],
+            result
+          }
+        });
+      }
+
+      // Mode 2: Attachment via MessageTranslationService (with existing data check)
+      if (!translationService) {
+        return reply.status(500).send({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Translation service not available'
+        });
+      }
+
+      // Check if already translated
+      const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
+
+      if (!existingData) {
+        return reply.status(404).send({
+          success: false,
+          error: 'NOT_FOUND',
+          message: 'Attachment not found'
+        });
+      }
+
+      // If already has translated audios, return them
+      if (existingData.translatedAudios?.length > 0) {
+        return reply.status(200).send({
+          success: true,
+          data: {
+            taskId: null,
+            status: 'completed',
+            attachment: existingData.attachment,
+            transcription: existingData.transcription,
+            translatedAudios: existingData.translatedAudios
+          }
+        });
+      }
+
+      // Start translation
+      const result = await translationService.translateAttachment(attachmentId!, {
         targetLanguages,
-        sourceLanguage,
         generateVoiceClone
       });
 
-      return reply.status(200).send({ success: true, data: result });
+      if (!result) {
+        return reply.status(500).send({
+          success: false,
+          error: 'TRANSLATION_FAILED',
+          message: 'Failed to start translation'
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          taskId: result.taskId,
+          status: 'processing',
+          attachment: result.attachment,
+          transcription: null,
+          translatedAudios: []
+        }
+      });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate error:', error);
       return errorResponse(reply, error);
@@ -458,27 +551,29 @@ export function registerVoiceRoutes(
 
   /**
    * POST /api/v1/voice/translate/async
-   * Asynchronous voice translation - returns job ID immediately
+   * Asynchronous voice translation with advanced options (webhookUrl, priority, etc.)
    */
   fastify.post(`${prefix}/translate/async`, {
     schema: {
-      description: 'Submit an asynchronous voice translation job. Returns a job ID immediately without waiting for processing. Use GET /job/:jobId to check status and retrieve results. Optionally provide a webhook URL for completion notifications. Supports priority queuing for premium users.',
+      description: 'Asynchronous voice translation with advanced options. Accepts audioBase64 or attachmentId. Supports webhooks for completion notification, priority queuing, and custom metadata.',
       tags: ['voice'],
-      summary: 'Asynchronous voice translation',
+      summary: 'Async voice translation with advanced options',
       body: {
         type: 'object',
-        required: ['audioBase64', 'targetLanguages'],
         properties: {
           audioBase64: {
             type: 'string',
-            description: 'Base64-encoded audio file (wav, mp3, ogg, webm, m4a supported)',
-            example: 'UklGRiQAAABXQVZFZm10...'
+            description: 'Audio data in base64 format (alternative to attachmentId)'
+          },
+          attachmentId: {
+            type: 'string',
+            description: 'ID of an existing audio attachment (alternative to audioBase64)',
+            example: '507f1f77bcf86cd799439011'
           },
           targetLanguages: {
             type: 'array',
             items: { type: 'string' },
-            minItems: 1,
-            description: 'Array of target language codes (ISO 639-1)',
+            description: 'Array of target language codes (ISO 639-1). Required.',
             example: ['en', 'es', 'de']
           },
           sourceLanguage: {
@@ -488,26 +583,24 @@ export function registerVoiceRoutes(
           },
           generateVoiceClone: {
             type: 'boolean',
-            default: false,
+            default: true,
             description: 'Whether to clone the original voice in the translated audio'
           },
           webhookUrl: {
             type: 'string',
             format: 'uri',
-            description: 'URL to receive a POST request when translation completes',
-            example: 'https://api.example.com/webhooks/translation'
+            description: 'URL to receive completion notification via POST'
           },
           priority: {
             type: 'number',
             minimum: 1,
             maximum: 10,
-            default: 5,
-            description: 'Job priority (1=lowest, 10=highest, premium feature)'
+            default: 1,
+            description: 'Job priority (1=lowest, 10=highest)'
           },
           callbackMetadata: {
             type: 'object',
-            description: 'Custom metadata to include in webhook callback',
-            additionalProperties: true
+            description: 'Custom metadata to include in webhook callback'
           }
         }
       },
@@ -521,17 +614,23 @@ export function registerVoiceRoutes(
               type: 'object',
               properties: {
                 jobId: { type: 'string', description: 'Unique job identifier for status tracking' },
-                status: { type: 'string', enum: ['pending'], description: 'Initial job status' }
+                taskId: { type: 'string', description: 'Task ID (alias for jobId)' },
+                status: { type: 'string', enum: ['pending', 'processing'], description: 'Initial job status' },
+                attachment: { type: 'object', nullable: true }
               }
             }
           }
         },
         400: {
-          description: 'Bad request - missing required fields or invalid audio',
+          description: 'Bad request - must provide audioBase64 or attachmentId',
           ...errorResponseSchema
         },
         401: {
           description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
         },
         500: {
@@ -540,7 +639,18 @@ export function registerVoiceRoutes(
         }
       }
     }
-  }, async (request: FastifyRequest<{ Body: TranslateAsyncBody }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{
+    Body: {
+      audioBase64?: string;
+      attachmentId?: string;
+      targetLanguages?: string[];
+      sourceLanguage?: string;
+      generateVoiceClone?: boolean;
+      webhookUrl?: string;
+      priority?: number;
+      callbackMetadata?: Record<string, any>;
+    }
+  }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
       return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
@@ -549,6 +659,7 @@ export function registerVoiceRoutes(
     try {
       const {
         audioBase64,
+        attachmentId,
         targetLanguages,
         sourceLanguage,
         generateVoiceClone,
@@ -557,25 +668,78 @@ export function registerVoiceRoutes(
         callbackMetadata
       } = request.body;
 
-      if (!audioBase64 && !targetLanguages?.length) {
+      // Must provide either audioBase64 or attachmentId
+      if (!audioBase64 && !attachmentId) {
         return reply.status(400).send({
           success: false,
           error: 'INVALID_REQUEST',
-          message: 'audioBase64 and targetLanguages are required'
+          message: 'Must provide either audioBase64 or attachmentId'
         });
       }
 
-      const result = await voiceAPIService.translateAsync(userId, {
-        audioBase64,
+      if (!targetLanguages || targetLanguages.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'targetLanguages is required'
+        });
+      }
+
+      // Mode 1: Direct audio via VoiceAPIService.translateAsync
+      if (audioBase64) {
+        const result = await audioTranslateService.translateAsync(userId, {
+          audioBase64,
+          targetLanguages,
+          sourceLanguage,
+          generateVoiceClone: generateVoiceClone ?? true,
+          webhookUrl,
+          priority,
+          callbackMetadata
+        });
+
+        return reply.status(202).send({
+          success: true,
+          data: {
+            jobId: result.jobId,
+            taskId: result.jobId,
+            status: result.status,
+            attachment: null
+          }
+        });
+      }
+
+      // Mode 2: Attachment via MessageTranslationService
+      if (!translationService) {
+        return reply.status(500).send({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Translation service not available'
+        });
+      }
+
+      // Start translation (always async)
+      const result = await translationService.translateAttachment(attachmentId!, {
         targetLanguages,
-        sourceLanguage,
-        generateVoiceClone,
-        webhookUrl,
-        priority,
-        callbackMetadata
+        generateVoiceClone
       });
 
-      return reply.status(202).send({ success: true, data: result });
+      if (!result) {
+        return reply.status(500).send({
+          success: false,
+          error: 'TRANSLATION_FAILED',
+          message: 'Failed to start translation'
+        });
+      }
+
+      return reply.status(202).send({
+        success: true,
+        data: {
+          jobId: result.taskId,
+          taskId: result.taskId,
+          status: 'processing',
+          attachment: result.attachment
+        }
+      });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate async error:', error);
       return errorResponse(reply, error);
@@ -632,7 +796,7 @@ export function registerVoiceRoutes(
 
     try {
       const { jobId } = request.params;
-      const result = await voiceAPIService.getJobStatus(userId, jobId);
+      const result = await audioTranslateService.getJobStatus(userId, jobId);
       return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get job status error:', error);
@@ -700,10 +864,274 @@ export function registerVoiceRoutes(
 
     try {
       const { jobId } = request.params;
-      const result = await voiceAPIService.cancelJob(userId, jobId);
+      const result = await audioTranslateService.cancelJob(userId, jobId);
       return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Cancel job error:', error);
+      return errorResponse(reply, error);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRANSCRIPTION ONLY ENDPOINT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * POST /api/v1/voice/transcribe
+   * Flexible transcription - accepts file upload, audioBase64, OR attachmentId
+   * Supports both multipart/form-data and JSON body
+   */
+  fastify.post(`${prefix}/transcribe`, {
+    schema: {
+      description: 'Transcribe audio to text using Whisper. Accepts file upload (multipart/form-data), direct audio (audioBase64), or existing attachment (attachmentId). Returns transcription with detected language, confidence score, and word-level timestamps. OpenAI-compatible when using file upload.',
+      tags: ['voice'],
+      summary: 'Transcribe audio (flexible input)',
+      consumes: ['multipart/form-data', 'application/json'],
+      body: {
+        type: 'object',
+        properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'Audio file (multipart/form-data) - OpenAI compatible'
+          },
+          audioBase64: {
+            type: 'string',
+            description: 'Audio data in base64 format (alternative to file/attachmentId)'
+          },
+          audioFormat: {
+            type: 'string',
+            description: 'Audio format when using audioBase64 (required with audioBase64)',
+            enum: ['wav', 'mp3', 'ogg', 'webm', 'm4a', 'mp4', 'aac', 'flac'],
+            example: 'webm'
+          },
+          attachmentId: {
+            type: 'string',
+            description: 'ID of an existing audio attachment (alternative to file/audioBase64)',
+            example: '507f1f77bcf86cd799439011'
+          },
+          language: {
+            type: 'string',
+            description: 'Hint for source language (optional, auto-detected if not provided)',
+            example: 'fr'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Transcription completed or processing started',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if completed)' },
+                status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
+                attachment: {
+                  type: 'object',
+                  nullable: true,
+                  properties: {
+                    id: { type: 'string' },
+                    messageId: { type: 'string' },
+                    fileName: { type: 'string' },
+                    fileUrl: { type: 'string' },
+                    duration: { type: 'number' },
+                    mimeType: { type: 'string' }
+                  }
+                },
+                transcription: {
+                  type: 'object',
+                  nullable: true,
+                  properties: {
+                    text: { type: 'string' },
+                    language: { type: 'string' },
+                    confidence: { type: 'number' },
+                    source: { type: 'string' },
+                    segments: { type: 'array' },
+                    durationMs: { type: 'number' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Bad request - must provide audioBase64 or attachmentId',
+          ...errorResponseSchema
+        },
+        401: {
+          description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Attachment not found (when using attachmentId)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error or transcription service failure',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = getUserId(request);
+    if (!userId) {
+      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+
+    try {
+      let audioBase64: string | undefined;
+      let audioFormat: string | undefined;
+      let attachmentId: string | undefined;
+      let language: string | undefined;
+
+      // Check if request is multipart/form-data
+      const contentType = request.headers['content-type'] || '';
+      const isMultipart = contentType.includes('multipart/form-data');
+
+      if (isMultipart) {
+        // Mode: File upload via multipart/form-data (OpenAI compatible)
+        const parts = request.parts();
+        for await (const part of parts) {
+          if (part.type === 'file' && part.fieldname === 'file') {
+            // Read file buffer and convert to base64
+            const buffer = await part.toBuffer();
+            audioBase64 = buffer.toString('base64');
+            // Extract format from filename or mimetype
+            const filename = part.filename || '';
+            const ext = filename.split('.').pop()?.toLowerCase();
+            audioFormat = ext || part.mimetype?.split('/').pop() || 'wav';
+            logger.info(`[VoiceRoutes] Transcribe file upload: ${filename}, format=${audioFormat}, size=${(buffer.length / 1024).toFixed(1)}KB`);
+          } else if (part.type === 'field') {
+            // Parse form fields
+            if (part.fieldname === 'language') language = part.value as string;
+            if (part.fieldname === 'attachmentId') attachmentId = part.value as string;
+            if (part.fieldname === 'audioFormat') audioFormat = part.value as string;
+          }
+        }
+      } else {
+        // Mode: JSON body
+        const body = request.body as {
+          audioBase64?: string;
+          audioFormat?: string;
+          attachmentId?: string;
+          language?: string;
+        };
+        audioBase64 = body.audioBase64;
+        audioFormat = body.audioFormat;
+        attachmentId = body.attachmentId;
+        language = body.language;
+      }
+
+      // Must provide either file/audioBase64 or attachmentId
+      if (!audioBase64 && !attachmentId) {
+        return reply.status(400).send({
+          success: false,
+          error: 'INVALID_REQUEST',
+          message: 'Must provide file, audioBase64, or attachmentId'
+        });
+      }
+
+      // Mode 1: Direct audio via file upload or audioBase64
+      if (audioBase64) {
+        // Valider que audioFormat est fourni (sauf pour file upload où il est déduit)
+        if (!audioFormat) {
+          return reply.status(400).send({
+            success: false,
+            error: 'INVALID_REQUEST',
+            message: 'audioFormat is required when using audioBase64'
+          });
+        }
+
+        if (!isMultipart) {
+          logger.info(`[VoiceRoutes] Transcribe direct audio: format=${audioFormat}, size=${(audioBase64.length * 0.75 / 1024).toFixed(1)}KB`);
+        }
+
+        // Utiliser AudioTranslateService.transcribeOnly avec audioBase64
+        const result = await audioTranslateService.transcribeOnly(userId, {
+          audioBase64,
+          audioFormat,
+          language,
+          saveToDatabase: false  // Pas d'attachment, pas de sauvegarde
+        });
+
+        return reply.status(200).send({
+          success: true,
+          data: {
+            taskId: null,
+            status: 'completed',
+            attachment: null,  // Pas d'attachment pour transcription directe
+            transcription: {
+              text: result.text,
+              language: result.language,
+              confidence: result.confidence,
+              source: result.source,
+              segments: result.segments,
+              durationMs: result.durationMs
+            },
+            translatedAudios: []
+          }
+        });
+      }
+
+      // Mode 2: Attachment via MessageTranslationService
+      if (!translationService) {
+        return reply.status(500).send({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Translation service not available'
+        });
+      }
+
+      // Vérifier si l'attachement a déjà une transcription
+      const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
+
+      if (!existingData) {
+        return reply.status(404).send({
+          success: false,
+          error: 'NOT_FOUND',
+          message: 'Attachment not found'
+        });
+      }
+
+      // Si une transcription existe déjà, la retourner directement
+      if (existingData.transcription) {
+        return reply.status(200).send({
+          success: true,
+          data: {
+            taskId: null,
+            status: 'completed',
+            attachment: existingData.attachment,
+            transcription: existingData.transcription,
+            translatedAudios: existingData.translatedAudios
+          }
+        });
+      }
+
+      // Sinon, déclencher la transcription
+      const result = await translationService.transcribeAttachment(attachmentId!);
+
+      if (!result) {
+        return reply.status(500).send({
+          success: false,
+          error: 'TRANSCRIPTION_FAILED',
+          message: 'Failed to start transcription'
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          taskId: result.taskId,
+          status: 'processing',
+          attachment: result.attachment,
+          transcription: null,
+          translatedAudios: []
+        }
+      });
+    } catch (error) {
+      logger.error('[VoiceRoutes] Transcribe error:', error);
       return errorResponse(reply, error);
     }
   });
@@ -781,7 +1209,7 @@ export function registerVoiceRoutes(
         });
       }
 
-      const result = await voiceAPIService.analyzeVoice(userId, {
+      const result = await audioTranslateService.analyzeVoice(userId, {
         audioBase64,
         analysisTypes
       });
@@ -858,7 +1286,7 @@ export function registerVoiceRoutes(
         });
       }
 
-      const result = await voiceAPIService.compareVoices(userId, {
+      const result = await audioTranslateService.compareVoices(userId, {
         audioBase64_1,
         audioBase64_2
       });
@@ -976,7 +1404,7 @@ export function registerVoiceRoutes(
         });
       }
 
-      const result = await voiceAPIService.submitFeedback(userId, {
+      const result = await audioTranslateService.submitFeedback(userId, {
         translationId,
         rating,
         feedbackType,
@@ -1069,7 +1497,7 @@ export function registerVoiceRoutes(
 
     try {
       const { limit, offset, startDate, endDate } = request.query;
-      const result = await voiceAPIService.getHistory(userId, {
+      const result = await audioTranslateService.getHistory(userId, {
         limit,
         offset,
         startDate,
@@ -1130,7 +1558,7 @@ export function registerVoiceRoutes(
 
     try {
       const { period } = request.query;
-      const result = await voiceAPIService.getUserStats(userId, period);
+      const result = await audioTranslateService.getUserStats(userId, period);
       return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get stats error:', error);
@@ -1185,7 +1613,7 @@ export function registerVoiceRoutes(
     }
 
     try {
-      const result = await voiceAPIService.getSystemMetrics(userId);
+      const result = await audioTranslateService.getSystemMetrics(userId);
       return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get metrics error:', error);
@@ -1224,7 +1652,7 @@ export function registerVoiceRoutes(
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const result = await voiceAPIService.getHealthStatus();
+      const result = await audioTranslateService.getHealthStatus();
       const statusCode = result.status === 'healthy' ? 200 : result.status === 'degraded' ? 200 : 503;
       return reply.status(statusCode).send({ success: true, data: result });
     } catch (error) {
@@ -1272,7 +1700,7 @@ export function registerVoiceRoutes(
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const result = await voiceAPIService.getSupportedLanguages();
+      const result = await audioTranslateService.getSupportedLanguages();
       return reply.status(200).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get languages error:', error);

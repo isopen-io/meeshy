@@ -600,16 +600,25 @@ class TestRealTranslatorIntegration:
         Test 2.b: Traduction d'audio complet
 
         Gateway → ZMQ → Translator (transcription + traduction + TTS) → ZMQ → Gateway
+
+        Note: Ce test est très lent sur CPU (~10 min pour audio de 10s).
+        Utilisez GPU/MPS pour accélérer significativement.
         """
+        import torch
+        has_gpu = torch.cuda.is_available() or torch.backends.mps.is_available()
+
         server, push_port, sub_port, ml_service_working = translator_server
 
         if not ml_service_working:
             pytest.skip("Service ML non fonctionnel - test de traduction audio skippé")
 
+        # Timeout adapté: 10 min CPU, 2 min GPU
+        timeout_seconds = 120.0 if has_gpu else 600.0
+
         config = GatewaySimulatorConfig(
             push_port=push_port,
             sub_port=sub_port,
-            timeout_seconds=60.0  # Plus long pour audio processing
+            timeout_seconds=timeout_seconds
         )
         gateway = GatewaySimulator(config)
         await gateway.initialize()
@@ -642,11 +651,11 @@ class TestRealTranslatorIntegration:
             # Envoyer en multipart
             await gateway.send_multipart(request, [sample_audio])
 
-            # Attendre le résultat
+            # Attendre le résultat (TTS sur CPU est lent)
             event = await gateway.wait_for_event(
                 "audio_process_completed",
                 task_id=task_id,
-                timeout=60.0
+                timeout=timeout_seconds
             )
 
             if event is None:
@@ -673,11 +682,24 @@ class TestRealTranslatorIntegration:
             translated_audios = event['translatedAudios']
             assert len(translated_audios) >= 1
 
+            # Répertoire pour sauvegarder les résultats
+            outputs_dir = Path(__file__).parent / "fixtures" / "audio" / "outputs"
+            outputs_dir.mkdir(parents=True, exist_ok=True)
+
             for audio in translated_audios:
                 assert 'targetLanguage' in audio
                 assert 'translatedText' in audio
                 assert 'audioUrl' in audio or 'audioPath' in audio
                 print(f"✅ Audio traduit ({audio['targetLanguage']}): {audio['translatedText'][:30]}...")
+
+                # Sauvegarder l'audio généré s'il existe
+                audio_path = audio.get('audioPath')
+                if audio_path and Path(audio_path).exists():
+                    dest_filename = f"test_output_{audio['targetLanguage']}_{message_id[:8]}.wav"
+                    dest_path = outputs_dir / dest_filename
+                    import shutil
+                    shutil.copy(audio_path, dest_path)
+                    print(f"   📁 Sauvegardé: {dest_path}")
 
         finally:
             await gateway.close()

@@ -164,18 +164,20 @@ describe('Système de notifications unifié - Tests d\'intégration', () => {
     it('navigue vers /notifications quand onClick n\'est pas fourni', () => {
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button');
-      fireEvent.click(bellButton);
-
-      expect(mockPush).toHaveBeenCalledWith('/notifications');
+      // Sans onClick, le composant rend un Link (rôle link) au lieu d'un Button
+      const bellLink = screen.getByRole('link');
+      // Le Link navigue via href="/notifications", pas via router.push
+      expect(bellLink).toHaveAttribute('href', '/notifications');
     });
 
-    it('affiche le titre correct selon l\'état de connexion', () => {
+    it('affiche le aria-label correct selon l\'état de connexion', () => {
       // Non connecté par défaut (isConnected = false dans le hook initial)
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button');
-      expect(bellButton).toHaveAttribute('title', 'Notifications (hors ligne)');
+      // Sans onClick, le composant rend un Link (rôle link)
+      const bellLink = screen.getByRole('link');
+      // Le composant utilise aria-label, pas title
+      expect(bellLink).toHaveAttribute('aria-label', 'Notifications (hors ligne)');
     });
   });
 

@@ -25,6 +25,18 @@ import {
   VoiceProfileVerifyResult,
   VoiceProfileEvent
 } from './ZmqTranslationClient';
+import {
+  VoiceProfileConsentRequest,
+  VoiceProfileConsentStatus,
+  VoiceProfileDetails as SharedVoiceProfileDetails,
+  VoiceProfileTranscription,
+  BrowserTranscription,
+  VoiceProfileSegment,
+  ServiceResult,
+  VoiceCloningUserSettings,
+  DEFAULT_VOICE_CLONING_SETTINGS,
+  VoicePreviewSample
+} from '@meeshy/shared/types/voice-api';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -41,14 +53,14 @@ const STANDARD_PROFILE_EXPIRATION_DAYS = 90;  // 3 months standard
 const ZMQ_RESPONSE_TIMEOUT_MS = 60000;  // 60 seconds
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TYPES
+// TYPES - Re-export from shared + local extensions
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface ConsentRequest {
-  voiceRecordingConsent: boolean;
-  voiceCloningConsent: boolean;
-  birthDate?: string;  // ISO date string for age verification
-}
+// Re-export shared types for consumers of this service
+export type { VoiceProfileConsentRequest, VoiceProfileConsentStatus, ServiceResult };
+
+// Alias for backward compatibility (internal use with Date instead of string)
+export interface ConsentRequest extends VoiceProfileConsentRequest {}
 
 /**
  * Audio input - either from attachment or direct upload
@@ -62,7 +74,32 @@ export interface AudioInput {
   audioFormat?: string;  // wav, mp3, ogg, webm
 }
 
-export interface RegisterProfileRequest extends AudioInput {}
+export interface RegisterProfileRequest extends AudioInput {
+  /** Request transcription from server (Whisper) - ignored if browserTranscription is provided */
+  includeTranscription?: boolean;
+  /** Browser-side transcription to use instead of server transcription */
+  browserTranscription?: BrowserTranscription;
+  /**
+   * Voice cloning settings to save with the profile
+   * These settings will be persisted in UserFeature and used for future voice cloning
+   */
+  voiceCloningSettings?: Partial<VoiceCloningUserSettings>;
+  /**
+   * Generate voice previews in different languages
+   * Previews are returned in the response and should be saved client-side (IndexedDB)
+   */
+  generateVoicePreviews?: boolean;
+  /**
+   * Target languages for voice previews (e.g., ['en', 'fr', 'es'])
+   * Default: ['en', 'es', 'fr'] if not specified and generateVoicePreviews=true
+   */
+  previewLanguages?: string[];
+  /**
+   * Source text for previews (optional)
+   * Default: uses the transcription from the recorded audio
+   */
+  previewText?: string;
+}
 
 export interface UpdateProfileRequest extends AudioInput {}
 
@@ -71,31 +108,11 @@ export interface CalibrateProfileRequest extends AudioInput {
   replaceExisting?: boolean;  // Replace profile instead of adding samples
 }
 
-export interface VoiceProfileDetails {
-  profileId: string;
-  userId: string;
-  qualityScore: number;
-  audioDurationMs: number;
-  audioCount: number;
-  voiceCharacteristics: Record<string, any> | null;
-  signatureShort: string | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-  expiresAt: Date | null;
-  needsCalibration: boolean;
-  consentStatus: {
-    voiceRecordingConsentAt: Date | null;
-    voiceCloningEnabledAt: Date | null;
-    ageVerificationConsentAt: Date | null;
-  };
-}
-
-export interface ServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  errorCode?: string;
+// Type aligné avec SharedVoiceProfileDetails (utilise strings ISO pour les dates)
+export interface VoiceProfileDetails extends SharedVoiceProfileDetails {
+  transcription?: VoiceProfileTranscription;  // Included if requested
+  /** Voice previews in different languages - to be saved in IndexedDB by client */
+  voicePreviews?: VoicePreviewSample[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -267,23 +284,68 @@ export class VoiceProfileService extends EventEmitter {
     consent: ConsentRequest
   ): Promise<ServiceResult<{ consentUpdated: boolean }>> {
     try {
+      console.log('[VoiceProfileService] updateConsent called:', { userId, consent });
       const now = new Date();
-      const updateData: any = {};
+      const userFeatureData: any = {};
+      const userData: any = {};
 
-      if (consent.voiceRecordingConsent) {
-        updateData.voiceProfileConsentAt = now;
+      // Récupérer l'état actuel pour gérer les dépendances
+      const existingFeature = await this.prisma.userFeature.findUnique({
+        where: { userId },
+        select: {
+          dataProcessingConsentAt: true,
+          voiceDataConsentAt: true,
+          voiceProfileConsentAt: true,
+        }
+      });
+      console.log('[VoiceProfileService] Existing feature:', existingFeature);
+
+      // Les consentements vocaux sont dans UserFeature
+      // IMPORTANT: Respecter la chaîne de dépendances:
+      // dataProcessingConsentAt → voiceDataConsentAt → voiceProfileConsentAt → voiceCloningEnabledAt
+      if (consent.voiceRecordingConsent !== undefined) {
+        if (consent.voiceRecordingConsent) {
+          // Activer voiceProfileConsentAt et ses dépendances
+          userFeatureData.voiceProfileConsentAt = now;
+          // Activer automatiquement les dépendances si pas déjà activées
+          if (!existingFeature?.voiceDataConsentAt) {
+            userFeatureData.voiceDataConsentAt = now;
+          }
+          if (!existingFeature?.dataProcessingConsentAt) {
+            userFeatureData.dataProcessingConsentAt = now;
+          }
+        } else {
+          // Désactiver seulement voiceProfileConsentAt (ne pas toucher aux dépendances)
+          userFeatureData.voiceProfileConsentAt = null;
+        }
       }
 
-      if (consent.voiceCloningConsent) {
-        updateData.voiceCloningEnabledAt = now;
+      if (consent.voiceCloningConsent !== undefined) {
+        if (consent.voiceCloningConsent) {
+          userFeatureData.voiceCloningEnabledAt = now;
+          // S'assurer que voiceProfileConsentAt est activé (dépendance)
+          if (!existingFeature?.voiceProfileConsentAt && !userFeatureData.voiceProfileConsentAt) {
+            userFeatureData.voiceProfileConsentAt = now;
+          }
+          // Et ses dépendances
+          if (!existingFeature?.voiceDataConsentAt && !userFeatureData.voiceDataConsentAt) {
+            userFeatureData.voiceDataConsentAt = now;
+          }
+          if (!existingFeature?.dataProcessingConsentAt && !userFeatureData.dataProcessingConsentAt) {
+            userFeatureData.dataProcessingConsentAt = now;
+          }
+        } else {
+          userFeatureData.voiceCloningEnabledAt = null;
+        }
       }
 
+      // birthDate est sur User, ageVerifiedAt est sur UserFeature
       if (consent.birthDate) {
-        updateData.birthDate = new Date(consent.birthDate);
-        updateData.ageVerificationConsentAt = now;
+        userData.birthDate = new Date(consent.birthDate);
+        userFeatureData.ageVerifiedAt = now;
       }
 
-      if (Object.keys(updateData).length === 0) {
+      if (Object.keys(userFeatureData).length === 0 && Object.keys(userData).length === 0) {
         return {
           success: false,
           error: 'No consent data provided',
@@ -291,11 +353,34 @@ export class VoiceProfileService extends EventEmitter {
         };
       }
 
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: updateData
-      });
+      // Mettre à jour UserFeature (créer si n'existe pas)
+      if (Object.keys(userFeatureData).length > 0) {
+        console.log('[VoiceProfileService] Upserting userFeature with:', userFeatureData);
+        const result = await this.prisma.userFeature.upsert({
+          where: { userId },
+          update: userFeatureData,
+          create: {
+            userId,
+            ...userFeatureData
+          }
+        });
+        console.log('[VoiceProfileService] Upsert result:', {
+          voiceProfileConsentAt: result.voiceProfileConsentAt,
+          voiceDataConsentAt: result.voiceDataConsentAt,
+          dataProcessingConsentAt: result.dataProcessingConsentAt,
+          voiceCloningEnabledAt: result.voiceCloningEnabledAt
+        });
+      }
 
+      // Mettre à jour User si nécessaire (birthDate)
+      if (Object.keys(userData).length > 0) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: userData
+        });
+      }
+
+      console.log('[VoiceProfileService] Consent updated successfully');
       return {
         success: true,
         data: { consentUpdated: true }
@@ -314,9 +399,14 @@ export class VoiceProfileService extends EventEmitter {
     hasVoiceRecordingConsent: boolean;
     hasVoiceCloningConsent: boolean;
     hasAgeVerification: boolean;
-    birthDate: Date | null;
+    birthDate: string | null;
+    // Timestamps ISO pour compatibilité avec VoiceProfileConsentStatus du frontend
+    voiceRecordingConsentAt: string | null;
+    voiceCloningEnabledAt: string | null;
+    ageVerificationConsentAt: string | null;
   }>> {
     try {
+      console.log('[VoiceProfileService] getConsentStatus called for userId:', userId);
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -332,6 +422,7 @@ export class VoiceProfileService extends EventEmitter {
       });
 
       if (!user) {
+        console.log('[VoiceProfileService] User not found');
         return {
           success: false,
           error: 'User not found',
@@ -339,14 +430,28 @@ export class VoiceProfileService extends EventEmitter {
         };
       }
 
+      console.log('[VoiceProfileService] User feature from DB:', user.userFeature);
+
+      // Helper pour convertir Date en string ISO ou null
+      const toISOString = (date: Date | null | undefined): string | null => {
+        return date ? date.toISOString() : null;
+      };
+
+      const result = {
+        hasVoiceRecordingConsent: !!user.userFeature?.voiceProfileConsentAt,
+        hasVoiceCloningConsent: !!user.userFeature?.voiceCloningEnabledAt,
+        hasAgeVerification: !!user.userFeature?.ageVerifiedAt,
+        birthDate: toISOString(user.birthDate),
+        // Timestamps ISO pour le frontend
+        voiceRecordingConsentAt: toISOString(user.userFeature?.voiceProfileConsentAt),
+        voiceCloningEnabledAt: toISOString(user.userFeature?.voiceCloningEnabledAt),
+        ageVerificationConsentAt: toISOString(user.userFeature?.ageVerifiedAt)
+      };
+
+      console.log('[VoiceProfileService] Returning consent status:', result);
       return {
         success: true,
-        data: {
-          hasVoiceRecordingConsent: !!user.userFeature?.voiceProfileConsentAt,
-          hasVoiceCloningConsent: !!user.userFeature?.voiceCloningEnabledAt,
-          hasAgeVerification: !!user.userFeature?.ageVerifiedAt,
-          birthDate: user.birthDate
-        }
+        data: result
       };
     } catch (error) {
       console.error('[VoiceProfileService] Error getting consent status:', error);
@@ -397,6 +502,10 @@ export class VoiceProfileService extends EventEmitter {
       // Resolve audio input (attachmentId or direct audio)
       const { audioData, audioFormat } = await this.resolveAudioInput(userId, request);
 
+      // Check if browser transcription is provided - if so, skip server transcription
+      const hasBrowserTranscription = !!request.browserTranscription?.text;
+      const shouldRequestServerTranscription = request.includeTranscription && !hasBrowserTranscription;
+
       // Send audio to Translator for analysis
       const requestId = randomUUID();
       const zmqRequest: VoiceProfileAnalyzeRequest = {
@@ -405,7 +514,12 @@ export class VoiceProfileService extends EventEmitter {
         user_id: userId,
         audio_data: audioData,
         audio_format: audioFormat,
-        is_update: false
+        is_update: false,
+        include_transcription: shouldRequestServerTranscription,
+        // Voice preview options
+        generate_previews: request.generateVoicePreviews,
+        preview_languages: request.previewLanguages,
+        preview_text: request.previewText || request.browserTranscription?.text
       };
 
       await this.zmqClient.sendVoiceProfileRequest(zmqRequest);
@@ -447,9 +561,95 @@ export class VoiceProfileService extends EventEmitter {
         }
       });
 
+      // Save voice cloning settings to UserFeature if provided
+      if (request.voiceCloningSettings) {
+        const cloningSettings = request.voiceCloningSettings;
+        const updateData: Record<string, number | string> = {};
+
+        // Validate and apply each setting with bounds checking
+        if (cloningSettings.voiceCloningExaggeration !== undefined) {
+          updateData.voiceCloningExaggeration = Math.max(0, Math.min(1, cloningSettings.voiceCloningExaggeration));
+        }
+        if (cloningSettings.voiceCloningCfgWeight !== undefined) {
+          updateData.voiceCloningCfgWeight = Math.max(0, Math.min(1, cloningSettings.voiceCloningCfgWeight));
+        }
+        if (cloningSettings.voiceCloningTemperature !== undefined) {
+          updateData.voiceCloningTemperature = Math.max(0.1, Math.min(2, cloningSettings.voiceCloningTemperature));
+        }
+        if (cloningSettings.voiceCloningTopP !== undefined) {
+          updateData.voiceCloningTopP = Math.max(0, Math.min(1, cloningSettings.voiceCloningTopP));
+        }
+        if (cloningSettings.voiceCloningQualityPreset !== undefined) {
+          const validPresets = ['fast', 'balanced', 'high_quality'];
+          if (validPresets.includes(cloningSettings.voiceCloningQualityPreset)) {
+            updateData.voiceCloningQualityPreset = cloningSettings.voiceCloningQualityPreset;
+          }
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await this.prisma.userFeature.update({
+            where: { userId },
+            data: updateData
+          });
+          console.log('[VoiceProfileService] Saved voice cloning settings:', updateData);
+        }
+      }
+
+      // Format profile details
+      const profileDetails = this.formatProfileDetails(voiceModel, user);
+
+      // Add transcription - prefer browser transcription if provided, else use server transcription
+      if (hasBrowserTranscription && request.browserTranscription) {
+        // Use browser-provided transcription
+        const browserTx = request.browserTranscription;
+        profileDetails.transcription = {
+          text: browserTx.text,
+          language: browserTx.language,
+          confidence: browserTx.confidence,
+          durationMs: browserTx.durationMs,
+          source: 'browser',
+          segments: browserTx.segments,
+          processingTimeMs: 0, // No server processing time
+          browserDetails: browserTx.browserDetails
+        };
+      } else if (response.transcription) {
+        // Use server transcription (Whisper)
+        // Cast source to VoiceProfileTranscriptionSource - server returns 'whisper' which is valid
+        const serverSource = (response.transcription.source || 'whisper') as import('@meeshy/shared/types/voice-api').VoiceProfileTranscriptionSource;
+        profileDetails.transcription = {
+          text: response.transcription.text,
+          language: response.transcription.language,
+          confidence: response.transcription.confidence,
+          durationMs: response.transcription.duration_ms,
+          source: serverSource,
+          model: response.transcription.model,
+          segments: response.transcription.segments?.map(seg => ({
+            text: seg.text,
+            startMs: seg.start_ms,
+            endMs: seg.end_ms,
+            confidence: seg.confidence
+          })),
+          processingTimeMs: response.transcription.processing_time_ms
+        };
+      }
+
+      // Add voice previews if generated
+      if (response.voice_previews && response.voice_previews.length > 0) {
+        profileDetails.voicePreviews = response.voice_previews.map(preview => ({
+          language: preview.language,
+          originalText: preview.original_text,
+          translatedText: preview.translated_text,
+          audioBase64: preview.audio_base64,
+          audioFormat: preview.audio_format,
+          durationMs: preview.duration_ms,
+          generatedAt: preview.generated_at
+        }));
+        console.log(`[VoiceProfileService] Generated ${profileDetails.voicePreviews.length} voice previews`);
+      }
+
       return {
         success: true,
-        data: this.formatProfileDetails(voiceModel, user)
+        data: profileDetails
       };
     } catch (error) {
       console.error('[VoiceProfileService] Error registering profile:', error);
@@ -477,7 +677,19 @@ export class VoiceProfileService extends EventEmitter {
       // Get existing profile
       const voiceModel = await this.prisma.userVoiceModel.findUnique({
         where: { userId },
-        include: { user: true }
+        include: {
+          user: {
+            include: {
+              userFeature: {
+                select: {
+                  voiceProfileConsentAt: true,
+                  voiceCloningEnabledAt: true,
+                  ageVerifiedAt: true
+                }
+              }
+            }
+          }
+        }
       });
 
       if (!voiceModel) {
@@ -584,7 +796,19 @@ export class VoiceProfileService extends EventEmitter {
     try {
       const voiceModel = await this.prisma.userVoiceModel.findUnique({
         where: { userId },
-        include: { user: true }
+        include: {
+          user: {
+            include: {
+              userFeature: {
+                select: {
+                  voiceProfileConsentAt: true,
+                  voiceCloningEnabledAt: true,
+                  ageVerifiedAt: true
+                }
+              }
+            }
+          }
+        }
       });
 
       if (!voiceModel) {
@@ -649,23 +873,32 @@ export class VoiceProfileService extends EventEmitter {
       ? voiceModel.nextRecalibrationAt < now
       : false;
 
+    // Les consentements sont dans UserFeature, pas dans User
+    const userFeature = user.userFeature;
+
+    // Helper pour convertir Date en string ISO ou null
+    const toISOString = (date: Date | null | undefined): string | null => {
+      return date ? date.toISOString() : null;
+    };
+
     return {
-      profileId: voiceModel.profileId || '',
+      profileId: voiceModel.profileId || null,
       userId: voiceModel.userId,
+      exists: true, // Si on arrive ici, le profil existe
       qualityScore: voiceModel.qualityScore,
       audioDurationMs: voiceModel.totalDurationMs,
       audioCount: voiceModel.audioCount,
-      voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, any> | null,
+      voiceCharacteristics: voiceModel.voiceCharacteristics as Record<string, unknown> | null,
       signatureShort: voiceModel.signatureShort,
       version: voiceModel.version,
-      createdAt: voiceModel.createdAt,
-      updatedAt: voiceModel.updatedAt,
-      expiresAt: voiceModel.nextRecalibrationAt,
+      createdAt: toISOString(voiceModel.createdAt),
+      updatedAt: toISOString(voiceModel.updatedAt),
+      expiresAt: toISOString(voiceModel.nextRecalibrationAt),
       needsCalibration,
       consentStatus: {
-        voiceRecordingConsentAt: user.voiceProfileConsentAt,
-        voiceCloningEnabledAt: user.voiceCloningEnabledAt,
-        ageVerificationConsentAt: user.ageVerificationConsentAt
+        voiceRecordingConsentAt: toISOString(userFeature?.voiceProfileConsentAt),
+        voiceCloningEnabledAt: toISOString(userFeature?.voiceCloningEnabledAt),
+        ageVerificationConsentAt: toISOString(userFeature?.ageVerifiedAt)
       }
     };
   }

@@ -1,0 +1,28 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/components"],
+            "message": "❌ Barrel imports interdits ! Utilisez des imports directs: import { Button } from '@/components/ui/button'"
+          },
+          {
+            "group": ["@/components/ui"],
+            "message": "❌ Barrel imports interdits ! Utilisez des imports directs: import { Button } from '@/components/ui/button'"
+          },
+          {
+            "group": ["@/components/common"],
+            "message": "❌ Barrel imports interdits ! Utilisez des imports directs: import { ErrorBoundary } from '@/components/common/ErrorBoundary'"
+          },
+          {
+            "group": ["@/lib/ui-imports"],
+            "message": "❌ Ce fichier est DEPRECATED ! Utilisez des imports directs: import { Button } from '@/components/ui/button'"
+          }
+        ]
+      }
+    ]
+  }
+}

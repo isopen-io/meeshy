@@ -20,6 +20,7 @@
       "notifications": "Notifications",
       "privacy": "Confidentialité",
       "encryption": "Chiffrement",
+      "audio": "Audio",
       "translation": "Traduction",
       "security": "Sécurité",
       "theme": "Thème",
@@ -306,6 +307,100 @@
       "placeholder": "Sélectionner une langue...",
       "searchPlaceholder": "Rechercher une langue...",
       "noLanguageFound": "Aucune langue trouvée."
+    },
+    "audio": {
+      "consents": {
+        "title": "Consentements audio",
+        "description": "Autorisations nécessaires pour les fonctionnalités audio",
+        "voiceData": "Traitement des données vocales",
+        "voiceDataDesc": "Autorise le traitement de vos messages audio pour la transcription",
+        "dataProcessing": "Traitement général des données",
+        "dataProcessingDesc": "Autorise le traitement de vos données pour les traductions"
+      },
+      "transcription": {
+        "title": "Transcription audio",
+        "description": "Convertir vos messages audio en texte",
+        "enable": "Activer la transcription",
+        "enableDesc": "Permet de transcrire les messages audio en texte",
+        "source": "Source de transcription",
+        "sourceAuto": "Automatique (recommandé)",
+        "sourceServer": "Serveur (meilleure qualité)",
+        "sourceMobile": "Appareil (plus rapide)"
+      },
+      "translation": {
+        "title": "Traduction audio",
+        "description": "Traduire automatiquement les messages audio",
+        "text": "Traduction du texte",
+        "textDesc": "Traduire les messages texte dans votre langue",
+        "audio": "Traduction des audios",
+        "audioDesc": "Transcrire et traduire les messages audio",
+        "generateAudio": "Générer audio traduit",
+        "generateAudioDesc": "Créer une version audio de la traduction",
+        "format": "Format audio"
+      },
+      "gdpr": {
+        "title": "Informations sur vos données",
+        "info": "Vos données audio sont traitées conformément au RGPD. La transcription est effectuée sur nos serveurs sécurisés et les données sont supprimées selon vos préférences de rétention."
+      },
+      "voiceProfile": {
+        "title": "Profil vocal",
+        "description": "Créez votre profil vocal pour cloner votre voix dans différentes langues"
+      }
+    },
+    "voiceProfile": {
+      "consents": {
+        "title": "Consentements vocaux",
+        "description": "Autorisations requises pour créer et utiliser votre profil vocal",
+        "recording": "Enregistrement vocal",
+        "recordingDesc": "Permet de créer un profil vocal à partir de votre voix",
+        "cloning": "Clonage vocal",
+        "cloningDesc": "Permet de cloner votre voix dans d'autres langues"
+      },
+      "existing": {
+        "title": "Profil vocal actif",
+        "quality": "Qualité",
+        "duration": "Durée audio",
+        "version": "Version",
+        "expires": "Expire",
+        "noExpiry": "Pas d'expiration",
+        "needsCalibration": "Votre profil nécessite une mise à jour pour maintenir sa qualité.",
+        "delete": "Supprimer le profil vocal"
+      },
+      "create": {
+        "title": "Créer votre profil vocal",
+        "description": "Lisez le texte ci-dessous à haute voix pour créer votre profil vocal",
+        "readThis": "Lisez ce texte à haute voix",
+        "minDuration": "Minimum {seconds} secondes",
+        "canStop": "Vous pouvez arrêter maintenant",
+        "keepGoing": "Continuez encore un peu...",
+        "startRecording": "Commencer",
+        "stopRecording": "Arrêter",
+        "retry": "Recommencer",
+        "transcribe": "Transcrire",
+        "transcribing": "Transcription...",
+        "creating": "Création...",
+        "createProfile": "Créer le profil",
+        "validate": "Valider et créer le profil",
+        "transcription": "Transcription"
+      },
+      "clonePreviews": {
+        "title": "Votre voix dans d'autres langues",
+        "description": "Écoutez un aperçu de votre voix clonée dans différentes langues"
+      },
+      "errors": {
+        "microphoneAccess": "Impossible d'accéder au microphone",
+        "tooShort": "L'enregistrement doit durer au moins {seconds} secondes",
+        "transcription": "Erreur de transcription",
+        "creation": "Erreur lors de la création du profil",
+        "consent": "Erreur lors de la mise à jour du consentement",
+        "delete": "Erreur lors de la suppression"
+      },
+      "consentUpdated": "Consentement mis à jour",
+      "transcriptionComplete": "Transcription terminée",
+      "profileCreated": "Profil vocal créé avec succès !",
+      "profileDeleted": "Profil vocal supprimé",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer votre profil vocal ?",
+      "noConsent": "Activez le consentement d'enregistrement vocal ci-dessus pour créer votre profil."
     },
     "noUserConnected": "Aucun utilisateur connecté"
   }

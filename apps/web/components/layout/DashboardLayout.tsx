@@ -1,13 +1,13 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useI18n } from '@/hooks/useI18n';
 import { NotificationBell } from '@/components/notifications';
 import { ShareAffiliateButton } from '@/components/affiliate/share-affiliate-button';
 import {
   MessageSquare,
-  Bell,
   Search,
   LogOut,
   Settings,
@@ -25,7 +25,6 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -41,7 +40,6 @@ import { useUser, useIsAuthChecking } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppStore } from '@/stores/app-store';
 import { authManager } from '@/services/auth-manager.service';
-import { preloadRouteModules } from '@/lib/lazy-components';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -67,13 +65,16 @@ export function DashboardLayout({
   const [isMobile, setIsMobile] = useState(false);
   const { theme, setTheme } = useAppStore();
 
-  // Détection mobile
+  // Détection mobile optimisée avec useCallback pour éviter les re-renders
+  const checkMobile = useCallback(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
+
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [checkMobile]);
 
   // Gérer l'état de chargement basé sur l'utilisateur du hook
   useEffect(() => {
@@ -148,15 +149,15 @@ export function DashboardLayout({
           <div className="flex justify-between items-center h-16">
             {/* Logo et titre */}
             <div className="flex items-center space-x-4">
-              <div 
-                className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => router.push('/')}
+              <Link
+                href="/"
+                className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
               >
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
                   <MessageSquare className="h-5 w-5 text-white" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white hidden md:inline">Meeshy</h1>
-              </div>
+              </Link>
               {title && (
                 <div className="hidden md:block">
                   <span className="text-gray-400 dark:text-gray-600 mx-2">/</span>
@@ -214,82 +215,66 @@ export function DashboardLayout({
                 </DropdownMenuTrigger>
                 
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => router.push('/dashboard')}
-                    onMouseEnter={() => preloadRouteModules('/dashboard')}
-                    onFocus={() => preloadRouteModules('/dashboard')}
-                  >
-                    <Home className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.dashboard')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard" className="flex items-center cursor-pointer">
+                      <Home className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.dashboard')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/conversations')}
-                    onMouseEnter={() => preloadRouteModules('/conversations')}
-                    onFocus={() => preloadRouteModules('/conversations')}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.conversations')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/conversations" className="flex items-center cursor-pointer">
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.conversations')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/groups')}
-                    onMouseEnter={() => preloadRouteModules('/groups')}
-                    onFocus={() => preloadRouteModules('/groups')}
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.communities')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/groups" className="flex items-center cursor-pointer">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.communities')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/contacts')}
-                    onMouseEnter={() => preloadRouteModules('/contacts')}
-                    onFocus={() => preloadRouteModules('/contacts')}
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.contacts')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/contacts" className="flex items-center cursor-pointer">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.contacts')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/links')}
-                    onMouseEnter={() => preloadRouteModules('/links')}
-                    onFocus={() => preloadRouteModules('/links')}
-                  >
-                    <LinkIcon className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.links')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/links" className="flex items-center cursor-pointer">
+                      <LinkIcon className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.links')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/u')}
-                    onMouseEnter={() => preloadRouteModules('/u')}
-                    onFocus={() => preloadRouteModules('/u')}
-                  >
-                    <UserIcon className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.profile')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/u" className="flex items-center cursor-pointer">
+                      <UserIcon className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.profile')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={() => router.push('/settings')}
-                    onMouseEnter={() => preloadRouteModules('/settings')}
-                    onFocus={() => preloadRouteModules('/settings')}
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>{t('navigation.settings')}</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="flex items-center cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.settings')}</span>
+                    </Link>
                   </DropdownMenuItem>
 
                   {/* Lien Admin - Affiché seulement si l'utilisateur a les permissions */}
                   {(user as any).permissions?.canAccessAdmin && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => router.push('/admin')}
-                        onMouseEnter={() => preloadRouteModules('/admin')}
-                        onFocus={() => preloadRouteModules('/admin')}
-                      >
-                        <Shield className="mr-2 h-4 w-4" />
-                        <span>{t('navigation.admin')}</span>
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin" className="flex items-center cursor-pointer">
+                          <Shield className="mr-2 h-4 w-4" />
+                          <span>{t('navigation.admin')}</span>
+                        </Link>
                       </DropdownMenuItem>
                     </>
                   )}

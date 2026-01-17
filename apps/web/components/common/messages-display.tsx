@@ -7,7 +7,7 @@ import { BubbleMessage } from './BubbleMessage';
 import { messageTranslationService } from '@/services/message-translation.service';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useI18n } from '@/hooks/useI18n';
-import type { User, Message, MessageWithTranslations } from '@meeshy/shared/types';
+import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
 interface MessagesDisplayProps {
   messages: Message[];
@@ -26,7 +26,7 @@ interface MessagesDisplayProps {
   onReplyMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
-  conversationType?: 'direct' | 'group' | 'public' | 'global';
+  conversationType?: ConversationType;
   userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
   conversationId?: string; // Add conversationId prop for reactions
   isAnonymous?: boolean; // Add isAnonymous for anonymous reactions
@@ -96,7 +96,8 @@ export function MessagesDisplay({
     }
     
     // Chercher une traduction dans la langue de l'utilisateur
-    const userLanguageTranslation = message.translations?.find((t: any) => 
+    const translationsArray = Array.isArray(message.translations) ? message.translations : [];
+    const userLanguageTranslation = translationsArray.find((t: any) =>
       (t.language || t.targetLanguage) === userLanguage
     );
     
@@ -109,7 +110,7 @@ export function MessagesDisplay({
   }, [userLanguage]);
 
   // Fonction pour forcer la traduction
-  const handleForceTranslation = useCallback(async (messageId: string, targetLanguage: string, model?: 'basic' | 'medium' | 'premium') => {
+  const handleForceTranslation = useCallback(async (messageId: string, targetLanguage: string, model?: TranslationModel) => {
     try {
       // Vérifier si cette traduction spécifique (même message + même langue) est déjà en cours
       const translationKey = `${messageId}-${targetLanguage}`;
@@ -211,26 +212,36 @@ export function MessagesDisplay({
 
   // Messages à afficher - transformer les messages pour BubbleMessage
   const displayMessages = useMemo(() => {
-    const messagesToUse = translatedMessages.length > 0 ? translatedMessages : messages;
+    // S'assurer que messages et translatedMessages sont des tableaux
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    const safeTranslatedMessages = Array.isArray(translatedMessages) ? translatedMessages : [];
+    
+    const messagesToUse = safeTranslatedMessages.length > 0 ? safeTranslatedMessages : safeMessages;
 
     // Transform messages to match BubbleMessage expected format
     // Filtrer les messages sans ID valide et dédupliquer par ID
     const seenIds = new Set<string>();
     const transformedMessages = messagesToUse
       .filter(message => {
-        // Exclure les messages sans ID valide
-        if (!message || !message.id) return false;
-        // Exclure les doublons (garder le premier)
-        if (seenIds.has(message.id)) return false;
-        seenIds.add(message.id);
+        // Exclure les messages null/undefined ou sans ID
+        if (!message || message.id === undefined || message.id === null) return false;
+        
+        // Convertir l'ID en string et vérifier s'il est vide
+        const idStr = String(message.id).trim();
+        if (idStr === '') return false;
+        
+        // Exclure les doublons (garder le premier rencontré)
+        if (seenIds.has(idStr)) return false;
+        seenIds.add(idStr);
         return true;
       })
       .map(message => ({
         ...message,
-        originalContent: message.content, // BubbleMessage expects originalContent
-        originalLanguage: message.originalLanguage || 'fr', // Ensure originalLanguage exists
-        translations: message.translations || [], // Ensure translations array exists
-        readStatus: (message as any).status || [] // Map status to readStatus
+        id: String(message.id), // Garantir que l'ID est un string
+        originalContent: (message as any).content, // BubbleMessage expects originalContent
+        originalLanguage: (message as any).originalLanguage || 'fr', // Ensure originalLanguage exists
+        translations: (message as any).translations || [], // Ensure translations array exists
+        readStatus: (message as any).readStatus || (message as any).status || [] // Map status to readStatus
       }));
 
     return reverseOrder ? [...transformedMessages].reverse() : transformedMessages;
@@ -272,7 +283,8 @@ export function MessagesDisplay({
         
         // Si le message n'est pas dans la langue utilisateur et qu'une traduction est disponible
         if (message.originalLanguage !== userLanguage) {
-          const userLanguageTranslation = message.translations?.find((t: any) => 
+          const translationsArray = Array.isArray(message.translations) ? message.translations : [];
+          const userLanguageTranslation = translationsArray.find((t: any) =>
             (t.language || t.targetLanguage) === userLanguage
           );
           
@@ -354,7 +366,7 @@ export function MessagesDisplay({
 
       {/* Load more button for infinite scroll - EN BAS */}
       {hasMore && onLoadMore && (
-        <div className="flex justify-center py-6 mt-4">
+        <div key="messages-load-more" className="flex justify-center py-6 mt-4">
           <button
             onClick={onLoadMore}
             disabled={isLoadingMore}

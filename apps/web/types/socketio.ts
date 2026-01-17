@@ -20,6 +20,7 @@ import type {
   UIMessage as SharedUIMessage,
   GatewayMessage,
   MessageWithTranslations as SharedMessageWithTranslations,
+  TranslationModel,
 } from '@meeshy/shared/types';
 
 // Alias pour rétrocompatibilité
@@ -98,7 +99,7 @@ export interface UseSocketIOMessagingReturn {
 export interface ForceTranslationRequest {
   messageId: string;
   targetLanguage: string;
-  model?: 'basic' | 'medium' | 'premium';
+  model?: TranslationModel;
 }
 
 export interface ForceTranslationResponse {

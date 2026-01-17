@@ -45,10 +45,10 @@ describe('Languages Utility Module', () => {
       expect(SUPPORTED_LANGUAGES.length).toBeGreaterThanOrEqual(8);
     });
 
-    it('should contain French as the first language', () => {
-      const french = SUPPORTED_LANGUAGES[0];
-      expect(french.code).toBe('fr');
-      expect(french.name).toBe('Français');
+    it('should contain English as the first language', () => {
+      const english = SUPPORTED_LANGUAGES[0];
+      expect(english.code).toBe('en');
+      expect(english.name).toBe('English');
     });
 
     it('should contain English', () => {
@@ -94,19 +94,19 @@ describe('Languages Utility Module', () => {
     it('should contain Spanish', () => {
       const spanish = SUPPORTED_LANGUAGES.find(lang => lang.code === 'es');
       expect(spanish).toBeDefined();
-      expect(spanish!.name).toBe('Español');
+      expect(spanish!.name).toBe('Spanish');
     });
 
     it('should contain German', () => {
       const german = SUPPORTED_LANGUAGES.find(lang => lang.code === 'de');
       expect(german).toBeDefined();
-      expect(german!.name).toBe('Deutsch');
+      expect(german!.name).toBe('German');
     });
 
     it('should contain Portuguese', () => {
       const portuguese = SUPPORTED_LANGUAGES.find(lang => lang.code === 'pt');
       expect(portuguese).toBeDefined();
-      expect(portuguese!.name).toBe('Português');
+      expect(portuguese!.name).toBe('Portuguese');
     });
 
     it('should contain Chinese', () => {
@@ -136,7 +136,7 @@ describe('Languages Utility Module', () => {
     it('should return French info for "fr" code', () => {
       const result = getLanguageInfo('fr');
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
       expect(result.flag).toBe('\uD83C\uDDEB\uD83C\uDDF7');
     });
 
@@ -155,7 +155,7 @@ describe('Languages Utility Module', () => {
     it('should handle mixed case language codes', () => {
       const result = getLanguageInfo('Fr');
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
     });
 
     it('should handle codes with whitespace', () => {
@@ -167,25 +167,25 @@ describe('Languages Utility Module', () => {
     it('should return French as default for undefined code', () => {
       const result = getLanguageInfo(undefined);
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
     });
 
     it('should return French as default for empty string', () => {
       const result = getLanguageInfo('');
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
     });
 
     it('should return French as default for whitespace-only string', () => {
       const result = getLanguageInfo('   ');
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
     });
 
     it('should return French as default for "unknown" code', () => {
       const result = getLanguageInfo('unknown');
       expect(result.code).toBe('fr');
-      expect(result.name).toBe('Français');
+      expect(result.name).toBe('French');
     });
 
     it('should return fallback object for unsupported language code', () => {
@@ -233,7 +233,7 @@ describe('Languages Utility Module', () => {
 
   describe('getLanguageName', () => {
     it('should return "Français" for "fr"', () => {
-      expect(getLanguageName('fr')).toBe('Français');
+      expect(getLanguageName('fr')).toBe('French');
     });
 
     it('should return "English" for "en"', () => {
@@ -241,15 +241,15 @@ describe('Languages Utility Module', () => {
     });
 
     it('should return "Español" for "es"', () => {
-      expect(getLanguageName('es')).toBe('Español');
+      expect(getLanguageName('es')).toBe('Spanish');
     });
 
     it('should return "Deutsch" for "de"', () => {
-      expect(getLanguageName('de')).toBe('Deutsch');
+      expect(getLanguageName('de')).toBe('German');
     });
 
     it('should return default name for undefined', () => {
-      expect(getLanguageName(undefined)).toBe('Français');
+      expect(getLanguageName(undefined)).toBe('French');
     });
 
     it('should return uppercase code for unsupported language', () => {
@@ -258,7 +258,7 @@ describe('Languages Utility Module', () => {
 
     it('should handle case insensitive codes', () => {
       expect(getLanguageName('EN')).toBe('English');
-      expect(getLanguageName('JA')).toBe('\u65E5\u672C\u8A9E'); // Japanese name
+      expect(getLanguageName('JA')).toBe('Japanese');
     });
   });
 
@@ -601,11 +601,23 @@ describe('Languages Utility Module', () => {
   // ==============================================
 
   describe('SupportedLanguageInfo interface', () => {
+    // Propriétés de base requises pour tous les tests d'interface
+    const baseProps = {
+      supportsTTS: true,
+      supportsSTT: true,
+      supportsVoiceCloning: false,
+      supportsTranslation: true,
+      ttsEngine: 'mms' as const,
+      sttEngine: 'whisper' as const,
+      region: 'Europe' as const,
+    };
+
     it('should have required code property', () => {
       const lang: SupportedLanguageInfo = {
         code: 'test',
         name: 'Test',
         flag: '\uD83C\uDF10',
+        ...baseProps,
       };
       expect(lang.code).toBe('test');
     });
@@ -615,6 +627,7 @@ describe('Languages Utility Module', () => {
         code: 'test',
         name: 'Test Language',
         flag: '\uD83C\uDF10',
+        ...baseProps,
       };
       expect(lang.name).toBe('Test Language');
     });
@@ -624,6 +637,7 @@ describe('Languages Utility Module', () => {
         code: 'test',
         name: 'Test',
         flag: '\uD83C\uDF10',
+        ...baseProps,
       };
       expect(lang.flag).toBe('\uD83C\uDF10');
     });
@@ -634,6 +648,7 @@ describe('Languages Utility Module', () => {
         name: 'Test',
         flag: '\uD83C\uDF10',
         color: 'bg-purple-500',
+        ...baseProps,
       };
       expect(lang.color).toBe('bg-purple-500');
     });
@@ -644,6 +659,7 @@ describe('Languages Utility Module', () => {
         name: 'Test',
         flag: '\uD83C\uDF10',
         translateText: 'Translate to Test',
+        ...baseProps,
       };
       expect(lang.translateText).toBe('Translate to Test');
     });

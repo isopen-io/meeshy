@@ -57,20 +57,22 @@ try:
     from services.audio_message_pipeline import get_audio_pipeline
     from services.transcription_service import get_transcription_service
     from services.voice_clone_service import get_voice_clone_service
-    from services.tts_service import get_tts_service
     AUDIO_SERVICES_AVAILABLE = True
 except ImportError as e:
     pass  # Will be logged later
 
-# Import du service TTS unifié (Chatterbox, Higgs Audio V2, XTTS)
+# Import du service TTS unifié (Chatterbox, Higgs Audio V2, XTTS, MMS)
 try:
-    from services.unified_tts_service import (
-        get_unified_tts_service,
-        UnifiedTTSService,
+    from services.tts_service import (
+        get_tts_service,
+        TTSService,
         TTSModel,
         TTS_MODEL_INFO,
         check_license_compliance
     )
+    # Alias pour compatibilité avec ancien code
+    get_unified_tts_service = get_tts_service
+    UnifiedTTSService = TTSService
     UNIFIED_TTS_AVAILABLE = True
 except ImportError as e:
     pass  # Will be logged later
@@ -278,6 +280,18 @@ class MeeshyTranslationServer:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services Voice API: {e}")
                     import traceback
                     traceback.print_exc()
+
+            # 4.5 Configurer les services dans le ZMQ server pour Voice Profile handler
+            # Ceci est nécessaire pour que le Voice Profile handler puisse créer des profils vocaux
+            self.zmq_server.set_voice_api_services(
+                transcription_service=transcription_service,
+                translation_service=self.translation_service,
+                voice_clone_service=voice_clone_service,
+                tts_service=tts_service,
+                voice_analyzer=voice_analyzer,
+                translation_pipeline=translation_pipeline,
+                analytics_service=analytics_service
+            )
 
             # 5. Initialiser l'API FastAPI avec le service ML unifié
             self.translation_api = TranslationAPI(

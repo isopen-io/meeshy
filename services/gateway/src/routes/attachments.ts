@@ -53,25 +53,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
         tags: ['attachments'],
         summary: 'Upload file attachments',
         consumes: ['multipart/form-data'],
-        body: {
-          type: 'object',
-          description: 'Multipart form data with file(s) and optional metadata',
-          properties: {
-            file: {
-              type: 'string',
-              format: 'binary',
-              description: 'File to upload (can send multiple files)'
-            },
-            metadata_0: {
-              type: 'string',
-              description: 'JSON metadata for first file (index 0). Example: {"duration": 5000, "title": "My Audio"}'
-            },
-            metadata_1: {
-              type: 'string',
-              description: 'JSON metadata for second file (index 1)'
-            }
-          }
-        },
+        // Note: body schema removed for multipart routes - validation is handled manually via request.parts()
         response: {
           200: {
             description: 'Files uploaded successfully',
@@ -161,6 +143,15 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
             }
           }
         }
+
+        // Log détaillé des fichiers reçus
+        console.log('[AttachmentRoutes] Files received:', files.map((f, i) => ({
+          index: i,
+          filename: f.filename,
+          mimeType: f.mimeType,
+          size: f.size,
+          bufferLength: f.buffer.length
+        })));
 
         if (files.length === 0) {
           return reply.status(400).send({
@@ -1225,6 +1216,8 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           }
         }
 
+        // Use AttachmentTranslateService for all attachment types
+        // It dispatches to the appropriate service based on mimeType
         const result = await translateService.translate(userId, attachmentId, {
           targetLanguages: body.targetLanguages,
           sourceLanguage: body.sourceLanguage,
@@ -1256,6 +1249,220 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
           success: false,
           error: 'TRANSLATION_FAILED',
           message: error.message || 'Error translating attachment'
+        });
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ATTACHMENT TRANSCRIPTION (Audio only)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * POST /attachments/:attachmentId/transcribe
+   * Transcribe an audio attachment to text only (no translation, no TTS)
+   */
+  fastify.post(
+    '/attachments/:attachmentId/transcribe',
+    {
+      onRequest: [authRequired],
+      schema: {
+        description: 'Transcribe an audio attachment to text only, without translation or voice synthesis. Uses Whisper for accurate speech-to-text. Returns the attachment enriched with transcription data including text, detected language, confidence score, and word-level timestamps.',
+        tags: ['attachments', 'transcription'],
+        summary: 'Transcribe audio attachment',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Transcription completed or processing started',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if already completed)' },
+                  status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
+                  attachment: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      messageId: { type: 'string' },
+                      fileName: { type: 'string' },
+                      fileUrl: { type: 'string' },
+                      duration: { type: 'number', nullable: true },
+                      mimeType: { type: 'string' }
+                    }
+                  },
+                  transcription: {
+                    type: 'object',
+                    nullable: true,
+                    description: 'Transcription data (null if still processing)',
+                    properties: {
+                      id: { type: 'string' },
+                      text: { type: 'string' },
+                      language: { type: 'string' },
+                      confidence: { type: 'number' },
+                      source: { type: 'string' },
+                      segments: { type: 'array' },
+                      durationMs: { type: 'number' }
+                    }
+                  },
+                  translatedAudios: {
+                    type: 'array',
+                    description: 'Translated audio versions (if any)'
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: 'Bad request - not an audio attachment',
+            ...errorResponseSchema
+          },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          403: {
+            description: 'Feature not enabled',
+            ...errorResponseSchema
+          },
+          404: {
+            description: 'Attachment not found',
+            ...errorResponseSchema
+          },
+          503: {
+            description: 'Service unavailable - transcription service not initialized',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const translationService = (fastify as any).translationService;
+        if (!translationService) {
+          return reply.status(503).send({
+            success: false,
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'Translation service not available'
+          });
+        }
+
+        const authContext = (request as any).authContext;
+        if (!authContext?.isAuthenticated) {
+          return reply.status(401).send({
+            success: false,
+            error: 'UNAUTHORIZED',
+            message: 'Authentication required'
+          });
+        }
+
+        const { attachmentId } = request.params as { attachmentId: string };
+        const userId = authContext.userId;
+
+        // Get attachment to validate type
+        const attachment = await (fastify as any).prisma.messageAttachment.findUnique({
+          where: { id: attachmentId },
+          select: { id: true, mimeType: true, uploadedBy: true }
+        });
+
+        if (!attachment) {
+          return reply.status(404).send({
+            success: false,
+            error: 'ATTACHMENT_NOT_FOUND',
+            message: 'Attachment not found'
+          });
+        }
+
+        // Only audio files can be transcribed
+        if (!attachment.mimeType?.startsWith('audio/')) {
+          return reply.status(400).send({
+            success: false,
+            error: 'INVALID_ATTACHMENT_TYPE',
+            message: 'Only audio attachments can be transcribed'
+          });
+        }
+
+        // Validate user features - transcription requires only audioTranscription feature (not full translation)
+        const audioValidation = await userFeaturesService.canTranscribeAudio(userId);
+        if (!audioValidation.allowed) {
+          return reply.status(403).send({
+            success: false,
+            error: 'FEATURE_NOT_ENABLED',
+            message: audioValidation.reason || 'Audio transcription not enabled',
+            details: {
+              missingConsents: audioValidation.missingConsents,
+              missingFeatures: audioValidation.missingFeatures
+            }
+          });
+        }
+
+        // Check if transcription already exists
+        const existingData = await translationService.getAttachmentWithTranscription(attachmentId);
+
+        if (!existingData) {
+          return reply.status(404).send({
+            success: false,
+            error: 'ATTACHMENT_NOT_FOUND',
+            message: 'Attachment not found'
+          });
+        }
+
+        // If transcription already exists, return it
+        if (existingData.transcription) {
+          return reply.send({
+            success: true,
+            data: {
+              taskId: null,
+              status: 'completed',
+              attachment: existingData.attachment,
+              transcription: existingData.transcription,
+              translatedAudios: existingData.translatedAudios
+            }
+          });
+        }
+
+        // Otherwise, start transcription
+        const result = await translationService.transcribeAttachment(attachmentId);
+
+        if (!result) {
+          return reply.status(500).send({
+            success: false,
+            error: 'TRANSCRIPTION_FAILED',
+            message: 'Failed to start transcription'
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            taskId: result.taskId,
+            status: 'processing',
+            attachment: result.attachment,
+            transcription: null,
+            translatedAudios: []
+          }
+        });
+      } catch (error: any) {
+        console.error('[AttachmentRoutes] Error transcribing attachment:', error);
+        return reply.status(500).send({
+          success: false,
+          error: 'TRANSCRIPTION_FAILED',
+          message: error.message || 'Error transcribing attachment'
         });
       }
     }

@@ -80,7 +80,7 @@ const NotificationEventSchema = z.object({
   senderAvatar: z.string().url().optional().nullable(),
   messagePreview: z.string().max(500).optional(),
   context: NotificationContextSchema,
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
   attachments: z.array(z.object({
     id: z.string(),
     fileName: z.string(),
@@ -112,8 +112,8 @@ const NotificationCountsEventSchema = z.object({
   counts: z.object({
     total: z.number().int().nonnegative(),
     unread: z.number().int().nonnegative(),
-    byType: z.record(z.number().int().nonnegative()),
-    byPriority: z.record(z.number().int().nonnegative())
+    byType: z.record(z.string(), z.number().int().nonnegative()),
+    byPriority: z.record(z.string(), z.number().int().nonnegative())
   })
 });
 
@@ -165,13 +165,13 @@ export function validateNotificationEvent(data: unknown): ValidationResult<Notif
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('[Socket Validator] Validation failed:', {
-        errors: error.errors,
+        errors: error.issues,
         data
       });
 
       return {
         success: false,
-        error: `Validation failed: ${error.errors.map(e => e.message).join(', ')}`
+        error: `Validation failed: ${error.issues.map((e: z.ZodIssue) => e.message).join(', ')}`
       };
     }
 
@@ -200,7 +200,7 @@ export function validateNotificationReadEvent(data: unknown): ValidationResult<{
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Read event validation failed:', error.errors);
+      console.error('[Socket Validator] Read event validation failed:', error.issues);
 
       return {
         success: false,
@@ -231,7 +231,7 @@ export function validateNotificationDeletedEvent(data: unknown): ValidationResul
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Deleted event validation failed:', error.errors);
+      console.error('[Socket Validator] Deleted event validation failed:', error.issues);
 
       return {
         success: false,
@@ -270,7 +270,7 @@ export function validateNotificationCountsEvent(data: unknown): ValidationResult
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Counts event validation failed:', error.errors);
+      console.error('[Socket Validator] Counts event validation failed:', error.issues);
 
       return {
         success: false,
@@ -423,7 +423,7 @@ export function validateNotificationResponse(response: unknown): ValidationResul
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Response validation failed:', error.errors);
+      console.error('[Socket Validator] Response validation failed:', error.issues);
 
       return {
         success: false,

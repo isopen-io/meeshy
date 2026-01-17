@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { TranslationService } from '../services/TranslationService';
+import { MessageTranslationService } from '../services/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -267,7 +267,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
   const translationService = (fastify as any).translationService;
 
   if (!translationService) {
-    throw new Error('TranslationService not provided to translation routes');
+    throw new Error('MessageTranslationService not provided to translation routes');
   }
 
   // Route principale de traduction

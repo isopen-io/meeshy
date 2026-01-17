@@ -17,6 +17,10 @@ const customJestConfig = {
     // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
     '^lucide-react$': '<rootDir>/__mocks__/lucide-react.js',
     '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/__mocks__/lucide-react.js',
+    // Mock styled-jsx to avoid module resolution issues
+    'styled-jsx/style': '<rootDir>/__mocks__/styled-jsx.js',
+    // Mock next/font/google for font tests
+    '^next/font/google$': '<rootDir>/__mocks__/next/font/google.js',
   },
   // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [

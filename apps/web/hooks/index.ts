@@ -43,3 +43,13 @@ export {
   useMentions,
   useTextareaAutosize,
 } from './composer';
+
+// Hooks vidéo (extraits de VideoPlayer)
+export { useVideoPlayback } from './use-video-playback';
+export { useFullscreen } from './use-fullscreen';
+export { useVolume } from './use-volume';
+
+// Hooks contacts (extraits de ContactsPage)
+export { useContactsData } from './use-contacts-data';
+export { useContactsFiltering } from './use-contacts-filtering';
+export { useContactsActions } from './use-contacts-actions';

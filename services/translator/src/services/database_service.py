@@ -7,6 +7,7 @@ Translator only stores translation cache and handles audio processing.
 """
 
 import asyncio
+import base64
 import logging
 import os
 from typing import Optional, Dict, Any
@@ -324,7 +325,12 @@ class DatabaseService:
             }
 
     # =========================================================================
-    # VOICE PROFILE METHODS
+    # VOICE PROFILE METHODS (DEPRECATED)
+    # =========================================================================
+    # Ces méthodes sont DÉPRÉCIÉES - Utiliser AudioCacheService (Redis) à la place.
+    # Le Translator utilise Redis pour le cache des profils vocaux.
+    # Gateway est responsable de la persistance dans MongoDB.
+    # Ces méthodes sont conservées pour compatibilité mais ne sont plus appelées.
     # =========================================================================
 
     async def save_voice_profile(
@@ -370,8 +376,11 @@ class DatabaseService:
                 where={"userId": user_id}
             )
 
+            # Encoder l'embedding en base64 pour Prisma Python (Bytes type)
+            embedding_b64 = base64.b64encode(embedding).decode('utf-8') if embedding else None
+
             data = {
-                "embedding": embedding,
+                "embedding": embedding_b64,
                 "embeddingModel": embedding_model,
                 "embeddingDimension": embedding_dimension,
                 "audioCount": audio_count,

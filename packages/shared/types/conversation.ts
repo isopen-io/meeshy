@@ -211,6 +211,8 @@ export interface Message {
 
 /**
  * Statut de traduction UI
+ * Note: 'translating' est un alias UI de 'in_progress' du ProcessStatus canonique
+ * @see status-types.ts UITranslationStatus pour le type canonique avec fonction de conversion
  */
 export type UITranslationStatus = 'pending' | 'translating' | 'completed' | 'failed';
 

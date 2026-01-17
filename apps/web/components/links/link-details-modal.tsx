@@ -25,13 +25,24 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
-import { ConversationLink } from '@/types';
+import type { ConversationLink, Conversation } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from 'sonner';
 
+// Extended types for properties that backend returns but aren't yet in shared types
+interface ExtendedConversation extends Conversation {
+  conversationUrl?: string;
+}
+
+interface ExtendedConversationLink extends Omit<ConversationLink, 'conversation'> {
+  conversation: ExtendedConversation;
+  requireAccount?: boolean;
+  requireBirthday?: boolean;
+}
+
 interface LinkDetailsModalProps {
-  link: ConversationLink;
+  link: ExtendedConversationLink;
   isOpen: boolean;
   onClose: () => void;
 }

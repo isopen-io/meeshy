@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
-  User,
+  User as UserIcon,
   Shield,
   Mail,
   Phone,
@@ -27,8 +27,13 @@ import {
   Activity
 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
-import { adminService } from '@/services/admin.service';
-import type { User } from '@/services/admin.service';
+import { adminService, type User as AdminUserType } from '@/services/admin.service';
+
+// Type pour les réponses API admin
+interface AdminApiResponse<T> {
+  success: boolean;
+  data: T;
+}
 import { toast } from 'sonner';
 
 export default function UserDetailPage() {
@@ -36,7 +41,7 @@ export default function UserDetailPage() {
   const params = useParams();
   const userId = params.id as string;
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AdminUserType | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,10 +78,10 @@ export default function UserDetailPage() {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get(`/admin/user-management/${userId}`);
+      const response = await apiService.get<AdminApiResponse<AdminUserType>>(`/admin/user-management/${userId}`);
 
       if (response.data?.success && response.data?.data) {
-        const userData = response.data.data;
+        const userData = response.data.data as AdminUserType;
         setUser(userData);
         setFormData({
           firstName: userData.firstName || '',
@@ -101,7 +106,7 @@ export default function UserDetailPage() {
   const handleUpdateProfile = async () => {
     try {
       setSaving(true);
-      const response = await apiService.patch(`/admin/user-management/${userId}`, formData);
+      const response = await apiService.patch<AdminApiResponse<AdminUserType>>(`/admin/user-management/${userId}`, formData);
 
       if (response.data?.success) {
         toast.success('Profil mis à jour avec succès');
@@ -125,7 +130,7 @@ export default function UserDetailPage() {
       setSaving(true);
       const response = await adminService.updateUserRole(userId, roleEdit.role);
 
-      if (response.data?.success) {
+      if (response.success) {
         toast.success('Rôle mis à jour avec succès');
         setRoleEdit({ editing: false, role: roleEdit.role, reason: '' });
         loadUserData();
@@ -144,7 +149,7 @@ export default function UserDetailPage() {
       const newStatus = !user.isActive;
       const response = await adminService.toggleUserStatus(userId, newStatus);
 
-      if (response.data?.success) {
+      if (response.success) {
         toast.success(newStatus ? 'Utilisateur activé' : 'Utilisateur désactivé');
         loadUserData();
       }
@@ -161,7 +166,7 @@ export default function UserDetailPage() {
 
     try {
       setSaving(true);
-      const response = await apiService.post(`/admin/user-management/${userId}/reset-password`, {
+      const response = await apiService.post<AdminApiResponse<void>>(`/admin/user-management/${userId}/reset-password`, {
         newPassword: passwordReset.newPassword,
         reason: passwordReset.reason
       });
@@ -182,7 +187,7 @@ export default function UserDetailPage() {
       setSaving(true);
       const response = await adminService.deleteUser(userId);
 
-      if (response.data?.success) {
+      if (response.success) {
         toast.success('Utilisateur supprimé avec succès');
         router.push('/admin/users');
       }
@@ -295,7 +300,7 @@ export default function UserDetailPage() {
             <Card className="dark:bg-gray-900 dark:border-gray-800">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
-                  <User className="h-5 w-5" />
+                  <UserIcon className="h-5 w-5" />
                   <span>Informations du profil</span>
                 </CardTitle>
                 {!editMode ? (
@@ -311,6 +316,7 @@ export default function UserDetailPage() {
                         firstName: user.firstName || '',
                         lastName: user.lastName || '',
                         displayName: user.displayName || '',
+                        username: user.username || '',
                         bio: user.bio || '',
                         systemLanguage: user.systemLanguage || 'fr',
                         regionalLanguage: user.regionalLanguage || 'fr'
@@ -434,7 +440,7 @@ export default function UserDetailPage() {
                     <div className="flex items-center text-sm">
                       <span className="w-32 text-gray-600 dark:text-gray-400">Username:</span>
                       <span className="font-medium font-mono flex items-center dark:text-gray-200">
-                        <User className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
+                        <UserIcon className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
                         @{user.username}
                       </span>
                     </div>
@@ -702,7 +708,7 @@ export default function UserDetailPage() {
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Email vérifié</span>
-                  {user.emailVerified ? (
+                  {user.emailVerifiedAt ? (
                     <Badge variant="default" className="text-xs">
                       <CheckCircle className="h-3 w-3 mr-1" />
                       Oui
@@ -716,7 +722,8 @@ export default function UserDetailPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400">2FA activé</span>
-                  {user.twoFactorEnabled ? (
+                  {/* TODO: twoFactorEnabled n'existe pas encore sur le type AdminUser */}
+                  {false ? (
                     <Badge variant="default" className="text-xs">
                       <CheckCircle className="h-3 w-3 mr-1" />
                       Oui

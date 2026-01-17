@@ -115,7 +115,7 @@ services:
     container_name: meeshy-nosqlclient
     restart: unless-stopped
     environment:
-      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true"
+      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD}@database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true&authSource=admin"
       ROOT_URL: "https://mongo.${DOMAIN:-meeshy.me}"
       PORT: 3000
     depends_on:
@@ -198,7 +198,7 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
-      - DATABASE_URL=mongodb://database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
+      - DATABASE_URL=mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD}@database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true&authSource=admin
       - REDIS_URL=redis://redis:6379
       - PRISMA_SCHEMA_PATH=/workspace/schema.prisma
       - PYTHONPATH=/workspace:/workspace/generated
@@ -238,7 +238,7 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
-      - DATABASE_URL=mongodb://database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
+      - DATABASE_URL=mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD}@database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true&authSource=admin
       - REDIS_URL=redis://redis:6379
       - TRANSLATOR_URL=http://translator:8000
       - ZMQ_PUSH_URL=tcp://translator:5555
@@ -259,14 +259,23 @@ services:
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_SYSTEM_LANGUAGE=${ADMIN_SYSTEM_LANGUAGE}
+      - ADMIN_REGIONAL_LANGUAGE=${ADMIN_REGIONAL_LANGUAGE}
+      - ADMIN_CUSTOM_DESTINATION_LANGUAGE=${ADMIN_CUSTOM_DESTINATION_LANGUAGE}
       - MEESHY_PASSWORD=${MEESHY_PASSWORD}
       - MEESHY_EMAIL=${MEESHY_EMAIL}
+      - MEESHY_SYSTEM_LANGUAGE=${MEESHY_SYSTEM_LANGUAGE}
+      - MEESHY_REGIONAL_LANGUAGE=${MEESHY_REGIONAL_LANGUAGE}
+      - MEESHY_CUSTOM_DESTINATION_LANGUAGE=${MEESHY_CUSTOM_DESTINATION_LANGUAGE}
       - ATABETH_PASSWORD=${ATABETH_PASSWORD}
       - ATABETH_EMAIL=${ATABETH_EMAIL}
       - ATABETH_USERNAME=${ATABETH_USERNAME:-atabeth}
       - ATABETH_FIRST_NAME=${ATABETH_FIRST_NAME:-Atabeth}
       - ATABETH_LAST_NAME=${ATABETH_LAST_NAME:-User}
       - ATABETH_ROLE=${ATABETH_ROLE:-user}
+      - ATABETH_SYSTEM_LANGUAGE=${ATABETH_SYSTEM_LANGUAGE}
+      - ATABETH_REGIONAL_LANGUAGE=${ATABETH_REGIONAL_LANGUAGE}
+      - ATABETH_CUSTOM_DESTINATION_LANGUAGE=${ATABETH_CUSTOM_DESTINATION_LANGUAGE}
       # Session configuration
       - SESSION_EXPIRY_MOBILE_DAYS=${SESSION_EXPIRY_MOBILE_DAYS:-365}
       - SESSION_EXPIRY_DESKTOP_DAYS=${SESSION_EXPIRY_DESKTOP_DAYS:-30}

@@ -149,6 +149,56 @@ export * from './voice-api.js';
 // ===== UTILITAIRES PARTAGÉS =====
 export * from '../utils/index.js';
 
+// ===== TYPES CANONIQUES NORMALISÉS =====
+// Export sélectif des nouveaux types normalisés pour éviter les conflits
+// Ces types sont les versions canoniques - utiliser ces types pour les nouveaux développements
+
+// Status types (exports sélectifs pour éviter conflits avec les types existants)
+export {
+  type ProcessStatus,
+  type TranslationStatus as CanonicalTranslationStatus,
+  type DeliveryStatus as CanonicalDeliveryStatus,
+  type EntityStatus,
+  type UserStatus,
+  type ServiceHealthStatus,
+  type VisibilityStatus,
+  type VerificationStatus,
+  PROCESS_STATUS_ALIASES,
+  DELIVERY_STATUS_ORDER,
+  normalizeProcessStatus,
+  toUITranslationStatus,
+  isDeliveryStatusBetter,
+  aggregateHealthStatus,
+} from './status-types.js';
+
+// Role types (exports sélectifs pour éviter conflits avec UserRole/ConversationRole existants)
+export {
+  GlobalUserRole,
+  type GlobalUserRoleType,
+  ConversationMemberRole as CanonicalConversationMemberRole,
+  type ConversationMemberRoleType,
+  CommunityMemberRole,
+  type CommunityMemberRoleType,
+  type WritePermissionLevel,
+  GLOBAL_ROLE_ALIASES,
+  GLOBAL_ROLE_HIERARCHY,
+  CONVERSATION_ROLE_HIERARCHY,
+  COMMUNITY_ROLE_HIERARCHY,
+  WRITE_PERMISSION_HIERARCHY,
+  hasMinimumRole,
+  hasMinimumConversationRole,
+  normalizeGlobalRole,
+  isGlobalUserRole,
+  isConversationMemberRole,
+  isGlobalAdmin,
+  isGlobalModerator,
+  isConversationAdmin as isCanonicalConversationAdmin,
+  isConversationModerator as isCanonicalConversationModerator,
+} from './role-types.js';
+
+// Action types (pas de conflits majeurs)
+export * from './action-types.js';
+
 // ===== ÉVÉNEMENTS SOCKET.IO =====
 export * from './socketio-events.js';
 
@@ -586,11 +636,18 @@ export interface ValidationError {
 }
 
 // ===== CONSTANTES =====
-// Réexporter les langues supportées depuis le module centralisé (41 langues)
+// Réexporter les langues supportées depuis le module centralisé (60+ langues avec capacités)
 export {
+  // Types
   SUPPORTED_LANGUAGES,
   type SupportedLanguageInfo,
   type SupportedLanguageCode,
+  type TTSEngine,
+  type STTEngine,
+  type LanguageRegion,
+  type LanguageStats,
+
+  // Fonctions de recherche
   getLanguageInfo,
   getLanguageName,
   getLanguageFlag,
@@ -598,7 +655,26 @@ export {
   getLanguageTranslateText,
   isSupportedLanguage,
   getSupportedLanguageCodes,
-  filterSupportedLanguages
+  filterSupportedLanguages,
+
+  // Fonctions de filtrage par capacité
+  getLanguagesWithTTS,
+  getLanguagesWithSTT,
+  getLanguagesWithVoiceCloning,
+  getLanguagesWithTranslation,
+  getLanguagesByRegion,
+  getAfricanLanguages,
+  getMMSTTSLanguages,
+
+  // Statistiques
+  getLanguageStats,
+
+  // Constantes
+  MAX_MESSAGE_LENGTH,
+  TOAST_SHORT_DURATION,
+  TOAST_LONG_DURATION,
+  TOAST_ERROR_DURATION,
+  TYPING_CANCELATION_DELAY,
 } from '../utils/languages.js';
 
 // Maintenir la compatibilité avec l'ancien type LanguageCode

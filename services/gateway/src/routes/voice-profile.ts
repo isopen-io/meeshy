@@ -114,7 +114,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -184,7 +184,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -205,26 +205,110 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   /**
    * POST /register - Register new voice profile
    * Requires minimum 10 seconds of audio
+   * Supports both multipart/form-data (file upload) and JSON body (base64)
    */
   fastify.post('/register', {
     preHandler: authMiddleware,
     schema: {
-      description: 'Register a new voice profile for the authenticated user. Requires minimum 10 seconds of clear audio for quality analysis. User must have voice recording consent enabled before registration. The audio is analyzed to extract voice characteristics, quality score, and acoustic fingerprint. Profile expires after 90 days (60 days for minors).',
+      description: 'Register a new voice profile for the authenticated user. Requires minimum 10 seconds of clear audio for quality analysis. Supports file upload (multipart/form-data) or base64 (JSON). User must have voice recording consent enabled before registration. The audio is analyzed to extract voice characteristics, quality score, and acoustic fingerprint. Profile expires after 90 days (60 days for minors).',
       tags: ['voice-profile'],
       summary: 'Register new voice profile',
+      consumes: ['multipart/form-data', 'application/json'],
       body: {
         type: 'object',
-        required: ['audioData', 'audioFormat'],
         properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'Audio file via multipart/form-data. Must contain at least 10 seconds of clear speech.'
+          },
           audioData: {
             type: 'string',
             minLength: 100,
-            description: 'Base64 encoded audio data. Must contain at least 10 seconds of clear speech for accurate voice profiling.'
+            description: 'Base64 encoded audio data (alternative to file upload). Must contain at least 10 seconds of clear speech for accurate voice profiling.'
           },
           audioFormat: {
             type: 'string',
             enum: ['wav', 'mp3', 'ogg', 'webm', 'm4a'],
-            description: 'Audio format of the provided data. WAV is recommended for best quality.'
+            description: 'Audio format of the provided data. Required for base64, auto-detected for file upload. WAV is recommended for best quality.'
+          },
+          includeTranscription: {
+            type: 'boolean',
+            description: 'Request server-side transcription (Whisper). Ignored if browserTranscription is provided.'
+          },
+          browserTranscription: {
+            type: 'object',
+            nullable: true,
+            description: 'Browser-side transcription (Web Speech API or other). If provided, server skips transcription.',
+            properties: {
+              text: { type: 'string', description: 'Transcribed text from browser' },
+              language: { type: 'string', description: 'Language code (e.g., fr, en, es)' },
+              confidence: { type: 'number', description: 'Confidence score (0-1)' },
+              durationMs: { type: 'number', description: 'Audio duration in milliseconds' },
+              source: { type: 'string', enum: ['browser'], description: 'Must be "browser"' },
+              browserDetails: {
+                type: 'object',
+                description: 'Details about the browser API used',
+                properties: {
+                  api: { type: 'string', enum: ['webSpeechApi', 'mediaRecorderTranscription', 'thirdParty', 'manual'] },
+                  userAgent: { type: 'string' },
+                  recognitionLang: { type: 'string' },
+                  continuous: { type: 'boolean' },
+                  interimResults: { type: 'boolean' }
+                }
+              },
+              segments: {
+                type: 'array',
+                description: 'Transcription segments with timestamps',
+                items: {
+                  type: 'object',
+                  properties: {
+                    text: { type: 'string' },
+                    startMs: { type: 'number' },
+                    endMs: { type: 'number' },
+                    confidence: { type: 'number' }
+                  }
+                }
+              },
+              createdAt: { type: 'string', format: 'date-time', description: 'Client-side timestamp' }
+            },
+            required: ['text', 'language', 'confidence', 'durationMs', 'source']
+          },
+          voiceCloningSettings: {
+            type: 'object',
+            nullable: true,
+            description: 'Voice cloning parameters to save with the profile. These settings will be used for future voice cloning operations.',
+            properties: {
+              voiceCloningExaggeration: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1,
+                description: 'Vocal expressiveness (0.0-1.0). 0.5 is balanced (default).'
+              },
+              voiceCloningCfgWeight: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1,
+                description: 'CFG weight for generation (0.0-1.0). For non-English: 0.0 reduces accent transfer.'
+              },
+              voiceCloningTemperature: {
+                type: 'number',
+                minimum: 0.1,
+                maximum: 2,
+                description: 'Generation temperature (0.1-2.0). 1.0 is default.'
+              },
+              voiceCloningTopP: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1,
+                description: 'Top-P / Nucleus sampling (0.0-1.0). 0.9 is default.'
+              },
+              voiceCloningQualityPreset: {
+                type: 'string',
+                enum: ['fast', 'balanced', 'high_quality'],
+                description: 'Quality preset: fast (quick generation), balanced (default), high_quality (best output).'
+              }
+            }
           }
         }
       },
@@ -254,6 +338,45 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
                   format: 'date-time',
                   nullable: true,
                   description: 'Profile expiration date (90 days for adults, 60 days for minors)'
+                },
+                transcription: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'Audio transcription (from browser or server)',
+                  properties: {
+                    text: { type: 'string', description: 'Transcribed text' },
+                    language: { type: 'string', description: 'Detected language code' },
+                    confidence: { type: 'number', description: 'Transcription confidence score (0-1)' },
+                    durationMs: { type: 'number', description: 'Audio duration in milliseconds' },
+                    source: { type: 'string', enum: ['browser', 'whisper', 'mobile', 'api'], description: 'Transcription source' },
+                    model: { type: 'string', nullable: true, description: 'Model used for transcription (null for browser)' },
+                    segments: {
+                      type: 'array',
+                      description: 'Transcription segments with timestamps',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          text: { type: 'string' },
+                          startMs: { type: 'number' },
+                          endMs: { type: 'number' },
+                          confidence: { type: 'number' }
+                        }
+                      }
+                    },
+                    processingTimeMs: { type: 'number', description: 'Server processing time (0 for browser transcription)' },
+                    browserDetails: {
+                      type: 'object',
+                      nullable: true,
+                      description: 'Browser API details (only if source is browser)',
+                      properties: {
+                        api: { type: 'string', enum: ['webSpeechApi', 'mediaRecorderTranscription', 'thirdParty', 'manual'] },
+                        userAgent: { type: 'string' },
+                        recognitionLang: { type: 'string' },
+                        continuous: { type: 'boolean' },
+                        interimResults: { type: 'boolean' }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -282,12 +405,87 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
 
-    const registerRequest = request.body as RegisterProfileRequest;
+    let registerRequest: RegisterProfileRequest;
+
+    // Check if request is multipart/form-data
+    const contentType = request.headers['content-type'] || '';
+    const isMultipart = contentType.includes('multipart/form-data');
+
+    if (isMultipart) {
+      // Mode: File upload via multipart/form-data
+      let audioData: string | undefined;
+      let audioFormat: string | undefined;
+      let includeTranscription = false;
+      let browserTranscription: any = null;
+      let voiceCloningSettings: any = null;
+
+      const parts = request.parts();
+      for await (const part of parts) {
+        if (part.type === 'file' && (part.fieldname === 'file' || part.fieldname === 'audioData')) {
+          // Read file buffer and convert to base64
+          const buffer = await part.toBuffer();
+          audioData = buffer.toString('base64');
+          // Extract format from filename or mimetype
+          const filename = part.filename || '';
+          const ext = filename.split('.').pop()?.toLowerCase();
+          audioFormat = ext || part.mimetype?.split('/').pop() || 'wav';
+          console.log(`[VoiceProfile] File upload: ${filename}, format=${audioFormat}, size=${(buffer.length / 1024).toFixed(1)}KB`);
+        } else if (part.type === 'field') {
+          // Parse form fields
+          const value = part.value as string;
+          switch (part.fieldname) {
+            case 'audioFormat':
+              audioFormat = value;
+              break;
+            case 'includeTranscription':
+              includeTranscription = value === 'true' || value === '1';
+              break;
+            case 'browserTranscription':
+              try { browserTranscription = JSON.parse(value); } catch {}
+              break;
+            case 'voiceCloningSettings':
+              try { voiceCloningSettings = JSON.parse(value); } catch {}
+              break;
+          }
+        }
+      }
+
+      if (!audioData || !audioFormat) {
+        return reply.status(400).send({
+          success: false,
+          error: 'INVALID_REQUEST',
+          errorCode: 'MISSING_AUDIO',
+          message: 'Audio file is required'
+        });
+      }
+
+      registerRequest = {
+        audioData,
+        audioFormat: audioFormat as 'wav' | 'mp3' | 'ogg' | 'webm' | 'm4a',
+        includeTranscription,
+        browserTranscription,
+        voiceCloningSettings
+      };
+    } else {
+      // Mode: JSON body
+      registerRequest = request.body as RegisterProfileRequest;
+    }
+
+    // Validate required fields
+    if (!registerRequest.audioData || !registerRequest.audioFormat) {
+      return reply.status(400).send({
+        success: false,
+        error: 'INVALID_REQUEST',
+        errorCode: 'MISSING_AUDIO',
+        message: 'audioData and audioFormat are required'
+      });
+    }
+
     const result = await voiceProfileService.registerProfile(auth.registeredUser.id, registerRequest);
 
     if (!result.success) {
@@ -393,7 +591,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Params: { profileId: string } }>, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -425,15 +623,16 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       summary: 'Get voice profile details',
       response: {
         200: {
-          description: 'Voice profile retrieved successfully',
+          description: 'Voice profile retrieved successfully (or default config if not exists)',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
               properties: {
-                profileId: { type: 'string', description: 'Voice profile unique identifier' },
+                profileId: { type: 'string', nullable: true, description: 'Voice profile unique identifier (null if not created)' },
                 userId: { type: 'string', description: 'User ID who owns this profile' },
+                exists: { type: 'boolean', description: 'Whether a voice profile exists for this user', example: true },
                 qualityScore: {
                   type: 'number',
                   description: 'Voice quality score (0-100). Score ≥50 recommended for cloning, ≥70 for production use.',
@@ -519,10 +718,6 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
           description: 'Authentication required',
           ...errorResponseSchema
         },
-        404: {
-          description: 'Voice profile not found',
-          ...errorResponseSchema
-        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -530,19 +725,58 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
 
     const result = await voiceProfileService.getProfile(auth.registeredUser.id);
 
-    if (!result.success) {
-      const statusCode = result.errorCode === 'PROFILE_NOT_FOUND' ? 404 : 400;
-      return reply.status(statusCode).send(result);
+    // If profile not found, return default configuration instead of 404
+    if (!result.success && result.errorCode === 'PROFILE_NOT_FOUND') {
+      // Get consent status to include in the response
+      const consentResult = await voiceProfileService.getConsentStatus(auth.registeredUser.id);
+
+      // Extraire les timestamps pour le format attendu par le frontend
+      const consentData = consentResult.success ? consentResult.data : null;
+
+      return reply.send({
+        success: true,
+        data: {
+          profileId: null,
+          userId: auth.registeredUser.id,
+          qualityScore: 0,
+          audioDurationMs: 0,
+          audioCount: 0,
+          voiceCharacteristics: null,
+          signatureShort: null,
+          version: 0,
+          createdAt: null,
+          updatedAt: null,
+          expiresAt: null,
+          needsCalibration: false,
+          exists: false,
+          consentStatus: {
+            voiceRecordingConsentAt: consentData?.voiceRecordingConsentAt || null,
+            voiceCloningEnabledAt: consentData?.voiceCloningEnabledAt || null,
+            ageVerificationConsentAt: consentData?.ageVerificationConsentAt || null
+          }
+        }
+      });
     }
 
-    return reply.send(result);
+    if (!result.success) {
+      return reply.status(400).send(result);
+    }
+
+    // Add exists flag to indicate profile exists
+    return reply.send({
+      ...result,
+      data: {
+        ...result.data,
+        exists: true
+      }
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -594,7 +828,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.auth;
+    const auth = (request as any).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }

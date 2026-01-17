@@ -23,7 +23,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import winston from 'winston';
 import * as fs from 'fs';
 import * as path from 'path';
-import { TranslationService } from './services/TranslationService';
+import { MessageTranslationService } from './services/MessageTranslationService';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
@@ -67,6 +67,8 @@ import { attachmentRoutes } from './routes/attachments';
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
+import { registerVoiceRoutes } from './routes/voice';
+import { getAudioTranslateService } from './services/AudioTranslateService';
 import { passwordResetRoutes } from './routes/password-reset';
 import { twoFactorRoutes } from './routes/two-factor';
 import { magicLinkRoutes } from './routes/magic-link';
@@ -243,7 +245,7 @@ interface TranslationRequest {
 declare module 'fastify' {
   interface FastifyInstance {
     prisma: PrismaClient;
-    translationService: TranslationService;
+    translationService: MessageTranslationService;
     socketIOHandler: MeeshySocketIOHandler;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
@@ -256,7 +258,7 @@ declare module 'fastify' {
 class MeeshyServer {
   private server: FastifyInstance;
   private prisma: PrismaClient;
-  private translationService: TranslationService;
+  private translationService: MessageTranslationService;
   private messagingService: MessagingService;
   private mentionService: MentionService;
   private statusService: StatusService;
@@ -285,6 +287,7 @@ class MeeshyServer {
       this.server = fastify({
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
+        bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
         https: {
           key: fs.readFileSync(keyPath),
           cert: fs.readFileSync(certFilePath),
@@ -303,6 +306,7 @@ class MeeshyServer {
       this.server = fastify({
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
+        bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
         ajv: {
           customOptions: {
             strict: 'log', // Allow unknown keywords like 'example' (for OpenAPI documentation)
@@ -325,7 +329,7 @@ class MeeshyServer {
     this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
 
     // Initialiser le service de traduction
-    this.translationService = new TranslationService(this.prisma);
+    this.translationService = new MessageTranslationService(this.prisma);
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -833,8 +837,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register mention routes with /api prefix
     await this.server.register(mentionRoutes, { prefix: API_PREFIX });
 
-    // Register attachment routes with /api prefix
+    // Register attachment routes with /api/v1 prefix
     await this.server.register(attachmentRoutes, { prefix: API_PREFIX });
+
+    // LEGACY: Register attachment routes with /api prefix (without v1) for backward compatibility
+    // Existing data in DB uses /api/attachments/file/... URLs without v1
+    await this.server.register(attachmentRoutes, { prefix: '/api' });
 
     // Register reaction routes with /api prefix
     await this.server.register(reactionRoutes, { prefix: API_PREFIX });
@@ -850,6 +858,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register voice profile routes with /api/voice/profile prefix
     await this.server.register(voiceProfileRoutes, { prefix: `${API_PREFIX}/voice/profile` });
+
+    // Register voice API routes (transcribe, translate, analyze, etc.)
+    const zmqClient = this.translationService.getZmqClient();
+    if (zmqClient) {
+      const audioTranslateService = getAudioTranslateService(this.prisma, zmqClient);
+      registerVoiceRoutes(this.server, audioTranslateService, this.translationService);
+      logger.info('✓ Voice API routes registered');
+    } else {
+      logger.warn('⚠️ ZMQ client not available, voice routes not registered');
+    }
 
     logger.info('✓ REST API routes configured successfully');
   }

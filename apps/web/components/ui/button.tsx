@@ -9,16 +9,25 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Primary - Main CTA buttons
         default:
           "bg-primary/90 backdrop-blur-sm text-primary-foreground shadow-xs hover:bg-primary/80 border border-primary/20",
+        // Destructive - Danger actions
         destructive:
           "bg-destructive/90 backdrop-blur-sm text-white shadow-xs hover:bg-destructive/80 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 border border-destructive/20",
+        // Outline - Secondary actions with border
         outline:
           "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-white/30 dark:border-gray-600/50 shadow-xs hover:bg-white/70 dark:hover:bg-gray-700/70 hover:text-accent-foreground",
+        // Secondary - Less prominent actions
         secondary:
           "bg-secondary/80 backdrop-blur-sm text-secondary-foreground shadow-xs hover:bg-secondary/70 border border-secondary/20",
+        // Tertiary - Subtle actions, minimal styling
+        tertiary:
+          "bg-white/30 dark:bg-gray-800/30 backdrop-blur-sm text-foreground/80 hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-foreground border border-transparent hover:border-white/20 dark:hover:border-gray-600/30",
+        // Ghost - No background until hover
         ghost:
           "hover:bg-white/50 dark:hover:bg-gray-800/50 hover:backdrop-blur-sm hover:text-accent-foreground",
+        // Link - Text only with underline
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

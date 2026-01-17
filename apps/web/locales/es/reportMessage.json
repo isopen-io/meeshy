@@ -49,6 +49,8 @@
         "label": "Otro",
         "description": "Otra razón"
       }
-    }
+    },
+    "success": "Denuncia enviada con éxito",
+    "error": "Error al enviar la denuncia"
   }
 }

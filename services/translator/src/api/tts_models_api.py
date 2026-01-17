@@ -129,9 +129,9 @@ def create_tts_models_router(unified_tts_service=None) -> APIRouter:
     """
     router = APIRouter(prefix="/v1/tts", tags=["TTS Models"])
 
-    # Import des types du service unifié
+    # Import des types du service TTS
     try:
-        from services.unified_tts_service import TTSModel, TTS_MODEL_INFO
+        from services.tts_service import TTSModel, TTS_MODEL_INFO
     except ImportError:
         TTSModel = None
         TTS_MODEL_INFO = {}
@@ -263,14 +263,35 @@ def create_tts_models_router(unified_tts_service=None) -> APIRouter:
         background_tasks: BackgroundTasks = None
     ):
         """
-        Télécharge un modèle TTS spécifique.
+        Download a specific TTS model to local storage.
+
+        Downloads model weights from HuggingFace to enable offline use.
+        Supports background download for large models.
 
         Args:
-            model_name: Nom du modèle (chatterbox, chatterbox-turbo, higgs-audio-v2, xtts-v2)
-            request: Options de téléchargement (background=True par défaut)
+            model_name: Model name (chatterbox, chatterbox-turbo, higgs-audio-v2, xtts-v2)
+            request: Download options (background=True by default)
 
         Returns:
-            TTSModelDownloadResponse avec le statut du téléchargement
+            TTSModelDownloadResponse with:
+            - model: Model name
+            - status: "started", "already_downloaded", "downloading", "completed", "failed"
+            - message: Human-readable status message
+
+        Model Sizes:
+            - chatterbox: ~2.5 GB
+            - chatterbox-turbo: ~1.2 GB
+            - higgs-audio-v2: ~3.0 GB
+            - xtts-v2: ~1.8 GB
+
+        Example:
+            ```
+            # Start background download
+            curl -X POST /v1/tts/models/chatterbox/download
+
+            # Check progress
+            curl -X GET /v1/tts/models/status
+            ```
         """
         if not unified_tts_service or not TTSModel:
             raise HTTPException(
@@ -576,10 +597,29 @@ def create_tts_models_router(unified_tts_service=None) -> APIRouter:
         )
     ):
         """
-        Compare plusieurs modèles TTS côte à côte.
+        Compare multiple TTS models side by side.
+
+        Returns a comparison table of model characteristics to help choose
+        the best model for your use case.
 
         Args:
-            models: Liste de modèles séparés par des virgules
+            models: Comma-separated list of model names to compare
+
+        Returns:
+            Comparison object with:
+            - comparison: Dict of model characteristics (quality, speed, license, etc.)
+            - recommendation: Best model for different use cases
+
+        Available Models:
+            - chatterbox: Best overall, Apache 2.0 license, commercial use allowed
+            - chatterbox-turbo: Fastest, same license as chatterbox
+            - higgs-audio-v2: Highest quality, limited commercial use (<100k users)
+            - xtts-v2: No commercial use, research only
+
+        Example:
+            ```
+            curl -X GET "/v1/tts/models/compare?models=chatterbox,higgs-audio-v2"
+            ```
         """
         if not TTSModel or not TTS_MODEL_INFO:
             raise HTTPException(

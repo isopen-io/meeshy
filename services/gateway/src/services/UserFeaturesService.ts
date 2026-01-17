@@ -75,11 +75,19 @@ export class UserFeaturesService {
       where: { userId }
     });
 
-    // Créer si n'existe pas
+    // Créer si n'existe pas avec les features de base activées par défaut
     if (!userFeature) {
       try {
+        const now = new Date();
         userFeature = await this.prisma.userFeature.create({
-          data: { userId }
+          data: {
+            userId,
+            // Activer par défaut les features de base pour une meilleure UX
+            voiceDataConsentAt: now,
+            audioTranscriptionEnabledAt: now,
+            dataProcessingConsentAt: now,
+            textTranslationEnabledAt: now,
+          }
         });
       } catch (error) {
         // Peut échouer si l'user n'existe pas

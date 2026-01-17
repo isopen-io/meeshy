@@ -82,7 +82,7 @@ else:
 
 
 # =========================================================================
-# MOCK CLASSES - Simulating unified_tts_service types
+# MOCK CLASSES - Simulating tts_service types
 # =========================================================================
 
 class MockTTSModel(str, Enum):
@@ -278,7 +278,7 @@ def mock_unified_tts_service():
 def mock_imports():
     """Patch the imports inside create_tts_models_router"""
     with patch.dict('sys.modules', {
-        'services.unified_tts_service': MagicMock(
+        'services.tts_service': MagicMock(
             TTSModel=MockTTSModel,
             TTS_MODEL_INFO=MOCK_TTS_MODEL_INFO
         )

@@ -7,14 +7,16 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { CompleteUserSettings } from '@/components/settings/complete-user-settings';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
 import { toast } from 'sonner';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { authManager } from '@/services/auth-manager.service';
+import { useReducedMotion } from '@/hooks/use-accessibility';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { t } = useI18n('settings');
+  const reducedMotion = useReducedMotion();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -118,12 +120,13 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center" role="status" aria-label={t('loadingSettings', 'Chargement des paramètres')}>
           <div className="relative">
-            <div className="animate-spin rounded-full h-20 w-20 border-4 border-gray-200 border-t-blue-600 mx-auto"></div>
+            <div className={`${reducedMotion ? '' : 'animate-spin'} rounded-full h-20 w-20 border-4 border-gray-200 border-t-blue-600 mx-auto`}></div>
             <SettingsIcon className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-8 w-8 text-blue-600" />
           </div>
           <p className="mt-6 text-gray-600 dark:text-gray-400 font-medium">{t('loadingSettings')}</p>
+          <span className="sr-only">Chargement en cours...</span>
         </div>
       </div>
     );

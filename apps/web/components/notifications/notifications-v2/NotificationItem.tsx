@@ -21,7 +21,7 @@ import {
   buildNotificationContent
 } from '@/utils/notification-helpers';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useI18n } from '@/hooks/useI18n';
 
 /**
@@ -36,7 +36,6 @@ export function NotificationItem({
   showActions = true,
   compact = false
 }: NotificationItemProps) {
-  const router = useRouter();
   const { t } = useI18n('notifications');
   const icon = getNotificationIcon(notification);
   const context = formatNotificationContext(notification);
@@ -48,7 +47,7 @@ export function NotificationItem({
   const content = buildNotificationContent(notification, t);
 
   /**
-   * Gère le clic sur la notification
+   * Gère le clic sur la notification (marquer comme lue)
    */
   const handleClick = () => {
     // Marquer comme lue si nécessaire
@@ -56,10 +55,8 @@ export function NotificationItem({
       onRead(notification.id);
     }
 
-    // Naviguer si un lien existe
+    // Fermer le dropdown après navigation
     if (link) {
-      router.push(link);
-      // Fermer le dropdown après navigation
       onAfterNavigation?.();
     } else if (onClick) {
       // Fallback pour les notifications sans lien
@@ -123,42 +120,36 @@ export function NotificationItem({
         );
 
       case NotificationTypeEnum.MISSED_CALL:
-        return (
+        return notification.context?.conversationId ? (
           <div className="flex gap-2 mt-2">
             <Button
               size="sm"
               variant="default"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (notification.context?.conversationId) {
-                  router.push(`/conversations/${notification.context.conversationId}?action=call`);
-                }
-              }}
+              asChild
               className="flex-1"
             >
-              <Phone className="w-4 h-4 mr-1" />
-              {t('actions.callBack')}
+              <Link href={`/conversations/${notification.context.conversationId}?action=call`} onClick={(e) => e.stopPropagation()}>
+                <Phone className="w-4 h-4 mr-1" />
+                {t('actions.callBack')}
+              </Link>
             </Button>
           </div>
-        );
+        ) : null;
 
       case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
-        if (!notification.metadata?.isMember) {
+        if (!notification.metadata?.isMember && notification.context?.conversationId) {
           return (
             <div className="flex gap-2 mt-2">
               <Button
                 size="sm"
                 variant="default"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (notification.context?.conversationId) {
-                    router.push(`/join/${notification.context.conversationId}`);
-                  }
-                }}
+                asChild
                 className="flex-1"
               >
-                <UserPlus className="w-4 h-4 mr-1" />
-                {t('actions.join')}
+                <Link href={`/join/${notification.context.conversationId}`} onClick={(e) => e.stopPropagation()}>
+                  <UserPlus className="w-4 h-4 mr-1" />
+                  {t('actions.join')}
+                </Link>
               </Button>
             </div>
           );
@@ -183,23 +174,9 @@ export function NotificationItem({
     );
   };
 
-  return (
-    <div
-      onClick={handleClick}
-      className={cn(
-        'group relative flex gap-2 p-2 transition-colors cursor-pointer',
-        'hover:bg-gray-50 dark:hover:bg-gray-800/50',
-        !notification.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
-        compact && 'p-1.5'
-      )}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          handleClick();
-        }
-      }}
-    >
+  // Contenu interne de la notification
+  const notificationContent = (
+    <>
       {/* Badge non lu */}
       {!notification.isRead && (
         <div className="absolute top-2 left-1 w-1.5 h-1.5 bg-blue-600 rounded-full" />
@@ -278,6 +255,43 @@ export function NotificationItem({
           </div>
         </div>
       )}
+    </>
+  );
+
+  // Classes communes pour le wrapper
+  const wrapperClasses = cn(
+    'group relative flex gap-2 p-2 transition-colors cursor-pointer',
+    'hover:bg-gray-50 dark:hover:bg-gray-800/50',
+    !notification.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
+    compact && 'p-1.5'
+  );
+
+  // Utiliser Link si un lien existe, sinon div
+  if (link) {
+    return (
+      <Link
+        href={link}
+        onClick={handleClick}
+        className={wrapperClasses}
+      >
+        {notificationContent}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      onClick={handleClick}
+      className={wrapperClasses}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          handleClick();
+        }
+      }}
+    >
+      {notificationContent}
     </div>
   );
 }

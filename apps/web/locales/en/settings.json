@@ -20,6 +20,7 @@
       "notifications": "Notifications",
       "privacy": "Privacy",
       "encryption": "Encryption",
+      "audio": "Audio",
       "translation": "Translation",
       "security": "Security",
       "theme": "Theme",
@@ -306,6 +307,100 @@
       "placeholder": "Select a language...",
       "searchPlaceholder": "Search for a language...",
       "noLanguageFound": "No language found."
+    },
+    "audio": {
+      "consents": {
+        "title": "Audio consents",
+        "description": "Required permissions for audio features",
+        "voiceData": "Voice data processing",
+        "voiceDataDesc": "Allows processing of your audio messages for transcription",
+        "dataProcessing": "General data processing",
+        "dataProcessingDesc": "Allows data processing for translations"
+      },
+      "transcription": {
+        "title": "Audio transcription",
+        "description": "Convert your audio messages to text",
+        "enable": "Enable transcription",
+        "enableDesc": "Allows transcribing audio messages to text",
+        "source": "Transcription source",
+        "sourceAuto": "Automatic (recommended)",
+        "sourceServer": "Server (better quality)",
+        "sourceMobile": "Device (faster)"
+      },
+      "translation": {
+        "title": "Audio translation",
+        "description": "Automatically translate audio messages",
+        "text": "Text translation",
+        "textDesc": "Translate text messages to your language",
+        "audio": "Audio translation",
+        "audioDesc": "Transcribe and translate audio messages",
+        "generateAudio": "Generate translated audio",
+        "generateAudioDesc": "Create an audio version of the translation",
+        "format": "Audio format"
+      },
+      "gdpr": {
+        "title": "About your data",
+        "info": "Your audio data is processed in compliance with GDPR. Transcription is performed on our secure servers and data is deleted according to your retention preferences."
+      },
+      "voiceProfile": {
+        "title": "Voice Profile",
+        "description": "Create your voice profile to clone your voice in different languages"
+      }
+    },
+    "voiceProfile": {
+      "consents": {
+        "title": "Voice consents",
+        "description": "Required permissions to create and use your voice profile",
+        "recording": "Voice recording",
+        "recordingDesc": "Allows creating a voice profile from your voice",
+        "cloning": "Voice cloning",
+        "cloningDesc": "Allows cloning your voice in other languages"
+      },
+      "existing": {
+        "title": "Active voice profile",
+        "quality": "Quality",
+        "duration": "Audio duration",
+        "version": "Version",
+        "expires": "Expires",
+        "noExpiry": "No expiration",
+        "needsCalibration": "Your profile needs an update to maintain its quality.",
+        "delete": "Delete voice profile"
+      },
+      "create": {
+        "title": "Create your voice profile",
+        "description": "Read the text below out loud to create your voice profile",
+        "readThis": "Read this text out loud",
+        "minDuration": "Minimum {seconds} seconds",
+        "canStop": "You can stop now",
+        "keepGoing": "Keep going a bit more...",
+        "startRecording": "Start",
+        "stopRecording": "Stop",
+        "retry": "Try again",
+        "transcribe": "Transcribe",
+        "transcribing": "Transcribing...",
+        "creating": "Creating...",
+        "createProfile": "Create profile",
+        "validate": "Validate and create profile",
+        "transcription": "Transcription"
+      },
+      "clonePreviews": {
+        "title": "Your voice in other languages",
+        "description": "Listen to a preview of your cloned voice in different languages"
+      },
+      "errors": {
+        "microphoneAccess": "Cannot access microphone",
+        "tooShort": "Recording must be at least {seconds} seconds",
+        "transcription": "Transcription error",
+        "creation": "Error creating profile",
+        "consent": "Error updating consent",
+        "delete": "Error deleting profile"
+      },
+      "consentUpdated": "Consent updated",
+      "transcriptionComplete": "Transcription complete",
+      "profileCreated": "Voice profile created successfully!",
+      "profileDeleted": "Voice profile deleted",
+      "confirmDelete": "Are you sure you want to delete your voice profile?",
+      "noConsent": "Enable voice recording consent above to create your profile."
     },
     "noUserConnected": "No user connected"
   }

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES, getLanguageInfo } from '@meeshy/shared/utils/languages';
-import type { Message, BubbleTranslation } from '@meeshy/shared/types';
+import type { Message, BubbleTranslation, TranslationModel } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -24,7 +24,7 @@ interface LanguageSelectionMessageViewProps {
   currentDisplayLanguage: string;
   isTranslating?: boolean;
   onSelectLanguage: (language: string) => void;
-  onRequestTranslation: (language: string, model?: 'basic' | 'medium' | 'premium') => void;
+  onRequestTranslation: (language: string, model?: TranslationModel) => void;
   onClose: () => void;
 }
 
@@ -92,7 +92,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     }
   };
 
-  const getModelTier = (model: string): 'basic' | 'medium' | 'premium' | null => {
+  const getModelTier = (model: string): TranslationModel | null => {
     const normalized = model?.toLowerCase();
     if (normalized === 'basic') return 'basic';
     if (normalized === 'medium' || normalized === 'standard') return 'medium';
@@ -463,7 +463,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                                         const nextTier = getNextTier(version.model || 'basic');
                                         if (nextTier) {
                                           markLanguageAsTranslating(version.language);
-                                          onRequestTranslation(version.language, nextTier as 'basic' | 'medium' | 'premium');
+                                          onRequestTranslation(version.language, nextTier as TranslationModel);
                                           // Note: unmarkLanguageAsTranslating sera appelé quand la traduction arrive via WebSocket
                                         }
                                       }}
@@ -494,7 +494,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                                         const prevTier = getPreviousTier(version.model || 'basic');
                                         if (prevTier) {
                                           markLanguageAsTranslating(version.language);
-                                          onRequestTranslation(version.language, prevTier as 'basic' | 'medium' | 'premium');
+                                          onRequestTranslation(version.language, prevTier as TranslationModel);
                                         }
                                       }}
                                     >

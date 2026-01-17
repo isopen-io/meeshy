@@ -33,6 +33,7 @@ from services.voice_clone_service import (
     VoiceModel,
     get_voice_clone_service
 )
+# TTS Service simplifié (utilise ModelManager pour gestion mémoire)
 from services.tts_service import (
     TTSService,
     TTSResult,
@@ -298,7 +299,9 @@ class AudioMessagePipeline:
         # Voice profile options - for using original sender's voice in forwarded messages
         original_sender_id: Optional[str] = None,
         existing_voice_profile: Optional[Dict[str, Any]] = None,
-        use_original_voice: bool = True
+        use_original_voice: bool = True,
+        # Paramètres de clonage vocal configurables par l'utilisateur
+        cloning_params: Optional[Dict[str, Any]] = None
     ) -> AudioMessageResult:
         """
         Traite un message audio complet.
@@ -325,6 +328,12 @@ class AudioMessagePipeline:
             existing_voice_profile: Profil vocal existant envoyé par Gateway
                                    (pour utiliser la voix de l'émetteur original)
             use_original_voice: Utiliser la voix de l'émetteur original (défaut: True)
+            cloning_params: Paramètres de clonage vocal configurables:
+                           - exaggeration: float (0.0-1.0, défaut 0.5)
+                           - cfg_weight: float (0.0-1.0, 0.0 pour langues non-anglaises)
+                           - temperature: float (0.1-2.0, défaut 1.0)
+                           - top_p: float (0.0-1.0, défaut 0.9)
+                           - quality_preset: str ("fast", "balanced", "high_quality")
 
         Returns:
             AudioMessageResult avec original + toutes les traductions audio
@@ -486,8 +495,8 @@ class AudioMessagePipeline:
         else:
             logger.info(f"[PIPELINE] 🔄 Traitement PARALLÈLE de {len(languages_to_process)} langues: {languages_to_process}")
 
-            # Fonction helper pour traiter une langue
-            async def process_single_language(target_lang: str) -> tuple:
+            # Fonction helper pour traiter une langue (avec accès aux cloning_params)
+            async def process_single_language(target_lang: str, lang_cloning_params: Optional[Dict[str, Any]] = None) -> tuple:
                 """Traite une langue: traduction + TTS + mise en cache"""
                 lang_start = time.time()
                 try:
@@ -505,17 +514,21 @@ class AudioMessagePipeline:
                     if voice_model:
                         tts_result = await self.tts_service.synthesize_with_voice(
                             text=translated_text,
-                            voice_model=voice_model,
+                            speaker_audio_path=voice_model.reference_audio_path if hasattr(voice_model, 'reference_audio_path') else None,
                             target_language=target_lang,
                             output_format="mp3",
-                            message_id=f"{message_id}_{attachment_id}"
+                            message_id=f"{message_id}_{attachment_id}",
+                            # Passer les paramètres de clonage configurables
+                            cloning_params=lang_cloning_params
                         )
                     else:
                         # Sans clonage vocal
                         tts_result = await self.tts_service.synthesize(
                             text=translated_text,
                             language=target_lang,
-                            output_format="mp3"
+                            output_format="mp3",
+                            # Passer les paramètres de clonage (pour température, etc.)
+                            cloning_params=lang_cloning_params
                         )
 
                     lang_time = int((time.time() - lang_start) * 1000)
@@ -556,7 +569,7 @@ class AudioMessagePipeline:
             # Exécuter toutes les traductions en parallèle
             parallel_start = time.time()
             results = await asyncio.gather(
-                *[process_single_language(lang) for lang in languages_to_process],
+                *[process_single_language(lang, cloning_params) for lang in languages_to_process],
                 return_exceptions=True
             )
             parallel_time = int((time.time() - parallel_start) * 1000)

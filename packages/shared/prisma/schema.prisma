@@ -550,8 +550,8 @@ model MessageTranslation {
 
 /// Attachement de fichier pour un message
 model MessageAttachment {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  messageId    String @db.ObjectId
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  messageId    String? @db.ObjectId
   fileName     String // Nom de fichier généré (unique)
   originalName String // Nom original du fichier
   mimeType     String // Type MIME (image/jpeg, application/pdf, etc.)
@@ -699,7 +699,7 @@ model MessageAttachment {
   /// For hybrid mode: translations JSON { "en": { text: "...", audioUrl: "..." }, ... }
   translationsJson Json?
 
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   // Status tracking (per-user per-attachment)
   statusEntries AttachmentStatusEntry[] @relation("AttachmentStatusEntries")
@@ -1133,6 +1133,21 @@ model UserFeature {
   nextVoiceRecalibrationAt     DateTime?
   /// Dernière notification de mise à jour du profil vocal
   voiceProfileUpdateNotifiedAt DateTime?
+
+  // ============================================
+  // VOICE CLONING PARAMETERS (User-configurable)
+  // Ces paramètres contrôlent la qualité du clonage vocal
+  // ============================================
+  /// Exagération des caractéristiques vocales (0.0-1.0, default 0.5)
+  voiceCloningExaggeration   Float   @default(0.5)
+  /// Poids CFG pour la génération (0.0-1.0, default 0.5, 0.0 recommandé pour non-anglais)
+  voiceCloningCfgWeight      Float   @default(0.5)
+  /// Température de génération (0.1-2.0, default 1.0)
+  voiceCloningTemperature    Float   @default(1.0)
+  /// Top-P / Nucleus sampling (0.0-1.0, default 0.9)
+  voiceCloningTopP           Float   @default(0.9)
+  /// Preset de qualité: "fast" | "balanced" | "high_quality"
+  voiceCloningQualityPreset  String  @default("balanced")
 
   // ============================================
   // ATTACHMENT TRANSLATION FEATURES

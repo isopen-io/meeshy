@@ -34,9 +34,9 @@ const mockCreateMentions = jest.fn();
 const mockMarkMessagesAsRead = jest.fn();
 const mockGetUnreadCount = jest.fn();
 
-// Mock TranslationService
-jest.mock('../../../services/TranslationService', () => ({
-  TranslationService: jest.fn().mockImplementation(() => ({
+// Mock MessageTranslationService
+jest.mock('../../../services/MessageTranslationService', () => ({
+  MessageTranslationService: jest.fn().mockImplementation(() => ({
     handleNewMessage: mockHandleNewMessage
   }))
 }));

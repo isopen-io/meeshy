@@ -184,7 +184,7 @@ export class ConversationStatsService {
         where: {
           conversationId: realConversationId,
           isActive: true,
-          NOT: { userId: null }  // Exclure les membres avec user supprimé
+          // Note: userId is required field, no need to filter nulls
         },
         select: { user: { select: { id: true, systemLanguage: true } } }
       }).catch(() => [] as any[]);

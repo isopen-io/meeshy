@@ -608,6 +608,217 @@ class VoiceAnalyzerService:
         self._analysis_cache.clear()
         logger.info("[VOICE_ANALYZER] Cache vidé")
 
+    def get_optimal_clone_params(
+        self,
+        characteristics: VoiceCharacteristics,
+        target_language: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Calcule les paramètres optimaux de clonage vocal basés sur l'analyse.
+
+        Args:
+            characteristics: Caractéristiques vocales analysées
+            target_language: Langue cible (optionnel, pour ajustements)
+
+        Returns:
+            Dict avec tous les paramètres Chatterbox optimisés:
+            - exaggeration: Expressivité (0.0-1.0)
+            - cfg_weight: Guidance (0.0-1.0)
+            - temperature: Créativité (0.0-2.0)
+            - repetition_penalty: Pénalité répétition (1.0-3.0)
+            - min_p: Probabilité minimum (0.0-1.0)
+            - top_p: Nucleus sampling (0.0-1.0)
+        """
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL DE L'EXPRESSIVITÉ (basé sur variation pitch + énergie)
+        # ═══════════════════════════════════════════════════════════════════
+        # Coefficient de variation du pitch
+        pitch_cv = characteristics.pitch_std / characteristics.pitch_mean if characteristics.pitch_mean > 0 else 0.15
+
+        # Normaliser (CV typique: 0.05-0.30)
+        pitch_expressiveness = min(1.0, pitch_cv / 0.25)
+
+        # Expressivité de l'énergie (basée sur dynamic_range)
+        # Dynamic range typique: 10-40 dB
+        energy_expressiveness = min(1.0, characteristics.dynamic_range / 30.0)
+
+        # Score d'expressivité combiné
+        expressiveness_score = (pitch_expressiveness * 0.6 + energy_expressiveness * 0.4)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL DE LA STABILITÉ (basé sur jitter, shimmer, spectral_flatness)
+        # ═══════════════════════════════════════════════════════════════════
+        # Jitter typique: 0.01-0.05 (plus bas = plus stable)
+        jitter_stability = 1.0 - min(1.0, characteristics.jitter / 0.05)
+
+        # Shimmer typique: 0.02-0.10
+        shimmer_stability = 1.0 - min(1.0, characteristics.shimmer / 0.10)
+
+        # Spectral flatness: 0 = tonal (stable), 1 = bruit (instable)
+        spectral_stability = 1.0 - characteristics.spectral_flatness
+
+        # Score de stabilité combiné
+        stability_score = (
+            jitter_stability * 0.35 +
+            shimmer_stability * 0.35 +
+            spectral_stability * 0.30
+        )
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL EXAGGERATION (inversement proportionnel à l'expressivité)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix expressive → exaggeration bas (pas besoin d'amplifier)
+        # Voix monotone → exaggeration plus élevé
+        if expressiveness_score > 0.6:
+            exaggeration = 0.30 + (1.0 - expressiveness_score) * 0.20
+        elif expressiveness_score < 0.3:
+            exaggeration = 0.50 + (0.3 - expressiveness_score) * 0.50
+        else:
+            exaggeration = 0.40 + (0.5 - expressiveness_score) * 0.30
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL CFG_WEIGHT (proportionnel à l'instabilité)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix stable → cfg bas (plus de liberté créative)
+        # Voix instable → cfg haut (plus de guidance)
+        if stability_score > 0.7:
+            cfg_weight = 0.35 + (1.0 - stability_score) * 0.20
+        elif stability_score < 0.4:
+            cfg_weight = 0.55 + (0.4 - stability_score) * 0.35
+        else:
+            cfg_weight = 0.45 + (0.5 - stability_score) * 0.20
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL TEMPERATURE (basé sur variabilité naturelle)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix très expressive → temperature plus basse (préserver les variations naturelles)
+        # Voix monotone → temperature plus haute (ajouter de la variété)
+        # Base: 0.8, range: 0.6-1.0
+        if expressiveness_score > 0.6:
+            temperature = 0.65 + (1.0 - expressiveness_score) * 0.15
+        elif expressiveness_score < 0.3:
+            temperature = 0.85 + (0.3 - expressiveness_score) * 0.15
+        else:
+            temperature = 0.75 + (0.5 - expressiveness_score) * 0.15
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL REPETITION_PENALTY (basé sur clarté et régularité)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix avec beaucoup de variations → pénalité plus basse
+        # Voix monotone/régulière → pénalité plus haute pour éviter répétitions
+        # Base mono: 1.2, multi: 2.0
+        # Ajuster légèrement basé sur le jitter (variation naturelle du pitch)
+        jitter_factor = min(1.0, characteristics.jitter / 0.03)  # Normaliser jitter
+
+        # Plus de jitter = plus de variations naturelles = moins besoin de pénaliser
+        repetition_penalty = 1.5 - jitter_factor * 0.3  # Range: 1.2-1.5
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL MIN_P (basé sur clarté du signal)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix claire (HNR élevé) → min_p plus bas (plus de liberté)
+        # Voix bruiteuse → min_p plus haut (filtrer les artefacts)
+        # Base: 0.05, range: 0.03-0.10
+        hnr = characteristics.harmonics_to_noise
+        if hnr > 0.8:  # Très clair
+            min_p = 0.03
+        elif hnr < 0.5:  # Bruité
+            min_p = 0.08 + (0.5 - hnr) * 0.04
+        else:
+            min_p = 0.05
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CALCUL TOP_P (nucleus sampling - basé sur complexité vocale)
+        # ═══════════════════════════════════════════════════════════════════
+        # Voix complexe (large bandwidth) → top_p plus haut
+        # Voix simple → top_p peut être plus bas
+        # En général, garder proche de 1.0 pour qualité
+        bandwidth_normalized = min(1.0, characteristics.spectral_bandwidth / 3000.0)
+        top_p = 0.92 + bandwidth_normalized * 0.08  # Range: 0.92-1.0
+
+        # ═══════════════════════════════════════════════════════════════════
+        # AJUSTEMENTS PAR LANGUE CIBLE
+        # ═══════════════════════════════════════════════════════════════════
+        language_adjustments = {
+            # Langues romanes: préfèrent cfg plus haut, temperature stable
+            "fr": {"cfg_weight": +0.05, "temperature": -0.02},
+            "es": {"cfg_weight": +0.03, "exaggeration": +0.02},
+            "it": {"cfg_weight": +0.03, "exaggeration": +0.02},
+            "pt": {"cfg_weight": +0.03},
+            # Langues germaniques: plus expressives
+            "en": {"exaggeration": +0.05, "cfg_weight": -0.05, "temperature": +0.02},
+            "de": {"exaggeration": +0.03, "cfg_weight": -0.02},
+            # Langues asiatiques: plus de guidance, moins de variations
+            "zh": {"cfg_weight": +0.08, "temperature": -0.05, "repetition_penalty": +0.2},
+            "ja": {"cfg_weight": +0.08, "temperature": -0.05, "repetition_penalty": +0.2},
+            "ko": {"cfg_weight": +0.05, "temperature": -0.03},
+            # Langues arabes: rythme particulier
+            "ar": {"cfg_weight": +0.05, "exaggeration": +0.03},
+        }
+
+        if target_language and target_language.lower() in language_adjustments:
+            adj = language_adjustments[target_language.lower()]
+            exaggeration += adj.get("exaggeration", 0)
+            cfg_weight += adj.get("cfg_weight", 0)
+            temperature += adj.get("temperature", 0)
+            repetition_penalty += adj.get("repetition_penalty", 0)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # BORNER TOUTES LES VALEURS
+        # ═══════════════════════════════════════════════════════════════════
+        exaggeration = float(np.clip(exaggeration, 0.25, 0.75))
+        cfg_weight = float(np.clip(cfg_weight, 0.25, 0.75))
+        temperature = float(np.clip(temperature, 0.5, 1.2))
+        repetition_penalty = float(np.clip(repetition_penalty, 1.0, 2.5))
+        min_p = float(np.clip(min_p, 0.02, 0.15))
+        top_p = float(np.clip(top_p, 0.85, 1.0))
+
+        # Confiance basée sur la qualité de l'analyse
+        confidence = characteristics.confidence * (0.5 + stability_score * 0.5)
+
+        return {
+            # Paramètres principaux de clonage
+            "exaggeration": round(exaggeration, 2),
+            "cfg_weight": round(cfg_weight, 2),
+            # Paramètres de génération
+            "temperature": round(temperature, 2),
+            "repetition_penalty": round(repetition_penalty, 2),
+            "min_p": round(min_p, 3),
+            "top_p": round(top_p, 2),
+            # Métadonnées
+            "confidence": round(confidence, 2),
+            "analysis": {
+                "expressiveness_score": round(expressiveness_score, 3),
+                "stability_score": round(stability_score, 3),
+                "pitch_cv": round(pitch_cv, 3),
+                "harmonics_to_noise": round(characteristics.harmonics_to_noise, 3),
+                "spectral_bandwidth": round(characteristics.spectral_bandwidth, 1),
+                "voice_type": characteristics.voice_type,
+                "gender": characteristics.gender_estimate
+            },
+            "explanation": self._explain_params(exaggeration, cfg_weight, expressiveness_score, stability_score)
+        }
+
+    def _explain_params(
+        self,
+        exaggeration: float,
+        cfg_weight: float,
+        expressiveness: float,
+        stability: float
+    ) -> str:
+        """Génère une explication des paramètres choisis"""
+        exp_desc = "neutre" if exaggeration < 0.4 else "modérée" if exaggeration < 0.55 else "expressive"
+        cfg_desc = "créatif" if cfg_weight < 0.4 else "équilibré" if cfg_weight < 0.55 else "guidé"
+
+        voice_desc = "expressive" if expressiveness > 0.5 else "neutre"
+        stable_desc = "stable" if stability > 0.6 else "variable"
+
+        return (
+            f"Voix {voice_desc} et {stable_desc} → "
+            f"expression {exp_desc} ({exaggeration:.2f}), "
+            f"mode {cfg_desc} ({cfg_weight:.2f})"
+        )
+
     async def close(self):
         """Libère les ressources"""
         logger.info("[VOICE_ANALYZER] 🛑 Fermeture du service")

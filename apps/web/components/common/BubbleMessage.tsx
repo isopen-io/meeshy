@@ -3,7 +3,7 @@
 import { memo, useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import type { User, BubbleTranslation } from '@meeshy/shared/types';
+import type { User, BubbleTranslation, ConversationType, TranslationModel } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types/conversation';
 import { useI18n } from '@/hooks/useI18n';
 import { useMessageView } from '@/hooks/use-message-view-state';
@@ -30,7 +30,7 @@ interface BubbleMessageProps {
   usedLanguages: string[];
   
   // Actions remontées au parent (AUCUN CHANGEMENT)
-  onForceTranslation?: (messageId: string, targetLanguage: string, model?: 'basic' | 'medium' | 'premium') => void;
+  onForceTranslation?: (messageId: string, targetLanguage: string, model?: TranslationModel) => void;
   onEditMessage?: (messageId: string, newContent: string) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
@@ -42,7 +42,7 @@ interface BubbleMessageProps {
   currentDisplayLanguage: string;
   isTranslating?: boolean;
   translationError?: string;
-  conversationType?: 'direct' | 'group' | 'public' | 'global';
+  conversationType?: ConversationType;
   userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
   conversationId?: string;
   isAnonymous?: boolean;
@@ -165,7 +165,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     exitMode();
   }, [onLanguageSwitch, message.id, exitMode]);
 
-  const handleRequestTranslation = useCallback((language: string, model?: 'basic' | 'medium' | 'premium') => {
+  const handleRequestTranslation = useCallback((language: string, model?: TranslationModel) => {
     onForceTranslation?.(message.id, language, model);
     exitMode();
   }, [onForceTranslation, message.id, exitMode]);

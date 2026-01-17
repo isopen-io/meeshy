@@ -70,6 +70,10 @@ export default function TrackingLinkDetailsPage() {
       setError(null);
       const data = await getTrackingLinkStats(token);
 
+      if (!data) {
+        throw new Error('No data returned from API');
+      }
+
       // Transformer les données du format API vers le format attendu par le composant
       const transformedStats: TrackingLinkStats = {
         trackingLink: data.trackingLink,

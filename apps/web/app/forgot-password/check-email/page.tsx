@@ -2,14 +2,14 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { passwordResetService } from '@/services/password-reset.service';
-import { Mail, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Clock, Loader2, Phone } from 'lucide-react';
+import { Mail, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Clock, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { PhoneResetFlow } from '@/components/auth/PhoneResetFlow';
 
@@ -145,78 +145,113 @@ function CheckEmailContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg space-y-6">
-        {/* Header */}
-        <div className="text-center">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
+
+      {/* CSS-animated decorative blobs - blue tones for email */}
+      <div
+        className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 dark:from-blue-600/20 dark:to-indigo-700/20 rounded-full blur-2xl md:blur-3xl will-change-transform animate-blob-1"
+      />
+      <div
+        className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 dark:from-cyan-600/20 dark:to-blue-700/20 rounded-full blur-2xl md:blur-3xl will-change-transform animate-blob-2"
+      />
+      <div
+        className="hidden sm:block absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-sky-400/30 to-blue-500/30 dark:from-sky-600/20 dark:to-blue-700/20 rounded-full blur-3xl will-change-transform animate-blob-3"
+      />
+
+      {/* Main content */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-6"
+        >
           <LargeLogo href="/" />
-        </div>
+        </motion.div>
 
         {/* Content - Phone Reset OR Email Check */}
         {showPhoneReset ? (
           /* Phone Reset Flow - replaces entire card */
-          <PhoneResetFlow onClose={() => setShowPhoneReset(false)} />
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="w-full max-w-md"
+          >
+            <div className="backdrop-blur-md sm:backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 sm:bg-white/60 sm:dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+              <PhoneResetFlow onClose={() => setShowPhoneReset(false)} />
+            </div>
+          </motion.div>
         ) : (
           /* Email Check Card */
-          <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-            <CardHeader className="text-center pb-6">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                  <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-full max-w-md"
+          >
+            <div className="backdrop-blur-md sm:backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 sm:bg-white/60 sm:dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-8">
+              {/* Header */}
+              <div className="text-center mb-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                  </div>
                 </div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('checkEmail.title') || 'Vérifiez vos emails'}
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  {t('checkEmail.description') ||
+                    'Nous avons envoyé un lien de réinitialisation à votre adresse email'}
+                </p>
               </div>
-              <CardTitle className="text-2xl">
-                {t('checkEmail.title') || 'Check Your Email'}
-              </CardTitle>
-              <CardDescription className="text-base mt-2">
-                {t('checkEmail.description') ||
-                  'We have sent a password reset link to your email address'}
-              </CardDescription>
-            </CardHeader>
 
-            <CardContent className="space-y-6">
               {/* Email Address Display */}
-              <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+              <Alert className="bg-blue-50/80 dark:bg-blue-900/20 border-blue-200/50 dark:border-blue-800/50 mb-6">
                 <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <AlertDescription className="ml-2">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {t('checkEmail.emailSentTo') || 'Email sent to'}:{' '}
+                    {t('checkEmail.emailSentTo') || 'Email envoyé à'}:{' '}
                     <span className="font-semibold">{email}</span>
                   </p>
                 </AlertDescription>
               </Alert>
 
               {/* Instructions */}
-              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400 mb-6">
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <span>{t('checkEmail.step1') || 'Check your inbox for an email from Meeshy'}</span>
+                  <span>{t('checkEmail.step1') || 'Vérifiez votre boîte de réception'}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
                   <span>
-                    {t('checkEmail.step2') || 'Click the password reset link in the email'}
+                    {t('checkEmail.step2') || 'Cliquez sur le lien de réinitialisation'}
                   </span>
                 </p>
                 <p className="flex items-start gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <span>{t('checkEmail.step3') || 'Create a new secure password'}</span>
+                  <span>{t('checkEmail.step3') || 'Créez un nouveau mot de passe sécurisé'}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
                   <span>
                     {t('checkEmail.expiry') ||
-                      'The reset link will expire in 15 minutes for security'}
+                      'Le lien expire dans 15 minutes pour votre sécurité'}
                   </span>
                 </p>
               </div>
 
               {/* Spam Warning */}
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="ml-2 text-sm">
+              <Alert className="bg-gray-50/80 dark:bg-gray-800/50 border-gray-200/50 dark:border-gray-700/50 mb-6">
+                <AlertCircle className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <AlertDescription className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                   {t('checkEmail.spamWarning') ||
-                    "Can't find the email? Check your spam or junk folder"}
+                    "Vous ne trouvez pas l'email ? Vérifiez vos spams"}
                 </AlertDescription>
               </Alert>
 
@@ -228,7 +263,7 @@ function CheckEmailContent() {
                     <Button
                       variant="outline"
                       onClick={() => setShowCaptcha(false)}
-                      className="flex-1"
+                      className="flex-1 bg-white/50 dark:bg-gray-800/50"
                     >
                       {t('checkEmail.cancel') || 'Annuler'}
                     </Button>
@@ -239,13 +274,13 @@ function CheckEmailContent() {
                     >
                       {isResending ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {t('checkEmail.resending') || 'Sending...'}
+                          <div className="mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          {t('checkEmail.resending') || 'Envoi...'}
                         </>
                       ) : (
                         <>
                           <Mail className="mr-2 h-4 w-4" />
-                          {t('checkEmail.confirmResend') || 'Send Email'}
+                          {t('checkEmail.confirmResend') || 'Envoyer'}
                         </>
                       )}
                     </Button>
@@ -259,24 +294,24 @@ function CheckEmailContent() {
                     className="flex-1"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    {t('checkEmail.backToLogin') || 'Back to Login'}
+                    {t('checkEmail.backToLogin') || 'Retour'}
                   </Button>
                   <div className="h-8 w-px bg-gray-200 dark:bg-gray-700" />
                   <Button
                     variant="outline"
                     onClick={handleResendEmail}
                     disabled={isResending || resendCooldown > 0}
-                    className="flex-1"
+                    className="flex-1 bg-white/50 dark:bg-gray-800/50"
                   >
                     {resendCooldown > 0 ? (
                       <>
                         <Clock className="mr-2 h-4 w-4" />
-                        {t('checkEmail.resendWait') || `Resend in ${resendCooldown}s`}
+                        {resendCooldown}s
                       </>
                     ) : (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        {t('checkEmail.resendButton') || 'Resend Email'}
+                        {t('checkEmail.resendButton') || 'Renvoyer'}
                       </>
                     )}
                   </Button>
@@ -284,12 +319,12 @@ function CheckEmailContent() {
               )}
 
               {/* Phone Reset Option */}
-              <div className="relative">
+              <div className="relative mt-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                  <div className="w-full border-t border-gray-200/50 dark:border-gray-700/50" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white dark:bg-gray-800 px-2 text-gray-500">
+                  <span className="bg-white/70 dark:bg-gray-900/70 px-2 text-gray-500">
                     {t('checkEmail.orUse') || 'ou utilisez'}
                   </span>
                 </div>
@@ -298,44 +333,73 @@ function CheckEmailContent() {
               <Button
                 variant="secondary"
                 onClick={() => setShowPhoneReset(true)}
-                className="w-full"
+                className="w-full mt-4 bg-white/50 dark:bg-gray-800/50"
               >
                 <Phone className="mr-2 h-4 w-4" />
                 {t('checkEmail.resetByPhone') || 'Réinitialiser par téléphone'}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </motion.div>
         )}
 
-        {/* Support Link */}
-        <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+        {/* Footer links */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="mt-8 text-center text-sm text-muted-foreground"
+        >
           <p>
-            {t('checkEmail.needHelp') || 'Need help?'}{' '}
+            {t('checkEmail.needHelp') || 'Besoin d\'aide ?'}{' '}
             <a
               href="/contact"
               className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
             >
-              {t('checkEmail.contactSupport') || 'Contact Support'}
+              {t('checkEmail.contactSupport') || 'Contactez le support'}
             </a>
           </p>
-        </div>
+        </motion.div>
       </div>
+
+      {/* CSS Keyframes for GPU-optimized blob animations */}
+      <style jsx>{`
+        @keyframes blob-float-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(30px, -20px) scale(1.1); }
+        }
+        @keyframes blob-float-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-20px, 30px) scale(1.05); }
+        }
+        @keyframes blob-float-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(20px, -30px) scale(1.15); }
+        }
+        .animate-blob-1 { animation: blob-float-1 12s ease-in-out infinite; }
+        .animate-blob-2 { animation: blob-float-2 14s ease-in-out infinite; animation-delay: -2s; }
+        .animate-blob-3 { animation: blob-float-3 16s ease-in-out infinite; animation-delay: -4s; }
+        @media (max-width: 640px) {
+          .animate-blob-1, .animate-blob-2 { animation-duration: 20s; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-blob-1, .animate-blob-2, .animate-blob-3 { animation: none; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+      <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 }
 
 export default function CheckEmailPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-          <div className="text-center space-y-3">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingFallback />}>
       <CheckEmailContent />
     </Suspense>
   );

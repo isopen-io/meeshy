@@ -1,4 +1,8 @@
 {
+  "justNow": "agora mesmo",
+  "minutesAgo": "há {minutes}min",
+  "hoursAgo": "há {hours}h",
+  "yesterday": "Ontem {time}",
   "conversations": {
     "common": {
       "loading": "Carregando..."
@@ -121,7 +125,11 @@
       "muteError": "Erro ao alterar notificações",
       "archiveError": "Erro ao arquivar",
       "startVideoCall": "Iniciar chamada de vídeo",
-      "menuActions": "Ações"
+      "menuActions": "Ações",
+      "settings": "Configurações",
+      "encryptionE2EE": "Criptografia de ponta a ponta",
+      "encryptionHybrid": "Criptografia híbrida",
+      "encryptionServer": "Criptografia no servidor"
     },
     "conversationUI": {
       "participants": "Participantes",
@@ -231,7 +239,41 @@
       "groupConversation": "Conversa em grupo",
       "conversation": "Conversa",
       "linkCopied": "Link da conversa copiado!",
-      "copyError": "Erro ao copiar"
+      "copyError": "Erro ao copiar",
+      "myPreferences": "Minhas preferências",
+      "configuration": "Configuração",
+      "organization": "Organização",
+      "customization": "Personalização",
+      "pinDescription": "Manter no topo da lista",
+      "muteDescription": "Desativar notificações",
+      "archiveDescription": "Ocultar da lista principal",
+      "categoryDescription": "Organizar por categoria",
+      "selectCategory": "Selecionar uma categoria...",
+      "addTag": "Adicionar uma tag...",
+      "customNameHelp": "Visível apenas para você",
+      "preferencesSaved": "Preferências salvas",
+      "preferencesError": "Erro ao salvar preferências",
+      "saving": "Salvando...",
+      "savePreferences": "Salvar minhas preferências",
+      "basicInfo": "Informações",
+      "description": "Descrição",
+      "namePlaceholder": "Digite um nome...",
+      "descriptionPlaceholder2": "Adicione uma descrição...",
+      "security": "Segurança",
+      "encryptionMode": "Modo de criptografia",
+      "noEncryption": "Sem criptografia",
+      "e2ee": "Ponta a ponta (E2EE)",
+      "hybrid": "Híbrida",
+      "serverEncryption": "Servidor",
+      "e2eeDescription": "As mensagens são criptografadas de ponta a ponta. Apenas os participantes podem lê-las.",
+      "hybridDescription": "Criptografia no servidor com chaves compartilhadas.",
+      "serverDescription": "As mensagens são criptografadas no servidor.",
+      "noEncryptionDescription": "As mensagens não são criptografadas.",
+      "currentStatus": "Status atual",
+      "directConversation": "Direta",
+      "configSaved": "Configuração salva",
+      "configError": "Erro ao salvar configuração",
+      "saveConfig": "Salvar configuração"
     },
     "conversationImage": {
       "title": "Alterar imagem da conversa",

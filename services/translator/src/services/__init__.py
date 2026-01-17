@@ -20,6 +20,7 @@ AUDIO_SERVICES_AVAILABLE = False
 try:
     from .transcription_service import TranscriptionService, get_transcription_service
     from .voice_clone_service import VoiceCloneService, VoiceModel, get_voice_clone_service
+    # TTS Service: tts_service.py est le point d'entrée principal
     from .tts_service import TTSService, get_tts_service
     from .audio_message_pipeline import AudioMessagePipeline, get_audio_pipeline
     AUDIO_SERVICES_AVAILABLE = True

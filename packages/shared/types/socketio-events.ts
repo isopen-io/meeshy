@@ -54,7 +54,8 @@ export const SERVER_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
-  READ_STATUS_UPDATED: 'read-status:updated'
+  READ_STATUS_UPDATED: 'read-status:updated',
+  AUDIO_TRANSLATION_READY: 'audio:translation-ready'
 } as const;
 
 // Événements du client vers le serveur
@@ -239,6 +240,33 @@ export interface ReadStatusUpdatedEventData {
   readonly updatedAt: Date;
 }
 
+/**
+ * Données pour un audio traduit
+ */
+export interface TranslatedAudioData {
+  readonly language: string;
+  readonly audioUrl: string;
+  readonly audioDuration?: number;
+  readonly voiceCloned: boolean;
+  readonly modelUsed?: string;
+}
+
+/**
+ * Données pour l'événement de traduction audio prête
+ */
+export interface AudioTranslationReadyEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly transcription?: {
+    readonly text: string;
+    readonly language: string;
+    readonly confidence?: number;
+  };
+  readonly translatedAudios: readonly TranslatedAudioData[];
+  readonly processingTimeMs?: number;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -272,6 +300,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: CallMediaToggleEvent) => void;
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
 }
 
 /**

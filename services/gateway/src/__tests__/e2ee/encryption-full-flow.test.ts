@@ -17,7 +17,7 @@
 import { PrismaClient } from '../../../shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
-import { TranslationService } from '../../services/TranslationService';
+import { MessageTranslationService } from '../../services/MessageTranslationService';
 import type { MessageRequest } from '../../../shared/types/messaging';
 import type { EncryptedPayload, EncryptionMode } from '../../../shared/types/encryption';
 import crypto from 'crypto';
@@ -25,7 +25,7 @@ import crypto from 'crypto';
 describe('E2EE Full Flow Integration Tests', () => {
   let prisma: PrismaClient;
   let messagingService: MessagingService;
-  let translationService: TranslationService;
+  let translationService: MessageTranslationService;
 
   // Test users
   let alice: any;
@@ -38,7 +38,7 @@ describe('E2EE Full Flow Integration Tests', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient();
-    translationService = new TranslationService(prisma);
+    translationService = new MessageTranslationService(prisma);
     messagingService = new MessagingService(prisma, translationService);
 
     // Clean up test data

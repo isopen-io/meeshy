@@ -10,7 +10,7 @@
  * 4. Cache (LRU, TTL)
  */
 
-import { parseMarkdown, markdownToHtml, renderMarkdownNode } from '../markdown-parser-v2.2-optimized';
+import { parseMarkdown, markdownToHtml, renderMarkdownNode } from '../markdown';
 
 describe('Markdown Parser V2.2-OPTIMIZED - Quick Tests', () => {
 

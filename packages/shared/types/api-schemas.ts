@@ -215,6 +215,119 @@ export const anonymousSenderSchema = {
   }
 } as const;
 
+// =============================================================================
+// MESSAGE ATTACHMENT SCHEMAS (moved before messageSchema for proper reference)
+// =============================================================================
+
+/**
+ * Message attachment schema for API responses
+ * Aligned with schema.prisma MessageAttachment model
+ */
+export const messageAttachmentSchema = {
+  type: 'object',
+  description: 'File attachment for a message',
+  properties: {
+    // Identifiers
+    id: { type: 'string', description: 'Attachment unique identifier' },
+    messageId: { type: 'string', description: 'Parent message ID' },
+
+    // File info
+    fileName: { type: 'string', description: 'Generated unique filename' },
+    originalName: { type: 'string', description: 'Original filename' },
+    mimeType: { type: 'string', description: 'MIME type (image/jpeg, application/pdf, etc.)' },
+    fileSize: { type: 'number', description: 'File size in bytes' },
+    filePath: { type: 'string', description: 'Relative file path' },
+    fileUrl: { type: 'string', description: 'Full URL for access' },
+
+    // User-provided metadata
+    title: { type: 'string', nullable: true, description: 'Human-readable title' },
+    alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
+    caption: { type: 'string', nullable: true, description: 'Caption/legend' },
+
+    // Forwarding
+    forwardedFromAttachmentId: { type: 'string', nullable: true, description: 'Original attachment ID if forwarded' },
+    isForwarded: { type: 'boolean', description: 'Whether this is a forwarded attachment' },
+
+    // View-once / Secret
+    isViewOnce: { type: 'boolean', description: 'View-once attachment' },
+    maxViewOnceCount: { type: 'number', nullable: true, description: 'Max unique viewers' },
+    viewOnceCount: { type: 'number', description: 'Current view count' },
+    isBlurred: { type: 'boolean', description: 'Content blurred until tap' },
+
+    // Image metadata
+    width: { type: 'number', nullable: true, description: 'Image width in pixels' },
+    height: { type: 'number', nullable: true, description: 'Image height in pixels' },
+    thumbnailPath: { type: 'string', nullable: true, description: 'Thumbnail file path' },
+    thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
+
+    // Audio/Video metadata
+    duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },
+    bitrate: { type: 'number', nullable: true, description: 'Bitrate in bps' },
+    sampleRate: { type: 'number', nullable: true, description: 'Sample rate in Hz' },
+    codec: { type: 'string', nullable: true, description: 'Audio codec (opus, aac, mp3)' },
+    channels: { type: 'number', nullable: true, description: 'Audio channels (1=mono, 2=stereo)' },
+
+    // Video-specific
+    fps: { type: 'number', nullable: true, description: 'Frames per second' },
+    videoCodec: { type: 'string', nullable: true, description: 'Video codec (h264, h265, vp9)' },
+
+    // Document metadata
+    pageCount: { type: 'number', nullable: true, description: 'Page count for PDFs' },
+    lineCount: { type: 'number', nullable: true, description: 'Line count for text files' },
+
+    // Upload info
+    uploadedBy: { type: 'string', description: 'Uploader user ID' },
+    isAnonymous: { type: 'boolean', description: 'Uploaded by anonymous user' },
+
+    // Security/Moderation
+    scanStatus: {
+      type: 'string',
+      enum: ['pending', 'clean', 'infected', 'error'],
+      nullable: true,
+      description: 'Virus scan status'
+    },
+    scanCompletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Scan completion time' },
+    moderationStatus: {
+      type: 'string',
+      enum: ['pending', 'approved', 'flagged', 'rejected'],
+      nullable: true,
+      description: 'Content moderation status'
+    },
+    moderationReason: { type: 'string', nullable: true, description: 'Moderation reason' },
+
+    // Delivery status
+    deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
+    viewedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Viewed by all timestamp' },
+    downloadedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Downloaded by all timestamp' },
+    viewedCount: { type: 'number', description: 'Number of viewers' },
+    downloadedCount: { type: 'number', description: 'Number of downloads' },
+
+    // Encryption (encryptionMode is only on Conversation, not Attachment)
+    isEncrypted: { type: 'boolean', description: 'Whether encrypted' },
+
+    // Timestamps
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' }
+  }
+} as const;
+
+/**
+ * Minimal attachment schema for lists
+ */
+export const messageAttachmentMinimalSchema = {
+  type: 'object',
+  description: 'Minimal attachment data',
+  properties: {
+    id: { type: 'string', description: 'Attachment ID' },
+    fileName: { type: 'string', description: 'Filename' },
+    mimeType: { type: 'string', description: 'MIME type' },
+    fileSize: { type: 'number', description: 'File size' },
+    fileUrl: { type: 'string', description: 'File URL' },
+    thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
+    duration: { type: 'number', nullable: true, description: 'Duration (audio/video)' }
+  }
+} as const;
+
 /**
  * Message schema for API responses
  * Aligned with schema.prisma Message model
@@ -288,7 +401,7 @@ export const messageSchema = {
     // Attachments
     attachments: {
       type: 'array',
-      items: { type: 'object' },
+      items: messageAttachmentSchema,
       nullable: true,
       description: 'Message attachments (files, images, etc.)'
     }
@@ -919,119 +1032,6 @@ export const sessionsListResponseSchema = {
         totalCount: { type: 'number', description: 'Total number of active sessions' }
       }
     }
-  }
-} as const;
-
-// =============================================================================
-// MESSAGE ATTACHMENT SCHEMAS
-// =============================================================================
-
-/**
- * Message attachment schema for API responses
- * Aligned with schema.prisma MessageAttachment model
- */
-export const messageAttachmentSchema = {
-  type: 'object',
-  description: 'File attachment for a message',
-  properties: {
-    // Identifiers
-    id: { type: 'string', description: 'Attachment unique identifier' },
-    messageId: { type: 'string', description: 'Parent message ID' },
-
-    // File info
-    fileName: { type: 'string', description: 'Generated unique filename' },
-    originalName: { type: 'string', description: 'Original filename' },
-    mimeType: { type: 'string', description: 'MIME type (image/jpeg, application/pdf, etc.)' },
-    fileSize: { type: 'number', description: 'File size in bytes' },
-    filePath: { type: 'string', description: 'Relative file path' },
-    fileUrl: { type: 'string', description: 'Full URL for access' },
-
-    // User-provided metadata
-    title: { type: 'string', nullable: true, description: 'Human-readable title' },
-    alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
-    caption: { type: 'string', nullable: true, description: 'Caption/legend' },
-
-    // Forwarding
-    forwardedFromAttachmentId: { type: 'string', nullable: true, description: 'Original attachment ID if forwarded' },
-    isForwarded: { type: 'boolean', description: 'Whether this is a forwarded attachment' },
-
-    // View-once / Secret
-    isViewOnce: { type: 'boolean', description: 'View-once attachment' },
-    maxViewOnceCount: { type: 'number', nullable: true, description: 'Max unique viewers' },
-    viewOnceCount: { type: 'number', description: 'Current view count' },
-    isBlurred: { type: 'boolean', description: 'Content blurred until tap' },
-
-    // Image metadata
-    width: { type: 'number', nullable: true, description: 'Image width in pixels' },
-    height: { type: 'number', nullable: true, description: 'Image height in pixels' },
-    thumbnailPath: { type: 'string', nullable: true, description: 'Thumbnail file path' },
-    thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
-
-    // Audio/Video metadata
-    duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },
-    bitrate: { type: 'number', nullable: true, description: 'Bitrate in bps' },
-    sampleRate: { type: 'number', nullable: true, description: 'Sample rate in Hz' },
-    codec: { type: 'string', nullable: true, description: 'Audio codec (opus, aac, mp3)' },
-    channels: { type: 'number', nullable: true, description: 'Audio channels (1=mono, 2=stereo)' },
-
-    // Video-specific
-    fps: { type: 'number', nullable: true, description: 'Frames per second' },
-    videoCodec: { type: 'string', nullable: true, description: 'Video codec (h264, h265, vp9)' },
-
-    // Document metadata
-    pageCount: { type: 'number', nullable: true, description: 'Page count for PDFs' },
-    lineCount: { type: 'number', nullable: true, description: 'Line count for text files' },
-
-    // Upload info
-    uploadedBy: { type: 'string', description: 'Uploader user ID' },
-    isAnonymous: { type: 'boolean', description: 'Uploaded by anonymous user' },
-
-    // Security/Moderation
-    scanStatus: {
-      type: 'string',
-      enum: ['pending', 'clean', 'infected', 'error'],
-      nullable: true,
-      description: 'Virus scan status'
-    },
-    scanCompletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Scan completion time' },
-    moderationStatus: {
-      type: 'string',
-      enum: ['pending', 'approved', 'flagged', 'rejected'],
-      nullable: true,
-      description: 'Content moderation status'
-    },
-    moderationReason: { type: 'string', nullable: true, description: 'Moderation reason' },
-
-    // Delivery status
-    deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
-    viewedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Viewed by all timestamp' },
-    downloadedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Downloaded by all timestamp' },
-    viewedCount: { type: 'number', description: 'Number of viewers' },
-    downloadedCount: { type: 'number', description: 'Number of downloads' },
-
-    // Encryption (encryptionMode is only on Conversation, not Attachment)
-    isEncrypted: { type: 'boolean', description: 'Whether encrypted' },
-
-    // Timestamps
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' }
-  }
-} as const;
-
-/**
- * Minimal attachment schema for lists
- */
-export const messageAttachmentMinimalSchema = {
-  type: 'object',
-  description: 'Minimal attachment data',
-  properties: {
-    id: { type: 'string', description: 'Attachment ID' },
-    fileName: { type: 'string', description: 'Filename' },
-    mimeType: { type: 'string', description: 'MIME type' },
-    fileSize: { type: 'number', description: 'File size' },
-    fileUrl: { type: 'string', description: 'File URL' },
-    thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
-    duration: { type: 'number', nullable: true, description: 'Duration (audio/video)' }
   }
 } as const;
 

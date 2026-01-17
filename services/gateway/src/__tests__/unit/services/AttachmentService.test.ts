@@ -128,9 +128,9 @@ describe('AttachmentService', () => {
     mimeType: 'image/jpeg',
     fileSize: 1024 * 100,
     filePath: '2024/01/507f1f77bcf86cd799439011/test_image_test-uuid-1234.jpg',
-    fileUrl: '/api/attachments/file/2024%2F01%2F507f1f77bcf86cd799439011%2Ftest_image_test-uuid-1234.jpg',
+    fileUrl: '/api/v1/attachments/file/2024%2F01%2F507f1f77bcf86cd799439011%2Ftest_image_test-uuid-1234.jpg',
     thumbnailPath: '2024/01/507f1f77bcf86cd799439011/test_image_test-uuid-1234_thumb.jpg',
-    thumbnailUrl: '/api/attachments/file/2024%2F01%2F507f1f77bcf86cd799439011%2Ftest_image_test-uuid-1234_thumb.jpg',
+    thumbnailUrl: '/api/v1/attachments/file/2024%2F01%2F507f1f77bcf86cd799439011%2Ftest_image_test-uuid-1234_thumb.jpg',
     width: 1920,
     height: 1080,
     duration: null,
@@ -692,18 +692,18 @@ describe('AttachmentService', () => {
     it('getAttachmentUrl should generate full URL', () => {
       const url = service.getAttachmentUrl('2024/01/user/file.jpg');
 
-      expect(url).toBe('https://test.meeshy.me/api/attachments/file/2024%2F01%2Fuser%2Ffile.jpg');
+      expect(url).toBe('https://test.meeshy.me/api/v1/attachments/file/2024%2F01%2Fuser%2Ffile.jpg');
     });
 
     it('getAttachmentPath should generate relative path', () => {
       const path = service.getAttachmentPath('2024/01/user/file.jpg');
 
-      expect(path).toBe('/api/attachments/file/2024%2F01%2Fuser%2Ffile.jpg');
+      expect(path).toBe('/api/v1/attachments/file/2024%2F01%2Fuser%2Ffile.jpg');
       expect(path).not.toContain('https://');
     });
 
     it('buildFullUrl should return existing full URLs unchanged', () => {
-      const existingUrl = 'https://old.domain.com/api/attachments/file/path';
+      const existingUrl = 'https://old.domain.com/api/v1/attachments/file/path';
 
       const result = service.buildFullUrl(existingUrl);
 
@@ -711,15 +711,15 @@ describe('AttachmentService', () => {
     });
 
     it('buildFullUrl should construct full URL from relative path', () => {
-      const relativePath = '/api/attachments/file/path';
+      const relativePath = '/api/v1/attachments/file/path';
 
       const result = service.buildFullUrl(relativePath);
 
-      expect(result).toBe('https://test.meeshy.me/api/attachments/file/path');
+      expect(result).toBe('https://test.meeshy.me/api/v1/attachments/file/path');
     });
 
     it('buildFullUrl should handle http URLs', () => {
-      const httpUrl = 'http://localhost:3000/api/attachments/file/path';
+      const httpUrl = 'http://localhost:3000/api/v1/attachments/file/path';
 
       const result = service.buildFullUrl(httpUrl);
 
@@ -928,15 +928,17 @@ describe('AttachmentService', () => {
       );
     });
 
-    it('should use temporary messageId when not provided', async () => {
+    it('should use null messageId when not provided', async () => {
       const file = createTestFile();
 
       await service.uploadFile(file, testUserId);
 
+      // messageId is now nullable - null when not provided
+      // The attachment will be associated to a message later via associateAttachmentsToMessage()
       expect(mockPrisma.messageAttachment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            messageId: '000000000000000000000000',
+            messageId: null,
           }),
         })
       );

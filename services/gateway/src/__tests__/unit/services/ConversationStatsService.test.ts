@@ -959,6 +959,32 @@ describe('ConversationStatsService', () => {
       expect(stats.participantsPerLanguage).toEqual({ en: 3 });
     });
 
+    it('should handle members with deleted users (null user)', async () => {
+      mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 10 } },
+        { originalLanguage: 'fr', _count: { _all: 5 } }
+      ]);
+      // Simulate members where some have null user (deleted users)
+      mockPrisma.conversationMember.findMany.mockResolvedValue([
+        { user: { id: testUserId1, systemLanguage: 'en' } },
+        { user: null }, // deleted user
+        { user: { id: testUserId2, systemLanguage: 'fr' } },
+        { user: null }  // another deleted user
+      ]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const getConnectedUserIds = () => [];
+      const stats = await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+
+      // participantCount should include all members (including those with null user)
+      expect(stats.participantCount).toBe(4);
+      // participantsPerLanguage should only count members with valid user objects
+      expect(stats.participantsPerLanguage).toEqual({ en: 1, fr: 1 });
+      // messagesPerLanguage should be unaffected
+      expect(stats.messagesPerLanguage).toEqual({ en: 10, fr: 5 });
+    });
+
     it('should handle conversation lookup by direct ID', async () => {
       // When ID looks like ObjectId, it should try findUnique first (based on code logic)
       mockPrisma.conversation.findFirst.mockResolvedValue(null);

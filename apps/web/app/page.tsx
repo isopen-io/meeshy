@@ -36,9 +36,8 @@ import {
 } from 'lucide-react';
 import { LoginForm } from '@/components/auth/login-form';
 import { RegisterForm } from '@/components/auth/register-form';
-import { JoinConversationForm } from '@/components/auth/join-conversation-form';
 import { LanguageSelector } from '@/components/translation/language-selector';
-import { BubbleStreamPage } from '@/components/common';
+import { BubbleStreamPage } from '@/components/common/bubble-stream-page';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Header } from '@/components/layout/Header';
 import { useUser, useIsAuthChecking } from '@/stores';

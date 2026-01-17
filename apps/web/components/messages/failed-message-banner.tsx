@@ -43,13 +43,13 @@ export function FailedMessageBanner({
       
       if (success) {
         removeFailedMessage(message.id);
-        toast.success(t('messageSentSuccessfully') || 'Message envoyé avec succès');
+        toast.success(t('bubbleStream.messageSentSuccessfully') || 'Message envoyé avec succès');
       } else {
-        toast.error(t('retryFailed') || 'Échec du renvoi. Cliquez pour restaurer le message.');
+        toast.error(t('bubbleStream.retryFailed') || 'Échec du renvoi. Cliquez pour restaurer le message.');
       }
     } catch (error) {
       console.error('Erreur lors du renvoi:', error);
-      toast.error(t('retryError') || 'Erreur lors du renvoi');
+      toast.error(t('bubbleStream.retryError') || 'Erreur lors du renvoi');
     } finally {
       setRetryingId(null);
     }
@@ -58,17 +58,17 @@ export function FailedMessageBanner({
   const handleRestore = useCallback((message: FailedMessage) => {
     onRestore(message);
     removeFailedMessage(message.id);
-    toast.info(t('messageRestored') || 'Message restauré dans le compositeur');
+    toast.info(t('bubbleStream.messageRestored') || 'Message restauré dans le compositeur');
   }, [onRestore, removeFailedMessage, t]);
 
   const handleDismiss = useCallback((messageId: string) => {
     removeFailedMessage(messageId);
-    toast.info(t('messageDismissed') || 'Message ignoré');
+    toast.info(t('bubbleStream.messageDismissed') || 'Message ignoré');
   }, [removeFailedMessage, t]);
 
   const handleClearAll = useCallback(() => {
     clearFailedMessages(conversationId);
-    toast.info(t('allMessagesDismissed') || 'Tous les messages en échec ont été ignorés');
+    toast.info(t('bubbleStream.allMessagesDismissed') || 'Tous les messages en échec ont été ignorés');
   }, [conversationId, clearFailedMessages, t]);
 
   if (failedMessages.length === 0) {
@@ -89,19 +89,19 @@ export function FailedMessageBanner({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-medium text-red-800 dark:text-red-200">
-                    {t('messageSendFailed') || 'Échec d\'envoi du message'}
+                    {t('bubbleStream.messageSendFailed') || 'Échec d\'envoi du message'}
                   </span>
                   {message.retryCount > 0 && (
                     <span className="text-xs text-red-600 dark:text-red-400">
-                      ({message.retryCount} {t('retries') || 'tentative(s)'})
+                      ({message.retryCount} {t('bubbleStream.retries') || 'tentative(s)'})
                     </span>
                   )}
                 </div>
                 
                 <p className="text-sm text-red-700 dark:text-red-300 line-clamp-2 mb-2">
                   {message.content || (message.attachmentIds.length > 0 
-                    ? `${message.attachmentIds.length} ${t('attachments') || 'pièce(s) jointe(s)'}`
-                    : t('emptyMessage') || 'Message vide')}
+                    ? `${message.attachmentIds.length} ${t('bubbleStream.attachments') || 'pièce(s) jointe(s)'}`
+                    : t('bubbleStream.emptyMessage') || 'Message vide')}
                 </p>
                 
                 <div className="flex flex-wrap gap-2">

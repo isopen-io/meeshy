@@ -57,20 +57,13 @@ const mockPrisma: any = {
     update: jest.fn()
   },
   conversationMember: {
-    count: jest.fn()
+    count: jest.fn(),
+    findMany: jest.fn()
   },
   // Mock $transaction to pass the mock prisma to the callback
   $transaction: jest.fn().mockImplementation(async (callback: (tx: any) => Promise<any>) => {
-    // Create a transaction mock that proxies to the main mock
-    const txMock = {
-      conversationReadCursor: mockPrisma.conversationReadCursor,
-      messageStatusEntry: mockPrisma.messageStatusEntry,
-      attachmentStatusEntry: mockPrisma.attachmentStatusEntry,
-      message: mockPrisma.message,
-      messageAttachment: mockPrisma.messageAttachment,
-      conversationMember: mockPrisma.conversationMember
-    };
-    return callback(txMock);
+    // Create a transaction mock that proxies to the main mock (includes findMany)
+    return callback(mockPrisma);
   })
 };
 
@@ -96,6 +89,9 @@ describe('MessageReadStatusService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Clear the static dedup cache to ensure tests are isolated
+    (MessageReadStatusService as any).recentActionCache.clear();
 
     // Suppress console output in tests
     console.log = jest.fn();
@@ -193,13 +189,13 @@ describe('MessageReadStatusService', () => {
         { conversationId: conversationIds[0], unreadCount: 5 },
         { conversationId: conversationIds[1], unreadCount: 3 }
       ]);
-      mockPrisma.message.count.mockResolvedValue(7); // For conversation without cursor
 
       const result = await service.getUnreadCountsForConversations(testUserId, conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
-      expect(result.get(conversationIds[2])).toBe(7);
+      // In cursor-based approach, conversations without cursors default to 0
+      expect(result.get(conversationIds[2])).toBe(0);
     });
 
     it('should return empty map on database error', async () => {
@@ -218,24 +214,14 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('markMessagesAsReceived', () => {
-    it('should create cursor and status entry when marking as received', async () => {
+    it('should create cursor when marking as received (cursor-only approach)', async () => {
       const mockMessage = { id: testMessageId, conversationId: testConversationId };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
+      // Mock for updateUnreadCount
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
-      // Mock for updateMessageComputedStatus
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ deliveredAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsReceived(testUserId, testConversationId, testMessageId);
 
@@ -246,46 +232,28 @@ describe('MessageReadStatusService', () => {
         create: expect.objectContaining({
           userId: testUserId,
           conversationId: testConversationId,
-          lastDeliveredMessageId: testMessageId
+          lastDeliveredMessageId: testMessageId,
+          lastDeliveredAt: expect.any(Date),
+          unreadCount: 0,
+          version: 0
         }),
         update: expect.objectContaining({
-          lastDeliveredMessageId: testMessageId
+          lastDeliveredMessageId: testMessageId,
+          lastDeliveredAt: expect.any(Date),
+          version: { increment: 1 }
         })
       });
 
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalledWith({
-        where: {
-          message_user_status: { messageId: testMessageId, userId: testUserId }
-        },
-        create: expect.objectContaining({
-          messageId: testMessageId,
-          conversationId: testConversationId,
-          userId: testUserId,
-          deliveredAt: expect.any(Date),
-          receivedAt: expect.any(Date)
-        }),
-        update: expect.objectContaining({
-          deliveredAt: expect.any(Date),
-          receivedAt: expect.any(Date)
-        })
-      });
+      // Cursor-only approach: no messageStatusEntry.upsert
+      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
     });
 
     it('should fetch latest message when messageId not provided', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
+      // Mock for updateUnreadCount
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ deliveredAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsReceived(testUserId, testConversationId);
 
@@ -302,15 +270,26 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsReceived(testUserId, testConversationId);
 
       expect(mockPrisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
-      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
     });
 
-    it('should throw error when messageId does not belong to conversation', async () => {
-      mockPrisma.message.findFirst.mockResolvedValue(null);
+    it('should proceed with provided messageId even without validation', async () => {
+      // In the cursor-based approach, when a messageId is explicitly provided,
+      // the service proceeds directly without fetching the latest message.
+      // The messageId is trusted as provided by the caller.
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      // Mock for updateUnreadCount
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(0);
 
-      await expect(
-        service.markMessagesAsReceived(testUserId, testConversationId, 'wrong-message-id')
-      ).rejects.toThrow('does not belong to conversation');
+      await service.markMessagesAsReceived(testUserId, testConversationId, 'provided-message-id');
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            lastDeliveredMessageId: 'provided-message-id'
+          })
+        })
+      );
     });
   });
 
@@ -319,25 +298,12 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('markMessagesAsRead', () => {
-    it('should update cursor and create status entries for all unread messages', async () => {
+    it('should update cursor only (cursor-based approach, no individual status entries)', async () => {
       const messageDate = new Date('2025-01-01');
       const mockMessage = { id: testMessageId, createdAt: messageDate };
-      const unreadMessages = [{ id: testMessageId }, { id: testMessageId2 }];
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue(unreadMessages);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      // Mock for updateMessageComputedStatus
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
@@ -347,16 +313,23 @@ describe('MessageReadStatusService', () => {
         },
         create: expect.objectContaining({
           lastReadMessageId: testMessageId,
-          unreadCount: 0
+          lastReadAt: expect.any(Date),
+          lastDeliveredMessageId: testMessageId,
+          lastDeliveredAt: expect.any(Date),
+          unreadCount: 0,
+          version: 0
         }),
         update: expect.objectContaining({
           lastReadMessageId: testMessageId,
-          unreadCount: 0
+          lastReadAt: expect.any(Date),
+          unreadCount: 0,
+          version: { increment: 1 }
         })
       });
 
-      // Should create status entries for all unread messages
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalledTimes(2);
+      // Cursor-only approach: no messageStatusEntry.upsert, no message.findMany, no message.update
+      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.message.update).not.toHaveBeenCalled();
     });
 
     it('should sync notifications when marking as read', async () => {
@@ -364,17 +337,6 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
@@ -388,32 +350,39 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('getMessageReadStatus', () => {
-    it('should return detailed read status for a message', async () => {
+    it('should return detailed read status for a message using cursors', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       const mockMessage = {
         id: testMessageId,
-        createdAt: new Date(),
+        createdAt: messageCreatedAt,
         senderId: testUserId,
         anonymousSenderId: null,
         conversationId: testConversationId
       };
 
-      const mockStatuses = [
+      const mockMembers = [
+        { userId: testUserId },
+        { userId: testUserId2 }
+      ];
+
+      // Cursors with lastDeliveredAt and lastReadAt >= message.createdAt
+      const mockCursors = [
         {
           userId: testUserId2,
-          receivedAt: new Date(),
-          readAt: new Date(),
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:10:00Z'),
           user: { id: testUserId2, username: 'user2' }
         }
       ];
 
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue(mockStatuses);
+      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
 
       expect(result.messageId).toBe(testMessageId);
-      expect(result.totalMembers).toBe(2);
+      expect(result.totalMembers).toBe(1); // 2 members - 1 sender = 1
       expect(result.receivedCount).toBe(1);
       expect(result.readCount).toBe(1);
       expect(result.receivedBy).toHaveLength(1);
@@ -428,28 +397,34 @@ describe('MessageReadStatusService', () => {
       ).rejects.toThrow('Message nonexistent-id not found');
     });
 
-    it('should exclude sender from counts', async () => {
+    it('should exclude sender from counts using cursor-based approach', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       const mockMessage = {
         id: testMessageId,
-        createdAt: new Date(),
+        createdAt: messageCreatedAt,
         senderId: testUserId,
         anonymousSenderId: null,
         conversationId: testConversationId
       };
 
-      // Prisma query filters with `userId: { not: authorId }`, so mock returns only non-sender
-      const mockStatuses = [
+      const mockMembers = [
+        { userId: testUserId },
+        { userId: testUserId2 }
+      ];
+
+      // Cursor for non-sender user with timestamps >= message.createdAt
+      const mockCursors = [
         {
           userId: testUserId2,
-          receivedAt: new Date(),
-          readAt: new Date(),
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:10:00Z'),
           user: { id: testUserId2, username: 'user2' }
         }
       ];
 
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.count.mockResolvedValue(2); // 2 members excluding sender
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue(mockStatuses);
+      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
 
@@ -738,24 +713,47 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('getConversationReadStatuses', () => {
-    it('should return status map for multiple messages', async () => {
+    it('should return status map for multiple messages using cursors', async () => {
       const messageIds = [testMessageId, testMessageId2];
+      const message1CreatedAt = new Date('2025-01-01T10:00:00Z');
+      const message2CreatedAt = new Date('2025-01-01T11:00:00Z');
 
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
-        { messageId: testMessageId, receivedAt: new Date(), readAt: new Date() },
-        { messageId: testMessageId, receivedAt: new Date(), readAt: null },
-        { messageId: testMessageId2, receivedAt: new Date(), readAt: new Date() }
+      // Mock messages with createdAt timestamps
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: message1CreatedAt, senderId: 'sender-1' },
+        { id: testMessageId2, createdAt: message2CreatedAt, senderId: 'sender-2' }
+      ]);
+
+      // Mock cursors: 2 users with different read/delivered timestamps
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          userId: testUserId,
+          lastDeliveredAt: new Date('2025-01-01T12:00:00Z'), // After both messages
+          lastReadAt: new Date('2025-01-01T12:00:00Z') // After both messages
+        },
+        {
+          userId: testUserId2,
+          lastDeliveredAt: new Date('2025-01-01T10:30:00Z'), // After message1, before message2
+          lastReadAt: null // Never read
+        }
       ]);
 
       const result = await service.getConversationReadStatuses(testConversationId, messageIds);
 
       expect(result).toBeInstanceOf(Map);
+      // message1: user1 delivered+read, user2 delivered only (but user2 is sender so excluded)
+      // Actually sender is 'sender-1', so both testUserId and testUserId2 are counted
+      // testUserId: delivered+read, testUserId2: delivered only
       expect(result.get(testMessageId)).toEqual({ receivedCount: 2, readCount: 1 });
+      // message2: only testUserId delivered+read (testUserId2's delivered is before message2)
       expect(result.get(testMessageId2)).toEqual({ receivedCount: 1, readCount: 1 });
     });
 
-    it('should return empty counts for messages without statuses', async () => {
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+    it('should return empty counts for messages without cursors', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date(), senderId: 'sender-1' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
 
       const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
 
@@ -816,85 +814,31 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Computed Status Fields', () => {
-    describe('updateMessageComputedStatus (via markMessagesAsRead)', () => {
-      it('should update deliveredToAllAt when all participants delivered', async () => {
+    describe('updateMessageComputedStatus is now a no-op', () => {
+      it('should NOT update message computed fields (cursor-based approach)', async () => {
+        // In the new cursor-based architecture, updateMessageComputedStatus is a no-op
+        // Read statuses are computed dynamically via cursors, not stored on Message
         const mockMessage = { id: testMessageId, createdAt: new Date() };
 
         mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
         mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-        mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-        mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-
-        // For updateMessageComputedStatus
-        mockPrisma.message.findUnique.mockResolvedValue({
-          id: testMessageId,
-          conversationId: testConversationId,
-          senderId: testUserId2,
-          anonymousSenderId: null
-        });
-        mockPrisma.conversationMember.count.mockResolvedValue(2); // 2 participants (excluding sender)
-
-        // All 2 participants have delivered and read
-        mockPrisma.messageStatusEntry.count
-          .mockResolvedValueOnce(2) // deliveredCount
-          .mockResolvedValueOnce(2); // readCount
-
-        const lastDeliveredDate = new Date('2025-01-01T12:00:00Z');
-        const lastReadDate = new Date('2025-01-01T13:00:00Z');
-
-        mockPrisma.messageStatusEntry.findFirst
-          .mockResolvedValueOnce({ deliveredAt: lastDeliveredDate })
-          .mockResolvedValueOnce({ readAt: lastReadDate });
-
-        mockPrisma.message.update.mockResolvedValue({});
 
         await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-        expect(mockPrisma.message.update).toHaveBeenCalledWith({
-          where: { id: testMessageId },
-          data: {
-            deliveredCount: 2,
-            readCount: 2,
-            deliveredToAllAt: lastDeliveredDate,
-            readByAllAt: lastReadDate
-          }
-        });
+        // message.update should NOT be called for computed status fields
+        expect(mockPrisma.message.update).not.toHaveBeenCalled();
       });
 
-      it('should not set allAt dates when not all participants completed', async () => {
+      it('should NOT create messageStatusEntry records (cursor-based approach)', async () => {
         const mockMessage = { id: testMessageId, createdAt: new Date() };
 
         mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
         mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-        mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-        mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-
-        mockPrisma.message.findUnique.mockResolvedValue({
-          id: testMessageId,
-          conversationId: testConversationId,
-          senderId: testUserId2,
-          anonymousSenderId: null
-        });
-        mockPrisma.conversationMember.count.mockResolvedValue(3); // 3 participants
-
-        // Only 2 of 3 participants delivered, 1 read
-        mockPrisma.messageStatusEntry.count
-          .mockResolvedValueOnce(2) // deliveredCount
-          .mockResolvedValueOnce(1); // readCount
-
-        mockPrisma.message.update.mockResolvedValue({});
 
         await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-        expect(mockPrisma.message.update).toHaveBeenCalledWith({
-          where: { id: testMessageId },
-          data: {
-            deliveredCount: 2,
-            readCount: 1,
-            deliveredToAllAt: null,
-            readByAllAt: null
-          }
-        });
+        // messageStatusEntry.upsert should NOT be called
+        expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
       });
     });
 
@@ -979,7 +923,7 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Workflow Tests', () => {
-    it('should correctly track message status progression', async () => {
+    it('should correctly track message status progression (cursor-based)', async () => {
       // 1. Initial: No cursor, all messages unread
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(5);
@@ -987,21 +931,18 @@ describe('MessageReadStatusService', () => {
       let unreadCount = await service.getUnreadCount(testUserId, testConversationId);
       expect(unreadCount).toBe(5);
 
-      // 2. Mark as received: cursor created with unreadCount
+      // 2. Mark as received: cursor created (cursor-only approach)
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ deliveredAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
+      // Mock for updateUnreadCount called after upsert
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(4);
 
       await service.markMessagesAsReceived(testUserId, testConversationId, testMessageId);
+
+      // Verify cursor-only approach: no messageStatusEntry or message.update
+      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.message.update).not.toHaveBeenCalled();
 
       // 3. After received, cursor has updated unreadCount
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 4 });
@@ -1075,17 +1016,6 @@ describe('MessageReadStatusService', () => {
       const mockMessage = { id: testMessageId, createdAt: new Date() };
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
@@ -1099,78 +1029,31 @@ describe('MessageReadStatusService', () => {
       );
     });
 
-    it('should correctly compute deliveredToAllAt only when ALL participants delivered', async () => {
+    it('should NOT compute deliveredToAllAt (cursor-based approach does not track individual message delivery)', async () => {
+      // In the new cursor-based architecture, deliveredToAllAt is no longer computed
+      // Read statuses are determined dynamically via cursors
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: 'sender-id',
-        anonymousSenderId: null
-      });
-
-      // 5 participants, only 3 have delivered
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
-      mockPrisma.messageStatusEntry.count
-        .mockResolvedValueOnce(3) // deliveredCount - NOT all
-        .mockResolvedValueOnce(1); // readCount
-
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      // deliveredToAllAt should be null because not all delivered
-      expect(mockPrisma.message.update).toHaveBeenCalledWith({
-        where: { id: testMessageId },
-        data: expect.objectContaining({
-          deliveredToAllAt: null,
-          deliveredCount: 3
-        })
-      });
+      // message.update should NOT be called in cursor-based approach
+      expect(mockPrisma.message.update).not.toHaveBeenCalled();
     });
 
-    it('should set readByAllAt with correct timestamp when all participants read', async () => {
+    it('should NOT set readByAllAt (cursor-based approach)', async () => {
+      // In the new cursor-based architecture, readByAllAt is no longer computed
       const mockMessage = { id: testMessageId, createdAt: new Date() };
-      const allReadTimestamp = new Date('2025-06-15T10:30:00Z');
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: 'sender-id',
-        anonymousSenderId: null
-      });
-
-      // All 3 participants have delivered and read
-      mockPrisma.conversationMember.count.mockResolvedValue(3);
-      mockPrisma.messageStatusEntry.count
-        .mockResolvedValueOnce(3) // deliveredCount - ALL
-        .mockResolvedValueOnce(3); // readCount - ALL
-
-      mockPrisma.messageStatusEntry.findFirst
-        .mockResolvedValueOnce({ deliveredAt: new Date('2025-06-15T09:00:00Z') })
-        .mockResolvedValueOnce({ readAt: allReadTimestamp }); // Last read timestamp
-
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      expect(mockPrisma.message.update).toHaveBeenCalledWith({
-        where: { id: testMessageId },
-        data: expect.objectContaining({
-          readByAllAt: allReadTimestamp,
-          readCount: 3
-        })
-      });
+      // message.update should NOT be called in cursor-based approach
+      expect(mockPrisma.message.update).not.toHaveBeenCalled();
     });
 
     it('should maintain accurate attachment status counts', async () => {
@@ -1219,31 +1102,25 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Idempotency', () => {
-    it('should handle marking same message as read twice without errors', async () => {
+    it('should handle marking same message as read twice without errors (cursor-based)', async () => {
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       // First read
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      // Second read - should use upsert.update path
+      // Clear the dedup cache to allow second call
+      (MessageReadStatusService as any).recentActionCache.clear();
+
+      // Second read - should use cursor upsert.update path
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      // Upsert should be called twice, using update path second time
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalledTimes(2);
+      // Cursor upsert should be called twice (once per markMessagesAsRead call)
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(2);
+      // No messageStatusEntry.upsert in cursor-based approach
+      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
     });
 
     it('should not increment listen count when using upsert create (first listen)', async () => {
@@ -1302,21 +1179,11 @@ describe('MessageReadStatusService', () => {
 
   describe('Concurrency & Race Conditions', () => {
     it('should handle multiple users marking same message as read simultaneously', async () => {
+      // The service now uses cursor-based approach - each user gets their own cursor
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: 'sender-id'
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(3);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       const user1 = 'user-1';
       const user2 = 'user-2';
@@ -1331,8 +1198,8 @@ describe('MessageReadStatusService', () => {
 
       await expect(Promise.all(promises)).resolves.not.toThrow();
 
-      // Each user should have their own status entry via upsert
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalledTimes(3);
+      // Each user should have their own cursor via upsert (cursor-based approach)
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(3);
     });
 
     it('should handle concurrent attachment status updates', async () => {
@@ -1379,70 +1246,61 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Anonymous User Handling', () => {
-    it('should handle messages from anonymous senders', async () => {
+    it('should handle messages from anonymous senders using cursor-based approach', async () => {
       const anonymousSenderId = 'anon-sender-123';
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       const mockMessage = {
         id: testMessageId,
-        createdAt: new Date(),
+        createdAt: messageCreatedAt,
         senderId: null,
         anonymousSenderId: anonymousSenderId,
         conversationId: testConversationId
       };
 
-      mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.count.mockResolvedValue(3);
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+      const mockMembers = [
+        { userId: testUserId },
+        { userId: testUserId2 },
+        { userId: 'user-3' }
+      ];
+
+      // Cursor with timestamps >= message.createdAt
+      const mockCursors = [
         {
           userId: testUserId,
-          receivedAt: new Date(),
-          readAt: new Date(),
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:10:00Z'),
           user: { id: testUserId, username: 'user1' }
         }
-      ]);
+      ];
+
+      mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
+      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
 
-      expect(result.totalMembers).toBe(3);
+      expect(result.totalMembers).toBe(3); // Anonymous sender not excluded
       expect(result.receivedBy).toHaveLength(1);
     });
 
-    it('should correctly exclude anonymous sender from computed status', async () => {
+    it('should correctly handle anonymous sender in markMessagesAsRead', async () => {
+      // The service now uses a simplified cursor-based approach
+      // It updates conversationReadCursor instead of messageStatusEntry and message.update
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-
-      // Message sent by anonymous user
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: null,
-        anonymousSenderId: 'anon-sender'
-      });
-
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count
-        .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(2);
-
-      const allReadDate = new Date();
-      mockPrisma.messageStatusEntry.findFirst
-        .mockResolvedValueOnce({ deliveredAt: allReadDate })
-        .mockResolvedValueOnce({ readAt: allReadDate });
-
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      expect(mockPrisma.message.update).toHaveBeenCalledWith({
-        where: { id: testMessageId },
-        data: expect.objectContaining({
-          deliveredCount: 2,
-          readCount: 2
+      // Should update the read cursor
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+          }
         })
-      });
+      );
     });
   });
 
@@ -1451,53 +1309,59 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Bulk Operations & Performance', () => {
-    it('should handle marking many messages as read efficiently', async () => {
-      const messageCount = 50;
-      const messages = Array.from({ length: messageCount }, (_, i) => ({
-        id: `msg-${i}`
-      }));
-
+    it('should handle marking messages as read efficiently with cursor update', async () => {
+      // The service now uses a simplified cursor-based approach
+      // It only updates conversationReadCursor once, not individual messageStatusEntry
       const mockMessage = { id: 'msg-49', createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue(messages);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: 'msg-49',
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
-      mockPrisma.messageStatusEntry.count.mockResolvedValue(1);
-      mockPrisma.messageStatusEntry.findFirst.mockResolvedValue({ readAt: new Date() });
-      mockPrisma.message.update.mockResolvedValue({});
 
       await service.markMessagesAsRead(testUserId, testConversationId, 'msg-49');
 
-      // Should create status entries for all messages
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalledTimes(messageCount);
+      // Should update cursor once regardless of message count
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+          },
+          update: expect.objectContaining({
+            lastReadMessageId: 'msg-49',
+            unreadCount: 0
+          })
+        })
+      );
     });
 
     it('should get unread counts for many conversations efficiently', async () => {
       const conversationCount = 20;
       const conversationIds = Array.from({ length: conversationCount }, (_, i) => `conv-${i}`);
 
-      // Half have cursors, half don't
+      // Half have cursors with unread counts
       const cursors = conversationIds.slice(0, 10).map(id => ({
         conversationId: id,
         unreadCount: Math.floor(Math.random() * 10)
       }));
 
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(cursors);
-      mockPrisma.message.count.mockResolvedValue(5);
 
       const result = await service.getUnreadCountsForConversations(testUserId, conversationIds);
 
       expect(result.size).toBe(conversationCount);
-      // Should make 1 findMany for cursors + 10 individual counts for conversations without cursor
+      // Should make only 1 findMany for cursors - no individual message.count calls needed
+      // Conversations without cursors default to 0
       expect(mockPrisma.conversationReadCursor.findMany).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.message.count).toHaveBeenCalledTimes(10);
+
+      // Verify that conversations with cursors have their unreadCount
+      cursors.forEach(cursor => {
+        expect(result.get(cursor.conversationId)).toBe(cursor.unreadCount);
+      });
+
+      // Verify that conversations without cursors default to 0
+      conversationIds.slice(10).forEach(id => {
+        expect(result.get(id)).toBe(0);
+      });
     });
   });
 
@@ -1506,29 +1370,21 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Error Recovery & Data Integrity', () => {
-    it('should not leave inconsistent state when updateComputedStatus fails', async () => {
+    it('should complete cursor update even if notification sync fails', async () => {
+      // The service now uses a simplified cursor-based approach
+      // Even if notification sync fails, the cursor update should complete
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
-      mockPrisma.messageStatusEntry.upsert.mockResolvedValue({});
 
-      // updateMessageComputedStatus will fail
-      mockPrisma.message.findUnique.mockResolvedValue({
-        id: testMessageId,
-        conversationId: testConversationId,
-        senderId: testUserId2
-      });
-      mockPrisma.conversationMember.count.mockRejectedValue(new Error('DB error'));
-
-      // Should not throw - computed status update errors are caught
+      // Should not throw - notification sync errors are caught internally
       await expect(
         service.markMessagesAsRead(testUserId, testConversationId, testMessageId)
       ).resolves.not.toThrow();
 
-      // Status entry should still have been created
-      expect(mockPrisma.messageStatusEntry.upsert).toHaveBeenCalled();
+      // Cursor should still have been updated
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalled();
     });
 
     it('should handle missing message gracefully in getMessageReadStatus', async () => {
@@ -1668,6 +1524,273 @@ describe('MessageReadStatusService', () => {
       // Verify consumedCount is viewedCount for documents
       const updateCall = mockPrisma.messageAttachment.update.mock.calls[0][0];
       expect(updateCall.data.consumedCount).toBe(5); // viewedCount (not audio/video)
+    });
+  });
+
+  // ==============================================
+  // DEADLOCK RETRY (P2034) TESTS - withRetry function
+  // ==============================================
+
+  describe('Deadlock Retry (P2034 - withRetry)', () => {
+    // Helper to create a Prisma P2034 deadlock error
+    const createDeadlockError = () => {
+      const error = new Error('Transaction failed due to a write conflict or a deadlock');
+      (error as any).code = 'P2034';
+      return error;
+    };
+
+    // Helper to create a non-P2034 Prisma error
+    const createNonDeadlockError = (code: string = 'P2025') => {
+      const error = new Error('Record not found');
+      (error as any).code = code;
+      return error;
+    };
+
+    describe('markAudioAsListened with retry', () => {
+      beforeEach(() => {
+        // Setup common mocks for attachment methods
+        mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+          id: testAttachmentId,
+          messageId: testMessageId,
+          mimeType: 'audio/mp3',
+          message: { conversationId: testConversationId, senderId: testUserId2 }
+        });
+        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+        mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
+        mockPrisma.messageAttachment.update.mockResolvedValue({});
+      });
+
+      it('should retry and succeed after P2034 deadlock error on first attempt', async () => {
+        // First call fails with P2034, second call succeeds
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markAudioAsListened(testUserId, testAttachmentId);
+
+        // $transaction should have been called twice (1 failure + 1 success)
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should succeed after 2 P2034 failures on 3rd attempt', async () => {
+        // First two calls fail with P2034, third call succeeds
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markAudioAsListened(testUserId, testAttachmentId);
+
+        // $transaction should have been called 3 times (2 failures + 1 success)
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw P2034 error after exhausting all 3 retry attempts', async () => {
+        // All 3 attempts fail with P2034
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError());
+
+        await expect(
+          service.markAudioAsListened(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2034' });
+
+        // $transaction should have been called 3 times (all failures)
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw non-P2034 error immediately without retry', async () => {
+        // First call fails with non-P2034 error
+        mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2025'));
+
+        await expect(
+          service.markAudioAsListened(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2025' });
+
+        // $transaction should have been called only once (no retry for non-P2034)
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('markVideoAsWatched with retry', () => {
+      beforeEach(() => {
+        mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+          id: testAttachmentId,
+          messageId: testMessageId,
+          mimeType: 'video/mp4',
+          message: { conversationId: testConversationId, senderId: testUserId2 }
+        });
+        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+        mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ watchedAt: new Date() });
+        mockPrisma.messageAttachment.update.mockResolvedValue({});
+      });
+
+      it('should retry and succeed after P2034 deadlock error', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markVideoAsWatched(testUserId, testAttachmentId);
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should throw P2034 error after exhausting retries', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError());
+
+        await expect(
+          service.markVideoAsWatched(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2034' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw non-P2034 error immediately', async () => {
+        mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2002'));
+
+        await expect(
+          service.markVideoAsWatched(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2002' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('markImageAsViewed with retry', () => {
+      beforeEach(() => {
+        mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+          id: testAttachmentId,
+          messageId: testMessageId,
+          mimeType: 'image/jpeg',
+          message: { conversationId: testConversationId, senderId: testUserId2 }
+        });
+        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+        mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ viewedAt: new Date() });
+        mockPrisma.messageAttachment.update.mockResolvedValue({});
+      });
+
+      it('should retry and succeed after P2034 deadlock error', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markImageAsViewed(testUserId, testAttachmentId);
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should throw P2034 error after exhausting retries', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError());
+
+        await expect(
+          service.markImageAsViewed(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2034' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw non-P2034 error immediately', async () => {
+        mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2003'));
+
+        await expect(
+          service.markImageAsViewed(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2003' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('markAttachmentAsDownloaded with retry', () => {
+      beforeEach(() => {
+        mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+          id: testAttachmentId,
+          messageId: testMessageId,
+          mimeType: 'application/pdf',
+          message: { conversationId: testConversationId, senderId: testUserId2 }
+        });
+        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+        mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ downloadedAt: new Date() });
+        mockPrisma.messageAttachment.update.mockResolvedValue({});
+      });
+
+      it('should retry and succeed after P2034 deadlock error', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should succeed after 2 P2034 failures on 3rd attempt', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockImplementationOnce(async (callback: (tx: any) => Promise<any>) => {
+            return callback(mockPrisma);
+          });
+
+        await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw P2034 error after exhausting retries', async () => {
+        mockPrisma.$transaction
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError())
+          .mockRejectedValueOnce(createDeadlockError());
+
+        await expect(
+          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2034' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should throw non-P2034 error immediately without retry', async () => {
+        const uniqueConstraintError = createNonDeadlockError('P2002');
+        mockPrisma.$transaction.mockRejectedValueOnce(uniqueConstraintError);
+
+        await expect(
+          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+        ).rejects.toMatchObject({ code: 'P2002' });
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+
+      it('should throw error without code property immediately without retry', async () => {
+        const genericError = new Error('Generic database error');
+        mockPrisma.$transaction.mockRejectedValueOnce(genericError);
+
+        await expect(
+          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+        ).rejects.toThrow('Generic database error');
+
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

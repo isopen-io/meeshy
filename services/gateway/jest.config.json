@@ -2,6 +2,12 @@
   "preset": "ts-jest",
   "testEnvironment": "node",
   "rootDir": ".",
+  "transformIgnorePatterns": [
+    "node_modules/(?!@meeshy/shared)"
+  ],
+  "moduleNameMapper": {
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1"
+  },
   "testMatch": [
     "<rootDir>/src/**/__tests__/**/*.test.ts",
     "<rootDir>/src/**/*.test.ts"

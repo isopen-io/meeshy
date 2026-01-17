@@ -20,18 +20,21 @@ AUDIO_FIXTURES_DIR = FIXTURES_DIR / "audio"
 
 # Real voice clone samples per language
 VOICE_CLONE_SAMPLES = {
-    "de": AUDIO_FIXTURES_DIR / "cloned_de.wav",
-    "en": AUDIO_FIXTURES_DIR / "cloned_en.wav",
-    "es": AUDIO_FIXTURES_DIR / "cloned_es.wav",
-    "fr": AUDIO_FIXTURES_DIR / "cloned_fr.wav",
-    "it": AUDIO_FIXTURES_DIR / "cloned_it.wav",
-    "ja": AUDIO_FIXTURES_DIR / "cloned_ja.wav",
-    "pt": AUDIO_FIXTURES_DIR / "cloned_pt.wav",
-    "zh": AUDIO_FIXTURES_DIR / "cloned_zh.wav",
+    "de": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_de.wav",
+    "en": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_en.wav",
+    "es": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_es.wav",
+    "fr": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_fr.wav",
+    "it": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_it.wav",
+    "ja": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_ja.wav",
+    "pt": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_pt.wav",
+    "zh": AUDIO_FIXTURES_DIR / "voice_sample_male_cloned_zh.wav",
 }
 
-# Source voice sample for cloning
-VOICE_SAMPLE_PATH = AUDIO_FIXTURES_DIR / "voice_sample_chatterbox.wav"
+# Source voice sample for cloning (original French voice)
+# Use short version (5s) for faster tests on CPU
+VOICE_SAMPLE_PATH = AUDIO_FIXTURES_DIR / "voice_sample_male_fr_short.wav"
+# Full version (30s) for comprehensive tests
+VOICE_SAMPLE_PATH_FULL = AUDIO_FIXTURES_DIR / "voice_sample_male_fr.wav"
 
 
 def get_voice_clone_sample(language: str) -> Optional[Path]:
