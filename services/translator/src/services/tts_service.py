@@ -18,6 +18,9 @@ Ce fichier maintient la compatibilité avec les imports existants:
     from services.tts_service import TTSService, get_tts_service
 """
 
+# Import settings pour compatibilité
+from config.settings import get_settings
+
 # Réexporter tout depuis le nouveau module refactorisé
 from .tts.tts_service import (
     UnifiedTTSService,
@@ -69,6 +72,7 @@ __all__ = [
     "TTS_MODEL_INFO",
     # Fonctions
     "check_license_compliance",
+    "get_settings",
     # Backends (réexportés depuis tts/)
     "BaseTTSBackend",
     "ChatterboxBackend",

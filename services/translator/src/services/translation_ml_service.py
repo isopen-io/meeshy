@@ -51,6 +51,18 @@ from services.translation_ml import (
     TranslationResult
 )
 
+# Exports pour compatibilité des tests
+from utils.text_segmentation import TextSegmenter
+from utils.performance import PerformanceOptimizer
+
+__all__ = [
+    'TranslationMLService',
+    'get_unified_ml_service',
+    'TextSegmenter',
+    'PerformanceOptimizer',
+    'get_settings'
+]
+
 # Import des dépendances ML avec warnings
 try:
     import torch
