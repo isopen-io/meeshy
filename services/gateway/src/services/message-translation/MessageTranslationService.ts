@@ -940,6 +940,7 @@ export class MessageTranslationService extends EventEmitter {
       confidence: number;
       durationMs: number;
       source: string;
+      model?: string;
       segments?: Array<{ text: string; startMs: number; endMs: number }>;
     };
     processingTimeMs: number;
