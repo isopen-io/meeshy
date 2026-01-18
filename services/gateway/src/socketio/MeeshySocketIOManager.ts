@@ -13,7 +13,7 @@ import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { CallService } from '../services/CallService';
-import { AttachmentService } from '../services/AttachmentService';
+import { AttachmentService } from '../services/attachments';
 import { NotificationService } from '../services/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { validateMessageLength } from '../config/message-limits';
@@ -490,7 +490,7 @@ export class MeeshySocketIOManager {
           }
 
           // Vérifier que les attachments existent et appartiennent à l'utilisateur
-          const attachmentService = new (await import('../services/AttachmentService')).AttachmentService(this.prisma);
+          const attachmentService = new (await import('../services/attachments')).AttachmentService(this.prisma);
 
           for (const attachmentId of data.attachmentIds) {
             const attachment = await attachmentService.getAttachment(attachmentId);

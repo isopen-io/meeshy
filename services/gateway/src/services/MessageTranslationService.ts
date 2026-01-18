@@ -10,10 +10,14 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './ZmqTranslationClient';
+import { ZmqTranslationClient, TranslationRequest, TranslationResult } from './zmq-translation';
 import { ZMQSingleton } from './ZmqSingleton';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { TranslationCache } from './message-translation/TranslationCache';
+import { LanguageCache } from './message-translation/LanguageCache';
+import { TranslationStats } from './message-translation/TranslationStats';
+import { EncryptionHelper } from './message-translation/EncryptionHelper';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -55,139 +59,59 @@ export interface TranslationServiceStats {
 
 export class MessageTranslationService extends EventEmitter {
   private prisma: PrismaClient;
-  private zmqClient: ZMQTranslationClient | null = null;
-  private startTime: number = Date.now();
-  private isInitialized: boolean = false; // Flag pour éviter la double initialisation
-  
-  // Cache mémoire pour les résultats récents
-  private memoryCache: Map<string, TranslationResult> = new Map();
-  private readonly CACHE_SIZE = 1000;
-  
-  // OPTIMISATION: Cache des langues par conversation (TTL 5 minutes)
-  private conversationLanguagesCache: Map<string, { languages: string[], timestamp: number }> = new Map();
-  private readonly LANGUAGES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-  
-  // Statistiques
-  private stats: TranslationServiceStats = {
-    messages_saved: 0,
-    translation_requests_sent: 0,
-    translations_received: 0,
-    errors: 0,
-    pool_full_rejections: 0,
-    avg_processing_time: 0,
-    uptime_seconds: 0,
-    memory_usage_mb: 0
-  };
+  private zmqClient: ZmqTranslationClient | null = null;
+  private isInitialized: boolean = false;
+
+  // REFACTORED: Use modular components via composition
+  private readonly translationCache: TranslationCache;
+  private readonly languageCache: LanguageCache;
+  private readonly translationStats: TranslationStats;
+  private readonly encryptionHelper: EncryptionHelper;
 
   private processedMessages = new Set<string>();
   private processedTasks = new Set<string>();
 
   constructor(prisma: PrismaClient) {
-    super(); // Appel au constructeur EventEmitter
+    super();
     this.prisma = prisma;
+
+    // Initialize modular components
+    this.translationCache = new TranslationCache(1000);
+    this.languageCache = new LanguageCache(5 * 60 * 1000, 100);
+    this.translationStats = new TranslationStats();
+    this.encryptionHelper = new EncryptionHelper(prisma);
   }
 
   /**
    * Expose le client ZMQ pour permettre la création du VoiceAPIService
    */
-  getZmqClient(): ZMQTranslationClient | null {
+  getZmqClient(): ZmqTranslationClient | null {
     return this.zmqClient;
   }
 
   // ============================================================================
-  // ENCRYPTION HELPERS FOR TRANSLATION STORAGE
+  // ENCRYPTION HELPERS - DELEGATED TO EncryptionHelper MODULE
   // ============================================================================
 
   /**
-   * Get the encryption key for a conversation from ServerEncryptionKey table
-   * Returns the decrypted key for use in translation encryption
-   * OPTIMIZED: Uses Prisma relation to fetch in a single query (JOIN)
+   * @deprecated Use encryptionHelper.getConversationEncryptionKey instead
    */
   private async _getConversationEncryptionKey(conversationId: string): Promise<{ keyId: string; key: Buffer } | null> {
-    try {
-      // OPTIMIZED: Single query with include instead of 2 sequential queries
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: {
-          serverEncryptionKeyId: true,
-          encryptionMode: true,
-          serverEncryptionKey: true // JOIN via Prisma relation
-        }
-      });
-
-      if (!conversation?.serverEncryptionKeyId || !conversation.serverEncryptionKey) {
-        return null;
-      }
-
-      const keyRecord = conversation.serverEncryptionKey;
-
-      // Decrypt the key using master key
-      const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;
-      if (!masterKeyB64) {
-        logger.warn('ENCRYPTION_MASTER_KEY not set, cannot decrypt conversation key');
-        return null;
-      }
-
-      const masterKey = Buffer.from(masterKeyB64, 'base64');
-      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
-      const iv = Buffer.from(keyRecord.iv, 'base64');
-      const authTag = Buffer.from(keyRecord.authTag, 'base64');
-
-      const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
-      decipher.setAuthTag(authTag);
-      const key = Buffer.concat([decipher.update(encryptedKey), decipher.final()]);
-
-      return { keyId: conversation.serverEncryptionKeyId, key };
-    } catch (error) {
-      logger.error('Failed to get conversation encryption key', { conversationId, error });
-      return null;
-    }
+    return this.encryptionHelper.getConversationEncryptionKey(conversationId);
   }
 
   /**
-   * Encrypt translation content using conversation's encryption key
+   * @deprecated Use encryptionHelper.encryptTranslation instead
    */
   private async _encryptTranslation(
     plaintext: string,
     conversationId: string
   ): Promise<TranslationEncryptionData & { encryptedContent: string }> {
-    const keyData = await this._getConversationEncryptionKey(conversationId);
-
-    if (!keyData) {
-      // No encryption key available, store unencrypted
-      return {
-        encryptedContent: plaintext,
-        isEncrypted: false,
-        encryptionKeyId: null,
-        encryptionIv: null,
-        encryptionAuthTag: null
-      };
-    }
-
-    // Generate IV (12 bytes for AES-GCM)
-    const iv = crypto.randomBytes(12);
-
-    // Encrypt using AES-256-GCM
-    const cipher = crypto.createCipheriv('aes-256-gcm', keyData.key, iv);
-    const ciphertext = Buffer.concat([
-      cipher.update(plaintext, 'utf8'),
-      cipher.final()
-    ]);
-    const authTag = cipher.getAuthTag();
-
-    logger.debug('Translation encrypted', { conversationId, keyId: keyData.keyId });
-
-    return {
-      encryptedContent: ciphertext.toString('base64'),
-      isEncrypted: true,
-      encryptionKeyId: keyData.keyId,
-      encryptionIv: iv.toString('base64'),
-      encryptionAuthTag: authTag.toString('base64')
-    };
+    return this.encryptionHelper.encryptTranslation(plaintext, conversationId);
   }
 
   /**
-   * Decrypt translation content
+   * @deprecated Use encryptionHelper.decryptTranslation instead
    */
   private async _decryptTranslation(
     encryptedContent: string,
@@ -195,74 +119,14 @@ export class MessageTranslationService extends EventEmitter {
     encryptionIv: string,
     encryptionAuthTag: string
   ): Promise<string> {
-    try {
-      // Get the encryption key
-      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
-        where: { id: encryptionKeyId }
-      });
-
-      if (!keyRecord) {
-        throw new Error(`Encryption key not found: ${encryptionKeyId}`);
-      }
-
-      // Decrypt the key using master key
-      const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;
-      if (!masterKeyB64) {
-        throw new Error('ENCRYPTION_MASTER_KEY not set');
-      }
-
-      const masterKey = Buffer.from(masterKeyB64, 'base64');
-      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
-      const keyIv = Buffer.from(keyRecord.iv, 'base64');
-      const keyAuthTag = Buffer.from(keyRecord.authTag, 'base64');
-
-      const keyDecipher = crypto.createDecipheriv('aes-256-gcm', masterKey, keyIv);
-      keyDecipher.setAuthTag(keyAuthTag);
-      const key = Buffer.concat([keyDecipher.update(encryptedKey), keyDecipher.final()]);
-
-      // Decrypt the translation
-      const iv = Buffer.from(encryptionIv, 'base64');
-      const authTag = Buffer.from(encryptionAuthTag, 'base64');
-      const ciphertext = Buffer.from(encryptedContent, 'base64');
-
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTag);
-      const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-
-      return plaintext.toString('utf8');
-    } catch (error) {
-      logger.error('Failed to decrypt translation', { encryptionKeyId, error });
-      throw error;
-    }
+    return this.encryptionHelper.decryptTranslation(encryptedContent, encryptionKeyId, encryptionIv, encryptionAuthTag);
   }
 
   /**
-   * Check if a message requires encrypted translation storage
+   * @deprecated Use encryptionHelper.shouldEncryptTranslation instead
    */
   private async _shouldEncryptTranslation(messageId: string): Promise<{ shouldEncrypt: boolean; conversationId: string | null }> {
-    try {
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: {
-          conversationId: true,
-          encryptionMode: true,
-          isEncrypted: true
-        }
-      });
-
-      if (!message) {
-        return { shouldEncrypt: false, conversationId: null };
-      }
-
-      // E2EE messages should NOT have translations (they should be skipped entirely)
-      // Server and Hybrid mode messages should have encrypted translations
-      const shouldEncrypt = message.encryptionMode === 'server' || message.encryptionMode === 'hybrid';
-
-      return { shouldEncrypt, conversationId: message.conversationId };
-    } catch (error) {
-      logger.error('Failed to check encryption requirement', { messageId, error });
-      return { shouldEncrypt: false, conversationId: null };
-    }
+    return this.encryptionHelper.shouldEncryptTranslation(messageId);
   }
 
   // ============================================================================
@@ -331,14 +195,7 @@ export class MessageTranslationService extends EventEmitter {
       this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
 
 
-      // Test de réception après initialisation
-      setTimeout(async () => {
-        try {
-          await this.zmqClient.testReception();
-        } catch (error) {
-          console.error('[GATEWAY] ❌ Erreur test réception:', error);
-        }
-      }, 3000);
+      // Client initialized successfully
       
       this.isInitialized = true;
     } catch (error) {
@@ -369,7 +226,7 @@ export class MessageTranslationService extends EventEmitter {
         // Still save the message if it's new, but skip translation
         if (!messageData.id) {
           const savedMessage = await this._saveMessageToDatabase(messageData);
-          this.stats.messages_saved++;
+          this.translationStats.incrementMessagesSaved();
           return {
             messageId: savedMessage.id,
             status: 'e2ee_skipped'
@@ -388,21 +245,21 @@ export class MessageTranslationService extends EventEmitter {
       if (messageData.id) {
         messageId = messageData.id;
         isRetranslation = true;
-        
+
         // Vérifier que le message existe en base
         const existingMessage = await this.prisma.message.findFirst({
           where: { id: messageData.id }
         });
-        
+
         if (!existingMessage) {
           throw new Error(`Message ${messageData.id} non trouvé en base de données`);
         }
-        
+
       } else {
         // Nouveau message - sauvegarder en base
         const savedMessage = await this._saveMessageToDatabase(messageData);
         messageId = savedMessage.id;
-        this.stats.messages_saved++;
+        this.translationStats.incrementMessagesSaved();
       }
       
       // 2. LIBÉRER LE CLIENT IMMÉDIATEMENT
@@ -435,7 +292,7 @@ export class MessageTranslationService extends EventEmitter {
           }
         } catch (error) {
           console.error(`❌ Erreur traitement asynchrone des traductions: ${error}`);
-          this.stats.errors++;
+          this.translationStats.incrementErrors();
         }
       });
       
@@ -443,7 +300,7 @@ export class MessageTranslationService extends EventEmitter {
       
     } catch (error) {
       console.error(`❌ Erreur traitement message: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
       throw error;
     }
   }
@@ -557,13 +414,13 @@ export class MessageTranslationService extends EventEmitter {
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this.stats.translation_requests_sent++;
+      this.translationStats.incrementRequestsSent();
       
       const processingTime = Date.now() - startTime;
       
     } catch (error) {
       console.error(`❌ Erreur traitement asynchrone: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
     }
   }
 
@@ -645,12 +502,12 @@ export class MessageTranslationService extends EventEmitter {
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this.stats.translation_requests_sent++;
+      this.translationStats.incrementRequestsSent();
       
       
     } catch (error) {
       console.error(`❌ Erreur retraduction: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
     }
   }
 
@@ -666,11 +523,10 @@ export class MessageTranslationService extends EventEmitter {
   private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
     try {
       // OPTIMISATION: Vérifier le cache d'abord
-      const now = Date.now();
-      const cached = this.conversationLanguagesCache.get(conversationId);
-      
-      if (cached && (now - cached.timestamp) < this.LANGUAGES_CACHE_TTL) {
-        return cached.languages;
+      const cached = this.languageCache.get(conversationId);
+
+      if (cached) {
+        return cached;
       }
       
       const startTime = Date.now();
@@ -744,18 +600,9 @@ export class MessageTranslationService extends EventEmitter {
       
       // Retourner toutes les langues (le filtrage se fera dans les méthodes de traitement)
       const allLanguages = Array.from(languages);
-      
+
       // OPTIMISATION: Mettre en cache le résultat
-      this.conversationLanguagesCache.set(conversationId, {
-        languages: allLanguages,
-        timestamp: now
-      });
-      
-      // Nettoyer le cache si trop grand (garder max 100 conversations)
-      if (this.conversationLanguagesCache.size > 100) {
-        const firstKey = this.conversationLanguagesCache.keys().next().value;
-        this.conversationLanguagesCache.delete(firstKey);
-      }
+      this.languageCache.set(conversationId, allLanguages);
       
       const queryTime = Date.now() - startTime;
       
@@ -809,7 +656,7 @@ export class MessageTranslationService extends EventEmitter {
       }
       
       
-      this.stats.translations_received++;
+      this.translationStats.incrementTranslationsReceived();
       
       // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
       let translationId: string | null = null;
@@ -841,7 +688,7 @@ export class MessageTranslationService extends EventEmitter {
     } catch (error) {
       console.error(`❌ [TranslationService] Erreur traitement: ${error}`);
       console.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
     }
   }
 
@@ -849,10 +696,10 @@ export class MessageTranslationService extends EventEmitter {
     console.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
 
     if (data.error === 'translation pool full') {
-      this.stats.pool_full_rejections++;
+      this.translationStats.incrementPoolFullRejections();
     }
 
-    this.stats.errors++;
+    this.translationStats.incrementErrors();
   }
 
   // ============================================================================
@@ -1098,7 +945,7 @@ export class MessageTranslationService extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur sauvegarde audio: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
     }
   }
 
@@ -1125,7 +972,7 @@ export class MessageTranslationService extends EventEmitter {
       errorCode: data.errorCode
     });
 
-    this.stats.errors++;
+    this.translationStats.incrementErrors();
   }
 
   // ============================================================================
@@ -1215,7 +1062,7 @@ export class MessageTranslationService extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur sauvegarde transcription: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
     }
   }
 
@@ -1242,7 +1089,7 @@ export class MessageTranslationService extends EventEmitter {
       errorCode: data.errorCode
     });
 
-    this.stats.errors++;
+    this.translationStats.incrementErrors();
   }
 
   // ============================================================================
@@ -1456,13 +1303,13 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);
       logger.info(`🔍 [VOICE-PROFILE-TRACE] Task ID: ${taskId}`);
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== FIN ENVOI REQUÊTE ========`);
-      this.stats.translation_requests_sent++;
+      this.translationStats.incrementRequestsSent();
 
       return taskId;
 
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur traitement audio: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
       return null;
     }
   }
@@ -1561,7 +1408,7 @@ export class MessageTranslationService extends EventEmitter {
 
       logger.info(`🔍 [GATEWAY-TRACE] ✅ Requête ZMQ envoyée avec succès`);
       logger.info(`🔍 [GATEWAY-TRACE] Task ID: ${taskId}`);
-      this.stats.translation_requests_sent++;
+      this.translationStats.incrementRequestsSent();
 
       logger.info(`🔍 [GATEWAY-TRACE] ======== FIN TRANSCRIPTION (requête envoyée) ========`);
 
@@ -1580,7 +1427,7 @@ export class MessageTranslationService extends EventEmitter {
     } catch (error) {
       logger.error(`🔍 [GATEWAY-TRACE] ❌ ERREUR TRANSCRIPTION: ${error}`);
       logger.error(`🔍 [GATEWAY-TRACE] Stack: ${error instanceof Error ? error.stack : 'N/A'}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
       return null;
     }
   }
@@ -1780,14 +1627,11 @@ export class MessageTranslationService extends EventEmitter {
   // END PUBLIC AUDIO PROCESSING API
   // ============================================================================
 
+  /**
+   * @deprecated Use translationCache.set instead
+   */
   private _addToCache(key: string, result: TranslationResult) {
-    // Gestion du cache LRU simple
-    if (this.memoryCache.size >= this.CACHE_SIZE) {
-      const firstKey = this.memoryCache.keys().next().value;
-      this.memoryCache.delete(firstKey);
-    }
-    
-    this.memoryCache.set(key, result);
+    this.translationCache.set(key, result);
   }
 
 
@@ -2031,10 +1875,8 @@ export class MessageTranslationService extends EventEmitter {
   async getTranslation(messageId: string, targetLanguage: string, sourceLanguage?: string): Promise<TranslationResult | null> {
     try {
       // Vérifier d'abord le cache mémoire
-      const cacheKey = sourceLanguage
-        ? `${messageId}_${sourceLanguage}_${targetLanguage}`
-        : `${messageId}_${targetLanguage}`;
-      const cachedResult = this.memoryCache.get(cacheKey);
+      const cacheKey = TranslationCache.generateKey(messageId, targetLanguage, sourceLanguage);
+      const cachedResult = this.translationCache.get(cacheKey);
 
       if (cachedResult) {
         return cachedResult;
@@ -2134,7 +1976,7 @@ export class MessageTranslationService extends EventEmitter {
       
       // Envoyer la requête et attendre la réponse
       const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this.stats.translation_requests_sent++;
+      this.translationStats.incrementRequestsSent();
       
       
       // Attendre la réponse via un événement
@@ -2171,7 +2013,7 @@ export class MessageTranslationService extends EventEmitter {
       
     } catch (error) {
       console.error(`❌ [REST] Erreur traduction directe: ${error}`);
-      this.stats.errors++;
+      this.translationStats.incrementErrors();
       
       // Fallback en cas d'erreur
       return {
@@ -2187,13 +2029,7 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   getStats(): TranslationServiceStats {
-    const uptime = (Date.now() - this.startTime) / 1000;
-    
-    return {
-      ...this.stats,
-      uptime_seconds: uptime,
-      memory_usage_mb: process.memoryUsage().heapUsed / 1024 / 1024
-    };
+    return this.translationStats.getStats();
   }
 
   async healthCheck(): Promise<boolean> {

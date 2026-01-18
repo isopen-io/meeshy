@@ -12,7 +12,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
-import { ZMQTranslationClient } from './ZmqTranslationClient';
+import { ZmqTranslationClient } from './zmq-translation';
 import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
 
 // Alias pour compatibilité
@@ -85,7 +85,7 @@ export class AttachmentTranslateService {
   private audioTranslateService: AudioTranslateService;
   private uploadBasePath: string;
 
-  constructor(prisma: PrismaClient, zmqClient: ZMQTranslationClient) {
+  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
     this.prisma = prisma;
     this.audioTranslateService = new AudioTranslateService(prisma, zmqClient);
     this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');

@@ -1,0 +1,68 @@
+# Fichiers créés lors de la refactorisation NotificationService
+
+## Modules TypeScript (Code)
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/NotificationService.ts
+- Lignes: 649
+- Rôle: Orchestrateur principal avec composition forte
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/FirebaseNotificationService.ts
+- Lignes: 223
+- Rôle: Service de push notifications Firebase Cloud Messaging
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/SocketNotificationService.ts
+- Lignes: 83
+- Rôle: Service de notifications temps réel via Socket.IO
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/NotificationFormatter.ts
+- Lignes: 188
+- Rôle: Formatage et transformation de données
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/NotificationServiceExtensions.ts
+- Lignes: 378
+- Rôle: Méthodes de notification spécialisées
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/types.ts
+- Lignes: 86
+- Rôle: Définitions de types TypeScript
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/index.ts
+- Lignes: 18
+- Rôle: Point d'entrée avec exports publics
+
+## Tests
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/__tests__/NotificationFormatter.test.ts
+- Lignes: 374
+- Rôle: Suite de tests unitaires pour NotificationFormatter
+
+## Documentation
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/README.md
+- Taille: ~12 KB
+- Rôle: Documentation complète du système de notifications
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/MIGRATION.md
+- Taille: ~8.6 KB
+- Rôle: Guide de migration étape par étape
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/ARCHITECTURE.md
+- Taille: ~15 KB
+- Rôle: Diagrammes d'architecture et patterns de design
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/SUMMARY.md
+- Taille: ~9.5 KB
+- Rôle: Résumé de la refactorisation
+
+/Users/smpceo/Documents/v2_meeshy/services/gateway/src/services/notifications/FILES.txt
+- Taille: ~2 KB
+- Rôle: Liste de tous les fichiers créés (ce fichier)
+
+## Statistiques
+
+Total de fichiers créés: 13
+- Code TypeScript: 7 fichiers (1,625 lignes)
+- Tests: 1 fichier (374 lignes)
+- Documentation: 5 fichiers (~45 KB)
+
+Tous les modules respectent la contrainte < 800 lignes ✅

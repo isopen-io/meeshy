@@ -310,6 +310,30 @@ class VoiceCharacteristics:
             }
         }
 
+    def generate_fingerprint(
+        self,
+        audio_duration_ms: int = 0,
+        embedding = None
+    ):
+        """
+        Génère une empreinte vocale depuis ces caractéristiques.
+
+        Helper pour compatibilité - délègue à VoiceFingerprint.generate_from_characteristics
+
+        Args:
+            audio_duration_ms: Durée de l'audio analysé (ms)
+            embedding: Vecteur d'embedding optionnel (numpy array)
+
+        Returns:
+            VoiceFingerprint généré
+        """
+        from services.voice_clone.voice_fingerprint import VoiceFingerprint
+        return VoiceFingerprint.generate_from_characteristics(
+            self,
+            audio_duration_ms=audio_duration_ms,
+            embedding=embedding
+        )
+
 
 # Wrapper __init__ pour supporter les alias de paramètres
 _original_init = VoiceCharacteristics.__init__

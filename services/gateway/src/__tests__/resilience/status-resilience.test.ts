@@ -16,7 +16,7 @@ import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MeeshySocketIOManager } from '../../socketio/MeeshySocketIOManager';
 import { MaintenanceService } from '../../services/MaintenanceService';
-import { AttachmentService } from '../../services/AttachmentService';
+import { AttachmentService } from '../../services/attachments';
 import jwt from 'jsonwebtoken';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

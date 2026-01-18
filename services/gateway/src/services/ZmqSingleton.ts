@@ -2,16 +2,16 @@
  * Service ZMQ singleton pour éviter les conflits de ports multiples
  */
 
-import { ZMQTranslationClient } from './ZmqTranslationClient';
+import { ZmqTranslationClient } from './zmq-translation';
 
 class ZMQSingleton {
-  private static instance: ZMQTranslationClient | null = null;
+  private static instance: ZmqTranslationClient | null = null;
   private static isInitializing = false;
   private static initializationPromise: Promise<void> | null = null;
 
   private constructor() {}
 
-  static async getInstance(): Promise<ZMQTranslationClient> {
+  static async getInstance(): Promise<ZmqTranslationClient> {
     if (this.instance) {
       return this.instance;
     }
@@ -26,7 +26,7 @@ class ZMQSingleton {
 
     this.isInitializing = true;
     this.initializationPromise = this.initializeInstance();
-    
+
     try {
       await this.initializationPromise;
       return this.instance!;
@@ -38,10 +38,10 @@ class ZMQSingleton {
 
   private static async initializeInstance(): Promise<void> {
     try {
-      
-      this.instance = new ZMQTranslationClient();
+
+      this.instance = new ZmqTranslationClient();
       await this.instance.initialize();
-      
+
     } catch (error) {
       console.error('[GATEWAY] Erreur lors de l\'initialisation:', error);
       this.instance = null;
@@ -61,7 +61,7 @@ class ZMQSingleton {
     }
   }
 
-  static getInstanceSync(): ZMQTranslationClient | null {
+  static getInstanceSync(): ZmqTranslationClient | null {
     return this.instance;
   }
 }

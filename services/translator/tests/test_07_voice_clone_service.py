@@ -232,8 +232,9 @@ async def test_voice_clone_quality_score(voice_cache_dir):
     if not SERVICE_AVAILABLE:
         pytest.skip("VoiceCloneService not available")
 
-    VoiceCloneService._instance = None
-    service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
+    # Import directly from refactored module
+    from services.voice_clone.voice_clone_audio import VoiceCloneAudioProcessor
+    audio_processor = VoiceCloneAudioProcessor(database_service=None, max_audio_history=20)
 
     # Test different duration thresholds
     test_cases = [
@@ -245,7 +246,7 @@ async def test_voice_clone_quality_score(voice_cache_dir):
     ]
 
     for duration_ms, audio_count, expected_score in test_cases:
-        score = service._calculate_quality_score(duration_ms, audio_count)
+        score = audio_processor.calculate_quality_score(duration_ms, audio_count)
         assert abs(score - expected_score) < 0.01, f"Expected {expected_score}, got {score}"
         logger.info(f"Duration {duration_ms}ms, {audio_count} audios -> score {score:.2f}")
 
@@ -254,15 +255,21 @@ async def test_voice_clone_quality_score(voice_cache_dir):
 
 @pytest.mark.asyncio
 async def test_voice_model_cache_save_load(voice_cache_dir, mock_database_service):
-    """Test model cache save and load via MongoDB mock"""
+    """Test model cache save and load via Redis cache"""
     logger.info("Test 07.5: Cache save and load")
 
     if not SERVICE_AVAILABLE:
         pytest.skip("VoiceCloneService not available")
 
-    VoiceCloneService._instance = None
-    service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
-    service.set_database_service(mock_database_service)
+    # Import directly from refactored modules
+    from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager
+    from services.redis_service import get_audio_cache_service
+
+    audio_cache = get_audio_cache_service()
+    cache_manager = VoiceCloneCacheManager(
+        audio_cache=audio_cache,
+        voice_cache_dir=voice_cache_dir
+    )
 
     # Create a model
     embedding = np.random.randn(256).astype(np.float32)
@@ -272,31 +279,25 @@ async def test_voice_model_cache_save_load(voice_cache_dir, mock_database_servic
         audio_count=2,
         total_duration_ms=20000,
         quality_score=0.6,
+        profile_id="test_profile_456",
         version=1,
         created_at=datetime.now(),
         updated_at=datetime.now(),
         embedding=embedding
     )
 
-    # Save to mock database
-    await service._save_model_to_cache(model)
+    # Save to Redis cache
+    await cache_manager.save_model_to_cache(model)
 
-    # Check data was saved to mock database (camelCase keys)
-    assert "test_user_456" in mock_database_service._voice_profiles
-    saved_profile = mock_database_service._voice_profiles["test_user_456"]
-    assert saved_profile["audioCount"] == 2
-    assert saved_profile["qualityScore"] == 0.6
-
-    # Check embedding was saved
-    assert "test_user_456" in mock_database_service._voice_embeddings
-
-    # Load
-    loaded_model = await service._load_cached_model("test_user_456")
+    # Load from cache
+    loaded_model = await cache_manager.load_cached_model("test_user_456")
 
     assert loaded_model is not None
     assert loaded_model.user_id == "test_user_456"
     assert loaded_model.audio_count == 2
     assert loaded_model.quality_score == 0.6
+    assert loaded_model.embedding is not None
+    assert loaded_model.embedding.shape == (256,)
 
     logger.info("Cache save and load works correctly")
 

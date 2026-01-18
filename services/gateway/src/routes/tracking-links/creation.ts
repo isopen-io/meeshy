@@ -1,75 +1,35 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { TrackingLinkService } from '../services/TrackingLinkService';
-import { logError } from '../utils/logger';
+import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser
-} from '../middleware/auth';
-import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
+} from '../../middleware/auth';
 import {
   trackingLinkSchema,
-  trackingLinkClickSchema,
   errorResponseSchema,
   validationErrorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
+import {
+  createTrackingLinkSchema,
+  enrichTrackingLink
+} from './types';
 
 /**
- * Helper pour enrichir un TrackingLink avec l'URL complète
- * Construit l'URL basée sur FRONTEND_URL ou le domaine de la requête
+ * Routes de création et gestion des liens de tracking
  */
-function enrichTrackingLink(link: TrackingLink, request?: FastifyRequest): TrackingLink & { fullUrl?: string } {
-  const trackingService = new TrackingLinkService(null as any); // Just for the helper method
-  const fullUrl = trackingService.buildTrackingUrl(link.token);
-  
-  return {
-    ...link,
-    fullUrl // Ajouter l'URL complète pour le client
-  };
-}
-
-// Schémas de validation Zod
-const createTrackingLinkSchema = z.object({
-  originalUrl: z.string().url('URL invalide'),
-  conversationId: z.string().optional(),
-  messageId: z.string().optional(),
-  expiresAt: z.string().datetime().optional()
-});
-
-const recordClickSchema = z.object({
-  ipAddress: z.string().optional(),
-  country: z.string().optional(),
-  city: z.string().optional(),
-  region: z.string().optional(),
-  userAgent: z.string().optional(),
-  browser: z.string().optional(),
-  os: z.string().optional(),
-  device: z.string().optional(),
-  language: z.string().optional(),
-  referrer: z.string().optional(),
-  deviceFingerprint: z.string().optional()
-});
-
-const getStatsSchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional()
-});
-
-/**
- * Routes pour les liens de tracking
- */
-export async function trackingLinksRoutes(fastify: FastifyInstance) {
+export async function registerCreationRoutes(fastify: FastifyInstance) {
   const trackingLinkService = new TrackingLinkService(fastify.prisma);
 
-  // Middleware d'authentification
-  const authOptional = createUnifiedAuthMiddleware(fastify.prisma, { 
-    requireAuth: false, 
-    allowAnonymous: true 
+  const authOptional = createUnifiedAuthMiddleware(fastify.prisma, {
+    requireAuth: false,
+    allowAnonymous: true
   });
-  const authRequired = createUnifiedAuthMiddleware(fastify.prisma, { 
-    requireAuth: true, 
-    allowAnonymous: false 
+  const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
+    requireAuth: true,
+    allowAnonymous: false
   });
 
   /**
@@ -159,13 +119,12 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const body = createTrackingLinkSchema.parse(request.body);
-      
+
       let createdBy: string | undefined;
       if (isRegisteredUser(request.authContext)) {
         createdBy = request.authContext.registeredUser!.id;
       }
 
-      // Vérifier si un lien existe déjà pour cette URL dans cette conversation
       const existingLink = await trackingLinkService.findExistingTrackingLink(
         body.originalUrl,
         body.conversationId
@@ -181,7 +140,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Créer un nouveau lien de tracking
       const trackingLink = await trackingLinkService.createTrackingLink({
         originalUrl: body.originalUrl,
         createdBy,
@@ -206,299 +164,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
       logError(fastify.log, 'Create tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
-    }
-  });
-
-  /**
-   * 2. Rediriger un lien de tracking et enregistrer le clic
-   * GET /l/:token
-   */
-  fastify.get('/l/:token', {
-    onRequest: [authOptional],
-    schema: {
-      description: 'Redirect to the original URL and record click analytics. Automatically captures visitor information including IP address, user agent, browser, OS, device type, referrer, and language. Associates clicks with authenticated or anonymous users if available.',
-      tags: ['tracking-links'],
-      summary: 'Redirect tracking link',
-      params: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
-          }
-        }
-      },
-      response: {
-        302: {
-          description: 'Redirect to original URL'
-        },
-        400: {
-          description: 'Invalid token format',
-          ...errorResponseSchema
-        },
-        404: {
-          description: 'Tracking link not found',
-          ...errorResponseSchema
-        },
-        410: {
-          description: 'Link inactive or expired',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.params as { token: string };
-
-      // Valider le token (6 caractères alphanumériques)
-      if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Token invalide'
-        });
-      }
-
-      // Récupérer le lien de tracking
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
-
-      if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
-      }
-
-      // Vérifier si le lien est actif
-      if (!trackingLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          error: 'Ce lien n\'est plus actif'
-        });
-      }
-
-      // Vérifier si le lien a expiré
-      if (trackingLink.expiresAt && new Date() > trackingLink.expiresAt) {
-        return reply.status(410).send({
-          success: false,
-          error: 'Ce lien a expiré'
-        });
-      }
-
-      // Extraire les informations du visiteur
-      const ipAddress = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || 
-                        (request.headers['x-real-ip'] as string) ||
-                        request.ip;
-      const userAgent = request.headers['user-agent'] as string;
-      const referrer = request.headers['referer'] as string;
-      const language = (request.headers['accept-language'] as string)?.split(',')[0].split('-')[0];
-
-      // Détecter le navigateur et l'OS à partir du user agent
-      const browser = detectBrowser(userAgent);
-      const os = detectOS(userAgent);
-      const device = detectDevice(userAgent);
-
-      // Récupérer l'ID de l'utilisateur si connecté
-      let userId: string | undefined;
-      let anonymousId: string | undefined;
-
-      if (isRegisteredUser(request.authContext)) {
-        userId = request.authContext.registeredUser!.id;
-      } else if (request.authContext.type === 'session' && request.authContext.anonymousUser) {
-        anonymousId = request.authContext.anonymousUser.id;
-      }
-
-      // Enregistrer le clic
-      await trackingLinkService.recordClick({
-        token,
-        userId,
-        anonymousId,
-        ipAddress,
-        userAgent,
-        browser,
-        os,
-        device,
-        language,
-        referrer
-      });
-
-      // Rediriger vers l'URL originale
-      return reply.redirect(trackingLink.originalUrl);
-
-    } catch (error) {
-      logError(fastify.log, 'Redirect tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
-    }
-  });
-
-  /**
-   * 3. Enregistrer un clic manuellement (pour les SPAs)
-   * POST /api/tracking-links/:token/click
-   */
-  fastify.post('/tracking-links/:token/click', {
-    onRequest: [authOptional],
-    schema: {
-      description: 'Manually record a click on a tracking link. Designed for Single Page Applications (SPAs) that handle navigation client-side. Accepts optional visitor metadata or auto-detects from request headers. Returns the original URL and tracking link details.',
-      tags: ['tracking-links'],
-      summary: 'Record tracking click',
-      params: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
-          }
-        }
-      },
-      body: {
-        type: 'object',
-        properties: {
-          ipAddress: { type: 'string', description: 'Visitor IP address (auto-detected if not provided)' },
-          country: { type: 'string', description: 'Visitor country code' },
-          city: { type: 'string', description: 'Visitor city' },
-          region: { type: 'string', description: 'Visitor region/state' },
-          userAgent: { type: 'string', description: 'Browser user agent (auto-detected if not provided)' },
-          browser: { type: 'string', description: 'Browser name (auto-detected if not provided)' },
-          os: { type: 'string', description: 'Operating system (auto-detected if not provided)' },
-          device: { type: 'string', enum: ['mobile', 'tablet', 'desktop'], description: 'Device type (auto-detected if not provided)' },
-          language: { type: 'string', description: 'Preferred language code' },
-          referrer: { type: 'string', description: 'Referrer URL' },
-          deviceFingerprint: { type: 'string', description: 'Unique device fingerprint for tracking unique visitors' }
-        }
-      },
-      response: {
-        200: {
-          description: 'Click recorded successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                originalUrl: { type: 'string', description: 'Original destination URL' },
-                trackingLink: trackingLinkSchema
-              }
-            }
-          }
-        },
-        400: {
-          description: 'Invalid token format or request data',
-          ...validationErrorResponseSchema
-        },
-        404: {
-          description: 'Tracking link not found',
-          ...errorResponseSchema
-        },
-        410: {
-          description: 'Link inactive or expired',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.params as { token: string };
-      const body = recordClickSchema.parse(request.body);
-
-      // Valider le token
-      if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Token invalide'
-        });
-      }
-
-      // Extraire les informations du visiteur
-      const ipAddress = body.ipAddress || 
-                        (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || 
-                        (request.headers['x-real-ip'] as string) ||
-                        request.ip;
-      const userAgent = body.userAgent || request.headers['user-agent'] as string;
-
-      let userId: string | undefined;
-      let anonymousId: string | undefined;
-
-      if (isRegisteredUser(request.authContext)) {
-        userId = request.authContext.registeredUser!.id;
-      } else if (request.authContext.type === 'session' && request.authContext.anonymousUser) {
-        anonymousId = request.authContext.anonymousUser.id;
-      }
-
-      // Enregistrer le clic
-      const result = await trackingLinkService.recordClick({
-        token,
-        userId,
-        anonymousId,
-        ipAddress,
-        userAgent,
-        browser: body.browser || detectBrowser(userAgent),
-        os: body.os || detectOS(userAgent),
-        device: body.device || detectDevice(userAgent),
-        country: body.country,
-        city: body.city,
-        region: body.region,
-        language: body.language,
-        referrer: body.referrer,
-        deviceFingerprint: body.deviceFingerprint
-      });
-
-      return reply.send({
-        success: true,
-        data: {
-          originalUrl: result.trackingLink.originalUrl,
-          trackingLink: result.trackingLink
-        }
-      });
-
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Données invalides',
-          details: error.errors
-        });
-      }
-      
-      if (error instanceof Error) {
-        if (error.message === 'Tracking link not found') {
-          return reply.status(404).send({
-            success: false,
-            error: 'Lien de tracking non trouvé'
-          });
-        }
-        if (error.message === 'Tracking link is inactive') {
-          return reply.status(410).send({
-            success: false,
-            error: 'Ce lien n\'est plus actif'
-          });
-        }
-        if (error.message === 'Tracking link has expired') {
-          return reply.status(410).send({
-            success: false,
-            error: 'Ce lien a expiré'
-          });
-        }
-      }
-
-      logError(fastify.log, 'Record click error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur interne du serveur'
@@ -568,9 +233,8 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Vérifier les permissions (seul le créateur peut voir les détails)
       if (trackingLink.createdBy) {
-        if (!isRegisteredUser(request.authContext) || 
+        if (!isRegisteredUser(request.authContext) ||
             request.authContext.registeredUser!.id !== trackingLink.createdBy) {
           return reply.status(403).send({
             success: false,
@@ -588,182 +252,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
-    }
-  });
-
-  /**
-   * 5. Récupérer les statistiques d'un lien de tracking
-   * GET /api/tracking-links/:token/stats
-   */
-  fastify.get('/tracking-links/:token/stats', {
-    onRequest: [authRequired],
-    schema: {
-      description: 'Get detailed analytics and statistics for a tracking link. Only authenticated users who created the link can access stats. Supports optional date range filtering. Returns aggregated click data, geographic distribution, device/browser breakdown, and temporal patterns.',
-      tags: ['tracking-links'],
-      summary: 'Get tracking link statistics',
-      params: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
-          }
-        }
-      },
-      querystring: {
-        type: 'object',
-        properties: {
-          startDate: {
-            type: 'string',
-            format: 'date-time',
-            description: 'Filter clicks from this date (ISO 8601 format)'
-          },
-          endDate: {
-            type: 'string',
-            format: 'date-time',
-            description: 'Filter clicks until this date (ISO 8601 format)'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'Statistics retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                totalClicks: { type: 'number', description: 'Total number of clicks' },
-                uniqueClicks: { type: 'number', description: 'Number of unique visitors' },
-                clicksByCountry: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      country: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
-                },
-                clicksByDevice: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      device: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
-                },
-                clicksByBrowser: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      browser: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
-                },
-                clicksByOS: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      os: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
-                },
-                clicksByDate: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      date: { type: 'string', format: 'date' },
-                      count: { type: 'number' }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        400: {
-          description: 'Invalid query parameters',
-          ...validationErrorResponseSchema
-        },
-        403: {
-          description: 'Access denied - only creator can view statistics',
-          ...errorResponseSchema
-        },
-        404: {
-          description: 'Tracking link not found',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.params as { token: string };
-      const query = getStatsSchema.parse(request.query);
-
-      if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
-      }
-
-      const userId = request.authContext.registeredUser!.id;
-
-      // Vérifier que l'utilisateur est le créateur du lien
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
-      
-      if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
-      }
-
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé'
-        });
-      }
-
-      const stats = await trackingLinkService.getTrackingLinkStats(token, {
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined
-      });
-
-      return reply.send({
-        success: true,
-        data: stats
-      });
-
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Paramètres invalides',
-          details: error.errors
-        });
-      }
-      logError(fastify.log, 'Get tracking link stats error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur interne du serveur'
@@ -844,24 +332,22 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Pagination parameters
-      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50); // Max 50
+      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50);
       const offset = parseInt((request.query as any).offset || '0', 10);
 
       const userId = request.authContext.registeredUser!.id;
 
-      // Get total count for pagination
-      const totalCount = await fastify.prisma.trackingLink.count({
-        where: { createdBy: userId }
-      });
-
-      // Get tracking links with pagination
-      const links = await fastify.prisma.trackingLink.findMany({
-        where: { createdBy: userId },
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit
-      });
+      const [totalCount, links] = await Promise.all([
+        fastify.prisma.trackingLink.count({
+          where: { createdBy: userId }
+        }),
+        fastify.prisma.trackingLink.findMany({
+          where: { createdBy: userId },
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit
+        })
+      ]);
 
       return reply.send({
         success: true,
@@ -945,7 +431,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
 
-      // Vérifier que l'utilisateur est membre de la conversation
       const member = await fastify.prisma.conversationMember.findFirst({
         where: {
           conversationId,
@@ -1042,9 +527,8 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
 
-      // Vérifier que l'utilisateur est le créateur du lien
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
-      
+
       if (!trackingLink) {
         return reply.status(404).send({
           success: false,
@@ -1140,7 +624,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
 
-      // Vérifier que l'utilisateur est le créateur du lien
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
@@ -1281,7 +764,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
 
-      // Vérifier que l'utilisateur est le créateur du lien
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
@@ -1298,7 +780,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Valider le nouveau token si fourni (6 caractères alphanumériques)
       if (body.newToken && !/^[a-zA-Z0-9]{6}$/.test(body.newToken)) {
         return reply.status(400).send({
           success: false,
@@ -1306,7 +787,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Valider l'URL si fournie
       if (body.originalUrl) {
         try {
           new URL(body.originalUrl);
@@ -1318,7 +798,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Mettre à jour le lien
       const updatedLink = await trackingLinkService.updateTrackingLink({
         token,
         originalUrl: body.originalUrl,
@@ -1420,7 +899,6 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Valider le format du token (6 caractères alphanumériques)
       if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
         return reply.status(400).send({
           success: false,
@@ -1447,43 +925,3 @@ export async function trackingLinksRoutes(fastify: FastifyInstance) {
     }
   });
 }
-
-// Fonctions utilitaires pour détecter le navigateur, l'OS et le type d'appareil
-
-function detectBrowser(userAgent: string): string {
-  if (!userAgent) return 'Unknown';
-  
-  if (userAgent.includes('Firefox')) return 'Firefox';
-  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) return 'Chrome';
-  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
-  if (userAgent.includes('Edg')) return 'Edge';
-  if (userAgent.includes('Opera') || userAgent.includes('OPR')) return 'Opera';
-  
-  return 'Other';
-}
-
-function detectOS(userAgent: string): string {
-  if (!userAgent) return 'Unknown';
-  
-  if (userAgent.includes('Windows')) return 'Windows';
-  if (userAgent.includes('Mac OS')) return 'macOS';
-  if (userAgent.includes('Linux')) return 'Linux';
-  if (userAgent.includes('Android')) return 'Android';
-  if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'iOS';
-  
-  return 'Other';
-}
-
-function detectDevice(userAgent: string): string {
-  if (!userAgent) return 'Unknown';
-  
-  if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
-    return 'mobile';
-  }
-  if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
-    return 'tablet';
-  }
-  
-  return 'desktop';
-}
-

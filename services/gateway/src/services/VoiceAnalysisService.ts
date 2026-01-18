@@ -13,7 +13,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService } from './AudioTranslateService';
-import { ZMQTranslationClient } from './ZmqTranslationClient';
+import { ZmqTranslationClient } from './zmq-translation';
 import type {
   VoiceQualityAnalysis,
   VoiceAnalysisType,
@@ -72,7 +72,7 @@ export class VoiceAnalysisService {
   private prisma: PrismaClient;
   private audioTranslateService: AudioTranslateService;
 
-  constructor(prisma: PrismaClient, zmqClient: ZMQTranslationClient) {
+  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
     this.prisma = prisma;
     this.audioTranslateService = new AudioTranslateService(prisma, zmqClient);
   }

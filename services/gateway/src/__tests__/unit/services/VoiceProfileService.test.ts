@@ -33,7 +33,7 @@ jest.mock('crypto', () => ({
   randomUUID: () => 'test-uuid-1234'
 }));
 
-// Mock ZMQTranslationClient
+// Mock ZmqTranslationClient
 class MockZMQClient extends EventEmitter {
   sendVoiceProfileRequest = jest.fn() as jest.Mock<any>;
 }

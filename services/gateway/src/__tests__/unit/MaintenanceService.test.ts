@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MaintenanceService } from '../../services/MaintenanceService';
-import { AttachmentService } from '../../services/AttachmentService';
+import { AttachmentService } from '../../services/attachments';
 
 // Mock du logger
 jest.mock('../../utils/logger', () => ({

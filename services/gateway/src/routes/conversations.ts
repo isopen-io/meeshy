@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { MessageTranslationService } from '../services/MessageTranslationService';
 import { TrackingLinkService } from '../services/TrackingLinkService';
-import { AttachmentService } from '../services/AttachmentService';
+import { AttachmentService } from '../services/attachments';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
