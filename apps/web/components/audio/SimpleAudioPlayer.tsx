@@ -239,6 +239,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
       <AudioTranscriptionPanel
         transcription={transcription}
         isExpanded={isTranscriptionExpanded}
+        onToggleExpanded={() => setIsTranscriptionExpanded(!isTranscriptionExpanded)}
         transcriptionError={transcriptionError}
         translationError={translationError}
         selectedLanguage={selectedLanguage}
