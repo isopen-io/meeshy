@@ -1,169 +1,215 @@
 /**
- * Tests E2E pour les routes /me/preferences
- * Teste les opérations CRUD complètes pour chaque catégorie
+ * Integration tests for /me/preferences routes
+ * Tests CRUD operations for all preference categories with mocked dependencies
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import Fastify, { FastifyInstance } from 'fastify';
 import {
   PRIVACY_PREFERENCE_DEFAULTS,
   AUDIO_PREFERENCE_DEFAULTS,
   NOTIFICATION_PREFERENCE_DEFAULTS
 } from '@meeshy/shared/types/preferences';
+import { userPreferencesRoutes } from '../../routes/me/preferences';
 
-// Mock Fastify server (à adapter selon votre setup de tests)
-describe('/me/preferences API E2E', () => {
-  let authToken: string;
-  let userId: string;
+// Mock Prisma
+const mockPrisma = {
+  userPreferences: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+    update: vi.fn()
+  }
+};
+
+// Mock auth middleware
+vi.mock('../../middleware/auth', () => ({
+  createUnifiedAuthMiddleware: vi.fn(() => async (request: any, reply: any) => {
+    request.auth = {
+      isAuthenticated: true,
+      registeredUser: true,
+      userId: 'test-user-456',
+      isAnonymous: false
+    };
+  })
+}));
+
+describe('/me/preferences API Integration Tests', () => {
+  let app: FastifyInstance;
+  const userId = 'test-user-456';
 
   beforeAll(async () => {
-    // TODO: Setup test server et créer un utilisateur de test
-    // authToken = await createTestUser();
-    // userId = extractUserIdFromToken(authToken);
+    app = Fastify({ logger: false });
+    app.decorate('prisma', mockPrisma);
+    await app.register(userPreferencesRoutes, { prefix: '/preferences' });
   });
 
   afterAll(async () => {
-    // TODO: Cleanup test data
+    await app.close();
   });
 
-  describe('GET /me/preferences', () => {
-    test('devrait retourner toutes les préférences avec defaults', async () => {
-      // TODO: Implémenter avec votre client de test
-      // const response = await fastify.inject({
-      //   method: 'GET',
-      //   url: '/api/v1/me/preferences',
-      //   headers: { Authorization: `Bearer ${authToken}` }
-      // });
-
-      // expect(response.statusCode).toBe(200);
-      // expect(response.json().success).toBe(true);
-      // expect(response.json().data.privacy).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
-      expect(true).toBe(true); // Placeholder
-    });
-
-    test('devrait retourner 401 sans authentification', async () => {
-      // TODO: Tester sans token
-      expect(true).toBe(true); // Placeholder
-    });
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  describe('GET /me/preferences/privacy', () => {
-    test('devrait retourner les defaults si aucune préférence', async () => {
-      // TODO: Implémenter
-      // const response = await fastify.inject({
-      //   method: 'GET',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` }
-      // });
+  describe('GET /preferences', () => {
+    test('should return all preferences with defaults', async () => {
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
 
-      // expect(response.statusCode).toBe(200);
-      // expect(response.json().data).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
-      expect(true).toBe(true); // Placeholder
+      const response = await app.inject({
+        method: 'GET',
+        url: '/preferences'
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(true);
+      expect(body.data.privacy).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
+      expect(body.data.audio).toEqual(AUDIO_PREFERENCE_DEFAULTS);
     });
   });
 
-  describe('PUT /me/preferences/privacy', () => {
-    test('devrait créer/mettre à jour les préférences complètes', async () => {
-      // const newPrefs = {
-      //   ...PRIVACY_PREFERENCE_DEFAULTS,
-      //   showOnlineStatus: false,
-      //   allowContactRequests: false
-      // };
+  describe('GET /preferences/privacy', () => {
+    test('should return defaults when no preferences exist', async () => {
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
 
-      // const response = await fastify.inject({
-      //   method: 'PUT',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` },
-      //   payload: newPrefs
-      // });
+      const response = await app.inject({
+        method: 'GET',
+        url: '/preferences/privacy'
+      });
 
-      // expect(response.statusCode).toBe(200);
-      // expect(response.json().data.showOnlineStatus).toBe(false);
-      expect(true).toBe(true); // Placeholder
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
     });
 
-    test('devrait rejeter des données invalides', async () => {
-      // const invalid = { showOnlineStatus: 'not-a-boolean' };
+    test('should return stored preferences when they exist', async () => {
+      const customPrivacy = { ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false };
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        userId,
+        privacy: customPrivacy
+      });
 
-      // const response = await fastify.inject({
-      //   method: 'PUT',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` },
-      //   payload: invalid
-      // });
+      const response = await app.inject({
+        method: 'GET',
+        url: '/preferences/privacy'
+      });
 
-      // expect(response.statusCode).toBe(400);
-      // expect(response.json().error).toBe('VALIDATION_ERROR');
-      expect(true).toBe(true); // Placeholder
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data.showOnlineStatus).toBe(false);
     });
   });
 
-  describe('PATCH /me/preferences/privacy', () => {
-    test('devrait mettre à jour partiellement', async () => {
-      // // D'abord créer des préférences
-      // await fastify.inject({
-      //   method: 'PUT',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` },
-      //   payload: PRIVACY_PREFERENCE_DEFAULTS
-      // });
+  describe('PUT /preferences/privacy', () => {
+    test('should create/update complete preferences', async () => {
+      const newPrefs = {
+        ...PRIVACY_PREFERENCE_DEFAULTS,
+        showOnlineStatus: false,
+        allowContactRequests: false
+      };
 
-      // // Ensuite update partiel
-      // const partial = { showOnlineStatus: false };
+      mockPrisma.userPreferences.upsert.mockResolvedValue({
+        userId,
+        privacy: newPrefs
+      });
 
-      // const response = await fastify.inject({
-      //   method: 'PATCH',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` },
-      //   payload: partial
-      // });
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/preferences/privacy',
+        payload: newPrefs
+      });
 
-      // expect(response.statusCode).toBe(200);
-      // expect(response.json().data.showOnlineStatus).toBe(false);
-      // // Les autres champs doivent rester inchangés
-      // expect(response.json().data.showLastSeen).toBe(PRIVACY_PREFERENCE_DEFAULTS.showLastSeen);
-      expect(true).toBe(true); // Placeholder
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data.showOnlineStatus).toBe(false);
+      expect(body.data.allowContactRequests).toBe(false);
+    });
+
+    test('should reject invalid data', async () => {
+      const invalid = { showOnlineStatus: 'not-a-boolean' };
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/preferences/privacy',
+        payload: invalid
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(false);
     });
   });
 
-  describe('DELETE /me/preferences/privacy', () => {
-    test('devrait réinitialiser aux defaults', async () => {
-      // // D'abord créer des préférences custom
-      // await fastify.inject({
-      //   method: 'PUT',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` },
-      //   payload: { ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false }
-      // });
+  describe('PATCH /preferences/privacy', () => {
+    test('should partially update preferences', async () => {
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        userId,
+        privacy: PRIVACY_PREFERENCE_DEFAULTS
+      });
 
-      // // Delete (reset)
-      // const deleteResponse = await fastify.inject({
-      //   method: 'DELETE',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` }
-      // });
+      const updatedPrefs = {
+        ...PRIVACY_PREFERENCE_DEFAULTS,
+        showOnlineStatus: false
+      };
 
-      // expect(deleteResponse.statusCode).toBe(200);
+      mockPrisma.userPreferences.upsert.mockResolvedValue({
+        userId,
+        privacy: updatedPrefs
+      });
 
-      // // Vérifier que GET retourne les defaults
-      // const getResponse = await fastify.inject({
-      //   method: 'GET',
-      //   url: '/api/v1/me/preferences/privacy',
-      //   headers: { Authorization: `Bearer ${authToken}` }
-      // });
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/preferences/privacy',
+        payload: { showOnlineStatus: false }
+      });
 
-      // expect(getResponse.json().data).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
-      expect(true).toBe(true); // Placeholder
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data.showOnlineStatus).toBe(false);
+      expect(body.data.showLastSeen).toBe(PRIVACY_PREFERENCE_DEFAULTS.showLastSeen);
     });
   });
 
-  describe('DELETE /me/preferences (all)', () => {
-    test('devrait réinitialiser toutes les préférences', async () => {
-      // TODO: Implémenter
-      expect(true).toBe(true); // Placeholder
+  describe('DELETE /preferences/privacy', () => {
+    test('should reset to defaults', async () => {
+      mockPrisma.userPreferences.update.mockResolvedValue({
+        userId,
+        privacy: null
+      });
+
+      const deleteResponse = await app.inject({
+        method: 'DELETE',
+        url: '/preferences/privacy'
+      });
+
+      expect(deleteResponse.statusCode).toBe(200);
+      const body = JSON.parse(deleteResponse.body);
+      expect(body.success).toBe(true);
+      expect(body.message).toContain('reset to defaults');
     });
   });
 
-  describe('Tests pour toutes les catégories', () => {
+  describe('DELETE /preferences (all)', () => {
+    test('should reset all preferences', async () => {
+      mockPrisma.userPreferences.update.mockResolvedValue({
+        userId,
+        privacy: null,
+        audio: null,
+        notification: null
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/preferences'
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(true);
+    });
+  });
+
+  describe('All preference categories', () => {
     const categories = [
       'privacy',
       'audio',
@@ -175,56 +221,36 @@ describe('/me/preferences API E2E', () => {
     ];
 
     categories.forEach((category) => {
-      test(`GET /me/preferences/${category} devrait fonctionner`, async () => {
-        // TODO: Tester chaque catégorie
-        expect(true).toBe(true); // Placeholder
-      });
+      test(`GET /preferences/${category} should work`, async () => {
+        mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
 
-      test(`PUT /me/preferences/${category} devrait fonctionner`, async () => {
-        // TODO: Tester chaque catégorie
-        expect(true).toBe(true); // Placeholder
-      });
+        const response = await app.inject({
+          method: 'GET',
+          url: `/preferences/${category}`
+        });
 
-      test(`PATCH /me/preferences/${category} devrait fonctionner`, async () => {
-        // TODO: Tester chaque catégorie
-        expect(true).toBe(true); // Placeholder
-      });
-
-      test(`DELETE /me/preferences/${category} devrait fonctionner`, async () => {
-        // TODO: Tester chaque catégorie
-        expect(true).toBe(true); // Placeholder
+        expect(response.statusCode).toBe(200);
+        const body = JSON.parse(response.body);
+        expect(body.success).toBe(true);
+        expect(body.data).toBeDefined();
       });
     });
   });
 
-  describe('Validation des defaults', () => {
-    test('defaults PRIVACY doivent être valides selon le schema', () => {
+  describe('Validation of defaults', () => {
+    test('PRIVACY defaults should be valid', () => {
       expect(PRIVACY_PREFERENCE_DEFAULTS.showOnlineStatus).toBe(true);
       expect(PRIVACY_PREFERENCE_DEFAULTS.allowAnalytics).toBe(true);
     });
 
-    test('defaults AUDIO doivent être valides selon le schema', () => {
+    test('AUDIO defaults should be valid', () => {
       expect(AUDIO_PREFERENCE_DEFAULTS.transcriptionEnabled).toBe(true);
       expect(AUDIO_PREFERENCE_DEFAULTS.transcriptionSource).toBe('auto');
     });
 
-    test('defaults NOTIFICATION doivent être valides selon le schema', () => {
+    test('NOTIFICATION defaults should be valid', () => {
       expect(NOTIFICATION_PREFERENCE_DEFAULTS.pushEnabled).toBe(true);
       expect(NOTIFICATION_PREFERENCE_DEFAULTS.dndEnabled).toBe(false);
     });
   });
 });
-
-/**
- * Instructions pour compléter les tests:
- *
- * 1. Remplacer les placeholders par de vraies requêtes HTTP
- * 2. Utiliser votre setup de test (fastify.inject ou supertest)
- * 3. Créer des helpers pour setup/teardown des utilisateurs de test
- * 4. Ajouter des tests pour:
- *    - Concurrency (2 updates simultanés)
- *    - Race conditions
- *    - Large payloads
- *    - Unicode/caractères spéciaux
- *    - Permissions (user A ne peut pas modifier prefs de user B)
- */

@@ -173,8 +173,8 @@ async def test_unified_tts_initialization(reset_singleton, output_dir):
     mock_backend.download_progress = 0.0
     mock_backend.initialize = AsyncMock(return_value=True)
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
-        with patch.object(service, '_download_models_background', new_callable=AsyncMock):
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+        with patch.object(service.model_manager, 'download_models_background', new_callable=AsyncMock):
             result = await service.initialize()
 
     assert result is True
@@ -184,7 +184,7 @@ async def test_unified_tts_initialization(reset_singleton, output_dir):
 
 @pytest.mark.asyncio
 async def test_unified_tts_find_local_model(reset_singleton, output_dir):
-    """Test _find_local_model method"""
+    """Test find_local_model method via model_manager"""
     logger.info("Test 14.5: Find local model")
 
     if not SERVICE_AVAILABLE:
@@ -197,8 +197,8 @@ async def test_unified_tts_find_local_model(reset_singleton, output_dir):
     mock_backend.is_available = True
     mock_backend.is_model_downloaded.return_value = True
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
-        local_model = await service._find_local_model(TTSModel.CHATTERBOX)
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+        local_model = await service.model_manager.find_local_model(TTSModel.CHATTERBOX)
 
     assert local_model == TTSModel.CHATTERBOX
     logger.info("Local model found correctly")
@@ -219,8 +219,8 @@ async def test_unified_tts_no_local_model(reset_singleton, output_dir):
     mock_backend.is_available = True
     mock_backend.is_model_downloaded.return_value = False
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
-        local_model = await service._find_local_model(TTSModel.CHATTERBOX)
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+        local_model = await service.model_manager.find_local_model(TTSModel.CHATTERBOX)
 
     assert local_model is None
     logger.info("Correctly detected no local model")
@@ -244,7 +244,7 @@ async def test_unified_tts_model_status(reset_singleton, output_dir):
     mock_backend.is_downloading = False
     mock_backend.download_progress = 0.0
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
         status = await service.get_model_status(TTSModel.CHATTERBOX)
 
     assert isinstance(status, ModelStatus)
@@ -274,7 +274,7 @@ async def test_unified_tts_all_models_status(reset_singleton, output_dir):
     mock_backend.is_downloading = False
     mock_backend.download_progress = 0.0
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
         all_status = await service.get_all_models_status()
 
     assert len(all_status) == len(TTSModel)
@@ -300,7 +300,7 @@ async def test_unified_tts_is_ready_property(reset_singleton, output_dir):
     # Mock an active backend
     mock_backend = MagicMock()
     mock_backend.is_initialized = True
-    service.active_backend = mock_backend
+    service.model_manager.active_backend = mock_backend
 
     # Now should be ready
     assert service.is_ready is True
@@ -327,7 +327,7 @@ async def test_unified_tts_get_stats(reset_singleton, output_dir):
     mock_backend.is_downloading = False
     mock_backend.download_progress = 0.0
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
         stats = await service.get_stats()
 
     assert "service" in stats
@@ -362,11 +362,11 @@ async def test_unified_tts_switch_model(reset_singleton, output_dir):
     mock_backend.download_progress = 0.0
     mock_backend.initialize = AsyncMock(return_value=True)
 
-    with patch.object(service, '_create_backend', return_value=mock_backend):
-        with patch.object(service, '_download_models_background', new_callable=AsyncMock):
+    with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+        with patch.object(service.model_manager, 'download_models_background', new_callable=AsyncMock):
             # First initialize
             await service.initialize(TTSModel.CHATTERBOX)
-            assert service.current_model == TTSModel.CHATTERBOX
+            assert service.model_manager.active_model == TTSModel.CHATTERBOX
 
             # Switch to another model
             success = await service.switch_model(TTSModel.CHATTERBOX_TURBO)
@@ -412,7 +412,7 @@ async def test_unified_tts_synthesize_pending_mode(reset_singleton, output_dir):
 
     service = UnifiedTTSService(output_dir=str(output_dir))
     service.is_initialized = True
-    service.active_backend = None  # Pending mode
+    service.model_manager.active_backend = None  # Pending mode
 
     # Mock backend that becomes ready after a delay
     mock_backend = MagicMock()
@@ -421,16 +421,16 @@ async def test_unified_tts_synthesize_pending_mode(reset_singleton, output_dir):
 
     async def make_ready():
         await asyncio.sleep(0.5)
-        service.active_backend = mock_backend
-        service.current_model = TTSModel.CHATTERBOX
+        service.model_manager.active_backend = mock_backend
+        service.model_manager.active_model = TTSModel.CHATTERBOX
 
     # Start making the service ready in background
     ready_task = asyncio.create_task(make_ready())
 
     # Mock additional methods
-    with patch.object(service, '_convert_format', new_callable=AsyncMock) as mock_convert:
+    with patch.object(service.synthesizer, '_convert_format', new_callable=AsyncMock) as mock_convert:
         mock_convert.return_value = str(output_dir / "test.mp3")
-        with patch.object(service, '_get_duration_ms', new_callable=AsyncMock) as mock_duration:
+        with patch.object(service.synthesizer, '_get_duration_ms', new_callable=AsyncMock) as mock_duration:
             mock_duration.return_value = 2000
 
             # This should wait for the model
@@ -466,14 +466,14 @@ async def test_unified_tts_close(reset_singleton, output_dir):
     # Add mock backends
     mock_backend = MagicMock()
     mock_backend.close = AsyncMock()
-    service.backends = {TTSModel.CHATTERBOX: mock_backend}
-    service.active_backend = mock_backend
+    service.model_manager.backends = {TTSModel.CHATTERBOX: mock_backend}
+    service.model_manager.active_backend = mock_backend
 
     await service.close()
 
     assert service.is_initialized is False
-    assert service.active_backend is None
-    assert len(service.backends) == 0
+    assert service.model_manager.active_backend is None
+    assert len(service.model_manager.backends) == 0
     mock_backend.close.assert_called_once()
 
     logger.info("Close method works correctly")
@@ -490,11 +490,11 @@ async def test_unified_tts_disk_space_check(reset_singleton, output_dir):
     service = UnifiedTTSService(output_dir=str(output_dir))
 
     # Get available disk space
-    available_gb = service._get_available_disk_space_gb()
+    available_gb = service.model_manager.get_available_disk_space_gb()
     assert available_gb >= 0
 
     # Check can download model
-    can_download = service._can_download_model(TTSModel.CHATTERBOX)
+    can_download = service.model_manager.can_download_model(TTSModel.CHATTERBOX)
     # Should be true if there's enough space (model is ~3.5GB + 2GB buffer)
     logger.info(f"Available disk space: {available_gb:.2f} GB, can download: {can_download}")
 
