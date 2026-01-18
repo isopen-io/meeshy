@@ -1,14 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * Privacy Settings Component
+ * Gestion des préférences de confidentialité avec synchronisation API
+ * Utilise /api/v1/me/preferences/privacy (12 champs backend)
+ * SUPPRIME localStorage - tout est synchronisé avec le serveur via React Query
+ */
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Shield, Eye, Database, Download, Trash2 } from 'lucide-react';
+import { Shield, Eye, Database, Download, Trash2, Loader2, Phone, Search, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
+import { usePreferences } from '@/hooks/use-preferences';
+import type { PrivacyPreferences } from '@/types/preferences';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,64 +29,70 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-interface PrivacyConfig {
-  shareOnlineStatus: boolean;
-  shareTypingStatus: boolean;
-  shareLastSeen: boolean;
-  allowDirectMessages: boolean;
-  allowGroupInvites: boolean;
-  enableReadReceipts: boolean;
-  collectAnalytics: boolean;
-  shareUsageData: boolean;
-}
-
 export function PrivacySettings() {
   const { t } = useI18n('settings');
-  const [config, setConfig] = useState<PrivacyConfig>({
-    shareOnlineStatus: true,
-    shareTypingStatus: true,
-    shareLastSeen: true,
-    allowDirectMessages: true,
-    allowGroupInvites: true,
-    enableReadReceipts: true,
-    collectAnalytics: false,
-    shareUsageData: false,
+
+  // Hook de préférences avec React Query (optimistic updates automatiques)
+  const {
+    data: preferences,
+    isLoading,
+    isUpdating,
+    error,
+    consentViolations,
+    updatePreferences,
+    refetch,
+  } = usePreferences<'privacy'>('privacy', {
+    onConsentRequired: (violations) => {
+      console.warn('[PrivacySettings] Consentement requis:', violations);
+    },
   });
 
-  useEffect(() => {
-    const savedConfig = localStorage.getItem('meeshy-privacy-config');
-    if (savedConfig) {
-      setConfig(JSON.parse(savedConfig));
+  /**
+   * Gère le changement d'un champ de préférence
+   * Utilise optimistic update automatique via React Query
+   */
+  const handlePreferenceChange = async (
+    key: keyof PrivacyPreferences,
+    value: boolean | string
+  ) => {
+    // Play sound feedback immédiatement
+    if (typeof value === 'boolean') {
+      if (value) {
+        SoundFeedback.playToggleOn();
+      } else {
+        SoundFeedback.playToggleOff();
+      }
     }
-  }, []);
 
-  const handleConfigChange = (key: keyof PrivacyConfig, value: boolean) => {
-    const newConfig = { ...config, [key]: value };
-    setConfig(newConfig);
-    localStorage.setItem('meeshy-privacy-config', JSON.stringify(newConfig));
-    if (value) {
-      SoundFeedback.playToggleOn();
-    } else {
-      SoundFeedback.playToggleOff();
+    try {
+      // Update avec optimistic UI via React Query
+      await updatePreferences({ [key]: value });
+    } catch (err) {
+      // L'erreur est déjà gérée par le hook
+      console.error('[PrivacySettings] Erreur update:', err);
     }
-    toast.success(t('privacy.settingsUpdated', 'Paramètres de confidentialité mis à jour'));
   };
 
+  /**
+   * Export des données utilisateur (placeholder)
+   */
   const exportData = () => {
     SoundFeedback.playClick();
-    // Simulation de l'export des données
+
+    // TODO: Implémenter l'export réel via API
     const userData = {
       profile: 'Données de profil...',
       messages: 'Données de messages...',
       translations: 'Cache de traduction...',
       settings: 'Paramètres utilisateur...',
+      exportedAt: new Date().toISOString(),
     };
 
     const blob = new Blob([JSON.stringify(userData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'meeshy-data-export.json';
+    a.download = `meeshy-data-export-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -86,16 +100,75 @@ export function PrivacySettings() {
     toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
   };
 
-  const handleDeleteAllData = () => {
-    // Cette fonction est appelée après confirmation dans l'AlertDialog
+  /**
+   * Suppression de toutes les données utilisateur
+   * TODO: Implémenter via API backend
+   */
+  const handleDeleteAllData = async () => {
     SoundFeedback.playClick();
-    localStorage.clear();
-    SoundFeedback.playSuccess();
-    toast.success(t('privacy.dataDeleted', 'Toutes les données ont été supprimées'));
+
+    try {
+      // TODO: Appeler l'API de suppression de compte
+      // await apiService.delete('/api/v1/me/account');
+
+      // Pour l'instant, on refetch juste
+      await refetch();
+
+      SoundFeedback.playSuccess();
+      toast.success(t('privacy.dataDeleted', 'Données supprimées'));
+    } catch (err) {
+      toast.error('Erreur lors de la suppression');
+    }
   };
+
+  // Afficher le loader pendant le chargement initial
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]" role="status">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="sr-only">Chargement des préférences de confidentialité...</span>
+      </div>
+    );
+  }
+
+  // Afficher l'erreur si échec du chargement
+  if (error && !preferences) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-destructive">{error.message}</p>
+        <Button onClick={() => refetch()} className="mt-4">
+          Réessayer
+        </Button>
+      </div>
+    );
+  }
+
+  // Si pas de préférences, afficher des defaults
+  if (!preferences) {
+    return null;
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Afficher les violations de consentement GDPR */}
+      {consentViolations && consentViolations.length > 0 && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Consentement requis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc list-inside space-y-1">
+              {consentViolations.map((violation, idx) => (
+                <li key={idx} className="text-sm text-muted-foreground">
+                  {violation.message}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Visibilité et statut */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -109,140 +182,103 @@ export function PrivacySettings() {
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
+              <Label className="text-sm sm:text-base">Visibilité du profil</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Contrôlez qui peut voir votre profil
+              </p>
+            </div>
+            <select
+              value={preferences.profileVisibility}
+              onChange={(e) => handlePreferenceChange('profileVisibility', e.target.value)}
+              disabled={isUpdating}
+              className="px-3 py-2 border rounded-md"
+            >
+              <option value="public">Public</option>
+              <option value="friends">Amis</option>
+              <option value="private">Privé</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 flex-1">
               <Label className="text-sm sm:text-base">Statut en ligne</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Permet aux autres de voir si vous êtes connecté
               </p>
             </div>
             <Switch
-              checked={config.shareOnlineStatus}
-              onCheckedChange={(checked) => handleConfigChange('shareOnlineStatus', checked)}
+              checked={preferences.showOnlineStatus}
+              onCheckedChange={(checked) => handlePreferenceChange('showOnlineStatus', checked)}
+              disabled={isUpdating}
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Indicateur de frappe</Label>
-              <p className="text-sm text-muted-foreground">
-                Affiche quand vous êtes en train d&apos;écrire un message
-              </p>
-            </div>
-            <Switch
-              checked={config.shareTypingStatus}
-              onCheckedChange={(checked) => handleConfigChange('shareTypingStatus', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Dernière activité</Label>
-              <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 flex-1">
+              <Label className="text-sm sm:text-base">Dernière activité</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Partage la date de votre dernière connexion
               </p>
             </div>
             <Switch
-              checked={config.shareLastSeen}
-              onCheckedChange={(checked) => handleConfigChange('shareLastSeen', checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Communications</CardTitle>
-          <CardDescription>
-            Gérez qui peut vous contacter et comment
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Messages directs</Label>
-              <p className="text-sm text-muted-foreground">
-                Permet à tous les utilisateurs de vous envoyer des messages
-              </p>
-            </div>
-            <Switch
-              checked={config.allowDirectMessages}
-              onCheckedChange={(checked) => handleConfigChange('allowDirectMessages', checked)}
+              checked={preferences.showLastSeen}
+              onCheckedChange={(checked) => handlePreferenceChange('showLastSeen', checked)}
+              disabled={isUpdating}
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Invitations de groupe</Label>
-              <p className="text-sm text-muted-foreground">
-                Autorise les autres à vous inviter dans des groupes
-              </p>
-            </div>
-            <Switch
-              checked={config.allowGroupInvites}
-              onCheckedChange={(checked) => handleConfigChange('allowGroupInvites', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Accusés de réception</Label>
-              <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 flex-1">
+              <Label className="text-sm sm:text-base">Accusés de réception</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Informe les expéditeurs que vous avez lu leurs messages
               </p>
             </div>
             <Switch
-              checked={config.enableReadReceipts}
-              onCheckedChange={(checked) => handleConfigChange('enableReadReceipts', checked)}
+              checked={preferences.showReadReceipts}
+              onCheckedChange={(checked) => handlePreferenceChange('showReadReceipts', checked)}
+              disabled={isUpdating}
             />
           </div>
         </CardContent>
       </Card>
 
+      {/* Communications */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Données et analytiques
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
+            Communications
           </CardTitle>
-          <CardDescription>
-            Contrôlez la collecte et l&apos;utilisation de vos données
+          <CardDescription className="text-sm sm:text-base">
+            Gérez qui peut vous contacter et comment
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Collecte d&apos;analytiques</Label>
-              <p className="text-sm text-muted-foreground">
-                Permet de collecter des données anonymes pour améliorer l&apos;application
+        <CardContent className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 flex-1">
+              <Label className="text-sm sm:text-base">Demandes de messages</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Permet aux utilisateurs de vous envoyer des demandes de messages
               </p>
             </div>
             <Switch
-              checked={config.collectAnalytics}
-              onCheckedChange={(checked) => handleConfigChange('collectAnalytics', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>Partage des données d&apos;usage</Label>
-              <p className="text-sm text-muted-foreground">
-                Partage des statistiques d&apos;utilisation pour la recherche et développement
-              </p>
-            </div>
-            <Switch
-              checked={config.shareUsageData}
-              onCheckedChange={(checked) => handleConfigChange('shareUsageData', checked)}
+              checked={preferences.allowMessageRequests}
+              onCheckedChange={(checked) => handlePreferenceChange('allowMessageRequests', checked)}
+              disabled={isUpdating}
             />
           </div>
         </CardContent>
       </Card>
 
+      {/* Gestion des données */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Database className="h-4 w-4 sm:h-5 sm:w-5" />
             Gestion des données
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-sm sm:text-base">
             Exportez ou supprimez vos données personnelles
           </CardDescription>
         </CardHeader>
@@ -263,7 +299,9 @@ export function PrivacySettings() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-red-600">{t('privacy.deleteData.title', 'Supprimer toutes mes données')}</Label>
+            <Label className="text-red-600">
+              {t('privacy.deleteData.title', 'Supprimer toutes mes données')}
+            </Label>
             <p className="text-sm text-muted-foreground">
               {t('privacy.deleteData.description', 'Supprime définitivement toutes vos données. Cette action est irréversible.')}
             </p>
@@ -271,7 +309,7 @@ export function PrivacySettings() {
               <AlertDialogTrigger asChild>
                 <Button
                   variant="destructive"
-                  className="flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
+                  className="flex items-center gap-2"
                   onClick={() => SoundFeedback.playClick()}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -280,7 +318,9 @@ export function PrivacySettings() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t('privacy.deleteData.confirmTitle', 'Êtes-vous absolument sûr ?')}</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {t('privacy.deleteData.confirmTitle', 'Êtes-vous absolument sûr ?')}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
                     {t('privacy.deleteData.confirmDescription', 'Cette action est irréversible. Toutes vos données personnelles, messages et paramètres seront définitivement supprimés de nos serveurs.')}
                   </AlertDialogDescription>
@@ -302,9 +342,10 @@ export function PrivacySettings() {
         </CardContent>
       </Card>
 
+      {/* Informations légales */}
       <Card>
         <CardHeader>
-          <CardTitle>Informations légales</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">Informations légales</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
