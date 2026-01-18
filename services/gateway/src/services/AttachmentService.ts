@@ -20,6 +20,7 @@ import {
   Attachment,
   AttachmentType,
   AttachmentMetadata,
+  AttachmentWithMetadata,
   getAttachmentType,
   getSizeLimit,
   UPLOAD_LIMITS,
@@ -1172,7 +1173,7 @@ export class AttachmentService {
       limit?: number;
       offset?: number;
     } = {}
-  ): Promise<any[]> {
+  ): Promise<AttachmentWithMetadata[]> {
     const where: any = {
       message: {
         conversationId: conversationId,

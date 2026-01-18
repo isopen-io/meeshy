@@ -615,6 +615,57 @@ export function getSizeLimit(type: AttachmentType): number {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// EXTENDED ATTACHMENT TYPES WITH RELATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+import type { MessageTranslatedAudio } from './audio-transcription.js';
+import type { VoiceQualityAnalysis } from './voice-api.js';
+
+/**
+ * Minimal transcription data for API responses
+ * Subset of MessageAudioTranscription with essential fields
+ */
+export interface TranscriptionData {
+  readonly id: string;
+  readonly transcribedText: string;
+  readonly language: string;
+  readonly confidence: number;
+  readonly source: string;
+  readonly voiceQualityAnalysis?: VoiceQualityAnalysis | null;
+}
+
+/**
+ * Minimal translated audio data for API responses
+ * Subset of MessageTranslatedAudio with essential fields
+ */
+export interface TranslatedAudioData {
+  readonly id: string;
+  readonly targetLanguage: string;
+  readonly translatedText: string;
+  readonly audioUrl: string;
+  readonly durationMs: number;
+  readonly voiceCloned: boolean;
+  readonly voiceQuality: number;
+}
+
+/**
+ * Attachment with transcription relation
+ * Used when fetching attachments with transcription data
+ */
+export interface AttachmentWithTranscription extends Attachment {
+  readonly transcription: TranscriptionData | null;
+}
+
+/**
+ * Attachment with complete metadata including transcription and translations
+ * Used for comprehensive attachment data retrieval
+ */
+export interface AttachmentWithMetadata extends Attachment {
+  readonly transcription: TranscriptionData | null;
+  readonly translatedAudios: readonly TranslatedAudioData[];
+}
+
 /**
  * Unités de taille de fichier
  */

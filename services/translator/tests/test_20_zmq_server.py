@@ -366,11 +366,8 @@ class TestTranslationPoolManager:
 
     def test_create_error_result(self, mock_translation_service):
         """Test error result creation"""
-        from services.zmq_server import TranslationPoolManager, TranslationTask
-
-        manager = TranslationPoolManager(
-            translation_service=mock_translation_service
-        )
+        from services.zmq_server import TranslationTask
+        from services.zmq_pool.translation_processor import _create_error_result
 
         task = TranslationTask(
             task_id="task_123",
@@ -381,13 +378,13 @@ class TestTranslationPoolManager:
             conversation_id="conv_789"
         )
 
-        error_result = manager._create_error_result(task, "fr", "Test error")
+        error_result = _create_error_result(task, "fr", "Test error")
 
         assert error_result['messageId'] == "msg_456"
         assert error_result['targetLanguage'] == "fr"
         assert error_result['error'] == "Test error"
         assert error_result['confidenceScore'] == 0.0
-        assert "[ERREUR: Test error]" in error_result['translatedText']
+        assert "[ERROR: Test error]" in error_result['translatedText']
 
     def test_get_stats(self, mock_translation_service):
         """Test getting pool manager statistics"""
@@ -408,11 +405,8 @@ class TestTranslationPoolManager:
     @pytest.mark.asyncio
     async def test_translate_single_language_success(self, mock_translation_service):
         """Test single language translation with service"""
-        from services.zmq_server import TranslationPoolManager, TranslationTask
-
-        manager = TranslationPoolManager(
-            translation_service=mock_translation_service
-        )
+        from services.zmq_server import TranslationTask
+        from services.zmq_pool.translation_processor import _translate_single_language
 
         task = TranslationTask(
             task_id="task_123",
@@ -423,7 +417,13 @@ class TestTranslationPoolManager:
             conversation_id="conv_789"
         )
 
-        result = await manager._translate_single_language(task, "fr", "worker_1")
+        result = await _translate_single_language(
+            task=task,
+            target_language="fr",
+            worker_name="worker_1",
+            translation_service=mock_translation_service,
+            translation_cache=None
+        )
 
         assert result['messageId'] == "msg_456"
         assert result['targetLanguage'] == "fr"
@@ -434,45 +434,8 @@ class TestTranslationPoolManager:
     @pytest.mark.asyncio
     async def test_translate_single_language_no_service(self):
         """Test single language translation without service (fallback)"""
-        with patch('services.zmq_server.CACHE_AVAILABLE', False):
-            from services.zmq_server import TranslationPoolManager, TranslationTask
-
-            manager = TranslationPoolManager(
-                translation_service=None  # No translation service
-            )
-            # Ensure cache is disabled for this test
-            manager.translation_cache = None
-
-            task = TranslationTask(
-                task_id="task_123",
-                message_id="msg_456",
-                text="Hello world",
-                source_language="en",
-                target_languages=["fr"],
-                conversation_id="conv_789"
-            )
-
-            result = await manager._translate_single_language(task, "fr", "worker_1")
-
-            assert result['messageId'] == "msg_456"
-            assert result['modelType'] == "fallback"
-            assert result['confidenceScore'] == 0.1
-            assert "[FR]" in result['translatedText']
-
-    @pytest.mark.asyncio
-    async def test_translate_single_language_service_returns_none(self):
-        """Test handling when translation service returns None"""
-        from services.zmq_server import TranslationPoolManager, TranslationTask
-
-        # Create a service that returns None
-        bad_service = MagicMock()
-        bad_service.translate_with_structure = AsyncMock(return_value=None)
-
-        manager = TranslationPoolManager(
-            translation_service=bad_service
-        )
-        # Ensure cache is disabled for this test
-        manager.translation_cache = None
+        from services.zmq_server import TranslationTask
+        from services.zmq_pool.translation_processor import _translate_single_language
 
         task = TranslationTask(
             task_id="task_123",
@@ -483,7 +446,45 @@ class TestTranslationPoolManager:
             conversation_id="conv_789"
         )
 
-        result = await manager._translate_single_language(task, "fr", "worker_1")
+        result = await _translate_single_language(
+            task=task,
+            target_language="fr",
+            worker_name="worker_1",
+            translation_service=None,
+            translation_cache=None
+        )
+
+        assert result['messageId'] == "msg_456"
+        assert result['modelType'] == "fallback"
+        assert result['confidenceScore'] == 0.1
+        assert "[FR]" in result['translatedText']
+
+    @pytest.mark.asyncio
+    async def test_translate_single_language_service_returns_none(self):
+        """Test handling when translation service returns None"""
+        from services.zmq_server import TranslationTask
+        from services.zmq_pool.translation_processor import _translate_single_language
+
+        # Create a service that returns None
+        bad_service = MagicMock()
+        bad_service.translate_with_structure = AsyncMock(return_value=None)
+
+        task = TranslationTask(
+            task_id="task_123",
+            message_id="msg_456",
+            text="Hello world",
+            source_language="en",
+            target_languages=["fr"],
+            conversation_id="conv_789"
+        )
+
+        result = await _translate_single_language(
+            task=task,
+            target_language="fr",
+            worker_name="worker_1",
+            translation_service=bad_service,
+            translation_cache=None
+        )
 
         # Should fall back gracefully
         assert result['modelType'] == "fallback"
@@ -492,17 +493,12 @@ class TestTranslationPoolManager:
     @pytest.mark.asyncio
     async def test_translate_single_language_service_exception(self):
         """Test handling when translation service raises exception"""
-        from services.zmq_server import TranslationPoolManager, TranslationTask
+        from services.zmq_server import TranslationTask
+        from services.zmq_pool.translation_processor import _translate_single_language
 
         # Create a service that raises an exception
         bad_service = MagicMock()
         bad_service.translate_with_structure = AsyncMock(side_effect=Exception("Service error"))
-
-        manager = TranslationPoolManager(
-            translation_service=bad_service
-        )
-        # Ensure cache is disabled for this test
-        manager.translation_cache = None
 
         task = TranslationTask(
             task_id="task_123",
@@ -513,7 +509,13 @@ class TestTranslationPoolManager:
             conversation_id="conv_789"
         )
 
-        result = await manager._translate_single_language(task, "fr", "worker_1")
+        result = await _translate_single_language(
+            task=task,
+            target_language="fr",
+            worker_name="worker_1",
+            translation_service=bad_service,
+            translation_cache=None
+        )
 
         # Should fall back gracefully
         assert result['modelType'] == "fallback"
