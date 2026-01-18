@@ -12,21 +12,21 @@ Corriger les tests suite au refactoring de 6 God Objects en 37 modules et attein
 - **Total : 1412 tests**
 - **Couverture : 48.43%**
 
-### Résultats Actuels (Après 12 commits) - VÉRIFIÉS ✅
-- ✅ Tests passants : **1240 (87.6%)**
-- ❌ Tests échoués : **145 (10.2%)**
+### Résultats Actuels (Après 13 commits) - VÉRIFIÉS ✅
+- ✅ Tests passants : **1243 (87.8%)**
+- ❌ Tests échoués : **142 (10.0%)**
 - ⏸️ Tests skipped : **3 (0.2%)**
 - ⚠️ Erreurs : **27 (1.9%)**
 - **Total : 1415 tests** (+3 nouveaux tests dynamic scaling)
 - **Durée : ~6min**
 
 ### Amélioration RÉELLE 🎉
-- **+216 tests réussis** (+21.1% augmentation absolue)
-- **-213 tests échoués** (-59.5% réduction!)
-- **Taux de réussite : 87.6%** (vs 72.5% initial)
-- **Progrès : +15.1% points de réussite** ✨
+- **+219 tests réussis** (+21.4% augmentation absolue)
+- **-216 tests échoués** (-60.3% réduction!)
+- **Taux de réussite : 87.8%** (vs 72.5% initial)
+- **Progrès : +15.3% points de réussite** ✨
 
-**Dépassement majeur des estimations:** +15.1% vs +9.8% estimé! (+54% de dépassement)
+**Dépassement majeur des estimations:** +15.3% vs +9.8% estimé! (+56% de dépassement)
 
 ### Voice Clone Tests - 100% TERMINÉ ✅
 - **35/35 tests passants** (100%!)
@@ -264,7 +264,30 @@ assert handler._is_valid_translation("Bonjour", result) is True
 
 **Impact:** +14 tests ZMQTranslationServer (5/20 → 17/20), +14 tests ZMQ total (45/81 → 59/81)
 
-## Tests Encore en Échec (145 tests - 10.2%)
+### Commit 13: ZMQTranslationServer 100% - Imports et get_stats() ✅
+**Fichiers:** `tests/test_20_zmq_server.py`, `src/services/zmq_translation_handler.py`, `src/services/zmq_server_core.py`
+
+**Objectif:** Corriger les 3 derniers tests ZMQTranslationServer échouants
+
+**Tests corrigés (3 tests - 17/20 → 20/20):**
+- test_publish_translation_result ✅
+- test_get_server_stats ✅
+- test_health_check_healthy ✅
+
+**Changements code production:**
+1. **Import psutil manquant** (zmq_translation_handler.py ligne 10):
+   - `import psutil` - Utilisé dans _publish_translation_result() pour memory_info()
+
+2. **Correction get_stats()** (zmq_server_core.py lignes 309-310):
+   - `self.pool_manager.normal_workers` → `self.pool_manager.normal_pool.current_workers`
+   - `self.pool_manager.any_workers` → `self.pool_manager.any_pool.current_workers`
+
+**Changements tests:**
+- test_publish_translation_result: Ajout `await server.initialize()` + appel via `translation_handler`
+
+**Impact:** +3 tests ZMQTranslationServer (17/20 → 20/20 = 100%!), +3 tests ZMQ total (59/81 → 62/81)
+
+## Tests Encore en Échec (142 tests - 10.0%)
 
 ### Par Catégorie
 
@@ -273,7 +296,7 @@ assert handler._is_valid_translation("Bonjour", result) is True
 - Tous corrigés avec imports directs depuis modules refactorisés
 - Pattern: VoiceCloneAudioProcessor, VoiceCloneCacheManager, VoiceCloneModelCreator
 
-#### 2. ✅ ZMQ Server Infrastructure (81 tests) - 72.8% DONE (+14 tests!) 🎉
+#### 2. ✅ ZMQ Server Infrastructure (81 tests) - 76.5% DONE (+17 tests!) 🎉
 - ✅ **TranslationPoolManager (14/14 tests - 100%)**
   - Pool manager initialization ✅
   - Worker pools (start/stop) ✅
@@ -289,7 +312,7 @@ assert handler._is_valid_translation("Bonjour", result) is True
   - Time interval check ✅
   - Max workers limit ✅
 
-- ✅ **ZMQTranslationServer (17/20 tests - 85%)** 🎉
+- ✅ **ZMQTranslationServer (20/20 tests - 100%)** 🎉🎉
   - Server initialization ✅
   - Server initialize ✅
   - Stop server ✅
@@ -297,15 +320,16 @@ assert handler._is_valid_translation("Bonjour", result) is True
   - Handle translation requests (valid, invalid, JSON error, too long) ✅
   - Is valid translation (6 tests) ✅
   - Get translation error reason ✅
+  - Publish translation result ✅
   - Publish invalid result ✅
-  - Health check unhealthy ✅
-  - ❌ 3 tests restants (publish_result, stats, health_check_healthy)
+  - Get server stats ✅
+  - Health check (healthy + unhealthy) ✅
 
 - 🔄 **Autres tests ZMQ (22/41 tests - 53.7%)**
   - Audio processing, Voice API, Integration tests partiellement passants
   - Méthodes privées AudioHandler, VoiceHandler besoin corrections similaires
 
-**Résumé ZMQ:** 59/81 tests passants (72.8%), 22 échoués (27.2%), 0 skipped
+**Résumé ZMQ:** 62/81 tests passants (76.5%), 19 échoués (23.5%), 0 skipped
 
 **Pattern appliqué Commit 12:**
 - Ajout paramètres gateway_push_port/gateway_sub_port au TranslationHandler

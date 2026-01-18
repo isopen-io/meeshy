@@ -912,6 +912,9 @@ class TestZMQTranslationServer:
                         server.pub_socket = pub_socket
                         server.database_service = mock_database_service
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         result = {
                             'messageId': 'msg_123',
                             'translatedText': 'Bonjour',
@@ -924,7 +927,7 @@ class TestZMQTranslationServer:
                             'created_at': time.time()
                         }
 
-                        await server._publish_translation_result("task_123", result, "fr")
+                        await server.translation_handler._publish_translation_result("task_123", result, "fr")
 
                         # Verify message was sent
                         assert pub_socket.send.called

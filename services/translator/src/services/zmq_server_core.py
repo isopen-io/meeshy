@@ -301,13 +301,13 @@ class ZMQTranslationServer:
     def get_stats(self) -> dict:
         """Retourne les statistiques du serveur"""
         pool_stats = self.pool_manager.get_stats()
-        
+
         return {
             'server_status': 'running' if self.running else 'stopped',
             'gateway_push_port': self.gateway_push_port,
             'gateway_sub_port': self.gateway_sub_port,
-            'normal_workers': self.pool_manager.normal_workers,
-            'any_workers': self.pool_manager.any_workers,
+            'normal_workers': self.pool_manager.normal_pool.current_workers,
+            'any_workers': self.pool_manager.any_pool.current_workers,
             **pool_stats
         }
     

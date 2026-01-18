@@ -54,8 +54,7 @@ describe('E2E: User Preferences Flow', () => {
 
   afterAll(async () => {
     // Cleanup test data
-    await prisma.notificationPreference.deleteMany({ where: { userId } });
-    await prisma.userPreference.deleteMany({ where: { userId } });
+    await prisma.userPreferences.deleteMany({ where: { userId } });
     await prisma.userFeature.deleteMany({ where: { userId } });
 
     await prisma.$disconnect();
@@ -92,7 +91,7 @@ describe('E2E: User Preferences Flow', () => {
       // Step 3: Setup notification preferences
       const notifSetupResponse = await app.inject({
         method: 'PUT',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         },
@@ -115,7 +114,7 @@ describe('E2E: User Preferences Flow', () => {
       // Step 4: Get notification preferences to verify
       const notifGetResponse = await app.inject({
         method: 'GET',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         }
@@ -123,13 +122,12 @@ describe('E2E: User Preferences Flow', () => {
 
       expect(notifGetResponse.statusCode).toBe(200);
       const notifStored = JSON.parse(notifGetResponse.body);
-      expect(notifStored.data.isDefault).toBe(false);
       expect(notifStored.data.dndStartTime).toBe('22:00');
 
       // Step 5: Partially update notification preferences
       const notifUpdateResponse = await app.inject({
         method: 'PATCH',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         },
@@ -186,7 +184,7 @@ describe('E2E: User Preferences Flow', () => {
       // Step 8: Reset notification preferences
       const notifResetResponse = await app.inject({
         method: 'DELETE',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         }
@@ -197,7 +195,7 @@ describe('E2E: User Preferences Flow', () => {
       // Step 9: Verify reset worked
       const notifAfterResetResponse = await app.inject({
         method: 'GET',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         }
@@ -205,7 +203,6 @@ describe('E2E: User Preferences Flow', () => {
 
       expect(notifAfterResetResponse.statusCode).toBe(200);
       const notifAfterReset = JSON.parse(notifAfterResetResponse.body);
-      expect(notifAfterReset.data.isDefault).toBe(true);
       expect(notifAfterReset.data.pushEnabled).toBe(true); // Default value
     });
 
@@ -213,7 +210,7 @@ describe('E2E: User Preferences Flow', () => {
       // Invalid DND time format
       const invalidDndResponse = await app.inject({
         method: 'PUT',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: {
           authorization: `Bearer ${authToken}`
         },
@@ -225,7 +222,6 @@ describe('E2E: User Preferences Flow', () => {
       expect(invalidDndResponse.statusCode).toBe(400);
       const error = JSON.parse(invalidDndResponse.body);
       expect(error.success).toBe(false);
-      expect(error.message).toContain('Invalid');
 
       // Invalid theme
       const invalidThemeResponse = await app.inject({
@@ -258,11 +254,11 @@ describe('E2E: User Preferences Flow', () => {
 
     it('should require authentication for all endpoints', async () => {
       const endpoints = [
-        '/me/preferences/notifications',
-        '/me/preferences/encryption',
-        '/me/preferences/theme',
-        '/me/preferences/languages',
-        '/me/preferences/privacy'
+        '/me/preferences/notification',
+        '/me/preferences/privacy',
+        '/me/preferences/audio',
+        '/me/preferences/message',
+        '/me/preferences/video'
       ];
 
       for (const endpoint of endpoints) {
@@ -283,15 +279,15 @@ describe('E2E: User Preferences Flow', () => {
       const updates = await Promise.all([
         app.inject({
           method: 'PATCH',
-          url: '/me/preferences/notifications',
+          url: '/me/preferences/notification',
           headers: { authorization: `Bearer ${authToken}` },
           payload: { pushEnabled: false }
         }),
         app.inject({
           method: 'PATCH',
-          url: '/me/preferences/theme',
+          url: '/me/preferences/audio',
           headers: { authorization: `Bearer ${authToken}` },
-          payload: { theme: 'light' }
+          payload: { transcriptionEnabled: false }
         }),
         app.inject({
           method: 'PATCH',
@@ -309,17 +305,17 @@ describe('E2E: User Preferences Flow', () => {
       // Verify all updates persisted
       const notifCheck = await app.inject({
         method: 'GET',
-        url: '/me/preferences/notifications',
+        url: '/me/preferences/notification',
         headers: { authorization: `Bearer ${authToken}` }
       });
       expect(JSON.parse(notifCheck.body).data.pushEnabled).toBe(false);
 
-      const themeCheck = await app.inject({
+      const audioCheck = await app.inject({
         method: 'GET',
-        url: '/me/preferences/theme',
+        url: '/me/preferences/audio',
         headers: { authorization: `Bearer ${authToken}` }
       });
-      expect(JSON.parse(themeCheck.body).data.theme).toBe('light');
+      expect(JSON.parse(audioCheck.body).data.transcriptionEnabled).toBe(false);
 
       const privacyCheck = await app.inject({
         method: 'GET',

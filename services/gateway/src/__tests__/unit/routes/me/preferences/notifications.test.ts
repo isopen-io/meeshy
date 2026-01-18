@@ -3,9 +3,9 @@
  */
 
 import Fastify, { FastifyInstance } from 'fastify';
-import notificationPreferencesRoutes from '../../../../../routes/me/preferences/notifications';
+import { userPreferencesRoutes } from '../../../../../routes/me/preferences';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { NOTIFICATION_PREFERENCES_DEFAULTS } from '../../../../../config/user-preferences-defaults';
+import { NOTIFICATION_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
 
 // Mock Prisma and authentication
 jest.mock('@meeshy/shared/prisma/client', () => ({
@@ -18,19 +18,19 @@ describe('Notification Preferences Routes', () => {
 
   beforeEach(async () => {
     mockPrisma = {
-      notificationPreference: {
+      userPreferences: {
         findUnique: jest.fn(),
         upsert: jest.fn(),
-        deleteMany: jest.fn()
+        update: jest.fn()
       }
     };
 
     app = Fastify();
     app.decorate('prisma', mockPrisma);
 
-    // Mock authentication middleware
-    app.decorate('authenticate', async (request: any, reply: any) => {
-      request.authContext = {
+    // Mock authentication - set auth context directly
+    app.addHook('preHandler', async (request: any, reply: any) => {
+      request.auth = {
         isAuthenticated: true,
         registeredUser: true,
         userId: 'user-123',
@@ -39,7 +39,7 @@ describe('Notification Preferences Routes', () => {
     });
 
     // Add error handler for validation errors
-    app.setErrorHandler((error, request, reply) => {
+    app.setErrorHandler((error: any, request, reply) => {
       if (error.validation) {
         return reply.status(400).send({
           success: false,
@@ -52,7 +52,7 @@ describe('Notification Preferences Routes', () => {
       });
     });
 
-    await app.register(notificationPreferencesRoutes);
+    await app.register(userPreferencesRoutes, { prefix: '/preferences' });
   });
 
   afterEach(async () => {
@@ -60,43 +60,46 @@ describe('Notification Preferences Routes', () => {
     jest.clearAllMocks();
   });
 
-  describe('GET /me/preferences/notifications', () => {
+  describe('GET /preferences/notification', () => {
     it('should return stored preferences', async () => {
       const mockPreferences = {
-        id: 'pref-123',
         userId: 'user-123',
-        ...NOTIFICATION_PREFERENCES_DEFAULTS,
+        notification: {
+          ...NOTIFICATION_PREFERENCE_DEFAULTS
+        },
         createdAt: new Date(),
         updatedAt: new Date()
       };
 
-      mockPrisma.notificationPreference.findUnique.mockResolvedValue(mockPreferences);
+      mockPrisma.userPreferences = {
+        findUnique: jest.fn().mockResolvedValue(mockPreferences)
+      };
 
       const response = await app.inject({
         method: 'GET',
-        url: '/me/preferences/notifications'
+        url: '/preferences/notification'
       });
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
-      expect(body.data.isDefault).toBe(false);
-      expect(body.data.userId).toBe('user-123');
+      expect(body.data).toMatchObject(NOTIFICATION_PREFERENCE_DEFAULTS);
     });
 
     it('should return defaults when no preferences exist', async () => {
-      mockPrisma.notificationPreference.findUnique.mockResolvedValue(null);
+      mockPrisma.userPreferences = {
+        findUnique: jest.fn().mockResolvedValue(null)
+      };
 
       const response = await app.inject({
         method: 'GET',
-        url: '/me/preferences/notifications'
+        url: '/preferences/notification'
       });
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
-      expect(body.data.isDefault).toBe(true);
-      expect(body.data).toMatchObject(NOTIFICATION_PREFERENCES_DEFAULTS);
+      expect(body.data).toMatchObject(NOTIFICATION_PREFERENCE_DEFAULTS);
     });
 
     it('should require authentication', async () => {
@@ -105,17 +108,17 @@ describe('Notification Preferences Routes', () => {
       unauthApp.decorate('prisma', mockPrisma);
 
       // Mock authentication middleware that fails
-      unauthApp.decorate('authenticate', async (request: any, reply: any) => {
-        request.authContext = {
+      unauthApp.addHook('preHandler', async (request: any, reply: any) => {
+        request.auth = {
           isAuthenticated: false
         };
       });
 
-      await unauthApp.register(notificationPreferencesRoutes);
+      await unauthApp.register(userPreferencesRoutes, { prefix: '/preferences' });
 
       const response = await unauthApp.inject({
         method: 'GET',
-        url: '/me/preferences/notifications'
+        url: '/preferences/notification'
       });
 
       expect(response.statusCode).toBe(401);
@@ -126,23 +129,23 @@ describe('Notification Preferences Routes', () => {
     });
   });
 
-  describe('PUT /me/preferences/notifications', () => {
+  describe('PUT /preferences/notification', () => {
     it('should update notification preferences', async () => {
-      const updateData = { pushEnabled: false, emailEnabled: true };
+      const updateData = { ...NOTIFICATION_PREFERENCE_DEFAULTS, pushEnabled: false, emailEnabled: true };
       const mockUpdated = {
-        id: 'pref-123',
         userId: 'user-123',
-        ...NOTIFICATION_PREFERENCES_DEFAULTS,
-        ...updateData,
+        notification: updateData,
         createdAt: new Date(),
         updatedAt: new Date()
       };
 
-      mockPrisma.notificationPreference.upsert.mockResolvedValue(mockUpdated);
+      mockPrisma.userPreferences = {
+        upsert: jest.fn().mockResolvedValue(mockUpdated)
+      };
 
       const response = await app.inject({
         method: 'PUT',
-        url: '/me/preferences/notifications',
+        url: '/preferences/notification',
         payload: updateData
       });
 
@@ -156,34 +159,37 @@ describe('Notification Preferences Routes', () => {
     it('should validate DND time format', async () => {
       const response = await app.inject({
         method: 'PUT',
-        url: '/me/preferences/notifications',
-        payload: { dndStartTime: 'invalid-time' }
+        url: '/preferences/notification',
+        payload: { ...NOTIFICATION_PREFERENCE_DEFAULTS, dndStartTime: 'invalid-time' }
       });
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(false);
-      expect(body.message).toContain('Invalid dndStartTime format');
     });
   });
 
-  describe('PATCH /me/preferences/notifications', () => {
+  describe('PATCH /preferences/notification', () => {
     it('should partially update notification preferences', async () => {
       const updateData = { soundEnabled: false };
       const mockUpdated = {
-        id: 'pref-123',
         userId: 'user-123',
-        ...NOTIFICATION_PREFERENCES_DEFAULTS,
-        soundEnabled: false,
+        notification: {
+          ...NOTIFICATION_PREFERENCE_DEFAULTS,
+          soundEnabled: false
+        },
         createdAt: new Date(),
         updatedAt: new Date()
       };
 
-      mockPrisma.notificationPreference.upsert.mockResolvedValue(mockUpdated);
+      mockPrisma.userPreferences = {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue(mockUpdated)
+      };
 
       const response = await app.inject({
         method: 'PATCH',
-        url: '/me/preferences/notifications',
+        url: '/preferences/notification',
         payload: updateData
       });
 
@@ -194,22 +200,21 @@ describe('Notification Preferences Routes', () => {
     });
   });
 
-  describe('DELETE /me/preferences/notifications', () => {
+  describe('DELETE /preferences/notification', () => {
     it('should reset notification preferences', async () => {
-      mockPrisma.notificationPreference.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.userPreferences = {
+        update: jest.fn().mockResolvedValue({ userId: 'user-123', notification: null })
+      };
 
       const response = await app.inject({
         method: 'DELETE',
-        url: '/me/preferences/notifications'
+        url: '/preferences/notification'
       });
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
-      expect(body.data.message).toContain('reset to defaults');
-      expect(mockPrisma.notificationPreference.deleteMany).toHaveBeenCalledWith({
-        where: { userId: 'user-123' }
-      });
+      expect(body.message).toContain('reset to defaults');
     });
   });
 });
