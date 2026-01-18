@@ -619,7 +619,6 @@ export function getSizeLimit(type: AttachmentType): number {
 // EXTENDED ATTACHMENT TYPES WITH RELATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { MessageTranslatedAudio } from './audio-transcription.js';
 import type { VoiceQualityAnalysis } from './voice-api.js';
 
 /**
@@ -638,8 +637,9 @@ export interface TranscriptionData {
 /**
  * Minimal translated audio data for API responses
  * Subset of MessageTranslatedAudio with essential fields
+ * Note: Different from TranslatedAudioData in socketio-events (used for real-time events)
  */
-export interface TranslatedAudioData {
+export interface AttachmentTranslationData {
   readonly id: string;
   readonly targetLanguage: string;
   readonly translatedText: string;
@@ -663,7 +663,7 @@ export interface AttachmentWithTranscription extends Attachment {
  */
 export interface AttachmentWithMetadata extends Attachment {
   readonly transcription: TranscriptionData | null;
-  readonly translatedAudios: readonly TranslatedAudioData[];
+  readonly translatedAudios: readonly AttachmentTranslationData[];
 }
 
 /**

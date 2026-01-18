@@ -8,7 +8,7 @@
  * - 'hybrid': Double encryption (E2EE + server layer for audio translation)
  */
 
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import sharp from 'sharp';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -26,6 +26,7 @@ import {
   UPLOAD_LIMITS,
   ACCEPTED_MIME_TYPES
 } from '@meeshy/shared/types/attachment';
+import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -1174,7 +1175,7 @@ export class AttachmentService {
       offset?: number;
     } = {}
   ): Promise<AttachmentWithMetadata[]> {
-    const where: any = {
+    const where: Prisma.MessageAttachmentWhereInput = {
       message: {
         conversationId: conversationId,
       },
@@ -1183,7 +1184,7 @@ export class AttachmentService {
     // Filtrer par type si spécifié
     if (options.type) {
       const mimeTypes = ACCEPTED_MIME_TYPES[options.type.toUpperCase() as keyof typeof ACCEPTED_MIME_TYPES] || [];
-      where.mimeType = { in: mimeTypes };
+      where.mimeType = { in: [...mimeTypes] };
     }
 
     const attachments = await this.prisma.messageAttachment.findMany({
@@ -1245,8 +1246,23 @@ export class AttachmentService {
       consumedCount: att.consumedCount ?? 0,
       isEncrypted: att.isEncrypted ?? false,
       // Métadonnées complètes
-      transcription: att.transcription || null,
-      translatedAudios: att.translatedAudios || [],
+      transcription: att.transcription ? {
+        id: att.transcription.id,
+        transcribedText: att.transcription.transcribedText,
+        language: att.transcription.language,
+        confidence: att.transcription.confidence,
+        source: att.transcription.source,
+        voiceQualityAnalysis: att.transcription.voiceQualityAnalysis as unknown as VoiceQualityAnalysis | null
+      } : null,
+      translatedAudios: att.translatedAudios.map(ta => ({
+        id: ta.id,
+        targetLanguage: ta.targetLanguage,
+        translatedText: ta.translatedText,
+        audioUrl: ta.audioUrl,
+        durationMs: ta.durationMs,
+        voiceCloned: ta.voiceCloned,
+        voiceQuality: ta.voiceQuality
+      }))
     }));
   }
 
