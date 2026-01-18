@@ -1,0 +1,54 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "transformIgnorePatterns": [
+    "node_modules/(?!@meeshy/shared)"
+  ],
+  "moduleNameMapper": {
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1"
+  },
+  "testMatch": [
+    "<rootDir>/src/**/__tests__/**/*.test.ts",
+    "<rootDir>/src/**/*.test.ts"
+  ],
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    "<rootDir>/src/__tests__/e2ee/",
+    "<rootDir>/src/__tests__/integration/",
+    "<rootDir>/src/__tests__/resilience/",
+    "<rootDir>/src/__tests__/performance/",
+    "<rootDir>/src/__tests__/notifications-",
+    "<rootDir>/src/__tests__/NotificationService",
+    "<rootDir>/src/__tests__/password-reset",
+    "<rootDir>/src/__tests__/unit/StatusService",
+    "<rootDir>/src/__tests__/unit/MaintenanceService",
+    "<rootDir>/src/__tests__/unit/encryption/shared-encryption",
+    "<rootDir>/src/__tests__/unit/adapters/node-crypto",
+    "<rootDir>/src/dma-interoperability/"
+  ],
+  "collectCoverageFrom": [
+    "src/services/**/*.ts",
+    "src/utils/**/*.ts",
+    "!src/**/*.d.ts",
+    "!src/**/__tests__/**",
+    "!src/main.ts",
+    "!src/server.ts",
+    "!src/routes/**/*",
+    "!src/middleware/**/*",
+    "!src/websocket/**/*",
+    "!src/grpc/**/*"
+  ],
+  "coverageDirectory": "coverage",
+  "coverageReporters": [
+    "text",
+    "lcov",
+    "html"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "collectCoverage": true
+}

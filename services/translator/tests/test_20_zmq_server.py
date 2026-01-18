@@ -608,12 +608,15 @@ class TestZMQTranslationServer:
                         )
                         server.pub_socket = pub_socket
 
-                        ping_message = json.dumps({
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
+                        ping_message = {
                             'type': 'ping',
                             'timestamp': time.time()
-                        }).encode('utf-8')
+                        }
 
-                        await server._handle_translation_request(ping_message)
+                        await server.translation_handler._handle_translation_request(ping_message)
 
                         # Verify pong was sent
                         assert pub_socket.send.called
@@ -638,15 +641,18 @@ class TestZMQTranslationServer:
                         )
                         server.pub_socket = pub_socket
 
-                        translation_message = json.dumps({
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
+                        translation_message = {
                             'messageId': 'msg_123',
                             'text': 'Hello world',
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr', 'es'],
                             'conversationId': 'conv_456'
-                        }).encode('utf-8')
+                        }
 
-                        await server._handle_translation_request(translation_message)
+                        await server.translation_handler._handle_translation_request(translation_message)
 
                         # Task should be queued
                         stats = server.pool_manager.get_stats()
@@ -668,14 +674,17 @@ class TestZMQTranslationServer:
                             translation_service=mock_translation_service
                         )
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         # Missing required fields
-                        invalid_message = json.dumps({
+                        invalid_message = {
                             'messageId': 'msg_123'
                             # Missing text and targetLanguages
-                        }).encode('utf-8')
+                        }
 
                         # Should not raise, just log warning
-                        await server._handle_translation_request(invalid_message)
+                        await server.translation_handler._handle_translation_request(invalid_message)
 
     @pytest.mark.asyncio
     async def test_handle_translation_request_json_error(self, mock_translation_service, mock_database_service, mock_zmq_context):
@@ -693,11 +702,14 @@ class TestZMQTranslationServer:
                             translation_service=mock_translation_service
                         )
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         # Invalid JSON
                         invalid_json = b'not valid json{{{}'
 
                         # Should not raise, just log error
-                        await server._handle_translation_request(invalid_json)
+                        await server.translation_handler._handle_translation_request_multipart([invalid_json])
 
     @pytest.mark.asyncio
     async def test_handle_message_too_long(self, mock_translation_service, mock_database_service, mock_zmq_context):
@@ -709,7 +721,7 @@ class TestZMQTranslationServer:
                 with patch('services.zmq_server_core.zmq.PULL', 1):
                     with patch('services.zmq_server_core.zmq.PUB', 2):
                         # Mock can_translate_message to return False
-                        with patch('services.zmq_server.can_translate_message', return_value=False):
+                        with patch('services.zmq_translation_handler.can_translate_message', return_value=False):
                             from services.zmq_server import ZMQTranslationServer
 
                             server = ZMQTranslationServer(
@@ -718,15 +730,18 @@ class TestZMQTranslationServer:
                             )
                             server.pub_socket = pub_socket
 
-                            long_message = json.dumps({
+                            # Initialize server to create translation_handler
+                            await server.initialize()
+
+                            long_message = {
                                 'messageId': 'msg_123',
                                 'text': 'x' * 200000,  # Very long
                                 'sourceLanguage': 'en',
                                 'targetLanguages': ['fr'],
                                 'conversationId': 'conv_456'
-                            }).encode('utf-8')
+                            }
 
-                            await server._handle_translation_request(long_message)
+                            await server.translation_handler._handle_translation_request(long_message)
 
                             # Should send translation_skipped message
                             if pub_socket.send.called:
@@ -735,128 +750,149 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_valid(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with valid translation"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {
-                    'originalText': 'Hello',
-                    'confidenceScore': 0.95
-                }
+        result = {
+            'originalText': 'Hello',
+            'confidenceScore': 0.95
+        }
 
-                assert server._is_valid_translation("Bonjour", result) is True
+        assert handler._is_valid_translation("Bonjour", result) is True
 
     def test_is_valid_translation_empty(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with empty text"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {'confidenceScore': 0.95}
+        result = {'confidenceScore': 0.95}
 
-                assert server._is_valid_translation("", result) is False
-                assert server._is_valid_translation("   ", result) is False
+        assert handler._is_valid_translation("", result) is False
+        assert handler._is_valid_translation("   ", result) is False
 
     def test_is_valid_translation_error_patterns(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with error patterns"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {'confidenceScore': 0.95}
+        result = {'confidenceScore': 0.95}
 
-                error_texts = [
-                    "[Error: translation failed]",
-                    "[ERREUR: something wrong]",
-                    "[Failed translation]",
-                    "[NLLB No Result]",
-                    "[Fallback mode]"
-                ]
+        error_texts = [
+            "[Error: translation failed]",
+            "[ERREUR: something wrong]",
+            "[Failed translation]",
+            "[NLLB No Result]",
+            "[Fallback mode]"
+        ]
 
-                for text in error_texts:
-                    assert server._is_valid_translation(text, result) is False
+        for text in error_texts:
+            assert handler._is_valid_translation(text, result) is False
 
     def test_is_valid_translation_low_confidence(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with low confidence score"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {'confidenceScore': 0.05}  # Very low
+        result = {'confidenceScore': 0.05}  # Very low
 
-                assert server._is_valid_translation("Bonjour", result) is False
+        assert handler._is_valid_translation("Bonjour", result) is False
 
     def test_is_valid_translation_same_as_original(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation when translated equals original"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {
-                    'originalText': 'Hello',
-                    'confidenceScore': 0.95
-                }
+        result = {
+            'originalText': 'Hello',
+            'confidenceScore': 0.95
+        }
 
-                assert server._is_valid_translation("Hello", result) is False
-                assert server._is_valid_translation("hello", result) is False
+        assert handler._is_valid_translation("Hello", result) is False
+        assert handler._is_valid_translation("hello", result) is False
 
     def test_is_valid_translation_with_error_flag(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation when error flag is set"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                result = {
-                    'confidenceScore': 0.95,
-                    'error': 'Some error occurred'
-                }
+        result = {
+            'confidenceScore': 0.95,
+            'error': 'Some error occurred'
+        }
 
-                assert server._is_valid_translation("Bonjour", result) is False
+        assert handler._is_valid_translation("Bonjour", result) is False
 
     def test_get_translation_error_reason(self, mock_translation_service, mock_database_service):
         """Test _get_translation_error_reason"""
-        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server_core.zmq.asyncio.Context'):
-                from services.zmq_server import ZMQTranslationServer
+        from services.zmq_translation_handler import TranslationHandler
+        from unittest.mock import MagicMock
 
-                server = ZMQTranslationServer(
-                    host="127.0.0.1",
-                    translation_service=mock_translation_service
-                )
+        # Create handler directly
+        pool_manager = MagicMock()
+        pub_socket = MagicMock()
+        handler = TranslationHandler(
+            pool_manager=pool_manager,
+            pub_socket=pub_socket,
+            database_service=mock_database_service
+        )
 
-                assert "vide" in server._get_translation_error_reason("")
-                assert "Error" in server._get_translation_error_reason("[Error: test]") or "erreur" in server._get_translation_error_reason("[Error: test]").lower()
-                assert "inconnue" in server._get_translation_error_reason("unknown pattern")
+        assert "vide" in handler._get_translation_error_reason("")
+        assert "Error" in handler._get_translation_error_reason("[Error: test]") or "erreur" in handler._get_translation_error_reason("[Error: test]").lower()
+        assert "inconnue" in handler._get_translation_error_reason("unknown pattern")
 
     @pytest.mark.asyncio
     async def test_publish_translation_result(self, mock_translation_service, mock_database_service, mock_zmq_context):
@@ -1461,16 +1497,19 @@ class TestIntegration:
                         server.pub_socket = pub_socket
                         server.database_service = mock_database_service
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         # Test enqueueing
-                        translation_message = json.dumps({
+                        translation_message = {
                             'messageId': 'msg_integration_test',
                             'text': 'Integration test message',
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr'],
                             'conversationId': 'conv_integration'
-                        }).encode('utf-8')
+                        }
 
-                        await server._handle_translation_request(translation_message)
+                        await server.translation_handler._handle_translation_request(translation_message)
 
                         # Verify task was queued
                         stats = server.pool_manager.get_stats()
@@ -1493,16 +1532,19 @@ class TestIntegration:
                         )
                         server.pub_socket = pub_socket
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         # Test with multiple target languages
-                        translation_message = json.dumps({
+                        translation_message = {
                             'messageId': 'msg_multi',
                             'text': 'Hello world',
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr', 'es', 'de', 'it'],
                             'conversationId': 'conv_multi'
-                        }).encode('utf-8')
+                        }
 
-                        await server._handle_translation_request(translation_message)
+                        await server.translation_handler._handle_translation_request(translation_message)
 
                         # Verify task was queued
                         stats = server.pool_manager.get_stats()
@@ -1853,29 +1895,32 @@ class TestAdditionalCoverage:
                         )
                         server.pub_socket = pub_socket
 
+                        # Initialize server to create translation_handler
+                        await server.initialize()
+
                         # Use text longer than 100 chars to avoid fast_pool (priority queue optimization)
                         long_text_1 = "This is a longer text message that exceeds the short text threshold of 100 characters for testing pool overflow functionality properly with first message."
                         long_text_2 = "This is a longer text message that exceeds the short text threshold of 100 characters for testing pool overflow functionality properly with second message."
 
                         # Fill the pool first
-                        msg1 = json.dumps({
+                        msg1 = {
                             'messageId': 'msg_1',
                             'text': long_text_1,
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr'],
                             'conversationId': 'conv_1'
-                        }).encode('utf-8')
-                        await server._handle_translation_request(msg1)
+                        }
+                        await server.translation_handler._handle_translation_request(msg1)
 
                         # Now try another - should fail
-                        msg2 = json.dumps({
+                        msg2 = {
                             'messageId': 'msg_2',
                             'text': long_text_2,
                             'sourceLanguage': 'en',
                             'targetLanguages': ['fr'],
                             'conversationId': 'conv_2'
-                        }).encode('utf-8')
-                        await server._handle_translation_request(msg2)
+                        }
+                        await server.translation_handler._handle_translation_request(msg2)
 
                         # Check that error was sent for the pool full case
                         # The pub_socket.send should be called with error message

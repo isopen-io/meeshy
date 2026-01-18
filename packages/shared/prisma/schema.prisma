@@ -139,9 +139,8 @@ model User {
   reactions              Reaction[]                    @relation("UserReactions")
   mentions               Mention[]                     @relation("UserMentions")
   notifications          Notification[]
-  notificationPreference NotificationPreference?
   userFeature            UserFeature?
-  preferences            UserPreference[]
+  userPreferences        UserPreferences?                  @relation("UserPreferences")
   stats                  UserStats?
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
@@ -1016,38 +1015,6 @@ model Notification {
   @@index([messageId])
 }
 
-/// Préférences de notifications par utilisateur
-model NotificationPreference {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @unique @db.ObjectId
-
-  // Activer/désactiver les notifications
-  pushEnabled  Boolean @default(true)
-  emailEnabled Boolean @default(true)
-  soundEnabled Boolean @default(true)
-
-  // Préférences par type de notification
-  newMessageEnabled     Boolean @default(true)
-  missedCallEnabled     Boolean @default(true)
-  systemEnabled         Boolean @default(true)
-  conversationEnabled   Boolean @default(true)
-  replyEnabled          Boolean @default(true)
-  mentionEnabled        Boolean @default(true)
-  reactionEnabled       Boolean @default(true)
-  contactRequestEnabled Boolean @default(true)
-  memberJoinedEnabled   Boolean @default(true)
-
-  // Do Not Disturb (ne pas déranger)
-  dndEnabled   Boolean @default(false)
-  dndStartTime String? // Format: "22:00"
-  dndEndTime   String? // Format: "08:00"
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
 /// Centralise tous les toggles de features et consentements GDPR
 /// Pattern: DateTime? = null (désactivé) | Date (activé à cette date - audit trail)
@@ -1253,18 +1220,42 @@ model UserStats {
   user User @relation(fields: [userId], references: [id])
 }
 
-/// Préférence utilisateur générale
-model UserPreference {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId      String   @db.ObjectId
-  key         String
-  value       String
-  valueType   String   @default("string")
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+/// Préférences utilisateur centralisées (embedded documents JSON)
+model UserPreferences {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
 
-  user User @relation(fields: [userId], references: [id])
+  // ═══════════════════════════════════════════════════════════
+  // SOUS-OBJETS DE PRÉFÉRENCES (JSON Documents)
+  // ═══════════════════════════════════════════════════════════
+
+  /// Paramètres de confidentialité
+  privacy Json?
+
+  /// Paramètres audio (transcription, traduction, TTS)
+  audio Json?
+
+  /// Paramètres de messages (formatage, auto-save, etc.)
+  message Json?
+
+  /// Paramètres de notifications
+  notification Json?
+
+  /// Paramètres vidéo (calls, qualité, codec)
+  video Json?
+
+  /// Paramètres documents (preview, download, storage)
+  document Json?
+
+  /// Paramètres application (thème, langue, UI)
+  application Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
 }
 
 /// Préférence spécifique à une conversation

@@ -87,7 +87,7 @@ export class AuthHandler {
       if (userId) {
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, languagePreference: true }
+          select: { id: true, systemLanguage: true }
         });
 
         if (!user) {
@@ -99,7 +99,7 @@ export class AuthHandler {
           id: user.id,
           socketId: socket.id,
           isAnonymous: false,
-          language: language || user.languagePreference || 'en'
+          language: language || user.systemLanguage || 'en'
         };
 
         this._registerUser(user.id, socketUser, socket);
@@ -128,7 +128,7 @@ export class AuthHandler {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, languagePreference: true }
+      select: { id: true, systemLanguage: true }
     });
 
     if (!user) {
@@ -140,7 +140,7 @@ export class AuthHandler {
       id: user.id,
       socketId: socket.id,
       isAnonymous: false,
-      language: user.languagePreference || 'en'
+      language: user.systemLanguage || 'en'
     };
 
     this._registerUser(user.id, socketUser, socket);

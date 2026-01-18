@@ -8,6 +8,8 @@ import asyncio
 import json
 import logging
 import re
+import time
+import uuid
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -23,23 +25,33 @@ except ImportError:
 # Import de la configuration des limites
 from config.message_limits import can_translate_message
 
+# Import des constantes de disponibilité des pipelines
+try:
+    from services.zmq_audio_handler import AUDIO_PIPELINE_AVAILABLE
+except ImportError:
+    AUDIO_PIPELINE_AVAILABLE = False
+
 
 class TranslationHandler:
     """Handler pour les traductions texte via ZMQ"""
-    
-    def __init__(self, pool_manager, pub_socket, database_service=None):
+
+    def __init__(self, pool_manager, pub_socket, database_service=None, gateway_push_port=None, gateway_sub_port=None):
         """
         Initialise le handler de traduction
-        
+
         Args:
             pool_manager: TranslationPoolManager instance
             pub_socket: Socket ZMQ PUB pour publier les résultats
             database_service: Service de base de données optionnel
+            gateway_push_port: Port PULL du serveur (optionnel)
+            gateway_sub_port: Port PUB du serveur (optionnel)
         """
         self.pool_manager = pool_manager
         self.pub_socket = pub_socket
         self.db = database_service
-        
+        self.gateway_push_port = gateway_push_port
+        self.gateway_sub_port = gateway_sub_port
+
         # Cache Redis si disponible
         if CACHE_AVAILABLE:
             self.cache_service = get_translation_cache_service()

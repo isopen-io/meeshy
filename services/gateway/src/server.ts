@@ -45,12 +45,10 @@ import { messagesRoutes } from './routes/admin/messages';
 // import { communityAdminRoutes } from './routes/admin/communities';
 // import { linksAdminRoutes } from './routes/admin/links';
 import { userRoutes } from './routes/users';
-import userPreferencesRoutes from './routes/user-preferences';
 import userFeaturesRoutes from './routes/user-features';
+import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
-import notificationPreferencesRoutes from './routes/notification-preferences';
-import privacyPreferencesRoutes from './routes/privacy-preferences';
 import conversationEncryptionRoutes from './routes/conversation-encryption';
 import encryptionKeysRoutes from './routes/encryption-keys';
 import userEncryptionPreferencesRoutes from './routes/user-encryption-preferences';
@@ -795,11 +793,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });
 
+    // Register /me routes (NEW unified preferences API)
+    await this.server.register(meRoutes, { prefix: `${API_PREFIX}/me` });
+
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await this.server.register(pushTokenRoutes, { prefix: API_PREFIX });
-
-    // Register user preferences routes with /api prefix
-    await this.server.register(userPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register user features routes with /api prefix (GDPR consents, feature toggles)
     await this.server.register(userFeaturesRoutes, { prefix: API_PREFIX });
@@ -809,12 +807,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register community preferences routes with /api prefix
     await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
-
-    // Register notification preferences routes with /api prefix
-    await this.server.register(notificationPreferencesRoutes, { prefix: API_PREFIX });
-
-    // Register privacy preferences routes with /api prefix
-    await this.server.register(privacyPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation encryption routes with /api prefix
     await this.server.register(conversationEncryptionRoutes, { prefix: '' });
