@@ -1396,7 +1396,17 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                 mimeType: true,
                 fileUrl: true,
                 thumbnailUrl: true,
-                metadata: true
+                metadata: true,
+                transcription: {
+                  select: {
+                    id: true,
+                    transcribedText: true,
+                    language: true,
+                    confidence: true,
+                    source: true,
+                    voiceQualityAnalysis: true
+                  }
+                }
               },
               take: 3
             },

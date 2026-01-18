@@ -78,17 +78,15 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
     allowAnonymous: false
   });
 
-  const prefix = '/api/voice-analysis';
-
   // ═══════════════════════════════════════════════════════════════════════════
   // ATTACHMENT ANALYSIS ENDPOINTS
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * POST /api/voice-analysis/attachment/:id
+   * POST /attachments/:attachmentId/analysis
    * Analyze single attachment and persist in MessageAudioTranscription
    */
-  fastify.post(`${prefix}/attachment/:id`, {
+  fastify.post('/attachments/:attachmentId/analysis', {
     preHandler: authMiddleware,
     schema: {
       description:
@@ -97,9 +95,9 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       summary: 'Analyze attachment voice quality',
       params: {
         type: 'object',
-        required: ['id'],
+        required: ['attachmentId'],
         properties: {
-          id: {
+          attachmentId: {
             type: 'string',
             description: 'Attachment ID (MongoDB ObjectId)'
           }
@@ -155,7 +153,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
     }
   }, async (
     request: FastifyRequest<{
-      Params: { id: string };
+      Params: { attachmentId: string };
       Body: AnalyzeAttachmentBody;
     }>,
     reply: FastifyReply
@@ -169,7 +167,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       });
     }
 
-    const { id: attachmentId } = request.params;
+    const { attachmentId } = request.params;
     const { audioBase64, audioPath, analysisTypes, persist = true } = request.body;
 
     try {
@@ -212,10 +210,10 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * POST /api/voice-analysis/attachments/batch
+   * POST /attachments/batch/analysis
    * Analyze multiple attachments in parallel
    */
-  fastify.post(`${prefix}/attachments/batch`, {
+  fastify.post('/attachments/batch/analysis', {
     preHandler: authMiddleware,
     schema: {
       description:
@@ -342,10 +340,10 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * GET /api/voice-analysis/attachment/:id
+   * GET /attachments/:attachmentId/analysis
    * Get persisted analysis for an attachment
    */
-  fastify.get(`${prefix}/attachment/:id`, {
+  fastify.get('/attachments/:attachmentId/analysis', {
     preHandler: authMiddleware,
     schema: {
       description: 'Retrieve persisted voice analysis for an attachment from MessageAudioTranscription.voiceQualityAnalysis. Returns null if no analysis exists.',
@@ -353,9 +351,9 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       summary: 'Get attachment analysis',
       params: {
         type: 'object',
-        required: ['id'],
+        required: ['attachmentId'],
         properties: {
-          id: { type: 'string', description: 'Attachment ID' }
+          attachmentId: { type: 'string', description: 'Attachment ID' }
         }
       },
       response: {
@@ -378,7 +376,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (
-    request: FastifyRequest<{ Params: { id: string } }>,
+    request: FastifyRequest<{ Params: { attachmentId: string } }>,
     reply: FastifyReply
   ) => {
     const userId = request.auth?.userId;
@@ -390,7 +388,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       });
     }
 
-    const { id: attachmentId } = request.params;
+    const { attachmentId } = request.params;
 
     try {
       const analysis = await voiceAnalysisService.getAttachmentAnalysis(attachmentId);
@@ -414,10 +412,10 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * POST /api/voice-analysis/profile
+   * POST /voice/analysis
    * Analyze user voice profile and persist in UserVoiceModel
    */
-  fastify.post(`${prefix}/profile`, {
+  fastify.post('/voice/analysis', {
     preHandler: authMiddleware,
     schema: {
       description:
@@ -498,10 +496,10 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * GET /api/voice-analysis/profile
+   * GET /voice/analysis
    * Get persisted analysis for user voice profile
    */
-  fastify.get(`${prefix}/profile`, {
+  fastify.get('/voice/analysis', {
     preHandler: authMiddleware,
     schema: {
       description: 'Retrieve persisted voice analysis for user voice profile from UserVoiceModel.voiceCharacteristics. Returns null if no analysis exists.',
