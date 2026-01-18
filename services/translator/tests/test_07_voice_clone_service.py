@@ -304,22 +304,42 @@ async def test_voice_model_cache_save_load(voice_cache_dir, mock_database_servic
 
 @pytest.mark.asyncio
 async def test_voice_model_embedding_load(voice_cache_dir, mock_database_service):
-    """Test embedding loading from database mock"""
+    """Test embedding loading from Redis cache"""
     logger.info("Test 07.6: Embedding load")
 
     if not SERVICE_AVAILABLE:
         pytest.skip("VoiceCloneService not available")
 
-    VoiceCloneService._instance = None
-    service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
-    service.set_database_service(mock_database_service)
+    # Import directly from refactored modules
+    from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager
+    from services.redis_service import get_audio_cache_service
 
-    # Create embedding and store in mock database
+    audio_cache = get_audio_cache_service()
+    cache_manager = VoiceCloneCacheManager(
+        audio_cache=audio_cache,
+        voice_cache_dir=voice_cache_dir
+    )
+
+    # Create embedding and save to cache first
     embedding = np.random.randn(256).astype(np.float32)
-    embedding_bytes = embedding.tobytes()
-    mock_database_service._voice_embeddings["embed_test_user"] = embedding_bytes
 
-    # Create model without embedding loaded
+    # Create model with embedding and save to cache
+    model_with_embedding = VoiceModel(
+        user_id="embed_test_user",
+        embedding_path=str(voice_cache_dir / "embed_test_user" / "embedding.pkl"),
+        audio_count=1,
+        total_duration_ms=10000,
+        quality_score=0.5,
+        profile_id="test_embed_profile",
+        version=1,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        embedding=embedding
+    )
+
+    await cache_manager.save_model_to_cache(model_with_embedding)
+
+    # Create model without embedding
     model = VoiceModel(
         user_id="embed_test_user",
         embedding_path=str(voice_cache_dir / "embed_test_user" / "embedding.pkl"),
@@ -330,58 +350,63 @@ async def test_voice_model_embedding_load(voice_cache_dir, mock_database_service
 
     assert model.embedding is None
 
-    # Load embedding from mock database
-    loaded_model = await service._load_embedding(model)
+    # Load embedding from cache
+    loaded_model = await cache_manager.load_embedding(model)
 
     assert loaded_model.embedding is not None
     assert loaded_model.embedding.shape == (256,)
-    np.testing.assert_array_almost_equal(loaded_model.embedding, embedding)
+    np.testing.assert_array_almost_equal(loaded_model.embedding, embedding, decimal=5)
 
     logger.info("Embedding load works correctly")
 
 
 @pytest.mark.asyncio
 async def test_voice_clone_get_or_create_cached(voice_cache_dir, mock_database_service):
-    """Test get_or_create with cached model from mock database"""
+    """Test loading cached model from Redis cache"""
     logger.info("Test 07.7: Get or create with cache")
 
     if not SERVICE_AVAILABLE:
         pytest.skip("VoiceCloneService not available")
 
-    VoiceCloneService._instance = None
-    service = VoiceCloneService(voice_cache_dir=str(voice_cache_dir))
-    service.set_database_service(mock_database_service)
-    service.is_initialized = True
+    # Import directly from refactored modules
+    from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager
+    from services.redis_service import get_audio_cache_service
 
-    # Pre-create a cached model in mock database
+    audio_cache = get_audio_cache_service()
+    cache_manager = VoiceCloneCacheManager(
+        audio_cache=audio_cache,
+        voice_cache_dir=voice_cache_dir
+    )
+
+    # Pre-create a cached model
     user_id = "cached_user"
     embedding = np.random.randn(256).astype(np.float32)
-    embedding_bytes = embedding.tobytes()
 
-    # Store profile in mock database with camelCase keys (MongoDB schema)
-    # Use ISO format strings for datetime fields as expected by _load_cached_model
-    mock_database_service._voice_profiles[user_id] = {
-        "userId": user_id,
-        "audioCount": 2,
-        "totalDurationMs": 30000,
-        "qualityScore": 0.7,
-        "embeddingDimension": 256,
-        "embeddingModel": "openvoice_v2",
-        "profileId": f"prof_{user_id}",
-        "version": 1,
-        "createdAt": datetime.now().isoformat(),
-        "updatedAt": datetime.now().isoformat(),
-        "nextRecalibrationAt": (datetime.now() + timedelta(days=90)).isoformat()
-    }
-    mock_database_service._voice_embeddings[user_id] = embedding_bytes
+    model = VoiceModel(
+        user_id=user_id,
+        embedding_path=str(voice_cache_dir / user_id / "embedding.pkl"),
+        audio_count=2,
+        total_duration_ms=30000,
+        quality_score=0.7,
+        profile_id=f"prof_{user_id}",
+        version=1,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        next_recalibration_at=datetime.now() + timedelta(days=90),
+        embedding=embedding
+    )
 
-    # Get model (should use cache)
-    model = await service._load_cached_model(user_id)
+    # Save to cache
+    await cache_manager.save_model_to_cache(model)
 
-    assert model is not None
-    assert model.user_id == user_id
-    assert model.audio_count == 2
-    assert model.quality_score == 0.7
+    # Load from cache
+    loaded_model = await cache_manager.load_cached_model(user_id)
+
+    assert loaded_model is not None
+    assert loaded_model.user_id == user_id
+    assert loaded_model.audio_count == 2
+    assert loaded_model.quality_score == 0.7
+    assert loaded_model.embedding is not None
 
     logger.info("Cached model retrieved successfully")
 
@@ -588,7 +613,7 @@ def test_voice_characteristics_to_dict():
         voice_type="medium_female",
         estimated_gender="female",
         brightness=2000.0,
-        energy_mean=0.03
+        energy_mean=0.03  # Alias automatically converted to rms_energy
     )
 
     result = chars.to_dict()
@@ -600,8 +625,9 @@ def test_voice_characteristics_to_dict():
     assert result["classification"]["estimated_gender"] == "female"
     assert "spectral" in result
     assert result["spectral"]["brightness"] == 2000.0
-    assert "prosody" in result
-    assert result["prosody"]["energy_mean"] == 0.03
+    # Energy is in its own section now, not in prosody
+    assert "energy" in result
+    assert result["energy"]["mean"] == 0.03
 
     logger.info("VoiceCharacteristics to_dict works correctly")
 
