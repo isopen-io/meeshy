@@ -544,8 +544,8 @@ class TestZMQTranslationServer:
 
     def test_server_initialization(self, mock_translation_service, mock_database_service):
         """Test basic server initialization"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -567,10 +567,10 @@ class TestZMQTranslationServer:
         """Test server initialization with sockets"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -596,10 +596,10 @@ class TestZMQTranslationServer:
         """Test handling ping request"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -626,10 +626,10 @@ class TestZMQTranslationServer:
         """Test handling valid translation request"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -657,10 +657,10 @@ class TestZMQTranslationServer:
         """Test handling invalid translation request"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -682,10 +682,10 @@ class TestZMQTranslationServer:
         """Test handling malformed JSON"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -704,10 +704,10 @@ class TestZMQTranslationServer:
         """Test handling message that is too long for translation"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         # Mock can_translate_message to return False
                         with patch('services.zmq_server.can_translate_message', return_value=False):
                             from services.zmq_server import ZMQTranslationServer
@@ -735,8 +735,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_valid(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with valid translation"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -753,8 +753,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_empty(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with empty text"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -769,8 +769,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_error_patterns(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with error patterns"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -793,8 +793,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_low_confidence(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation with low confidence score"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -808,8 +808,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_same_as_original(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation when translated equals original"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -827,8 +827,8 @@ class TestZMQTranslationServer:
 
     def test_is_valid_translation_with_error_flag(self, mock_translation_service, mock_database_service):
         """Test _is_valid_translation when error flag is set"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -845,8 +845,8 @@ class TestZMQTranslationServer:
 
     def test_get_translation_error_reason(self, mock_translation_service, mock_database_service):
         """Test _get_translation_error_reason"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -863,10 +863,10 @@ class TestZMQTranslationServer:
         """Test publishing translation result"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -898,10 +898,10 @@ class TestZMQTranslationServer:
         """Test publishing invalid translation result (should not send)"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -935,10 +935,10 @@ class TestZMQTranslationServer:
         """Test stopping the server"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -959,8 +959,8 @@ class TestZMQTranslationServer:
 
     def test_get_server_stats(self, mock_translation_service, mock_database_service):
         """Test getting server statistics"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -981,8 +981,8 @@ class TestZMQTranslationServer:
     @pytest.mark.asyncio
     async def test_health_check_healthy(self, mock_translation_service, mock_database_service):
         """Test health check when healthy"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1000,8 +1000,8 @@ class TestZMQTranslationServer:
     @pytest.mark.asyncio
     async def test_health_check_unhealthy(self, mock_translation_service, mock_database_service):
         """Test health check when error occurs"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1029,10 +1029,10 @@ class TestAudioProcessing:
         """Test audio processing when pipeline not available"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         with patch('services.zmq_server.AUDIO_PIPELINE_AVAILABLE', False):
                             from services.zmq_server import ZMQTranslationServer
 
@@ -1062,10 +1062,10 @@ class TestAudioProcessing:
         """Test publishing audio error"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1101,10 +1101,10 @@ class TestVoiceAPIHandling:
         """Test Voice API request when handler not available"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1123,10 +1123,10 @@ class TestVoiceAPIHandling:
         """Test Voice API request with handler"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1152,8 +1152,8 @@ class TestVoiceAPIHandling:
 
     def test_set_voice_api_services(self, mock_translation_service, mock_database_service):
         """Test setting Voice API services"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1196,10 +1196,10 @@ class TestVoiceProfileHandling:
         """Test Voice Profile request when handler not available"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1218,10 +1218,10 @@ class TestVoiceProfileHandling:
         """Test Voice Profile request with handler"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1332,10 +1332,10 @@ class TestIntegration:
         """Test complete translation workflow"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1369,10 +1369,10 @@ class TestIntegration:
         """Test translation to multiple languages"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1487,8 +1487,8 @@ class TestAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_publish_translation_result_no_socket(self, mock_translation_service, mock_database_service):
         """Test publishing when socket is None"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1518,10 +1518,10 @@ class TestAdditionalCoverage:
         """Test audio processing with missing required fields"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         with patch('services.zmq_server.AUDIO_PIPELINE_AVAILABLE', True):
                             # Mock the audio pipeline
                             mock_pipeline = MagicMock()
@@ -1560,10 +1560,10 @@ class TestAdditionalCoverage:
         """Test Voice API handler with exception"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1591,10 +1591,10 @@ class TestAdditionalCoverage:
         """Test Voice Profile handler with exception"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1626,10 +1626,10 @@ class TestAdditionalCoverage:
         """Test publishing audio result"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1675,8 +1675,8 @@ class TestAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_publish_audio_result_no_socket(self, mock_translation_service, mock_database_service):
         """Test publishing audio result with no socket"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1704,8 +1704,8 @@ class TestAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_publish_audio_error_no_socket(self, mock_translation_service, mock_database_service):
         """Test publishing audio error with no socket"""
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context'):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context'):
                 from services.zmq_server import ZMQTranslationServer
 
                 server = ZMQTranslationServer(
@@ -1728,10 +1728,10 @@ class TestAdditionalCoverage:
         """Test handling when translation pool is full"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1791,10 +1791,10 @@ class TestAdditionalCoverage:
         """Test database connection in background"""
         context, pull_socket, pub_socket = mock_zmq_context
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_database_service):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_database_service):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1816,10 +1816,10 @@ class TestAdditionalCoverage:
         mock_db.connect = AsyncMock(return_value=False)
         mock_db.disconnect = AsyncMock()
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_db):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_db):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
@@ -1841,10 +1841,10 @@ class TestAdditionalCoverage:
         mock_db.connect = AsyncMock(side_effect=Exception("Connection error"))
         mock_db.disconnect = AsyncMock()
 
-        with patch('services.zmq_server.DatabaseService', return_value=mock_db):
-            with patch('services.zmq_server.zmq.asyncio.Context', return_value=context):
-                with patch('services.zmq_server.zmq.PULL', 1):
-                    with patch('services.zmq_server.zmq.PUB', 2):
+        with patch('services.zmq_server_core.DatabaseService', return_value=mock_db):
+            with patch('services.zmq_server_core.zmq.asyncio.Context', return_value=context):
+                with patch('services.zmq_server_core.zmq.PULL', 1):
+                    with patch('services.zmq_server_core.zmq.PUB', 2):
                         from services.zmq_server import ZMQTranslationServer
 
                         server = ZMQTranslationServer(
