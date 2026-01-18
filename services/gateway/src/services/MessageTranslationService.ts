@@ -8,6 +8,7 @@
 
 import { EventEmitter } from 'events';
 import * as path from 'path';
+import { promises as fs } from 'fs';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZMQTranslationClient, TranslationRequest, TranslationResult } from './ZmqTranslationClient';
 import { ZMQSingleton } from './ZmqSingleton';
@@ -883,6 +884,11 @@ export class MessageTranslationService extends EventEmitter {
       durationMs: number;
       voiceCloned: boolean;
       voiceQuality: number;
+      // Audio binaire (multipart ZMQ - plus efficace que base64)
+      _audioBinary?: Buffer | null;
+      audioMimeType?: string;
+      // Rétrocompatibilité base64 (legacy)
+      audioDataBase64?: string;
     }>;
     voiceModelUserId: string;
     voiceModelQuality: number;
@@ -891,7 +897,10 @@ export class MessageTranslationService extends EventEmitter {
     newVoiceProfile?: {
       userId: string;
       profileId: string;
-      embedding: string; // Base64
+      // Embedding binaire (multipart ZMQ - plus efficace)
+      _embeddingBinary?: Buffer | null;
+      // Rétrocompatibilité base64 (legacy)
+      embedding?: string;
       qualityScore: number;
       audioCount: number;
       totalDurationMs: number;
@@ -944,7 +953,44 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`   ✅ Transcription sauvegardée (${data.transcription.language})`);
 
       // 3. Sauvegarder chaque audio traduit (upsert pour éviter les doublons)
+      // Les données audio arrivent en base64 depuis le Translator (pas de fichier partagé)
+      const savedTranslatedAudios: typeof data.translatedAudios = [];
+
       for (const translatedAudio of data.translatedAudios) {
+        let localAudioPath = translatedAudio.audioPath;
+        let localAudioUrl = translatedAudio.audioUrl;
+
+        // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
+        // Fallback sur base64 pour rétrocompatibilité
+        const audioBinary = translatedAudio._audioBinary;
+        const audioBase64 = translatedAudio.audioDataBase64;
+
+        if (audioBinary || audioBase64) {
+          try {
+            // Créer le dossier de sortie s'il n'existe pas
+            const translatedDir = path.resolve(process.cwd(), 'uploads/attachments/translated');
+            await fs.mkdir(translatedDir, { recursive: true });
+
+            // Générer un nom de fichier unique
+            const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
+            const filename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
+            localAudioPath = path.resolve(translatedDir, filename);
+
+            // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
+            const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
+            await fs.writeFile(localAudioPath, audioBuffer);
+
+            // Générer l'URL accessible
+            localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
+
+            const source = audioBinary ? 'multipart' : 'base64';
+            logger.info(`   📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
+          } catch (fileError) {
+            logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
+            // Continuer avec les chemins originaux du Translator (fallback)
+          }
+        }
+
         await this.prisma.messageTranslatedAudio.upsert({
           where: {
             attachmentId_targetLanguage: {
@@ -954,8 +1000,8 @@ export class MessageTranslationService extends EventEmitter {
           },
           update: {
             translatedText: translatedAudio.translatedText,
-            audioPath: translatedAudio.audioPath,
-            audioUrl: translatedAudio.audioUrl,
+            audioPath: localAudioPath,
+            audioUrl: localAudioUrl,
             durationMs: translatedAudio.durationMs,
             voiceCloned: translatedAudio.voiceCloned,
             voiceQuality: translatedAudio.voiceQuality,
@@ -966,13 +1012,20 @@ export class MessageTranslationService extends EventEmitter {
             messageId: data.messageId,
             targetLanguage: translatedAudio.targetLanguage,
             translatedText: translatedAudio.translatedText,
-            audioPath: translatedAudio.audioPath,
-            audioUrl: translatedAudio.audioUrl,
+            audioPath: localAudioPath,
+            audioUrl: localAudioUrl,
             durationMs: translatedAudio.durationMs,
             voiceCloned: translatedAudio.voiceCloned,
             voiceQuality: translatedAudio.voiceQuality,
             voiceModelId: data.voiceModelUserId || null
           }
+        });
+
+        // Mettre à jour l'URL locale dans l'objet pour l'événement
+        savedTranslatedAudios.push({
+          ...translatedAudio,
+          audioPath: localAudioPath,
+          audioUrl: localAudioUrl
         });
 
         logger.info(`   ✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
@@ -984,8 +1037,16 @@ export class MessageTranslationService extends EventEmitter {
           const nvp = data.newVoiceProfile;
           logger.info(`   📦 Sauvegarde nouveau profil vocal: ${nvp.userId}`);
 
-          // Décoder l'embedding Base64 en Buffer
-          const embeddingBuffer = Buffer.from(nvp.embedding, 'base64');
+          // MULTIPART: Utiliser binaire direct ou décoder base64 (fallback)
+          const embeddingBuffer = nvp._embeddingBinary || (nvp.embedding ? Buffer.from(nvp.embedding, 'base64') : null);
+
+          if (!embeddingBuffer) {
+            logger.error(`   ❌ Pas d'embedding disponible pour le profil vocal`);
+            throw new Error('Missing embedding data');
+          }
+
+          const source = nvp._embeddingBinary ? 'multipart' : 'base64';
+          logger.info(`   📦 Embedding (${source}): ${(embeddingBuffer.length / 1024).toFixed(1)}KB`);
 
           // Upsert le profil vocal dans UserVoiceModel
           await this.prisma.userVoiceModel.upsert({
@@ -1022,12 +1083,13 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // 5. Émettre événement pour notifier les clients (Socket.IO)
+      // Utiliser savedTranslatedAudios qui contient les URLs locales accessibles
       this.emit('audioTranslationReady', {
         taskId: data.taskId,
         messageId: data.messageId,
         attachmentId: data.attachmentId,
         transcription: data.transcription,
-        translatedAudios: data.translatedAudios,
+        translatedAudios: savedTranslatedAudios,
         processingTimeMs: data.processingTimeMs
       });
 
@@ -1378,10 +1440,15 @@ export class MessageTranslationService extends EventEmitter {
     };
   } | null> {
     try {
+      logger.info(`🔍 [GATEWAY-TRACE] ======== DÉBUT TRANSCRIPTION ========`);
+      logger.info(`🔍 [GATEWAY-TRACE] Attachment ID: ${attachmentId}`);
+
       if (!this.zmqClient) {
-        logger.error('[TranslationService] ZMQ Client non disponible pour la transcription');
+        logger.error('[GATEWAY-TRACE] ❌ ZMQ Client non disponible pour la transcription');
         return null;
       }
+
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 1: Récupération attachment depuis BDD...`);
 
       // 1. Récupérer l'attachement depuis la BDD
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -1399,25 +1466,45 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       if (!attachment) {
-        logger.error(`[TranslationService] Attachment non trouvé: ${attachmentId}`);
+        logger.error(`🔍 [GATEWAY-TRACE] ❌ Attachment non trouvé: ${attachmentId}`);
         return null;
       }
+
+      logger.info(`🔍 [GATEWAY-TRACE] ✅ Attachment récupéré:`);
+      logger.info(`   - ID: ${attachment.id}`);
+      logger.info(`   - Message ID: ${attachment.messageId}`);
+      logger.info(`   - File: ${attachment.fileName}`);
+      logger.info(`   - MIME: ${attachment.mimeType}`);
+      logger.info(`   - Duration: ${attachment.duration}ms`);
+      logger.info(`   - URL: ${attachment.fileUrl}`);
 
       // Vérifier que c'est un fichier audio
       if (!attachment.mimeType.startsWith('audio/')) {
-        logger.error(`[TranslationService] Attachment n'est pas un audio: ${attachment.mimeType}`);
+        logger.error(`🔍 [GATEWAY-TRACE] ❌ Pas un fichier audio: ${attachment.mimeType}`);
         return null;
       }
 
-      logger.info(`📝 [TranslationService] Transcription de l'attachment ${attachmentId}`);
-      logger.info(`   📎 File: ${attachment.fileName}`);
-      logger.info(`   ⏱️ Duration: ${attachment.duration}ms`);
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 2: Construction du chemin audio absolu...`);
 
       // 2. Construire le chemin ABSOLU du fichier audio
       // Le fileUrl est de la forme /api/v1/attachments/file/2026%2F01%2F.../audio.m4a (URL-encoded)
       // On doit extraire le chemin relatif, le décoder, et le convertir en chemin absolu
       const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
       const audioPath = path.resolve(process.cwd(), relativePath);
+
+      logger.info(`🔍 [GATEWAY-TRACE] Chemins calculés:`);
+      logger.info(`   - Relative: ${relativePath}`);
+      logger.info(`   - Absolute: ${audioPath}`);
+      logger.info(`   - Exists: ${require('fs').existsSync(audioPath)}`);
+
+      if (!require('fs').existsSync(audioPath)) {
+        logger.error(`🔍 [GATEWAY-TRACE] ❌ FICHIER AUDIO INTROUVABLE: ${audioPath}`);
+      } else {
+        const stats = require('fs').statSync(audioPath);
+        logger.info(`🔍 [GATEWAY-TRACE] ✅ Fichier existant, taille: ${(stats.size / 1024).toFixed(2)} KB`);
+      }
+
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 3: Envoi requête ZMQ vers Translator...`);
 
       // 3. Envoyer la requête de transcription au Translator (multipart binaire)
       const taskId = await this.zmqClient.sendTranscriptionOnlyRequest({
@@ -1426,8 +1513,11 @@ export class MessageTranslationService extends EventEmitter {
         audioPath: audioPath
       });
 
-      logger.info(`   ✅ Transcription request sent: taskId=${taskId}`);
+      logger.info(`🔍 [GATEWAY-TRACE] ✅ Requête ZMQ envoyée avec succès`);
+      logger.info(`🔍 [GATEWAY-TRACE] Task ID: ${taskId}`);
       this.stats.translation_requests_sent++;
+
+      logger.info(`🔍 [GATEWAY-TRACE] ======== FIN TRANSCRIPTION (requête envoyée) ========`);
 
       return {
         taskId,
@@ -1442,7 +1532,8 @@ export class MessageTranslationService extends EventEmitter {
       };
 
     } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur transcription attachment: ${error}`);
+      logger.error(`🔍 [GATEWAY-TRACE] ❌ ERREUR TRANSCRIPTION: ${error}`);
+      logger.error(`🔍 [GATEWAY-TRACE] Stack: ${error instanceof Error ? error.stack : 'N/A'}`);
       this.stats.errors++;
       return null;
     }

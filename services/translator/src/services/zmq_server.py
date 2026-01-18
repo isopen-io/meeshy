@@ -1526,10 +1526,124 @@ class ZMQTranslationServer:
             )
 
     async def _publish_audio_result(self, task_id: str, result, processing_time: int):
-        """Publie le résultat du processing audio via PUB"""
+        """
+        Publie le résultat du processing audio via PUB en multipart.
+
+        Architecture ZMQ Multipart:
+        - Frame 0: JSON metadata avec binaryFrames
+        - Frame 1+: Audios traduits binaires (un par langue)
+        - Frame N: Embedding vocal (si nouveau profil créé)
+
+        Avantages vs base64:
+        - Économie de 33% de bande passante
+        - Pas d'encodage/décodage CPU
+        - Support de fichiers volumineux
+        """
         try:
-            # Construire le message de résultat
-            message = {
+            import base64
+
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 1: Préparer les frames binaires et le mapping
+            # ═══════════════════════════════════════════════════════════════
+            binary_frames = []
+            binary_frames_info = {}
+            frame_index = 1  # Frame 0 = JSON metadata
+
+            # Préparer les métadonnées des audios traduits (sans base64)
+            translated_audios_metadata = []
+
+            for t in result.translations.values():
+                # Décoder l'audio base64 → bytes pour envoi binaire
+                audio_bytes = None
+                if t.audio_data_base64:
+                    try:
+                        audio_bytes = base64.b64decode(t.audio_data_base64)
+                        binary_frames.append(audio_bytes)
+
+                        # Enregistrer l'indice du frame binaire
+                        audio_key = f"audio_{t.language}"
+                        binary_frames_info[audio_key] = {
+                            'index': frame_index,
+                            'size': len(audio_bytes),
+                            'mimeType': t.audio_mime_type or 'audio/mp3'
+                        }
+                        frame_index += 1
+
+                        logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
+                    except Exception as e:
+                        logger.warning(f"[MULTIPART] Erreur décodage audio {t.language}: {e}")
+                elif t.audio_path and os.path.exists(t.audio_path):
+                    # Si pas de base64, charger depuis le fichier
+                    try:
+                        with open(t.audio_path, 'rb') as f:
+                            audio_bytes = f.read()
+                        binary_frames.append(audio_bytes)
+
+                        audio_key = f"audio_{t.language}"
+                        binary_frames_info[audio_key] = {
+                            'index': frame_index,
+                            'size': len(audio_bytes),
+                            'mimeType': t.audio_mime_type or 'audio/mp3'
+                        }
+                        frame_index += 1
+
+                        logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} depuis fichier ({len(audio_bytes)} bytes)")
+                    except Exception as e:
+                        logger.warning(f"[MULTIPART] Erreur lecture fichier audio {t.language}: {e}")
+
+                # Metadata sans base64 (contient juste le mapping vers le frame)
+                translated_audios_metadata.append({
+                    'targetLanguage': t.language,
+                    'translatedText': t.translated_text,
+                    'audioUrl': t.audio_url,
+                    'audioPath': t.audio_path,
+                    'durationMs': t.duration_ms,
+                    'voiceCloned': t.voice_cloned,
+                    'voiceQuality': t.voice_quality,
+                    'audioMimeType': t.audio_mime_type or 'audio/mp3'
+                    # Pas de audioDataBase64 - données dans binaryFrames
+                })
+
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 2: Ajouter l'embedding vocal si présent
+            # ═══════════════════════════════════════════════════════════════
+            new_voice_profile_metadata = None
+            if hasattr(result, 'new_voice_profile') and result.new_voice_profile:
+                nvp = result.new_voice_profile
+
+                # Décoder l'embedding base64 → bytes
+                try:
+                    embedding_bytes = base64.b64decode(nvp.embedding_base64)
+                    binary_frames.append(embedding_bytes)
+
+                    binary_frames_info['embedding'] = {
+                        'index': frame_index,
+                        'size': len(embedding_bytes)
+                    }
+                    frame_index += 1
+
+                    logger.debug(f"[MULTIPART] Frame {frame_index-1}: embedding vocal ({len(embedding_bytes)} bytes)")
+                except Exception as e:
+                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {e}")
+
+                # Metadata sans base64
+                new_voice_profile_metadata = {
+                    'userId': nvp.user_id,
+                    'profileId': nvp.profile_id,
+                    # Pas de embedding base64 - données dans binaryFrames
+                    'qualityScore': nvp.quality_score,
+                    'audioCount': nvp.audio_count,
+                    'totalDurationMs': nvp.total_duration_ms,
+                    'version': nvp.version,
+                    'fingerprint': nvp.fingerprint,
+                    'voiceCharacteristics': nvp.voice_characteristics
+                }
+                logger.info(f"📦 [TRANSLATOR] Nouveau profil vocal multipart pour Gateway: {nvp.user_id}")
+
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 3: Construire le JSON metadata (Frame 0)
+            # ═══════════════════════════════════════════════════════════════
+            metadata = {
                 'type': 'audio_process_completed',
                 'taskId': task_id,
                 'messageId': result.message_id,
@@ -1541,49 +1655,39 @@ class ZMQTranslationServer:
                     'source': result.original.source,
                     'segments': result.original.segments
                 },
-                'translatedAudios': [
-                    {
-                        'targetLanguage': t.language,
-                        'translatedText': t.translated_text,
-                        'audioUrl': t.audio_url,
-                        'audioPath': t.audio_path,
-                        'durationMs': t.duration_ms,
-                        'voiceCloned': t.voice_cloned,
-                        'voiceQuality': t.voice_quality
-                    }
-                    for t in result.translations.values()
-                ],
+                'translatedAudios': translated_audios_metadata,
                 'voiceModelUserId': result.voice_model_user_id,
                 'voiceModelQuality': result.voice_model_quality,
                 'processingTimeMs': processing_time,
-                'timestamp': time.time()
+                'timestamp': time.time(),
+                # Mapping des frames binaires
+                'binaryFrames': binary_frames_info
             }
 
-            # Inclure le nouveau profil vocal si créé par Translator
-            # Gateway doit le sauvegarder dans MongoDB pour réutilisation future
-            if hasattr(result, 'new_voice_profile') and result.new_voice_profile:
-                nvp = result.new_voice_profile
-                message['newVoiceProfile'] = {
-                    'userId': nvp.user_id,
-                    'profileId': nvp.profile_id,
-                    'embedding': nvp.embedding_base64,
-                    'qualityScore': nvp.quality_score,
-                    'audioCount': nvp.audio_count,
-                    'totalDurationMs': nvp.total_duration_ms,
-                    'version': nvp.version,
-                    'fingerprint': nvp.fingerprint,
-                    'voiceCharacteristics': nvp.voice_characteristics
-                }
-                logger.info(f"📦 [TRANSLATOR] Nouveau profil vocal inclus pour Gateway: {nvp.user_id}")
+            if new_voice_profile_metadata:
+                metadata['newVoiceProfile'] = new_voice_profile_metadata
 
+            # ═══════════════════════════════════════════════════════════════
+            # ÉTAPE 4: Envoyer via multipart
+            # ═══════════════════════════════════════════════════════════════
             if self.pub_socket:
-                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
-                logger.info(f"✅ [TRANSLATOR] Audio result publié: {result.message_id}")
+                # Construire les frames: [JSON, audio1, audio2, ..., embedding]
+                frames = [json.dumps(metadata).encode('utf-8')] + binary_frames
+
+                # Calculer la taille totale
+                total_size = sum(len(f) for f in frames)
+
+                await self.pub_socket.send_multipart(frames)
+
+                logger.info(f"✅ [TRANSLATOR] Audio result multipart publié: {result.message_id}")
+                logger.info(f"   📦 {len(frames)} frames, {total_size:,} bytes total ({len(binary_frames)} binaires)")
             else:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _publish_audio_error(
         self,

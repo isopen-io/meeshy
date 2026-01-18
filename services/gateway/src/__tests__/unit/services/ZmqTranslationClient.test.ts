@@ -350,6 +350,13 @@ describe('ZMQTranslationClient', () => {
     });
 
     it('should send audio process request successfully', async () => {
+      // Mock loadAudioAsBinary pour retourner un Buffer fake
+      jest.spyOn(client as any, 'loadAudioAsBinary').mockResolvedValue({
+        buffer: Buffer.from('fake-audio-data'),
+        mimeType: 'audio/mp3',
+        size: 15
+      });
+
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-audio-123',
         attachmentId: 'attach-456',
@@ -367,14 +374,30 @@ describe('ZMQTranslationClient', () => {
 
       expect(taskId).toBe('test-uuid-1234');
 
-      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      // Le message est maintenant envoyé en multipart (array de Buffers)
+      const frames = (mockPushSocket.send as jest.Mock).mock.calls[0][0];
+      expect(Array.isArray(frames)).toBe(true);
+      expect(frames.length).toBe(2); // JSON + audio binary
+
+      // Le premier frame est le JSON
+      const sentMessage = JSON.parse(frames[0].toString('utf-8'));
       expect(sentMessage.type).toBe('audio_process');
       expect(sentMessage.messageId).toBe('msg-audio-123');
       expect(sentMessage.attachmentId).toBe('attach-456');
       expect(sentMessage.generateVoiceClone).toBe(true);
+
+      // Le deuxième frame est l'audio binaire
+      expect(Buffer.isBuffer(frames[1])).toBe(true);
     });
 
     it('should include mobile transcription when provided', async () => {
+      // Mock loadAudioAsBinary pour retourner un Buffer fake
+      jest.spyOn(client as any, 'loadAudioAsBinary').mockResolvedValue({
+        buffer: Buffer.from('fake-audio-data'),
+        mimeType: 'audio/mp3',
+        size: 15
+      });
+
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-audio-123',
         attachmentId: 'attach-456',
@@ -396,7 +419,12 @@ describe('ZMQTranslationClient', () => {
 
       await client.sendAudioProcessRequest(request);
 
-      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      // Le message est maintenant envoyé en multipart (array de Buffers)
+      const frames = (mockPushSocket.send as jest.Mock).mock.calls[0][0];
+      expect(Array.isArray(frames)).toBe(true);
+
+      // Le premier frame est le JSON
+      const sentMessage = JSON.parse(frames[0].toString('utf-8'));
       expect(sentMessage.mobileTranscription).toBeDefined();
       expect(sentMessage.mobileTranscription.text).toBe('Hello from mobile');
     });

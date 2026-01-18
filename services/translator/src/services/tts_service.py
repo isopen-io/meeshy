@@ -257,6 +257,9 @@ class UnifiedTTSResult:
     text_length: int
     model_used: TTSModel
     model_info: TTSModelInfo
+    # Audio en base64 pour transmission directe au Gateway (pas de fichier partagé)
+    audio_data_base64: Optional[str] = None
+    audio_mime_type: Optional[str] = None
 
 class UnifiedTTSService:
     """
@@ -856,6 +859,19 @@ class UnifiedTTSService:
 
             model_info = TTS_MODEL_INFO[self.current_model]
 
+            # Lire l'audio et l'encoder en base64 pour transmission au Gateway
+            audio_data_base64 = None
+            audio_mime_type = None
+            try:
+                import base64
+                with open(output_path, 'rb') as f:
+                    audio_bytes = f.read()
+                audio_data_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+                audio_mime_type = f"audio/{output_format}"
+                logger.debug(f"[TTS] Audio encodé en base64: {len(audio_data_base64)} chars ({len(audio_bytes)} bytes)")
+            except Exception as e:
+                logger.warning(f"[TTS] Erreur encodage base64: {e}")
+
             logger.info(
                 f"[TTS] ✅ Synthèse terminée: {output_filename} "
                 f"(dur={duration_ms}ms, time={processing_time}ms, model={self.current_model.value})"
@@ -872,7 +888,9 @@ class UnifiedTTSService:
                 processing_time_ms=processing_time,
                 text_length=len(text),
                 model_used=self.current_model,
-                model_info=model_info
+                model_info=model_info,
+                audio_data_base64=audio_data_base64,
+                audio_mime_type=audio_mime_type
             )
 
         except Exception as e:

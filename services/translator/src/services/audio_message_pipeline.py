@@ -83,6 +83,9 @@ class TranslatedAudioVersion:
     voice_cloned: bool
     voice_quality: float
     processing_time_ms: int
+    # Audio en base64 pour transmission directe au Gateway
+    audio_data_base64: Optional[str] = None
+    audio_mime_type: Optional[str] = None
 
 
 @dataclass
@@ -136,7 +139,10 @@ class AudioMessageResult:
                     "duration_ms": t.duration_ms,
                     "format": t.format,
                     "voice_cloned": t.voice_cloned,
-                    "voice_quality": t.voice_quality
+                    "voice_quality": t.voice_quality,
+                    # Audio en base64 pour Gateway (pas de fichier partagé)
+                    "audio_data_base64": t.audio_data_base64,
+                    "audio_mime_type": t.audio_mime_type
                 }
                 for lang, t in self.translations.items()
             },
@@ -416,7 +422,45 @@ class AudioMessagePipeline:
                 sender_id=sender_id
             )
 
-        logger.info(f"[PIPELINE] 🎯 Langues cibles: {target_languages}")
+        logger.info(f"[PIPELINE] 🎯 Langues cibles initiales: {target_languages}")
+
+        # ═══════════════════════════════════════════════════════════════
+        # FILTRER LA LANGUE ORIGINALE (pas besoin de traduire vers la langue source)
+        # ═══════════════════════════════════════════════════════════════
+        source_language = transcription.language
+        original_target_count = len(target_languages)
+        target_languages = [lang for lang in target_languages if lang != source_language]
+
+        if len(target_languages) < original_target_count:
+            logger.info(f"[PIPELINE] 🔇 Langue source '{source_language}' exclue des cibles (évite traduction redondante)")
+
+        if not target_languages:
+            logger.info(f"[PIPELINE] ⚠️ Aucune langue cible après filtrage - pas de traduction nécessaire")
+            # Retourner un résultat avec juste la transcription, sans traductions
+            return AudioMessageResult(
+                message_id=message_id,
+                attachment_id=attachment_id,
+                original=OriginalAudio(
+                    audio_path=audio_path,
+                    audio_url=audio_url,
+                    transcription=transcription.text,
+                    language=transcription.language,
+                    duration_ms=transcription.duration_ms,
+                    confidence=transcription.confidence,
+                    source=transcription.source,
+                    segments=[{
+                        "text": s.text,
+                        "startMs": s.start_ms,
+                        "endMs": s.end_ms
+                    } for s in transcription.segments] if transcription.segments else None
+                ),
+                translations={},
+                voice_model_user_id=sender_id,
+                voice_model_quality=0.0,
+                processing_time_ms=int((time.time() - start_time) * 1000)
+            )
+
+        logger.info(f"[PIPELINE] 🎯 Langues cibles finales: {target_languages}")
 
         # ═══════════════════════════════════════════════════════════════
         # ÉTAPE 3: CLONAGE VOCAL
@@ -431,30 +475,44 @@ class AudioMessagePipeline:
                 # Option 1: Utiliser le profil vocal existant fourni par Gateway
                 # (cas des messages transférés - utiliser la voix de l'émetteur original)
                 if use_original_voice and existing_voice_profile:
-                    logger.info(
-                        f"[PIPELINE] 📦 Utilisation du profil vocal Gateway "
-                        f"(original_sender={original_sender_id or 'unknown'})"
-                    )
-                    voice_model = await self.voice_clone_service.create_voice_model_from_gateway_profile(
-                        profile_data=existing_voice_profile,
-                        user_id=original_sender_id or sender_id
-                    )
-                    if voice_model:
-                        voice_model_user_id = original_sender_id or sender_id
+                    embedding = existing_voice_profile.get('embedding')
+                    if embedding:
                         logger.info(
-                            f"[PIPELINE] ✅ Modèle voix (Gateway): "
-                            f"user={voice_model_user_id}, quality={voice_model.quality_score:.2f}"
+                            f"[PIPELINE] 📦 Utilisation du profil vocal Gateway "
+                            f"(original_sender={original_sender_id or 'unknown'})"
+                        )
+                        voice_model = await self.voice_clone_service.create_voice_model_from_gateway_profile(
+                            profile_data=existing_voice_profile,
+                            user_id=original_sender_id or sender_id
+                        )
+                        if voice_model:
+                            voice_model_user_id = original_sender_id or sender_id
+                            logger.info(
+                                f"[PIPELINE] ✅ Modèle voix (Gateway): "
+                                f"user={voice_model_user_id}, quality={voice_model.quality_score:.2f}"
+                            )
+                    else:
+                        logger.warning(
+                            f"[PIPELINE] ⚠️ Profil Gateway fourni mais SANS embedding - "
+                            f"clonage depuis audio source requis"
                         )
 
-                # Option 2: Créer/récupérer le modèle de voix normalement
+                # Option 2: Créer/récupérer le modèle de voix depuis l'audio source
                 if voice_model is None:
+                    logger.info(
+                        f"[PIPELINE] 🎙️ Clonage vocal depuis AUDIO SOURCE "
+                        f"(audio_path={audio_path}, sender={sender_id})"
+                    )
                     voice_model = await self.voice_clone_service.get_or_create_voice_model(
                         user_id=sender_id,
                         current_audio_path=audio_path,
                         current_audio_duration_ms=audio_duration_ms or transcription.duration_ms
                     )
                     voice_model_user_id = sender_id
-                    logger.info(f"[PIPELINE] ✅ Modèle voix: quality={voice_model.quality_score:.2f}")
+                    logger.info(
+                        f"[PIPELINE] ✅ Modèle voix (Audio Source): "
+                        f"user={voice_model_user_id}, quality={voice_model.quality_score:.2f}"
+                    )
 
             except Exception as e:
                 logger.warning(f"[PIPELINE] ⚠️ Échec clonage vocal: {e}")
@@ -475,17 +533,41 @@ class AudioMessagePipeline:
         for lang in target_languages:
             if cached_translations.get(lang):
                 cached = cached_translations[lang]
+                cached_audio_path = cached.get("audio_path", "")
+
+                # Lire le fichier audio et l'encoder en base64 pour le Gateway
+                audio_data_base64 = None
+                audio_mime_type = None
+                if cached_audio_path and os.path.exists(cached_audio_path):
+                    try:
+                        import base64
+                        with open(cached_audio_path, 'rb') as f:
+                            audio_bytes = f.read()
+                        audio_data_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+                        audio_format = cached.get("format", "mp3")
+                        audio_mime_type = f"audio/{audio_format}"
+                        logger.debug(f"[PIPELINE] Audio cache encodé en base64: {lang} ({len(audio_bytes)} bytes)")
+                    except Exception as e:
+                        logger.warning(f"[PIPELINE] Erreur encodage base64 cache {lang}: {e}")
+                else:
+                    # Fichier cache introuvable - on doit regénérer
+                    logger.warning(f"[PIPELINE] ⚠️ Fichier cache introuvable: {cached_audio_path} - regénération nécessaire")
+                    languages_to_process.append(lang)
+                    continue
+
                 logger.info(f"[PIPELINE] ⚡ Audio {lang} en cache: {cached.get('audio_url', 'N/A')}")
                 translations[lang] = TranslatedAudioVersion(
                     language=lang,
                     translated_text=cached.get("translated_text", ""),
-                    audio_path=cached.get("audio_path", ""),
+                    audio_path=cached_audio_path,
                     audio_url=cached.get("audio_url", ""),
                     duration_ms=cached.get("duration_ms", 0),
                     format=cached.get("format", "mp3"),
                     voice_cloned=cached.get("voice_cloned", False),
                     voice_quality=cached.get("voice_quality", 0.0),
-                    processing_time_ms=0  # Instantané depuis cache
+                    processing_time_ms=0,  # Instantané depuis cache
+                    audio_data_base64=audio_data_base64,
+                    audio_mime_type=audio_mime_type
                 )
             else:
                 languages_to_process.append(lang)
@@ -535,6 +617,8 @@ class AudioMessagePipeline:
                     logger.info(f"[PIPELINE] ✅ Audio généré ({target_lang}): {tts_result.audio_url} [{lang_time}ms]")
 
                     # 4d. Mettre en cache l'audio traduit (pour réutilisation cross-conversation)
+                    # NOTE: On ne met PAS le base64 en cache (trop volumineux)
+                    # Le cache stocke uniquement les métadonnées
                     audio_data = {
                         "translated_text": translated_text,
                         "audio_path": tts_result.audio_path,
@@ -557,7 +641,10 @@ class AudioMessagePipeline:
                         format=tts_result.format,
                         voice_cloned=tts_result.voice_cloned,
                         voice_quality=tts_result.voice_quality,
-                        processing_time_ms=tts_result.processing_time_ms
+                        processing_time_ms=tts_result.processing_time_ms,
+                        # Audio en base64 pour transmission directe au Gateway
+                        audio_data_base64=tts_result.audio_data_base64,
+                        audio_mime_type=tts_result.audio_mime_type
                     ))
 
                 except Exception as e:
