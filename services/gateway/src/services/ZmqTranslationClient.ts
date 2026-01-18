@@ -222,6 +222,9 @@ export interface TranslatedAudioData {
   durationMs: number;
   voiceCloned: boolean;
   voiceQuality: number;
+  // Audio en base64 pour transmission directe (pas de fichier partagé)
+  audioDataBase64?: string;
+  audioMimeType?: string;
 }
 
 export interface AudioProcessCompletedEvent {
@@ -611,17 +614,22 @@ export class ZMQTranslationClient extends EventEmitter {
         // Essayer de recevoir un message de manière non-bloquante
         try {
           const messages = await this.subSocket.receive();
-          
+
           if (messages && messages.length > 0) {
-            const [message] = messages as Buffer[];
-            
+            // Convertir messages en array de Buffer
+            const frames = messages as Buffer[];
+
             // LOG APRÈS RÉCEPTION
             logger.info('🔍 [GATEWAY] APRÈS RÉCEPTION SUB:');
-            logger.info(`   📋 Message reçu (taille): ${message.length} bytes`);
-            // logger.info(`   📋 Socket SUB state: ${this.subSocket}`); // Reduced log
-            logger.info(`📨 [ZMQ-Client] Message reçu dans la boucle (taille: ${message.length} bytes)`);
-            
-            await this._handleTranslationResult(message);
+            if (frames.length === 1) {
+              logger.info(`   📋 Message simple (taille): ${frames[0].length} bytes`);
+            } else {
+              const totalSize = frames.reduce((sum, f) => sum + f.length, 0);
+              logger.info(`   📋 Message multipart: ${frames.length} frames, ${totalSize} bytes total`);
+            }
+
+            // Passer tous les frames (simple ou multipart)
+            await this._handleTranslationResult(frames.length === 1 ? frames[0] : frames);
           }
         } catch (receiveError) {
           // Pas de message disponible ou erreur de réception
@@ -643,11 +651,36 @@ export class ZMQTranslationClient extends EventEmitter {
     (this as any).pollingIntervalId = intervalId;
   }
 
-  private async _handleTranslationResult(message: Buffer): Promise<void> {
+  /**
+   * Gère un message ZMQ (simple JSON ou multipart).
+   *
+   * Pour les messages multipart (audio_process_completed):
+   * - Frame 0: JSON metadata avec binaryFrames
+   * - Frame 1+: Données binaires (audios, embeddings)
+   */
+  private async _handleTranslationResult(message: Buffer | Buffer[]): Promise<void> {
     try {
-      const messageStr = message.toString('utf-8');
+      // Déterminer si c'est multipart
+      let firstFrame: Buffer;
+      let binaryFrames: Buffer[] = [];
+
+      if (Array.isArray(message)) {
+        // Multipart: premier frame = JSON, reste = binaires
+        [firstFrame, ...binaryFrames] = message;
+      } else {
+        // Simple: un seul frame JSON
+        firstFrame = message;
+      }
+
+      const messageStr = firstFrame.toString('utf-8');
       const event: ZMQEvent = JSON.parse(messageStr);
-      
+
+      // Log multipart
+      if (binaryFrames.length > 0) {
+        const totalSize = binaryFrames.reduce((sum, f) => sum + f.length, 0);
+        logger.info(`📦 [GATEWAY] Multipart reçu: ${binaryFrames.length} frames binaires, ${totalSize} bytes`);
+      }
+
       // Vérifier le type d'événement
       if (event.type === 'translation_completed') {
         const completedEvent = event as TranslationCompletedEvent;
@@ -719,7 +752,7 @@ export class ZMQTranslationClient extends EventEmitter {
         this.pendingRequests.delete(errorEvent.taskId);
 
       // ═══════════════════════════════════════════════════════════════
-      // AUDIO PROCESS EVENTS
+      // AUDIO PROCESS EVENTS (MULTIPART)
       // ═══════════════════════════════════════════════════════════════
       } else if (event.type === 'audio_process_completed') {
         const audioEvent = event as unknown as AudioProcessCompletedEvent;
@@ -728,16 +761,64 @@ export class ZMQTranslationClient extends EventEmitter {
         logger.info(`   📝 Transcription: ${audioEvent.transcription.text.substring(0, 50)}...`);
         logger.info(`   🌍 Traductions audio: ${audioEvent.translatedAudios.length} versions`);
 
-        // Émettre l'événement de succès audio
+        // ═══════════════════════════════════════════════════════════════
+        // EXTRACTION DES BINAIRES DEPUIS FRAMES MULTIPART
+        // ═══════════════════════════════════════════════════════════════
+        const binaryFramesInfo = (event as any).binaryFrames || {};
+        const audioBinaries: Map<string, Buffer> = new Map();
+        let embeddingBinary: Buffer | null = null;
+
+        // Extraire les audios traduits des frames binaires
+        for (const [key, info] of Object.entries(binaryFramesInfo)) {
+          const frameInfo = info as { index: number; size: number; mimeType?: string };
+          const frameIndex = frameInfo.index - 1; // Les indices dans metadata commencent à 1, array à 0
+
+          if (frameIndex >= 0 && frameIndex < binaryFrames.length) {
+            if (key.startsWith('audio_')) {
+              const language = key.replace('audio_', '');
+              audioBinaries.set(language, binaryFrames[frameIndex]);
+              // logger.info(`   📦 Audio ${language}: ${binaryFrames[frameIndex].length} bytes`);
+            } else if (key === 'embedding') {
+              embeddingBinary = binaryFrames[frameIndex];
+              // logger.info(`   📦 Embedding: ${binaryFrames[frameIndex].length} bytes`);
+            }
+          } else {
+            logger.warning(`   ⚠️ Frame index invalide pour ${key}: ${frameIndex}`);
+          }
+        }
+
+        // Enrichir translatedAudios avec les données binaires
+        const enrichedTranslatedAudios = audioEvent.translatedAudios.map(audio => {
+          const audioBinary = audioBinaries.get(audio.targetLanguage);
+          return {
+            ...audio,
+            // Ajouter le Buffer binaire pour sauvegarde directe
+            _audioBinary: audioBinary || null
+          };
+        });
+
+        // Enrichir newVoiceProfile avec l'embedding binaire
+        let enrichedVoiceProfile = (audioEvent as any).newVoiceProfile || null;
+        if (enrichedVoiceProfile && embeddingBinary) {
+          enrichedVoiceProfile = {
+            ...enrichedVoiceProfile,
+            _embeddingBinary: embeddingBinary
+          };
+        }
+
+        logger.info(`   ✅ Multipart décodé: ${audioBinaries.size} audios, embedding=${!!embeddingBinary}`);
+
+        // Émettre l'événement de succès audio avec binaires
         this.emit('audioProcessCompleted', {
           taskId: audioEvent.taskId,
           messageId: audioEvent.messageId,
           attachmentId: audioEvent.attachmentId,
           transcription: audioEvent.transcription,
-          translatedAudios: audioEvent.translatedAudios,
+          translatedAudios: enrichedTranslatedAudios, // Avec _audioBinary
           voiceModelUserId: audioEvent.voiceModelUserId,
           voiceModelQuality: audioEvent.voiceModelQuality,
-          processingTimeMs: audioEvent.processingTimeMs
+          processingTimeMs: audioEvent.processingTimeMs,
+          newVoiceProfile: enrichedVoiceProfile // Avec _embeddingBinary
         });
 
         // Nettoyer la requête en cours

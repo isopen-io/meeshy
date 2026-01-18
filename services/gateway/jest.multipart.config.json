@@ -1,0 +1,37 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "transformIgnorePatterns": [
+    "node_modules/(?!@meeshy/shared)"
+  ],
+  "moduleNameMapper": {
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1"
+  },
+  "testMatch": [
+    "<rootDir>/src/__tests__/unit/services/ZmqMultipartExtraction.test.ts",
+    "<rootDir>/src/__tests__/integration/AudioTranslationPersistence.simple.test.ts",
+    "<rootDir>/src/__tests__/performance/MultipartVsBase64.bench.ts"
+  ],
+  "testPathIgnorePatterns": [
+    "/node_modules/"
+  ],
+  "collectCoverageFrom": [
+    "src/services/ZmqTranslationClient.ts",
+    "src/services/MessageTranslationService.ts",
+    "src/socketio/MeeshySocketIOManager.ts"
+  ],
+  "coverageDirectory": "coverage-multipart",
+  "coverageReporters": [
+    "text",
+    "lcov",
+    "html"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "collectCoverage": false,
+  "testTimeout": 30000
+}
