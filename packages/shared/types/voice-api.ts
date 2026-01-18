@@ -186,6 +186,38 @@ export interface VoiceAnalysisResult {
   classification: VoiceClassification;
 }
 
+/**
+ * Voice Prosody Analysis - Speech rhythm and timing characteristics
+ */
+export interface VoiceProsodyAnalysis {
+  energyMean: number;
+  energyStd: number;
+  silenceRatio: number;
+  speechRateWpm: number;
+}
+
+/**
+ * Voice Quality Metrics - Overall quality assessment
+ */
+export interface VoiceQualityMetrics {
+  overallScore: number;        // 0-1: Overall voice quality score
+  clarity: number;              // 0-1: Audio clarity (SNR, noise level)
+  consistency: number;          // 0-1: Voice consistency across samples
+  suitableForCloning: boolean;  // Whether quality is sufficient for voice cloning
+  trainingQuality?: 'poor' | 'fair' | 'good' | 'excellent';
+}
+
+/**
+ * Complete Voice Quality Analysis
+ * Extends VoiceAnalysisResult with prosody and quality metrics
+ * Used in MessageAudioTranscription.voiceQualityAnalysis
+ * and UserVoiceModel.voiceCharacteristics
+ */
+export interface VoiceQualityAnalysis extends VoiceAnalysisResult {
+  prosody?: VoiceProsodyAnalysis;
+  qualityMetrics?: VoiceQualityMetrics;
+}
+
 export type VoiceComparisonVerdict = 'same_speaker' | 'different_speaker' | 'uncertain';
 
 export interface VoiceComparisonResult {

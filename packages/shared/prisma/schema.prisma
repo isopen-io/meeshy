@@ -2286,6 +2286,55 @@ model MessageAudioTranscription {
   /// Matched speaker ID if sender was identified
   senderSpeakerId String?
 
+  /// ============================================
+  /// VOICE QUALITY ANALYSIS (Advanced metrics)
+  /// ============================================
+  /// Comprehensive voice analysis for quality assessment and voice cloning
+  /// {
+  ///   "pitch": {
+  ///     "mean": 150.0,
+  ///     "std": 25.0,
+  ///     "min": 100.0,
+  ///     "max": 200.0,
+  ///     "contour": [150, 155, 148, ...]
+  ///   },
+  ///   "timbre": {
+  ///     "spectralCentroid": 2500.0,
+  ///     "spectralBandwidth": 1800.0,
+  ///     "spectralRolloff": 4500.0,
+  ///     "spectralFlatness": 0.15
+  ///   },
+  ///   "mfcc": {
+  ///     "coefficients": [13.5, -2.1, 5.8, ...],
+  ///     "mean": [12.0, -1.5, 5.0, ...],
+  ///     "std": [2.5, 1.2, 0.8, ...]
+  ///   },
+  ///   "energy": {
+  ///     "rms": 0.05,
+  ///     "peak": 0.8,
+  ///     "dynamicRange": 45.0
+  ///   },
+  ///   "classification": {
+  ///     "voiceType": "medium_male",
+  ///     "gender": "male",
+  ///     "ageRange": "adult",
+  ///     "confidence": 0.85
+  ///   },
+  ///   "qualityMetrics": {
+  ///     "overallScore": 0.82,
+  ///     "clarity": 0.85,
+  ///     "consistency": 0.78,
+  ///     "suitableForCloning": true
+  ///   }
+  /// }
+  voiceQualityAnalysis Json?
+
+  /// Timestamp when voice analysis was performed
+  voiceAnalysisAt DateTime?
+
+  /// Model/version used for voice analysis
+  voiceAnalysisModel String?
+
   createdAt DateTime @default(now())
 
   @@index([messageId])
@@ -2384,16 +2433,62 @@ model UserVoiceModel {
   version Int @default(1)
 
   /// ============================================
-  /// VOICE CHARACTERISTICS
+  /// VOICE CHARACTERISTICS (Aggregated Analysis)
   /// ============================================
-  /// JSON object containing voice analysis data:
+  /// JSON object containing aggregated voice analysis from all training samples:
   /// {
-  ///   "pitch": { "mean_hz": 150.0, "std_hz": 25.0, "min_hz": 100.0, "max_hz": 200.0 },
-  ///   "classification": { "voice_type": "medium_male", "estimated_gender": "male", "estimated_age_range": "adult" },
-  ///   "spectral": { "brightness": 1500.0, "warmth": 3.5, "breathiness": 0.1, "nasality": 0.05 },
-  ///   "prosody": { "energy_mean": 0.05, "energy_std": 0.02, "silence_ratio": 0.2, "speech_rate_wpm": 130.0 }
+  ///   "pitch": {
+  ///     "mean": 150.0,
+  ///     "std": 25.0,
+  ///     "min": 100.0,
+  ///     "max": 200.0,
+  ///     "contour": [150, 155, 148, ...]
+  ///   },
+  ///   "timbre": {
+  ///     "spectralCentroid": 2500.0,
+  ///     "spectralBandwidth": 1800.0,
+  ///     "spectralRolloff": 4500.0,
+  ///     "spectralFlatness": 0.15,
+  ///     "brightness": 1500.0,
+  ///     "warmth": 3.5
+  ///   },
+  ///   "mfcc": {
+  ///     "coefficients": [13.5, -2.1, 5.8, ...],
+  ///     "mean": [12.0, -1.5, 5.0, ...],
+  ///     "std": [2.5, 1.2, 0.8, ...]
+  ///   },
+  ///   "energy": {
+  ///     "rms": 0.05,
+  ///     "peak": 0.8,
+  ///     "dynamicRange": 45.0
+  ///   },
+  ///   "classification": {
+  ///     "voiceType": "medium_male",
+  ///     "gender": "male",
+  ///     "ageRange": "adult",
+  ///     "confidence": 0.85
+  ///   },
+  ///   "prosody": {
+  ///     "energyMean": 0.05,
+  ///     "energyStd": 0.02,
+  ///     "silenceRatio": 0.2,
+  ///     "speechRateWpm": 130.0
+  ///   },
+  ///   "qualityMetrics": {
+  ///     "overallScore": 0.82,
+  ///     "clarity": 0.85,
+  ///     "consistency": 0.78,
+  ///     "suitableForCloning": true,
+  ///     "trainingQuality": "excellent"
+  ///   }
   /// }
   voiceCharacteristics Json?
+
+  /// Timestamp when voice characteristics were last analyzed
+  voiceAnalysisAt DateTime?
+
+  /// Model/version used for voice analysis
+  voiceAnalysisModel String? @default("voice_quality_analyzer_v1")
 
   /// ============================================
   /// VOICE FINGERPRINT (For identification)
