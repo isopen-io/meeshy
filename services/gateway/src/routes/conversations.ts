@@ -1408,7 +1408,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
                   }
                 }
               },
-              take: 3
+              take: 4
             },
             _count: {
               select: {
@@ -4928,6 +4928,290 @@ export async function conversationRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: 'Erreur interne du serveur'
+      });
+    }
+  });
+
+  /**
+   * GET /conversations/:id/reactions
+   * Récupère toutes les réactions de tous les messages d'une conversation
+   */
+  fastify.get<{
+    Params: ConversationParams;
+  }>('/conversations/:id/reactions', {
+    schema: {
+      description: 'Get all reactions from all messages in a conversation. Returns reactions grouped by message ID with emoji counts and user information. Useful for loading full conversation context at once.',
+      tags: ['conversations', 'reactions'],
+      summary: 'Get all conversation reactions',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                reactions: {
+                  type: 'array',
+                  description: 'All reactions grouped by message'
+                }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Résoudre l'ID de conversation réel
+      const conversationId = await resolveConversationId(id);
+      if (!conversationId) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
+        });
+      }
+
+      // Vérifier les permissions d'accès
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
+        });
+      }
+
+      // Récupérer toutes les réactions de tous les messages de la conversation
+      const reactions = await prisma.reaction.findMany({
+        where: {
+          message: {
+            conversationId: conversationId,
+            isDeleted: false
+          }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true
+            }
+          },
+          anonymousUser: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Grouper les réactions par messageId et emoji
+      const reactionsByMessage = new Map<string, any>();
+
+      for (const reaction of reactions) {
+        if (!reactionsByMessage.has(reaction.messageId)) {
+          reactionsByMessage.set(reaction.messageId, {});
+        }
+
+        const messageReactions = reactionsByMessage.get(reaction.messageId);
+        if (!messageReactions[reaction.emoji]) {
+          messageReactions[reaction.emoji] = {
+            emoji: reaction.emoji,
+            count: 0,
+            users: []
+          };
+        }
+
+        messageReactions[reaction.emoji].count++;
+        messageReactions[reaction.emoji].users.push({
+          userId: reaction.userId || reaction.anonymousId,
+          isAnonymous: !!reaction.anonymousId,
+          user: reaction.user || reaction.anonymousUser
+        });
+      }
+
+      // Convertir en tableau
+      const reactionsArray = Array.from(reactionsByMessage.entries()).map(([messageId, emojis]) => ({
+        messageId,
+        reactions: Object.values(emojis)
+      }));
+
+      return reply.send({
+        success: true,
+        data: {
+          reactions: reactionsArray,
+          total: reactions.length
+        }
+      });
+
+    } catch (error) {
+      console.error('[GATEWAY] Error fetching conversation reactions:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la récupération des réactions'
+      });
+    }
+  });
+
+  /**
+   * GET /conversations/:id/status
+   * Récupère les statuts de lecture de tous les messages d'une conversation
+   */
+  fastify.get<{
+    Params: ConversationParams;
+  }>('/conversations/:id/status', {
+    schema: {
+      description: 'Get read/delivery status for all messages in a conversation. Returns aggregated counts and detailed per-user status for each message. Useful for displaying message receipts and read indicators.',
+      tags: ['conversations', 'status'],
+      summary: 'Get all conversation message statuses',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                statuses: {
+                  type: 'array',
+                  description: 'Status information for all messages'
+                }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Résoudre l'ID de conversation réel
+      const conversationId = await resolveConversationId(id);
+      if (!conversationId) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
+        });
+      }
+
+      // Vérifier les permissions d'accès
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
+        });
+      }
+
+      // Récupérer tous les messages avec leurs statuts dénormalisés
+      const messages = await prisma.message.findMany({
+        where: {
+          conversationId: conversationId,
+          isDeleted: false
+        },
+        select: {
+          id: true,
+          senderId: true,
+          anonymousSenderId: true,
+          deliveredCount: true,
+          readCount: true,
+          deliveredToAllAt: true,
+          readByAllAt: true,
+          createdAt: true,
+          statusEntries: {
+            select: {
+              userId: true,
+              anonymousId: true,
+              deliveredAt: true,
+              readAt: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true
+                }
+              },
+              anonymousUser: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Formater les statuts
+      const statuses = messages.map(message => ({
+        messageId: message.id,
+        senderId: message.senderId || message.anonymousSenderId,
+        summary: {
+          deliveredCount: message.deliveredCount || 0,
+          readCount: message.readCount || 0,
+          deliveredToAllAt: message.deliveredToAllAt,
+          readByAllAt: message.readByAllAt
+        },
+        entries: message.statusEntries.map(entry => ({
+          userId: entry.userId || entry.anonymousId,
+          isAnonymous: !!entry.anonymousId,
+          deliveredAt: entry.deliveredAt,
+          readAt: entry.readAt,
+          user: entry.user || entry.anonymousUser
+        }))
+      }));
+
+      return reply.send({
+        success: true,
+        data: {
+          statuses,
+          total: messages.length
+        }
+      });
+
+    } catch (error) {
+      console.error('[GATEWAY] Error fetching conversation statuses:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la récupération des statuts'
       });
     }
   });

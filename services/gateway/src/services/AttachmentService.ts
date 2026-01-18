@@ -1163,7 +1163,7 @@ export class AttachmentService {
   }
 
   /**
-   * Récupère tous les attachments d'une conversation
+   * Récupère tous les attachments d'une conversation avec métadonnées complètes
    */
   async getConversationAttachments(
     conversationId: string,
@@ -1172,7 +1172,7 @@ export class AttachmentService {
       limit?: number;
       offset?: number;
     } = {}
-  ): Promise<Attachment[]> {
+  ): Promise<any[]> {
     const where: any = {
       message: {
         conversationId: conversationId,
@@ -1190,6 +1190,29 @@ export class AttachmentService {
       orderBy: { createdAt: 'desc' },
       take: options.limit || 50,
       skip: options.offset || 0,
+      include: {
+        transcription: {
+          select: {
+            id: true,
+            transcribedText: true,
+            language: true,
+            confidence: true,
+            source: true,
+            voiceQualityAnalysis: true,
+          }
+        },
+        translatedAudios: {
+          select: {
+            id: true,
+            targetLanguage: true,
+            translatedText: true,
+            audioUrl: true,
+            durationMs: true,
+            voiceCloned: true,
+            voiceQuality: true,
+          }
+        }
+      }
     });
 
     return attachments.map((att) => ({
@@ -1220,6 +1243,9 @@ export class AttachmentService {
       downloadedCount: att.downloadedCount ?? 0,
       consumedCount: att.consumedCount ?? 0,
       isEncrypted: att.isEncrypted ?? false,
+      // Métadonnées complètes
+      transcription: att.transcription || null,
+      translatedAudios: att.translatedAudios || [],
     }));
   }
 
