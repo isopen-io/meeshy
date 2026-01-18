@@ -14,7 +14,7 @@
  *   └─> textTranslationEnabledAt
  */
 
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export interface ConsentStatus {
   hasDataProcessingConsent: boolean;
@@ -42,8 +42,8 @@ export class ConsentValidationService {
    * Récupère le statut de consentement pour un utilisateur
    */
   async getConsentStatus(userId: string): Promise<ConsentStatus> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const userFeature = await this.prisma.userFeature.findUnique({
+      where: { userId },
       select: {
         dataProcessingConsentAt: true,
         voiceDataConsentAt: true,
@@ -58,26 +58,26 @@ export class ConsentValidationService {
       }
     });
 
-    if (!user) {
-      throw new Error('User not found');
+    if (!userFeature) {
+      throw new Error('User feature record not found');
     }
 
-    const hasDataProcessingConsent = !!user.dataProcessingConsentAt;
-    const hasVoiceDataConsent = !!user.voiceDataConsentAt && hasDataProcessingConsent;
-    const hasVoiceProfileConsent = !!user.voiceProfileConsentAt && hasVoiceDataConsent;
-    const hasVoiceCloningConsent = !!user.voiceCloningConsentAt && hasVoiceProfileConsent;
+    const hasDataProcessingConsent = !!userFeature.dataProcessingConsentAt;
+    const hasVoiceDataConsent = !!userFeature.voiceDataConsentAt && hasDataProcessingConsent;
+    const hasVoiceProfileConsent = !!userFeature.voiceProfileConsentAt && hasVoiceDataConsent;
+    const hasVoiceCloningConsent = !!userFeature.voiceCloningConsentAt && hasVoiceProfileConsent;
 
     return {
       hasDataProcessingConsent,
       hasVoiceDataConsent,
       hasVoiceProfileConsent,
       hasVoiceCloningConsent,
-      hasThirdPartyServicesConsent: !!user.thirdPartyServicesConsentAt && hasDataProcessingConsent,
-      canTranscribeAudio: !!user.audioTranscriptionEnabledAt && hasVoiceDataConsent,
-      canTranslateText: !!user.textTranslationEnabledAt && hasDataProcessingConsent,
-      canTranslateAudio: !!user.audioTranslationEnabledAt && !!user.audioTranscriptionEnabledAt && !!user.textTranslationEnabledAt,
-      canGenerateTranslatedAudio: !!user.translatedAudioGenerationEnabledAt && !!user.audioTranslationEnabledAt,
-      canUseVoiceCloning: !!user.voiceCloningEnabledAt && hasVoiceCloningConsent
+      hasThirdPartyServicesConsent: !!userFeature.thirdPartyServicesConsentAt && hasDataProcessingConsent,
+      canTranscribeAudio: !!userFeature.audioTranscriptionEnabledAt && hasVoiceDataConsent,
+      canTranslateText: !!userFeature.textTranslationEnabledAt && hasDataProcessingConsent,
+      canTranslateAudio: !!userFeature.audioTranslationEnabledAt && !!userFeature.audioTranscriptionEnabledAt && !!userFeature.textTranslationEnabledAt,
+      canGenerateTranslatedAudio: !!userFeature.translatedAudioGenerationEnabledAt && !!userFeature.audioTranslationEnabledAt,
+      canUseVoiceCloning: !!userFeature.voiceCloningEnabledAt && hasVoiceCloningConsent
     };
   }
 
