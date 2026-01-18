@@ -192,6 +192,17 @@ class PerformanceOptimizer:
         # MPS is Apple's GPU acceleration for M1/M2/M3 chips
         # It's automatically used when device="mps", but we can set some hints
 
+        # Critical MPS environment variables (from iOS script optimizations)
+        # PYTORCH_MPS_HIGH_WATERMARK_RATIO: Controls memory allocation strategy
+        # Setting to "0.0" forces immediate memory release, reducing fragmentation
+        os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
+        # PYTORCH_ENABLE_MPS_FALLBACK: Enables CPU fallback for unsupported MPS ops
+        # This prevents crashes when encountering ops not yet implemented in MPS
+        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
+        logger.debug("MPS environment variables configured: HIGH_WATERMARK_RATIO=0.0, ENABLE_FALLBACK=1")
+
         try:
             # MPS memory management
             if hasattr(torch.mps, 'set_per_process_memory_fraction'):
@@ -211,15 +222,27 @@ class PerformanceOptimizer:
         logger.debug("MPS (Apple Silicon) optimizations configured")
 
     def _configure_cuda(self, torch) -> None:
-        """Configure CUDA optimizations."""
+        """Configure CUDA optimizations (from iOS script best practices)."""
         if not self._cuda_available:
             return
 
         # Enable cuDNN benchmark for consistent input sizes
+        # This auto-tunes cuDNN kernels for the specific input shapes
         if self.config.enable_cudnn_benchmark:
             torch.backends.cudnn.benchmark = True
             torch.backends.cudnn.deterministic = False
-            logger.debug("cuDNN benchmark enabled")
+            logger.debug("cuDNN benchmark enabled (auto-tuning kernels)")
+
+        # Enable TF32 for Ampere+ GPUs (3090, A100, 4090, etc.)
+        # TF32 is faster than FP32 with minimal precision loss
+        # Critical for performance on modern NVIDIA GPUs
+        if hasattr(torch.backends.cudnn, 'allow_tf32'):
+            torch.backends.cudnn.allow_tf32 = True
+            logger.debug("TF32 enabled for cuDNN (Ampere+ optimization)")
+
+        if hasattr(torch.backends.cuda, 'matmul'):
+            torch.backends.cuda.matmul.allow_tf32 = True
+            logger.debug("TF32 enabled for CUDA matmul (Ampere+ optimization)")
 
         # Set memory fraction
         if hasattr(torch.cuda, 'set_per_process_memory_fraction'):
@@ -227,14 +250,9 @@ class PerformanceOptimizer:
                 self.config.max_memory_fraction,
                 device=0
             )
+            logger.debug(f"CUDA memory fraction set to {self.config.max_memory_fraction}")
 
-        # Enable TF32 for Ampere+ GPUs (faster but slightly less precise)
-        if hasattr(torch.backends.cuda, 'matmul'):
-            torch.backends.cuda.matmul.allow_tf32 = True
-        if hasattr(torch.backends.cudnn, 'allow_tf32'):
-            torch.backends.cudnn.allow_tf32 = True
-
-        logger.debug("CUDA optimizations configured")
+        logger.debug("CUDA optimizations configured (benchmark + TF32)")
 
     def _configure_pytorch(self, torch) -> None:
         """Configure general PyTorch optimizations."""
@@ -247,10 +265,23 @@ class PerformanceOptimizer:
 
         logger.debug("PyTorch optimizations configured")
 
-    def compile_model(self, model: Any, model_name: str) -> Any:
+    def compile_model(self, model: Any, model_name: str, warmup_input: Any = None) -> Any:
         """
-        Compile a model using torch.compile for faster inference.
-        Returns the compiled model or original if compilation fails.
+        Compile a model using torch.compile for faster inference (iOS optimizations).
+        Optionally performs a warmup pass to optimize JIT compilation.
+
+        Args:
+            model: PyTorch model to compile
+            model_name: Unique identifier for caching
+            warmup_input: Optional input tensor for warmup pass (recommended)
+
+        Returns:
+            Compiled model or original if compilation fails
+
+        Note:
+            - Uses "reduce-overhead" mode for inference optimization (from iOS script)
+            - torch.compile doesn't support MPS yet (Apple Silicon)
+            - Warmup pass helps JIT compiler generate optimal code paths
         """
         if model_name in self._compiled_models:
             return self._compiled_models[model_name]
@@ -267,15 +298,35 @@ class PerformanceOptimizer:
                 self._compiled_models[model_name] = model
                 return model
 
+            # torch.compile doesn't support MPS yet (as of PyTorch 2.x)
+            if self._mps_available:
+                logger.debug(f"Skipping torch.compile for '{model_name}' (MPS not supported)")
+                self._compiled_models[model_name] = model
+                return model
+
+            # Use "reduce-overhead" mode for inference optimization (from iOS script)
+            # This mode minimizes Python overhead and graph breaks
+            compile_mode = "reduce-overhead" if self.config.torch_compile_mode == "default" else self.config.torch_compile_mode
+
             compiled = torch.compile(
                 model,
-                mode=self.config.torch_compile_mode,
+                mode=compile_mode,
                 fullgraph=False,  # Allow graph breaks for complex models
                 dynamic=True,     # Handle variable sequence lengths
             )
 
+            # Warmup pass (from iOS script optimization)
+            if warmup_input is not None:
+                logger.debug(f"Performing warmup pass for '{model_name}'...")
+                try:
+                    with torch.inference_mode():
+                        _ = compiled(warmup_input)
+                    logger.debug(f"Warmup pass completed for '{model_name}'")
+                except Exception as e:
+                    logger.debug(f"Warmup pass failed (non-critical): {e}")
+
             self._compiled_models[model_name] = compiled
-            logger.info(f"Model '{model_name}' compiled with mode='{self.config.torch_compile_mode}'")
+            logger.info(f"Model '{model_name}' compiled with mode='{compile_mode}' (torch.compile + warmup)")
             return compiled
 
         except Exception as e:
@@ -345,15 +396,83 @@ class PerformanceOptimizer:
 
     def get_optimal_batch_size(self, default: int = 8) -> int:
         """
-        Get optimal batch size based on device.
-        GPU can handle larger batches than CPU.
+        Get optimal batch size based on device and available memory.
+        Uses logic from iOS script for memory-aware batch sizing.
+
+        Returns:
+            Optimal batch size (1-4 for most cases)
         """
-        if self._cuda_available:
-            return max(default, 16)  # GPU can handle larger batches
-        elif self._mps_available:
-            return max(default, 12)  # MPS handles medium batches well
-        else:
-            return min(default, 4)  # CPU works better with smaller batches
+        try:
+            import torch
+
+            if self._cuda_available:
+                # CUDA: Calculate based on available VRAM (from iOS script)
+                total_mem = torch.cuda.get_device_properties(0).total_memory
+                # Use ~70% of available memory for batch processing
+                if total_mem > 16 * 1024**3:  # 16GB+ VRAM
+                    return 4  # Large batches for high-end GPUs
+                elif total_mem > 8 * 1024**3:  # 8GB+ VRAM
+                    return 2  # Medium batches for mid-range GPUs
+                else:
+                    return 1  # Conservative for lower-end GPUs
+
+            elif self._mps_available:
+                # MPS: Apple Silicon typically has unified memory
+                # Start conservative, can be increased based on testing
+                return 2  # MPS handles medium batches efficiently
+
+            else:
+                # CPU: Keep batches small to avoid memory pressure
+                return 1  # CPU works best with minimal batching
+
+        except Exception as e:
+            logger.debug(f"Error calculating optimal batch size: {e}")
+            return min(default, 2)  # Safe fallback
+
+    def warmup_model(self, model: Any, warmup_input: Any) -> bool:
+        """
+        Perform warmup pass on a model (from iOS script optimization).
+        This helps JIT compilers generate optimal code paths.
+
+        Args:
+            model: PyTorch model to warm up
+            warmup_input: Example input tensor for the model
+
+        Returns:
+            True if warmup succeeded, False otherwise
+        """
+        try:
+            import torch
+
+            logger.debug("Performing model warmup pass...")
+            with torch.inference_mode():
+                _ = model(warmup_input)
+            logger.debug("Model warmup completed successfully")
+            return True
+
+        except Exception as e:
+            logger.debug(f"Model warmup failed (non-critical): {e}")
+            return False
+
+    def get_inference_context(self):
+        """
+        Get the appropriate inference context manager.
+        Returns torch.inference_mode() for maximum performance.
+
+        Usage:
+            with optimizer.get_inference_context():
+                output = model(input)
+        """
+        try:
+            import torch
+            if hasattr(torch, 'inference_mode'):
+                return torch.inference_mode()
+        except ImportError:
+            pass
+
+        # Fallback to nullcontext if torch not available
+        from contextlib import nullcontext
+        return nullcontext()
 
 
 @dataclass(order=True)
@@ -620,13 +739,12 @@ def create_inference_context():
     """
     Create a context manager for optimized inference.
     Returns torch.inference_mode() if available, else nullcontext.
-    """
-    try:
-        import torch
-        if hasattr(torch, 'inference_mode'):
-            return torch.inference_mode()
-    except ImportError:
-        pass
 
-    from contextlib import nullcontext
-    return nullcontext()
+    Usage:
+        with create_inference_context():
+            output = model(input)
+
+    Note: Delegates to PerformanceOptimizer.get_inference_context()
+    """
+    optimizer = get_performance_optimizer()
+    return optimizer.get_inference_context()
