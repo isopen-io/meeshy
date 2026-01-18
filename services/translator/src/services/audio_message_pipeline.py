@@ -13,6 +13,10 @@ The actual implementation has been modularized into:
 This file serves as the public API entry point for existing code.
 """
 
+# Import helpers pour compatibilité des tests
+from utils.performance import get_performance_optimizer
+from services.transcription_service import get_transcription_service
+
 # Re-export all public API from the modular package
 from .audio_pipeline import (
     AudioMessagePipeline,
@@ -46,4 +50,8 @@ __all__ = [
     "TranslatedAudioVersion",
     "create_transcription_stage",
     "create_translation_stage",
+
+    # Helpers pour compatibilité des tests
+    "get_performance_optimizer",
+    "get_transcription_service",
 ]
