@@ -224,6 +224,9 @@ class TranscriptionHandler:
             logger.info(f"   - confidence: {result.confidence}")
             logger.info(f"   - duration_ms: {result.duration_ms}")
             logger.info(f"   - source: {result.source}")
+            logger.info(f"   - segments: {len(result.segments) if result.segments else 0} segments")
+            if result.segments and len(result.segments) > 0:
+                logger.info(f"   - premier segment: {result.segments[0].text[:30]}... ({result.segments[0].start_ms}ms - {result.segments[0].end_ms}ms)")
 
             processing_time = int((time.time() - start_time) * 1000)
             logger.info(f"🔍 [TRANSLATOR-TRACE] Processing time: {processing_time}ms")
