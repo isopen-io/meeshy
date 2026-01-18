@@ -1295,11 +1295,19 @@ export class MessageTranslationService extends EventEmitter {
       // ═══════════════════════════════════════════════════════════════════════════
       // VÉRIFICATION DES CONSENTEMENTS VOCAUX
       // ═══════════════════════════════════════════════════════════════════════════
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== VÉRIFICATION CONSENTEMENTS ========`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Sender ID: ${params.senderId}`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Generate voice clone: ${params.generateVoiceClone}`);
+
       const bypassConsentCheck = process.env.BYPASS_VOICE_CONSENT_CHECK === 'true';
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Bypass consent check: ${bypassConsentCheck}`);
+
       let hasVoiceCloningConsent = false;
       let hasVoiceProfileConsent = false;
 
       try {
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] Récupération consentements utilisateur depuis BDD...`);
+
         // Récupérer les consentements de l'utilisateur
         const userWithConsent = await this.prisma.user.findUnique({
           where: { id: params.senderId },
@@ -1314,22 +1322,37 @@ export class MessageTranslationService extends EventEmitter {
           }
         });
 
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] User found: ${!!userWithConsent}`);
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] UserFeature found: ${!!userWithConsent?.userFeature}`);
+
         if (userWithConsent?.userFeature) {
           hasVoiceProfileConsent = userWithConsent.userFeature.voiceProfileConsentAt != null;
           hasVoiceCloningConsent = userWithConsent.userFeature.voiceCloningEnabledAt != null ||
                                    userWithConsent.userFeature.voiceCloningConsentAt != null;
+
+          logger.info(`🔍 [VOICE-PROFILE-TRACE] Consentements:`);
+          logger.info(`   - voiceProfileConsentAt: ${userWithConsent.userFeature.voiceProfileConsentAt}`);
+          logger.info(`   - voiceCloningConsentAt: ${userWithConsent.userFeature.voiceCloningConsentAt}`);
+          logger.info(`   - voiceCloningEnabledAt: ${userWithConsent.userFeature.voiceCloningEnabledAt}`);
+          logger.info(`   - hasVoiceProfileConsent: ${hasVoiceProfileConsent}`);
+          logger.info(`   - hasVoiceCloningConsent: ${hasVoiceCloningConsent}`);
+        } else {
+          logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ Pas de UserFeature trouvé pour ${params.senderId}`);
         }
 
         if (bypassConsentCheck) {
-          logger.warn(`   ⚠️ BYPASS_VOICE_CONSENT_CHECK=true - Contournement des vérifications de consentement`);
+          logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ BYPASS activé - force consentements à TRUE`);
           hasVoiceCloningConsent = true;
           hasVoiceProfileConsent = true;
         }
 
-        logger.info(`   🔐 Consent check: voiceProfile=${hasVoiceProfileConsent}, voiceCloning=${hasVoiceCloningConsent}`);
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Consentements finaux:`);
+        logger.info(`   - voiceProfile: ${hasVoiceProfileConsent}`);
+        logger.info(`   - voiceCloning: ${hasVoiceCloningConsent}`);
 
       } catch (consentError) {
-        logger.warn(`   ⚠️ Erreur vérification consentements: ${consentError}`);
+        logger.error(`🔍 [VOICE-PROFILE-TRACE] ❌ ERREUR vérification consentements: ${consentError}`);
+        logger.error(`🔍 [VOICE-PROFILE-TRACE] Stack: ${consentError instanceof Error ? consentError.stack : 'N/A'}`);
         // En cas d'erreur, on continue sans clonage vocal par sécurité
         if (bypassConsentCheck) {
           hasVoiceCloningConsent = true;
@@ -1391,6 +1414,27 @@ export class MessageTranslationService extends EventEmitter {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);
       }
 
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== ENVOI REQUÊTE TRANSLATOR ========`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Paramètres de la requête:`);
+      logger.info(`   - messageId: ${params.messageId}`);
+      logger.info(`   - attachmentId: ${params.attachmentId}`);
+      logger.info(`   - conversationId: ${params.conversationId}`);
+      logger.info(`   - senderId: ${params.senderId}`);
+      logger.info(`   - audioPath: ${params.audioPath}`);
+      logger.info(`   - audioDurationMs: ${params.audioDurationMs}`);
+      logger.info(`   - targetLanguages: ${JSON.stringify(targetLanguages)}`);
+      logger.info(`   - shouldGenerateVoiceClone: ${shouldGenerateVoiceClone}`);
+      logger.info(`   - modelType: ${params.modelType || 'medium'}`);
+      logger.info(`   - existingVoiceProfile: ${existingVoiceProfile ? 'OUI' : 'NON'}`);
+
+      if (existingVoiceProfile) {
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] Détails profil vocal existant:`);
+        logger.info(`   - profileId: ${existingVoiceProfile.profileId}`);
+        logger.info(`   - userId: ${existingVoiceProfile.userId}`);
+        logger.info(`   - qualityScore: ${existingVoiceProfile.qualityScore}`);
+        logger.info(`   - embedding size: ${existingVoiceProfile.embedding?.length || 0} chars`);
+      }
+
       // 3. Envoyer la requête au Translator (multipart binaire, pas d'URL)
       // Note: On n'envoie le profil vocal que si le clonage est autorisé
       const taskId = await this.zmqClient.sendAudioProcessRequest({
@@ -1409,7 +1453,9 @@ export class MessageTranslationService extends EventEmitter {
         useOriginalVoice: shouldGenerateVoiceClone
       });
 
-      logger.info(`   ✅ Audio process request sent: taskId=${taskId}`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Task ID: ${taskId}`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== FIN ENVOI REQUÊTE ========`);
       this.stats.translation_requests_sent++;
 
       return taskId;
