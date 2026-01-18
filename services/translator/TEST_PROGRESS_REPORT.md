@@ -12,19 +12,21 @@ Corriger les tests suite au refactoring de 6 God Objects en 37 modules et attein
 - **Total : 1412 tests**
 - **Couverture : 48.43%**
 
-### Résultats Actuels (Après 10 commits de corrections)
-- ✅ Tests passants : **~1163+ (82.3%+)**
-- ❌ Tests échoués : **~217 (15.4%)**
-- ⏸️ Tests skipped : **~3 (0.2%)**
-- ⚠️ Erreurs : **~27 (1.9%)**
-- **Total : ~1412 tests**
-- **Durée : ~6-8min**
+### Résultats Actuels (Après 10 commits de corrections) - VÉRIFIÉS ✅
+- ✅ Tests passants : **1204 (85.3%)**
+- ❌ Tests échoués : **178 (12.6%)**
+- ⏸️ Tests skipped : **3 (0.2%)**
+- ⚠️ Erreurs : **27 (1.9%)**
+- **Total : 1412 tests**
+- **Durée : 6:20 (380.35s)**
 
-### Amélioration
-- **+139 tests réussis** (+13.6% points)
-- **-141 tests échoués** (-39.4% reduction)
-- **Taux de réussite : 82.3%+** (vs 72.5% initial)
-- **Progrès : +9.8% points de réussite**
+### Amélioration RÉELLE
+- **+180 tests réussis** (+17.6% augmentation absolue)
+- **-180 tests échoués** (-50.3% réduction!)
+- **Taux de réussite : 85.3%** (vs 72.5% initial)
+- **Progrès : +12.8% points de réussite** ✨
+
+**Dépassement des estimations:** +12.8% vs +9.8% estimé!
 
 ### Voice Clone Tests - 100% TERMINÉ ✅
 - **35/35 tests passants** (100%!)
@@ -156,7 +158,7 @@ L'implémentation réelle est dans zmq_server_core.py
 
 **Impact:** +5 tests ZMQ server (19/78 → 24/78 en comptant l'init)
 
-## Tests Encore en Échec (~217)
+## Tests Encore en Échec (178 tests - 12.6%)
 
 ### Par Catégorie
 
@@ -230,17 +232,20 @@ L'implémentation réelle est dans zmq_server_core.py
 
 ## Prochaines Étapes
 
-### Phase 1: Corriger tests existants restants (~226 tests)
+### Phase 1: Corriger tests existants restants (178 tests - 12.6%)
 1. ✅ **Exports manquants** - Terminé (Commit 1)
 2. ✅ **VoiceCharacteristics** - Terminé (Commit 2)
-3. ✅ **Voice Clone Service (35/35)** - Terminé (Commits 4-8)
-4. 🔄 **ZMQ Infrastructure** - En cours
-   - ✅ TranslationPoolManager (14/14) - Terminé (Commit 9)
-   - ⏳ ZMQTranslationServer (~40 tests) - À faire
-5. ⏳ **TTS Service (~40 tests)** - À faire
-6. ⏳ **Audio Pipeline (~30 tests)** - À faire
-7. ⏳ **Translation ML (~20 tests)** - À faire
-8. ⏳ **Autres (~39 tests)** - À faire
+3. ✅ **Voice Clone Service (35/35 - 100%)** - Terminé (Commits 4-8)
+4. 🔄 **ZMQ Infrastructure (39/78 - 50%)** - En cours (Commits 9-10)
+   - ✅ TranslationPoolManager (14/14 - 100%) - Terminé
+   - 🔄 ZMQTranslationServer (5/20 - 25%) - En cours
+   - 🔄 Autres ZMQ (20/44 - 45%) - En cours
+   - ⏸️ Dynamic scaling (3 skipped) - TODO: réécrire
+5. ⏳ **Tests restants (~139 tests)** - À analyser et corriger
+   - TTS Service
+   - Audio Pipeline
+   - Translation ML
+   - Autres modules
 
 ### Phase 2: Créer nouveaux tests pour 95% couverture
 Après correction de tous les tests existants, ajouter tests pour :
@@ -260,11 +265,17 @@ Après correction de tous les tests existants, ajouter tests pour :
 
 **Total:** ~2400 statements à couvrir avec nouveaux tests
 
-## Temps Estimé
+## Temps Réel et Estimé
 
-- ✅ Correction exports : 1h (terminé)
-- ✅ VoiceCharacteristics : 30min (terminé)
-- 🔄 Tests restants (269) : 4-6h (en cours)
-- ⏳ Nouveaux tests : 8-12h (à faire)
+**Temps réel (10 commits):**
+- ✅ Correction exports : 1h (terminé - Commit 1)
+- ✅ VoiceCharacteristics : 30min (terminé - Commit 2)
+- ✅ Voice Clone tests (35): 3h (terminé - Commits 3-8)
+- ✅ ZMQ corrections (50%): 2h (en cours - Commits 9-10)
+- **Temps total dépensé:** ~6.5h pour +180 tests (+12.8% points)
 
-**Total estimé:** 14-20h pour 95% couverture
+**Temps estimé restant:**
+- ⏳ Tests restants (178): 4-6h
+- ⏳ Nouveaux tests pour 95%: 8-12h
+
+**Total estimé:** 18-24h pour 95% couverture (6.5h déjà fait)
