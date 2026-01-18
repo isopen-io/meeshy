@@ -68,6 +68,7 @@ import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
 import { registerVoiceRoutes } from './routes/voice';
+import { voiceAnalysisRoutes } from './routes/voice-analysis';
 import { getAudioTranslateService } from './services/AudioTranslateService';
 import { passwordResetRoutes } from './routes/password-reset';
 import { twoFactorRoutes } from './routes/two-factor';
@@ -858,6 +859,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register voice profile routes with /api/voice/profile prefix
     await this.server.register(voiceProfileRoutes, { prefix: `${API_PREFIX}/voice/profile` });
+
+    // Register voice analysis routes with /api/voice-analysis prefix
+    await this.server.register(voiceAnalysisRoutes);
+    logger.info('✓ Voice Analysis routes registered');
 
     // Register voice API routes (transcribe, translate, analyze, etc.)
     const zmqClient = this.translationService.getZmqClient();

@@ -11,6 +11,7 @@ import { useReducedMotion } from '@/hooks/use-accessibility';
 import { apiService, TIMEOUT_VOICE_PROFILE } from '@/services/api.service';
 import { useVoiceProfileManagement } from '@/hooks/use-voice-profile-management';
 import { MIN_RECORDING_SECONDS } from '@/hooks/use-voice-recording';
+import { useVoiceAnalysis } from '@/hooks/use-voice-analysis';
 import {
   saveRecordingToStorage,
   loadRecordingFromStorage,
@@ -45,6 +46,11 @@ const VoiceSettingsPanel = dynamic(() =>
 
 const VoiceRecorder = dynamic(() =>
   import('./voice/VoiceRecorder').then(m => ({ default: m.VoiceRecorder })),
+  { loading: () => <CardSkeleton /> }
+);
+
+const VoiceQualityConfig = dynamic(() =>
+  import('./voice/VoiceQualityConfig').then(m => ({ default: m.VoiceQualityConfig })),
   { loading: () => <CardSkeleton /> }
 );
 
@@ -92,6 +98,13 @@ export function VoiceProfileSettings() {
     revokeVoiceCloningConsent,
   } = useVoiceProfileManagement();
 
+  // Voice analysis hook
+  const {
+    analysis: voiceAnalysis,
+    isLoading: isLoadingAnalysis,
+    fetchProfileAnalysis
+  } = useVoiceAnalysis();
+
   // Recording state
   const [sourceLanguage, setSourceLanguage] = useState<string>(locale || 'fr');
   const [selectedPreviewLanguages, setSelectedPreviewLanguages] = useState<string[]>(
@@ -107,6 +120,13 @@ export function VoiceProfileSettings() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  // Load voice analysis when profile exists
+  useEffect(() => {
+    if (profile?.exists) {
+      fetchProfileAnalysis();
+    }
+  }, [profile?.exists, fetchProfileAnalysis]);
 
   // Restore recording from IndexedDB
   useEffect(() => {
@@ -278,6 +298,14 @@ export function VoiceProfileSettings() {
         <VoiceSettingsPanel
           profileExists={profile.exists}
           reducedMotion={reducedMotion}
+        />
+      )}
+
+      {/* Voice Quality Analysis */}
+      {profile?.exists && hasVoiceCloningConsent && (
+        <VoiceQualityConfig
+          analysis={voiceAnalysis}
+          isLoading={isLoadingAnalysis}
         />
       )}
 
