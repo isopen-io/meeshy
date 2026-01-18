@@ -12,21 +12,21 @@ Corriger les tests suite au refactoring de 6 God Objects en 37 modules et attein
 - **Total : 1412 tests**
 - **Couverture : 48.43%**
 
-### Résultats Actuels (Après 15 commits) - VÉRIFIÉS ✅
-- ✅ Tests passants : **1267 (89.5%)**
-- ❌ Tests échoués : **112 (7.9%)**
+### Résultats Actuels (Après 16 commits) - VÉRIFIÉS ✅
+- ✅ Tests passants : **1276 (90.1%)**
+- ❌ Tests échoués : **110 (7.8%)**
 - ⏸️ Tests skipped : **9 (0.6%)**
-- ⚠️ Erreurs : **27 (1.9%)**
+- ⚠️ Erreurs : **20 (1.4%)**
 - **Total : 1415 tests** (+3 nouveaux tests dynamic scaling)
 - **Durée : ~7min**
 
 ### Amélioration RÉELLE 🎉
-- **+243 tests réussis** (+23.7% augmentation absolue)
-- **-246 tests échoués** (-68.7% réduction!)
-- **Taux de réussite : 89.5%** (vs 72.5% initial)
-- **Progrès : +17.0% points de réussite** ✨
+- **+252 tests réussis** (+24.6% augmentation absolue)
+- **-248 tests échoués** (-69.3% réduction!)
+- **Taux de réussite : 90.1%** (vs 72.5% initial)
+- **Progrès : +17.6% points de réussite** ✨
 
-**Dépassement majeur des estimations:** +17.0% vs +9.8% estimé! (+73% de dépassement)
+**Dépassement majeur des estimations:** +17.6% vs +9.8% estimé! (+80% de dépassement)
 
 ### Voice Clone Tests - 100% TERMINÉ ✅
 - **35/35 tests passants** (100%!)
@@ -385,7 +385,43 @@ with patch.object(service.model_manager, 'create_backend', return_value=mock_bac
 
 **Impact:** +11 tests TTS (6/17 → 17/17 = 100%), +11 tests global (1256 → 1267)
 
-## Tests Encore en Échec (112 tests - 7.9%)
+### Commit 16: Exports Manquants Translation ML + Audio Pipeline ✅
+**Fichiers:** `src/services/translation_ml_service.py`, `src/services/audio_message_pipeline.py`
+
+**Objectif:** Ajouter les exports manquants utilisés par les tests pour patcher les dépendances
+
+**Exports ajoutés:**
+
+1. **translation_ml_service.py:**
+   - `get_performance_optimizer` - Fonction helper pour tests
+   - `ML_AVAILABLE` - Flag disponibilité ML
+
+2. **audio_message_pipeline.py:**
+   - `get_voice_clone_service` - Service voice cloning
+   - `get_tts_service` - Service TTS
+
+**Raison:**
+Les tests utilisent `patch('services.translation_ml_service.get_performance_optimizer')` et similaires pour mocker les dépendances pendant les tests unitaires. Ces fonctions n'étaient pas exportées par les wrappers de compatibilité.
+
+**Tests corrigés (9 tests):**
+- Tests Translation ML qui patchaient get_performance_optimizer
+- Tests Audio Pipeline qui patchaient get_voice_clone_service et get_tts_service
+
+**Pattern de correction:**
+```python
+# Les tests font:
+with patch('services.translation_ml_service.get_performance_optimizer') as mock_perf:
+    # Test code
+
+# Il faut donc que translation_ml_service.py exporte:
+from utils.performance import get_performance_optimizer
+
+__all__ = [..., 'get_performance_optimizer']
+```
+
+**Impact:** +9 tests global (1267 → 1276), -7 erreurs (27 → 20)
+
+## Tests Encore en Échec (110 tests - 7.8%)
 
 ### Par Catégorie
 
