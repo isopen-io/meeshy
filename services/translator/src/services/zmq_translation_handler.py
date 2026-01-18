@@ -7,6 +7,7 @@ Gère les requêtes de traduction texte simple via ZMQ.
 import asyncio
 import json
 import logging
+import psutil
 import re
 import time
 import uuid

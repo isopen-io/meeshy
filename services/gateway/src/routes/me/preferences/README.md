@@ -1,499 +1,334 @@
-# User Preferences API - `/me/preferences/*`
+# User Preferences API - Système Unifié
 
-Unified RESTful API for managing all user preference types under a consistent `/me/preferences/*` structure.
+## Vue d'ensemble
+
+Le nouveau système de préférences utilisateur utilise une architecture unifiée basée sur :
+- **Modèle Prisma** : `UserPreferences` avec 7 champs JSON
+- **Validation Zod** : Schemas avec defaults automatiques et validation runtime
+- **Factory Router** : Pattern DRY pour générer les routes CRUD
+- **Validation GDPR** : Consentements obligatoires pour certaines préférences
 
 ## Architecture
 
-### Directory Structure
-
-```
-src/routes/me/preferences/
-├── README.md                    # This file
-├── index.ts                     # Main entry point, aggregates all routes
-├── types.ts                     # TypeScript types and DTOs
-├── schemas.ts                   # JSON Schema definitions for OpenAPI
-├── notifications/
-│   └── index.ts                 # Notification preferences routes
-├── encryption/
-│   └── index.ts                 # Encryption preferences routes
-├── theme/
-│   └── index.ts                 # Theme preferences routes
-├── languages/
-│   └── index.ts                 # Language preferences routes
-└── privacy/
-    └── index.ts                 # Privacy preferences routes
-
-src/services/preferences/
-├── index.ts                     # Service exports
-└── PreferencesService.ts        # Business logic layer
-```
-
-### Design Patterns
-
-1. **Repository Pattern**: Separation between business logic (Service) and data access (Prisma)
-2. **DTO Pattern**: Clear input/output types for API boundaries
-3. **Service Layer**: Centralized business logic with validation
-4. **Modular Routes**: Each preference type in its own module
-5. **Consistent API**: All routes follow RESTful conventions
-
-## API Endpoints
-
-### Overview Endpoint
-
-```
-GET /me/preferences
-```
-
-Returns a list of all available preference endpoints.
-
-### Notification Preferences
-
-**Base Path**: `/me/preferences/notifications`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me/preferences/notifications` | Get notification preferences (returns defaults if not set) |
-| PUT | `/me/preferences/notifications` | Update notification preferences (supports partial updates) |
-| PATCH | `/me/preferences/notifications` | Partial update (semantically clearer for partial updates) |
-| DELETE | `/me/preferences/notifications` | Reset to default values |
-
-**Request Body Example** (PUT/PATCH):
-```json
-{
-  "pushEnabled": true,
-  "emailEnabled": false,
-  "soundEnabled": true,
-  "newMessageEnabled": true,
-  "dndEnabled": true,
-  "dndStartTime": "22:00",
-  "dndEndTime": "08:00"
-}
-```
-
-**Response Example**:
-```json
-{
-  "success": true,
-  "data": {
-    "id": "pref-123",
-    "userId": "user-123",
-    "pushEnabled": true,
-    "emailEnabled": false,
-    "soundEnabled": true,
-    "newMessageEnabled": true,
-    "missedCallEnabled": true,
-    "systemEnabled": true,
-    "conversationEnabled": true,
-    "replyEnabled": true,
-    "mentionEnabled": true,
-    "reactionEnabled": true,
-    "contactRequestEnabled": true,
-    "memberJoinedEnabled": true,
-    "dndEnabled": true,
-    "dndStartTime": "22:00",
-    "dndEndTime": "08:00",
-    "isDefault": false,
-    "createdAt": "2024-01-15T10:00:00Z",
-    "updatedAt": "2024-01-15T12:30:00Z"
-  }
-}
-```
-
-### Encryption Preferences
-
-**Base Path**: `/me/preferences/encryption`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me/preferences/encryption` | Get encryption preferences and Signal key status |
-| PUT | `/me/preferences/encryption` | Update encryption preference level |
-
-**Request Body Example** (PUT):
-```json
-{
-  "encryptionPreference": "always"
-}
-```
-
-**Response Example**:
-```json
-{
-  "success": true,
-  "data": {
-    "encryptionPreference": "always",
-    "hasSignalKeys": true,
-    "signalRegistrationId": 12345,
-    "signalPreKeyBundleVersion": 1,
-    "lastKeyRotation": "2024-01-10T08:00:00Z"
-  }
-}
-```
-
-**Encryption Levels**:
-- `disabled`: No encryption
-- `optional`: User can choose per conversation
-- `always`: Enforce E2EE on all conversations
-
-### Theme Preferences
-
-**Base Path**: `/me/preferences/theme`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me/preferences/theme` | Get theme and appearance preferences |
-| PUT | `/me/preferences/theme` | Update theme preferences |
-| PATCH | `/me/preferences/theme` | Partial update |
-| DELETE | `/me/preferences/theme` | Reset to defaults |
-
-**Request Body Example** (PUT/PATCH):
-```json
-{
-  "theme": "dark",
-  "fontFamily": "inter",
-  "fontSize": "large",
-  "compactMode": true
-}
-```
-
-**Response Example**:
-```json
-{
-  "success": true,
-  "data": {
-    "theme": "dark",
-    "fontFamily": "inter",
-    "fontSize": "large",
-    "compactMode": true
-  }
-}
-```
-
-**Valid Values**:
-- `theme`: `light`, `dark`, `system`
-- `fontFamily`: `inter`, `nunito`, `poppins`, `open-sans`, `lato`, `comic-neue`, `lexend`, `roboto`, `geist-sans`
-- `fontSize`: `small`, `medium`, `large`
-
-### Language Preferences
-
-**Base Path**: `/me/preferences/languages`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me/preferences/languages` | Get language preferences |
-| PUT | `/me/preferences/languages` | Update language preferences |
-| PATCH | `/me/preferences/languages` | Partial update |
-
-**Request Body Example** (PUT/PATCH):
-```json
-{
-  "systemLanguage": "en",
-  "regionalLanguage": "fr",
-  "customDestinationLanguage": "es",
-  "autoTranslate": true
-}
-```
-
-**Response Example**:
-```json
-{
-  "success": true,
-  "data": {
-    "systemLanguage": "en",
-    "regionalLanguage": "fr",
-    "customDestinationLanguage": "es",
-    "autoTranslate": true
-  }
-}
-```
-
-### Privacy Preferences
-
-**Base Path**: `/me/preferences/privacy`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me/preferences/privacy` | Get privacy preferences |
-| PUT | `/me/preferences/privacy` | Update privacy preferences |
-| PATCH | `/me/preferences/privacy` | Partial update |
-| DELETE | `/me/preferences/privacy` | Reset to defaults |
-
-**Request Body Example** (PUT/PATCH):
-```json
-{
-  "showOnlineStatus": true,
-  "showLastSeen": true,
-  "showReadReceipts": true,
-  "showTypingIndicator": true,
-  "allowContactRequests": true,
-  "allowGroupInvites": true,
-  "saveMediaToGallery": false,
-  "allowAnalytics": true
-}
-```
-
-**Response Example**:
-```json
-{
-  "success": true,
-  "data": {
-    "showOnlineStatus": true,
-    "showLastSeen": true,
-    "showReadReceipts": true,
-    "showTypingIndicator": true,
-    "allowContactRequests": true,
-    "allowGroupInvites": true,
-    "saveMediaToGallery": false,
-    "allowAnalytics": true
-  }
-}
-```
-
-## Common Response Formats
-
-### Success Response
-
-```json
-{
-  "success": true,
-  "data": {
-    // Preference data here
-  }
-}
-```
-
-### Error Response
-
-```json
-{
-  "success": false,
-  "message": "Error description"
-}
-```
-
-### Common HTTP Status Codes
-
-- `200 OK`: Request successful
-- `400 Bad Request`: Invalid input (validation failed)
-- `401 Unauthorized`: Authentication required or invalid token
-- `403 Forbidden`: Anonymous users attempting to access restricted preferences
-- `404 Not Found`: User not found
-- `500 Internal Server Error`: Server error
-
-## Authentication
-
-All endpoints require authentication via JWT token in the Authorization header:
-
-```
-Authorization: Bearer <jwt_token>
-```
-
-Anonymous users (session-based) are **not allowed** to manage:
-- Encryption preferences (require registered user account)
-
-## Rate Limiting
-
-Rate limits apply per user:
-- **100 requests/minute** per authenticated user
-- Configured via Fastify rate-limit middleware
-
-## Validation
-
-### Input Validation
-
-All endpoints validate input using JSON Schema:
-- Type checking (string, boolean, number)
-- Enum validation (theme, font, encryption level)
-- Pattern matching (DND times: HH:MM format)
-- Required field checking
-
-### Business Logic Validation
-
-Additional validation in `PreferencesService`:
-- DND times must be valid HH:MM format
-- DND times required when enabling DND
-- Encryption preference must be valid enum
-- Theme/font must be from allowed list
-
-## Default Values
-
-When preferences are not set, the API returns defaults from:
-- `NOTIFICATION_PREFERENCES_DEFAULTS`
-- `PRIVACY_PREFERENCES_DEFAULTS`
-- `USER_PREFERENCES_DEFAULTS`
-
-See `/src/config/user-preferences-defaults.ts` for complete list.
-
-## Database Schema
-
-### NotificationPreference (Dedicated Table)
+### Modèle de Données
 
 ```prisma
-model NotificationPreference {
-  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId                String   @unique @db.ObjectId
-  pushEnabled           Boolean
-  emailEnabled          Boolean
-  soundEnabled          Boolean
-  newMessageEnabled     Boolean
-  missedCallEnabled     Boolean
-  systemEnabled         Boolean
-  conversationEnabled   Boolean
-  replyEnabled          Boolean
-  mentionEnabled        Boolean
-  reactionEnabled       Boolean
-  contactRequestEnabled Boolean
-  memberJoinedEnabled   Boolean
-  dndEnabled            Boolean
-  dndStartTime          String?
-  dndEndTime            String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-}
-```
+model UserPreferences {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
 
-### UserPreference (Key-Value Store)
+  privacy      Json?  // Paramètres de confidentialité
+  audio        Json?  // Transcription, traduction, TTS
+  message      Json?  // Formatage, auto-save
+  notification Json?  // Préférences de notifications
+  video        Json?  // Appels vidéo, qualité, codec
+  document     Json?  // Preview, download, storage
+  application  Json?  // Thème, langue, UI
 
-For theme, privacy, and other flexible preferences:
-
-```prisma
-model UserPreference {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  key       String
-  value     String
-  valueType String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, key], map: "userId_key")
+  user User @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
 }
 ```
 
-### User & UserFeature
+### 7 Catégories de Préférences
 
-Encryption and language preferences stored directly on User model:
-- `User.signalIdentityKeyPublic`
-- `User.signalRegistrationId`
-- `User.systemLanguage`
-- `User.regionalLanguage`
-- `UserFeature.encryptionPreference`
+1. **Privacy** (`privacy`) - 12 champs
+   - Visibilité du profil (online status, last seen, read receipts, typing)
+   - Paramètres de contact (requests, invites, calls)
+   - Données (analytics, usage data, screenshots, search)
 
-## Testing
+2. **Audio** (`audio`) - 15 champs
+   - Transcription (enabled, source, auto-transcribe)
+   - Traduction audio (enabled, format)
+   - TTS (enabled, speed, pitch)
+   - Qualité audio (quality, noise suppression, echo)
+   - Profil vocal (enabled, clone quality)
 
-### Unit Tests
+3. **Message** (`message`) - 14 champs
+   - Saisie (sendOnEnter, formatting toolbar, markdown)
+   - Correction (autocorrect, spellcheck)
+   - Aperçus (links, images)
+   - Brouillons (save, expiration)
+   - Présentation (font size, alignment)
+   - Auto-traduction (enabled, languages)
 
-Located in `/src/__tests__/unit/`:
-- `services/PreferencesService.test.ts`: Service layer tests
-- `routes/me/preferences/*.test.ts`: Route handler tests
+4. **Notification** (`notification`) - 24 champs
+   - Canaux (push, email, sound, vibration)
+   - Types (12 types de notifications)
+   - DND (enabled, start/end time, days)
+   - Aperçu (show preview, sender name)
+   - Groupement (group notifications, badge)
 
-Run tests:
+5. **Video** (`video`) - 18 champs
+   - Qualité (quality, bitrate, frame rate, resolution, codec)
+   - Affichage (mirror, layout, self-view position)
+   - Effets (background blur, virtual background)
+   - Performance (hardware acceleration, adaptive bitrate)
+   - Comportement (auto start, auto mute)
+
+6. **Document** (`document`) - 14 champs
+   - Téléchargement (auto, wifi only, max size)
+   - Aperçu (inline, PDF, images, videos)
+   - Stockage (quota, auto-delete, retention)
+   - Upload (compress images, quality)
+   - Sécurité (allowed types, malware scan, external links)
+
+7. **Application** (`application`) - 18 champs
+   - Apparence (theme, accent color, font)
+   - Langues (interface, system, regional, custom)
+   - Mise en page (compact mode, sidebar, avatars)
+   - Accessibilité (reduced motion, high contrast, screen reader)
+   - Avancé (shortcuts, tutorials, beta features, telemetry)
+
+## Routes API
+
+### Routes Globales
+
+```
+GET    /api/v1/me/preferences          # Récupérer toutes les préférences
+DELETE /api/v1/me/preferences          # Réinitialiser toutes les préférences
+```
+
+### Routes par Catégorie
+
+Chaque catégorie expose 4 routes CRUD :
+
+```
+GET    /api/v1/me/preferences/{category}   # Récupérer (retourne defaults si null)
+PUT    /api/v1/me/preferences/{category}   # Remplacer complètement
+PATCH  /api/v1/me/preferences/{category}   # Mise à jour partielle (merge)
+DELETE /api/v1/me/preferences/{category}   # Réinitialiser aux defaults
+```
+
+Catégories disponibles : `privacy`, `audio`, `message`, `notification`, `video`, `document`, `application`
+
+### Exemples de Requêtes
+
+#### GET - Récupérer les préférences audio
+
+```http
+GET /api/v1/me/preferences/audio
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "transcriptionEnabled": true,
+    "transcriptionSource": "auto",
+    "audioTranslationEnabled": false,
+    "ttsEnabled": false,
+    ...
+  }
+}
+```
+
+#### PUT - Remplacer complètement
+
+```http
+PUT /api/v1/me/preferences/audio
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "transcriptionEnabled": true,
+  "transcriptionSource": "server",
+  "autoTranscribeIncoming": true,
+  ...
+}
+
+Response 200:
+{
+  "success": true,
+  "data": { ... }
+}
+```
+
+#### PATCH - Mise à jour partielle
+
+```http
+PATCH /api/v1/me/preferences/audio
+Authorization: Bearer {token}
+
+{
+  "transcriptionSource": "mobile",
+  "ttsSpeed": 1.2
+}
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "transcriptionEnabled": true,        # Valeur existante conservée
+    "transcriptionSource": "mobile",     # Valeur mise à jour
+    "ttsSpeed": 1.2,                     # Valeur mise à jour
+    ...
+  }
+}
+```
+
+#### DELETE - Réinitialiser
+
+```http
+DELETE /api/v1/me/preferences/audio
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "success": true,
+  "message": "audio preferences reset to defaults"
+}
+```
+
+## Validation de Consentement GDPR
+
+Certaines préférences nécessitent des consentements GDPR. Voir [CONSENT_VALIDATION.md](./CONSENT_VALIDATION.md) pour la documentation complète.
+
+### Exemple de Violation de Consentement
+
+```http
+PUT /api/v1/me/preferences/audio
+{
+  "transcriptionEnabled": true
+}
+
+Response 403:
+{
+  "success": false,
+  "error": "CONSENT_REQUIRED",
+  "message": "Missing required consents for requested preferences",
+  "violations": [
+    {
+      "field": "transcriptionEnabled",
+      "message": "Audio transcription requires voice data consent and feature activation",
+      "requiredConsents": [
+        "voiceDataConsentAt",
+        "audioTranscriptionEnabledAt"
+      ]
+    }
+  ]
+}
+```
+
+## Gestion des Defaults
+
+Les valeurs par défaut sont définies dans les schemas Zod :
+
+```typescript
+import {
+  AUDIO_PREFERENCE_DEFAULTS,
+  PRIVACY_PREFERENCE_DEFAULTS,
+  // ... autres defaults
+} from '@meeshy/shared/types/preferences';
+```
+
+Comportement :
+- Si `UserPreferences` n'existe pas → retourne defaults
+- Si champ JSON est `null` → retourne defaults
+- Les defaults sont appliqués automatiquement par Zod lors du parse
+
+## Factory Pattern
+
+Le système utilise un factory pour générer les routes CRUD :
+
+```typescript
+import { createPreferenceRouter } from './preference-router-factory';
+
+// Génère automatiquement les 4 routes CRUD
+fastify.register(
+  createPreferenceRouter('audio', AudioPreferenceSchema, AUDIO_PREFERENCE_DEFAULTS),
+  { prefix: '/audio' }
+);
+```
+
+## Tests
+
+### Tests Unitaires
 ```bash
-npm test -- PreferencesService
+npm test packages/shared/types/preferences/__tests__/preferences.test.ts
 ```
 
-### Integration Tests
-
-Test complete request/response flow:
+### Tests E2E
 ```bash
-npm test -- routes/me/preferences
+npm test services/gateway/src/__tests__/routes/preferences.e2e.test.ts
+npm test services/gateway/src/__tests__/routes/preferences-consent.e2e.test.ts
 ```
 
-### Test Coverage
+### Helper de Tests
 
-Aim for >80% coverage on:
-- All service methods
-- All route handlers
-- Validation logic
-- Error handling
+```typescript
+import { CONSENT_LEVELS, createTestUserWithConsents } from '@/__tests__/helpers/consent-test-helper';
 
-## Migration from Old Routes
+// Créer un utilisateur avec transcription activée
+const user = await createTestUserWithConsents(prisma, CONSENT_LEVELS.TRANSCRIPTION);
 
-Old routes being migrated:
-- `/user-preferences/notifications` → `/me/preferences/notifications`
-- `/users/me/encryption-preferences` → `/me/preferences/encryption`
-- `/privacy-preferences` → `/me/preferences/privacy`
-
-### Migration Strategy
-
-1. Keep old routes functional (deprecated)
-2. Add deprecation warnings in old routes
-3. Update client applications to use new endpoints
-4. Remove old routes after migration period
-
-## Examples
-
-### Get all notification settings
-
-```bash
-curl -X GET \
-  https://api.meeshy.com/me/preferences/notifications \
-  -H 'Authorization: Bearer <token>'
+// Créer un utilisateur avec tous les consentements
+const userFull = await createTestUserWithConsents(prisma, CONSENT_LEVELS.FULL);
 ```
 
-### Enable Do Not Disturb
+## Schémas Zod
 
-```bash
-curl -X PATCH \
-  https://api.meeshy.com/me/preferences/notifications \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "dndEnabled": true,
-    "dndStartTime": "22:00",
-    "dndEndTime": "08:00"
-  }'
+Chaque catégorie a un schema Zod complet avec :
+- Validation de types
+- Enums pour les valeurs contraintes
+- Limites numériques (min/max)
+- Patterns regex (ex: format d'heure HH:MM)
+- Defaults automatiques
+
+Exemple :
+
+```typescript
+export const AudioPreferenceSchema = z.object({
+  transcriptionEnabled: z.boolean().default(true),
+  transcriptionSource: z.enum(['auto', 'mobile', 'server']).default('auto'),
+  ttsSpeed: z.number().min(0.5).max(2.0).default(1.0),
+  // ...
+});
 ```
 
-### Change theme to dark mode
+## Migration depuis l'ancien système
 
-```bash
-curl -X PATCH \
-  https://api.meeshy.com/me/preferences/theme \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{"theme": "dark"}'
-```
+### Ancien système (obsolète)
+- Modèle : `NotificationPreference`, `UserPreference` (key-value)
+- Routes : `/api/notification-preferences`, `/api/user-preferences`
 
-### Update privacy settings
+### Nouveau système
+- Modèle : `UserPreferences` avec champs JSON
+- Routes : `/api/v1/me/preferences/*`
+- Validation : Zod + GDPR consents
+- Factory pattern : DRY, maintainable
 
-```bash
-curl -X PATCH \
-  https://api.meeshy.com/me/preferences/privacy \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "showOnlineStatus": false,
-    "showLastSeen": false
-  }'
-```
-
-### Reset preferences to defaults
-
-```bash
-curl -X DELETE \
-  https://api.meeshy.com/me/preferences/notifications \
-  -H 'Authorization: Bearer <token>'
-```
-
-## OpenAPI Documentation
-
-All endpoints are fully documented with OpenAPI schemas. Access the interactive documentation at:
+## Fichiers Importants
 
 ```
-https://api.meeshy.com/documentation
+services/gateway/src/routes/me/preferences/
+├── index.ts                          # Point d'entrée, routes globales
+├── preference-router-factory.ts      # Factory pour générer routes CRUD
+├── CONSENT_VALIDATION.md             # Documentation consentements
+└── README.md                         # Ce fichier
+
+packages/shared/types/preferences/
+├── index.ts                          # Barrel export
+├── privacy.ts                        # Schema + defaults privacy
+├── audio.ts                          # Schema + defaults audio
+├── message.ts                        # Schema + defaults message
+├── notification.ts                   # Schema + defaults notification
+├── video.ts                          # Schema + defaults video
+├── document.ts                       # Schema + defaults document
+└── application.ts                    # Schema + defaults application
+
+services/gateway/src/services/
+└── ConsentValidationService.ts       # Validation GDPR automatique
 ```
 
-Filter by tags:
-- `preferences`: All preference endpoints
-- `notifications`: Notification-specific
-- `encryption`: Encryption-specific
-- `theme`: Theme-specific
-- `languages`: Language-specific
-- `privacy`: Privacy-specific
-- `me`: User-scoped endpoints
+## Évolutivité
 
-## Support
+Le système est conçu pour évoluer sans migration :
 
-For issues or questions:
-- GitHub Issues: [meeshy/gateway](https://github.com/meeshy/gateway)
-- Documentation: [docs.meeshy.com](https://docs.meeshy.com)
+1. **Ajouter un champ** : Ajouter dans le schema Zod avec `.default()`
+2. **Nouvelle catégorie** : Créer schema, ajouter champ JSON, register factory
+3. **Nouvelle règle de consentement** : Ajouter dans ConsentValidationService
+
+Aucune migration Prisma nécessaire car les champs JSON sont flexibles !
