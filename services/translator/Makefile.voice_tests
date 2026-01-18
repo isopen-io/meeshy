@@ -1,0 +1,148 @@
+# Makefile for Voice Analyzer Tests
+# ===================================
+#
+# Usage:
+#   make -f Makefile.voice_tests test          # Run quick tests
+#   make -f Makefile.voice_tests test-all      # Run all tests
+#   make -f Makefile.voice_tests coverage      # Run with coverage report
+#   make -f Makefile.voice_tests clean         # Clean test artifacts
+
+.PHONY: help install test test-all test-quick test-edge test-integration coverage clean fixtures
+
+# Variables
+PYTHON := python3
+PYTEST := pytest
+TEST_FILE := tests/test_voice_quality_analyzer.py
+COVERAGE_DIR := htmlcov
+FIXTURES_DIR := tests/fixtures/test_audio_fixtures
+
+# Default target
+.DEFAULT_GOAL := help
+
+help:  ## Show this help message
+	@echo "Voice Analyzer Tests - Available Commands"
+	@echo "=========================================="
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+
+install:  ## Install test dependencies
+	@echo "📦 Installing test dependencies..."
+	@$(PYTHON) -m pip install pytest pytest-asyncio pytest-cov
+	@echo "📦 Installing audio dependencies..."
+	@$(PYTHON) -m pip install librosa soundfile scipy numpy
+	@echo "✅ Installation complete"
+
+test: test-quick  ## Alias for test-quick
+
+test-quick:  ## Run quick tests (exclude performance tests)
+	@echo "🚀 Running quick tests..."
+	@$(PYTEST) $(TEST_FILE) -v -k "not (performance or stress or concurrent)"
+
+test-all:  ## Run all tests
+	@echo "🧪 Running all tests..."
+	@$(PYTEST) $(TEST_FILE) -v
+
+test-edge:  ## Run edge case tests only
+	@echo "⚠️  Running edge case tests..."
+	@$(PYTEST) $(TEST_FILE) -v -k "edge or silence or noise or short or error"
+
+test-integration:  ## Run integration tests only
+	@echo "🔗 Running integration tests..."
+	@$(PYTEST) $(TEST_FILE) -v -k "integration or pipeline"
+
+coverage:  ## Run tests with coverage report
+	@echo "📊 Running tests with coverage..."
+	@$(PYTEST) $(TEST_FILE) -v \
+		--cov=src/services/voice_analyzer_service \
+		--cov-report=term-missing \
+		--cov-report=html:$(COVERAGE_DIR)
+	@echo ""
+	@echo "📊 Coverage report generated: $(COVERAGE_DIR)/index.html"
+	@echo "   Open with: open $(COVERAGE_DIR)/index.html"
+
+coverage-html: coverage  ## Generate and open HTML coverage report
+	@open $(COVERAGE_DIR)/index.html 2>/dev/null || xdg-open $(COVERAGE_DIR)/index.html 2>/dev/null || echo "Open manually: $(COVERAGE_DIR)/index.html"
+
+test-verbose:  ## Run tests with verbose output
+	@echo "🔊 Running tests (verbose mode)..."
+	@$(PYTEST) $(TEST_FILE) -vv --log-cli-level=DEBUG
+
+test-failfast:  ## Run tests, stop at first failure
+	@echo "⚡ Running tests (fail-fast mode)..."
+	@$(PYTEST) $(TEST_FILE) -v -x
+
+test-markers:  ## Show available pytest markers
+	@$(PYTEST) --markers
+
+test-durations:  ## Show 10 slowest tests
+	@echo "🐌 Running tests and showing slowest..."
+	@$(PYTEST) $(TEST_FILE) -v --durations=10
+
+fixtures:  ## Generate test audio fixtures
+	@echo "🎵 Generating test audio fixtures..."
+	@$(PYTHON) tests/fixtures/generate_test_audio.py
+	@echo "✅ Fixtures generated in: $(FIXTURES_DIR)"
+
+clean:  ## Clean test artifacts and cache
+	@echo "🧹 Cleaning test artifacts..."
+	@rm -rf $(COVERAGE_DIR)
+	@rm -rf .pytest_cache
+	@rm -rf .coverage
+	@rm -rf $(FIXTURES_DIR)
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@echo "✅ Clean complete"
+
+clean-all: clean  ## Clean everything including generated fixtures
+	@echo "🧹 Deep clean..."
+	@rm -rf htmlcov
+	@rm -rf .tox
+	@rm -rf .mypy_cache
+	@echo "✅ Deep clean complete"
+
+watch:  ## Run tests on file changes (requires pytest-watch)
+	@echo "👀 Watching for changes..."
+	@$(PYTHON) -m pytest_watch $(TEST_FILE) -v
+
+lint:  ## Run code quality checks
+	@echo "🔍 Running linters..."
+	@$(PYTHON) -m flake8 src/services/voice_analyzer_service.py || echo "flake8 not installed"
+	@$(PYTHON) -m mypy src/services/voice_analyzer_service.py || echo "mypy not installed"
+	@echo "✅ Lint complete"
+
+format:  ## Format code with black
+	@echo "🎨 Formatting code..."
+	@$(PYTHON) -m black src/services/voice_analyzer_service.py tests/test_voice_quality_analyzer.py || echo "black not installed"
+	@echo "✅ Format complete"
+
+check: lint test-quick  ## Run linters and quick tests
+
+ci: clean install test-all coverage  ## Run CI pipeline (clean, install, test, coverage)
+	@echo "✅ CI pipeline complete"
+
+# Development helpers
+dev-setup: install fixtures  ## Setup development environment
+	@echo "🛠️  Development environment ready"
+
+# Statistics
+stats:  ## Show test statistics
+	@echo "📊 Test Statistics"
+	@echo "=================="
+	@echo ""
+	@echo "Total tests:"
+	@$(PYTEST) $(TEST_FILE) --collect-only -q | tail -1
+	@echo ""
+	@echo "Tests by category:"
+	@echo "  Initialization:  $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'init' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo "  Analyze:         $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'analyze' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo "  Compare:         $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'compare' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo "  Classification:  $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'classify' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo "  Edge Cases:      $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'edge' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo "  Integration:     $$($(PYTEST) $(TEST_FILE) --collect-only -q -k 'integration' 2>/dev/null | grep -c 'test_' || echo '0')"
+	@echo ""
+
+# Quick reference
+ref: help  ## Alias for help
+
+.SILENT: help
