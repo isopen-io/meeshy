@@ -1,13 +1,14 @@
 /**
  * ZMQ Translation Client - Public API
  * Exports sélectifs pour une API propre et maintenable
+ *
+ * IMPORTANT: Pas de barrel exports (*) pour éviter les problèmes de dépendances circulaires
  */
 
 // Export principal client
 export { ZmqTranslationClient } from './ZmqTranslationClient';
-export type { ZMQClientConfig, ZMQClientStats } from './ZmqTranslationClient';
 
-// Export types publics
+// Export types publics (PAS le client lui-même en type)
 export type {
   // Translation types
   TranslationRequest,
@@ -61,9 +62,8 @@ export type {
 // Export constants
 export { AUDIO_BASE64_SIZE_THRESHOLD } from './types';
 
-// Export configuration types (useful for advanced users)
-export type { ConnectionPoolConfig, ConnectionPoolStats } from './ZmqConnectionPool';
-export type { RetryConfig, RetryStats } from './ZmqRetryHandler';
+// Export stats type from client
+export type { ZMQClientStats } from './ZmqTranslationClient';
 
-// Note: ZmqConnectionPool et ZmqRetryHandler ne sont PAS exportés
-// car ils sont des détails d'implémentation internes
+// Note: Les modules internes (ZmqConnectionManager, ZmqMessageHandler, ZmqRequestSender)
+// ne sont PAS exportés car ce sont des détails d'implémentation

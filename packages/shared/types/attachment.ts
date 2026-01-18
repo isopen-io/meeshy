@@ -3,6 +3,8 @@
  * Partagés entre frontend et backend
  */
 
+import type { MessageAudioTranscription, MessageTranslatedAudio } from './audio-transcription.js';
+
 /**
  * Types d'attachements supportés
  */
@@ -206,8 +208,28 @@ export interface Attachment {
 
   // ===== AUDIO PROCESSING =====
   readonly serverCopyUrl?: string;
+
+  /**
+   * @deprecated Use transcription instead
+   */
   readonly transcriptionText?: string;
+
+  /**
+   * @deprecated Use translatedAudios instead
+   */
   readonly translationsJson?: Record<string, unknown>;
+
+  /**
+   * Audio transcription (Whisper)
+   * Populated when including the transcription relation from Prisma
+   */
+  readonly transcription?: MessageAudioTranscription;
+
+  /**
+   * Translated audio versions
+   * Populated when including the translatedAudios relation from Prisma
+   */
+  readonly translatedAudios?: readonly MessageTranslatedAudio[];
 
   /**
    * Metadata JSON contenant des données additionnelles
@@ -652,16 +674,18 @@ export interface AttachmentTranslationData {
 /**
  * Attachment with transcription relation
  * Used when fetching attachments with transcription data
+ * @deprecated Use Attachment with transcription field instead
  */
-export interface AttachmentWithTranscription extends Attachment {
+export interface AttachmentWithTranscription extends Omit<Attachment, 'transcription' | 'translatedAudios'> {
   readonly transcription: TranscriptionData | null;
 }
 
 /**
  * Attachment with complete metadata including transcription and translations
  * Used for comprehensive attachment data retrieval
+ * @deprecated Use Attachment with transcription and translatedAudios fields instead
  */
-export interface AttachmentWithMetadata extends Attachment {
+export interface AttachmentWithMetadata extends Omit<Attachment, 'transcription' | 'translatedAudios'> {
   readonly transcription: TranscriptionData | null;
   readonly translatedAudios: readonly AttachmentTranslationData[];
 }

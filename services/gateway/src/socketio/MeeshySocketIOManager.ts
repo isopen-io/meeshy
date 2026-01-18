@@ -1528,7 +1528,16 @@ export class MeeshySocketIOManager {
     processingTimeMs?: number;
   }) {
     try {
+      console.log(`🎵 [SocketIOManager] ======== DIFFUSION SOCKET.IO VERS CLIENTS ========`);
       console.log(`🎵 [SocketIOManager] Audio translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      console.log(`   📝 Has Transcription: ${!!data.transcription}`);
+      if (data.transcription) {
+        console.log(`   📝 Transcription Text: "${data.transcription.text?.substring(0, 100)}..."`);
+        console.log(`   📝 Transcription Language: ${data.transcription.language}`);
+        console.log(`   📝 Transcription Confidence: ${data.transcription.confidence}`);
+      }
+      console.log(`   🌍 Translated Audios: ${data.translatedAudios.length}`);
+      console.log(`   🔊 Langues: ${data.translatedAudios.map(ta => ta.language).join(', ')}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1566,9 +1575,13 @@ export class MeeshySocketIOManager {
       };
 
       // Diffuser dans la room de conversation
+      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.AUDIO_TRANSLATION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, audioTranslationData);
 
-      console.log(`✅ [SocketIOManager] Traduction audio diffusée: ${data.translatedAudios.length} audios traduits, transcription: ${data.transcription ? 'oui' : 'non'}`);
+      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT SOCKET.IO DIFFUSÉ ========`);
+      console.log(`✅ [SocketIOManager] Traduction audio diffusée vers ${clientCount} client(s)`);
+      console.log(`   📝 Transcription: ${data.transcription ? 'OUI' : 'NON'}`);
+      console.log(`   🌍 Audios traduits: ${data.translatedAudios.length}`);
 
     } catch (error) {
       console.error(`❌ [SocketIOManager] Erreur envoi traduction audio:`, error);

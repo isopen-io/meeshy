@@ -116,7 +116,7 @@ describe('NotificationSettings', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:3001/user-preferences/notifications',
+          'http://localhost:3001/me/preferences/notification',
           expect.objectContaining({
             headers: {
               Authorization: 'Bearer test-token',
@@ -394,7 +394,7 @@ describe('NotificationSettings', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:3001/user-preferences/notifications',
+          'http://localhost:3001/me/preferences/notification',
           expect.objectContaining({
             method: 'PUT',
             headers: expect.objectContaining({

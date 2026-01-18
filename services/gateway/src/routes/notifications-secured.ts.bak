@@ -689,19 +689,216 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   });
 
   /**
-  /**
-   * LEGACY ROUTES REMOVED
-   * Les routes /notifications/preferences ont été supprimées.
+   * GET /notifications/preferences
+   * Récupérer les préférences de notification
    *
-   * Migration: Utiliser /me/preferences/notification à la place (nouveau système unifié UserPreferences).
-   * - GET  /me/preferences/notification
-   * - PUT  /me/preferences/notification
-   * - PATCH /me/preferences/notification
-   * - DELETE /me/preferences/notification
-   *
-   * Le nouveau système utilise UserPreferences.notification (JSON) au lieu du modèle NotificationPreference obsolète.
+   * Security:
+   * - Rate limited: 100 req/min per user
+   * - IDOR protected: userId in WHERE clause
    */
+  fastify.get('/notifications/preferences', {
+    onRequest: [
+      fastify.authenticate,
+      notificationRateLimiter.middleware()
+    ],
+    schema: {
+      description: 'Retrieve notification preferences for the authenticated user. If no preferences exist, they will be automatically created with default values (all notifications enabled except Do Not Disturb). IDOR protection ensures users can only access their own preferences.',
+      tags: ['notifications'],
+      summary: 'Get notification preferences (secured)',
+      response: {
+        200: {
+          description: 'Notification preferences retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: notificationPreferenceSchema
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (100 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user as any;
 
+      // SECURITY: IDOR protection - userId in WHERE clause
+      let preferences = await fastify.prisma.notificationPreference.findUnique({
+        where: { userId }
+      });
+
+      // Create default preferences if none exist
+      if (!preferences) {
+        preferences = await fastify.prisma.notificationPreference.create({
+          data: {
+            userId,
+            pushEnabled: true,
+            emailEnabled: true,
+            soundEnabled: true,
+            newMessageEnabled: true,
+            missedCallEnabled: true,
+            systemEnabled: true,
+            conversationEnabled: true,
+            dndEnabled: false
+          }
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: preferences
+      });
+
+    } catch (error) {
+      notificationLogger.error('Get notification preferences error', error instanceof Error ? error : new Error(String(error)));
+
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+
+  /**
+   * PUT /notifications/preferences
+   * Mettre à jour les préférences de notification
+   *
+   * Security:
+   * - Strict rate limited: 10 req/min per user
+   * - IDOR protected: userId in WHERE clause
+   * - Validated with Zod schema
+   * - Sanitized inputs
+   */
+  fastify.put('/notifications/preferences', {
+    onRequest: [
+      fastify.authenticate,
+      strictRateLimiter.middleware()
+    ],
+    preHandler: validateBody(UpdateNotificationPreferencesSchema),
+    schema: {
+      description: 'Update notification preferences for the authenticated user. All fields are optional - only provided fields will be updated. If preferences do not exist, they will be created. DND times should be in HH:mm format. Uses strict rate limiting and comprehensive input validation.',
+      tags: ['notifications'],
+      summary: 'Update notification preferences (secured)',
+      body: updateNotificationPreferencesRequestSchema,
+      response: {
+        200: {
+          description: 'Notification preferences updated successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Preferences updated' },
+                preferences: notificationPreferenceSchema
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid request data - validation failed',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error message' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string', description: 'Field that failed validation' },
+                  message: { type: 'string', description: 'Validation error message' },
+                  code: { type: 'string', description: 'Zod error code' }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - rate limit exceeded (10 req/min)',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const body = request.body as z.infer<typeof UpdateNotificationPreferencesSchema>;
+      const { userId } = request.user as any;
+
+      // Check if preferences exist
+      const existingPreferences = await fastify.prisma.notificationPreference.findUnique({
+        where: { userId }
+      });
+
+      let preferences;
+      if (existingPreferences) {
+        // SECURITY: IDOR protection - update with userId in WHERE clause
+        preferences = await fastify.prisma.notificationPreference.update({
+          where: { userId },
+          data: body
+        });
+      } else {
+        // Create new preferences
+        preferences = await fastify.prisma.notificationPreference.create({
+          data: {
+            userId,
+            ...body
+          }
+        });
+      }
+
+      notificationLogger.info('Notification preferences updated', {
+        userId,
+        changes: Object.keys(body)
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          message: 'Preferences updated',
+          preferences
+        }
+      });
+
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+            code: err.code
+          }))
+        });
+      }
+
+      notificationLogger.error('Update notification preferences error', error instanceof Error ? error : new Error(String(error)));
+
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
 
   /**
    * GET /notifications/stats

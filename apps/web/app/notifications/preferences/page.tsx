@@ -75,8 +75,8 @@ function NotificationPreferencesContent() {
         const token = localStorage.getItem('authToken');
         if (!token) return;
 
-        // Utilise le nouvel endpoint unifié /user-preferences/notifications
-        const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/notifications`, {
+        // Utilise le nouvel endpoint unifié /me/preferences/notification
+        const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/notification`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -110,8 +110,8 @@ function NotificationPreferencesContent() {
         return;
       }
 
-      // Utilise le nouvel endpoint unifié /user-preferences/notifications
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/notifications`, {
+      // Utilise le nouvel endpoint unifié /me/preferences/notification
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/notification`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -245,7 +245,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(buildApiUrl('/user-preferences/notifications'), {
+          const response = await fetch(buildApiUrl('/me/preferences/notification'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -330,7 +330,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
 
         try {
-          const response = await fetch(buildApiUrl('/user-preferences/notifications'), {
+          const response = await fetch(buildApiUrl('/me/preferences/notification'), {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,

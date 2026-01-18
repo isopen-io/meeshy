@@ -706,9 +706,12 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
+      logger.info(`🎤 [TranslationService] ======== RÉCEPTION ASYNCHRONE DEPUIS TRANSLATOR ========`);
       logger.info(`🎤 [TranslationService] Audio process completed: ${data.attachmentId}`);
-      logger.info(`   📝 Transcription: ${data.transcription.text.substring(0, 50)}...`);
+      logger.info(`   📝 Transcription: "${data.transcription.text.substring(0, 100)}..."`);
       logger.info(`   🌍 Traductions: ${data.translatedAudios.length} langues`);
+      logger.info(`   ⏱️ Temps de traitement Translator: ${data.processingTimeMs}ms`);
+      logger.info(`   🎯 Task ID: ${data.taskId}`);
 
       // 1. Récupérer les infos de l'attachment pour vérifier
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -878,6 +881,15 @@ export class MessageTranslationService extends EventEmitter {
 
       // 5. Émettre événement pour notifier les clients (Socket.IO)
       // Utiliser savedTranslatedAudios qui contient les URLs locales accessibles
+      logger.info(`📡 [TranslationService] ======== ÉMISSION ÉVÉNEMENT SOCKET.IO ========`);
+      logger.info(`📡 [TranslationService] Émission 'audioTranslationReady' vers SocketIOManager`);
+      logger.info(`   🎯 Task ID: ${data.taskId}`);
+      logger.info(`   📨 Message ID: ${data.messageId}`);
+      logger.info(`   📎 Attachment ID: ${data.attachmentId}`);
+      logger.info(`   📝 Has Transcription: ${!!data.transcription}`);
+      logger.info(`   🌍 Translated Audios: ${savedTranslatedAudios.length}`);
+      logger.info(`   🔊 Langues: ${savedTranslatedAudios.map(ta => ta.targetLanguage).join(', ')}`);
+
       this.emit('audioTranslationReady', {
         taskId: data.taskId,
         messageId: data.messageId,

@@ -137,7 +137,7 @@ export default function SettingsPage() {
               'Content-Type': 'application/json'
             }
           }),
-          fetch(`${buildApiUrl('')}/user-preferences/notifications`, {
+          fetch(`${buildApiUrl('')}/me/preferences/notification`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }).catch(() => null),
           fetch(`${buildApiUrl('')}/user-preferences/encryption`, {

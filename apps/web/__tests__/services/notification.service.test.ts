@@ -330,7 +330,7 @@ describe('NotificationService', () => {
       await jest.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/user-preferences/notifications');
+      expect(mockApiService.get).toHaveBeenCalledWith('/me/preferences/notification');
       expect(result.data?.preferences.emailNotifications).toBe(true);
     });
   });
@@ -354,7 +354,7 @@ describe('NotificationService', () => {
       const result = await resultPromise;
 
       expect(mockApiService.put).toHaveBeenCalledWith(
-        '/user-preferences/notifications',
+        '/me/preferences/notification',
         updatedPreferences
       );
       expect(result.data?.preferences.emailNotifications).toBe(false);

@@ -274,7 +274,38 @@ export function registerMessagesRoutes(
             metadata: true,
             uploadedBy: true,
             isAnonymous: true,
-            createdAt: true
+            createdAt: true,
+            // Inclure les transcriptions audio
+            transcription: {
+              select: {
+                id: true,
+                transcribedText: true,
+                language: true,
+                confidence: true,
+                source: true,
+                model: true,
+                segments: true,
+                audioDurationMs: true,
+                speakerCount: true,
+                createdAt: true
+              }
+            },
+            // Inclure les audios traduits
+            translatedAudios: {
+              select: {
+                id: true,
+                targetLanguage: true,
+                translatedText: true,
+                audioPath: true,
+                audioUrl: true,
+                durationMs: true,
+                format: true,
+                voiceCloned: true,
+                voiceQuality: true,
+                ttsModel: true,
+                createdAt: true
+              }
+            }
           }
         },
         _count: {
@@ -459,24 +490,65 @@ export function registerMessagesRoutes(
         ? resolveUserLanguage(userPrefs)
         : 'en';
 
-      // DEBUG: Log pour vérifier les attachments et metadata
+      // DEBUG: Log détaillé pour vérifier les transcriptions audio
       if (messages.length > 0) {
-        const firstMessage = messages[0] as any;
-        if (firstMessage.attachments && firstMessage.attachments.length > 0) {
-          const firstAttachment = firstMessage.attachments[0];
-          console.log('🔍 [CONVERSATIONS] Premier message avec attachments:', {
-            messageId: firstMessage.id,
-            attachmentCount: firstMessage.attachments.length,
-            firstAttachment: {
-              id: firstAttachment.id,
-              hasMetadata: !!firstAttachment.metadata,
-              metadata: firstAttachment.metadata,
-              metadataType: typeof firstAttachment.metadata,
-              metadataKeys: firstAttachment.metadata ? Object.keys(firstAttachment.metadata) : [],
-              fullAttachment: JSON.stringify(firstAttachment, null, 2)
-            }
-          });
-        }
+        console.log(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
+
+        // Compter les messages avec attachments audio
+        let audioAttachmentCount = 0;
+        let audioWithTranscriptionCount = 0;
+        let audioWithTranslatedAudiosCount = 0;
+
+        (messages as any[]).forEach((msg, index) => {
+          if (msg.attachments && msg.attachments.length > 0) {
+            msg.attachments.forEach((att: any) => {
+              // Vérifier si c'est un audio
+              if (att.mimeType && att.mimeType.startsWith('audio/')) {
+                audioAttachmentCount++;
+
+                // Vérifier si l'audio a une transcription
+                if (att.transcription) {
+                  audioWithTranscriptionCount++;
+                  console.log(`📝 [CONVERSATIONS] Message ${msg.id} - Audio avec transcription:`, {
+                    attachmentId: att.id,
+                    hasTranscription: true,
+                    transcriptionText: att.transcription.transcribedText?.substring(0, 100) + '...',
+                    language: att.transcription.language,
+                    confidence: att.transcription.confidence,
+                    source: att.transcription.source,
+                    model: att.transcription.model,
+                    audioDurationMs: att.transcription.audioDurationMs
+                  });
+                } else {
+                  console.log(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription:`, {
+                    attachmentId: att.id,
+                    hasTranscription: false,
+                    mimeType: att.mimeType,
+                    fileUrl: att.fileUrl
+                  });
+                }
+
+                // Vérifier les audios traduits
+                if (att.translatedAudios && att.translatedAudios.length > 0) {
+                  audioWithTranslatedAudiosCount++;
+                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio avec ${att.translatedAudios.length} traductions:`, {
+                    attachmentId: att.id,
+                    translatedLanguages: att.translatedAudios.map((ta: any) => ta.targetLanguage),
+                    voiceCloned: att.translatedAudios.map((ta: any) => ta.voiceCloned)
+                  });
+                }
+              }
+            });
+          }
+        });
+
+        console.log(`📊 [CONVERSATIONS] Statistiques audio:`, {
+          totalMessages: messages.length,
+          audioAttachments: audioAttachmentCount,
+          audioWithTranscription: audioWithTranscriptionCount,
+          audioWithTranslatedAudios: audioWithTranslatedAudiosCount,
+          transcriptionRate: audioAttachmentCount > 0 ? `${(audioWithTranscriptionCount / audioAttachmentCount * 100).toFixed(1)}%` : '0%'
+        });
       }
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types

@@ -286,12 +286,12 @@ export const NotificationService = {
 
   /**
    * Récupère les préférences de notifications
-   * Utilise le nouvel endpoint unifié /user-preferences/notifications
+   * Utilise le nouvel endpoint unifié /me/preferences/notification
    */
   async getPreferences(): Promise<ApiResponse<{ preferences: NotificationPreferences }>> {
     return withRetry(async () => {
       const response = await apiService.get<{ success: boolean; data: NotificationPreferences }>(
-        '/user-preferences/notifications'
+        '/me/preferences/notification'
       );
       // Adapter la réponse au format attendu
       if (response.data?.data) {
@@ -306,14 +306,14 @@ export const NotificationService = {
 
   /**
    * Met à jour les préférences de notifications
-   * Utilise le nouvel endpoint unifié /user-preferences/notifications
+   * Utilise le nouvel endpoint unifié /me/preferences/notification
    */
   async updatePreferences(
     preferences: Partial<NotificationPreferences>
   ): Promise<ApiResponse<{ success: boolean; preferences: NotificationPreferences }>> {
     return withRetry(async () => {
       const response = await apiService.put<{ success: boolean; data: NotificationPreferences }>(
-        '/user-preferences/notifications',
+        '/me/preferences/notification',
         preferences
       );
       // Adapter la réponse au format attendu
