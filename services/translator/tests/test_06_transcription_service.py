@@ -169,13 +169,14 @@ async def test_transcription_whisper_fallback(mock_audio_file):
     mock_model = MagicMock()
     mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
 
-    service.model = mock_model
-    service.is_initialized = True
+    # Mock get_stt_model to return our mock (nouveau pattern après refactoring)
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model):
+        service.is_initialized = True
 
-    result = await service.transcribe(
-        audio_path=str(mock_audio_file),
-        mobile_transcription=None
-    )
+        result = await service.transcribe(
+            audio_path=str(mock_audio_file),
+            mobile_transcription=None
+        )
 
     assert result.text == "Test transcription from Whisper"
     assert result.language == "en"
@@ -274,7 +275,9 @@ async def test_transcription_close():
 
     await service.close()
 
-    assert service.model is None
+    # NOTE: Le modèle est maintenant géré par ModelManager centralisé
+    # On ne peut plus vérifier service.model is None
+    # On vérifie juste que is_initialized est False
     assert service.is_initialized is False
     logger.info("Close method works correctly")
 
@@ -304,14 +307,15 @@ async def test_transcription_empty_mobile_text(mock_audio_file):
     mock_model = MagicMock()
     mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
 
-    service.model = mock_model
-    service.is_initialized = True
+    # Mock get_stt_model to return our mock (nouveau pattern après refactoring)
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model):
+        service.is_initialized = True
 
-    # Empty text should trigger Whisper fallback
-    result = await service.transcribe(
-        audio_path=str(mock_audio_file),
-        mobile_transcription={"text": "", "language": "en"}
-    )
+        # Empty text should trigger Whisper fallback
+        result = await service.transcribe(
+            audio_path=str(mock_audio_file),
+            mobile_transcription={"text": "", "language": "en"}
+        )
 
     # Should use Whisper since mobile text is empty
     assert result.source == "whisper"
