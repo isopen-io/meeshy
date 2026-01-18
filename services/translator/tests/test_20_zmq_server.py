@@ -1251,19 +1251,14 @@ class TestVoiceProfileHandling:
 # ============================================================================
 
 class TestDynamicScaling:
-    """Tests for dynamic worker scaling"""
+    """Tests for dynamic worker scaling using WorkerPool.check_scaling()"""
 
-    # TODO: Rewrite dynamic scaling tests to use WorkerPool.check_scaling()
-    # The refactored architecture delegates scaling to WorkerPool objects
-    # Old private methods (_dynamic_scaling_check, _scale_normal_workers, _scale_any_workers)
-    # have been removed in favor of WorkerPool.check_scaling()
-
-    @pytest.mark.skip(reason="TODO: Rewrite for refactored WorkerPool architecture")
     @pytest.mark.asyncio
     async def test_dynamic_scaling_disabled(self, mock_translation_service):
         """Test that scaling is skipped when disabled"""
         from services.zmq_server import TranslationPoolManager
 
+        # Create manager with dynamic scaling DISABLED
         manager = TranslationPoolManager(
             translation_service=mock_translation_service,
             enable_dynamic_scaling=False
@@ -1272,52 +1267,169 @@ class TestDynamicScaling:
         initial_normal = manager.normal_pool.current_workers
         initial_any = manager.any_pool.current_workers
 
-        # TODO: Rewrite to test WorkerPool.check_scaling() directly
-        # Scaling is now handled by WorkerPool objects, not TranslationPoolManager
+        # Force last_scaling_check to 0 to bypass time interval check
+        manager.normal_pool.last_scaling_check = 0
+        manager.any_pool.last_scaling_check = 0
 
-        # Workers should not change when scaling is disabled
+        # Try to trigger scaling with high queue size and utilization
+        # Should return False because scaling is disabled
+        normal_scaled = await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
+        any_scaled = await manager.any_pool.check_scaling(queue_size=100, utilization=0.9)
+
+        # Verify scaling did NOT occur
+        assert normal_scaled is False
+        assert any_scaled is False
         assert manager.normal_pool.current_workers == initial_normal
         assert manager.any_pool.current_workers == initial_any
+        assert manager.normal_pool.stats['scaling_events'] == 0
+        assert manager.any_pool.stats['scaling_events'] == 0
 
-    @pytest.mark.skip(reason="TODO: Rewrite for refactored WorkerPool architecture")
     @pytest.mark.asyncio
     async def test_scale_normal_workers_up(self, mock_translation_service):
-        """Test scaling up normal workers"""
+        """Test scaling up normal workers when queue is large and utilization is high"""
         from services.zmq_server import TranslationPoolManager
+
+        # Create manager with small initial workers
+        manager = TranslationPoolManager(
+            normal_workers=5,
+            translation_service=mock_translation_service,
+            enable_dynamic_scaling=True
+        )
+
+        initial_count = manager.normal_pool.current_workers
+        initial_events = manager.normal_pool.stats['scaling_events']
+
+        # Force last_scaling_check to 0 to bypass time interval check
+        manager.normal_pool.last_scaling_check = 0
+
+        # Trigger scaling UP with high queue size (>100) and high utilization (>0.8)
+        scaled = await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
+
+        # Verify scaling occurred
+        assert scaled is True
+        assert manager.normal_pool.current_workers > initial_count
+        assert manager.normal_pool.current_workers == initial_count + 5  # normal pool increments by 5
+        assert manager.normal_pool.stats['scaling_events'] == initial_events + 1
+
+    @pytest.mark.asyncio
+    async def test_scale_any_workers_up(self, mock_translation_service):
+        """Test scaling up any workers when queue is large and utilization is high"""
+        from services.zmq_server import TranslationPoolManager
+
+        # Create manager with small initial workers
+        manager = TranslationPoolManager(
+            any_workers=3,
+            translation_service=mock_translation_service,
+            enable_dynamic_scaling=True
+        )
+
+        initial_count = manager.any_pool.current_workers
+        initial_events = manager.any_pool.stats['scaling_events']
+
+        # Force last_scaling_check to 0 to bypass time interval check
+        manager.any_pool.last_scaling_check = 0
+
+        # Trigger scaling UP with high queue size (>50) and high utilization (>0.8)
+        scaled = await manager.any_pool.check_scaling(queue_size=100, utilization=0.9)
+
+        # Verify scaling occurred
+        assert scaled is True
+        assert manager.any_pool.current_workers > initial_count
+        assert manager.any_pool.current_workers == initial_count + 3  # any pool increments by 3
+        assert manager.any_pool.stats['scaling_events'] == initial_events + 1
+
+    @pytest.mark.asyncio
+    async def test_scale_normal_workers_down(self, mock_translation_service):
+        """Test scaling down normal workers when queue is empty and utilization is low"""
+        from services.zmq_server import TranslationPoolManager
+
+        # Create manager with more workers
+        manager = TranslationPoolManager(
+            normal_workers=10,
+            translation_service=mock_translation_service,
+            enable_dynamic_scaling=True
+        )
+
+        initial_count = manager.normal_pool.current_workers
+        initial_events = manager.normal_pool.stats['scaling_events']
+
+        # Force last_scaling_check to 0 to bypass time interval check
+        manager.normal_pool.last_scaling_check = 0
+
+        # Trigger scaling DOWN with low queue size (<10) and low utilization (<0.3)
+        scaled = await manager.normal_pool.check_scaling(queue_size=5, utilization=0.2)
+
+        # Verify scaling down occurred
+        assert scaled is True
+        assert manager.normal_pool.current_workers < initial_count
+        assert manager.normal_pool.current_workers == initial_count - 2  # normal pool decrements by 2
+        assert manager.normal_pool.stats['scaling_events'] == initial_events + 1
+
+    @pytest.mark.asyncio
+    async def test_scaling_time_interval_check(self, mock_translation_service):
+        """Test that scaling respects time interval between checks"""
+        from services.zmq_server import TranslationPoolManager
+        import time
 
         manager = TranslationPoolManager(
             normal_workers=5,
-            translation_service=mock_translation_service
+            translation_service=mock_translation_service,
+            enable_dynamic_scaling=True
         )
 
         initial_count = manager.normal_pool.current_workers
 
-        # TODO: Rewrite to test WorkerPool._scale_to() or check_scaling()
-        # await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
+        # First scaling check should work (last_scaling_check was initialized to 0)
+        # Force it to current time to simulate recent check
+        manager.normal_pool.last_scaling_check = time.time()
 
-        # Verify scaling occurred
-        # assert manager.normal_pool.current_workers > initial_count
-        # assert manager.normal_pool.stats['scaling_events'] >= 1
+        # Try to scale immediately (should be rejected due to time interval)
+        scaled = await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
 
-    @pytest.mark.skip(reason="TODO: Rewrite for refactored WorkerPool architecture")
+        # Verify scaling did NOT occur (too soon after last check)
+        assert scaled is False
+        assert manager.normal_pool.current_workers == initial_count
+
+        # Now force last_scaling_check to 0 (simulate 30+ seconds passed)
+        manager.normal_pool.last_scaling_check = 0
+
+        # Try again - should work now
+        scaled = await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
+
+        # Verify scaling occurred this time
+        assert scaled is True
+        assert manager.normal_pool.current_workers > initial_count
+
     @pytest.mark.asyncio
-    async def test_scale_any_workers_up(self, mock_translation_service):
-        """Test scaling up any workers"""
+    async def test_scaling_respects_max_workers(self, mock_translation_service):
+        """Test that scaling up respects max_scaling_workers limit"""
         from services.zmq_server import TranslationPoolManager
 
+        # Create manager with workers close to max
         manager = TranslationPoolManager(
-            any_workers=3,
-            translation_service=mock_translation_service
+            normal_workers=38,  # max_scaling_workers is typically 40
+            translation_service=mock_translation_service,
+            enable_dynamic_scaling=True
         )
 
-        initial_count = manager.any_pool.current_workers
+        # Get the actual max_scaling_workers for this pool
+        max_workers = manager.normal_pool.max_scaling_workers
+        initial_count = manager.normal_pool.current_workers
 
-        # TODO: Rewrite to test WorkerPool._scale_to() or check_scaling()
-        # await manager.any_pool.check_scaling(queue_size=100, utilization=0.9)
+        # Force last_scaling_check to 0
+        manager.normal_pool.last_scaling_check = 0
 
-        # Verify scaling occurred
-        # assert manager.any_pool.current_workers > initial_count
-        # assert manager.any_pool.stats['scaling_events'] >= 1
+        # Try to scale up with high load
+        scaled = await manager.normal_pool.check_scaling(queue_size=200, utilization=0.9)
+
+        # Should scale but not exceed max
+        if initial_count < max_workers:
+            assert scaled is True
+            assert manager.normal_pool.current_workers <= max_workers
+        else:
+            # Already at max, no scaling
+            assert scaled is False
+            assert manager.normal_pool.current_workers == initial_count
 
 
 # ============================================================================
