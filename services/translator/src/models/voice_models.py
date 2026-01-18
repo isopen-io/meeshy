@@ -147,26 +147,114 @@ class VoiceCharacteristics:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'VoiceCharacteristics':
         """
-        Crée une instance depuis un dictionnaire avec support des alias legacy.
+        Crée une instance depuis un dictionnaire (format structuré ou plat).
 
-        Gère automatiquement les anciens noms de paramètres pour compatibilité:
+        Supporte deux formats:
+        1. Format structuré: {"pitch": {"mean_hz": 150}, "classification": {...}}
+        2. Format plat: {"pitch_mean_hz": 150, "gender_estimate": "male"}
+
+        Gère automatiquement les alias legacy:
+        - pitch_mean_hz → pitch_mean
         - gender_estimate → estimated_gender
         - age_range → estimated_age_range
+        - energy_mean → rms_energy
         """
-        # Copier les données pour ne pas modifier l'original
+        # Détecter le format (structuré vs plat)
+        if "pitch" in data and isinstance(data["pitch"], dict):
+            # Format structuré (from to_dict())
+            return cls._from_dict_structured(data)
+        else:
+            # Format plat (from tests ou API)
+            return cls._from_dict_flat(data)
+
+    @classmethod
+    def _from_dict_flat(cls, data: Dict[str, Any]) -> 'VoiceCharacteristics':
+        """Crée depuis format plat avec support des alias"""
         normalized_data = data.copy()
 
-        # Convertir les alias legacy
-        if 'gender_estimate' in normalized_data:
-            normalized_data['estimated_gender'] = normalized_data.pop('gender_estimate')
-        if 'age_range' in normalized_data and 'estimated_age_range' not in normalized_data:
-            normalized_data['estimated_age_range'] = normalized_data.pop('age_range')
+        # Mapper les alias avec suffixes vers noms de champs
+        alias_mapping = {
+            'pitch_mean_hz': 'pitch_mean',
+            'pitch_std_hz': 'pitch_std',
+            'pitch_min_hz': 'pitch_min',
+            'pitch_max_hz': 'pitch_max',
+            'pitch_range_hz': 'pitch_range',
+            'spectral_centroid_hz': 'spectral_centroid',
+            'spectral_bandwidth_hz': 'spectral_bandwidth',
+            'spectral_rolloff_hz': 'spectral_rolloff',
+            'energy_mean': 'rms_energy',
+            'dynamic_range_db': 'dynamic_range',
+            'gender_estimate': 'estimated_gender',
+            'age_range': 'estimated_age_range',
+            'speaking_rate_wpm': 'speech_rate_wpm'
+        }
 
-        # Filtrer seulement les champs valides du dataclass
+        # Convertir les alias
+        for alias, field_name in alias_mapping.items():
+            if alias in normalized_data and field_name not in normalized_data:
+                normalized_data[field_name] = normalized_data.pop(alias)
+
+        # Filtrer seulement les champs valides
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered_data = {k: v for k, v in normalized_data.items() if k in valid_fields}
 
         return cls(**filtered_data)
+
+    @classmethod
+    def _from_dict_structured(cls, data: Dict[str, Any]) -> 'VoiceCharacteristics':
+        """Crée depuis format structuré (from to_dict())"""
+        pitch = data.get("pitch", {})
+        classification = data.get("classification", {})
+        spectral = data.get("spectral", {})
+        energy = data.get("energy", {})
+        quality = data.get("quality", {})
+        prosody = data.get("prosody", {})
+        mfcc = data.get("mfcc", {})
+        metadata = data.get("metadata", {})
+
+        return cls(
+            # Pitch
+            pitch_mean=pitch.get("mean_hz", 0.0),
+            pitch_std=pitch.get("std_hz", 0.0),
+            pitch_min=pitch.get("min_hz", 0.0),
+            pitch_max=pitch.get("max_hz", 0.0),
+            pitch_range=pitch.get("range_hz", 0.0),
+            # Classification
+            voice_type=classification.get("voice_type", "unknown"),
+            estimated_gender=classification.get("estimated_gender", "unknown"),
+            estimated_age_range=classification.get("estimated_age_range", "unknown"),
+            # Spectral
+            spectral_centroid=spectral.get("centroid_hz", 0.0),
+            spectral_bandwidth=spectral.get("bandwidth_hz", 0.0),
+            spectral_rolloff=spectral.get("rolloff_hz", 0.0),
+            spectral_flatness=spectral.get("flatness", 0.0),
+            brightness=spectral.get("brightness", 0.0),
+            warmth=spectral.get("warmth", 0.0),
+            breathiness=spectral.get("breathiness", 0.0),
+            nasality=spectral.get("nasality", 0.0),
+            # Energy
+            rms_energy=energy.get("mean", 0.0),
+            energy_std=energy.get("std", 0.0),
+            dynamic_range=energy.get("dynamic_range_db", 0.0),
+            silence_ratio=energy.get("silence_ratio", 0.0),
+            # Quality
+            harmonics_to_noise=quality.get("harmonics_to_noise", 0.0),
+            jitter=quality.get("jitter", 0.0),
+            shimmer=quality.get("shimmer", 0.0),
+            # Prosody
+            speech_rate_wpm=prosody.get("speech_rate_wpm", 0.0),
+            # MFCC
+            mfcc_mean=mfcc.get("mean", []),
+            mfcc_std=mfcc.get("std", []),
+            # Metadata
+            sample_rate=metadata.get("sample_rate", 0),
+            bit_depth=metadata.get("bit_depth", 0),
+            channels=metadata.get("channels", 1),
+            codec=metadata.get("codec", ""),
+            duration_seconds=metadata.get("duration_seconds", 0.0),
+            analysis_time_ms=metadata.get("analysis_time_ms", 0),
+            confidence=metadata.get("confidence", 0.0)
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convertit en dictionnaire pour sérialisation JSON/MongoDB"""
@@ -222,59 +310,39 @@ class VoiceCharacteristics:
             }
         }
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'VoiceCharacteristics':
-        """Crée une instance depuis un dictionnaire"""
-        pitch = data.get("pitch", {})
-        classification = data.get("classification", {})
-        spectral = data.get("spectral", {})
-        energy = data.get("energy", {})
-        quality = data.get("quality", {})
-        prosody = data.get("prosody", {})
-        mfcc = data.get("mfcc", {})
-        metadata = data.get("metadata", {})
 
-        return cls(
-            # Pitch
-            pitch_mean=pitch.get("mean_hz", 0.0),
-            pitch_std=pitch.get("std_hz", 0.0),
-            pitch_min=pitch.get("min_hz", 0.0),
-            pitch_max=pitch.get("max_hz", 0.0),
-            pitch_range=pitch.get("range_hz", 0.0),
-            # Classification
-            voice_type=classification.get("voice_type", "unknown"),
-            estimated_gender=classification.get("estimated_gender", "unknown"),
-            estimated_age_range=classification.get("estimated_age_range", "unknown"),
-            # Spectral
-            spectral_centroid=spectral.get("centroid_hz", 0.0),
-            spectral_bandwidth=spectral.get("bandwidth_hz", 0.0),
-            spectral_rolloff=spectral.get("rolloff_hz", 0.0),
-            spectral_flatness=spectral.get("flatness", 0.0),
-            brightness=spectral.get("brightness", 0.0),
-            warmth=spectral.get("warmth", 0.0),
-            breathiness=spectral.get("breathiness", 0.0),
-            nasality=spectral.get("nasality", 0.0),
-            # Energy
-            rms_energy=energy.get("mean", 0.0),
-            energy_std=energy.get("std", 0.0),
-            dynamic_range=energy.get("dynamic_range_db", 0.0),
-            silence_ratio=energy.get("silence_ratio", 0.0),
-            # Quality
-            harmonics_to_noise=quality.get("harmonics_to_noise", 0.0),
-            jitter=quality.get("jitter", 0.0),
-            shimmer=quality.get("shimmer", 0.0),
-            # Prosody
-            speech_rate_wpm=prosody.get("speech_rate_wpm", 0.0),
-            # MFCC
-            mfcc_mean=mfcc.get("mean", []),
-            mfcc_std=mfcc.get("std", []),
-            # Metadata
-            sample_rate=metadata.get("sample_rate", 0),
-            bit_depth=metadata.get("bit_depth", 0),
-            channels=metadata.get("channels", 1),
-            codec=metadata.get("codec", ""),
-            duration_seconds=metadata.get("duration_seconds", 0.0),
-            analysis_time_ms=metadata.get("analysis_time_ms", 0),
-            confidence=metadata.get("confidence", 0.0)
-        )
+# Wrapper __init__ pour supporter les alias de paramètres
+_original_init = VoiceCharacteristics.__init__
+
+
+def _init_with_aliases(self, **kwargs):
+    """__init__ wrapper qui convertit les alias vers les vrais noms de champs"""
+    # Mapper les alias vers les vrais noms
+    alias_mapping = {
+        'pitch_mean_hz': 'pitch_mean',
+        'pitch_std_hz': 'pitch_std',
+        'pitch_min_hz': 'pitch_min',
+        'pitch_max_hz': 'pitch_max',
+        'pitch_range_hz': 'pitch_range',
+        'spectral_centroid_hz': 'spectral_centroid',
+        'spectral_bandwidth_hz': 'spectral_bandwidth',
+        'spectral_rolloff_hz': 'spectral_rolloff',
+        'energy_mean': 'rms_energy',
+        'dynamic_range_db': 'dynamic_range',
+        'gender_estimate': 'estimated_gender',
+        'age_range': 'estimated_age_range',
+        'speaking_rate_wpm': 'speech_rate_wpm'
+    }
+
+    # Convertir les alias
+    for alias, field_name in alias_mapping.items():
+        if alias in kwargs:
+            kwargs[field_name] = kwargs.pop(alias)
+
+    # Appeler le __init__ original
+    _original_init(self, **kwargs)
+
+
+# Remplacer __init__ par la version avec support d'alias
+VoiceCharacteristics.__init__ = _init_with_aliases
 
