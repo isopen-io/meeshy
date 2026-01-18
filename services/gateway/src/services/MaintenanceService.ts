@@ -5,7 +5,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { AttachmentService } from './AttachmentService';
+import { AttachmentService } from './attachments';
 
 export class MaintenanceService {
   private prisma: PrismaClient;

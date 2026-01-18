@@ -13,7 +13,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ZMQTranslationClient } from './ZmqTranslationClient';
+import { ZmqTranslationClient } from './zmq-translation';
 import { logger } from '../utils/logger';
 import type {
   VoiceTranslateRequest,
@@ -81,11 +81,11 @@ export type {
 
 export class AudioTranslateService extends EventEmitter {
   private prisma: PrismaClient;
-  private zmqClient: ZMQTranslationClient;
+  private zmqClient: ZmqTranslationClient;
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private initialized: boolean = false;
 
-  constructor(prisma: PrismaClient, zmqClient: ZMQTranslationClient) {
+  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
@@ -974,7 +974,7 @@ export class AudioTranslateError extends Error {
 // Singleton instance
 let audioTranslateServiceInstance: AudioTranslateService | null = null;
 
-export function getAudioTranslateService(prisma: PrismaClient, zmqClient: ZMQTranslationClient): AudioTranslateService {
+export function getAudioTranslateService(prisma: PrismaClient, zmqClient: ZmqTranslationClient): AudioTranslateService {
   if (!audioTranslateServiceInstance) {
     audioTranslateServiceInstance = new AudioTranslateService(prisma, zmqClient);
   }

@@ -1,5 +1,5 @@
 /**
- * Unit tests for ZMQTranslationClient
+ * Unit tests for ZmqTranslationClient
  *
  * Tests:
  * - Constructor and initialization
@@ -47,7 +47,7 @@ jest.mock('crypto', () => ({
 
 // Import after mocking
 import {
-  ZMQTranslationClient,
+  ZmqTranslationClient,
   TranslationRequest,
   TranslationResult,
   TranslationCompletedEvent,
@@ -68,10 +68,10 @@ import {
   VoiceProfileErrorEvent,
   ZMQClientStats,
   PongEvent
-} from '../../../services/ZmqTranslationClient';
+} from '../../../services/zmq-translation';
 
-describe('ZMQTranslationClient', () => {
-  let client: ZMQTranslationClient;
+describe('ZmqTranslationClient', () => {
+  let client: ZmqTranslationClient;
   const defaultHost = '0.0.0.0';
   const defaultPushPort = 5555;
   const defaultSubPort = 5558;
@@ -106,13 +106,13 @@ describe('ZMQTranslationClient', () => {
 
   describe('Constructor', () => {
     it('should create instance with default parameters', () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       expect(client).toBeDefined();
       expect(client).toBeInstanceOf(EventEmitter);
     });
 
     it('should create instance with custom host and ports', () => {
-      client = new ZMQTranslationClient('192.168.1.1', 6000, 6001);
+      client = new ZmqTranslationClient('192.168.1.1', 6000, 6001);
       expect(client).toBeDefined();
     });
 
@@ -125,7 +125,7 @@ describe('ZMQTranslationClient', () => {
       process.env.ZMQ_TRANSLATOR_PUSH_PORT = '7000';
       process.env.ZMQ_TRANSLATOR_SUB_PORT = '7001';
 
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       expect(client).toBeDefined();
 
       // Restore
@@ -137,7 +137,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('initialize()', () => {
     beforeEach(() => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
     });
 
     it('should initialize sockets successfully', async () => {
@@ -179,7 +179,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('sendTranslationRequest()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -240,7 +240,7 @@ describe('ZMQTranslationClient', () => {
 
     it('should throw error if push socket not initialized', async () => {
       await client.close();
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       // Not initialized
 
       const request: TranslationRequest = {
@@ -287,7 +287,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('translateText()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -322,7 +322,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('translateToMultipleLanguages()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -345,7 +345,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('sendAudioProcessRequest()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -431,7 +431,7 @@ describe('ZMQTranslationClient', () => {
 
     it('should throw error if push socket not initialized', async () => {
       await client.close();
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
 
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-123',
@@ -452,7 +452,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('sendVoiceAPIRequest()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -488,7 +488,7 @@ describe('ZMQTranslationClient', () => {
 
     it('should throw error if push socket not initialized', async () => {
       await client.close();
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
 
       const request: VoiceAPIRequest = {
         type: 'voice_translate',
@@ -501,7 +501,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('sendVoiceProfileRequest()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -553,7 +553,7 @@ describe('ZMQTranslationClient', () => {
 
     it('should throw error if push socket not initialized', async () => {
       await client.close();
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
 
       const request: VoiceProfileAnalyzeRequest = {
         type: 'voice_profile_analyze',
@@ -569,7 +569,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('Event Handling - Translation Events', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -693,7 +693,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('Event Handling - Audio Events', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -766,7 +766,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('Event Handling - Voice API Events', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -846,7 +846,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('Event Handling - Voice Profile Events', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -970,7 +970,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('healthCheck()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
     });
 
     it('should return true when healthy', async () => {
@@ -1000,7 +1000,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('getStats()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -1083,7 +1083,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('getPendingRequestsCount()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -1127,7 +1127,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('close()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -1177,7 +1177,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('testReception()', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 
@@ -1197,7 +1197,7 @@ describe('ZMQTranslationClient', () => {
 
   describe('Edge Cases and Error Handling', () => {
     beforeEach(async () => {
-      client = new ZMQTranslationClient();
+      client = new ZmqTranslationClient();
       await client.initialize();
     });
 

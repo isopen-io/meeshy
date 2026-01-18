@@ -107,7 +107,7 @@ jest.mock('fluent-ffmpeg', () => ({
 }));
 
 // Import after mocks are set up
-import { AttachmentService, FileToUpload, UploadResult } from '../../../services/AttachmentService';
+import { AttachmentService, FileToUpload, UploadResult } from '../../../services/attachments';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 describe('AttachmentService', () => {

@@ -18,13 +18,13 @@ import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
 import path from 'path';
 import {
-  ZMQTranslationClient,
+  ZmqTranslationClient,
   VoiceProfileAnalyzeRequest,
   VoiceProfileVerifyRequest,
   VoiceProfileAnalyzeResult,
   VoiceProfileVerifyResult,
   VoiceProfileEvent
-} from './ZmqTranslationClient';
+} from './zmq-translation';
 import {
   VoiceProfileConsentRequest,
   VoiceProfileConsentStatus,
@@ -121,7 +121,7 @@ export interface VoiceProfileDetails extends SharedVoiceProfileDetails {
 
 export class VoiceProfileService extends EventEmitter {
   private prisma: PrismaClient;
-  private zmqClient: ZMQTranslationClient;
+  private zmqClient: ZmqTranslationClient;
   private uploadBasePath: string;
   private pendingRequests: Map<string, {
     resolve: (value: VoiceProfileEvent) => void;
@@ -129,7 +129,7 @@ export class VoiceProfileService extends EventEmitter {
     timeout: NodeJS.Timeout;
   }> = new Map();
 
-  constructor(prisma: PrismaClient, zmqClient: ZMQTranslationClient) {
+  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;

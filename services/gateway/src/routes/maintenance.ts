@@ -5,7 +5,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { MaintenanceService } from '../services/MaintenanceService';
-import { AttachmentService } from '../services/AttachmentService';
+import { AttachmentService } from '../services/attachments';
 import { StatusService } from '../services/StatusService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';

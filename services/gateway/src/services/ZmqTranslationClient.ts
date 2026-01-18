@@ -516,7 +516,7 @@ export interface ZMQClientStats {
   memory_usage_mb: number;
 }
 
-export class ZMQTranslationClient extends EventEmitter {
+export class ZmqTranslationClient extends EventEmitter {
   private pushSocket: zmq.Push | null = null;  // PUSH pour envoyer commandes
   private subSocket: zmq.Subscriber | null = null;  // SUB pour recevoir réponses
   private context: zmq.Context | null = null;
@@ -557,12 +557,12 @@ export class ZMQTranslationClient extends EventEmitter {
     this.pushPort = pushPort;
     this.subPort = subPort;
     
-  // logger.info(`[ZMQ-Client] ZMQTranslationClient initialisé: PUSH connect ${host}:${pushPort} (envoi commandes), SUB connect ${host}:${subPort} (réception résultats)`); // Reduced log
+  // logger.info(`[ZMQ-Client] ZmqTranslationClient initialisé: PUSH connect ${host}:${pushPort} (envoi commandes), SUB connect ${host}:${subPort} (réception résultats)`); // Reduced log
   }
 
   async initialize(): Promise<void> {
     try {
-      logger.info(`🔧 [ZMQ-Client] Début initialisation ZMQTranslationClient...`);
+      logger.info(`🔧 [ZMQ-Client] Début initialisation ZmqTranslationClient...`);
       
       // Créer le contexte ZMQ
       this.context = new zmq.Context();
@@ -590,12 +590,12 @@ export class ZMQTranslationClient extends EventEmitter {
       }, 2000);
       
       this.running = true;
-      logger.info('✅ [ZMQ-Client] ZMQTranslationClient initialisé avec succès');
+      logger.info('✅ [ZMQ-Client] ZmqTranslationClient initialisé avec succès');
   // logger.info(`🔌 [ZMQ-Client] Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`); // Reduced log
   // logger.info(`🔌 [ZMQ-Client] Socket SUB connecté: ${this.host}:${this.subPort} (réception résultats)`); // Reduced log
       
     } catch (error) {
-      logger.error(`❌ Erreur initialisation ZMQTranslationClient: ${error}`);
+      logger.error(`❌ Erreur initialisation ZmqTranslationClient: ${error}`);
       throw error;
     }
   }
@@ -1530,7 +1530,7 @@ export class ZMQTranslationClient extends EventEmitter {
   }
 
   async close(): Promise<void> {
-    logger.info('🛑 Arrêt ZMQTranslationClient...');
+    logger.info('🛑 Arrêt ZmqTranslationClient...');
     
     this.running = false;
     
@@ -1558,10 +1558,10 @@ export class ZMQTranslationClient extends EventEmitter {
         (this as any).pollingIntervalId = null;
       }
 
-      logger.info('✅ ZMQTranslationClient arrêté');
+      logger.info('✅ ZmqTranslationClient arrêté');
       
     } catch (error) {
-      logger.error(`❌ Erreur arrêt ZMQTranslationClient: ${error}`);
+      logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
 

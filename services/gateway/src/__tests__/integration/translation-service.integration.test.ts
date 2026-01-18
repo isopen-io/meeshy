@@ -24,7 +24,7 @@ import { EventEmitter } from 'events';
 type MockFn = jest.Mock<any, any>;
 
 // Mock ZMQ client for local testing
-class MockZMQTranslationClient extends EventEmitter {
+class MockZmqTranslationClient extends EventEmitter {
   sendTranslationRequest: MockFn = jest.fn();
   healthCheck: MockFn = jest.fn();
   close: MockFn = jest.fn();
@@ -66,7 +66,7 @@ class MockZMQTranslationClient extends EventEmitter {
 }
 
 // Mock ZMQ Singleton
-const mockZmqClient = new MockZMQTranslationClient();
+const mockZmqClient = new MockZmqTranslationClient();
 
 jest.mock('../../services/ZmqSingleton', () => ({
   ZMQSingleton: {

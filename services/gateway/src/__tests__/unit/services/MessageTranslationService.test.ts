@@ -40,7 +40,7 @@ jest.mock('../../../services/ZmqSingleton', () => ({
 
 // Import after mocking
 import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/MessageTranslationService';
-import { TranslationResult } from '../../../services/ZmqTranslationClient';
+import { TranslationResult } from '../../../services/zmq-translation';
 import { ZMQSingleton } from '../../../services/ZmqSingleton';
 
 // Mock Prisma client factory
