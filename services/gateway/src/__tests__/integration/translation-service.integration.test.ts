@@ -75,7 +75,7 @@ jest.mock('../../services/ZmqSingleton', () => ({
 }));
 
 // Import after mocking
-import { MessageTranslationService, MessageData } from '../../services/MessageTranslationService';
+import { MessageTranslationService, MessageData } from '../../services/message-translation/MessageTranslationService';
 
 describe('MessageTranslationService Integration Tests', () => {
   let prisma: PrismaClient;

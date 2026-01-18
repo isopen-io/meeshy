@@ -5,7 +5,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { AudioTranslateService } from '../../services/AudioTranslateService';
-import { MessageTranslationService } from '../../services/MessageTranslationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { logger } from '../../utils/logger';
 import { registerTranslationRoutes } from './translation';
 import { registerAnalysisRoutes } from './analysis';

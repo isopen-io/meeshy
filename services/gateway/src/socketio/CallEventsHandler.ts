@@ -12,7 +12,7 @@
 import { Socket } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallService } from '../services/CallService';
-import { NotificationService } from '../services/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../middleware/validation';

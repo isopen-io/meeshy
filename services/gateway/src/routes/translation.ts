@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { MessageTranslationService } from '../services/MessageTranslationService';
+import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import { NotificationService, CreateNotificationData } from '../services/NotificationService';
+import { NotificationService, CreateNotificationData } from '../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
 

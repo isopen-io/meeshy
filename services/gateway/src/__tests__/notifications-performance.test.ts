@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { NotificationService } from '../services/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // Mock Prisma

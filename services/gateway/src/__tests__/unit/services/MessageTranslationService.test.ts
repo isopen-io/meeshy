@@ -39,7 +39,7 @@ jest.mock('../../../services/ZmqSingleton', () => ({
 }));
 
 // Import after mocking
-import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/MessageTranslationService';
+import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/message-translation/MessageTranslationService';
 import { TranslationResult } from '../../../services/zmq-translation';
 import { ZMQSingleton } from '../../../services/ZmqSingleton';
 

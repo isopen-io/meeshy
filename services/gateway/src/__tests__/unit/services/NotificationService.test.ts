@@ -96,7 +96,7 @@ jest.mock('../../../utils/sanitize', () => ({
   }
 }));
 
-import { NotificationService, CreateNotificationData, NotificationEventData } from '../../../services/NotificationService';
+import { NotificationService, CreateNotificationData, NotificationEventData } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // Mock Prisma - using jest.mock at module scope to ensure proper mocking

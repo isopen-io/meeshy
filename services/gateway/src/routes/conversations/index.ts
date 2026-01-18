@@ -6,7 +6,7 @@ import { registerMessagesAdvancedRoutes } from './messages-advanced';
 import { registerParticipantsRoutes } from './participants';
 import { registerSharingRoutes } from './sharing';
 import { registerSearchRoutes } from './search';
-import { MessageTranslationService } from '../../services/MessageTranslationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 
 /**
  * Point d'entrée principal pour toutes les routes de conversations

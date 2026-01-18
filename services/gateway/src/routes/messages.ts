@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
-import { MessageTranslationService } from '../services/MessageTranslationService.js';
+import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 
 interface MessageParams {
   messageId: string;
