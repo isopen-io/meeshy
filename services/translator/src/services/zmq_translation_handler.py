@@ -1,0 +1,461 @@
+"""
+Handler pour les requêtes de traduction texte
+
+Gère les requêtes de traduction texte simple via ZMQ.
+"""
+
+import asyncio
+import json
+import logging
+import re
+from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+# Import du service de cache Redis
+CACHE_AVAILABLE = False
+try:
+    from .redis_service import get_redis_service, get_translation_cache_service
+    CACHE_AVAILABLE = True
+except ImportError:
+    pass
+
+# Import de la configuration des limites
+from config.message_limits import can_translate_message
+
+
+class TranslationHandler:
+    """Handler pour les traductions texte via ZMQ"""
+    
+    def __init__(self, pool_manager, pub_socket, database_service=None):
+        """
+        Initialise le handler de traduction
+        
+        Args:
+            pool_manager: TranslationPoolManager instance
+            pub_socket: Socket ZMQ PUB pour publier les résultats
+            database_service: Service de base de données optionnel
+        """
+        self.pool_manager = pool_manager
+        self.pub_socket = pub_socket
+        self.db = database_service
+        
+        # Cache Redis si disponible
+        if CACHE_AVAILABLE:
+            self.cache_service = get_translation_cache_service()
+        else:
+            self.cache_service = None
+    async def _handle_translation_request_multipart(self, frames: list[bytes]):
+        """
+        Traite une requête multipart ZMQ.
+
+        Protocol multipart:
+        - Frame 0: JSON metadata avec 'binaryFrames' indiquant les indices des binaires
+        - Frame 1+: Données binaires (audio, embedding, etc.)
+
+        Le champ 'binaryFrames' dans le JSON indique où trouver les binaires:
+        - binaryFrames.audio = 1 → l'audio binaire est dans frames[1]
+        - binaryFrames.embedding = 2 → l'embedding pkl est dans frames[2]
+
+        Rétrocompatibilité:
+        - Si un seul frame → ancien format JSON avec base64
+        - Si binaryFrames absent → utiliser audioBase64/audioData (legacy)
+        """
+        if not frames:
+            logger.warning("⚠️ [TRANSLATOR] Message multipart vide reçu")
+            return
+
+        # Frame 0: JSON metadata
+        json_frame = frames[0]
+
+        # Extraire les frames binaires si présents
+        binary_frames = frames[1:] if len(frames) > 1 else []
+
+        # Parser le JSON
+        try:
+            request_data = json.loads(json_frame.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {e}")
+            return
+
+        # Extraire les infos des frames binaires
+        binary_frame_info = request_data.get('binaryFrames', {})
+
+        # Si on a des frames binaires, les injecter dans request_data
+        if binary_frames and binary_frame_info:
+            # Audio binaire
+            audio_idx = binary_frame_info.get('audio')
+            if audio_idx and audio_idx <= len(binary_frames):
+                # Stocker le binaire directement (pas de base64!)
+                request_data['_audioBinary'] = binary_frames[audio_idx - 1]
+                audio_size = len(binary_frames[audio_idx - 1])
+                logger.info(f"📦 [TRANSLATOR] Audio binaire extrait du frame {audio_idx}: {audio_size / 1024:.1f}KB")
+
+            # Embedding binaire (pkl)
+            embedding_idx = binary_frame_info.get('embedding')
+            if embedding_idx and embedding_idx <= len(binary_frames):
+                request_data['_embeddingBinary'] = binary_frames[embedding_idx - 1]
+                embedding_size = len(binary_frames[embedding_idx - 1])
+                logger.info(f"📦 [TRANSLATOR] Embedding binaire extrait du frame {embedding_idx}: {embedding_size / 1024:.1f}KB")
+
+        # Déléguer au handler existant
+        await self._handle_translation_request(request_data, binary_frames)
+
+    async def _handle_translation_request(self, request_data: dict, binary_frames: list[bytes] = None):
+        """
+        Traite une requête de traduction reçue via SUB
+
+        XXX: PARALLÉLISATION OPPORTUNITÉ #3 - Traduction multi-langues simultanée
+        TODO: Actuellement, si targetLanguages = ['en', 'es', 'de', 'it', 'pt']
+              chaque langue est traduite SÉQUENTIELLEMENT par le worker
+        TODO: Optimisation possible:
+              - Créer UNE tâche par langue cible (5 tâches au lieu d'1)
+              - Les workers traitent en parallèle (si plusieurs workers disponibles)
+              - OU: Batch translation dans le worker (traduire toutes les langues en 1 passe)
+        TODO: Implémentation suggérée:
+              # Option A: Multiple tasks (simple, utilise workers existants)
+              for target_lang in target_languages:
+                  task = TranslationTask(
+                      target_languages=[target_lang],  # UNE langue par tâche
+                      ...
+                  )
+                  await self.pool_manager.enqueue_task(task)
+              
+              # Option B: Batch API dans ML service (plus efficace)
+              results = await ml_service.translate_batch_multilingual(
+                  text=text,
+                  source_lang=source_lang,
+                  target_langs=['en', 'es', 'de', 'it', 'pt'],  # Toutes ensemble
+                  model_type=model_type
+              )
+        TODO: Gains attendus:
+              - Option A: N workers × vitesse (si N workers disponibles)
+              - Option B: 2-3x plus rapide (overhead réduit, batch processing)
+        """
+        try:
+            # Note: request_data est déjà parsé par _handle_translation_request_multipart
+            # binary_frames contient les données binaires si présentes
+
+            # Dispatcher selon le type de message
+            message_type = request_data.get('type')
+
+            # === PING ===
+            if message_type == 'ping':
+                logger.info(f"🏓 [TRANSLATOR] Ping reçu, timestamp: {request_data.get('timestamp')}")
+                # Répondre au ping via PUB
+                ping_response = {
+                    'type': 'pong',
+                    'timestamp': time.time(),
+                    'translator_status': 'alive',
+                    'translator_port_pub': self.gateway_sub_port,
+                    'translator_port_pull': self.gateway_push_port,
+                    'audio_pipeline_available': AUDIO_PIPELINE_AVAILABLE
+                }
+                if self.pub_socket:
+                    await self.pub_socket.send(json.dumps(ping_response).encode('utf-8'))
+                    logger.info(f"🏓 [TRANSLATOR] Pong envoyé via port {self.gateway_sub_port}")
+                else:
+                    logger.error(f"❌ [TRANSLATOR] Socket PUB non disponible pour pong (port {self.gateway_sub_port})")
+                return
+
+            # === AUDIO PROCESSING ===
+            if message_type == 'audio_process':
+                await self._handle_audio_process_request(request_data)
+                return
+
+            # === TRANSCRIPTION ONLY ===
+            if message_type == 'transcription_only':
+                await self._handle_transcription_only_request(request_data)
+                return
+
+            # === VOICE API ===
+            if VOICE_API_AVAILABLE and self.voice_api_handler and self.voice_api_handler.is_voice_api_request(message_type):
+                await self._handle_voice_api_request(request_data)
+                return
+
+            # === VOICE PROFILE (internal processing for Gateway) ===
+            if VOICE_PROFILE_HANDLER_AVAILABLE and self.voice_profile_handler and self.voice_profile_handler.is_voice_profile_request(message_type):
+                await self._handle_voice_profile_request(request_data)
+                return
+
+            # Vérifier que c'est une requête de traduction valide
+            if not request_data.get('text') or not request_data.get('targetLanguages'):
+                logger.warning(f"⚠️ [TRANSLATOR] Requête invalide reçue: {request_data}")
+                return
+            
+            # Vérifier la longueur du message pour la traduction
+            message_text = request_data.get('text', '')
+            if not can_translate_message(message_text):
+                logger.warning(f"⚠️ [TRANSLATOR] Message too long to be translated: {len(message_text)} caractères (max: {MessageLimits.MAX_TRANSLATION_LENGTH})")
+                # Ne pas traiter ce message, retourner un résultat vide ou le texte original
+                # On pourrait aussi envoyer une notification à la gateway ici si nécessaire
+                no_translation_message = {
+                    'type': 'translation_skipped',
+                    'messageId': request_data.get('messageId'),
+                    'reason': 'message_too_long',
+                    'length': len(message_text),
+                    'max_length': MessageLimits.MAX_TRANSLATION_LENGTH,
+                    'conversationId': request_data.get('conversationId', 'unknown')
+                }
+                if self.pub_socket:
+                    await self.pub_socket.send(json.dumps(no_translation_message).encode('utf-8'))
+                    logger.info(f"[TRANSLATOR] translation message ignored for message {request_data.get('messageId')}")
+                return
+            
+            # Créer la tâche de traduction
+            task = TranslationTask(
+                task_id=str(uuid.uuid4()),
+                message_id=request_data.get('messageId'),
+                text=message_text,
+                source_language=request_data.get('sourceLanguage', 'fr'),
+                target_languages=request_data.get('targetLanguages', []),
+                conversation_id=request_data.get('conversationId', 'unknown'),
+                model_type=request_data.get('modelType', 'basic')
+            )
+            
+            logger.info(f"🔧 [TRANSLATOR] Tâche créée: {task.task_id} pour {task.conversation_id} ({len(task.target_languages)} langues)")
+            logger.info(f"📝 [TRANSLATOR] Détails: texte='{task.text[:50]}...', source={task.source_language}, target={task.target_languages}, modèle={task.model_type}")
+            
+            # Enfiler la tâche dans la pool appropriée
+            success = await self.pool_manager.enqueue_task(task)
+            
+            if not success:
+                # Pool pleine, publier un message d'erreur vers la gateway
+                error_message = {
+                    'type': 'translation_error',
+                    'taskId': task.task_id,
+                    'messageId': task.message_id,
+                    'error': 'translation pool full',
+                    'conversationId': task.conversation_id
+                }
+                # Utiliser le socket PUB configuré pour envoyer l'erreur à la gateway
+                if self.pub_socket:
+                    await self.pub_socket.send(json.dumps(error_message).encode('utf-8'))
+                    logger.warning(f"Pool pleine, rejet de la tâche {task.task_id}")
+                else:
+                    logger.error("❌ Socket PUB non initialisé pour envoyer l'erreur")
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Erreur de décodage JSON: {e}")
+        except Exception as e:
+            logger.error(f"Erreur lors du traitement de la requête: {e}")
+
+    async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
+        """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
+        try:
+            # DEBUG: Logs réduits de 60% - Suppression des vérifications détaillées
+            
+            # Récupérer les informations techniques du système
+            import socket
+            import uuid
+            
+            # Calculer le temps d'attente en queue
+            queue_time = time.time() - result.get('created_at', time.time())
+            
+            # Récupérer les métriques système
+            memory_usage = psutil.Process().memory_info().rss / 1024 / 1024  # MB
+            # OPTIMISATION: Suppression du sleep(0.1) qui ajoutait 100ms de latence
+            # Utiliser la valeur CPU mise en cache ou 0.0 si non disponible
+            cpu_usage = getattr(self, '_cached_cpu_usage', 0.0)
+            
+            # Enrichir le résultat avec toutes les informations techniques
+            enriched_result = {
+                # Informations applicatives existantes
+                'messageId': result.get('messageId'),
+                'translatedText': result.get('translatedText'),
+                'sourceLanguage': result.get('sourceLanguage'),
+                'targetLanguage': result.get('targetLanguage'),
+                'confidenceScore': result.get('confidenceScore', 0.0),
+                'processingTime': result.get('processingTime', 0.0),
+                'modelType': result.get('modelType', 'basic'),
+                'workerName': result.get('workerName', 'unknown'),
+                
+                # NOUVELLES INFORMATIONS TECHNIQUES
+                'translatorModel': result.get('modelType', 'basic'),  # Modèle ML utilisé
+                'workerId': result.get('workerName', 'unknown'),      # Worker qui a traité
+                'poolType': result.get('poolType', 'normal'),         # Pool utilisée (normal/any)
+                'translationTime': result.get('processingTime', 0.0), # Temps de traduction
+                'queueTime': queue_time,                              # Temps d'attente en queue
+                'memoryUsage': memory_usage,                          # Usage mémoire (MB)
+                'cpuUsage': cpu_usage,                                # Usage CPU (%)
+                'timestamp': time.time(),
+                'version': '1.0.0'  # Version du Translator
+            }
+            
+            # Créer le message enrichi
+            message = {
+                'type': 'translation_completed',
+                'taskId': task_id,
+                'result': enriched_result,
+                'targetLanguage': target_language,
+                'timestamp': time.time(),
+                # MÉTADONNÉES TECHNIQUES
+                'metadata': {
+                    'translatorVersion': '1.0.0',
+                    'modelVersion': result.get('modelType', 'basic'),
+                    'processingNode': socket.gethostname(),
+                    'sessionId': str(uuid.uuid4()),
+                    'requestId': task_id,
+                    'protocol': 'ZMQ_PUB_SUB',
+                    'encoding': 'UTF-8'
+                }
+            }
+            
+            # DEBUG: Logs réduits de 60% - Suppression des détails techniques
+            
+            # VÉRIFICATION DE LA QUALITÉ DE LA TRADUCTION
+            translated_text = result.get('translatedText', '')
+            is_valid_translation = self._is_valid_translation(translated_text, result)
+            
+            if not is_valid_translation:
+                # Traduction invalide - NE PAS ENVOYER à la Gateway
+                logger.error(f"❌ [TRANSLATOR] Traduction invalide détectée - PAS D'ENVOI à la Gateway:")
+                logger.error(f"   📋 Task ID: {task_id}")
+                logger.error(f"   📋 Message ID: {result.get('messageId')}")
+                logger.error(f"   📋 Source: {result.get('sourceLanguage')} -> Target: {target_language}")
+                logger.error(f"   📋 Texte original: {result.get('originalText', 'N/A')}")
+                logger.error(f"   📋 Texte traduit: '{translated_text}'")
+                logger.error(f"   📋 Modèle utilisé: {result.get('modelType', 'unknown')}")
+                logger.error(f"   📋 Worker: {result.get('workerName', 'unknown')}")
+                logger.error(f"   📋 Raison: {self._get_translation_error_reason(translated_text)}")
+                return  # Sortir sans envoyer à la Gateway
+            
+            # Traduction valide - SAUVEGARDE ET ENVOI
+            try:
+                # Préparer les données pour la sauvegarde
+                save_data = {
+                    'messageId': result.get('messageId'),
+                    'sourceLanguage': result.get('sourceLanguage'),
+                    'targetLanguage': result.get('targetLanguage'),
+                    'translatedText': result.get('translatedText'),
+                    'translatorModel': result.get('translatorModel', result.get('modelType', 'basic')),
+                    'confidenceScore': result.get('confidenceScore', 0.9),
+                    'processingTime': result.get('processingTime', 0.0),
+                    'workerName': result.get('workerName', 'unknown'),
+                    'poolType': result.get('poolType', 'normal')
+                }
+                
+                # ═══════════════════════════════════════════════════════════════════════
+                # ARCHITECTURE: PAS DE SAUVEGARDE EN BASE ICI
+                # ═══════════════════════════════════════════════════════════════════════
+                # La persistance des traductions est la RESPONSABILITÉ DE LA GATEWAY.
+                # Translator ne fait que:
+                #   1. Traduire (avec cache Redis pour éviter les retraductions)
+                #   2. Renvoyer les résultats à Gateway via ZMQ PUB
+                # Gateway reçoit les résultats et persiste en base de données.
+                #
+                # Avantages:
+                #   - Séparation claire des responsabilités
+                #   - Translator peut fonctionner sans base de données
+                #   - Gateway contrôle la logique de persistance (encryption, etc.)
+                #   - Meilleure scalabilité (Translator stateless)
+                # ═══════════════════════════════════════════════════════════════════════
+                # CODE DÉSACTIVÉ - Conservé pour référence uniquement:
+                # if self.database_service.is_db_connected():
+                #     save_success = await self.database_service.save_translation(save_data)
+                # ═══════════════════════════════════════════════════════════════════════
+                    
+            except Exception as e:
+                logger.error(f"❌ [TRANSLATOR] Erreur sauvegarde base de données: {e}")
+            
+            # ENVOI À LA GATEWAY (seulement si traduction valide)
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+                logger.info(f"📤 [TRANSLATOR] Résultat envoyé à la Gateway: {task_id} -> {target_language}")
+            else:
+                logger.error("❌ Socket PUB non initialisé")
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la publication du résultat enrichi: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _is_valid_translation(self, translated_text: str, result: dict) -> bool:
+        """
+        Vérifie si une traduction est valide et peut être envoyée à la Gateway
+        
+        Args:
+            translated_text: Le texte traduit
+            result: Le résultat complet de la traduction
+        
+        Returns:
+            bool: True si la traduction est valide, False sinon
+        """
+        # Vérifier que le texte traduit existe et n'est pas vide
+        if not translated_text or translated_text.strip() == '':
+            return False
+        
+        # Vérifier que ce n'est pas un message d'erreur
+        error_patterns = [
+            r'^\[.*Error.*\]',
+            r'^\[.*Failed.*\]',
+            r'^\[.*No.*Result.*\]',
+            r'^\[.*Fallback.*\]',
+            r'^\[.*ML.*Error.*\]',
+            r'^\[.*ÉCHEC.*\]',
+            r'^\[.*MODÈLES.*NON.*\]',
+            r'^\[.*MODÈLES.*NON.*CHARGÉS.*\]',
+            r'^\[.*NLLB.*No.*Result.*\]',
+            r'^\[.*NLLB.*Fallback.*\]',
+            r'^\[.*ERREUR.*\]',
+            r'^\[.*FAILED.*\]',
+            r'^\[.*TIMEOUT.*\]',
+            r'^\[.*META.*TENSOR.*\]'
+        ]
+        
+        for pattern in error_patterns:
+            if re.search(pattern, translated_text, re.IGNORECASE):
+                return False
+        
+        # Vérifier que le texte traduit n'est pas identique au texte source
+        original_text = result.get('originalText', '')
+        if original_text and translated_text.strip().lower() == original_text.strip().lower():
+            return False
+        
+        # Vérifier que le score de confiance est acceptable
+        confidence_score = result.get('confidenceScore', 1.0)
+        if confidence_score < 0.1:
+            return False
+        
+        # Vérifier qu'il n'y a pas d'erreur dans le résultat
+        if result.get('error'):
+            return False
+        
+        return True
+    
+    def _get_translation_error_reason(self, translated_text: str) -> str:
+        """
+        Retourne la raison de l'échec de traduction
+        
+        Args:
+            translated_text: Le texte traduit
+        
+        Returns:
+            str: La raison de l'échec
+        """
+        if not translated_text or translated_text.strip() == '':
+            return "Texte traduit vide"
+        
+        error_patterns = [
+            (r'^\[.*Error.*\]', "Message d'erreur détecté"),
+            (r'^\[.*Failed.*\]', "Échec de traduction détecté"),
+            (r'^\[.*No.*Result.*\]', "Aucun résultat de traduction"),
+            (r'^\[.*Fallback.*\]', "Fallback de traduction détecté"),
+            (r'^\[.*ML.*Error.*\]', "Erreur ML détectée"),
+            (r'^\[.*ÉCHEC.*\]', "Échec de traduction"),
+            (r'^\[.*MODÈLES.*NON.*\]', "Modèles non disponibles"),
+            (r'^\[.*MODÈLES.*NON.*CHARGÉS.*\]', "Modèles non chargés"),
+            (r'^\[.*NLLB.*No.*Result.*\]', "NLLB: Aucun résultat"),
+            (r'^\[.*NLLB.*Fallback.*\]', "NLLB: Fallback"),
+            (r'^\[.*ERREUR.*\]', "Erreur générale"),
+            (r'^\[.*FAILED.*\]', "Échec général"),
+            (r'^\[.*TIMEOUT.*\]', "Timeout de traduction"),
+            (r'^\[.*META.*TENSOR.*\]', "Erreur meta tensor")
+        ]
+        
+        for pattern, reason in error_patterns:
+            if re.search(pattern, translated_text, re.IGNORECASE):
+                return reason
+        
+        return "Erreur de validation inconnue"
+    
