@@ -45,6 +45,24 @@ jest.mock('crypto', () => ({
   randomUUID: jest.fn().mockReturnValue('test-uuid-1234')
 }));
 
+// Mock zmq-helpers for loadAudioAsBinary
+jest.mock('../../../services/zmq-translation/utils/zmq-helpers', () => ({
+  loadAudioAsBinary: jest.fn().mockResolvedValue({
+    buffer: Buffer.from('fake-audio-data'),
+    mimeType: 'audio/mp3',
+    size: 15
+  }),
+  audioFormatToMimeType: jest.fn((format: string) => {
+    const map: Record<string, string> = {
+      'wav': 'audio/wav',
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/mp4'
+    };
+    return map[format] || 'audio/wav';
+  }),
+  mimeTypeToAudioFormat: jest.fn((mimeType: string) => mimeType.replace('audio/', ''))
+}));
+
 // Import after mocking
 import {
   ZmqTranslationClient,
@@ -341,13 +359,6 @@ describe('ZmqTranslationClient', () => {
     });
 
     it('should send audio process request successfully', async () => {
-      // Mock loadAudioAsBinary pour retourner un Buffer fake
-      jest.spyOn(client as any, 'loadAudioAsBinary').mockResolvedValue({
-        buffer: Buffer.from('fake-audio-data'),
-        mimeType: 'audio/mp3',
-        size: 15
-      });
-
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-audio-123',
         attachmentId: 'attach-456',
@@ -382,13 +393,6 @@ describe('ZmqTranslationClient', () => {
     });
 
     it('should include mobile transcription when provided', async () => {
-      // Mock loadAudioAsBinary pour retourner un Buffer fake
-      jest.spyOn(client as any, 'loadAudioAsBinary').mockResolvedValue({
-        buffer: Buffer.from('fake-audio-data'),
-        mimeType: 'audio/mp3',
-        size: 15
-      });
-
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-audio-123',
         attachmentId: 'attach-456',
@@ -698,6 +702,7 @@ describe('ZmqTranslationClient', () => {
           text: 'Hello world',
           language: 'en',
           confidence: 0.95,
+          durationMs: 3000,
           source: 'whisper'
         },
         translatedAudios: [
