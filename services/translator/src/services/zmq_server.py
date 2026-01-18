@@ -13,9 +13,10 @@ from .zmq_models import TranslationTask
 from .zmq_pool_manager import TranslationPoolManager
 from .zmq_server_core import ZMQTranslationServer
 from .zmq_translation_handler import TranslationHandler
-from .zmq_audio_handler import AudioHandler
+from .zmq_audio_handler import AudioHandler, AUDIO_PIPELINE_AVAILABLE
 from .zmq_transcription_handler import TranscriptionHandler
 from .zmq_voice_handler import VoiceHandler
+from .database_service import DatabaseService
 
 # ═══════════════════════════════════════════════════════════════════
 # Exports publics
@@ -29,4 +30,6 @@ __all__ = [
     'AudioHandler',
     'TranscriptionHandler',
     'VoiceHandler',
+    'DatabaseService',
+    'AUDIO_PIPELINE_AVAILABLE',
 ]
