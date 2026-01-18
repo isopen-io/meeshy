@@ -180,29 +180,45 @@ export interface AudioProcessRequest {
   useOriginalVoice?: boolean;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // VOICE CLONE PARAMETERS (Chatterbox TTS)
+  // VOICE CLONE PARAMETERS - Configuration complète depuis translation.types.ts
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Paramètres de clonage vocal pour Chatterbox TTS
-   * Permet un contrôle fin de la génération vocale.
-   * Si non spécifiés, les paramètres sont auto-calculés basés sur l'analyse vocale.
+   * Paramètres complets de clonage vocal (Chatterbox + Performance + Quality)
+   * Permet un contrôle total sur le processus de traduction audio.
+   *
+   * Structure:
+   * - chatterbox: Paramètres Chatterbox TTS (expressivité, sampling)
+   * - performance: Paramètres de performance (parallélisme, optimisation)
+   * - quality: Paramètres de qualité (validation, retry)
+   *
+   * Voir translation.types.ts pour la définition complète et les presets.
    */
   voiceCloneParams?: {
-    /** Expressivité vocale (0.0-1.0). Défaut: auto-calculé */
-    exaggeration?: number;
-    /** Guidance du modèle (0.0-1.0). Défaut: auto-calculé */
-    cfgWeight?: number;
-    /** Température/Créativité (0.0-2.0). Défaut: 0.8 */
-    temperature?: number;
-    /** Pénalité de répétition (1.0-3.0). Défaut: 1.2 (mono) / 2.0 (multi) */
-    repetitionPenalty?: number;
-    /** Probabilité minimum (0.0-1.0). Défaut: 0.05 */
-    minP?: number;
-    /** Nucleus sampling (0.0-1.0). Défaut: 1.0 */
-    topP?: number;
-    /** Activer l'auto-optimisation. Défaut: true */
-    autoOptimize?: boolean;
+    /** Paramètres Chatterbox TTS */
+    chatterbox?: {
+      exaggeration?: number;        // 0.0-1.0, défaut: 0.5
+      cfgWeight?: number;            // 0.0-1.0, défaut: 0.5 (0.0 pour non-anglais)
+      temperature?: number;          // 0.1-2.0, défaut: 1.0
+      topP?: number;                 // 0.0-1.0, défaut: 0.9
+      minP?: number;                 // 0.0-1.0, défaut: 0.05
+      repetitionPenalty?: number;    // 1.0-3.0, défaut: 1.2 (mono) / 2.0 (multi)
+      autoOptimize?: boolean;        // Défaut: true
+    };
+    /** Paramètres de performance */
+    performance?: {
+      parallel?: boolean;            // Défaut: true
+      maxWorkers?: number;           // 1-8, défaut: 2
+      optimizeModel?: boolean;       // Défaut: true
+      useFp16?: boolean;             // Défaut: false
+      warmup?: boolean;              // Défaut: true
+    };
+    /** Paramètres de qualité */
+    quality?: {
+      minSimilarityThreshold?: number;      // 0.0-1.0, défaut: 0.70
+      autoRetryOnLowSimilarity?: boolean;   // Défaut: true
+      maxRetries?: number;                  // 0-5, défaut: 2
+    };
   };
 }
 
@@ -1228,33 +1244,50 @@ export class ZMQTranslationClient extends EventEmitter {
   async sendTranscriptionOnlyRequest(
     request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>
   ): Promise<string> {
+    logger.info(`🔍 [ZMQ-TRACE] ======== DÉBUT ENVOI TRANSCRIPTION ========`);
+    logger.info(`🔍 [ZMQ-TRACE] Request params:`);
+    logger.info(`   - messageId: ${request.messageId}`);
+    logger.info(`   - attachmentId: ${request.attachmentId}`);
+    logger.info(`   - audioPath: ${request.audioPath || 'N/A'}`);
+    logger.info(`   - audioData (base64): ${request.audioData ? `${request.audioData.substring(0, 50)}...` : 'N/A'}`);
+    logger.info(`   - audioFormat: ${request.audioFormat || 'N/A'}`);
+    logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'OUI' : 'NON'}`);
+
     if (!this.pushSocket) {
-      logger.error('❌ [GATEWAY] Socket PUSH non initialisé pour transcription only');
+      logger.error('🔍 [ZMQ-TRACE] ❌ Socket PUSH non initialisé');
       throw new Error('Socket PUSH non initialisé');
     }
 
+    logger.info(`🔍 [ZMQ-TRACE] Socket PUSH: ${!!this.pushSocket ? 'OK' : 'KO'}`);
+
     // Valider qu'on a une source audio (fichier OU base64)
     if (!request.audioPath && !request.audioData) {
+      logger.error(`🔍 [ZMQ-TRACE] ❌ Aucune source audio fournie`);
       throw new Error('Either audioPath or audioData (base64) must be provided');
     }
 
     try {
       const taskId = randomUUID();
+      logger.info(`🔍 [ZMQ-TRACE] Task ID généré: ${taskId}`);
 
       let audioBuffer: Buffer;
       let mimeType: string;
       let audioSize: number;
 
       if (request.audioPath) {
+        logger.info(`🔍 [ZMQ-TRACE] Mode FICHIER: chargement depuis ${request.audioPath}...`);
         // Mode fichier: charger depuis le disque
         const audioData = await this.loadAudioAsBinary(request.audioPath);
         if (!audioData) {
+          logger.error(`🔍 [ZMQ-TRACE] ❌ Impossible de charger le fichier`);
           throw new Error(`Impossible de charger le fichier audio: ${request.audioPath}`);
         }
         audioBuffer = audioData.buffer;
         mimeType = audioData.mimeType;
         audioSize = audioData.size;
+        logger.info(`🔍 [ZMQ-TRACE] ✅ Fichier chargé: ${(audioSize / 1024).toFixed(2)} KB`);
       } else {
+        logger.info(`🔍 [ZMQ-TRACE] Mode BASE64: décodage...`);
         // Mode base64: décoder en Buffer (pas de fichier temporaire)
         audioBuffer = Buffer.from(request.audioData!, 'base64');
         audioSize = audioBuffer.length;
@@ -1270,7 +1303,10 @@ export class ZMQTranslationClient extends EventEmitter {
           'flac': 'audio/flac'
         };
         mimeType = formatMimeTypes[request.audioFormat || 'wav'] || 'audio/wav';
+        logger.info(`🔍 [ZMQ-TRACE] ✅ Audio décodé: ${(audioSize / 1024).toFixed(2)} KB, MIME: ${mimeType}`);
       }
+
+      logger.info(`🔍 [ZMQ-TRACE] Préparation frames multipart...`);
 
       // Préparer les frames binaires
       const binaryFrames: Buffer[] = [audioBuffer];
@@ -1294,15 +1330,23 @@ export class ZMQTranslationClient extends EventEmitter {
       const sourceMode = request.audioPath ? 'fichier' : 'base64';
       const transferMode = `multipart binaire (${(audioSize / 1024).toFixed(1)}KB, ${mimeType}, source: ${sourceMode})`;
 
-      logger.info('📝 [GATEWAY] ENVOI TRANSCRIPTION ONLY:');
-      logger.info(`   📋 taskId: ${taskId}`);
-      logger.info(`   📋 messageId: ${request.messageId}`);
-      logger.info(`   📋 attachmentId: ${request.attachmentId || 'N/A (direct audio)'}`);
-      logger.info(`   📋 transferMode: ${transferMode}`);
-      logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
+      logger.info('🔍 [ZMQ-TRACE] Message à envoyer:');
+      logger.info(`   - type: ${requestMessage.type}`);
+      logger.info(`   - taskId: ${taskId}`);
+      logger.info(`   - messageId: ${request.messageId}`);
+      logger.info(`   - attachmentId: ${request.attachmentId || 'N/A'}`);
+      logger.info(`   - audioFormat: ${requestMessage.audioFormat}`);
+      logger.info(`   - binaryFrames.audio: ${binaryFrameInfo.audio}`);
+      logger.info(`   - binaryFrames.audioMimeType: ${binaryFrameInfo.audioMimeType}`);
+      logger.info(`   - binaryFrames.audioSize: ${binaryFrameInfo.audioSize} bytes`);
+      logger.info(`   - transferMode: ${transferMode}`);
+      logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
 
+      logger.info(`🔍 [ZMQ-TRACE] Envoi via PUSH multipart...`);
       // Envoyer via PUSH en multipart
       await this.sendMultipart(requestMessage, binaryFrames);
+
+      logger.info(`🔍 [ZMQ-TRACE] ✅ Message envoyé avec succès`);
 
       // Mettre à jour les statistiques
       this.stats.requests_sent++;
@@ -1313,12 +1357,14 @@ export class ZMQTranslationClient extends EventEmitter {
         timestamp: Date.now()
       });
 
+      logger.info(`🔍 [ZMQ-TRACE] ======== FIN ENVOI TRANSCRIPTION ========`);
       logger.info(`📤 [ZMQ-Client] Transcription only PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
 
       return taskId;
 
     } catch (error) {
-      logger.error(`❌ Erreur envoi transcription only: ${error}`);
+      logger.error(`🔍 [ZMQ-TRACE] ❌ ERREUR ENVOI: ${error}`);
+      logger.error(`🔍 [ZMQ-TRACE] Stack: ${error instanceof Error ? error.stack : 'N/A'}`);
       throw error;
     }
   }
