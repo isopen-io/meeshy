@@ -2422,6 +2422,22 @@ model UserVoiceModel {
   /// Durée totale des audios d'entraînement (ms)
   totalDurationMs Int
 
+  /// ============================================
+  /// TRAINING AUDIO REFERENCES
+  /// ============================================
+  /// JSON array containing references to the audio attachments used for training.
+  /// This allows retrieval of original training samples and their metadata.
+  /// [
+  ///   {
+  ///     "attachmentId": "ObjectId",
+  ///     "audioUrl": "/api/v1/attachments/file/...",
+  ///     "duration": 15000,
+  ///     "language": "fr",
+  ///     "addedAt": "2025-01-18T00:00:00Z"
+  ///   }
+  /// ]
+  trainingAudioSamples Json?
+
   /// Score de qualité du modèle (0-1)
   /// - 0-0.3: faible (audio trop court)
   /// - 0.3-0.5: moyen
