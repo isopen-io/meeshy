@@ -144,7 +144,9 @@ class ZMQTranslationServer:
             self.translation_handler = TranslationHandler(
                 pool_manager=self.pool_manager,
                 pub_socket=self.pub_socket,
-                database_service=self.database_service
+                database_service=self.database_service,
+                gateway_push_port=self.gateway_push_port,
+                gateway_sub_port=self.gateway_sub_port
             )
             self.audio_handler = AudioHandler(
                 pub_socket=self.pub_socket,

@@ -1,0 +1,43 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "transformIgnorePatterns": [
+    "node_modules/(?!@meeshy/shared)"
+  ],
+  "moduleNameMapper": {
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1"
+  },
+  "testMatch": [
+    "<rootDir>/src/**/__tests__/**/*.test.ts",
+    "<rootDir>/src/**/*.test.ts"
+  ],
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    ".skip"
+  ],
+  "collectCoverageFrom": [
+    "src/services/**/*.ts",
+    "src/utils/**/*.ts",
+    "!src/**/*.d.ts",
+    "!src/**/__tests__/**",
+    "!src/main.ts",
+    "!src/server.ts",
+    "!src/routes/**/*",
+    "!src/middleware/**/*",
+    "!src/websocket/**/*",
+    "!src/grpc/**/*"
+  ],
+  "coverageDirectory": "coverage",
+  "coverageReporters": [
+    "text",
+    "lcov",
+    "html"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "collectCoverage": false
+}
