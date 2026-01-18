@@ -53,14 +53,16 @@ from services.translation_ml import (
 
 # Exports pour compatibilité des tests
 from utils.text_segmentation import TextSegmenter
-from utils.performance import PerformanceOptimizer
+from utils.performance import PerformanceOptimizer, get_performance_optimizer
 
 __all__ = [
     'TranslationMLService',
     'get_unified_ml_service',
     'TextSegmenter',
     'PerformanceOptimizer',
-    'get_settings'
+    'get_performance_optimizer',
+    'get_settings',
+    'ML_AVAILABLE'
 ]
 
 # Import des dépendances ML avec warnings

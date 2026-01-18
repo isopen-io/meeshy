@@ -16,6 +16,8 @@ This file serves as the public API entry point for existing code.
 # Import helpers pour compatibilité des tests
 from utils.performance import get_performance_optimizer
 from services.transcription_service import get_transcription_service
+from services.voice_clone_service import get_voice_clone_service
+from services.tts_service import get_tts_service
 
 # Re-export all public API from the modular package
 from .audio_pipeline import (
@@ -54,4 +56,6 @@ __all__ = [
     # Helpers pour compatibilité des tests
     "get_performance_optimizer",
     "get_transcription_service",
+    "get_voice_clone_service",
+    "get_tts_service",
 ]
