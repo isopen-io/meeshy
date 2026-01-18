@@ -1078,6 +1078,27 @@ export class AttachmentService {
   }
 
   /**
+   * Récupère un attachment avec toutes ses métadonnées (transcription, traductions, analyses)
+   * Inclut les relations Prisma: transcription et translatedAudios
+   */
+  async getAttachmentWithMetadata(attachmentId: string): Promise<any | null> {
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        transcription: true, // Inclut MessageAudioTranscription avec voiceQualityAnalysis
+        translatedAudios: true, // Inclut MessageTranslatedAudio[]
+      },
+    });
+
+    if (!attachment) {
+      return null;
+    }
+
+    // Retourner l'objet complet avec toutes les relations
+    return attachment;
+  }
+
+  /**
    * Récupère le chemin physique d'un fichier
    */
   async getFilePath(attachmentId: string): Promise<string | null> {

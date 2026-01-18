@@ -37,7 +37,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       const response = await apiService.get<{
         success: boolean;
         data: { analysis: VoiceQualityAnalysis } | null;
-      }>('/api/voice-analysis/profile');
+      }>('/api/voice/analysis');
 
       if (response.success && response.data) {
         setAnalysis(response.data.analysis);
@@ -63,7 +63,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       const response = await apiService.get<{
         success: boolean;
         data: { analysis: VoiceQualityAnalysis } | null;
-      }>(`/api/voice-analysis/attachment/${attachmentId}`);
+      }>(`/api/attachments/${attachmentId}/analysis`);
 
       if (response.success && response.data) {
         setAnalysis(response.data.analysis);
@@ -93,7 +93,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
           analysis: VoiceQualityAnalysis;
           persisted: boolean;
         };
-      }>('/api/voice-analysis/profile', {
+      }>('/api/voice/analysis', {
         audioBase64,
         persist: true
       });
