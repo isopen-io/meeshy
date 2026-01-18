@@ -38,9 +38,10 @@ from config.settings import get_settings
 
 # CRITIQUE: Définir les variables d'environnement AVANT d'importer transformers
 _settings = get_settings()
-os.environ['HF_HOME'] = str(_settings.models_path)
-os.environ['TRANSFORMERS_CACHE'] = str(_settings.models_path)
-os.environ['HUGGINGFACE_HUB_CACHE'] = str(_settings.models_path)
+# Utiliser huggingface_cache_path pour isoler les modèles HF dans models/huggingface/
+os.environ['HF_HOME'] = str(_settings.huggingface_cache_path)
+os.environ['TRANSFORMERS_CACHE'] = str(_settings.huggingface_cache_path)
+os.environ['HUGGINGFACE_HUB_CACHE'] = str(_settings.huggingface_cache_path)
 
 # Import du module ML refactorisé
 from services.translation_ml import (

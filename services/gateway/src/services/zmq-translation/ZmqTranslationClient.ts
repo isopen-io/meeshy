@@ -95,7 +95,7 @@ export class ZmqTranslationClient extends EventEmitter {
       host,
       pushPort,
       subPort,
-      pollIntervalMs: 100
+      pollIntervalMs: parseInt(process.env.ZMQ_POLL_INTERVAL_MS || '500') // 500ms par défaut (2 fois/sec)
     };
     this.connectionPool = new ZmqConnectionPool(poolConfig);
 

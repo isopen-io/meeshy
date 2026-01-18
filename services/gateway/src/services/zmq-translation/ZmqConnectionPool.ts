@@ -88,8 +88,8 @@ export class ZmqConnectionPool extends EventEmitter {
       }
 
       try {
-        // Periodic heartbeat log
-        if (this.heartbeatCount % 50 === 0) {
+        // Periodic heartbeat log (only in development, every 5 minutes)
+        if (process.env.NODE_ENV !== 'production' && this.heartbeatCount % 600 === 0) {
           console.log(`[ConnectionPool] Polling active (heartbeat ${this.heartbeatCount})`);
         }
         this.heartbeatCount++;

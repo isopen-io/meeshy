@@ -213,6 +213,38 @@ class ZMQTranslationServer:
     # Méthodes de routing vers les handlers spécialisés
     # ══════════════════════════════════════════════════════════════
 
+    def _inject_binary_frames(self, request_data: dict, binary_frames: list):
+        """
+        Injecte les frames binaires dans request_data selon binaryFrames indices.
+
+        Cette méthode extrait les données binaires des frames ZMQ et les injecte
+        dans request_data sous les clés _audioBinary, _embeddingBinary, etc.
+
+        Args:
+            request_data: Dictionnaire contenant les métadonnées JSON
+            binary_frames: Liste des frames binaires (frames[1:])
+        """
+        if not binary_frames:
+            return
+
+        binary_frame_info = request_data.get('binaryFrames', {})
+        if not binary_frame_info:
+            return
+
+        # Audio binaire
+        audio_idx = binary_frame_info.get('audio')
+        if audio_idx and audio_idx <= len(binary_frames):
+            request_data['_audioBinary'] = binary_frames[audio_idx - 1]
+            audio_size = len(binary_frames[audio_idx - 1])
+            logger.info(f"📦 [ZMQ-SERVER] Audio binaire extrait du frame {audio_idx}: {audio_size / 1024:.1f}KB")
+
+        # Embedding binaire (pkl)
+        embedding_idx = binary_frame_info.get('embedding')
+        if embedding_idx and embedding_idx <= len(binary_frames):
+            request_data['_embeddingBinary'] = binary_frames[embedding_idx - 1]
+            embedding_size = len(binary_frames[embedding_idx - 1])
+            logger.info(f"📦 [ZMQ-SERVER] Embedding binaire extrait du frame {embedding_idx}: {embedding_size / 1024:.1f}KB")
+
     async def _handle_translation_request_multipart(self, frames):
         """Route la requête multipart vers le handler approprié"""
         # Le premier frame contient toujours le JSON
@@ -227,8 +259,12 @@ class ZMQTranslationServer:
         if request_type == 'translation':
             await self.translation_handler._handle_translation_request_multipart(frames)
         elif request_type == 'audio_process':
+            # Injecter les binaires dans request_data pour audio_process
+            self._inject_binary_frames(request_data, binary_frames)
             await self.audio_handler._handle_audio_process_request(request_data)
         elif request_type == 'transcription_only':
+            # Injecter les binaires dans request_data pour transcription_only
+            self._inject_binary_frames(request_data, binary_frames)
             await self.transcription_handler._handle_transcription_only_request(request_data)
         elif request_type == 'voice_api':
             await self.voice_handler._handle_voice_api_request(request_data)

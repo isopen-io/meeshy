@@ -74,6 +74,7 @@ class ModelLoader:
 
         # Configuration des chemins et device
         self.models_path = Path(settings.models_path)
+        self.huggingface_cache = Path(settings.huggingface_cache_path)
         self.device = os.getenv('DEVICE', 'cpu')
 
         # Configuration des modèles disponibles
@@ -101,10 +102,10 @@ class ModelLoader:
 
     def configure_environment(self):
         """Configure les variables d'environnement PyTorch et HuggingFace"""
-        # Configuration HuggingFace
-        os.environ['HF_HOME'] = str(self.models_path)
-        os.environ['TRANSFORMERS_CACHE'] = str(self.models_path)
-        os.environ['HUGGINGFACE_HUB_CACHE'] = str(self.models_path)
+        # Configuration HuggingFace - utiliser le cache dédié huggingface/
+        os.environ['HF_HOME'] = str(self.huggingface_cache)
+        os.environ['TRANSFORMERS_CACHE'] = str(self.huggingface_cache)
+        os.environ['HUGGINGFACE_HUB_CACHE'] = str(self.huggingface_cache)
         os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
         os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
         os.environ['TOKENIZERS_PARALLELISM'] = 'false'
@@ -199,7 +200,7 @@ class ModelLoader:
                 # Charger le tokenizer
                 tokenizer = AutoTokenizer.from_pretrained(
                     model_name,
-                    cache_dir=str(self.models_path),
+                    cache_dir=str(self.huggingface_cache),
                     use_fast=True,
                     model_max_length=512
                 )
@@ -215,7 +216,7 @@ class ModelLoader:
                 # Charger le modèle
                 model = AutoModelForSeq2SeqLM.from_pretrained(
                     model_name,
-                    cache_dir=str(self.models_path),
+                    cache_dir=str(self.huggingface_cache),
                     torch_dtype=dtype,
                     low_cpu_mem_usage=True,
                     device_map="auto" if device == "cuda" else None
@@ -290,7 +291,7 @@ class ModelLoader:
                 model_name = self.model_configs[model_type]['model_name']
                 tokenizer = AutoTokenizer.from_pretrained(
                     model_name,
-                    cache_dir=str(self.models_path),
+                    cache_dir=str(self.huggingface_cache),
                     use_fast=True
                 )
                 self._thread_local_tokenizers[cache_key] = tokenizer
