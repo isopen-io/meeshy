@@ -315,8 +315,8 @@ class VoiceAnalyzerService:
         # CLASSIFICATION
         # ═══════════════════════════════════════════════════════════════
         characteristics.voice_type = self._classify_voice_type(characteristics.pitch_mean)
-        characteristics.gender_estimate = self._estimate_gender(characteristics.pitch_mean)
-        characteristics.age_range = self._estimate_age_range(characteristics.pitch_mean)
+        characteristics.estimated_gender = self._estimate_gender(characteristics.pitch_mean)
+        characteristics.estimated_age_range = self._estimate_age_range(characteristics.pitch_mean)
 
         # Confidence basée sur la durée et la qualité
         voiced_ratio = np.sum(~np.isnan(f0)) / len(f0) if len(f0) > 0 else 0
@@ -507,8 +507,8 @@ class VoiceAnalyzerService:
         """Crée une analyse vide pour le mode dégradé"""
         return VoiceCharacteristics(
             voice_type="unknown",
-            gender_estimate="unknown",
-            age_range="unknown",
+            estimated_gender="unknown",
+            estimated_age_range="unknown",
             confidence=0.0,
             analysis_time_ms=int((time.time() - start_time) * 1000)
         )
