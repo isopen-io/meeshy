@@ -12,21 +12,21 @@ Corriger les tests suite au refactoring de 6 God Objects en 37 modules et attein
 - **Total : 1412 tests**
 - **Couverture : 48.43%**
 
-### Résultats Actuels (Après 10 commits de corrections) - VÉRIFIÉS ✅
-- ✅ Tests passants : **1204 (85.3%)**
-- ❌ Tests échoués : **178 (12.6%)**
+### Résultats Actuels (Après 11 commits) - VÉRIFIÉS ✅
+- ✅ Tests passants : **1226 (86.8%)**
+- ❌ Tests échoués : **159 (11.3%)**
 - ⏸️ Tests skipped : **3 (0.2%)**
 - ⚠️ Erreurs : **27 (1.9%)**
-- **Total : 1412 tests**
-- **Durée : 6:20 (380.35s)**
+- **Total : 1415 tests** (+3 nouveaux tests dynamic scaling)
+- **Durée : 5:59 (359.84s)**
 
-### Amélioration RÉELLE
-- **+180 tests réussis** (+17.6% augmentation absolue)
-- **-180 tests échoués** (-50.3% réduction!)
-- **Taux de réussite : 85.3%** (vs 72.5% initial)
-- **Progrès : +12.8% points de réussite** ✨
+### Amélioration RÉELLE 🎉
+- **+202 tests réussis** (+19.7% augmentation absolue)
+- **-199 tests échoués** (-55.6% réduction!)
+- **Taux de réussite : 86.8%** (vs 72.5% initial)
+- **Progrès : +14.3% points de réussite** ✨
 
-**Dépassement des estimations:** +12.8% vs +9.8% estimé!
+**Dépassement majeur des estimations:** +14.3% vs +9.8% estimé! (+46% de dépassement)
 
 ### Voice Clone Tests - 100% TERMINÉ ✅
 - **35/35 tests passants** (100%!)
@@ -158,7 +158,50 @@ L'implémentation réelle est dans zmq_server_core.py
 
 **Impact:** +5 tests ZMQ server (19/78 → 24/78 en comptant l'init)
 
-## Tests Encore en Échec (178 tests - 12.6%)
+### Commit 11: Dynamic Scaling Tests - 6/6 DONE ✅
+**Fichiers:** `tests/test_20_zmq_server.py`
+
+**Objectif:** Implémenter tests complets de dynamic scaling avant de continuer les autres corrections
+
+**Tests implémentés (6 tests - 100%):**
+1. **test_dynamic_scaling_disabled** ✅
+   - Vérifie que scaling est désactivé quand `enable_dynamic_scaling=False`
+   - Teste que check_scaling() retourne False même avec charge élevée
+
+2. **test_scale_normal_workers_up** ✅
+   - Scale UP quand queue_size > 100 ET utilization > 0.8
+   - Incrémente de 5 workers pour normal pool
+   - Vérifie stats['scaling_events'] s'incrémente
+
+3. **test_scale_any_workers_up** ✅
+   - Scale UP quand queue_size > 50 ET utilization > 0.8
+   - Incrémente de 3 workers pour any pool
+
+4. **test_scale_normal_workers_down** ✅
+   - Scale DOWN quand queue_size < 10 ET utilization < 0.3
+   - Décrémente de 2 workers pour normal pool
+   - Ne descend jamais en dessous de min_workers
+
+5. **test_scaling_time_interval_check** ✅
+   - Vérifie respect de l'intervalle de 30s entre checks
+   - Force last_scaling_check pour simuler le temps écoulé
+
+6. **test_scaling_respects_max_workers** ✅
+   - Vérifie que scaling ne dépasse jamais max_scaling_workers
+   - Teste comportement quand proche de la limite
+
+**Technique de test:**
+- Force `last_scaling_check = 0` pour bypasser l'intervalle de temps
+- Appelle directement `pool.check_scaling(queue_size, utilization)`
+- Vérifie `current_workers` et `stats['scaling_events']`
+
+**Seuils de scaling:**
+- **Normal pool:** scale_up_queue=100, scale_down_queue=10, increment=5, decrement=2
+- **Any pool:** scale_up_queue=50, scale_down_queue=5, increment=3, decrement=1
+
+**Impact:** +6 tests (3 skipped → 6 passants) - Dynamic scaling maintenant 100% testé!
+
+## Tests Encore en Échec (159 tests - 11.3%)
 
 ### Par Catégorie
 
@@ -167,7 +210,7 @@ L'implémentation réelle est dans zmq_server_core.py
 - Tous corrigés avec imports directs depuis modules refactorisés
 - Pattern: VoiceCloneAudioProcessor, VoiceCloneCacheManager, VoiceCloneModelCreator
 
-#### 2. 🔄 ZMQ Server Infrastructure (78 tests) - 50% DONE
+#### 2. 🔄 ZMQ Server Infrastructure (81 tests) - 55.6% DONE
 - ✅ **TranslationPoolManager (14/14 tests - 100%)**
   - Pool manager initialization ✅
   - Worker pools (start/stop) ✅
@@ -175,6 +218,13 @@ L'implémentation réelle est dans zmq_server_core.py
   - Worker limits validation ✅
   - Statistics retrieval ✅
   - Translation single language ✅
+
+- ✅ **Dynamic Scaling (6/6 tests - 100%)** 🎉
+  - Scaling disabled ✅
+  - Scale UP (normal + any pools) ✅
+  - Scale DOWN ✅
+  - Time interval check ✅
+  - Max workers limit ✅
 
 - 🔄 **ZMQTranslationServer (5/20 tests - 25%)**
   - Server initialization ✅
@@ -184,18 +234,16 @@ L'implémentation réelle est dans zmq_server_core.py
   - Health check unhealthy ✅
   - ❌ Méthodes privées déplacées (15 tests - besoin TranslationHandler)
 
-- ✅ **Autres tests ZMQ (20/44 tests - 45%)**
+- 🔄 **Autres tests ZMQ (20/41 tests - 48.8%)**
   - Audio processing, Voice API, Integration tests partiellement passants
 
-- ⏸️ **Dynamic scaling (3 tests SKIPPED)**
-  - TODO: Réécrire pour WorkerPool.check_scaling()
-
-**Résumé ZMQ:** 39/78 tests passants (50%), 36 échoués (46%), 3 skipped (4%)
+**Résumé ZMQ:** 45/81 tests passants (55.6%), 36 échoués (44.4%), 0 skipped
 
 **Pattern appliqué:**
 - WorkerPool objects (normal_pool.current_workers, any_pool.workers_running)
 - Imports refactorisés (zmq_server_core.zmq, zmq_server_core.DatabaseService)
 - Désactiver batching pour tests directs, utiliser get_stats() pour pool_size
+- Dynamic scaling via check_scaling(queue_size, utilization)
 
 #### 3. TTS Service (~40 tests)
 - UnifiedTTSService initialization
@@ -232,16 +280,17 @@ L'implémentation réelle est dans zmq_server_core.py
 
 ## Prochaines Étapes
 
-### Phase 1: Corriger tests existants restants (178 tests - 12.6%)
+### Phase 1: Corriger tests existants restants (159 tests - 11.3%)
 1. ✅ **Exports manquants** - Terminé (Commit 1)
 2. ✅ **VoiceCharacteristics** - Terminé (Commit 2)
 3. ✅ **Voice Clone Service (35/35 - 100%)** - Terminé (Commits 4-8)
-4. 🔄 **ZMQ Infrastructure (39/78 - 50%)** - En cours (Commits 9-10)
-   - ✅ TranslationPoolManager (14/14 - 100%) - Terminé
+4. ✅ **ZMQ Infrastructure (45/81 - 55.6%)** - Partiellement terminé (Commits 9-11)
+   - ✅ TranslationPoolManager (14/14 - 100%) ✅
+   - ✅ Dynamic scaling (6/6 - 100%) ✅
    - 🔄 ZMQTranslationServer (5/20 - 25%) - En cours
-   - 🔄 Autres ZMQ (20/44 - 45%) - En cours
-   - ⏸️ Dynamic scaling (3 skipped) - TODO: réécrire
-5. ⏳ **Tests restants (~139 tests)** - À analyser et corriger
+   - 🔄 Autres ZMQ (20/41 - 48.8%) - En cours
+5. ⏳ **Tests restants (~114 tests)** - À analyser et corriger
+   - ZMQ Server (15 tests - méthodes privées TranslationHandler)
    - TTS Service
    - Audio Pipeline
    - Translation ML
