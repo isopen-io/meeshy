@@ -23,7 +23,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import winston from 'winston';
 import * as fs from 'fs';
 import * as path from 'path';
-import { MessageTranslationService } from './services/MessageTranslationService';
+import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
@@ -35,7 +35,7 @@ import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
 import { communityRoutes } from './routes/communities';
-import { adminRoutes } from './routes/admin';
+// import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { userAdminRoutes } from './routes/admin/users';
 import { reportRoutes } from './routes/admin/reports';
 import { invitationRoutes } from './routes/admin/invitations';
@@ -762,9 +762,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     
     // Register community routes
     await this.server.register(communityRoutes, { prefix: API_PREFIX });
-    
-    // Register admin routes with /api/admin prefix
-    await this.server.register(adminRoutes, { prefix: `${API_PREFIX}/admin` });
+
+    // Register admin routes - Each admin route is registered individually below with specific prefixes
+    // (Removed global adminRoutes registration to avoid duplicate route declarations)
 
     // Register enhanced admin user management routes (at /api/admin/user-management)
     await this.server.register(userAdminRoutes, { prefix: API_PREFIX });

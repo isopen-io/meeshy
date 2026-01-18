@@ -15,7 +15,7 @@
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
 
 // Mock the NotificationService import (used dynamically in markMessagesAsRead)
-jest.mock('../../../services/NotificationService', () => ({
+jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn().mockImplementation(() => ({
     markConversationNotificationsAsRead: jest.fn().mockResolvedValue(0)
   }))

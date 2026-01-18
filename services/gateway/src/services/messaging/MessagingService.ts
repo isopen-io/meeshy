@@ -10,10 +10,10 @@ import type {
   MessageResponseMetadata,
   AuthenticationContext
 } from '@meeshy/shared/types';
-import { MessageTranslationService } from '../MessageTranslationService';
+import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { conversationStatsService } from '../ConversationStatsService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
-import { NotificationService } from '../NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 

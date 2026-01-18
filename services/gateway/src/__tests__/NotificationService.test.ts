@@ -14,7 +14,7 @@
  * @jest-environment node
  */
 
-import { NotificationService, CreateNotificationData } from '../services/NotificationService';
+import { NotificationService, CreateNotificationData } from '../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
 

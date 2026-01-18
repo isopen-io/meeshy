@@ -276,7 +276,7 @@ export class MessageReadStatusService {
       // Synchroniser avec les notifications
       try {
         const { NotificationService } = await import(
-          "./NotificationService.js"
+          "./notifications/NotificationService"
         );
         const notificationService = new NotificationService(this.prisma);
         await notificationService.markConversationNotificationsAsRead(

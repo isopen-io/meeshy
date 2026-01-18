@@ -17,7 +17,7 @@
 import { PrismaClient } from '../../../shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
-import { MessageTranslationService } from '../../services/MessageTranslationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import type { MessageRequest } from '../../../shared/types/messaging';
 import type { EncryptedPayload, EncryptionMode } from '../../../shared/types/encryption';
 import crypto from 'crypto';

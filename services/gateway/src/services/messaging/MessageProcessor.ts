@@ -9,7 +9,7 @@ import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
-import { NotificationService } from '../NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
 
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
 

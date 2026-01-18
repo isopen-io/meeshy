@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MessageTranslationService } from '../../services/MessageTranslationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';

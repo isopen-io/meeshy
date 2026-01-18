@@ -4,7 +4,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
-import { MessageTranslationService } from '../../services/MessageTranslationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { logger } from '../../utils/logger';
 import {
   voiceTranslationResultSchema,

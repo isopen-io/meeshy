@@ -6,14 +6,14 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MessageTranslationService } from '../services/MessageTranslationService';
+import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/AttachmentService';
-import { NotificationService } from '../services/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import type {
   ServerToClientEvents,

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
-import type { NotificationService } from '../services/NotificationService';
+import type { NotificationService } from '../services/notifications/NotificationService';
 import {
   friendRequestSchema,
   sendFriendRequestSchema,
