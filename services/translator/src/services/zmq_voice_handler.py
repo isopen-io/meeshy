@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Import du Voice API handler
 VOICE_API_AVAILABLE = False
 try:
-    from .voice_api_handler import VoiceAPIHandler, get_voice_api_handler
+    from .voice_api import VoiceAPIHandler, get_voice_api_handler
     VOICE_API_AVAILABLE = True
 except ImportError:
     pass
