@@ -85,6 +85,11 @@ from services.voice_clone.voice_clone_multi_speaker import (
 )
 from services.voice_clone.voice_clone_audio import VoiceCloneAudioProcessor
 from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager
+from services.voice_clone.voice_clone_model_improvement import (
+    VoiceCloneModelImprover,
+    get_voice_clone_model_improver
+)
+from services.voice_clone.voice_clone_model_creation import VoiceCloneModelCreator
 
 
 # NOTE: Les classes suivantes ont été déplacées vers services/voice_clone/:
@@ -100,11 +105,13 @@ from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager
 # ==============================================================================
 # VoiceCloneService - Service principal de clonage vocal
 # ==============================================================================
-# TODO: Refactoriser cette classe en modules plus petits (~400L chacun):
-# - voice_clone_init.py: Initialisation et configuration
-# - voice_clone_model.py: Création et amélioration de modèles
-# - voice_clone_cache.py: Gestion de cache et stockage
-# - voice_clone_audio.py: Opérations audio et multi-locuteurs
+# REFACTORISATION EN COURS:
+# ✅ voice_clone_cache.py: Gestion de cache et stockage
+# ✅ voice_clone_audio.py: Opérations audio et multi-locuteurs
+# ✅ voice_clone_model_improvement.py: Amélioration de modèles
+# TODO:
+# - voice_clone_init.py: Initialisation et configuration (~200L)
+# - voice_clone_model.py: Création de modèles (~200L)
 # ==============================================================================
 
 
@@ -132,8 +139,6 @@ class VoiceCloneService:
     MIN_AUDIO_DURATION_MS = 10_000  # 10 secondes minimum pour clonage de qualité
     VOICE_MODEL_MAX_AGE_DAYS = 90   # Recalibration trimestrielle (3 mois)
     MAX_AUDIO_HISTORY = 20          # Nombre max d'audios à agréger
-    IMPROVEMENT_WEIGHT_OLD = 0.7    # Poids de l'ancien embedding
-    IMPROVEMENT_WEIGHT_NEW = 0.3    # Poids du nouveau
 
     def __new__(cls, *args, **kwargs):
         """Singleton pattern"""
@@ -198,6 +203,12 @@ class VoiceCloneService:
             max_audio_history=self.MAX_AUDIO_HISTORY
         )
 
+        # Model improver (délégation)
+        self._model_improver: Optional[VoiceCloneModelImprover] = None
+
+        # Model creator (délégation)
+        self._model_creator: Optional[VoiceCloneModelCreator] = None
+
         logger.info(f"[VOICE_CLONE] Service cree: device={self.device}, models_path={self._settings.models_path}")
         self._initialized = True
 
@@ -228,6 +239,30 @@ class VoiceCloneService:
         if self._multi_speaker is None:
             self._multi_speaker = get_voice_clone_multi_speaker(self)
         return self._multi_speaker
+
+    def _get_model_improver(self) -> VoiceCloneModelImprover:
+        """Retourne le service d'amélioration de modèles (lazy init)"""
+        if self._model_improver is None:
+            cache_manager = self._get_cache_manager()
+            self._model_improver = get_voice_clone_model_improver(
+                audio_processor=self._audio_processor,
+                cache_manager=cache_manager,
+                voice_cache_dir=self.voice_cache_dir,
+                database_service=self.database_service
+            )
+        return self._model_improver
+
+    def _get_model_creator(self) -> VoiceCloneModelCreator:
+        """Retourne le service de création de modèles (lazy init)"""
+        if self._model_creator is None:
+            cache_manager = self._get_cache_manager()
+            self._model_creator = VoiceCloneModelCreator(
+                audio_processor=self._audio_processor,
+                cache_manager=cache_manager,
+                voice_cache_dir=self.voice_cache_dir,
+                max_age_days=self.VOICE_MODEL_MAX_AGE_DAYS
+            )
+        return self._model_creator
 
     async def initialize(self) -> bool:
         """Initialise OpenVoice pour le clonage vocal"""
@@ -367,57 +402,12 @@ class VoiceCloneService:
         Returns:
             VoiceModel prêt à l'emploi
         """
-        # 1. Vérifier le cache
-        cache_manager = self._get_cache_manager()
-        cached_model = await cache_manager.load_cached_model(user_id)
-
-        if cached_model:
-            age_days = (datetime.now() - cached_model.updated_at).days
-
-            # Modèle récent → utiliser directement
-            if age_days < self.VOICE_MODEL_MAX_AGE_DAYS:
-                logger.info(f"[VOICE_CLONE] 📦 Modèle en cache pour {user_id} (age: {age_days}j)")
-
-                # Charger l'embedding si pas en mémoire
-                if cached_model.embedding is None:
-                    cached_model = await cache_manager.load_embedding(cached_model)
-
-                return cached_model
-
-            # Modèle ancien → améliorer si on a un nouvel audio
-            if current_audio_path:
-                logger.info(f"[VOICE_CLONE] 🔄 Modèle obsolète pour {user_id}, amélioration...")
-                return await self._improve_model(cached_model, current_audio_path)
-
-            # Sinon utiliser l'ancien modèle
-            logger.info(f"[VOICE_CLONE] ⚠️ Modèle obsolète pour {user_id} mais pas de nouvel audio")
-            if cached_model.embedding is None:
-                cached_model = await cache_manager.load_embedding(cached_model)
-            return cached_model
-
-        # 2. Pas de modèle → créer
-        if not current_audio_path:
-            # Essayer de récupérer l'historique audio
-            audio_paths = await self._audio_processor.get_user_audio_history(user_id)
-            if not audio_paths:
-                raise ValueError(f"Aucun audio disponible pour créer le modèle de voix de {user_id}")
-            current_audio_path = audio_paths[0]
-            current_audio_duration_ms = await self._audio_processor.get_audio_duration_ms(current_audio_path)
-
-        audio_paths = [current_audio_path]
-        total_duration = current_audio_duration_ms
-
-        # Si audio trop court, chercher l'historique
-        if total_duration < self.MIN_AUDIO_DURATION_MS:
-            logger.info(f"[VOICE_CLONE] ⚠️ Audio trop court ({total_duration}ms), agrégation historique...")
-            historical_audios = await self._audio_processor.get_user_audio_history(user_id, exclude=[current_audio_path])
-            audio_paths.extend(historical_audios)
-            total_duration = await self._audio_processor.calculate_total_duration(audio_paths)
-
-            logger.info(f"[VOICE_CLONE] 📚 {len(audio_paths)} audios agrégés, total: {total_duration}ms")
-
-        # Créer le modèle avec ce qu'on a
-        return await self._create_voice_model(user_id, audio_paths, total_duration)
+        model_creator = self._get_model_creator()
+        return await model_creator.get_or_create_voice_model(
+            user_id=user_id,
+            current_audio_path=current_audio_path,
+            current_audio_duration_ms=current_audio_duration_ms
+        )
 
     async def create_voice_model_from_gateway_profile(
         self,
@@ -448,305 +438,17 @@ class VoiceCloneService:
         Returns:
             VoiceModel prêt à l'emploi, ou None si échec
         """
-        if not profile_data:
-            logger.warning(f"[VOICE_CLONE] ⚠️ Pas de profil fourni par Gateway pour {user_id}")
-            return None
-
-        try:
-            logger.info(f"[VOICE_CLONE] 📦 Création VoiceModel depuis profil Gateway pour {user_id}")
-
-            # Décoder l'embedding Base64
-            import base64
-            embedding_base64 = profile_data.get('embedding')
-            if not embedding_base64:
-                logger.error(f"[VOICE_CLONE] ❌ Embedding manquant dans le profil Gateway")
-                return None
-
-            embedding_bytes = base64.b64decode(embedding_base64)
-            embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
-
-            logger.info(f"[VOICE_CLONE] ✅ Embedding décodé: shape={embedding.shape}")
-
-            # Créer les caractéristiques vocales si fournies
-            voice_characteristics = None
-            voice_chars_data = profile_data.get('voiceCharacteristics')
-            if voice_chars_data:
-                try:
-                    voice_characteristics = VoiceCharacteristics(
-                        pitch_mean_hz=voice_chars_data.get('pitch_mean_hz', 0),
-                        pitch_std_hz=voice_chars_data.get('pitch_std_hz', 0),
-                        pitch_range_hz=voice_chars_data.get('pitch_range_hz', (0, 0)),
-                        estimated_gender=voice_chars_data.get('estimated_gender', 'unknown'),
-                        speaking_rate_wpm=voice_chars_data.get('speaking_rate_wpm', 0),
-                        spectral_centroid_hz=voice_chars_data.get('spectral_centroid_hz', 0),
-                        spectral_bandwidth_hz=voice_chars_data.get('spectral_bandwidth_hz', 0),
-                        energy_mean=voice_chars_data.get('energy_mean', 0),
-                        energy_std=voice_chars_data.get('energy_std', 0),
-                        mfcc_signature=voice_chars_data.get('mfcc_signature'),
-                        formants_hz=voice_chars_data.get('formants_hz'),
-                        jitter_percent=voice_chars_data.get('jitter_percent'),
-                        shimmer_percent=voice_chars_data.get('shimmer_percent'),
-                        confidence=voice_chars_data.get('confidence', 0.8)
-                    )
-                except Exception as e:
-                    logger.warning(f"[VOICE_CLONE] ⚠️ Impossible de recréer VoiceCharacteristics: {e}")
-
-            # Créer l'empreinte vocale si fournie
-            fingerprint = None
-            fingerprint_data = profile_data.get('fingerprint')
-            if fingerprint_data:
-                try:
-                    fingerprint = VoiceFingerprint(
-                        fingerprint_id=fingerprint_data.get('fingerprint_id', ''),
-                        signature=fingerprint_data.get('signature', ''),
-                        signature_short=fingerprint_data.get('signature_short', ''),
-                        audio_duration_ms=fingerprint_data.get('audio_duration_ms', 0),
-                        created_at=datetime.fromisoformat(fingerprint_data.get('created_at', datetime.now().isoformat()))
-                    )
-                except Exception as e:
-                    logger.warning(f"[VOICE_CLONE] ⚠️ Impossible de recréer VoiceFingerprint: {e}")
-
-            # Créer un dossier temporaire pour l'embedding (nécessaire pour TTS)
-            profile_user_id = profile_data.get('userId', user_id)
-            user_dir = self.voice_cache_dir / profile_user_id
-            user_dir.mkdir(parents=True, exist_ok=True)
-
-            profile_id = profile_data.get('profileId', f"vfp_{profile_user_id[:8]}")
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            embedding_filename = f"{profile_user_id}_{profile_id}_{timestamp}_gateway.pkl"
-            embedding_path = str(user_dir / embedding_filename)
-
-            # Sauvegarder l'embedding dans un fichier temporaire (pickle déjà utilisé dans le service)
-            with open(embedding_path, 'wb') as f:
-                pickle.dump(embedding, f)
-
-            logger.info(f"[VOICE_CLONE] 💾 Embedding sauvegardé: {embedding_path}")
-
-            # Créer le VoiceModel
-            model = VoiceModel(
-                user_id=profile_user_id,
-                embedding_path=embedding_path,
-                audio_count=profile_data.get('audioCount', 1),
-                total_duration_ms=profile_data.get('totalDurationMs', 0),
-                quality_score=profile_data.get('qualityScore', 0.8),
-                profile_id=profile_id,
-                version=profile_data.get('version', 1),
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-                embedding=embedding,
-                voice_characteristics=voice_characteristics,
-                fingerprint=fingerprint
-            )
-
-            logger.info(
-                f"[VOICE_CLONE] ✅ VoiceModel créé depuis Gateway: "
-                f"user={profile_user_id}, quality={model.quality_score:.2f}, "
-                f"profile_id={profile_id}"
-            )
-
-            return model
-
-        except Exception as e:
-            logger.error(f"[VOICE_CLONE] ❌ Erreur création VoiceModel depuis Gateway: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    async def _create_voice_model(
-        self,
-        user_id: str,
-        audio_paths: List[str],
-        total_duration_ms: int
-    ) -> VoiceModel:
-        """
-        Crée un nouveau modèle de voix à partir des audios.
-
-        IMPORTANT: Extrait uniquement les segments du locuteur principal
-        pour garantir que le clonage ne concerne que sa voix.
-        """
-        import uuid as uuid_module
-        start_time = time.time()
-        logger.info(f"[VOICE_CLONE] 🎤 Création modèle pour {user_id} ({len(audio_paths)} audios)")
-
-        # Filtrer les audios valides
-        valid_paths = [p for p in audio_paths if os.path.exists(p)]
-        if not valid_paths:
-            raise ValueError("Aucun fichier audio valide trouvé")
-
-        # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
-        user_dir = self.voice_cache_dir / user_id
-        user_dir.mkdir(parents=True, exist_ok=True)
-
-        # =====================================================================
-        # EXTRACTION DU LOCUTEUR PRINCIPAL UNIQUEMENT
-        # Pour chaque audio, extraire uniquement les segments du locuteur principal
-        # =====================================================================
-        voice_analyzer = get_voice_analyzer()
-        extracted_paths = []
-        primary_voice_chars = None
-        recording_metadata = None
-
-        for audio_path in valid_paths:
-            try:
-                # Extraire uniquement les segments du locuteur principal
-                extracted_path, metadata = await voice_analyzer.extract_primary_speaker_audio(
-                    audio_path,
-                    output_path=str(user_dir / f"primary_{os.path.basename(audio_path)}"),
-                    min_segment_duration_ms=100
-                )
-                extracted_paths.append(extracted_path)
-
-                # Conserver les caractéristiques vocales du premier locuteur principal
-                if primary_voice_chars is None and metadata.primary_speaker:
-                    primary_voice_chars = metadata.primary_speaker.voice_characteristics
-                    recording_metadata = metadata
-                    logger.info(
-                        f"[VOICE_CLONE] Locuteur principal détecté: "
-                        f"gender={primary_voice_chars.estimated_gender}, "
-                        f"pitch={primary_voice_chars.pitch_mean_hz:.1f}Hz"
-                    )
-
-            except Exception as e:
-                logger.warning(f"[VOICE_CLONE] Erreur extraction locuteur principal: {e}")
-                # Fallback: utiliser l'audio complet
-                extracted_paths.append(audio_path)
-
-        # Recalculer la durée totale après extraction
-        extracted_duration_ms = 0
-        for path in extracted_paths:
-            extracted_duration_ms += await self._audio_processor.get_audio_duration_ms(path)
-
-        logger.info(
-            f"[VOICE_CLONE] Audio extrait: {extracted_duration_ms}ms "
-            f"(original: {total_duration_ms}ms, {len(extracted_paths)} fichiers)"
+        model_creator = self._get_model_creator()
+        return await model_creator.create_voice_model_from_gateway_profile(
+            profile_data=profile_data,
+            user_id=user_id
         )
 
-        # Concaténer les audios extraits si multiples
-        if len(extracted_paths) > 1:
-            combined_audio = await self._audio_processor.concatenate_audios(
-                extracted_paths,
-                output_dir=user_dir,
-                user_id=user_id
-            )
-        else:
-            combined_audio = extracted_paths[0]
+    # NOTE: Méthode _create_voice_model déplacée vers voice_clone_model_creation.py
+    # Utiliser self._get_model_creator()._create_voice_model() à la place (interne)
 
-        # Générer un profile_id unique
-        profile_id = uuid_module.uuid4().hex[:12]
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-
-        # Extraire l'embedding de voix (du locuteur principal uniquement)
-        embedding = await self._audio_processor.extract_voice_embedding(combined_audio, user_dir)
-
-        # Calculer score de qualité
-        quality_score = self._audio_processor.calculate_quality_score(extracted_duration_ms, len(valid_paths))
-
-        # Chemin de l'embedding avec nouvelle convention: {userId}_{profileId}_{timestamp}.pkl
-        embedding_filename = f"{user_id}_{profile_id}_{timestamp}.pkl"
-        embedding_path = str(user_dir / embedding_filename)
-
-        # Créer le modèle avec les caractéristiques vocales du locuteur principal
-        model = VoiceModel(
-            user_id=user_id,
-            embedding_path=embedding_path,
-            audio_count=len(valid_paths),
-            total_duration_ms=extracted_duration_ms,  # Durée extraite, pas originale
-            quality_score=quality_score,
-            profile_id=profile_id,
-            version=1,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            next_recalibration_at=datetime.now() + timedelta(days=self.VOICE_MODEL_MAX_AGE_DAYS),
-            embedding=embedding,
-            voice_characteristics=primary_voice_chars  # Caractéristiques du locuteur principal
-        )
-
-        # Générer l'empreinte vocale unique
-        if model.voice_characteristics or model.embedding is not None:
-            fingerprint = model.generate_fingerprint()
-            if fingerprint:
-                logger.info(f"[VOICE_CLONE] Empreinte vocale: {fingerprint.fingerprint_id}")
-
-        # Sauvegarder
-        cache_manager = self._get_cache_manager()
-        await cache_manager.save_model_to_cache(model)
-
-        processing_time = int((time.time() - start_time) * 1000)
-        logger.info(f"[VOICE_CLONE] ✅ Modèle créé pour {user_id}: quality={quality_score:.2f}, time={processing_time}ms")
-
-        return model
-
-    async def _improve_model(
-        self,
-        existing_model: VoiceModel,
-        new_audio_path: str
-    ) -> VoiceModel:
-        """
-        Améliore un modèle existant avec un nouvel audio.
-
-        RÈGLE: La mise à jour n'est effectuée QUE si la signature vocale
-        du nouvel audio correspond au profil existant (similarité > 80%).
-        """
-        logger.info(f"[VOICE_CLONE] 🔄 Vérification amélioration modèle pour {existing_model.user_id}")
-
-        voice_analyzer = get_voice_analyzer()
-
-        # Charger l'embedding existant si nécessaire
-        cache_manager = self._get_cache_manager()
-        if existing_model.embedding is None:
-            existing_model = await cache_manager.load_embedding(existing_model)
-
-        # Vérifier si la signature correspond avant mise à jour
-        if existing_model.fingerprint:
-            metadata = await voice_analyzer.analyze_audio(new_audio_path)
-            can_update, reason, matched_speaker = voice_analyzer.can_update_user_profile(
-                metadata,
-                existing_model.fingerprint,
-                similarity_threshold=0.80
-            )
-
-            if not can_update:
-                logger.warning(
-                    f"[VOICE_CLONE] ⚠️ Mise à jour refusée pour {existing_model.user_id}: {reason}"
-                )
-                # Retourner le modèle existant sans modification
-                return existing_model
-
-            logger.info(f"[VOICE_CLONE] ✅ Signature vocale vérifiée: {reason}")
-
-        # Extraire embedding du nouvel audio
-        user_dir = self.voice_cache_dir / existing_model.user_id / "temp"
-        user_dir.mkdir(parents=True, exist_ok=True)
-
-        new_embedding = await self._audio_processor.extract_voice_embedding(new_audio_path, user_dir)
-
-        if existing_model.embedding is not None and new_embedding is not None:
-            # Moyenne pondérée (plus de poids aux anciens pour stabilité)
-            improved_embedding = (
-                self.IMPROVEMENT_WEIGHT_OLD * existing_model.embedding +
-                self.IMPROVEMENT_WEIGHT_NEW * new_embedding
-            )
-        else:
-            improved_embedding = new_embedding if new_embedding is not None else existing_model.embedding
-
-        # Mettre à jour le modèle
-        existing_model.embedding = improved_embedding
-        existing_model.updated_at = datetime.now()
-        existing_model.audio_count += 1
-        existing_model.quality_score = min(1.0, existing_model.quality_score + 0.05)
-        existing_model.version += 1
-        existing_model.next_recalibration_at = datetime.now() + timedelta(days=self.VOICE_MODEL_MAX_AGE_DAYS)
-
-        # Régénérer l'empreinte vocale avec le nouvel embedding
-        if existing_model.voice_characteristics:
-            existing_model.generate_fingerprint()
-
-        # Sauvegarder
-        cache_manager = self._get_cache_manager()
-        await cache_manager.save_model_to_cache(existing_model)
-
-        logger.info(f"[VOICE_CLONE] ✅ Modèle amélioré pour {existing_model.user_id} (v{existing_model.version})")
-        return existing_model
+    # NOTE: Méthode _improve_model déplacée vers voice_clone_model_improvement.py
+    # Utiliser self._get_model_improver().improve_model() à la place
 
     async def schedule_quarterly_recalibration(self):
         """
@@ -755,10 +457,11 @@ class VoiceCloneService:
         Sélectionne le meilleur audio: le plus long, le plus clair, sans bruit, le plus récent.
         """
         cache_manager = self._get_cache_manager()
+        model_creator = self._get_model_creator()
         await cache_manager.schedule_quarterly_recalibration(
             get_best_audio_callback=self._audio_processor.get_best_audio_for_cloning,
             get_audio_history_callback=self._audio_processor.get_user_audio_history,
-            create_model_callback=self._create_voice_model,
+            create_model_callback=model_creator._create_voice_model,
             max_age_days=self.VOICE_MODEL_MAX_AGE_DAYS
         )
 
