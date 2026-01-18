@@ -148,11 +148,13 @@ class TestTTSModelEnum:
         logger.info("Test 24.4: TTSModel iteration")
 
         models = list(TTSModel)
-        assert len(models) == 4
+        assert len(models) == 6  # CHATTERBOX, CHATTERBOX_TURBO, HIGGS_AUDIO_V2, XTTS_V2, MMS, VITS
         assert TTSModel.CHATTERBOX in models
         assert TTSModel.CHATTERBOX_TURBO in models
         assert TTSModel.HIGGS_AUDIO_V2 in models
         assert TTSModel.XTTS_V2 in models
+        assert TTSModel.MMS in models
+        assert TTSModel.VITS in models
 
         logger.info("TTSModel iteration OK")
 
@@ -885,18 +887,18 @@ class TestUnifiedTTSService:
 
             service = UnifiedTTSService(output_dir=str(output_dir))
 
-            backend_chatterbox = service._create_backend(TTSModel.CHATTERBOX)
+            backend_chatterbox = service.model_manager.create_backend(TTSModel.CHATTERBOX)
             assert isinstance(backend_chatterbox, ChatterboxBackend)
             assert backend_chatterbox.turbo is False
 
-            backend_turbo = service._create_backend(TTSModel.CHATTERBOX_TURBO)
+            backend_turbo = service.model_manager.create_backend(TTSModel.CHATTERBOX_TURBO)
             assert isinstance(backend_turbo, ChatterboxBackend)
             assert backend_turbo.turbo is True
 
-            backend_higgs = service._create_backend(TTSModel.HIGGS_AUDIO_V2)
+            backend_higgs = service.model_manager.create_backend(TTSModel.HIGGS_AUDIO_V2)
             assert isinstance(backend_higgs, HiggsAudioBackend)
 
-            backend_xtts = service._create_backend(TTSModel.XTTS_V2)
+            backend_xtts = service.model_manager.create_backend(TTSModel.XTTS_V2)
             assert isinstance(backend_xtts, XTTSBackend)
 
         logger.info("Create backend OK")
@@ -919,7 +921,7 @@ class TestUnifiedTTSService:
 
             # Create a mock invalid model (simulate by passing an invalid value)
             with pytest.raises(ValueError):
-                service._create_backend("invalid")
+                service.model_manager.create_backend("invalid")
 
         logger.info("Create backend invalid model OK")
 
@@ -939,7 +941,7 @@ class TestUnifiedTTSService:
 
             service = UnifiedTTSService(output_dir=str(output_dir))
 
-            space = service._get_available_disk_space_gb()
+            space = service.model_manager.get_available_disk_space_gb()
             assert space >= 0
 
         logger.info("Get available disk space OK")
@@ -961,13 +963,13 @@ class TestUnifiedTTSService:
             service = UnifiedTTSService(output_dir=str(output_dir))
 
             # Mock disk space to be large enough
-            with patch.object(service, '_get_available_disk_space_gb', return_value=100.0):
-                can_download = service._can_download_model(TTSModel.CHATTERBOX)
+            with patch.object(service.model_manager, 'get_available_disk_space_gb', return_value=100.0):
+                can_download = service.model_manager.can_download_model(TTSModel.CHATTERBOX)
                 assert can_download is True
 
             # Mock disk space to be too small
-            with patch.object(service, '_get_available_disk_space_gb', return_value=0.1):
-                can_download = service._can_download_model(TTSModel.CHATTERBOX)
+            with patch.object(service.model_manager, 'get_available_disk_space_gb', return_value=0.1):
+                can_download = service.model_manager.can_download_model(TTSModel.CHATTERBOX)
                 assert can_download is False
 
         logger.info("Can download model OK")
@@ -996,7 +998,7 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 status = await service.get_model_status(TTSModel.CHATTERBOX)
 
             assert isinstance(status, ModelStatus)
@@ -1030,7 +1032,7 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 all_status = await service.get_all_models_status()
 
             assert len(all_status) == len(TTSModel)
@@ -1061,7 +1063,7 @@ class TestUnifiedTTSService:
             # Add active backend
             mock_backend = MagicMock()
             mock_backend.is_initialized = True
-            service.active_backend = mock_backend
+            service.model_manager.active_backend = mock_backend
 
             assert service.is_ready is True
 
@@ -1172,7 +1174,7 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 stats = await service.get_stats()
 
             assert "service" in stats
@@ -1212,9 +1214,10 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            service.active_backend = mock_backend
+            service.model_manager.active_backend = mock_backend
+            service.model_manager.active_model = TTSModel.CHATTERBOX  # Required for get_stats()
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 stats = await service.get_stats()
 
             assert stats["is_ready"] is True
@@ -1242,14 +1245,14 @@ class TestUnifiedTTSService:
 
             mock_backend = MagicMock()
             mock_backend.close = AsyncMock()
-            service.backends = {TTSModel.CHATTERBOX: mock_backend}
-            service.active_backend = mock_backend
+            service.model_manager.backends = {TTSModel.CHATTERBOX: mock_backend}
+            service.model_manager.active_backend = mock_backend
 
             await service.close()
 
             assert service.is_initialized is False
-            assert service.active_backend is None
-            assert len(service.backends) == 0
+            assert service.model_manager.active_backend is None
+            assert len(service.model_manager.backends) == 0
             mock_backend.close.assert_called_once()
 
         logger.info("Close method OK")
@@ -1273,12 +1276,12 @@ class TestUnifiedTTSService:
 
             # Add mock background download task
             mock_task = MagicMock()
-            service._background_downloads = {TTSModel.HIGGS_AUDIO_V2: mock_task}
+            service.model_manager._background_downloads = {TTSModel.HIGGS_AUDIO_V2: mock_task}
 
             await service.close()
 
             mock_task.cancel.assert_called_once()
-            assert len(service._background_downloads) == 0
+            assert len(service.model_manager._background_downloads) == 0
 
         logger.info("Close cancels downloads OK")
 
@@ -1304,8 +1307,8 @@ class TestUnifiedTTSService:
             mock_backend.is_initialized = False
             mock_backend.initialize = AsyncMock(return_value=True)
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                with patch.object(service, '_download_models_background', new_callable=AsyncMock):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                with patch.object(service.model_manager, 'download_models_background', new_callable=AsyncMock):
                     result = await service.initialize()
 
             assert result is True
@@ -1331,12 +1334,12 @@ class TestUnifiedTTSService:
 
             mock_backend = MagicMock()
             mock_backend.is_initialized = True
-            service.backends = {TTSModel.CHATTERBOX: mock_backend}
+            service.model_manager.backends = {TTSModel.CHATTERBOX: mock_backend}
 
             result = await service.initialize(TTSModel.CHATTERBOX)
 
             assert result is True
-            assert service.active_backend == mock_backend
+            assert service.model_manager.active_backend == mock_backend
 
         logger.info("Initialize already initialized OK")
 
@@ -1355,11 +1358,11 @@ class TestUnifiedTTSService:
             mock_get_settings.return_value = mock_settings
 
             service = UnifiedTTSService(output_dir=str(output_dir))
-            service.current_model = TTSModel.CHATTERBOX
+            service.model_manager.active_model = TTSModel.CHATTERBOX
 
             mock_backend = MagicMock()
             mock_backend.is_initialized = True
-            service.active_backend = mock_backend
+            service.model_manager.active_backend = mock_backend
 
             result = await service.switch_model(TTSModel.CHATTERBOX)
 
@@ -1383,7 +1386,7 @@ class TestUnifiedTTSService:
             mock_get_settings.return_value = mock_settings
 
             service = UnifiedTTSService(output_dir=str(output_dir))
-            service.current_model = TTSModel.CHATTERBOX
+            service.model_manager.active_model = TTSModel.CHATTERBOX
 
             mock_backend = MagicMock(spec=BaseTTSBackend)
             mock_backend.is_available = False
@@ -1392,7 +1395,7 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 result = await service.switch_model(TTSModel.HIGGS_AUDIO_V2)
 
             assert result is False  # Not available
@@ -1415,7 +1418,7 @@ class TestUnifiedTTSService:
             mock_get_settings.return_value = mock_settings
 
             service = UnifiedTTSService(output_dir=str(output_dir))
-            service.current_model = TTSModel.CHATTERBOX
+            service.model_manager.active_model = TTSModel.CHATTERBOX
 
             mock_backend = MagicMock(spec=BaseTTSBackend)
             mock_backend.is_available = True
@@ -1424,8 +1427,8 @@ class TestUnifiedTTSService:
             mock_backend.is_downloading = False
             mock_backend.download_progress = 0.0
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                with patch.object(service, '_can_download_model', return_value=False):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                with patch.object(service.model_manager, 'can_download_model', return_value=False):
                     result = await service.switch_model(TTSModel.HIGGS_AUDIO_V2)
 
             assert result is False  # Insufficient space
@@ -1482,11 +1485,11 @@ class TestUnifiedTTSService:
             mock_backend = MagicMock()
             mock_backend.is_initialized = True
             mock_backend.synthesize = AsyncMock(return_value=str(output_dir / "translated" / "test.wav"))
-            service.active_backend = mock_backend
+            service.model_manager.active_backend = mock_backend
 
-            with patch.object(service, '_convert_format', new_callable=AsyncMock) as mock_convert:
+            with patch.object(service.synthesizer, '_convert_format', new_callable=AsyncMock) as mock_convert:
                 mock_convert.return_value = str(output_dir / "translated" / "test.mp3")
-                with patch.object(service, '_get_duration_ms', new_callable=AsyncMock) as mock_duration:
+                with patch.object(service.synthesizer, '_get_duration_ms', new_callable=AsyncMock) as mock_duration:
                     mock_duration.return_value = 2000
 
                     result = await service.synthesize(
@@ -1559,7 +1562,7 @@ class TestUnifiedTTSService:
             mock_pydub_module.AudioSegment = mock_audio_segment_class
 
             with patch.dict('sys.modules', {'pydub': mock_pydub_module}):
-                result = await service._convert_format("/tmp/test.wav", "mp3")
+                result = await service.synthesizer._convert_format("/tmp/test.wav", "mp3")
                 # Should return original path on error
                 assert result == "/tmp/test.wav"
 
@@ -1587,7 +1590,7 @@ class TestUnifiedTTSService:
                 mock_librosa = sys.modules['librosa']
                 mock_librosa.get_duration.return_value = 2.5
 
-                result = await service._get_duration_ms("/tmp/test.mp3")
+                result = await service.synthesizer._get_duration_ms("/tmp/test.mp3")
                 # The result depends on the mock
 
         logger.info("Get duration ms OK")
@@ -1609,7 +1612,7 @@ class TestUnifiedTTSService:
             service = UnifiedTTSService(output_dir=str(output_dir))
 
             # Test with non-existent file (should return 0)
-            result = await service._get_duration_ms("/nonexistent/file.mp3")
+            result = await service.synthesizer._get_duration_ms("/nonexistent/file.mp3")
             assert result == 0
 
         logger.info("Get duration ms error OK")
@@ -1727,8 +1730,8 @@ class TestFindLocalModel:
             mock_backend.is_available = True
             mock_backend.is_model_downloaded.return_value = True
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                result = await service._find_local_model(TTSModel.HIGGS_AUDIO_V2)
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                result = await service.model_manager.find_local_model(TTSModel.HIGGS_AUDIO_V2)
 
             assert result == TTSModel.HIGGS_AUDIO_V2
 
@@ -1763,8 +1766,8 @@ class TestFindLocalModel:
                     backend.is_model_downloaded.return_value = False
                 return backend
 
-            with patch.object(service, '_create_backend', side_effect=mock_create_backend):
-                result = await service._find_local_model(TTSModel.HIGGS_AUDIO_V2)
+            with patch.object(service.model_manager, 'create_backend', side_effect=mock_create_backend):
+                result = await service.model_manager.find_local_model(TTSModel.HIGGS_AUDIO_V2)
 
             assert result == TTSModel.CHATTERBOX
 
@@ -1791,8 +1794,8 @@ class TestFindLocalModel:
             mock_backend.is_available = True
             mock_backend.is_model_downloaded.return_value = False
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                result = await service._find_local_model(TTSModel.CHATTERBOX)
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                result = await service.model_manager.find_local_model(TTSModel.CHATTERBOX)
 
             assert result is None
 
@@ -1826,12 +1829,12 @@ class TestLoadModel:
             mock_backend = MagicMock()
             mock_backend.initialize = AsyncMock(return_value=True)
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                result = await service._load_model(TTSModel.CHATTERBOX)
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                result = await service.model_manager.load_model(TTSModel.CHATTERBOX)
 
             assert result is True
-            assert service.active_backend == mock_backend
-            assert service.current_model == TTSModel.CHATTERBOX
+            assert service.model_manager.active_backend == mock_backend
+            assert service.model_manager.active_model == TTSModel.CHATTERBOX
 
         logger.info("Load model success OK")
 
@@ -1855,8 +1858,8 @@ class TestLoadModel:
             mock_backend = MagicMock()
             mock_backend.initialize = AsyncMock(return_value=False)
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
-                result = await service._load_model(TTSModel.CHATTERBOX)
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
+                result = await service.model_manager.load_model(TTSModel.CHATTERBOX)
 
             assert result is False
 
@@ -1882,9 +1885,9 @@ class TestLoadModel:
             mock_backend = MagicMock()
             mock_backend.initialize = AsyncMock(return_value=True)
 
-            with patch.object(service, '_create_backend', return_value=mock_backend):
+            with patch.object(service.model_manager, 'create_backend', return_value=mock_backend):
                 with patch('builtins.print') as mock_print:
-                    result = await service._load_model(TTSModel.HIGGS_AUDIO_V2)
+                    result = await service.model_manager.load_model(TTSModel.HIGGS_AUDIO_V2)
 
             assert result is True
             # License warning should have been printed

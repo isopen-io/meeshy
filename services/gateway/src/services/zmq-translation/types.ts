@@ -147,7 +147,9 @@ export interface TranscriptionData {
   text: string;
   language: string;
   confidence: number;
+  durationMs: number;
   source: 'mobile' | 'whisper';
+  model?: string;
   segments?: Array<{ text: string; startMs: number; endMs: number }>;
 }
 
@@ -222,6 +224,7 @@ export interface TranscriptionCompletedEvent {
     confidence: number;
     durationMs: number;
     source: string;
+    model?: string;
     segments?: Array<{ text: string; startMs: number; endMs: number }>;
   };
   processingTimeMs: number;

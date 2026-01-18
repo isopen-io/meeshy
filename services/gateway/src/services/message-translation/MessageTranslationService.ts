@@ -970,6 +970,7 @@ export class MessageTranslationService extends EventEmitter {
           language: data.transcription.language,
           confidence: data.transcription.confidence,
           source: data.transcription.source,
+          model: data.transcription.model || 'whisper_boost',
           segments: data.transcription.segments || null,
           audioDurationMs: data.transcription.durationMs || attachment.duration || 0
         },
@@ -980,6 +981,7 @@ export class MessageTranslationService extends EventEmitter {
           language: data.transcription.language,
           confidence: data.transcription.confidence,
           source: data.transcription.source,
+          model: data.transcription.model || 'whisper_boost',
           segments: data.transcription.segments || null,
           audioDurationMs: data.transcription.durationMs || attachment.duration || 0
         }

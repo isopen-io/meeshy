@@ -320,7 +320,7 @@ class TranscriptionService:
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",
-                model=f"whisper-{self.model_size}",
+                model="whisper_boost",  # Nom canonique du modèle Whisper
                 processing_time_ms=processing_time
             )
 

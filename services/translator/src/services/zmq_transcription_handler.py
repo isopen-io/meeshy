@@ -317,6 +317,7 @@ class TranscriptionHandler:
                     'confidence': result.confidence,
                     'durationMs': result.duration_ms,
                     'source': result.source,
+                    'model': result.model or 'whisper_boost',
                     'segments': segments_dict
                 },
                 'processingTimeMs': processing_time,
