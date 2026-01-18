@@ -486,6 +486,83 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   );
 
   /**
+   * GET /attachments/:attachmentId/metadata
+   * Get attachment metadata including transcription, translations, and voice analysis
+   */
+  fastify.get(
+    '/attachments/:attachmentId/metadata',
+    {
+      preHandler: authRequired,
+      schema: {
+        description: 'Get comprehensive attachment metadata including transcription (with voice quality analysis), translated audios, and all metadata fields. Returns the complete attachment object with all relations.',
+        tags: ['attachments'],
+        summary: 'Get attachment metadata',
+        params: {
+          type: 'object',
+          required: ['attachmentId'],
+          properties: {
+            attachmentId: {
+              type: 'string',
+              description: 'Unique attachment identifier'
+            }
+          }
+        },
+        response: {
+          200: {
+            description: 'Attachment metadata retrieved successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  attachment: messageAttachmentSchema
+                }
+              }
+            }
+          },
+          404: {
+            description: 'Attachment not found',
+            ...errorResponseSchema
+          },
+          500: {
+            description: 'Internal server error',
+            ...errorResponseSchema
+          }
+        }
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { attachmentId } = request.params as { attachmentId: string };
+
+        const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
+        if (!attachment) {
+          return reply.status(404).send({
+            success: false,
+            error: 'ATTACHMENT_NOT_FOUND',
+            message: 'Attachment not found',
+          });
+        }
+
+        return reply.status(200).send({
+          success: true,
+          data: {
+            attachment
+          }
+        });
+      } catch (error: any) {
+        console.error('[AttachmentRoutes] Error fetching attachment metadata:', error);
+        return reply.status(500).send({
+          success: false,
+          error: 'METADATA_FETCH_FAILED',
+          message: error.message || 'Failed to fetch attachment metadata',
+        });
+      }
+    }
+  );
+
+  /**
    * GET /attachments/file/:filePath
    * Stream un fichier via son chemin (utilisé pour les URLs générées)
    */
