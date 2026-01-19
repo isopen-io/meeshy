@@ -195,7 +195,35 @@ export const messageTranslationSchema = {
     confidenceScore: { type: 'number', nullable: true, description: 'Translation confidence (0-1)' },
     sourceLanguage: { type: 'string', nullable: true, description: 'Source language code' },
     cached: { type: 'boolean', nullable: true, description: 'Whether translation was from cache' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Translation creation timestamp' }
+    createdAt: { type: 'string', format: 'date-time', description: 'Translation creation timestamp' },
+    updatedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Translation last update timestamp'
+    },
+
+    // Encryption fields for secure conversations
+    isEncrypted: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Whether translation is encrypted (server/hybrid modes)'
+    },
+    encryptionKeyId: {
+      type: 'string',
+      nullable: true,
+      description: 'Encryption key ID used for this translation'
+    },
+    encryptionIv: {
+      type: 'string',
+      nullable: true,
+      description: 'Initialization vector for decryption'
+    },
+    encryptionAuthTag: {
+      type: 'string',
+      nullable: true,
+      description: 'Authentication tag for integrity verification'
+    }
   }
 } as const;
 
@@ -426,11 +454,45 @@ export const messageSchema = {
     viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
     isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
 
+    // Pinning
+    pinnedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Date when message was pinned (null = not pinned)'
+    },
+    pinnedBy: {
+      type: 'string',
+      nullable: true,
+      description: 'User ID who pinned the message'
+    },
+
     // Delivery Status
     deliveredCount: { type: 'number', description: 'Number of recipients who received the message' },
     readCount: { type: 'number', description: 'Number of recipients who read the message' },
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     readByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read by all timestamp' },
+
+    // Reactions
+    reactionSummary: {
+      type: 'object',
+      nullable: true,
+      description: 'Reaction counts by emoji (e.g., {"❤️": 5, "👍": 3})',
+      additionalProperties: { type: 'number' }
+    },
+    reactionCount: {
+      type: 'number',
+      description: 'Total number of reactions on this message',
+      default: 0
+    },
+
+    // Mentions
+    validatedMentions: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true,
+      description: 'Array of validated user IDs mentioned in message'
+    },
 
     // Encryption (encryptionMode is only on Conversation)
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
@@ -713,6 +775,36 @@ export const conversationSchema = {
       nullable: true,
       description: 'Announcement-only mode (only creator/admins can write)',
       default: false
+    },
+    isArchived: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Conversation is archived (use status=archived instead)',
+      deprecated: true
+    },
+    defaultWriteRole: {
+      type: 'string',
+      enum: ['everyone', 'member', 'moderator', 'admin', 'creator'],
+      nullable: true,
+      description: 'Minimum role required to send messages'
+    },
+    slowModeSeconds: {
+      type: 'number',
+      nullable: true,
+      description: 'Minimum seconds between messages per user (0 = disabled)',
+      default: 0
+    },
+
+    // Configuration
+    encryptionProtocol: {
+      type: 'string',
+      nullable: true,
+      description: 'Encryption protocol used (aes-256-gcm, signal_v3)'
+    },
+    autoTranslateEnabled: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Auto-translation enabled (disabled for E2EE conversations)'
     },
 
     // Statistics
