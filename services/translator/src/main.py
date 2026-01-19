@@ -63,7 +63,7 @@ except ImportError as e:
 
 # Import du service TTS unifié (Chatterbox, Higgs Audio V2, XTTS, MMS)
 try:
-    from services.tts_service import (
+    from services.tts.tts_service import (
         get_tts_service,
         TTSService,
         TTSModel,
@@ -74,8 +74,11 @@ try:
     get_unified_tts_service = get_tts_service
     UnifiedTTSService = TTSService
     UNIFIED_TTS_AVAILABLE = True
+    logger.info("[TRANSLATOR] ✅ Service TTS unifié importé avec succès")
 except ImportError as e:
-    pass  # Will be logged later
+    logger.error(f"[TRANSLATOR] ❌ CRITIQUE: Échec import TTS unifié: {e}")
+    import traceback
+    traceback.print_exc()
 
 # Import des services Voice API (optionnel)
 VOICE_API_AVAILABLE = False
