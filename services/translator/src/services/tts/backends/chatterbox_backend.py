@@ -77,7 +77,11 @@ class ChatterboxBackend(BaseTTSBackend):
         return self._available or self._available_multilingual
 
     def is_model_downloaded(self) -> bool:
-        """Vérifie si le modèle Chatterbox est téléchargé.
+        """
+        Vérifie si le modèle Chatterbox est téléchargé.
+
+        PRIORITÉ MULTILINGUE: Vérifie d'abord le modèle multilingual,
+        puis fallback sur le monolingual.
 
         Vérifie dans l'ordre:
         1. Le cache personnalisé (models/huggingface/)
@@ -85,31 +89,53 @@ class ChatterboxBackend(BaseTTSBackend):
 
         Note: Chatterbox utilise tokenizer.json au lieu de config.json
         """
-        if not self._available:
+        if not self._available and not self._available_multilingual:
             return False
 
         try:
             from huggingface_hub import try_to_load_from_cache
-            model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
 
-            # Chatterbox utilise tokenizer.json (pas config.json comme la plupart des modèles)
-            check_file = "tokenizer.json"
+            # PRIORITÉ 1: Vérifier le modèle MULTILINGUAL d'abord
+            if self._available_multilingual:
+                model_id_multi = "ResembleAI/chatterbox-multilingual"
+                check_file = "tokenizer.json"
 
-            # 1. Vérifier le cache personnalisé
-            file_path = try_to_load_from_cache(
-                model_id,
-                check_file,
-                cache_dir=str(self._models_path)
-            )
-            if file_path is not None:
-                logger.debug(f"[TTS] Modèle Chatterbox trouvé dans cache personnalisé: {self._models_path}")
-                return True
+                # 1a. Cache personnalisé
+                file_path = try_to_load_from_cache(
+                    model_id_multi,
+                    check_file,
+                    cache_dir=str(self._models_path)
+                )
+                if file_path is not None:
+                    logger.debug(f"[TTS] Chatterbox Multilingual trouvé dans cache personnalisé")
+                    return True
 
-            # 2. Vérifier le cache global HuggingFace
-            file_path = try_to_load_from_cache(model_id, check_file)
-            if file_path is not None:
-                logger.debug(f"[TTS] Modèle Chatterbox trouvé dans cache global HuggingFace")
-                return True
+                # 1b. Cache global
+                file_path = try_to_load_from_cache(model_id_multi, check_file)
+                if file_path is not None:
+                    logger.debug(f"[TTS] Chatterbox Multilingual trouvé dans cache global")
+                    return True
+
+            # PRIORITÉ 2: Fallback sur le modèle MONOLINGUAL
+            if self._available:
+                model_id_mono = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
+                check_file = "tokenizer.json"
+
+                # 2a. Cache personnalisé
+                file_path = try_to_load_from_cache(
+                    model_id_mono,
+                    check_file,
+                    cache_dir=str(self._models_path)
+                )
+                if file_path is not None:
+                    logger.debug(f"[TTS] Chatterbox monolingual trouvé dans cache personnalisé")
+                    return True
+
+                # 2b. Cache global
+                file_path = try_to_load_from_cache(model_id_mono, check_file)
+                if file_path is not None:
+                    logger.debug(f"[TTS] Chatterbox monolingual trouvé dans cache global")
+                    return True
 
             return False
         except Exception as e:
@@ -117,8 +143,13 @@ class ChatterboxBackend(BaseTTSBackend):
             return False
 
     async def download_model(self) -> bool:
-        """Télécharge le modèle Chatterbox"""
-        if not self._available:
+        """
+        Télécharge le modèle Chatterbox.
+
+        PRIORITÉ MULTILINGUE: Télécharge le modèle multilingual (23 langues) en priorité
+        pour supporter une plateforme multilingue comme Meeshy.
+        """
+        if not self._available and not self._available_multilingual:
             return False
 
         self._downloading = True
@@ -127,8 +158,16 @@ class ChatterboxBackend(BaseTTSBackend):
         try:
             from huggingface_hub import snapshot_download
 
-            model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
-            logger.info(f"[TTS] 📥 Téléchargement de {model_id} vers {self._models_path}...")
+            # PRIORITÉ: Télécharger le modèle MULTILINGUAL pour support 23 langues
+            if self._available_multilingual:
+                model_id = "ResembleAI/chatterbox-multilingual"
+                logger.info(f"[TTS] 🌍 Téléchargement Chatterbox Multilingual (23 langues) vers {self._models_path}...")
+                logger.info("[TTS] Langues supportées: ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, no, pl, pt, ru, sv, sw, tr, zh")
+            else:
+                # Fallback sur monolingual si multilingual non disponible
+                model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
+                logger.info(f"[TTS] 📥 Téléchargement Chatterbox (anglais uniquement) vers {self._models_path}...")
+                logger.warning("[TTS] ⚠️ Chatterbox Multilingual non disponible - téléchargement modèle anglais uniquement")
 
             loop = asyncio.get_event_loop()
 
@@ -165,7 +204,29 @@ class ChatterboxBackend(BaseTTSBackend):
         return self.device
 
     async def initialize(self) -> bool:
-        """Initialise le modèle monolingual (anglais)."""
+        """
+        Initialise le modèle Chatterbox.
+
+        PRIORITÉ MULTILINGUE: Pour une plateforme multilingue comme Meeshy,
+        charge le modèle multilingual (23 langues) par défaut si disponible.
+        Fallback sur le monolingual (anglais uniquement) si échec.
+        """
+        # Si déjà initialisé (mono ou multi), retourner True
+        if self._initialized or self._initialized_multilingual:
+            return True
+
+        # ÉTAPE 1: Essayer de charger le modèle MULTILINGUAL en priorité
+        if self._available_multilingual:
+            logger.info("[TTS] 🌍 Tentative de chargement Chatterbox Multilingual (23 langues)...")
+            success = await self.initialize_multilingual()
+            if success:
+                logger.info("[TTS] ✅ Chatterbox Multilingual chargé - support de 23 langues activé")
+                self._initialized = True  # Marquer comme initialisé aussi
+                return True
+            else:
+                logger.warning("[TTS] ⚠️ Échec chargement multilingual, fallback sur monolingual...")
+
+        # ÉTAPE 2: Fallback sur le modèle MONOLINGUAL (anglais uniquement)
         if self._initialized:
             return True
 
@@ -183,7 +244,7 @@ class ChatterboxBackend(BaseTTSBackend):
 
             device = self._get_device()
             model_name = "Turbo" if self.turbo else ""
-            logger.info(f"[TTS] 🔄 Chargement Chatterbox {model_name}...")
+            logger.info(f"[TTS] 🔄 Chargement Chatterbox {model_name} (monolingual - anglais uniquement)...")
 
             loop = asyncio.get_event_loop()
 
@@ -208,7 +269,8 @@ class ChatterboxBackend(BaseTTSBackend):
             )
 
             self._initialized = True
-            logger.info(f"✅ [TTS] Chatterbox {model_name} initialisé sur {device} (via ModelManager)")
+            logger.info(f"✅ [TTS] Chatterbox {model_name} monolingual initialisé sur {device}")
+            logger.warning("[TTS] ⚠️ Support multilingue limité - seulement anglais disponible")
             return True
 
         except Exception as e:
