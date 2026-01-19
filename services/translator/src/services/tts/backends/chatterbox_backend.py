@@ -95,46 +95,27 @@ class ChatterboxBackend(BaseTTSBackend):
         try:
             from huggingface_hub import try_to_load_from_cache
 
-            # PRIORITÉ 1: Vérifier le modèle MULTILINGUAL d'abord
-            if self._available_multilingual:
-                model_id_multi = "ResembleAI/chatterbox-multilingual"
+            # PRIORITÉ 1: Vérifier le modèle CHATTERBOX (contient mono + multi)
+            # NOTE: Le modèle multilingual et monolingual partagent le MÊME repo HuggingFace
+            # ResembleAI/chatterbox contient les deux variantes (classes Python différentes)
+            if self._available_multilingual or self._available:
+                model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
                 check_file = "tokenizer.json"
 
                 # 1a. Cache personnalisé
                 file_path = try_to_load_from_cache(
-                    model_id_multi,
+                    model_id,
                     check_file,
                     cache_dir=str(self._models_path)
                 )
                 if file_path is not None:
-                    logger.debug(f"[TTS] Chatterbox Multilingual trouvé dans cache personnalisé")
+                    logger.debug(f"[TTS] Chatterbox trouvé dans cache personnalisé: {model_id}")
                     return True
 
                 # 1b. Cache global
-                file_path = try_to_load_from_cache(model_id_multi, check_file)
+                file_path = try_to_load_from_cache(model_id, check_file)
                 if file_path is not None:
-                    logger.debug(f"[TTS] Chatterbox Multilingual trouvé dans cache global")
-                    return True
-
-            # PRIORITÉ 2: Fallback sur le modèle MONOLINGUAL
-            if self._available:
-                model_id_mono = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
-                check_file = "tokenizer.json"
-
-                # 2a. Cache personnalisé
-                file_path = try_to_load_from_cache(
-                    model_id_mono,
-                    check_file,
-                    cache_dir=str(self._models_path)
-                )
-                if file_path is not None:
-                    logger.debug(f"[TTS] Chatterbox monolingual trouvé dans cache personnalisé")
-                    return True
-
-                # 2b. Cache global
-                file_path = try_to_load_from_cache(model_id_mono, check_file)
-                if file_path is not None:
-                    logger.debug(f"[TTS] Chatterbox monolingual trouvé dans cache global")
+                    logger.debug(f"[TTS] Chatterbox trouvé dans cache global: {model_id}")
                     return True
 
             return False
@@ -158,16 +139,16 @@ class ChatterboxBackend(BaseTTSBackend):
         try:
             from huggingface_hub import snapshot_download
 
-            # PRIORITÉ: Télécharger le modèle MULTILINGUAL pour support 23 langues
+            # Télécharger ResembleAI/chatterbox qui contient MONO + MULTI
+            # NOTE: Le même repo contient les 2 variantes (classes Python différentes)
+            model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
+
             if self._available_multilingual:
-                model_id = "ResembleAI/chatterbox-multilingual"
-                logger.info(f"[TTS] 🌍 Téléchargement Chatterbox Multilingual (23 langues) vers {self._models_path}...")
-                logger.info("[TTS] Langues supportées: ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, no, pl, pt, ru, sv, sw, tr, zh")
+                logger.info(f"[TTS] 🌍 Téléchargement Chatterbox (avec support Multilingual 23 langues) vers {self._models_path}...")
+                logger.info("[TTS] Langues supportées via ChatterboxMultilingualTTS: ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, no, pl, pt, ru, sv, sw, tr, zh")
             else:
-                # Fallback sur monolingual si multilingual non disponible
-                model_id = "ResembleAI/chatterbox-turbo" if self.turbo else "ResembleAI/chatterbox"
-                logger.info(f"[TTS] 📥 Téléchargement Chatterbox (anglais uniquement) vers {self._models_path}...")
-                logger.warning("[TTS] ⚠️ Chatterbox Multilingual non disponible - téléchargement modèle anglais uniquement")
+                logger.info(f"[TTS] 📥 Téléchargement Chatterbox (ChatterboxTTS - anglais) vers {self._models_path}...")
+                logger.warning("[TTS] ⚠️ Chatterbox Multilingual non disponible - support anglais uniquement")
 
             loop = asyncio.get_event_loop()
 
