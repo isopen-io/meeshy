@@ -763,6 +763,11 @@ export const conversationSchema = {
       description: 'Encryption mode'
     },
     encryptionEnabledAt: { type: 'string', format: 'date-time', nullable: true, description: 'Encryption enabled timestamp' },
+    encryptionEnabledBy: {
+      type: 'string',
+      nullable: true,
+      description: 'User ID who enabled encryption (for audit purposes)'
+    },
     serverEncryptionKeyId: {
       type: 'string',
       nullable: true,
