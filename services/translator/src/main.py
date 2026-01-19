@@ -220,7 +220,21 @@ class MeeshyTranslationServer:
                         tts_model = TTSModel.CHATTERBOX
 
                     unified_tts_service = get_unified_tts_service()
-                    logger.info(f"[TRANSLATOR] ✅ Service TTS unifié configuré: {unified_tts_service.current_model.value}")
+
+                    # CRITIQUE: Initialiser le service TTS pour charger le modèle
+                    logger.info(f"[TRANSLATOR] 🔄 Initialisation du modèle TTS {tts_model.value}...")
+                    tts_initialized = await unified_tts_service.initialize(tts_model)
+
+                    if tts_initialized:
+                        # Utiliser model_manager.active_model au lieu de current_model (qui n'existe pas)
+                        active_model = unified_tts_service.model_manager.active_model
+                        model_name = active_model.value if active_model else tts_model.value
+                        logger.info(f"[TRANSLATOR] ✅ Service TTS unifié initialisé: {model_name}")
+                    else:
+                        logger.warning(
+                            f"[TRANSLATOR] ⚠️ TTS non initialisé immédiatement, "
+                            f"téléchargement en arrière-plan de {tts_model.value}"
+                        )
 
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur init TTS unifié: {e}")
@@ -275,7 +289,19 @@ class MeeshyTranslationServer:
                         translation_service=self.translation_service
                     )
 
-                    logger.info("[TRANSLATOR] ✅ Services Voice API configurés")
+                    # CRITIQUE: Initialiser le pipeline pour créer la queue de jobs
+                    pipeline_initialized = await translation_pipeline.initialize()
+
+                    # FIABILITÉ: Valider que le pipeline est bien initialisé
+                    if not pipeline_initialized or not translation_pipeline.is_initialized:
+                        raise RuntimeError(
+                            "Translation pipeline initialization failed - workers not started"
+                        )
+
+                    logger.info(
+                        f"[TRANSLATOR] ✅ Services Voice API configurés "
+                        f"(pipeline: {len(translation_pipeline._workers)} workers)"
+                    )
                 except Exception as e:
                     logger.warning(f"[TRANSLATOR] ⚠️ Erreur init services Voice API: {e}")
                     import traceback

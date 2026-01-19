@@ -10,7 +10,7 @@ import logging
 import time
 import asyncio
 import threading
-import pickle
+# pickle non utilisé - supprimé pour éviter risques de sécurité
 import json
 import hashlib
 import struct

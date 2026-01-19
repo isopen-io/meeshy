@@ -16,7 +16,7 @@ Architecture:
 import os
 import logging
 import asyncio
-import pickle
+# numpy remplace pickle pour la sécurité
 import time
 import uuid as uuid_module
 from typing import List, Dict, Any, Optional
@@ -293,12 +293,13 @@ class VoiceCloneModelCreator:
 
             profile_id = profile_data.get('profileId', f"vfp_{profile_user_id[:8]}")
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            embedding_filename = f"{profile_user_id}_{profile_id}_{timestamp}_gateway.pkl"
+            # SÉCURITÉ: .npy au lieu de .pkl (numpy safe vs pickle unsafe)
+            embedding_filename = f"{profile_user_id}_{profile_id}_{timestamp}_gateway.npy"
             embedding_path = str(user_dir / embedding_filename)
 
-            # Sauvegarder l'embedding dans un fichier temporaire
-            with open(embedding_path, 'wb') as f:
-                pickle.dump(embedding, f)
+            # Sauvegarder l'embedding de manière sécurisée avec NumPy
+            # SÉCURITÉ: np.save est sûr, pickle.dump permet l'exécution de code arbitraire
+            np.save(embedding_path, embedding)
 
             logger.info(
                 f"[MODEL_CREATOR] 💾 Embedding sauvegardé: {embedding_path}"
@@ -444,7 +445,8 @@ class VoiceCloneModelCreator:
         )
 
         # Chemin de l'embedding avec nouvelle convention
-        embedding_filename = f"{user_id}_{profile_id}_{timestamp}.pkl"
+        # SÉCURITÉ: .npy au lieu de .pkl (numpy safe vs pickle unsafe)
+        embedding_filename = f"{user_id}_{profile_id}_{timestamp}.npy"
         embedding_path = str(user_dir / embedding_filename)
 
         # Créer le modèle avec les caractéristiques vocales du locuteur principal

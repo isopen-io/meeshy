@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 from typing import Dict, Optional
+from contextlib import asynccontextmanager
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -236,6 +237,39 @@ class RequestHandler:
         """
         for path in file_paths:
             self.cleanup_temp_file(path)
+
+    @asynccontextmanager
+    async def temp_audio_file(self, audio_base64: str, persist: bool = False):
+        """
+        STABILITÉ: Context manager pour gérer automatiquement le cycle de vie
+        des fichiers audio temporaires.
+
+        Usage:
+            async with request_handler.temp_audio_file(audio_base64) as temp_path:
+                # Utiliser temp_path
+                result = await process_audio(temp_path)
+            # Le fichier est automatiquement nettoyé, même en cas d'exception
+
+        Args:
+            audio_base64: Audio encodé en base64
+            persist: Si True, persiste dans temp_dir (pour async jobs)
+
+        Yields:
+            str: Chemin vers le fichier temporaire
+
+        Raises:
+            ValueError: Si le décodage échoue
+        """
+        temp_path = None
+        try:
+            temp_path = await self.save_audio_base64(audio_base64, persist)
+            logger.debug(f"[TEMP-MANAGER] 📁 Fichier créé: {temp_path}")
+            yield temp_path
+        finally:
+            # STABILITÉ: Nettoyage garanti même si exception
+            if temp_path and not persist:
+                self.cleanup_temp_file(temp_path)
+                logger.debug(f"[TEMP-MANAGER] 🗑️ Fichier nettoyé: {temp_path}")
 
     def extract_pagination_params(self, request_data: Dict) -> tuple[int, int]:
         """

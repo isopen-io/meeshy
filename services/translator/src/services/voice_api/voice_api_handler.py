@@ -186,25 +186,26 @@ class VoiceAPIHandler:
         source_language = request_data.get('sourceLanguage')
         generate_voice_clone = request_data.get('generateVoiceClone', True)
 
-        # Convert base64 to temp file if needed
-        temp_audio_path = None
+        # STABILITÉ: Utiliser context manager pour nettoyage automatique
         if audio_base64 and not audio_path:
-            temp_audio_path = await self.request_handler.save_audio_base64(audio_base64)
-            audio_path = temp_audio_path
+            async with self.request_handler.temp_audio_file(audio_base64) as temp_path:
+                return await self.operation_handlers.handle_translate(
+                    audio_path=temp_path,
+                    target_languages=target_languages,
+                    source_language=source_language,
+                    user_id=user_id,
+                    generate_voice_clone=generate_voice_clone
+                )
+            # Fichier automatiquement nettoyé après le with, même si exception
 
-        try:
-            # Execute translation
-            result = await self.operation_handlers.handle_translate(
-                audio_path=audio_path,
-                target_languages=target_languages,
-                source_language=source_language,
-                user_id=user_id,
-                generate_voice_clone=generate_voice_clone
-            )
-            return result
-        finally:
-            # Cleanup temp file
-            self.request_handler.cleanup_temp_file(temp_audio_path)
+        # Pas de conversion base64 nécessaire
+        return await self.operation_handlers.handle_translate(
+            audio_path=audio_path,
+            target_languages=target_languages,
+            source_language=source_language,
+            user_id=user_id,
+            generate_voice_clone=generate_voice_clone
+        )
 
     async def _handle_translate_async(self, request_data: Dict) -> VoiceAPIResult:
         """Handle asynchronous voice translation request"""

@@ -191,13 +191,16 @@ class TranslationPipelineService:
         transcription_service=None,
         voice_clone_service=None,
         tts_service=None,
-        translation_service=None
+        translation_service=None,
+        on_job_completed=None
     ):
         if self._initialized:
             return
 
         # Configuration
         self.max_concurrent_jobs = max_concurrent_jobs or int(os.getenv('MAX_CONCURRENT_JOBS', '10'))
+        # ROBUSTESSE: Limiter la queue pour éviter OOM en cas de pic de trafic
+        self.max_queue_size = int(os.getenv('MAX_QUEUE_SIZE', '1000'))
         self.audio_output_dir = Path(audio_output_dir or os.getenv('AUDIO_OUTPUT_DIR', './audio_output'))
         self.audio_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -206,6 +209,10 @@ class TranslationPipelineService:
         self.voice_clone_service = voice_clone_service
         self.tts_service = tts_service
         self.translation_service = translation_service
+
+        # CRITIQUE: Callback pour notifier quand un job est complété
+        # Utilisé pour publier via ZMQ PUB vers le Gateway
+        self.on_job_completed = on_job_completed
 
         # Queue de jobs (OrderedDict pour maintenir l'ordre)
         self._jobs: OrderedDict[str, TranslationJob] = OrderedDict()
@@ -270,8 +277,14 @@ class TranslationPipelineService:
             logger.info("[PIPELINE] 🔄 Initialisation du pipeline...")
 
             # Créer la queue et le semaphore
-            self._job_queue = asyncio.Queue()
+            # ROBUSTESSE: Queue limitée pour éviter OOM (Out Of Memory) si pic de trafic
+            self._job_queue = asyncio.Queue(maxsize=self.max_queue_size)
             self._worker_semaphore = asyncio.Semaphore(self.max_concurrent_jobs)
+
+            logger.info(
+                f"[PIPELINE] 📊 Queue configurée: max_size={self.max_queue_size}, "
+                f"max_workers={self.max_concurrent_jobs}"
+            )
 
             # Démarrer les workers
             self._running = True
@@ -513,7 +526,15 @@ class TranslationPipelineService:
 
             logger.info(f"[PIPELINE] ✅ Job terminé: {job_id} ({processing_time}ms)")
 
-            # Webhook callback
+            # CRITIQUE: Notifier via callback (pour publier via ZMQ PUB)
+            if self.on_job_completed:
+                try:
+                    await self.on_job_completed(job)
+                    logger.debug(f"[PIPELINE] 📤 Callback de complétion appelé pour {job_id}")
+                except Exception as e:
+                    logger.error(f"[PIPELINE] ❌ Erreur callback complétion: {e}")
+
+            # Webhook callback HTTP (optionnel)
             if job.webhook_url:
                 await self._send_webhook(job)
 
@@ -528,7 +549,15 @@ class TranslationPipelineService:
             job.completed_at = datetime.now()
             self._stats["jobs_failed"] += 1
 
-            # Webhook callback (erreur)
+            # CRITIQUE: Notifier via callback même en cas d'échec
+            if self.on_job_completed:
+                try:
+                    await self.on_job_completed(job)
+                    logger.debug(f"[PIPELINE] 📤 Callback d'échec appelé pour {job_id}")
+                except Exception as callback_error:
+                    logger.error(f"[PIPELINE] ❌ Erreur callback échec: {callback_error}")
+
+            # Webhook callback HTTP (erreur, optionnel)
             if job.webhook_url:
                 await self._send_webhook(job)
 

@@ -55,6 +55,13 @@ class VoiceHandler:
         if VOICE_PROFILE_HANDLER_AVAILABLE:
             self.voice_profile_handler = get_voice_profile_handler()
             logger.info("✅ [ZMQ] VoiceProfileHandler initialisé")
+
+    def is_voice_api_request(self, request_type: str) -> bool:
+        """Vérifie si le type de requête est une requête Voice API"""
+        if self.voice_api_handler and hasattr(self.voice_api_handler, 'is_voice_api_request'):
+            return self.voice_api_handler.is_voice_api_request(request_type)
+        return False
+
     async def _handle_voice_api_request(self, request_data: dict):
         """
         Traite une requête Voice API.
@@ -138,6 +145,45 @@ class VoiceHandler:
             if self.pub_socket:
                 await self.pub_socket.send(json.dumps(error_response).encode('utf-8'))
 
+    async def _on_translation_job_completed(self, job):
+        """
+        CRITIQUE: Callback appelé par TranslationPipelineService quand un job est terminé.
+        Publie le résultat via ZMQ PUB vers le Gateway.
+
+        Args:
+            job: TranslationJob complété ou échoué
+        """
+        try:
+            # Formater le résultat pour le Gateway
+            response = {
+                'type': 'voice_translation_completed' if job.status.value == 'completed' else 'voice_translation_failed',
+                'jobId': job.id,
+                'status': job.status.value,
+                'userId': job.user_id,
+                'timestamp': time.time()
+            }
+
+            if job.status.value == 'completed' and job.result:
+                response['result'] = job.result
+            elif job.error:
+                response['error'] = job.error
+                response['errorCode'] = job.error_code
+
+            # Publier via ZMQ PUB
+            if self.pub_socket:
+                await self.pub_socket.send(json.dumps(response).encode('utf-8'))
+                logger.info(
+                    f"📤 [TRANSLATOR] Translation job completed: {job.id} "
+                    f"(status={job.status.value})"
+                )
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour publier résultat du job")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication résultat job: {e}")
+            import traceback
+            traceback.print_exc()
+
     def set_voice_api_services(
         self,
         transcription_service=None,
@@ -160,7 +206,33 @@ class VoiceHandler:
             self.voice_api_handler.voice_analyzer = voice_analyzer
             self.voice_api_handler.translation_pipeline = translation_pipeline
             self.voice_api_handler.analytics_service = analytics_service
+
+            # CRITIQUE: Injecter également dans les handlers imbriqués
+            if hasattr(self.voice_api_handler, 'operation_handlers') and self.voice_api_handler.operation_handlers:
+                self.voice_api_handler.operation_handlers.transcription_service = transcription_service
+                self.voice_api_handler.operation_handlers.translation_service = translation_service
+                self.voice_api_handler.operation_handlers.voice_clone_service = voice_clone_service
+                self.voice_api_handler.operation_handlers.tts_service = tts_service
+                self.voice_api_handler.operation_handlers.voice_analyzer = voice_analyzer
+                self.voice_api_handler.operation_handlers.translation_pipeline = translation_pipeline
+                self.voice_api_handler.operation_handlers.analytics_service = analytics_service
+                logger.info("✅ [ZMQ] OperationHandlers services configurés")
+
+            if hasattr(self.voice_api_handler, 'system_handlers') and self.voice_api_handler.system_handlers:
+                self.voice_api_handler.system_handlers.transcription_service = transcription_service
+                self.voice_api_handler.system_handlers.translation_service = translation_service
+                self.voice_api_handler.system_handlers.voice_clone_service = voice_clone_service
+                self.voice_api_handler.system_handlers.tts_service = tts_service
+                self.voice_api_handler.system_handlers.translation_pipeline = translation_pipeline
+                self.voice_api_handler.system_handlers.analytics_service = analytics_service
+                logger.info("✅ [ZMQ] SystemHandlers services configurés")
+
             logger.info("✅ [ZMQ] Voice API services configurés")
+
+        # CRITIQUE: Configurer le callback pour le translation_pipeline
+        if translation_pipeline and hasattr(translation_pipeline, 'on_job_completed'):
+            translation_pipeline.on_job_completed = self._on_translation_job_completed
+            logger.info("✅ [ZMQ] Translation pipeline callback configuré pour notifications ZMQ")
 
         # Also configure voice profile handler
         if self.voice_profile_handler:
