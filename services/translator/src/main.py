@@ -74,9 +74,9 @@ try:
     get_unified_tts_service = get_tts_service
     UnifiedTTSService = TTSService
     UNIFIED_TTS_AVAILABLE = True
-    logger.info("[TRANSLATOR] ✅ Service TTS unifié importé avec succès")
+    print("[TRANSLATOR] ✅ Service TTS unifié importé avec succès")
 except ImportError as e:
-    logger.error(f"[TRANSLATOR] ❌ CRITIQUE: Échec import TTS unifié: {e}")
+    print(f"[TRANSLATOR] ❌ CRITIQUE: Échec import TTS unifié: {e}")
     import traceback
     traceback.print_exc()
 
