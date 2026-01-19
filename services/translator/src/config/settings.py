@@ -195,15 +195,29 @@ class Settings:
 
     def ensure_model_directories(self):
         """Crée les répertoires de modèles s'ils n'existent pas"""
-        for path in [
-            self.models_path,
-            self.huggingface_cache_path,
-            self.openvoice_checkpoints_path,
-            self.xtts_models_path,
-            self.whisper_models_path,
-            self.voice_models_path
-        ]:
+        print("\n" + "="*80)
+        print("📦 CHEMINS DE TÉLÉCHARGEMENT DES MODÈLES ML")
+        print("="*80)
+
+        paths_info = [
+            ("Répertoire principal", self.models_path),
+            ("HuggingFace (TTS, Traduction)", self.huggingface_cache_path),
+            ("Whisper (STT)", self.whisper_models_path),
+            ("OpenVoice (Clonage)", self.openvoice_checkpoints_path),
+            ("XTTS v2 (Legacy)", self.xtts_models_path),
+            ("Voice Cache", self.voice_models_path),
+        ]
+
+        for name, path in paths_info:
             os.makedirs(path, exist_ok=True)
+            print(f"  {name:30} → {path}")
+
+        # Afficher aussi les variables d'environnement HuggingFace
+        print(f"\n🔧 Variables d'environnement:")
+        print(f"  {'HF_HOME':30} → {os.getenv('HF_HOME', 'NOT SET')}")
+        print(f"  {'TRANSFORMERS_CACHE':30} → {os.getenv('TRANSFORMERS_CACHE', 'NOT SET')}")
+        print(f"  {'TORCH_HOME':30} → {os.getenv('TORCH_HOME', 'NOT SET')}")
+        print("="*80 + "\n")
 
     @property
     def supported_languages_list(self):

@@ -120,6 +120,8 @@ class MeeshyTranslationServer:
 
     def __init__(self):
         self.settings = Settings()
+        # Afficher et créer les répertoires de modèles
+        self.settings.ensure_model_directories()
         self.translation_service = None
         self.zmq_server = None
         self.translation_api = None
