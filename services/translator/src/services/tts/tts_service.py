@@ -73,6 +73,9 @@ class UnifiedTTSService:
         self.default_format = os.getenv("TTS_DEFAULT_FORMAT", self._settings.tts_default_format)
         self.models_path = Path(self._settings.models_path)
 
+        # NOUVEAU: Timeout configurable
+        self.download_timeout = int(os.getenv("TTS_DOWNLOAD_TIMEOUT", "120"))
+
         # Modules spécialisés
         self.model_manager = ModelManager(device=self.device, models_path=self.models_path)
         self.language_router = LanguageRouter(model_manager=self.model_manager)
@@ -97,16 +100,18 @@ class UnifiedTTSService:
         Initialise le service avec le modèle spécifié.
 
         Logique NON-BLOQUANTE:
-        1. Cherche un modèle disponible localement (priorité: demandé > chatterbox > autres)
-        2. Si trouvé → le charger immédiatement
-        3. Télécharge les modèles manquants en ARRIÈRE-PLAN
-        4. Si aucun modèle local → mode "pending" jusqu'à fin du premier téléchargement
+        1. Vérifier qu'au moins un package TTS est installé
+        2. Chercher un modèle disponible localement (priorité: demandé > chatterbox > autres)
+        3. Si trouvé → le charger immédiatement
+        4. Télécharger les modèles manquants en ARRIÈRE-PLAN
+        5. Si aucun modèle local → mode "pending" jusqu'à fin du premier téléchargement
 
         Args:
             model: Modèle à initialiser (optionnel)
 
         Returns:
-            True si l'initialisation a réussi
+            True si au moins un backend est disponible (package installé),
+            False si aucun backend TTS n'est installable
         """
         model = model or self.requested_model
 
@@ -117,6 +122,24 @@ class UnifiedTTSService:
                 self.model_manager.active_backend.is_initialized):
                 self.is_initialized = True
                 return True
+
+            # ÉTAPE 0: VÉRIFIER QU'AU MOINS UN PACKAGE TTS EST INSTALLÉ
+            # =========================================================
+            try:
+                available_backends = await self.model_manager.get_available_backends()
+            except Exception as e:
+                logger.error(f"[TTS] ❌ Erreur lors de la vérification des backends: {e}")
+                available_backends = []
+
+            if not available_backends:
+                logger.error(
+                    "[TTS] ❌ AUCUN package TTS installé ! "
+                    "Installez au moins : pip install chatterbox-tts"
+                )
+                self.is_initialized = False
+                return False
+
+            logger.info(f"[TTS] ✅ Backends TTS disponibles: {[b.value for b in available_backends]}")
 
             # ÉTAPE 1: Trouver un modèle disponible localement
             local_model = await self.model_manager.find_local_model(model)
@@ -131,16 +154,42 @@ class UnifiedTTSService:
                         self.model_manager.download_models_background(model)
                     )
                     self.is_initialized = True
+                    logger.info(f"[TTS] ✅ Modèle {local_model.value} chargé et prêt")
                     return True
 
             # ÉTAPE 2: Aucun modèle local - téléchargement en arrière-plan
             logger.warning("[TTS] ⚠️ Aucun modèle TTS disponible localement")
+
+            # Vérifier que le modèle demandé a un package disponible
+            if model not in available_backends and TTSModel.CHATTERBOX not in available_backends:
+                logger.error(
+                    f"[TTS] ❌ Package requis non installé pour {model.value}. "
+                    "Installez : pip install chatterbox-tts"
+                )
+                self.is_initialized = False
+                return False
+
             logger.info("[TTS] 📥 Démarrage des téléchargements en arrière-plan...")
 
             # Lancer les téléchargements en arrière-plan
             asyncio.create_task(
                 self.model_manager.download_and_load_first_available(model)
             )
+
+            # NOUVEAU: Attendre un peu pour voir si le téléchargement démarre
+            try:
+                await asyncio.wait_for(
+                    self.model_manager.wait_for_download_start(),
+                    timeout=10.0
+                )
+                logger.info("[TTS] ✅ Téléchargement démarré avec succès")
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[TTS] ⚠️ Le téléchargement n'a pas démarré rapidement. "
+                    "Vérifiez la connexion internet et l'espace disque."
+                )
+            except Exception as e:
+                logger.warning(f"[TTS] ⚠️ Erreur lors du démarrage du téléchargement: {e}")
 
             # Service démarre en mode "pending"
             self.is_initialized = True
@@ -239,20 +288,30 @@ class UnifiedTTSService:
                     f"utilisation de {self.model_manager.active_model.value if self.model_manager.active_model else 'pending'}"
                 )
 
-        # Attendre qu'un modèle soit disponible (mode pending)
+        # NOUVELLE LOGIQUE: Attendre avec événements au lieu de polling
         if not self.model_manager.active_backend:
             logger.info("[TTS] ⏳ Attente d'un modèle TTS (téléchargement en cours)...")
-            waited = 0
-            while not self.model_manager.active_backend and waited < max_wait_seconds:
-                await asyncio.sleep(2)
-                waited += 2
-                if waited % 10 == 0:
-                    logger.info(f"[TTS] ⏳ Attente modèle TTS... ({waited}s)")
+
+            try:
+                # Attendre l'événement de modèle prêt (bloquant mais efficace)
+                await self.model_manager.wait_for_model_ready(timeout=max_wait_seconds)
+                logger.info("[TTS] ✅ Modèle TTS prêt")
+            except RuntimeError as e:
+                # Le téléchargement a échoué
+                raise RuntimeError(
+                    f"TTS non disponible: {e}. "
+                    "Vérifiez que les packages sont installés : pip install chatterbox-tts"
+                )
+            except asyncio.TimeoutError:
+                raise RuntimeError(
+                    f"Timeout TTS après {max_wait_seconds}s. "
+                    "Le modèle n'est pas encore téléchargé. Réessayez dans quelques minutes."
+                )
 
         if not self.model_manager.active_backend:
             raise RuntimeError(
-                f"Aucun backend TTS disponible après {max_wait_seconds}s. "
-                "Vérifiez la connexion internet et l'espace disque."
+                "Backend TTS non disponible. "
+                "Vérifiez les logs pour plus de détails."
             )
 
         # Synthétiser avec le backend actif

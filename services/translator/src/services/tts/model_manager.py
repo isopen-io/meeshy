@@ -78,6 +78,11 @@ class ModelManager:
         # Téléchargements en arrière-plan
         self._background_downloads: Dict['TTSModel', asyncio.Task] = {}
 
+        # NOUVEAU: Events pour signaler qu'un modèle est prêt
+        self._model_ready_event = asyncio.Event()
+        self._download_failed = False
+        self._download_error: Optional[str] = None
+
         logger.info(f"[ModelManager] Initialisé: device={device}, path={self.models_path}")
 
     def create_backend(self, model: 'TTSModel') -> BaseTTSBackend:
@@ -89,23 +94,36 @@ class ModelManager:
 
         Returns:
             Instance du backend correspondant
+
+        Raises:
+            RuntimeError: Si le package Python requis n'est pas installé
         """
         from .models import TTSModel
 
         if model == TTSModel.CHATTERBOX:
-            return ChatterboxBackend(device=self.device, turbo=False)
+            backend = ChatterboxBackend(device=self.device, turbo=False)
         elif model == TTSModel.CHATTERBOX_TURBO:
-            return ChatterboxBackend(device=self.device, turbo=True)
+            backend = ChatterboxBackend(device=self.device, turbo=True)
         elif model == TTSModel.HIGGS_AUDIO_V2:
-            return HiggsAudioBackend(device=self.device)
+            backend = HiggsAudioBackend(device=self.device)
         elif model == TTSModel.XTTS_V2:
-            return XTTSBackend(device=self.device)
+            backend = XTTSBackend(device=self.device)
         elif model == TTSModel.MMS:
-            return MMSBackend(device=self.device)
+            backend = MMSBackend(device=self.device)
         elif model == TTSModel.VITS:
-            return VITSBackend(device=self.device)
+            backend = VITSBackend(device=self.device)
         else:
             raise ValueError(f"Modèle inconnu: {model}")
+
+        # NOUVEAU: Vérifier que le package est installé
+        if not backend.is_available:
+            install_cmd = self._get_install_command(model)
+            raise RuntimeError(
+                f"Package Python requis non installé pour {model.value}. "
+                f"Installez avec : pip install {install_cmd}"
+            )
+
+        return backend
 
     def get_backend(self, model: 'TTSModel') -> BaseTTSBackend:
         """
@@ -155,6 +173,83 @@ class ModelManager:
         for model in TTSModel:
             statuses[model.value] = await self.get_model_status(model)
         return statuses
+
+    async def get_available_backends(self) -> list:
+        """
+        Retourne la liste des backends TTS dont les packages sont installés.
+
+        Returns:
+            Liste des TTSModel disponibles (packages installés)
+        """
+        from .models import TTSModel
+
+        available = []
+
+        for model in TTSModel:
+            backend = self.get_backend(model)
+            if backend.is_available:
+                available.append(model)
+
+        logger.debug(f"[ModelManager] Backends disponibles: {[m.value for m in available]}")
+        return available
+
+    async def wait_for_download_start(self, timeout: float = 10.0):
+        """
+        Attend qu'un téléchargement démarre.
+        Utilisé pour vérifier que le téléchargement en arrière-plan fonctionne.
+
+        Args:
+            timeout: Timeout en secondes
+
+        Raises:
+            asyncio.TimeoutError: Si aucun téléchargement ne démarre
+        """
+        start_time = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() - start_time < timeout:
+            # Vérifier si un backend est en téléchargement
+            for backend in self.backends.values():
+                if backend.is_downloading:
+                    logger.debug("[ModelManager] Téléchargement détecté")
+                    return
+
+            # Vérifier si un modèle a été chargé
+            if self.active_backend:
+                logger.debug("[ModelManager] Modèle chargé détecté")
+                return
+
+            await asyncio.sleep(0.5)
+
+        raise asyncio.TimeoutError("Aucun téléchargement n'a démarré")
+
+    async def wait_for_model_ready(self, timeout: float = 120.0) -> bool:
+        """
+        Attend qu'un modèle soit prêt ou que le téléchargement échoue.
+
+        Args:
+            timeout: Timeout en secondes
+
+        Returns:
+            True si un modèle est prêt, False si échec
+
+        Raises:
+            asyncio.TimeoutError: Si timeout atteint
+            RuntimeError: Si le téléchargement échoue
+        """
+        try:
+            await asyncio.wait_for(self._model_ready_event.wait(), timeout=timeout)
+
+            if self._download_failed:
+                raise RuntimeError(self._download_error or "Téléchargement TTS échoué")
+
+            return self.active_backend is not None
+
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Timeout après {timeout}s. "
+                "Le téléchargement TTS n'a pas abouti. "
+                "Vérifiez la connexion internet et l'espace disque."
+            )
 
     def get_available_disk_space_gb(self) -> float:
         """
@@ -324,6 +419,19 @@ class ModelManager:
         """
         from .models import TTSModel
 
+        # NOUVEAU: Vérifier l'espace disque global d'abord
+        available_space = self.get_available_disk_space_gb()
+        if available_space < self.MIN_DISK_SPACE_GB:
+            error_msg = (
+                f"Espace disque insuffisant: {available_space:.2f}GB disponible, "
+                f"au moins {self.MIN_DISK_SPACE_GB}GB requis"
+            )
+            logger.error(f"[ModelManager] ❌ {error_msg}")
+            self._download_failed = True
+            self._download_error = error_msg
+            self._model_ready_event.set()
+            return
+
         # Priorité: modèle demandé, puis Chatterbox
         models_to_try = [preferred]
         if preferred != TTSModel.CHATTERBOX:
@@ -351,12 +459,18 @@ class ModelManager:
 
                     if load_success:
                         logger.info(f"[ModelManager] ✅ Premier modèle prêt: {model.value}")
+                        # NOUVEAU: Signaler que le modèle est prêt
+                        self._model_ready_event.set()
                         return
 
             except Exception as e:
                 logger.error(f"[ModelManager] ❌ Erreur téléchargement {model.value}: {e}")
                 continue
 
+        # NOUVEAU: Signaler l'échec
+        self._download_failed = True
+        self._download_error = "Impossible de télécharger/charger un modèle TTS"
+        self._model_ready_event.set()  # Débloquer les attentes
         logger.error("[ModelManager] ❌ Impossible de télécharger/charger un modèle TTS!")
 
     async def download_models_background(self, preferred: 'TTSModel'):
@@ -427,6 +541,21 @@ class ModelManager:
 
             # Attendre un peu entre chaque téléchargement pour éviter surcharge
             await asyncio.sleep(30)
+
+    def _get_install_command(self, model: 'TTSModel') -> str:
+        """Retourne la commande pip pour installer le package requis."""
+        from .models import TTSModel
+
+        install_commands = {
+            TTSModel.CHATTERBOX: "chatterbox-tts",
+            TTSModel.CHATTERBOX_TURBO: "chatterbox-tts",
+            TTSModel.HIGGS_AUDIO_V2: "higgs-audio",
+            TTSModel.XTTS_V2: "TTS",
+            TTSModel.MMS: "transformers[torch]",
+            TTSModel.VITS: "vits",
+        }
+
+        return install_commands.get(model, "chatterbox-tts")
 
     async def close(self):
         """Libère les ressources de tous les backends."""
