@@ -307,7 +307,60 @@ export const messageAttachmentSchema = {
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' }
+    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' },
+
+    // ===== TRANSCRIPTION & TRANSLATION (Generic) =====
+    // Ces champs permettent d'afficher les transcriptions et traductions
+    // sans avoir à faire une requête séparée pour chaque attachment
+    transcriptionText: {
+      type: 'string',
+      nullable: true,
+      description: 'Texte de transcription simple (tous types: audio, video, document, image)'
+    },
+    transcription: {
+      type: 'object',
+      nullable: true,
+      description: 'Objet de transcription complet avec métadonnées',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['audio', 'video', 'document', 'image'],
+          description: 'Type de transcription'
+        },
+        transcribedText: { type: 'string', description: 'Texte transcrit' },
+        language: { type: 'string', description: 'Langue détectée (ISO 639-1)' },
+        confidence: { type: 'number', nullable: true, description: 'Score de confiance (0-1)' },
+        source: { type: 'string', nullable: true, description: 'Source du modèle (whisper, etc.)' },
+        model: { type: 'string', nullable: true, description: 'Modèle utilisé' },
+        segments: { type: 'array', nullable: true, description: 'Segments avec timestamps' },
+        audioDurationMs: { type: 'number', nullable: true, description: 'Durée audio (ms)' },
+        speakerCount: { type: 'number', nullable: true, description: 'Nombre de locuteurs' },
+        primarySpeakerId: { type: 'string', nullable: true, description: 'ID locuteur principal' }
+      }
+    },
+    translationsJson: {
+      type: 'object',
+      nullable: true,
+      description: 'Traductions disponibles (clé = langue cible)',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['audio', 'text', 'document'],
+            description: 'Type de traduction'
+          },
+          targetLanguage: { type: 'string', description: 'Langue cible (ISO 639-1)' },
+          translatedText: { type: 'string', nullable: true, description: 'Texte traduit' },
+          audioUrl: { type: 'string', nullable: true, description: 'URL audio traduit' },
+          durationMs: { type: 'number', nullable: true, description: 'Durée (ms)' },
+          voiceCloned: { type: 'boolean', nullable: true, description: 'Voix clonée' },
+          voiceQuality: { type: 'number', nullable: true, description: 'Qualité voix (0-1)' },
+          ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS utilisé' },
+          format: { type: 'string', nullable: true, description: 'Format audio (mp3, etc.)' }
+        }
+      }
+    }
   }
 } as const;
 
@@ -381,6 +434,32 @@ export const messageSchema = {
 
     // Encryption (encryptionMode is only on Conversation)
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
+    encryptedContent: {
+      type: 'string',
+      nullable: true,
+      description: 'Base64 encoded ciphertext for E2EE messages'
+    },
+    encryptionMetadata: {
+      type: 'object',
+      nullable: true,
+      description: 'Encryption metadata (IV, auth tag, key version)',
+      additionalProperties: true
+    },
+
+    // View-once limit
+    maxViewOnceCount: {
+      type: 'number',
+      nullable: true,
+      description: 'Maximum unique viewers allowed for view-once messages'
+    },
+
+    // Delivery status (extended)
+    receivedByAllAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Received by all recipients timestamp'
+    },
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Message creation timestamp' },
@@ -622,6 +701,19 @@ export const conversationSchema = {
       description: 'Encryption mode'
     },
     encryptionEnabledAt: { type: 'string', format: 'date-time', nullable: true, description: 'Encryption enabled timestamp' },
+    serverEncryptionKeyId: {
+      type: 'string',
+      nullable: true,
+      description: 'Server-side encryption key ID for key rotation'
+    },
+
+    // Permissions & Restrictions
+    isAnnouncementChannel: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Announcement-only mode (only creator/admins can write)',
+      default: false
+    },
 
     // Statistics
     stats: { ...conversationStatsSchema, nullable: true, description: 'Conversation statistics' },
