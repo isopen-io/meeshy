@@ -149,16 +149,27 @@ class ModelManager:
         Returns:
             Statut détaillé du modèle
         """
-        backend = self.get_backend(model)
-
-        return ModelStatus(
-            model=model,
-            is_available=backend.is_available,
-            is_downloaded=backend.is_model_downloaded(),
-            is_loaded=backend.is_initialized,
-            is_downloading=backend.is_downloading,
-            download_progress=backend.download_progress
-        )
+        try:
+            backend = self.get_backend(model)
+            return ModelStatus(
+                model=model,
+                is_available=backend.is_available,
+                is_downloaded=backend.is_model_downloaded(),
+                is_loaded=backend.is_initialized,
+                is_downloading=backend.is_downloading,
+                download_progress=backend.download_progress
+            )
+        except Exception as e:
+            # Backend non disponible (package non installé)
+            logger.debug(f"[ModelManager] Backend {model.value} non disponible: {e}")
+            return ModelStatus(
+                model=model,
+                is_available=False,
+                is_downloaded=False,
+                is_loaded=False,
+                is_downloading=False,
+                download_progress=0.0
+            )
 
     async def get_all_models_status(self) -> Dict[str, ModelStatus]:
         """
@@ -326,11 +337,16 @@ class ModelManager:
         priority_order = [m for m in priority_order if not (m in seen or seen.add(m))]
 
         for model in priority_order:
-            backend = self.get_backend(model)
+            try:
+                backend = self.get_backend(model)
 
-            if backend.is_available and backend.is_model_downloaded():
-                logger.info(f"[ModelManager] ✅ Modèle local trouvé: {model.value}")
-                return model
+                if backend.is_available and backend.is_model_downloaded():
+                    logger.info(f"[ModelManager] ✅ Modèle local trouvé: {model.value}")
+                    return model
+            except Exception as e:
+                # Backend non disponible, continuer avec le suivant
+                logger.debug(f"[ModelManager] Backend {model.value} non disponible: {e}")
+                continue
 
         logger.warning("[ModelManager] ⚠️ Aucun modèle disponible localement")
         return None
@@ -348,7 +364,12 @@ class ModelManager:
         """
         from .models import TTS_MODEL_INFO
 
-        backend = self.get_backend(model)
+        try:
+            backend = self.get_backend(model)
+        except Exception as e:
+            logger.warning(f"[ModelManager] ❌ Backend {model.value} non disponible: {e}")
+            return False
+
         model_info = TTS_MODEL_INFO[model]
 
         # Afficher l'alerte de licence si nécessaire
@@ -384,7 +405,11 @@ class ModelManager:
         Returns:
             True si le téléchargement a réussi
         """
-        backend = self.get_backend(model)
+        try:
+            backend = self.get_backend(model)
+        except Exception as e:
+            logger.warning(f"[ModelManager] ❌ Backend {model.value} non disponible: {e}")
+            return False
 
         if not backend.is_available:
             logger.warning(f"[ModelManager] Package {model.value} non disponible")
@@ -443,7 +468,11 @@ class ModelManager:
             models_to_try.append(TTSModel.CHATTERBOX)
 
         for model in models_to_try:
-            backend = self.get_backend(model)
+            try:
+                backend = self.get_backend(model)
+            except Exception as e:
+                logger.warning(f"[ModelManager] Backend {model.value} non disponible: {e}")
+                continue
 
             if not backend.is_available:
                 logger.warning(f"[ModelManager] Package {model.value} non disponible, skip")
@@ -511,7 +540,12 @@ class ModelManager:
             if model in self._background_downloads:
                 continue
 
-            backend = self.get_backend(model)
+            try:
+                backend = self.get_backend(model)
+            except Exception as e:
+                # Package non installé ou backend non disponible
+                logger.debug(f"[ModelManager] Backend {model.value} non disponible: {e}")
+                continue
 
             # Vérifier si le modèle est déjà téléchargé
             if backend.is_model_downloaded():
