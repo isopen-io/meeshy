@@ -832,40 +832,6 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
       }
 
-      // 3.5. Sauvegarder les traductions textuelles dans MessageTranslation
-      // Cela permet d'afficher les traductions dans l'interface utilisateur
-      logger.info(`   📝 Sauvegarde des traductions textuelles...`);
-      for (const translatedAudio of data.translatedAudios) {
-        try {
-          await this.prisma.messageTranslation.upsert({
-            where: {
-              messageId_targetLanguage: {
-                messageId: data.messageId,
-                targetLanguage: translatedAudio.targetLanguage
-              }
-            },
-            update: {
-              translatedContent: translatedAudio.translatedText,
-              translationModel: 'audio_translation',
-              confidenceScore: data.transcription.confidence,
-              updatedAt: new Date()
-            },
-            create: {
-              messageId: data.messageId,
-              targetLanguage: translatedAudio.targetLanguage,
-              translatedContent: translatedAudio.translatedText,
-              translationModel: 'audio_translation',
-              confidenceScore: data.transcription.confidence
-            }
-          });
-
-          logger.info(`   ✅ Traduction textuelle sauvegardée: ${translatedAudio.targetLanguage}`);
-        } catch (translationError) {
-          logger.error(`   ⚠️ Erreur sauvegarde traduction textuelle (${translatedAudio.targetLanguage}): ${translationError}`);
-          // Ne pas faire échouer le traitement principal
-        }
-      }
-
       // 4. Sauvegarder le nouveau profil vocal si créé par Translator
       if (data.newVoiceProfile) {
         try {
