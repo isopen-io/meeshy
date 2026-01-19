@@ -99,19 +99,22 @@ class UnifiedTTSService:
         """
         Initialise le service avec le modèle spécifié.
 
-        Logique NON-BLOQUANTE:
+        Logique d'initialisation:
         1. Vérifier qu'au moins un package TTS est installé
         2. Chercher un modèle disponible localement (priorité: demandé > chatterbox > autres)
-        3. Si trouvé → le charger immédiatement
-        4. Télécharger les modèles manquants en ARRIÈRE-PLAN
-        5. Si aucun modèle local → mode "pending" jusqu'à fin du premier téléchargement
+        3. Si modèle local trouvé → le charger immédiatement + télécharger autres modèles en arrière-plan
+        4. Si aucun modèle local → TÉLÉCHARGEMENT BLOQUANT du premier modèle (5 min timeout)
+        5. Une fois le premier modèle chargé → autres modèles téléchargés en arrière-plan
+
+        IMPORTANT: Cette méthode BLOQUE au démarrage si aucun modèle n'est disponible localement,
+        pour garantir qu'au moins un modèle TTS est prêt avant que le service n'accepte des requêtes.
 
         Args:
             model: Modèle à initialiser (optionnel)
 
         Returns:
-            True si au moins un backend est disponible (package installé),
-            False si aucun backend TTS n'est installable
+            True si un modèle est chargé et prêt,
+            False si échec (package manquant, espace disque, timeout)
         """
         model = model or self.requested_model
 
@@ -157,7 +160,7 @@ class UnifiedTTSService:
                     logger.info(f"[TTS] ✅ Modèle {local_model.value} chargé et prêt")
                     return True
 
-            # ÉTAPE 2: Aucun modèle local - téléchargement en arrière-plan
+            # ÉTAPE 2: Aucun modèle local - téléchargement BLOQUANT au démarrage
             logger.warning("[TTS] ⚠️ Aucun modèle TTS disponible localement")
 
             # Vérifier que le modèle demandé a un package disponible
@@ -169,33 +172,55 @@ class UnifiedTTSService:
                 self.is_initialized = False
                 return False
 
-            logger.info("[TTS] 📥 Démarrage des téléchargements en arrière-plan...")
+            logger.info("[TTS] 📥 Téléchargement et chargement du premier modèle TTS...")
+            logger.info("[TTS] ⏳ Cette opération peut prendre quelques minutes (téléchargement 2-3 GB)...")
 
-            # Lancer les téléchargements en arrière-plan
-            asyncio.create_task(
-                self.model_manager.download_and_load_first_available(model)
-            )
-
-            # NOUVEAU: Attendre un peu pour voir si le téléchargement démarre
+            # CRITIQUE: Télécharger et charger le premier modèle de façon BLOQUANTE
+            # au lieu de lancer en arrière-plan. Cela garantit qu'un modèle est prêt
+            # avant que le service ne démarre à accepter des requêtes.
             try:
+                # Timeout plus long pour le téléchargement initial (5 minutes)
+                timeout = int(os.getenv("TTS_INITIAL_DOWNLOAD_TIMEOUT", "300"))
+
                 await asyncio.wait_for(
-                    self.model_manager.wait_for_download_start(),
-                    timeout=10.0
+                    self.model_manager.download_and_load_first_available(model),
+                    timeout=timeout
                 )
-                logger.info("[TTS] ✅ Téléchargement démarré avec succès")
+
+                # Vérifier que le modèle a bien été chargé
+                if self.model_manager.active_backend and self.model_manager.active_backend.is_initialized:
+                    logger.info(
+                        f"[TTS] ✅ Premier modèle TTS chargé: {self.model_manager.active_model.value}"
+                    )
+
+                    # Lancer le téléchargement des autres modèles en arrière-plan
+                    asyncio.create_task(
+                        self.model_manager.download_models_background(model)
+                    )
+
+                    self.is_initialized = True
+                    return True
+                else:
+                    logger.error(
+                        "[TTS] ❌ Le modèle TTS n'a pas pu être chargé. "
+                        "Vérifiez l'espace disque et la connexion internet."
+                    )
+                    self.is_initialized = False
+                    return False
+
             except asyncio.TimeoutError:
-                logger.warning(
-                    "[TTS] ⚠️ Le téléchargement n'a pas démarré rapidement. "
-                    "Vérifiez la connexion internet et l'espace disque."
+                logger.error(
+                    f"[TTS] ❌ Timeout après {timeout}s lors du téléchargement initial. "
+                    "Le modèle TTS n'est pas prêt. Vérifiez la connexion internet et l'espace disque."
                 )
+                self.is_initialized = False
+                return False
             except Exception as e:
-                logger.warning(f"[TTS] ⚠️ Erreur lors du démarrage du téléchargement: {e}")
-
-            # Service démarre en mode "pending"
-            self.is_initialized = True
-            logger.info("[TTS] ⏳ Service TTS démarré en mode pending (téléchargement en cours)")
-
-            return True
+                logger.error(f"[TTS] ❌ Erreur lors du téléchargement initial: {e}")
+                import traceback
+                traceback.print_exc()
+                self.is_initialized = False
+                return False
 
     async def switch_model(self, model: TTSModel, force: bool = False) -> bool:
         """
