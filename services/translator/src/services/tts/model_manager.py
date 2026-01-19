@@ -186,9 +186,14 @@ class ModelManager:
         available = []
 
         for model in TTSModel:
-            backend = self.get_backend(model)
-            if backend.is_available:
-                available.append(model)
+            try:
+                backend = self.get_backend(model)
+                if backend.is_available:
+                    available.append(model)
+            except Exception as e:
+                # Ignorer les backends qui échouent à l'instanciation
+                logger.debug(f"[ModelManager] Backend {model.value} non disponible: {e}")
+                continue
 
         logger.debug(f"[ModelManager] Backends disponibles: {[m.value for m in available]}")
         return available
