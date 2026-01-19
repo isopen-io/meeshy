@@ -24,7 +24,9 @@ import type {
   VoiceProfileCompareResult,
   VoiceProfileErrorEvent,
   TranscriptionCompletedEvent,
-  TranscriptionErrorEvent
+  TranscriptionErrorEvent,
+  VoiceTranslationCompletedEvent,
+  VoiceTranslationFailedEvent
 } from './types';
 
 export interface MessageHandlerStats {
@@ -37,6 +39,8 @@ export interface MessageHandlerStats {
   transcriptionCompleted: number;
   transcriptionErrors: number;
   multipartMessages: number;
+  voiceTranslationCompleted: number;
+  voiceTranslationFailed: number;
 }
 
 export class ZmqMessageHandler extends EventEmitter {
@@ -51,7 +55,9 @@ export class ZmqMessageHandler extends EventEmitter {
     voiceEvents: 0,
     transcriptionCompleted: 0,
     transcriptionErrors: 0,
-    multipartMessages: 0
+    multipartMessages: 0,
+    voiceTranslationCompleted: 0,
+    voiceTranslationFailed: 0
   };
 
   /**
@@ -150,6 +156,14 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'transcription_error':
         this.handleTranscriptionError(event as unknown as TranscriptionErrorEvent);
+        break;
+
+      case 'voice_translation_completed':
+        this.handleVoiceTranslationCompleted(event as unknown as VoiceTranslationCompletedEvent);
+        break;
+
+      case 'voice_translation_failed':
+        this.handleVoiceTranslationFailed(event as unknown as VoiceTranslationFailedEvent);
         break;
 
       case 'pong':
@@ -458,6 +472,47 @@ export class ZmqMessageHandler extends EventEmitter {
   }
 
   /**
+   * Gère un événement de job de traduction audio terminé
+   */
+  private handleVoiceTranslationCompleted(event: VoiceTranslationCompletedEvent): void {
+    console.log(`[GATEWAY] 🎤 Voice translation job completed: ${event.jobId}`);
+    if (event.result) {
+      console.log(`[GATEWAY]    📝 Original: ${event.result.original_text.substring(0, 50)}...`);
+      console.log(`[GATEWAY]    🌍 Traductions: ${Object.keys(event.result.translations).join(', ')}`);
+    }
+
+    this.stats.voiceTranslationCompleted++;
+
+    // Émettre l'événement de job terminé
+    this.emit('voiceTranslationCompleted', {
+      jobId: event.jobId,
+      status: event.status,
+      userId: event.userId,
+      timestamp: event.timestamp,
+      result: event.result
+    });
+  }
+
+  /**
+   * Gère un événement de job de traduction audio échoué
+   */
+  private handleVoiceTranslationFailed(event: VoiceTranslationFailedEvent): void {
+    console.error(`[GATEWAY] ❌ Voice translation job failed: ${event.jobId} - ${event.error}`);
+
+    this.stats.voiceTranslationFailed++;
+
+    // Émettre l'événement de job échoué
+    this.emit('voiceTranslationFailed', {
+      jobId: event.jobId,
+      status: event.status,
+      userId: event.userId,
+      timestamp: event.timestamp,
+      error: event.error,
+      errorCode: event.errorCode
+    });
+  }
+
+  /**
    * Récupère les statistiques du handler
    */
   getStats(): MessageHandlerStats {
@@ -477,7 +532,9 @@ export class ZmqMessageHandler extends EventEmitter {
       voiceEvents: 0,
       transcriptionCompleted: 0,
       transcriptionErrors: 0,
-      multipartMessages: 0
+      multipartMessages: 0,
+      voiceTranslationCompleted: 0,
+      voiceTranslationFailed: 0
     };
   }
 

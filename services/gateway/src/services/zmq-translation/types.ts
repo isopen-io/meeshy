@@ -400,6 +400,49 @@ export type VoiceProfileEvent =
   | VoiceProfileErrorEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// VOICE TRANSLATION JOB TYPES
+// ═══════════════════════════════════════════════════════════════
+
+export interface VoiceTranslationResult {
+  job_id: string;
+  success: boolean;
+  original_text: string;
+  original_language: string;
+  original_duration_ms: number;
+  transcription_confidence: number;
+  translations: {
+    [language: string]: {
+      text: string;
+      audio_url?: string;
+      audio_duration_ms?: number;
+      synthesis_model?: string;
+    };
+  };
+  voice_cloned: boolean;
+  voice_quality: number;
+  voice_model_version: number;
+}
+
+export interface VoiceTranslationCompletedEvent {
+  type: 'voice_translation_completed';
+  jobId: string;
+  status: string;
+  userId: string;
+  timestamp: number;
+  result?: VoiceTranslationResult;
+}
+
+export interface VoiceTranslationFailedEvent {
+  type: 'voice_translation_failed';
+  jobId: string;
+  status: string;
+  userId: string;
+  timestamp: number;
+  error?: string;
+  errorCode?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // UNIFIED VOICE EVENT TYPE
 // ═══════════════════════════════════════════════════════════════
 
@@ -410,7 +453,9 @@ export type VoiceEvent =
   | VoiceProfileAnalyzeResult
   | VoiceProfileVerifyResult
   | VoiceProfileCompareResult
-  | VoiceProfileErrorEvent;
+  | VoiceProfileErrorEvent
+  | VoiceTranslationCompletedEvent
+  | VoiceTranslationFailedEvent;
 
 // ═══════════════════════════════════════════════════════════════
 // COMBINED EVENT TYPE

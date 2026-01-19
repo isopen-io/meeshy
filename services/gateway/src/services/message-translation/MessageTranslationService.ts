@@ -82,6 +82,8 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.removeAllListeners('translationError');
     this.zmqClient.removeAllListeners('audioProcessCompleted');
     this.zmqClient.removeAllListeners('audioProcessError');
+    this.zmqClient.removeAllListeners('voiceTranslationCompleted');
+    this.zmqClient.removeAllListeners('voiceTranslationFailed');
 
     // Enregistrer les nouveaux listeners
     this.zmqClient.on('translationCompleted', this._handleTranslationCompleted.bind(this));
@@ -90,6 +92,8 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
     this.zmqClient.on('transcriptionCompleted', this._handleTranscriptionOnlyCompleted.bind(this));
     this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
+    this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
+    this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
 
     // Client initialized successfully
 
@@ -828,6 +832,40 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
       }
 
+      // 3.5. Sauvegarder les traductions textuelles dans MessageTranslation
+      // Cela permet d'afficher les traductions dans l'interface utilisateur
+      logger.info(`   📝 Sauvegarde des traductions textuelles...`);
+      for (const translatedAudio of data.translatedAudios) {
+        try {
+          await this.prisma.messageTranslation.upsert({
+            where: {
+              messageId_targetLanguage: {
+                messageId: data.messageId,
+                targetLanguage: translatedAudio.targetLanguage
+              }
+            },
+            update: {
+              translatedContent: translatedAudio.translatedText,
+              translationModel: 'audio_translation',
+              confidenceScore: data.transcription.confidence,
+              updatedAt: new Date()
+            },
+            create: {
+              messageId: data.messageId,
+              targetLanguage: translatedAudio.targetLanguage,
+              translatedContent: translatedAudio.translatedText,
+              translationModel: 'audio_translation',
+              confidenceScore: data.transcription.confidence
+            }
+          });
+
+          logger.info(`   ✅ Traduction textuelle sauvegardée: ${translatedAudio.targetLanguage}`);
+        } catch (translationError) {
+          logger.error(`   ⚠️ Erreur sauvegarde traduction textuelle (${translatedAudio.targetLanguage}): ${translationError}`);
+          // Ne pas faire échouer le traitement principal
+        }
+      }
+
       // 4. Sauvegarder le nouveau profil vocal si créé par Translator
       if (data.newVoiceProfile) {
         try {
@@ -1047,6 +1085,94 @@ export class MessageTranslationService extends EventEmitter {
       taskId: data.taskId,
       messageId: data.messageId,
       attachmentId: data.attachmentId,
+      error: data.error,
+      errorCode: data.errorCode
+    });
+
+    this.stats.incrementErrors();
+  }
+
+  // ============================================================================
+  // VOICE TRANSLATION JOB HANDLERS
+  // ============================================================================
+
+  /**
+   * Traite les résultats de jobs de traduction vocale asynchrones.
+   * Ces jobs sont créés via l'API Voice et ne sont pas nécessairement liés à un message.
+   */
+  private async _handleVoiceTranslationCompleted(data: {
+    jobId: string;
+    status: string;
+    userId: string;
+    timestamp: number;
+    result?: {
+      job_id: string;
+      success: boolean;
+      original_text: string;
+      original_language: string;
+      original_duration_ms: number;
+      transcription_confidence: number;
+      translations: {
+        [language: string]: {
+          text: string;
+          audio_url?: string;
+          audio_duration_ms?: number;
+          synthesis_model?: string;
+        };
+      };
+      voice_cloned: boolean;
+      voice_quality: number;
+      voice_model_version: number;
+    };
+  }) {
+    try {
+      logger.info(`🎙️ [TranslationService] Voice translation job completed: ${data.jobId}`);
+      logger.info(`   👤 User ID: ${data.userId}`);
+
+      if (data.result) {
+        logger.info(`   📝 Original: "${data.result.original_text.substring(0, 50)}..."`);
+        logger.info(`   🌍 Languages: ${Object.keys(data.result.translations).join(', ')}`);
+        logger.info(`   🎤 Voice cloned: ${data.result.voice_cloned}`);
+        logger.info(`   ⭐ Voice quality: ${data.result.voice_quality.toFixed(2)}`);
+      }
+
+      // Émettre événement pour notifier les clients (WebSocket, etc.)
+      this.emit('voiceTranslationJobCompleted', {
+        jobId: data.jobId,
+        userId: data.userId,
+        status: data.status,
+        timestamp: data.timestamp,
+        result: data.result
+      });
+
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur traitement job vocal: ${error}`);
+      this.stats.incrementErrors();
+    }
+  }
+
+  /**
+   * Gère les échecs de jobs de traduction vocale asynchrones
+   */
+  private async _handleVoiceTranslationFailed(data: {
+    jobId: string;
+    status: string;
+    userId: string;
+    timestamp: number;
+    error?: string;
+    errorCode?: string;
+  }) {
+    logger.error(`❌ [TranslationService] Voice translation job failed: ${data.jobId}`);
+    logger.error(`   👤 User ID: ${data.userId}`);
+    logger.error(`   Code: ${data.errorCode}`);
+    logger.error(`   Error: ${data.error}`);
+
+    // Émettre événement d'erreur pour notifier les clients
+    this.emit('voiceTranslationJobFailed', {
+      jobId: data.jobId,
+      userId: data.userId,
+      status: data.status,
+      timestamp: data.timestamp,
       error: data.error,
       errorCode: data.errorCode
     });

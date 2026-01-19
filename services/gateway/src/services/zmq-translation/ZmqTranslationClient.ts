@@ -164,6 +164,15 @@ export class ZmqTranslationClient extends EventEmitter {
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('transcriptionError', event);
     });
+
+    // Voice Translation Job events
+    this.messageHandler.on('voiceTranslationCompleted', (event) => {
+      this.emit('voiceTranslationCompleted', event);
+    });
+
+    this.messageHandler.on('voiceTranslationFailed', (event) => {
+      this.emit('voiceTranslationFailed', event);
+    });
   }
 
   /**
