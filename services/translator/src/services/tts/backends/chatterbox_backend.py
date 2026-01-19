@@ -386,8 +386,10 @@ class ChatterboxBackend(BaseTTSBackend):
         lang_code = language.split('-')[0].lower() if language else 'en'
 
         # Déterminer si on utilise le modèle multilingue
+        # Note: On utilise le multilingual pour TOUTES les langues supportées,
+        # y compris l'anglais, car le modèle est chargé au démarrage.
+        # Le modèle monolingual n'est plus utilisé par défaut.
         use_multilingual = (
-            lang_code != 'en' and
             lang_code in self.MULTILINGUAL_LANGUAGES and
             self._available_multilingual
         )
