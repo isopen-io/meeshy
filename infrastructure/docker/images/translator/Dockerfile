@@ -53,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy dependency files first for layer caching
+COPY services/translator/requirements.txt ./
 COPY services/translator/pyproject.toml ./
 
 # Re-declare ARG after FROM
@@ -68,6 +69,9 @@ ENV PYTORCH_INDEX_CPU="https://download.pytorch.org/whl/cpu" \
     PYTORCH_INDEX_GPU_CU118="https://download.pytorch.org/whl/cu118"
 
 # Install dependencies with selected backend
+# Note: Using requirements.txt instead of pyproject.toml because:
+# - uv pip install -r works with requirements.txt format
+# - requirements.txt has all necessary deps including chatterbox-tts
 RUN --mount=type=cache,target=/root/.cache/uv \
     echo "Installing with TORCH_BACKEND=${TORCH_BACKEND}" && \
     case "${TORCH_BACKEND}" in \
@@ -78,7 +82,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     esac && \
     echo "Using PyTorch index: ${PYTORCH_INDEX}" && \
     uv pip install --system --index-url "${PYTORCH_INDEX}" torch torchaudio && \
-    uv pip install --system -r pyproject.toml --extra prod
+    uv pip install --system -r requirements.txt
 
 # =============================================================================
 # Stage 2a: CPU Runtime Base
