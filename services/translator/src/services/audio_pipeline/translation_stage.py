@@ -820,12 +820,38 @@ class TranslationStage:
                 f"{tts_result.audio_url} [{lang_time}ms]"
             )
 
-            # 3. Re-transcribe translated audio to get segments
+            # 3. Utiliser les segments traduits (préserve la structure de la transcription originale)
             translated_segments = None
-            if self.transcription_service and tts_result.audio_path:
+
+            # MODE MULTI-SPEAKER: On a déjà les segments traduits de translated_segments_list
+            if is_multi_speaker and 'translated_segments_list' in locals():
+                logger.info(
+                    f"[TRANSLATION_STAGE] 📊 Utilisation des segments traduits "
+                    f"(préserve structure originale): {len(translated_segments_list)} segments"
+                )
+
+                # Convertir les segments traduits au format attendu
+                translated_segments = []
+                for seg in translated_segments_list:
+                    translated_segments.append({
+                        "text": seg.get('text', ''),
+                        "startMs": seg.get('startMs', seg.get('start_ms', 0)),
+                        "endMs": seg.get('endMs', seg.get('end_ms', 0)),
+                        "speakerId": seg.get('speakerId', seg.get('speaker_id', None)),
+                        "voiceSimilarityScore": seg.get('voiceSimilarityScore', seg.get('voice_similarity_score', None)),
+                        "confidence": seg.get('confidence', None)
+                    })
+
+                logger.info(
+                    f"[TRANSLATION_STAGE] ✅ Segments traduits structurés: "
+                    f"{len(translated_segments)} segments avec timings originaux"
+                )
+
+            # MODE MONO-SPEAKER: Re-transcrire l'audio synthétisé
+            elif self.transcription_service and tts_result.audio_path:
                 try:
                     retranscription_start = time.time()
-                    logger.info(f"[TRANSLATION_STAGE] Re-transcribing translated audio ({target_lang})...")
+                    logger.info(f"[TRANSLATION_STAGE] 🎙️ Re-transcription audio synthétisé ({target_lang})...")
 
                     retranscription_result = await self.transcription_service.transcribe(
                         tts_result.audio_path,
