@@ -33,9 +33,10 @@ try:
     from openvoice import se_extractor
     from openvoice.api import ToneColorConverter
     OPENVOICE_AVAILABLE = True
-    logger.info("✅ [VOICE_CLONE] OpenVoice disponible")
+    logger.info("✅ [VOICE_CLONE] OpenVoice V2 disponible - extraction embeddings avancée activée")
 except ImportError:
-    logger.warning("⚠️ [VOICE_CLONE] OpenVoice non disponible - clonage vocal désactivé")
+    logger.warning("⚠️ [VOICE_CLONE] OpenVoice V2 non disponible (nécessite Python 3.9-3.10)")
+    logger.info("ℹ️  [VOICE_CLONE] Le clonage vocal utilisera Chatterbox Multilingual (23 langues)")
 
 try:
     import numpy as np
@@ -274,7 +275,13 @@ class VoiceCloneService:
                 return True
 
             if not OPENVOICE_AVAILABLE:
-                logger.warning("[VOICE_CLONE] OpenVoice non disponible - mode dégradé")
+                logger.info("╔═══════════════════════════════════════════════════════════════════╗")
+                logger.info("║ [VOICE_CLONE] Configuration: Chatterbox Multilingual             ║")
+                logger.info("║ • Clonage vocal natif (via speaker_audio_path)                   ║")
+                logger.info("║ • Support de 23 langues                                          ║")
+                logger.info("║ • Qualité haute fidélité                                         ║")
+                logger.info("║ • Pour activer OpenVoice: ./install-openvoice.sh (Python 3.9-10) ║")
+                logger.info("╚═══════════════════════════════════════════════════════════════════╝")
                 self.is_initialized = True
                 return True
 

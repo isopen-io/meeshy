@@ -55,7 +55,8 @@ export const SERVER_EVENTS = {
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
   READ_STATUS_UPDATED: 'read-status:updated',
-  AUDIO_TRANSLATION_READY: 'audio:translation-ready'
+  AUDIO_TRANSLATION_READY: 'audio:translation-ready',
+  TRANSCRIPTION_READY: 'audio:transcription-ready'
 } as const;
 
 // Événements du client vers le serveur
@@ -240,19 +241,17 @@ export interface ReadStatusUpdatedEventData {
   readonly updatedAt: Date;
 }
 
-/**
- * Données pour un audio traduit
- */
-export interface TranslatedAudioData {
-  readonly language: string;
-  readonly audioUrl: string;
-  readonly audioDuration?: number;
-  readonly voiceCloned: boolean;
-  readonly modelUsed?: string;
-}
+// Import unified TranslatedAudioData from translated-audio.ts
+import type { TranslatedAudioData } from './translated-audio.js';
+// Import TranscriptionSegment for real-time audio synchronization
+import type { TranscriptionSegment } from './attachment-transcription.js';
+
+// Re-export for convenience
+export type { TranslatedAudioData };
 
 /**
  * Données pour l'événement de traduction audio prête
+ * Inclut les segments de transcription pour synchronisation audio/texte en temps réel
  */
 export interface AudioTranslationReadyEventData {
   readonly messageId: string;
@@ -262,8 +261,36 @@ export interface AudioTranslationReadyEventData {
     readonly text: string;
     readonly language: string;
     readonly confidence?: number;
+    readonly durationMs?: number;
+    readonly source?: string;
+    readonly model?: string;
+    /**
+     * Segments de transcription avec timestamps pour synchronisation audio/texte
+     * Divisés en morceaux de 1-5 mots pour synchronisation fine
+     */
+    readonly segments?: readonly TranscriptionSegment[];
   };
   readonly translatedAudios: readonly TranslatedAudioData[];
+  readonly processingTimeMs?: number;
+}
+
+/**
+ * Données pour l'événement de transcription seule prête (sans traduction)
+ * Utilisé lorsque seule la transcription est demandée, sans génération d'audios traduits
+ */
+export interface TranscriptionReadyEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly transcription: {
+    readonly id: string;
+    readonly text: string;
+    readonly language: string;
+    readonly confidence?: number;
+    readonly durationMs?: number;
+    readonly source?: string;
+    readonly segments?: readonly TranscriptionSegment[];
+  };
   readonly processingTimeMs?: number;
 }
 
@@ -301,6 +328,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
+  [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
 }
 
 /**

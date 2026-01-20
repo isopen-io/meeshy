@@ -2,12 +2,15 @@
 
 /**
  * Application Settings Component
- * Manages 18 application preferences across 5 sections:
- * - Appearance (theme, accentColor, fontSize, fontFamily)
- * - Languages (language, systemLanguage, regionalLanguage, customLanguages)
+ * Manages application preferences across 5 sections:
+ * - Appearance (theme, accentColor, fontSize, fontFamily, lineHeight)
+ * - Interface Language (interfaceLanguage only - message translation languages are in User profile)
  * - Layout (compactMode, sidebarPosition, showAvatars, animationsEnabled)
  * - Accessibility (reducedMotion, highContrast, screenReaderOptimized)
  * - Advanced (keyboardShortcuts, tutorials, betaFeatures, telemetry)
+ *
+ * NOTE: Message translation languages (systemLanguage, regionalLanguage, customDestinationLanguage)
+ * are managed in the Profile tab via UserSettings component and stored in the User model.
  */
 
 import { useState, useEffect } from 'react';
@@ -42,7 +45,6 @@ import {
   SidebarLeft,
   SidebarRight,
   UserCircle,
-  Wand2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
@@ -78,7 +80,7 @@ const LINE_HEIGHTS = [
   { value: 'loose', label: 'Loose' },
 ];
 
-// Available languages - to be extended
+// Available languages
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇬🇧' },
   { code: 'fr', name: 'Français', flag: '🇫🇷' },
@@ -99,9 +101,6 @@ export function ApplicationSettings() {
     theme: 'auto',
     accentColor: 'blue',
     interfaceLanguage: 'en',
-    systemLanguage: 'en',
-    regionalLanguage: undefined,
-    customDestinationLanguage: undefined,
     fontSize: 'medium',
     fontFamily: 'inter',
     lineHeight: 'normal',
@@ -131,7 +130,7 @@ export function ApplicationSettings() {
           return;
         }
 
-        const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/application`, {
+        const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/application`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -164,7 +163,7 @@ export function ApplicationSettings() {
         return;
       }
 
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/user-preferences/application`, {
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/application`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -361,18 +360,48 @@ export function ApplicationSettings() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Line Height */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Type className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.appearance.lineHeight.label', 'Line Height')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.appearance.lineHeight.description', 'Adjust spacing between lines of text')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={preferences.lineHeight}
+              onValueChange={(value) => handlePreferenceChange('lineHeight', value as 'tight' | 'normal' | 'relaxed' | 'loose')}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LINE_HEIGHTS.map((lineHeight) => (
+                  <SelectItem key={lineHeight.value} value={lineHeight.value}>
+                    {t(`theme.ui.lineHeight.${lineHeight.value}`, lineHeight.label)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Section 2: Languages */}
+      {/* Section 2: Interface Language */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Languages className="h-4 w-4 sm:h-5 sm:w-5" />
-            {t('application.languages.title', 'Languages')}
+            {t('application.languages.title', 'Interface Language')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            {t('application.languages.description', 'Configure your language preferences')}
+            {t('application.languages.description', 'Choose the language for menus, buttons and interface elements')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
@@ -408,111 +437,10 @@ export function ApplicationSettings() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* System Language */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <Monitor className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">
-                  {t('application.languages.system.label', 'System Language')}
-                </Label>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {t('application.languages.system.description', 'Main language for your messages')}
-                </p>
-              </div>
-            </div>
-            <Select
-              value={preferences.systemLanguage}
-              onValueChange={(value) => handlePreferenceChange('systemLanguage', value)}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AVAILABLE_LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    <span className="flex items-center gap-2">
-                      <span>{lang.flag}</span>
-                      <span>{lang.name}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Regional Language */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <Languages className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">
-                  {t('application.languages.regional.label', 'Regional Language')}
-                </Label>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {t('application.languages.regional.description', 'Secondary language (optional)')}
-                </p>
-              </div>
-            </div>
-            <Select
-              value={preferences.regionalLanguage || 'none'}
-              onValueChange={(value) => handlePreferenceChange('regionalLanguage', value === 'none' ? undefined : value)}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
-                {AVAILABLE_LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    <span className="flex items-center gap-2">
-                      <span>{lang.flag}</span>
-                      <span>{lang.name}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Custom Destination Language */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <Wand2 className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">
-                  {t('application.languages.custom.label', 'Custom Language')}
-                </Label>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {t('application.languages.custom.description', 'Specific translation target (optional)')}
-                </p>
-              </div>
-            </div>
-            <Select
-              value={preferences.customDestinationLanguage || 'none'}
-              onValueChange={(value) =>
-                handlePreferenceChange('customDestinationLanguage', value === 'none' ? undefined : value)
-              }
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
-                {AVAILABLE_LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    <span className="flex items-center gap-2">
-                      <span>{lang.flag}</span>
-                      <span>{lang.name}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
+
+      {/* NOTE: Message translation languages (systemLanguage, regionalLanguage, customDestinationLanguage) are managed in the Profile tab via UserSettings component */}
 
       {/* Section 3: Layout */}
       <Card>

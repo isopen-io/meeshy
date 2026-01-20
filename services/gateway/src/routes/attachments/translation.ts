@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
-import { UserFeaturesService } from '../../services/UserFeaturesService';
+import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody } from './types';
 
@@ -15,7 +15,6 @@ export async function registerTranslationRoutes(
   prisma: PrismaClient,
   translateService: AttachmentTranslateService | null
 ) {
-  const userFeaturesService = new UserFeaturesService(prisma);
 
   /**
    * POST /attachments/:attachmentId/translate
@@ -153,7 +152,7 @@ export async function registerTranslationRoutes(
         const body = request.body as TranslateBody;
         const userId = authContext.userId;
 
-        const attachment = await prisma.attachment.findUnique({
+        const attachment = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
           select: { mimeType: true }
         });
@@ -168,71 +167,49 @@ export async function registerTranslationRoutes(
 
         const mimeType = attachment.mimeType || '';
 
+        // Vérifier les consentements de l'utilisateur pour la traduction
+        const consentService = new ConsentValidationService(prisma);
+        const consentStatus = await consentService.getConsentStatus(userId);
+
+        // Pour les fichiers audio, vérifier les consentements spécifiques
         if (mimeType.startsWith('audio/')) {
-          const audioValidation = await userFeaturesService.canTranslateAudio(userId);
-          if (!audioValidation.allowed) {
+          if (!consentStatus.canTranscribeAudio) {
             return reply.status(403).send({
               success: false,
-              error: 'FEATURE_NOT_ENABLED',
-              message: audioValidation.reason || 'Audio translation not enabled',
-              details: {
-                missingConsents: audioValidation.missingConsents,
-                missingFeatures: audioValidation.missingFeatures
-              }
+              error: 'AUDIO_TRANSCRIPTION_NOT_ENABLED',
+              message: 'You must enable audio transcription consent to translate audio',
+              requiredConsents: [
+                'dataProcessingConsentAt',
+                'voiceDataConsentAt',
+                'audioTranscriptionEnabledAt'
+              ]
             });
           }
 
-          if (body.generateVoiceClone) {
-            const voiceCloningValidation = await userFeaturesService.canUseVoiceCloning(userId);
-            if (!voiceCloningValidation.allowed) {
-              return reply.status(403).send({
-                success: false,
-                error: 'VOICE_CLONING_NOT_ENABLED',
-                message: voiceCloningValidation.reason || 'Voice cloning not enabled',
-                details: {
-                  missingConsents: voiceCloningValidation.missingConsents,
-                  missingFeatures: voiceCloningValidation.missingFeatures
-                }
-              });
-            }
-          }
-        } else if (mimeType.startsWith('image/')) {
-          const textValidation = await userFeaturesService.canTranslateText(userId);
-          if (!textValidation.allowed) {
+          if (!consentStatus.canTranslateAudio) {
             return reply.status(403).send({
               success: false,
-              error: 'FEATURE_NOT_ENABLED',
-              message: textValidation.reason || 'Text translation not enabled',
-              details: {
-                missingConsents: textValidation.missingConsents,
-                missingFeatures: textValidation.missingFeatures
-              }
+              error: 'AUDIO_TRANSLATION_NOT_ENABLED',
+              message: 'You must enable audio translation consent to translate audio',
+              requiredConsents: [
+                'audioTranslationEnabledAt',
+                'audioTranscriptionEnabledAt',
+                'textTranslationEnabledAt'
+              ]
             });
           }
-        } else if (mimeType.startsWith('video/')) {
-          const audioValidation = await userFeaturesService.canTranslateAudio(userId);
-          if (!audioValidation.allowed) {
+
+          if (body.generateVoiceClone && !consentStatus.canUseVoiceCloning) {
             return reply.status(403).send({
               success: false,
-              error: 'FEATURE_NOT_ENABLED',
-              message: audioValidation.reason || 'Video subtitle translation not enabled',
-              details: {
-                missingConsents: audioValidation.missingConsents,
-                missingFeatures: audioValidation.missingFeatures
-              }
-            });
-          }
-        } else if (mimeType === 'application/pdf' || mimeType.startsWith('text/')) {
-          const textValidation = await userFeaturesService.canTranslateText(userId);
-          if (!textValidation.allowed) {
-            return reply.status(403).send({
-              success: false,
-              error: 'FEATURE_NOT_ENABLED',
-              message: textValidation.reason || 'Document translation not enabled',
-              details: {
-                missingConsents: textValidation.missingConsents,
-                missingFeatures: textValidation.missingFeatures
-              }
+              error: 'VOICE_CLONING_NOT_ENABLED',
+              message: 'You must enable voice cloning consent to use this feature',
+              requiredConsents: [
+                'voiceDataConsentAt',
+                'voiceProfileConsentAt',
+                'voiceCloningConsentAt',
+                'voiceCloningEnabledAt'
+              ]
             });
           }
         }
@@ -410,16 +387,20 @@ export async function registerTranslationRoutes(
           });
         }
 
-        const audioValidation = await userFeaturesService.canTranscribeAudio(userId);
-        if (!audioValidation.allowed) {
+        // Vérifier les consentements de l'utilisateur pour la transcription audio
+        const consentService = new ConsentValidationService(prisma);
+        const consentStatus = await consentService.getConsentStatus(userId);
+
+        if (!consentStatus.canTranscribeAudio) {
           return reply.status(403).send({
             success: false,
-            error: 'FEATURE_NOT_ENABLED',
-            message: audioValidation.reason || 'Audio transcription not enabled',
-            details: {
-              missingConsents: audioValidation.missingConsents,
-              missingFeatures: audioValidation.missingFeatures
-            }
+            error: 'AUDIO_TRANSCRIPTION_NOT_ENABLED',
+            message: 'You must enable audio transcription consent to use this feature',
+            requiredConsents: [
+              'dataProcessingConsentAt',
+              'voiceDataConsentAt',
+              'audioTranscriptionEnabledAt'
+            ]
           });
         }
 

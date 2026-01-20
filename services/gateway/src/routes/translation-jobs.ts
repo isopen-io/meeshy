@@ -153,9 +153,14 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
   // Initialize translate service if ZMQ client is available
   let translateService: AttachmentTranslateService | null = null;
   if ((fastify as any).zmqClient) {
+    const { MultiLevelJobMappingCache } = await import('../services/MultiLevelJobMappingCache');
+    const redis = (fastify as any).redis;
+    const jobMappingService = new MultiLevelJobMappingCache(redis || undefined);
+
     translateService = new AttachmentTranslateService(
       (fastify as any).prisma,
-      (fastify as any).zmqClient
+      (fastify as any).zmqClient,
+      jobMappingService
     );
   }
 

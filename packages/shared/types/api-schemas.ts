@@ -56,8 +56,8 @@ export const userSchema = {
     // Role & Status
     role: {
       type: 'string',
-      enum: ['USER', 'MODERATOR', 'ADMIN', 'CREATOR', 'ANALYST', 'AUDIT', 'BIGBOSS'],
-      description: 'User role'
+      enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
+      description: 'User global role (aligned with Prisma enum UserRole)'
     },
     isActive: { type: 'boolean', description: 'Account active status' },
     deactivatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Account deactivation timestamp' },
@@ -337,55 +337,122 @@ export const messageAttachmentSchema = {
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' },
 
-    // ===== TRANSCRIPTION & TRANSLATION (Generic) =====
-    // Ces champs permettent d'afficher les transcriptions et traductions
-    // sans avoir à faire une requête séparée pour chaque attachment
-    transcriptionText: {
-      type: 'string',
-      nullable: true,
-      description: 'Texte de transcription simple (tous types: audio, video, document, image)'
-    },
+    // ===== TRANSCRIPTION & TRANSLATION V2 (JSON intégré - Générique) =====
+    // V2: Champs JSON intégrés dans MessageAttachment
+    // Support: audio, video, document, image
     transcription: {
       type: 'object',
       nullable: true,
-      description: 'Objet de transcription complet avec métadonnées',
+      description: 'Transcription JSON intégrée (AttachmentTranscription V2) - Support audio/video/document/image',
       properties: {
         type: {
           type: 'string',
           enum: ['audio', 'video', 'document', 'image'],
-          description: 'Type de transcription'
+          description: 'Type d\'attachment transcrit'
         },
-        transcribedText: { type: 'string', description: 'Texte transcrit' },
+        text: { type: 'string', description: 'Texte transcrit' },
         language: { type: 'string', description: 'Langue détectée (ISO 639-1)' },
-        confidence: { type: 'number', nullable: true, description: 'Score de confiance (0-1)' },
-        source: { type: 'string', nullable: true, description: 'Source du modèle (whisper, etc.)' },
+        confidence: { type: 'number', description: 'Score de confiance (0-1)' },
+        source: {
+          type: 'string',
+          enum: ['mobile', 'whisper', 'voice_api', 'ocr', 'vision_api'],
+          description: 'Source de transcription'
+        },
         model: { type: 'string', nullable: true, description: 'Modèle utilisé' },
-        segments: { type: 'array', nullable: true, description: 'Segments avec timestamps' },
-        audioDurationMs: { type: 'number', nullable: true, description: 'Durée audio (ms)' },
-        speakerCount: { type: 'number', nullable: true, description: 'Nombre de locuteurs' },
-        primarySpeakerId: { type: 'string', nullable: true, description: 'ID locuteur principal' }
+        // Spécifique audio/video
+        segments: {
+          type: 'array',
+          nullable: true,
+          description: 'Segments avec timestamps (audio/video)',
+          items: {
+            type: 'object',
+            properties: {
+              text: { type: 'string' },
+              start: { type: 'number', description: 'Start time (ms)' },
+              end: { type: 'number', description: 'End time (ms)' },
+              speaker_id: { type: 'string', nullable: true },
+              confidence: { type: 'number', nullable: true }
+            }
+          }
+        },
+        speakerCount: { type: 'number', nullable: true, description: 'Nombre de locuteurs (audio)' },
+        primarySpeakerId: { type: 'string', nullable: true, description: 'ID locuteur principal (audio)' },
+        durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
+        voiceQualityAnalysis: {
+          type: 'object',
+          nullable: true,
+          description: 'Analyse qualité vocale (audio)'
+        },
+        // Spécifique document
+        pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
+        documentLayout: { type: 'object', nullable: true, description: 'Structure document (document)' },
+        // Spécifique image
+        imageDescription: { type: 'string', nullable: true, description: 'Description image (image)' },
+        detectedObjects: { type: 'array', nullable: true, description: 'Objets détectés (image)' },
+        ocrRegions: { type: 'array', nullable: true, description: 'Régions OCR (image)' }
       }
     },
     translationsJson: {
       type: 'object',
       nullable: true,
-      description: 'Traductions disponibles (clé = langue cible)',
+      description: 'Traductions JSON intégrées (AttachmentTranslations V2) - Support audio/video/text/document/image - Map: langue → traduction',
       additionalProperties: {
         type: 'object',
+        required: ['type', 'transcription', 'createdAt'],
         properties: {
           type: {
             type: 'string',
-            enum: ['audio', 'text', 'document'],
+            enum: ['audio', 'video', 'text', 'document', 'image'],
+            description: 'Type de traduction'
+          },
+          transcription: { type: 'string', description: 'Texte traduit' },
+          path: { type: 'string', nullable: true, description: 'Chemin fichier local' },
+          url: { type: 'string', nullable: true, description: 'URL accessible' },
+          // Spécifique audio/video
+          durationMs: { type: 'number', nullable: true, description: 'Durée (ms) - audio/video' },
+          format: { type: 'string', nullable: true, description: 'Format fichier (mp3, mp4, pdf, png...)' },
+          cloned: { type: 'boolean', nullable: true, description: 'Clonage vocal activé (audio)' },
+          quality: { type: 'number', nullable: true, description: 'Qualité (0-1)' },
+          voiceModelId: { type: 'string', nullable: true, description: 'ID modèle vocal (audio)' },
+          ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS (xtts, openvoice) - audio' },
+          // Spécifique document/image
+          pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
+          overlayApplied: { type: 'boolean', nullable: true, description: 'Overlay texte appliqué (image)' },
+          // Métadonnées communes
+          createdAt: { type: 'string', format: 'date-time', description: 'Date création' },
+          updatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Date modification' },
+          deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Date suppression (soft delete)' }
+        }
+      }
+    },
+    // V2: Format Socket.IO converti depuis translationsJson pour rétrocompatibilité
+    translatedAudios: {
+      type: 'array',
+      nullable: true,
+      description: 'Traductions converties en format Socket.IO (SocketIOTranslation) - Support audio/video/text/document/image - Rétrocompatibilité',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'ID composite: attachmentId_langue' },
+          type: {
+            type: 'string',
+            enum: ['audio', 'video', 'text', 'document', 'image'],
             description: 'Type de traduction'
           },
           targetLanguage: { type: 'string', description: 'Langue cible (ISO 639-1)' },
-          translatedText: { type: 'string', nullable: true, description: 'Texte traduit' },
-          audioUrl: { type: 'string', nullable: true, description: 'URL audio traduit' },
-          durationMs: { type: 'number', nullable: true, description: 'Durée (ms)' },
-          voiceCloned: { type: 'boolean', nullable: true, description: 'Voix clonée' },
-          voiceQuality: { type: 'number', nullable: true, description: 'Qualité voix (0-1)' },
-          ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS utilisé' },
-          format: { type: 'string', nullable: true, description: 'Format audio (mp3, etc.)' }
+          translatedText: { type: 'string', description: 'Texte traduit' },
+          url: { type: 'string', description: 'URL du fichier traduit' },
+          path: { type: 'string', nullable: true, description: 'Chemin serveur' },
+          // Spécifique audio/video
+          durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
+          format: { type: 'string', nullable: true, description: 'Format fichier (mp3, mp4, pdf, png...)' },
+          voiceCloned: { type: 'boolean', nullable: true, description: 'Voix clonée utilisée (audio)' },
+          voiceQuality: { type: 'number', nullable: true, description: 'Qualité du clonage vocal (0-1) - audio' },
+          ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS utilisé (xtts, openvoice) - audio' },
+          voiceModelId: { type: 'string', nullable: true, description: 'ID du modèle vocal utilisé (audio)' },
+          // Spécifique document/image
+          pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
+          overlayApplied: { type: 'boolean', nullable: true, description: 'Overlay texte appliqué (image)' }
         }
       }
     }
@@ -604,8 +671,8 @@ export const conversationParticipantSchema = {
     userId: { type: 'string', description: 'User ID' },
     role: {
       type: 'string',
-      enum: ['USER', 'ADMIN', 'MODO', 'BIGBOSS', 'AUDIT', 'ANALYST', 'MODERATOR', 'CREATOR', 'MEMBER'],
-      description: 'Participant role in conversation'
+      enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
+      description: 'Participant global role (aligned with Prisma enum UserRole)'
     },
     joinedAt: { type: 'string', format: 'date-time', description: 'Join timestamp' },
     isActive: { type: 'boolean', description: 'Participant is active' },

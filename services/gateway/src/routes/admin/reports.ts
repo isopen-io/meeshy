@@ -36,7 +36,7 @@ const requireModeratorPermission = async (request: FastifyRequest, reply: Fastif
   }
 
   const userRole = authContext.registeredUser.role;
-  const canModerate = ['BIGBOSS', 'ADMIN', 'MODO'].includes(userRole);
+  const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(userRole);
 
   if (!canModerate) {
     return reply.status(403).send({

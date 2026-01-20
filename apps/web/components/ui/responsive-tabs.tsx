@@ -22,8 +22,8 @@ interface ResponsiveTabsProps {
 
 /**
  * Composant Tabs responsive :
- * - Desktop/Tablet : Icône + texte horizontal
- * - Mobile : Icône au-dessus du texte (colonne verticale)
+ * - Desktop/Tablet (md+) : Icône + texte côte à côte
+ * - Mobile (<md) : Icône uniquement (texte caché, visible au hover via title)
  * - Les tabs restent toujours visibles et sélectionnables sur tous les écrans
  */
 export function ResponsiveTabs({
@@ -57,10 +57,11 @@ export function ResponsiveTabs({
             <TabsTrigger
               key={item.value}
               value={item.value}
-              className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-[color,background-color] flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
+              className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-4 rounded-lg font-medium transition-[color,background-color] flex items-center justify-center gap-2"
+              title={item.label}
             >
-              {item.icon}
-              <span className="text-xs md:text-sm">{item.label}</span>
+              {item.icon && <span className="shrink-0">{item.icon}</span>}
+              <span className="hidden md:inline text-sm truncate">{item.label}</span>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -117,10 +118,11 @@ export function ResponsiveTabsWithContent({
           <TabsTrigger
             key={item.value}
             value={item.value}
-            className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
+            className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
+            title={item.label}
           >
-            {item.icon}
-            <span className="text-xs md:text-sm">{item.label}</span>
+            {item.icon && <span className="shrink-0">{item.icon}</span>}
+            <span className="hidden md:inline text-sm truncate">{item.label}</span>
           </TabsTrigger>
         ))}
       </TabsList>

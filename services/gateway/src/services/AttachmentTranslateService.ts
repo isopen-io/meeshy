@@ -13,7 +13,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
+import { MultiLevelJobMappingCache } from './MultiLevelJobMappingCache';
 import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
+import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 
 // Alias pour compatibilité
 type AudioTranslationResult = VoiceTranslationResult;
@@ -84,11 +86,17 @@ export class AttachmentTranslateService {
   private prisma: PrismaClient;
   private audioTranslateService: AudioTranslateService;
   private uploadBasePath: string;
+  private jobMappingService: MultiLevelJobMappingCache | null;
 
-  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
+  constructor(
+    prisma: PrismaClient,
+    zmqClient: ZmqTranslationClient,
+    jobMappingService?: MultiLevelJobMappingCache
+  ) {
     this.prisma = prisma;
     this.audioTranslateService = new AudioTranslateService(prisma, zmqClient);
     this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+    this.jobMappingService = jobMappingService || null;
   }
 
   /**
@@ -278,14 +286,44 @@ export class AttachmentTranslateService {
     const voiceProfile = await this._getVoiceProfile(voiceUserId);
 
     // =========================================================================
-    // 3. VÉRIFIER LES TRADUCTIONS EXISTANTES (cache/réutilisation)
+    // 3. VÉRIFIER LA TRANSCRIPTION EXISTANTE
+    // =========================================================================
+
+    // Récupérer la transcription existante de l'attachement ORIGINAL
+    const originalAttachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: originalAttachmentId },
+      select: { transcription: true }
+    });
+
+    const existingTranscription = originalAttachment?.transcription ? {
+      transcribedText: (originalAttachment.transcription as unknown as AttachmentTranscription).text,
+      language: (originalAttachment.transcription as unknown as AttachmentTranscription).language,
+      confidence: (originalAttachment.transcription as unknown as AttachmentTranscription).confidence,
+      audioDurationMs: (originalAttachment.transcription as unknown as AttachmentTranscription).durationMs,
+      source: (originalAttachment.transcription as unknown as AttachmentTranscription).source,
+      segments: (originalAttachment.transcription as unknown as AttachmentTranscription).segments
+    } : null;
+
+    // =========================================================================
+    // 4. VÉRIFIER LES TRADUCTIONS EXISTANTES (cache/réutilisation)
     // =========================================================================
 
     // Récupérer les traductions existantes de l'attachement ORIGINAL
-    const existingTranslations = await this.prisma.messageTranslatedAudio.findMany({
-      where: { attachmentId: originalAttachmentId },
-      select: { targetLanguage: true, translatedText: true, audioUrl: true, audioPath: true, durationMs: true, voiceCloned: true, voiceQuality: true }
+    const originalAttachmentWithTranslations = await this.prisma.messageAttachment.findUnique({
+      where: { id: originalAttachmentId },
+      select: { translations: true }
     });
+
+    const translationsData = originalAttachmentWithTranslations?.translations as unknown as AttachmentTranslations | undefined;
+    const existingTranslations = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
+      targetLanguage: lang,
+      translatedText: t.transcription,
+      audioUrl: t.url || null,
+      audioPath: t.path || null,
+      durationMs: t.durationMs || 0,
+      voiceCloned: t.cloned || false,
+      voiceQuality: t.quality || 0
+    })) : [];
 
     const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
 
@@ -298,6 +336,7 @@ export class AttachmentTranslateService {
     console.log(`   📦 Original attachment: ${originalAttachmentId}${isForwarded ? ' (forwarded)' : ''}`);
     console.log(`   👤 Original sender: ${originalSenderId || 'unknown'}`);
     console.log(`   🎙️ Voice profile: ${voiceUserId}${voiceProfile ? ' (loaded from DB)' : ' (will be created)'}`);
+    console.log(`   📝 Transcription: ${existingTranscription ? `✅ Existe (${existingTranscription.language})` : '❌ À créer'}`);
     console.log(`   ✅ Déjà traduit: [${Array.from(existingLanguages).join(', ')}]`);
     console.log(`   🔄 À traduire: [${languagesToTranslate.join(', ')}]`);
 
@@ -357,6 +396,7 @@ export class AttachmentTranslateService {
 
     // Translate via AudioTranslateService (seulement les langues manquantes)
     // Transmettre le profil vocal de l'émetteur original pour le clonage vocal
+    // ET la transcription existante si disponible (évite de refaire la transcription)
     try {
       if (options.async) {
         // Async mode - returns job info
@@ -369,8 +409,27 @@ export class AttachmentTranslateService {
           priority: options.priority,
           originalSenderId: originalSenderId || undefined,
           existingVoiceProfile: voiceProfile || undefined,
-          useOriginalVoice
+          useOriginalVoice,
+          existingTranscription: existingTranscription ? {
+            text: existingTranscription.transcribedText,
+            language: existingTranscription.language,
+            confidence: existingTranscription.confidence,
+            source: existingTranscription.source,
+            segments: existingTranscription.segments as any
+          } : undefined
         });
+
+        // Sauvegarder le mapping jobId -> metadata dans Redis pour diffusion frontend
+        if (this.jobMappingService && attachment.message) {
+          await this.jobMappingService.saveJobMapping((asyncResult as AsyncJobSubmitResult).jobId, {
+            messageId: attachment.messageId,
+            attachmentId: attachment.id,
+            conversationId: attachment.message.conversationId,
+            userId,
+            jobType: 'voice',
+            timestamp: Date.now()
+          });
+        }
 
         return {
           success: true,
@@ -390,7 +449,14 @@ export class AttachmentTranslateService {
         generateVoiceClone: options.generateVoiceClone,
         originalSenderId: originalSenderId || undefined,
         existingVoiceProfile: voiceProfile || undefined,
-        useOriginalVoice
+        useOriginalVoice,
+        existingTranscription: existingTranscription ? {
+          text: existingTranscription.transcribedText,
+          language: existingTranscription.language,
+          confidence: existingTranscription.confidence,
+          source: existingTranscription.source,
+          segments: existingTranscription.segments as any
+        } : undefined
       });
 
       // =========================================================================
@@ -554,62 +620,55 @@ export class AttachmentTranslateService {
     targetMessageId?: string
   ): Promise<void> {
     try {
-      // 1. Copier la transcription si elle existe
-      const sourceTranscription = await this.prisma.messageAudioTranscription.findUnique({
-        where: { attachmentId: originalAttachmentId }
+      // 1. Récupérer l'attachement source avec transcription et traductions
+      const sourceAttachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: originalAttachmentId },
+        select: { transcription: true, translations: true }
       });
 
-      if (sourceTranscription && targetMessageId) {
-        await this.prisma.messageAudioTranscription.upsert({
-          where: { attachmentId: targetAttachmentId },
-          update: {}, // Pas de mise à jour si existe déjà
-          create: {
-            attachmentId: targetAttachmentId,
-            messageId: targetMessageId,
-            transcribedText: sourceTranscription.transcribedText,
-            language: sourceTranscription.language,
-            confidence: sourceTranscription.confidence,
-            source: `forwarded:${sourceTranscription.source}`, // Marquer comme forwarded
-            segments: sourceTranscription.segments,
-            audioDurationMs: sourceTranscription.audioDurationMs,
-            speakerCount: sourceTranscription.speakerCount,
-            primarySpeakerId: sourceTranscription.primarySpeakerId,
-            speakerAnalysis: sourceTranscription.speakerAnalysis
-          }
+      if (!sourceAttachment) {
+        console.warn(`[AttachmentTranslateService] Source attachment not found: ${originalAttachmentId}`);
+        return;
+      }
+
+      // 2. Copier la transcription
+      const sourceTranscription = sourceAttachment.transcription as unknown as AttachmentTranscription | null;
+      if (sourceTranscription) {
+        const transcriptionData: AttachmentTranscription = {
+          text: sourceTranscription.text,
+          language: sourceTranscription.language,
+          confidence: sourceTranscription.confidence,
+          source: 'whisper',
+          model: sourceTranscription.model,
+          segments: sourceTranscription.segments,
+          speakerCount: sourceTranscription.speakerCount,
+          primarySpeakerId: sourceTranscription.primarySpeakerId,
+          durationMs: sourceTranscription.durationMs,
+          speakerAnalysis: sourceTranscription.speakerAnalysis,
+          senderVoiceIdentified: sourceTranscription.senderVoiceIdentified,
+          senderSpeakerId: sourceTranscription.senderSpeakerId,
+          voiceQualityAnalysis: sourceTranscription.voiceQualityAnalysis
+        };
+
+        await this.prisma.messageAttachment.update({
+          where: { id: targetAttachmentId },
+          data: { transcription: transcriptionData as any }
         });
+
         console.log(`   📝 Transcription copiée depuis l'original`);
       }
 
-      // 2. Copier les traductions audio
-      const sourceTranslations = await this.prisma.messageTranslatedAudio.findMany({
-        where: { attachmentId: originalAttachmentId }
-      });
-
-      for (const translation of sourceTranslations) {
-        await this.prisma.messageTranslatedAudio.upsert({
-          where: {
-            attachmentId_targetLanguage: {
-              attachmentId: targetAttachmentId,
-              targetLanguage: translation.targetLanguage
-            }
-          },
-          update: {}, // Pas de mise à jour si existe déjà
-          create: {
-            attachmentId: targetAttachmentId,
-            messageId: targetMessageId || translation.messageId,
-            targetLanguage: translation.targetLanguage,
-            translatedText: translation.translatedText,
-            audioPath: translation.audioPath, // Référence le même fichier
-            audioUrl: translation.audioUrl,   // Référence la même URL
-            durationMs: translation.durationMs,
-            voiceCloned: translation.voiceCloned,
-            voiceQuality: translation.voiceQuality,
-            voiceModelId: translation.voiceModelId
-          }
+      // 3. Copier les traductions
+      const sourceTranslations = sourceAttachment.translations as unknown as AttachmentTranslations | undefined;
+      if (sourceTranslations) {
+        await this.prisma.messageAttachment.update({
+          where: { id: targetAttachmentId },
+          data: { translations: sourceTranslations as any }
         });
-      }
 
-      console.log(`   📋 Copied ${sourceTranslations.length} audio translations for forwarded attachment`);
+        const translationCount = Object.keys(sourceTranslations).length;
+        console.log(`   📋 Copied ${translationCount} audio translations for forwarded attachment`);
+      }
     } catch (error) {
       console.error(`[AttachmentTranslateService] Error copying translations: ${error}`);
     }

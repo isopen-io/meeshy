@@ -241,8 +241,10 @@ export class ZmqMessageHandler extends EventEmitter {
    */
   private handleAudioProcessCompleted(event: AudioProcessCompletedEvent, binaryFrames: Buffer[]): void {
     console.log(`[GATEWAY] 🎤 Audio process terminé: ${event.messageId}`);
-    console.log(`[GATEWAY]    📝 Transcription: ${event.transcription.text.substring(0, 50)}...`);
-    console.log(`[GATEWAY]    🌍 Traductions audio: ${event.translatedAudios.length} versions`);
+    if (event.transcription?.text) {
+      console.log(`[GATEWAY]    📝 Transcription: ${event.transcription.text.substring(0, 50)}...`);
+    }
+    console.log(`[GATEWAY]    🌍 Traductions audio: ${event.translatedAudios?.length || 0} versions`);
 
     // ═══════════════════════════════════════════════════════════════
     // EXTRACTION DES BINAIRES DEPUIS FRAMES MULTIPART
@@ -438,8 +440,12 @@ export class ZmqMessageHandler extends EventEmitter {
    */
   private handleTranscriptionCompleted(event: TranscriptionCompletedEvent): void {
     console.log(`[GATEWAY] 📝 Transcription terminée: ${event.messageId}`);
-    console.log(`[GATEWAY]    📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
-    console.log(`[GATEWAY]    🌍 Langue: ${event.transcription.language}`);
+    if (event.transcription?.text) {
+      console.log(`[GATEWAY]    📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
+    }
+    if (event.transcription?.language) {
+      console.log(`[GATEWAY]    🌍 Langue: ${event.transcription.language}`);
+    }
 
     this.stats.transcriptionCompleted++;
 
@@ -477,8 +483,15 @@ export class ZmqMessageHandler extends EventEmitter {
   private handleVoiceTranslationCompleted(event: VoiceTranslationCompletedEvent): void {
     console.log(`[GATEWAY] 🎤 Voice translation job completed: ${event.jobId}`);
     if (event.result) {
-      console.log(`[GATEWAY]    📝 Original: ${event.result.original_text.substring(0, 50)}...`);
-      console.log(`[GATEWAY]    🌍 Traductions: ${Object.keys(event.result.translations).join(', ')}`);
+      const transcription = event.result.originalAudio?.transcription;
+      if (transcription) {
+        console.log(`[GATEWAY]    📝 Original: ${transcription.substring(0, 50)}...`);
+        console.log(`[GATEWAY]    🌍 Langue: ${event.result.originalAudio.language}`);
+      }
+      if (event.result.translations?.length) {
+        const langs = event.result.translations.map(t => t.targetLanguage).join(', ');
+        console.log(`[GATEWAY]    🌍 Traductions: ${event.result.translations.length} versions (${langs})`);
+      }
     }
 
     this.stats.voiceTranslationCompleted++;

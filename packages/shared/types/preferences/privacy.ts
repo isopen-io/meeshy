@@ -24,7 +24,13 @@ export const PrivacyPreferenceSchema = z.object({
 
   // Blocage et filtrage
   blockScreenshots: z.boolean().default(false),
-  hideProfileFromSearch: z.boolean().default(false)
+  hideProfileFromSearch: z.boolean().default(false),
+
+  // Encryption et sécurité
+  encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),
+  autoEncryptNewConversations: z.boolean().default(false),
+  showEncryptionStatus: z.boolean().default(true),
+  warnOnUnencrypted: z.boolean().default(false)
 });
 
 export type PrivacyPreference = z.infer<typeof PrivacyPreferenceSchema>;
@@ -41,5 +47,9 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   allowAnalytics: true,
   shareUsageData: false,
   blockScreenshots: false,
-  hideProfileFromSearch: false
+  hideProfileFromSearch: false,
+  encryptionPreference: 'optional',
+  autoEncryptNewConversations: false,
+  showEncryptionStatus: true,
+  warnOnUnencrypted: false
 };

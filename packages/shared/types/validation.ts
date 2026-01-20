@@ -102,7 +102,7 @@ export const createUserValidationSchema = z.object({
   displayName: displayNameSchema,
   bio: bioSchema,
   phoneNumber: phoneNumberSchema,
-  role: z.enum(['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'MODO', 'AUDIT', 'ANALYST', 'CREATOR', 'MEMBER']).default('USER'),
+  role: z.enum(['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST']).default('USER'),
   systemLanguage: z.string().length(2, 'Code langue ISO 639-1 requis (2 caracteres)').default('en'),
   regionalLanguage: z.string().length(2, 'Code langue ISO 639-1 requis (2 caracteres)').default('en')
 }).strict();

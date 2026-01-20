@@ -119,8 +119,14 @@ class RedisService:
 
     def _start_memory_cleanup(self):
         """Démarre le nettoyage automatique du cache mémoire"""
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.create_task(self._memory_cleanup_loop())
+        try:
+            # Vérifier si un event loop est en cours d'exécution
+            loop = asyncio.get_running_loop()
+            if self._cleanup_task is None or self._cleanup_task.done():
+                self._cleanup_task = loop.create_task(self._memory_cleanup_loop())
+        except RuntimeError:
+            # Pas d'event loop en cours, la task sera créée au premier appel async
+            logger.debug("[REDIS] Pas d'event loop actif, cleanup task sera créée plus tard")
 
     async def _memory_cleanup_loop(self):
         """Boucle de nettoyage du cache mémoire"""

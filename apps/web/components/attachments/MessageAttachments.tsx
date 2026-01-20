@@ -41,6 +41,7 @@ export const MessageAttachments = React.memo(function MessageAttachments({
   onAttachmentDeleted,
   isOwnMessage = false
 }: MessageAttachmentsProps) {
+
   const [isExpanded, setIsExpanded] = useState(false);
   const { t } = useI18n('common');
   const { isMobile } = useResponsiveDetection();
@@ -106,7 +107,11 @@ export const MessageAttachments = React.memo(function MessageAttachments({
     return (
       <div className={attachmentsByType.audios.length > 1 ? 'grid grid-cols-1 gap-2 w-full' : 'flex flex-col gap-1 w-full'}>
         {attachmentsByType.audios.map((attachment) => (
-          <AudioAttachment key={attachment.id} attachment={attachment} />
+          <AudioAttachment
+            key={attachment.id}
+            attachment={attachment}
+            messageId={attachment.messageId}
+          />
         ))}
       </div>
     );

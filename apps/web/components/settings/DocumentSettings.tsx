@@ -3,7 +3,7 @@
 /**
  * Document Settings Component
  * Configuration des préférences de documents et fichiers
- * Synchronisé avec l'API backend /user-preferences/documents
+ * Synchronisé avec l'API backend /me/preferences/document
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -74,7 +74,7 @@ export function DocumentSettings() {
       setError(null);
 
       const response = await apiService.get<{ success: boolean; data: DocumentPreference }>(
-        '/user-preferences/documents'
+        '/me/preferences/document'
       );
 
       if (response.success && response.data) {
@@ -101,7 +101,7 @@ export function DocumentSettings() {
 
     try {
       const response = await apiService.put<{ success: boolean; data: DocumentPreference }>(
-        '/user-preferences/documents',
+        '/me/preferences/document',
         preferences
       );
 

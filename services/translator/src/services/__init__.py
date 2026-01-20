@@ -52,6 +52,13 @@ except ImportError as e:
     get_translation_pipeline_service = None
     get_analytics_service = None
 
+# Voice Profile Handler (for voice profile requests)
+VOICE_PROFILE_HANDLER_AVAILABLE = False
+try:
+    from .zmq_voice_handler import VOICE_PROFILE_HANDLER_AVAILABLE
+except ImportError:
+    pass
+
 __all__ = [
     "ZMQTranslationServer",
     "ZMQ_AVAILABLE",
@@ -73,5 +80,6 @@ __all__ = [
     "get_voice_analyzer_service",
     "get_translation_pipeline_service",
     "get_analytics_service",
-    "VOICE_API_AVAILABLE"
+    "VOICE_API_AVAILABLE",
+    "VOICE_PROFILE_HANDLER_AVAILABLE"
 ]

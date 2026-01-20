@@ -181,10 +181,7 @@ export function registerParticipantsRoutes(
               customDestinationLanguage: true,
               isActive: true,
               createdAt: true,
-              updatedAt: true,
-              userFeature: {
-                select: { textTranslationEnabledAt: true }
-              }
+              updatedAt: true
             }
           }
         },
@@ -214,8 +211,8 @@ export function registerParticipantsRoutes(
         systemLanguage: participant.user.systemLanguage,
         regionalLanguage: participant.user.regionalLanguage,
         customDestinationLanguage: participant.user.customDestinationLanguage,
-        // Traduction activée si textTranslationEnabledAt n'est pas null (dans UserFeature)
-        autoTranslateEnabled: participant.user.userFeature?.textTranslationEnabledAt != null,
+        // TODO: Re-implement with UserPreferences.application
+        autoTranslateEnabled: false,
         isActive: participant.user.isActive,
         createdAt: participant.user.createdAt,
         updatedAt: participant.user.updatedAt,

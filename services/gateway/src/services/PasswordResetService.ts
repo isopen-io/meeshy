@@ -264,10 +264,14 @@ export class PasswordResetService {
         where: { tokenHash },
         include: {
           user: {
-            include: {
-              userFeature: {
-                select: { twoFactorEnabledAt: true }
-              }
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              password: true,
+              twoFactorSecret: true,
+              twoFactorEnabledAt: true
             }
           }
         }
@@ -316,7 +320,7 @@ export class PasswordResetService {
       }
 
       // 9. Verify 2FA if enabled
-      if (user.userFeature?.twoFactorEnabledAt) {
+      if (user.twoFactorEnabledAt) {
         if (!twoFactorCode) {
           return { success: false, error: '2FA code required' };
         }
@@ -675,13 +679,11 @@ export class PasswordResetService {
       where: { id: userId },
       select: {
         twoFactorSecret: true,
-        userFeature: {
-          select: { twoFactorEnabledAt: true }
-        }
+        twoFactorEnabledAt: true
       }
     });
 
-    if (!user?.userFeature?.twoFactorEnabledAt || !user.twoFactorSecret) {
+    if (!user?.twoFactorEnabledAt || !user.twoFactorSecret) {
       return true; // 2FA not enabled
     }
 

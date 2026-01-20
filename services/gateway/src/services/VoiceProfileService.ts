@@ -286,66 +286,65 @@ export class VoiceProfileService extends EventEmitter {
     try {
       console.log('[VoiceProfileService] updateConsent called:', { userId, consent });
       const now = new Date();
-      const userFeatureData: any = {};
       const userData: any = {};
 
       // Récupérer l'état actuel pour gérer les dépendances
-      const existingFeature = await this.prisma.userFeature.findUnique({
-        where: { userId },
+      const existingUser = await this.prisma.user.findUnique({
+        where: { id: userId },
         select: {
           dataProcessingConsentAt: true,
           voiceDataConsentAt: true,
           voiceProfileConsentAt: true,
         }
       });
-      console.log('[VoiceProfileService] Existing feature:', existingFeature);
+      console.log('[VoiceProfileService] Existing user consents:', existingUser);
 
-      // Les consentements vocaux sont dans UserFeature
+      // Les consentements vocaux sont maintenant dans User
       // IMPORTANT: Respecter la chaîne de dépendances:
       // dataProcessingConsentAt → voiceDataConsentAt → voiceProfileConsentAt → voiceCloningEnabledAt
       if (consent.voiceRecordingConsent !== undefined) {
         if (consent.voiceRecordingConsent) {
           // Activer voiceProfileConsentAt et ses dépendances
-          userFeatureData.voiceProfileConsentAt = now;
+          userData.voiceProfileConsentAt = now;
           // Activer automatiquement les dépendances si pas déjà activées
-          if (!existingFeature?.voiceDataConsentAt) {
-            userFeatureData.voiceDataConsentAt = now;
+          if (!existingUser?.voiceDataConsentAt) {
+            userData.voiceDataConsentAt = now;
           }
-          if (!existingFeature?.dataProcessingConsentAt) {
-            userFeatureData.dataProcessingConsentAt = now;
+          if (!existingUser?.dataProcessingConsentAt) {
+            userData.dataProcessingConsentAt = now;
           }
         } else {
           // Désactiver seulement voiceProfileConsentAt (ne pas toucher aux dépendances)
-          userFeatureData.voiceProfileConsentAt = null;
+          userData.voiceProfileConsentAt = null;
         }
       }
 
       if (consent.voiceCloningConsent !== undefined) {
         if (consent.voiceCloningConsent) {
-          userFeatureData.voiceCloningEnabledAt = now;
+          userData.voiceCloningEnabledAt = now;
           // S'assurer que voiceProfileConsentAt est activé (dépendance)
-          if (!existingFeature?.voiceProfileConsentAt && !userFeatureData.voiceProfileConsentAt) {
-            userFeatureData.voiceProfileConsentAt = now;
+          if (!existingUser?.voiceProfileConsentAt && !userData.voiceProfileConsentAt) {
+            userData.voiceProfileConsentAt = now;
           }
           // Et ses dépendances
-          if (!existingFeature?.voiceDataConsentAt && !userFeatureData.voiceDataConsentAt) {
-            userFeatureData.voiceDataConsentAt = now;
+          if (!existingUser?.voiceDataConsentAt && !userData.voiceDataConsentAt) {
+            userData.voiceDataConsentAt = now;
           }
-          if (!existingFeature?.dataProcessingConsentAt && !userFeatureData.dataProcessingConsentAt) {
-            userFeatureData.dataProcessingConsentAt = now;
+          if (!existingUser?.dataProcessingConsentAt && !userData.dataProcessingConsentAt) {
+            userData.dataProcessingConsentAt = now;
           }
         } else {
-          userFeatureData.voiceCloningEnabledAt = null;
+          userData.voiceCloningEnabledAt = null;
         }
       }
 
-      // birthDate est sur User, ageVerifiedAt est sur UserFeature
+      // birthDate et ageVerifiedAt sont tous deux sur User maintenant
       if (consent.birthDate) {
         userData.birthDate = new Date(consent.birthDate);
-        userFeatureData.ageVerifiedAt = now;
+        userData.ageVerifiedAt = now;
       }
 
-      if (Object.keys(userFeatureData).length === 0 && Object.keys(userData).length === 0) {
+      if (Object.keys(userData).length === 0) {
         return {
           success: false,
           error: 'No consent data provided',
@@ -353,32 +352,20 @@ export class VoiceProfileService extends EventEmitter {
         };
       }
 
-      // Mettre à jour UserFeature (créer si n'existe pas)
-      if (Object.keys(userFeatureData).length > 0) {
-        console.log('[VoiceProfileService] Upserting userFeature with:', userFeatureData);
-        const result = await this.prisma.userFeature.upsert({
-          where: { userId },
-          update: userFeatureData,
-          create: {
-            userId,
-            ...userFeatureData
-          }
-        });
-        console.log('[VoiceProfileService] Upsert result:', {
-          voiceProfileConsentAt: result.voiceProfileConsentAt,
-          voiceDataConsentAt: result.voiceDataConsentAt,
-          dataProcessingConsentAt: result.dataProcessingConsentAt,
-          voiceCloningEnabledAt: result.voiceCloningEnabledAt
-        });
-      }
-
-      // Mettre à jour User si nécessaire (birthDate)
-      if (Object.keys(userData).length > 0) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: userData
-        });
-      }
+      // Mettre à jour User
+      console.log('[VoiceProfileService] Updating user with:', userData);
+      const result = await this.prisma.user.update({
+        where: { id: userId },
+        data: userData,
+        select: {
+          voiceProfileConsentAt: true,
+          voiceDataConsentAt: true,
+          dataProcessingConsentAt: true,
+          voiceCloningEnabledAt: true,
+          ageVerifiedAt: true
+        }
+      });
+      console.log('[VoiceProfileService] Update result:', result);
 
       console.log('[VoiceProfileService] Consent updated successfully');
       return {
@@ -411,13 +398,9 @@ export class VoiceProfileService extends EventEmitter {
         where: { id: userId },
         select: {
           birthDate: true,
-          userFeature: {
-            select: {
-              voiceProfileConsentAt: true,
-              voiceCloningEnabledAt: true,
-              ageVerifiedAt: true
-            }
-          }
+          voiceProfileConsentAt: true,
+          voiceCloningEnabledAt: true,
+          ageVerifiedAt: true
         }
       });
 
@@ -430,7 +413,11 @@ export class VoiceProfileService extends EventEmitter {
         };
       }
 
-      console.log('[VoiceProfileService] User feature from DB:', user.userFeature);
+      console.log('[VoiceProfileService] User consents from DB:', {
+        voiceProfileConsentAt: user.voiceProfileConsentAt,
+        voiceCloningEnabledAt: user.voiceCloningEnabledAt,
+        ageVerifiedAt: user.ageVerifiedAt
+      });
 
       // Helper pour convertir Date en string ISO ou null
       const toISOString = (date: Date | null | undefined): string | null => {
@@ -438,14 +425,14 @@ export class VoiceProfileService extends EventEmitter {
       };
 
       const result = {
-        hasVoiceRecordingConsent: !!user.userFeature?.voiceProfileConsentAt,
-        hasVoiceCloningConsent: !!user.userFeature?.voiceCloningEnabledAt,
-        hasAgeVerification: !!user.userFeature?.ageVerifiedAt,
+        hasVoiceRecordingConsent: !!user.voiceProfileConsentAt,
+        hasVoiceCloningConsent: !!user.voiceCloningEnabledAt,
+        hasAgeVerification: !!user.ageVerifiedAt,
         birthDate: toISOString(user.birthDate),
         // Timestamps ISO pour le frontend
-        voiceRecordingConsentAt: toISOString(user.userFeature?.voiceProfileConsentAt),
-        voiceCloningEnabledAt: toISOString(user.userFeature?.voiceCloningEnabledAt),
-        ageVerificationConsentAt: toISOString(user.userFeature?.ageVerifiedAt)
+        voiceRecordingConsentAt: toISOString(user.voiceProfileConsentAt),
+        voiceCloningEnabledAt: toISOString(user.voiceCloningEnabledAt),
+        ageVerificationConsentAt: toISOString(user.ageVerifiedAt)
       };
 
       console.log('[VoiceProfileService] Returning consent status:', result);
@@ -475,13 +462,11 @@ export class VoiceProfileService extends EventEmitter {
       // Check consent
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        include: {
-          userFeature: {
-            select: {
-              voiceProfileConsentAt: true,
-              voiceCloningEnabledAt: true
-            }
-          },
+        select: {
+          id: true,
+          birthDate: true,
+          voiceProfileConsentAt: true,
+          voiceCloningEnabledAt: true,
           voiceModel: true
         }
       });
@@ -490,7 +475,7 @@ export class VoiceProfileService extends EventEmitter {
         return { success: false, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
       }
 
-      if (!user.userFeature?.voiceProfileConsentAt) {
+      if (!user.voiceProfileConsentAt) {
         return { success: false, error: 'Voice recording consent required', errorCode: 'CONSENT_REQUIRED' };
       }
 
@@ -586,12 +571,11 @@ export class VoiceProfileService extends EventEmitter {
           }
         }
 
+        // TODO: Save voice cloning settings to UserPreferences.audio JSON
+        // These settings (temperature, topP, qualityPreset) need to be migrated
         if (Object.keys(updateData).length > 0) {
-          await this.prisma.userFeature.update({
-            where: { userId },
-            data: updateData
-          });
-          console.log('[VoiceProfileService] Saved voice cloning settings:', updateData);
+          console.log('[VoiceProfileService] Voice cloning settings to save:', updateData);
+          console.warn('[VoiceProfileService] Voice cloning settings storage not yet migrated to UserPreferences');
         }
       }
 
@@ -679,14 +663,12 @@ export class VoiceProfileService extends EventEmitter {
         where: { userId },
         include: {
           user: {
-            include: {
-              userFeature: {
-                select: {
-                  voiceProfileConsentAt: true,
-                  voiceCloningEnabledAt: true,
-                  ageVerifiedAt: true
-                }
-              }
+            select: {
+              id: true,
+              birthDate: true,
+              voiceProfileConsentAt: true,
+              voiceCloningEnabledAt: true,
+              ageVerifiedAt: true
             }
           }
         }
@@ -798,14 +780,11 @@ export class VoiceProfileService extends EventEmitter {
         where: { userId },
         include: {
           user: {
-            include: {
-              userFeature: {
-                select: {
-                  voiceProfileConsentAt: true,
-                  voiceCloningEnabledAt: true,
-                  ageVerifiedAt: true
-                }
-              }
+            select: {
+              id: true,
+              voiceProfileConsentAt: true,
+              voiceCloningEnabledAt: true,
+              ageVerifiedAt: true
             }
           }
         }
@@ -840,9 +819,9 @@ export class VoiceProfileService extends EventEmitter {
         where: { userId }
       });
 
-      // Reset consent fields in UserFeature
-      await this.prisma.userFeature.update({
-        where: { userId },
+      // Reset consent fields in User
+      await this.prisma.user.update({
+        where: { id: userId },
         data: {
           voiceProfileConsentAt: null,
           voiceCloningEnabledAt: null
@@ -873,9 +852,6 @@ export class VoiceProfileService extends EventEmitter {
       ? voiceModel.nextRecalibrationAt < now
       : false;
 
-    // Les consentements sont dans UserFeature, pas dans User
-    const userFeature = user.userFeature;
-
     // Helper pour convertir Date en string ISO ou null
     const toISOString = (date: Date | null | undefined): string | null => {
       return date ? date.toISOString() : null;
@@ -896,9 +872,9 @@ export class VoiceProfileService extends EventEmitter {
       expiresAt: toISOString(voiceModel.nextRecalibrationAt),
       needsCalibration,
       consentStatus: {
-        voiceRecordingConsentAt: toISOString(userFeature?.voiceProfileConsentAt),
-        voiceCloningEnabledAt: toISOString(userFeature?.voiceCloningEnabledAt),
-        ageVerificationConsentAt: toISOString(userFeature?.ageVerifiedAt)
+        voiceRecordingConsentAt: toISOString(user?.voiceProfileConsentAt),
+        voiceCloningEnabledAt: toISOString(user?.voiceCloningEnabledAt),
+        ageVerificationConsentAt: toISOString(user?.ageVerifiedAt)
       }
     };
   }

@@ -14,6 +14,11 @@ import type {
 } from '@meeshy/shared/types/attachment';
 import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
+import type {
+  AttachmentTranscription,
+  AttachmentTranslations,
+} from '@meeshy/shared/types/attachment-audio';
+import { toSocketIOAudios } from '@meeshy/shared/types/attachment-audio';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -205,9 +210,19 @@ export class AttachmentService {
   async getAttachmentWithMetadata(attachmentId: string): Promise<any | null> {
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
-      include: {
+      select: {
+        id: true,
+        messageId: true,
+        fileName: true,
+        fileUrl: true,
+        filePath: true,
+        mimeType: true,
+        fileSize: true,
+        duration: true,
         transcription: true,
-        translatedAudios: true,
+        translations: true,
+        metadata: true,
+        createdAt: true,
       },
     });
 
@@ -297,28 +312,35 @@ export class AttachmentService {
       orderBy: { createdAt: 'desc' },
       take: options.limit || 50,
       skip: options.offset || 0,
-      include: {
-        transcription: {
-          select: {
-            id: true,
-            transcribedText: true,
-            language: true,
-            confidence: true,
-            source: true,
-            voiceQualityAnalysis: true,
-          }
-        },
-        translatedAudios: {
-          select: {
-            id: true,
-            targetLanguage: true,
-            translatedText: true,
-            audioUrl: true,
-            durationMs: true,
-            voiceCloned: true,
-            voiceQuality: true,
-          }
-        }
+      select: {
+        id: true,
+        messageId: true,
+        fileName: true,
+        originalName: true,
+        mimeType: true,
+        fileSize: true,
+        fileUrl: true,
+        thumbnailUrl: true,
+        width: true,
+        height: true,
+        duration: true,
+        bitrate: true,
+        sampleRate: true,
+        codec: true,
+        channels: true,
+        uploadedBy: true,
+        isAnonymous: true,
+        createdAt: true,
+        isForwarded: true,
+        isViewOnce: true,
+        viewOnceCount: true,
+        isBlurred: true,
+        viewedCount: true,
+        downloadedCount: true,
+        consumedCount: true,
+        isEncrypted: true,
+        transcription: true,
+        translations: true,
       }
     });
 
@@ -349,23 +371,9 @@ export class AttachmentService {
       downloadedCount: att.downloadedCount ?? 0,
       consumedCount: att.consumedCount ?? 0,
       isEncrypted: att.isEncrypted ?? false,
-      transcription: att.transcription ? {
-        id: att.transcription.id,
-        transcribedText: att.transcription.transcribedText,
-        language: att.transcription.language,
-        confidence: att.transcription.confidence,
-        source: att.transcription.source,
-        voiceQualityAnalysis: att.transcription.voiceQualityAnalysis as unknown as VoiceQualityAnalysis | null
-      } : null,
-      translatedAudios: att.translatedAudios.map(ta => ({
-        id: ta.id,
-        targetLanguage: ta.targetLanguage,
-        translatedText: ta.translatedText,
-        audioUrl: ta.audioUrl,
-        durationMs: ta.durationMs,
-        voiceCloned: ta.voiceCloned,
-        voiceQuality: ta.voiceQuality
-      }))
+      transcription: att.transcription as unknown as AttachmentTranscription | null,
+      translatedAudios: toSocketIOAudios(att.id, att.translations as unknown as AttachmentTranslations | undefined),
+      translationsJson: (att.translations as unknown as AttachmentTranslations | undefined) || {}
     }));
   }
 

@@ -78,9 +78,11 @@ export const AUDIO_BASE64_SIZE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
 export interface BinaryFrameInfo {
   audio?: number;
   embedding?: number;
+  voiceProfile?: number;  // Index du frame contenant le voice profile embedding
   audioMimeType?: string;
   audioSize?: number;
   embeddingSize?: number;
+  voiceProfileSize?: number;  // Taille du voice profile embedding en bytes
 }
 
 export interface AudioProcessRequest {
@@ -153,17 +155,11 @@ export interface TranscriptionData {
   segments?: Array<{ text: string; startMs: number; endMs: number }>;
 }
 
-export interface TranslatedAudioData {
-  targetLanguage: string;
-  translatedText: string;
-  audioUrl: string;
-  audioPath: string;
-  durationMs: number;
-  voiceCloned: boolean;
-  voiceQuality: number;
-  audioDataBase64?: string;
-  audioMimeType?: string;
-}
+// Import unified type from shared
+import type { TranslatedAudioData } from '@meeshy/shared/types';
+
+// Re-export for convenience
+export type { TranslatedAudioData };
 
 export interface AudioProcessCompletedEvent {
   type: 'audio_process_completed';
@@ -403,25 +399,8 @@ export type VoiceProfileEvent =
 // VOICE TRANSLATION JOB TYPES
 // ═══════════════════════════════════════════════════════════════
 
-export interface VoiceTranslationResult {
-  job_id: string;
-  success: boolean;
-  original_text: string;
-  original_language: string;
-  original_duration_ms: number;
-  transcription_confidence: number;
-  translations: {
-    [language: string]: {
-      text: string;
-      audio_url?: string;
-      audio_duration_ms?: number;
-      synthesis_model?: string;
-    };
-  };
-  voice_cloned: boolean;
-  voice_quality: number;
-  voice_model_version: number;
-}
+// Import du format unifié depuis shared
+import type { VoiceTranslationResult as SharedVoiceTranslationResult } from '@meeshy/shared/types/voice-api';
 
 export interface VoiceTranslationCompletedEvent {
   type: 'voice_translation_completed';
@@ -429,7 +408,7 @@ export interface VoiceTranslationCompletedEvent {
   status: string;
   userId: string;
   timestamp: number;
-  result?: VoiceTranslationResult;
+  result?: SharedVoiceTranslationResult;
 }
 
 export interface VoiceTranslationFailedEvent {

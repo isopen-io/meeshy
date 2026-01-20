@@ -46,14 +46,14 @@ class VoiceCloneModelCreator:
 
     # Configuration
     MIN_AUDIO_DURATION_MS = 10_000  # 10 secondes minimum
-    VOICE_MODEL_MAX_AGE_DAYS = 90   # 3 mois
+    VOICE_MODEL_MAX_AGE_DAYS_DEFAULT = 7  # 7 jours par défaut (production hebdomadaire)
 
     def __init__(
         self,
         audio_processor,
         cache_manager,
         voice_cache_dir: Path,
-        max_age_days: int = 90
+        max_age_days: Optional[int] = None
     ):
         """
         Initialise le créateur de modèles vocaux.
@@ -62,16 +62,23 @@ class VoiceCloneModelCreator:
             audio_processor: Instance de VoiceCloneAudioProcessor
             cache_manager: Instance de VoiceCloneCacheManager
             voice_cache_dir: Répertoire de cache des modèles
-            max_age_days: Âge maximum d'un modèle avant recalibration (défaut: 90 jours)
+            max_age_days: Âge maximum d'un modèle avant recalibration (défaut: 7 jours)
         """
         self._audio_processor = audio_processor
         self._cache_manager = cache_manager
         self.voice_cache_dir = voice_cache_dir
-        self.VOICE_MODEL_MAX_AGE_DAYS = max_age_days
+
+        # Utiliser max_age_days si fourni, sinon lire depuis env, sinon 7 jours
+        if max_age_days is not None:
+            self.VOICE_MODEL_MAX_AGE_DAYS = max_age_days
+        else:
+            self.VOICE_MODEL_MAX_AGE_DAYS = int(
+                os.getenv('VOICE_MODEL_MAX_AGE_DAYS', str(self.VOICE_MODEL_MAX_AGE_DAYS_DEFAULT))
+            )
 
         logger.info(
             f"[MODEL_CREATOR] Initialisé: cache_dir={voice_cache_dir}, "
-            f"max_age={max_age_days}j"
+            f"max_age={self.VOICE_MODEL_MAX_AGE_DAYS}j"
         )
 
     async def get_or_create_voice_model(
@@ -89,6 +96,10 @@ class VoiceCloneModelCreator:
         3. Si pas de modèle et audio trop court → agréger historique
         4. Créer nouveau modèle
 
+        Environnement:
+        - Development: Recalcul forcé si audio actuel > 20 secondes
+        - Production: Recalcul hebdomadaire (tous les 7 jours)
+
         Args:
             user_id: ID de l'utilisateur
             current_audio_path: Audio actuel pour le clonage (optionnel)
@@ -97,11 +108,26 @@ class VoiceCloneModelCreator:
         Returns:
             VoiceModel prêt à l'emploi
         """
+        # Déterminer l'environnement
+        environment = os.getenv('ENVIRONMENT', os.getenv('NODE_ENV', 'production')).lower()
+        is_development = environment in ['development', 'dev']
+
+        # Durée minimale pour recalcul en développement (20 secondes)
+        dev_recalc_threshold_ms = 20_000
+
         # 1. Vérifier le cache
         cached_model = await self._cache_manager.load_cached_model(user_id)
 
         if cached_model:
             age_days = (datetime.now() - cached_model.updated_at).days
+
+            # En développement: forcer le recalcul si audio actuel > 20s
+            if is_development and current_audio_path and current_audio_duration_ms >= dev_recalc_threshold_ms:
+                logger.info(
+                    f"[MODEL_CREATOR] 🔄 Mode DEV: Recalcul forcé pour {user_id} "
+                    f"(audio {current_audio_duration_ms}ms > {dev_recalc_threshold_ms}ms)"
+                )
+                return await self._improve_model(cached_model, current_audio_path)
 
             # Modèle récent → utiliser directement
             if age_days < self.VOICE_MODEL_MAX_AGE_DAYS:

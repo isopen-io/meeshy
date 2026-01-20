@@ -137,8 +137,7 @@ export function registerMessagesAdvancedRoutes(
       if (isAuthor && messageAge > twentyFourHoursInMs) {
         // Vérifier si l'utilisateur a des privilèges spéciaux
         const userRole = existingMessage.sender.role;
-        // Support both MODO and MODERATOR for backward compatibility
-        const hasSpecialPrivileges = userRole === 'MODO' || userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'CREATOR' || userRole === 'BIGBOSS';
+        const hasSpecialPrivileges = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
 
         if (!hasSpecialPrivileges) {
           return reply.status(403).send({
@@ -168,8 +167,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (membership) {
           const userRole = membership.user.role;
-          // Support both MODO and MODERATOR for backward compatibility
-          canModify = userRole === 'MODO' || userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'CREATOR' || userRole === 'BIGBOSS';
+          canModify = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
         }
       }
 
@@ -589,8 +587,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (membership) {
           const userRole = membership.user.role;
-          // Support both MODO and MODERATOR for backward compatibility
-          canDelete = userRole === 'MODO' || userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'CREATOR' || userRole === 'BIGBOSS';
+          canDelete = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
         }
       }
 

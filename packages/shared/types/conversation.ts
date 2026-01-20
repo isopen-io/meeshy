@@ -8,12 +8,16 @@ import type { AnonymousParticipant } from './anonymous.js';
 import type { Attachment } from './attachment.js';
 
 /**
- * Rôle utilisateur global (aligné avec schema.prisma User.role)
- * @see shared/schema.prisma ligne 35
+ * Import du type UserRole depuis user.ts (éviter la duplication)
+ * @see user.ts UserRole type
  */
-export type UserRole = 'USER' | 'ADMIN' | 'MODO' | 'BIGBOSS' | 'AUDIT' | 'ANALYST' | 
-  // Aliases pour rétrocompatibilité
-  'MODERATOR' | 'CREATOR' | 'MEMBER';
+import type { UserRole } from './user.js';
+
+/**
+ * Import du type MemberRoleType depuis role-types.ts (type unifié pour conversations et communautés)
+ * @see role-types.ts MemberRole enum
+ */
+import type { MemberRoleType } from './role-types.js';
 
 /**
  * Langue parlée avec statistiques
@@ -668,11 +672,6 @@ export interface UpdateConversationShareDTO {
 // ===== CONVERSATION MEMBER =====
 
 /**
- * Rôle d'un membre de conversation
- */
-export type ConversationMemberRole = 'admin' | 'moderator' | 'member';
-
-/**
  * Membre d'une conversation
  * Aligned with schema.prisma ConversationMember
  */
@@ -681,8 +680,8 @@ export interface ConversationMember {
   readonly conversationId: string;
   readonly userId: string;
 
-  /** Rôle: admin, moderator, member */
-  readonly role: ConversationMemberRole | string;
+  /** Rôle: creator, admin, moderator, member */
+  readonly role: MemberRoleType | string;
 
   /** Surnom personnalisé dans la conversation */
   readonly nickname?: string;
@@ -715,7 +714,7 @@ export type ConversationMemberCompat = ConversationMember;
  */
 export interface AddConversationMemberDTO {
   readonly userId: string;
-  readonly role?: ConversationMemberRole;
+  readonly role?: MemberRoleType;
   readonly nickname?: string;
 }
 
@@ -723,7 +722,7 @@ export interface AddConversationMemberDTO {
  * DTO pour mettre à jour un membre
  */
 export interface UpdateConversationMemberDTO {
-  readonly role?: ConversationMemberRole;
+  readonly role?: MemberRoleType;
   readonly nickname?: string;
   readonly canSendMessage?: boolean;
   readonly canSendFiles?: boolean;

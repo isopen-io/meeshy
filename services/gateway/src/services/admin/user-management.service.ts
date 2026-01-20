@@ -1,4 +1,4 @@
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import {
   FullUser,
   UserFilters,
@@ -52,9 +52,7 @@ export class UserManagementService {
     }
 
     if (filters.twoFactorEnabled !== undefined) {
-      where.userFeature = {
-        twoFactorEnabledAt: filters.twoFactorEnabled ? { not: null } : null
-      };
+      where.twoFactorEnabledAt = filters.twoFactorEnabled ? { not: null } : null;
     }
 
     if (filters.createdAfter || filters.createdBefore) {
@@ -91,10 +89,7 @@ export class UserManagementService {
         where,
         orderBy,
         skip: offset,
-        take: limit,
-        include: {
-          userFeature: true
-        }
+        take: limit
       }),
       this.prisma.user.count({ where })
     ]);
@@ -112,7 +107,6 @@ export class UserManagementService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        userFeature: true,
         _count: {
           select: {
             sentMessages: true,
@@ -142,22 +136,12 @@ export class UserManagementService {
         displayName: data.displayName,
         bio: data.bio || '',
         phoneNumber: data.phoneNumber,
-        role: data.role || 'USER',
+        role: (data.role || 'USER') as UserRole,
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date(),
-        userFeature: {
-          create: {
-            autoTranslateEnabled: false,
-            translateToSystemLanguage: true,
-            translateToRegionalLanguage: false,
-            useCustomDestination: false
-          }
-        }
-      },
-      include: {
-        userFeature: true
+        lastActiveAt: new Date()
+        // TODO: Initialize UserPreferences.application when implemented
       }
     });
 
@@ -178,9 +162,6 @@ export class UserManagementService {
         ...data,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -215,9 +196,6 @@ export class UserManagementService {
         email: data.newEmail,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return updatedUser as unknown as FullUser;
@@ -234,12 +212,9 @@ export class UserManagementService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        role: data.role,
+        role: data.role as UserRole,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -260,9 +235,6 @@ export class UserManagementService {
         deactivatedAt: data.isActive ? null : new Date(),
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -284,9 +256,6 @@ export class UserManagementService {
         password: hashedPassword,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -302,9 +271,6 @@ export class UserManagementService {
         isActive: false,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -320,9 +286,6 @@ export class UserManagementService {
         isActive: true,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -338,9 +301,6 @@ export class UserManagementService {
         avatar: avatarUrl,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;
@@ -356,9 +316,6 @@ export class UserManagementService {
         avatar: null,
         updatedAt: new Date()
       },
-      include: {
-        userFeature: true
-      }
     });
 
     return user as unknown as FullUser;

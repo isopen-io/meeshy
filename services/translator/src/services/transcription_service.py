@@ -29,6 +29,9 @@ from .model_manager import (
     ModelType
 )
 
+# Import du smart segment merger pour fusionner intelligemment les mots courts
+from utils.smart_segment_merger import merge_short_segments
+
 # Configuration du logging
 logger = logging.getLogger(__name__)
 
@@ -54,16 +57,24 @@ except ImportError:
 
 @dataclass
 class TranscriptionSegment:
-    """Segment de transcription avec timestamps"""
+    """
+    Segment de transcription avec timestamps et identification du locuteur.
+    Aligné avec TypeScript shared/types/attachment-transcription.ts
+    """
     text: str
     start_ms: int
     end_ms: int
     confidence: float = 0.0
+    speaker_id: Optional[str] = None  # ID du locuteur (via diarisation)
+    voice_similarity_score: Optional[float] = None  # Score de similarité vocale avec l utilisateur (0-1)
 
 
 @dataclass
 class TranscriptionResult:
-    """Résultat d'une transcription"""
+    """
+    Résultat d'une transcription avec support de diarisation.
+    Aligné avec TypeScript shared/types/audio-transcription.ts
+    """
     text: str
     language: str
     confidence: float
@@ -72,6 +83,13 @@ class TranscriptionResult:
     source: str = "whisper"  # "mobile" ou "whisper"
     model: Optional[str] = None
     processing_time_ms: int = 0
+
+    # === SPEAKER DIARIZATION (Multi-speaker support) ===
+    speaker_count: Optional[int] = None  # Nombre de locuteurs détectés
+    primary_speaker_id: Optional[str] = None  # ID du locuteur principal
+    speaker_analysis: Optional[Dict[str, Any]] = None  # Métadonnées d'analyse
+    sender_voice_identified: Optional[bool] = None  # L'expéditeur a été identifié
+    sender_speaker_id: Optional[str] = None  # ID du locuteur expéditeur
 
 
 class TranscriptionService:
@@ -240,7 +258,9 @@ class TranscriptionService:
                         text=seg.get('text', ''),
                         start_ms=seg.get('startMs', 0),
                         end_ms=seg.get('endMs', 0),
-                        confidence=seg.get('confidence', 0.9)
+                        confidence=seg.get('confidence', 0.9),
+                        speaker_id=seg.get('speakerId'),
+                        voice_similarity_score=seg.get('isCurrentUser', False)
                     ))
 
             # Récupérer la durée audio
@@ -284,7 +304,8 @@ class TranscriptionService:
                 None,
                 lambda: model.transcribe(
                     audio_path,
-                    beam_size=5,
+                    beam_size=1,  # Optimisé: 5→1 pour vitesse (greedy search)
+                    best_of=1,     # Optimisé: génère une seule hypothèse
                     word_timestamps=return_timestamps,
                     vad_filter=True  # Filtrer les silences
                 )
@@ -297,13 +318,45 @@ class TranscriptionService:
             # Parser les segments
             segments = []
             if return_timestamps:
+                # ✅ Utiliser les timestamps NATIFS au niveau des mots fournis par Whisper
+                # Référence: CORRECTION_UTILISER_WHISPER_WORDS_NATIF.md
                 for s in segments_list:
-                    segments.append(TranscriptionSegment(
-                        text=s.text.strip(),
-                        start_ms=int(s.start * 1000),
-                        end_ms=int(s.end * 1000),
-                        confidence=getattr(s, 'avg_logprob', 0.0)
-                    ))
+                    # Vérifier si le segment contient des words (timestamps par mot)
+                    if hasattr(s, 'words') and s.words:
+                        # ✅ Utiliser les mots individuels avec timestamps exacts
+                        for word in s.words:
+                            segments.append(TranscriptionSegment(
+                                text=word.word.strip(),
+                                start_ms=int(word.start * 1000),
+                                end_ms=int(word.end * 1000),
+                                confidence=getattr(word, 'probability', 0.0),
+                                # speaker_id sera ajouté par la diarisation ultérieure
+                                speaker_id=None,
+                                voice_similarity_score=None
+                            ))
+                    else:
+                        # Fallback : segment complet si pas de words
+                        segments.append(TranscriptionSegment(
+                            text=s.text.strip(),
+                            start_ms=int(s.start * 1000),
+                            end_ms=int(s.end * 1000),
+                            confidence=getattr(s, 'avg_logprob', 0.0),
+                            speaker_id=None,
+                            voice_similarity_score=None
+                        ))
+
+                # ✅ Fusion intelligente des mots courts (Option D)
+                # Règles: pause < 90ms ET somme < 8 caractères
+                original_count = len(segments)
+                segments = merge_short_segments(
+                    segments,
+                    word_max_pause_ms=90,
+                    word_max_chars=8
+                )
+                logger.info(
+                    f"[TRANSCRIPTION] Fusion intelligente: {original_count} → {len(segments)} segments "
+                    f"(réduction {(original_count - len(segments)) / original_count * 100:.1f}%)"
+                )
 
             processing_time = int((time.time() - start_time) * 1000)
 
@@ -313,7 +366,7 @@ class TranscriptionService:
                 f"dur={int(info.duration)}s, time={processing_time}ms)"
             )
 
-            return TranscriptionResult(
+            result = TranscriptionResult(
                 text=full_text,
                 language=info.language,
                 confidence=info.language_probability,
@@ -323,6 +376,14 @@ class TranscriptionService:
                 model="whisper_boost",  # Nom canonique du modèle Whisper
                 processing_time_ms=processing_time
             )
+
+            # Appliquer la diarisation si demandé (via flag ou config)
+            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'false').lower() == 'true'
+            if enable_diarization and return_timestamps:
+                logger.info("[TRANSCRIPTION] 🎯 Application de la diarisation")
+                result = await self._apply_diarization(audio_path, result)
+
+            return result
 
         except Exception as e:
             logger.error(f"[TRANSCRIPTION] ❌ Erreur transcription: {e}")
@@ -345,6 +406,97 @@ class TranscriptionService:
         except Exception as e:
             logger.warning(f"[TRANSCRIPTION] Impossible de lire la durée audio: {e}")
             return 0
+
+    async def _apply_diarization(
+        self,
+        audio_path: str,
+        transcription: TranscriptionResult,
+        sender_voice_profile: Optional[Dict[str, Any]] = None
+    ) -> TranscriptionResult:
+        """
+        Applique la diarisation aux segments transcrits.
+
+        Args:
+            audio_path: Chemin vers le fichier audio
+            transcription: Résultat de transcription à enrichir
+            sender_voice_profile: Profil vocal de l'expéditeur (optionnel)
+
+        Returns:
+            TranscriptionResult avec segments enrichis de speaker_id et is_current_user
+        """
+        try:
+            from .diarization_service import get_diarization_service
+
+            diarization_service = get_diarization_service()
+
+            # Détecter les locuteurs
+            diarization = await diarization_service.detect_speakers(audio_path)
+
+            # Identifier l'expéditeur
+            diarization = await diarization_service.identify_sender(
+                diarization,
+                sender_voice_profile
+            )
+
+            logger.info(
+                f"[TRANSCRIPTION] Détecté {diarization.speaker_count} locuteur(s), "
+                f"principal={diarization.primary_speaker_id}"
+            )
+
+            # Taguer les segments avec les speaker_id
+            for segment in transcription.segments:
+                # Trouver le locuteur correspondant à ce segment
+                segment_mid_ms = (segment.start_ms + segment.end_ms) // 2
+
+                for speaker in diarization.speakers:
+                    for speaker_seg in speaker.segments:
+                        if speaker_seg.start_ms <= segment_mid_ms <= speaker_seg.end_ms:
+                            segment.speaker_id = speaker.speaker_id
+                            segment.voice_similarity_score = (
+                                diarization.sender_identified and
+                                speaker.speaker_id == diarization.sender_speaker_id
+                            )
+                            break
+                    if segment.speaker_id:
+                        break
+
+            # Enrichir le résultat de transcription
+            transcription.speaker_count = diarization.speaker_count
+            transcription.primary_speaker_id = diarization.primary_speaker_id
+            transcription.sender_voice_identified = diarization.sender_identified
+            transcription.sender_speaker_id = diarization.sender_speaker_id
+
+            # Construire speaker_analysis pour la base de données
+            transcription.speaker_analysis = {
+                'speakers': [
+                    {
+                        'sid': s.speaker_id,
+                        'is_primary': s.is_primary,
+                        'speaking_time_ms': s.speaking_time_ms,
+                        'speaking_ratio': s.speaking_ratio,
+                        'segments': [
+                            {
+                                'start': seg.start_ms / 1000,
+                                'end': seg.end_ms / 1000,
+                                'duration': seg.duration_ms / 1000
+                            }
+                            for seg in s.segments
+                        ]
+                    }
+                    for s in diarization.speakers
+                ],
+                'total_duration_ms': diarization.total_duration_ms,
+                'method': diarization.method
+            }
+
+            return transcription
+
+        except Exception as e:
+            logger.error(f"[TRANSCRIPTION] Erreur diarisation: {e}")
+            import traceback
+            traceback.print_exc()
+            # Retourner le résultat sans diarisation en cas d'erreur
+            return transcription
 
     async def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du service"""

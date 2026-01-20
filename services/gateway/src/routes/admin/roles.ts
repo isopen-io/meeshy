@@ -8,6 +8,7 @@ import {
   type UserRole
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -50,8 +51,8 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         properties: {
           role: {
             type: 'string',
-            enum: ['USER', 'MODERATOR', 'ADMIN', 'CREATOR', 'ANALYST', 'AUDIT', 'BIGBOSS'],
-            description: 'New role to assign'
+            enum: ['USER', 'ANALYST', 'AUDIT', 'MODERATOR', 'ADMIN', 'BIGBOSS'],
+            description: 'New role to assign (aligned with Prisma enum UserRole)'
           }
         }
       },
@@ -149,7 +150,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       // Mettre a jour le role
       const updatedUser = await fastify.prisma.user.update({
         where: { id },
-        data: { role: body.role },
+        data: { role: body.role as PrismaUserRole },
         select: {
           id: true,
           username: true,

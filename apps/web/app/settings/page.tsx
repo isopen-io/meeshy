@@ -16,7 +16,8 @@ import {
   MessageSquare,
   Bell,
   Rocket,
-  PlayCircle
+  PlayCircle,
+  Lock
 } from 'lucide-react';
 import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion } from '@/hooks/use-accessibility';
@@ -80,6 +81,14 @@ const BetaPlayground = dynamic(
   }
 );
 
+const SecuritySettings = dynamic(
+  () => import('@/components/settings/encryption-settings').then(mod => ({ default: mod.EncryptionSettings })),
+  {
+    loading: () => <SettingsLoadingSkeleton />,
+    ssr: false
+  }
+);
+
 // Loading skeleton component
 function SettingsLoadingSkeleton() {
   return (
@@ -119,6 +128,73 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(getInitialTab);
   const [prefetchedTabs, setPrefetchedTabs] = useState<Set<string>>(new Set());
 
+  // Check if user has moderator access or higher
+  const hasModeratorAccess = useMemo(() => {
+    if (!currentUser?.role) return false;
+    const moderatorRoles = ['MODERATOR', 'ADMIN', 'BIGBOSS', 'CREATOR', 'MODO'];
+    return moderatorRoles.includes(currentUser.role);
+  }, [currentUser]);
+
+  // Memoized tabs configuration
+  const tabs = useMemo(() => {
+    const allTabs = [
+      {
+        value: 'profile',
+        label: t('tabs.profile'),
+        icon: <UserIcon className="h-4 w-4" />,
+        component: ProfileSettings
+      },
+      {
+        value: 'privacy',
+        label: t('tabs.privacy'),
+        icon: <Shield className="h-4 w-4" />,
+        component: PrivacySettings
+      },
+      {
+        value: 'security',
+        label: t('tabs.security', 'Security'),
+        icon: <Lock className="h-4 w-4" />,
+        component: SecuritySettings
+      },
+      {
+        value: 'media',
+        label: t('tabs.media', 'Media'),
+        icon: <PlayCircle className="h-4 w-4" />,
+        component: MediaSettings
+      },
+      {
+        value: 'message',
+        label: t('tabs.message', 'Messages'),
+        icon: <MessageSquare className="h-4 w-4" />,
+        component: MessageSettings
+      },
+      {
+        value: 'notification',
+        label: t('tabs.notifications'),
+        icon: <Bell className="h-4 w-4" />,
+        component: NotificationSettings
+      },
+      {
+        value: 'application',
+        label: t('tabs.application', 'Application'),
+        icon: <SettingsIcon className="h-4 w-4" />,
+        component: ApplicationSettings
+      }
+    ];
+
+    // Only add Beta Playground for moderators and above
+    if (hasModeratorAccess) {
+      allTabs.push({
+        value: 'beta',
+        label: t('tabs.beta', 'Beta'),
+        icon: <Rocket className="h-4 w-4" />,
+        component: BetaPlayground
+      });
+    }
+
+    return allTabs;
+  }, [t, hasModeratorAccess]);
+
   // Load user settings with parallel fetches
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -130,17 +206,17 @@ export default function SettingsPage() {
         }
 
         // Parallel fetches to eliminate waterfall
-        const [userResponse, notificationsResponse, encryptionResponse] = await Promise.all([
+        const [userResponse, notificationsResponse, privacyResponse] = await Promise.all([
           fetch(buildApiUrl(API_ENDPOINTS.AUTH.ME), {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             }
           }),
-          fetch(`${buildApiUrl('')}/me/preferences/notification`, {
+          fetch(buildApiUrl('/me/preferences/notification'), {
             headers: { 'Authorization': `Bearer ${token}` }
           }).catch(() => null),
-          fetch(`${buildApiUrl('')}/user-preferences/encryption`, {
+          fetch(buildApiUrl('/me/preferences/privacy'), {
             headers: { 'Authorization': `Bearer ${token}` }
           }).catch(() => null),
         ]);
@@ -161,8 +237,8 @@ export default function SettingsPage() {
             if (notificationsResponse?.ok) {
               await notificationsResponse.json();
             }
-            if (encryptionResponse?.ok) {
-              await encryptionResponse.json();
+            if (privacyResponse?.ok) {
+              await privacyResponse.json();
             }
           } else {
             throw new Error(userResult.error || t('errors.loadProfile'));
@@ -257,13 +333,15 @@ export default function SettingsPage() {
       if ('email' in updatedUser) filteredData.email = updatedUser.email;
       if ('phoneNumber' in updatedUser) filteredData.phoneNumber = updatedUser.phoneNumber;
       if ('bio' in updatedUser) filteredData.bio = updatedUser.bio;
+
+      // Message translation languages (managed in Profile tab)
       if ('systemLanguage' in updatedUser) filteredData.systemLanguage = updatedUser.systemLanguage;
-      if ('regionalLanguage' in updatedUser) filteredData.regionalLanguage = updatedUser.regionalLanguage;
-      if ('customDestinationLanguage' in updatedUser) filteredData.customDestinationLanguage = updatedUser.customDestinationLanguage;
-      if ('autoTranslateEnabled' in updatedUser) filteredData.autoTranslateEnabled = updatedUser.autoTranslateEnabled;
-      if ('translateToSystemLanguage' in updatedUser) filteredData.translateToSystemLanguage = updatedUser.translateToSystemLanguage;
-      if ('translateToRegionalLanguage' in updatedUser) filteredData.translateToRegionalLanguage = updatedUser.translateToRegionalLanguage;
-      if ('useCustomDestination' in updatedUser) filteredData.useCustomDestination = updatedUser.useCustomDestination;
+      if ('regionalLanguage' in updatedUser) {
+        filteredData.regionalLanguage = updatedUser.regionalLanguage === '' ? null : updatedUser.regionalLanguage;
+      }
+      if ('customDestinationLanguage' in updatedUser) {
+        filteredData.customDestinationLanguage = updatedUser.customDestinationLanguage === '' ? null : updatedUser.customDestinationLanguage;
+      }
 
       const response = await fetch(buildApiUrl('/users/me'), {
         method: 'PATCH',
@@ -291,67 +369,6 @@ export default function SettingsPage() {
       toast.error(error instanceof Error ? error.message : t('errors.updateSettings'));
     }
   };
-
-  // Check if user has moderator access or higher
-  const hasModeratorAccess = useMemo(() => {
-    if (!currentUser?.role) return false;
-    const moderatorRoles = ['MODERATOR', 'ADMIN', 'BIGBOSS', 'CREATOR', 'MODO'];
-    return moderatorRoles.includes(currentUser.role);
-  }, [currentUser]);
-
-  // Memoized tabs configuration
-  const tabs = useMemo(() => {
-    const allTabs = [
-      {
-        value: 'profile',
-        label: t('tabs.profile'),
-        icon: <UserIcon className="h-4 w-4" />,
-        component: ProfileSettings
-      },
-      {
-        value: 'privacy',
-        label: t('tabs.privacy'),
-        icon: <Shield className="h-4 w-4" />,
-        component: PrivacySettings
-      },
-      {
-        value: 'media',
-        label: t('tabs.media', 'Media'),
-        icon: <PlayCircle className="h-4 w-4" />,
-        component: MediaSettings
-      },
-      {
-        value: 'message',
-        label: t('tabs.message', 'Messages'),
-        icon: <MessageSquare className="h-4 w-4" />,
-        component: MessageSettings
-      },
-      {
-        value: 'notification',
-        label: t('tabs.notifications'),
-        icon: <Bell className="h-4 w-4" />,
-        component: NotificationSettings
-      },
-      {
-        value: 'application',
-        label: t('tabs.application', 'Application'),
-        icon: <SettingsIcon className="h-4 w-4" />,
-        component: ApplicationSettings
-      }
-    ];
-
-    // Only add Beta Playground for moderators and above
-    if (hasModeratorAccess) {
-      allTabs.push({
-        value: 'beta',
-        label: t('tabs.beta', 'Beta'),
-        icon: <Rocket className="h-4 w-4" />,
-        component: BetaPlayground
-      });
-    }
-
-    return allTabs;
-  }, [t, hasModeratorAccess]);
 
   // Memoized tab items for ResponsiveTabs
   const tabItems = useMemo(() => tabs.map(tab => ({

@@ -1,0 +1,110 @@
+// ===================================================================
+// Migration : Ajouter enum UserRole et migrer les rôles existants
+// ===================================================================
+//
+// Cette migration crée un enum UserRole fort et migre les données
+// de String vers l'enum typé.
+//
+// Étapes :
+// 1. Créer l'enum UserRole
+// 2. Ajouter une colonne temporaire roleTemp de type UserRole
+// 3. Migrer les données de role (String) vers roleTemp (UserRole)
+// 4. Supprimer l'ancienne colonne role
+// 5. Renommer roleTemp en role
+//
+// ===================================================================
+
+// NOUVELLE DÉFINITION D'ENUM
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR  // ✅ Valeur explicite au lieu de "MODO"
+  BIGBOSS
+  AUDIT
+  ANALYST
+}
+
+// MODÈLE USER MIS À JOUR
+model User {
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username                  String   @unique
+  firstName                 String
+  lastName                  String
+  bio                       String   @default("")
+  email                     String   @unique
+  phoneNumber               String?
+  phoneCountryCode          String?
+  password                  String
+  displayName               String?
+  avatar                    String?
+  banner                    String?
+  isOnline                  Boolean  @default(false)
+  lastActiveAt              DateTime @default(now())
+  timezone                  String?
+  blockedUserIds            String[] @default([]) @db.ObjectId
+
+  // ============================================
+  // LANGUAGE CONFIGURATION
+  // ============================================
+  systemLanguage            String   @default("en")
+  regionalLanguage          String?
+  customDestinationLanguage String?
+
+  // ============================================
+  // RÔLE UTILISATEUR (NOUVELLE VERSION TYPÉE)
+  // ============================================
+  role          UserRole  @default(USER)  // ✅ Enum au lieu de String
+  isActive      Boolean   @default(true)
+  deactivatedAt DateTime?
+
+  // ... (autres champs inchangés)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (inchangées)
+  sentMessages                Message[]                  @relation("MessageSender")
+  receivedMessages            MessageStatus[]            @relation("MessageRecipient")
+  conversations               ConversationParticipant[]
+  reactions                   MessageReaction[]
+  mentions                    MessageMention[]
+  readReceipts                MessageReadReceipt[]
+  communities                 CommunityMember[]
+  ownedCommunities            Community[]                @relation("CommunityCreator")
+  affiliateLinks              AffiliateLink[]
+  sentFriendRequests          FriendRequest[]            @relation("SentFriendRequests")
+  receivedFriendRequests      FriendRequest[]            @relation("ReceivedFriendRequests")
+  friends1                    Friend[]                   @relation("Friend1")
+  friends2                    Friend[]                   @relation("Friend2")
+  blockedUsers                BlockedUser[]              @relation("BlockedBy")
+  blockedByUsers              BlockedUser[]              @relation("BlockedUser")
+  deviceTokens                DeviceToken[]
+  preferences                 UserPreference[]
+  stats                       UserStats?
+  sessions                    UserSession[]
+  auditLogs                   AuditLog[]
+  sentNotifications           Notification[]             @relation("NotificationSender")
+  receivedNotifications       NotificationRecipient[]
+  magicLinks                  MagicLink[]
+  passwordResetTokens         PasswordResetToken[]
+  preKeyBundles               SignalPreKeyBundle[]
+  signalIdentityKeys          SignalIdentityKey[]
+  signalConversations         SignalConversation[]
+  adminActions                AdminAction[]
+  adminTargetActions          AdminAction[]              @relation("AdminActionTarget")
+  uploadedAttachments         MessageAttachment[]        @relation("UploadedBy")
+  deletions                   MessageDeletion[]
+  voiceModels                 UserVoiceModel[]
+  adminRole                   AdminRole?
+  translationJobs             TranslationJob[]
+  stickerPacks                StickerPack[]
+  anonymousParticipants       AnonymousParticipant[]
+
+  @@index([email])
+  @@index([username])
+  @@index([isOnline])
+  @@index([role])  // ✅ Index sur l'enum
+  @@index([lastActiveAt])
+  @@index([createdAt])
+  @@map("users")
+}

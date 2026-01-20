@@ -133,17 +133,35 @@ export class AuthService {
           ],
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
+        select: {
+          id: true,
+          username: true,
+          password: true,
+          email: true,
+          phoneNumber: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          isOnline: true,
+          lastActiveAt: true,
+          twoFactorEnabledAt: true,
+          twoFactorSecret: true,
+          twoFactorBackupCodes: true,
+          lastLoginIp: true,
+          lastLoginLocation: true,
+          lastLoginDevice: true,
+          timezone: true,
+          emailVerifiedAt: true,
+          phoneVerifiedAt: true,
+          createdAt: true,
+          updatedAt: true
         }
       });
 
@@ -164,7 +182,7 @@ export class AuthService {
       console.log('[AUTH_SERVICE] ✅ Mot de passe valide pour:', user.username);
 
       // Check if 2FA is enabled
-      if (user.userFeature?.twoFactorEnabledAt) {
+      if (user.twoFactorEnabledAt) {
         console.log('[AUTH_SERVICE] 🔐 2FA activé pour:', user.username, '- Génération du token temporaire');
 
         // Generate a temporary token for 2FA verification
@@ -288,17 +306,32 @@ export class AuthService {
           phoneVerificationExpiry: { gt: new Date() },
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          phoneNumber: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          twoFactorEnabledAt: true,
+          twoFactorSecret: true,
+          twoFactorBackupCodes: true,
+          lastLoginIp: true,
+          lastLoginLocation: true,
+          lastLoginDevice: true,
+          timezone: true,
+          emailVerifiedAt: true,
+          phoneVerifiedAt: true,
+          createdAt: true,
+          updatedAt: true
         }
       });
 
@@ -638,17 +671,26 @@ export class AuthService {
           id: userId,
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          phoneNumber: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          isOnline: true,
+          lastActiveAt: true,
+          twoFactorEnabledAt: true,
+          createdAt: true,
+          updatedAt: true
         }
       });
 
@@ -1104,11 +1146,11 @@ export class AuthService {
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,
       customDestinationLanguage: user.customDestinationLanguage,
-      // Feature flags from userFeature relation (with defaults for backwards compatibility)
-      autoTranslateEnabled: user.userFeature?.autoTranslateEnabled ?? true,
-      translateToSystemLanguage: user.userFeature?.translateToSystemLanguage ?? true,
-      translateToRegionalLanguage: user.userFeature?.translateToRegionalLanguage ?? false,
-      useCustomDestination: user.userFeature?.useCustomDestination ?? false,
+      // TODO: Load from UserPreferences.application
+      autoTranslateEnabled: true,
+      translateToSystemLanguage: true,
+      translateToRegionalLanguage: false,
+      useCustomDestination: false,
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,
@@ -1116,7 +1158,7 @@ export class AuthService {
       // Security & verification fields for auth responses
       emailVerifiedAt: user.emailVerifiedAt,
       phoneVerifiedAt: user.phoneVerifiedAt,
-      twoFactorEnabledAt: user.userFeature?.twoFactorEnabledAt ?? null,
+      twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
       lastPasswordChange: user.lastPasswordChange,
       // Login tracking
       lastLoginIp: user.lastLoginIp,

@@ -6,6 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
+import { MultiLevelJobMappingCache } from '../../services/MultiLevelJobMappingCache';
 import { registerUploadRoutes } from './upload';
 import { registerDownloadRoutes } from './download';
 import { registerMetadataRoutes } from './metadata';
@@ -14,13 +15,27 @@ import { registerTranslationRoutes } from './translation';
 export async function attachmentRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
-  // Initialize translate service if ZMQ client is available
+  // Vérifier que prisma est bien défini
+  if (!prisma) {
+    throw new Error('[AttachmentRoutes] Prisma client is not available on fastify instance');
+  }
+
+  // Initialize translate service if ZMQ client is available via translationService
   let translateService: AttachmentTranslateService | null = null;
-  if ((fastify as any).zmqClient) {
-    translateService = new AttachmentTranslateService(
-      prisma,
-      (fastify as any).zmqClient
-    );
+  const translationService = (fastify as any).translationService;
+  if (translationService) {
+    const zmqClient = translationService.getZmqClient();
+    if (zmqClient) {
+      // Créer le cache multi-niveau (fonctionne avec ou sans Redis)
+      const redis = (fastify as any).redis;
+      const jobMappingService = new MultiLevelJobMappingCache(redis || undefined);
+
+      translateService = new AttachmentTranslateService(
+        prisma,
+        zmqClient,
+        jobMappingService
+      );
+    }
   }
 
   // Middleware d'authentification optionnel (supporte JWT + Session anonyme)

@@ -669,7 +669,12 @@ endif
 		fi && \
 		. .venv/bin/activate && \
 		pip install -q --upgrade pip && \
-		pip install -r requirements.txt
+		echo "  $(BLUE)📦 Installation des dépendances principales...$(NC)" && \
+		pip install -r requirements.txt && \
+		echo "  $(BLUE)🎯 Installation des dépendances de diarisation...$(NC)" && \
+		(pip install pyannote.audio>=3.1.0 scikit-learn>=1.3.0 && \
+		 echo "  $(GREEN)✅ Diarisation installée (pyannote.audio + scikit-learn)$(NC)") || \
+		echo "  $(YELLOW)⚠️  Diarisation non disponible - le fallback pitch clustering sera utilisé$(NC)"
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les dépendances installées$(NC)"
 	@echo ""
@@ -1016,6 +1021,10 @@ start: ## Lancer les services natifs avec HTTPS (https://meeshy.local)
 	@echo "$(CYAN)║      MEESHY - Démarrage Services ($(LOCAL_DOMAIN))            ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
+	@# Arrêter les services existants pour libérer les ports
+	@echo "$(BLUE)🧹 Nettoyage des services existants...$(NC)"
+	@$(MAKE) stop 2>/dev/null || true
+	@echo ""
 	@echo "$(BOLD)🌐 Configuration:$(NC)"
 	@echo "   Domaine:    $(GREEN)$(LOCAL_DOMAIN)$(NC)"
 	@echo "   IP locale:  $(GREEN)$(HOST_IP)$(NC)"
@@ -1206,6 +1215,10 @@ start-network: ## 🌐 Lancer avec accès réseau (HOST=smpdev02.local ou IP)
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║    MEESHY - Démarrage Réseau (Accès Mobile/Multi-Device)     ║$(NC)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@# Arrêter les services existants pour libérer les ports
+	@echo "$(BLUE)🧹 Nettoyage des services existants...$(NC)"
+	@$(MAKE) stop 2>/dev/null || true
 	@echo ""
 	@# Vérification des prérequis de base (sans certificats - gérés par setup-network)
 	@echo "$(BLUE)🔍 Vérification des prérequis...$(NC)"

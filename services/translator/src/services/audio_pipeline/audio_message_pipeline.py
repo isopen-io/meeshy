@@ -408,7 +408,8 @@ class AudioMessagePipeline:
             attachment_id=attachment_id,
             model_type=model_type,
             cloning_params=cloning_params,
-            max_workers=max_workers
+            max_workers=max_workers,
+            source_audio_path=audio_path
         )
 
         logger.info(f"[PIPELINE] Generated {len(translations)} translations")

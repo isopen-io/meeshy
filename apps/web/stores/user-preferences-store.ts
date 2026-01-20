@@ -49,19 +49,11 @@ export interface NotificationPreferences {
 }
 
 export interface EncryptionPreferences {
-  // Server-side preferences (synced with backend)
+  // Server-side preferences (synced with backend via /me/preferences/privacy)
   encryptionPreference: EncryptionPreference;
-  hasSignalKeys: boolean;
-  signalRegistrationId: number | null;
-  signalPreKeyBundleVersion: number | null;
-  lastKeyRotation: string | null;
-
-  // Local-only settings (not synced)
-  localSettings: {
-    autoEncryptNewConversations: boolean;
-    showEncryptionStatus: boolean;
-    warnOnUnencrypted: boolean;
-  };
+  autoEncryptNewConversations: boolean;
+  showEncryptionStatus: boolean;
+  warnOnUnencrypted: boolean;
 }
 
 export interface PrivacyPreferences {
@@ -117,7 +109,7 @@ export interface UserPreferencesActions {
   // Update preferences
   updateNotifications: (prefs: Partial<NotificationPreferences>) => Promise<void>;
   updateEncryption: (prefs: Partial<EncryptionPreferences>) => Promise<void>;
-  updateEncryptionLocalSettings: (settings: Partial<EncryptionPreferences['localSettings']>) => void;
+  updateEncryptionLocalSettings: (settings: Partial<EncryptionPreferences>) => Promise<void>;
   updatePrivacy: (prefs: Partial<PrivacyPreferences>) => Promise<void>;
   updateLanguage: (prefs: Partial<LanguagePreferences>) => void;
 
@@ -151,15 +143,9 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
 
 const DEFAULT_ENCRYPTION_PREFERENCES: EncryptionPreferences = {
   encryptionPreference: 'optional',
-  hasSignalKeys: false,
-  signalRegistrationId: null,
-  signalPreKeyBundleVersion: null,
-  lastKeyRotation: null,
-  localSettings: {
-    autoEncryptNewConversations: false,
-    showEncryptionStatus: true,
-    warnOnUnencrypted: false,
-  },
+  autoEncryptNewConversations: false,
+  showEncryptionStatus: true,
+  warnOnUnencrypted: false,
 };
 
 const DEFAULT_PRIVACY_PREFERENCES: PrivacyPreferences = {
@@ -268,21 +254,29 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(buildApiUrl('/users/me/encryption-preferences'), {
+          // Encryption preferences are now part of privacy preferences
+          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.data) {
+              // Extract encryption-related fields from privacy preferences
+              const {
+                encryptionPreference,
+                autoEncryptNewConversations,
+                showEncryptionStatus,
+                warnOnUnencrypted
+              } = data.data;
+
               set(state => ({
                 encryption: {
                   ...state.encryption,
-                  encryptionPreference: data.data.encryptionPreference || 'optional',
-                  hasSignalKeys: data.data.hasSignalKeys || false,
-                  signalRegistrationId: data.data.signalRegistrationId,
-                  signalPreKeyBundleVersion: data.data.signalPreKeyBundleVersion,
-                  lastKeyRotation: data.data.lastKeyRotation,
+                  encryptionPreference: encryptionPreference || 'optional',
+                  autoEncryptNewConversations: autoEncryptNewConversations ?? false,
+                  showEncryptionStatus: showEncryptionStatus ?? true,
+                  warnOnUnencrypted: warnOnUnencrypted ?? false,
                 }
               }));
             }
@@ -297,14 +291,26 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return;
 
         try {
-          const response = await fetch(buildApiUrl('/user-preferences/privacy'), {
+          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.data) {
-              const { id, userId, createdAt, updatedAt, ...prefs } = data.data;
+              // Filter out encryption-related fields (they're synced separately)
+              const {
+                id,
+                userId,
+                createdAt,
+                updatedAt,
+                encryptionPreference,
+                autoEncryptNewConversations,
+                showEncryptionStatus,
+                warnOnUnencrypted,
+                ...prefs
+              } = data.data;
+
               set(state => ({
                 privacy: { ...state.privacy, ...prefs }
               }));
@@ -354,39 +360,47 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
-        // Only sync server-side preferences
-        if (prefs.encryptionPreference) {
-          try {
-            const response = await fetch(buildApiUrl('/users/me/encryption-preferences'), {
-              method: 'PUT',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ encryptionPreference: prefs.encryptionPreference }),
-            });
+        // Optimistic update
+        set(state => ({
+          encryption: { ...state.encryption, ...prefs }
+        }));
 
-            if (response.ok) {
-              set(state => ({
-                encryption: { ...state.encryption, ...prefs }
-              }));
-            } else {
-              throw new Error('Failed to update encryption preferences');
-            }
-          } catch (error) {
-            console.error('[UserPreferencesStore] Error updating encryption:', error);
-            throw error;
+        try {
+          // Encryption preferences are stored in privacy preferences
+          // We need to merge with existing privacy prefs
+          const currentPrivacy = get().privacy;
+          const updatedEncryption = get().encryption;
+
+          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              ...currentPrivacy,
+              encryptionPreference: updatedEncryption.encryptionPreference,
+              autoEncryptNewConversations: updatedEncryption.autoEncryptNewConversations,
+              showEncryptionStatus: updatedEncryption.showEncryptionStatus,
+              warnOnUnencrypted: updatedEncryption.warnOnUnencrypted,
+            }),
+          });
+
+          if (!response.ok) {
+            // Revert on error
+            await get().syncEncryption();
+            throw new Error('Failed to update encryption preferences');
           }
+        } catch (error) {
+          console.error('[UserPreferencesStore] Error updating encryption:', error);
+          throw error;
         }
       },
 
-      updateEncryptionLocalSettings: (settings) => {
-        set(state => ({
-          encryption: {
-            ...state.encryption,
-            localSettings: { ...state.encryption.localSettings, ...settings }
-          }
-        }));
+      updateEncryptionLocalSettings: async (settings) => {
+        // Deprecated: localSettings are now top-level encryption preferences
+        // Just call updateEncryption with the settings
+        await get().updateEncryption(settings);
       },
 
       updatePrivacy: async (prefs) => {
@@ -399,7 +413,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
 
         try {
-          const response = await fetch(buildApiUrl('/user-preferences/privacy'), {
+          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -436,8 +450,8 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           return true;
         }
 
-        // Show warning based on local setting
-        if (encryption.localSettings.warnOnUnencrypted && !conversationEncrypted) {
+        // Show warning based on user preference
+        if (encryption.warnOnUnencrypted && !conversationEncrypted) {
           return true;
         }
 

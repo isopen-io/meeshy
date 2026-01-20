@@ -407,30 +407,30 @@ export class NotificationService {
         }
       }
 
-      // Vérifier les préférences par type
+      // Vérifier les préférences par type (mapping des champs DB vers DTO)
       switch (type) {
         case 'new_message':
-          return preferences.newMessageEnabled;
+          return preferences.newMessage;
         case 'message_reply':
-          return preferences.replyEnabled || preferences.newMessageEnabled;
+          return preferences.messageReply || preferences.newMessage;
         case 'user_mentioned':
-          return preferences.mentionEnabled || preferences.newMessageEnabled;
+          return preferences.messageMention || preferences.newMessage;
         case 'message_reaction':
-          return preferences.reactionEnabled;
+          return true; // TODO: Add reactionEnabled to schema
         case 'missed_call':
-          return preferences.missedCallEnabled;
+          return preferences.missedCall;
         case 'system':
-          return preferences.systemEnabled;
+          return true; // TODO: Add systemEnabled to schema
         case 'new_conversation':
         case 'new_conversation_direct':
         case 'new_conversation_group':
         case 'message_edited':
-          return preferences.conversationEnabled;
+          return preferences.newConversation;
         case 'contact_request':
         case 'contact_accepted':
-          return preferences.contactRequestEnabled;
+          return preferences.friendRequest;
         case 'member_joined':
-          return preferences.memberJoinedEnabled;
+          return preferences.friendRequestAccepted;
         default:
           return true;
       }

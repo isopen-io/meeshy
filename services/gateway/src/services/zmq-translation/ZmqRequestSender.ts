@@ -60,6 +60,7 @@ export class ZmqRequestSender {
 
     // Préparer le message de commande
     const requestMessage = {
+      type: 'translation',  // Type explicite pour routage
       taskId: taskId,
       messageId: request.messageId,
       text: request.text,
@@ -126,6 +127,32 @@ export class ZmqRequestSender {
       audioSize: audioData.size
     };
 
+    // Extraire et transmettre le voice profile en frame binaire séparé (si disponible)
+    let voiceProfileMetadata: any = undefined;
+    if (request.existingVoiceProfile && request.existingVoiceProfile.embedding) {
+      try {
+        // Décoder l'embedding base64 en Buffer binaire
+        const embeddingBuffer = Buffer.from(request.existingVoiceProfile.embedding, 'base64');
+
+        // Ajouter le frame binaire du profil vocal (Frame 2)
+        binaryFrames.push(embeddingBuffer);
+        binaryFrameInfo.voiceProfile = 2;  // Le profil vocal est dans le frame 2
+        binaryFrameInfo.voiceProfileSize = embeddingBuffer.length;
+
+        // Créer les métadonnées du profil SANS l'embedding (qui est dans le frame binaire)
+        voiceProfileMetadata = {
+          profileId: request.existingVoiceProfile.profileId,
+          userId: request.existingVoiceProfile.userId,
+          qualityScore: request.existingVoiceProfile.qualityScore,
+          // L'embedding est transmis en frame binaire, pas dans le JSON
+        };
+
+        console.log(`[GATEWAY]    🎙️ Voice profile transmis en multipart: frame 2 (${embeddingBuffer.length} bytes)`);
+      } catch (error) {
+        console.error('[GATEWAY] ⚠️ Erreur décodage voice profile, ignoré:', error);
+      }
+    }
+
     // Préparer le message de commande audio (SANS chemin ni URL!)
     const requestMessage: AudioProcessRequest = {
       type: 'audio_process',
@@ -142,9 +169,9 @@ export class ZmqRequestSender {
       targetLanguages: request.targetLanguages,
       generateVoiceClone: request.generateVoiceClone,
       modelType: request.modelType,
-      // Champs voice profile (si fournis)
+      // Champs voice profile (métadonnées seulement, embedding dans frame binaire)
       originalSenderId: request.originalSenderId,
-      existingVoiceProfile: request.existingVoiceProfile,
+      existingVoiceProfile: voiceProfileMetadata,  // Métadonnées uniquement (sans embedding)
       useOriginalVoice: request.useOriginalVoice,
       voiceCloneParams: request.voiceCloneParams
     };

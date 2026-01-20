@@ -245,6 +245,13 @@ class ZMQTranslationServer:
             embedding_size = len(binary_frames[embedding_idx - 1])
             logger.info(f"📦 [ZMQ-SERVER] Embedding binaire extrait du frame {embedding_idx}: {embedding_size / 1024:.1f}KB")
 
+        # Voice Profile embedding binaire
+        voice_profile_idx = binary_frame_info.get('voiceProfile')
+        if voice_profile_idx and voice_profile_idx <= len(binary_frames):
+            request_data['_voiceProfileBinary'] = binary_frames[voice_profile_idx - 1]
+            voice_profile_size = len(binary_frames[voice_profile_idx - 1])
+            logger.info(f"📦 [ZMQ-SERVER] Voice Profile embedding binaire extrait du frame {voice_profile_idx}: {voice_profile_size / 1024:.1f}KB")
+
     async def _handle_translation_request_multipart(self, frames):
         """Route la requête multipart vers le handler approprié"""
         # Le premier frame contient toujours le JSON
@@ -256,7 +263,10 @@ class ZMQTranslationServer:
         request_type = request_data.get('type', 'translation')
 
         # Router vers le handler approprié
-        if request_type == 'translation':
+        if request_type == 'ping':
+            # Health check - déléguer au TranslationHandler
+            await self.translation_handler._handle_translation_request_multipart(frames)
+        elif request_type == 'translation':
             await self.translation_handler._handle_translation_request_multipart(frames)
         elif request_type == 'audio_process':
             # Injecter les binaires dans request_data pour audio_process
@@ -270,6 +280,9 @@ class ZMQTranslationServer:
             await self.voice_handler._handle_voice_api_request(request_data)
         elif request_type == 'voice_profile':
             await self.voice_handler._handle_voice_profile_request(request_data)
+        elif self.voice_handler and hasattr(self.voice_handler, 'is_voice_api_request') and self.voice_handler.is_voice_api_request(request_type):
+            # Support direct voice API request types (voice_translate_async, etc.)
+            await self.voice_handler._handle_voice_api_request(request_data)
         else:
             logger.warning(f"Type de requête inconnu: {request_type}")
 

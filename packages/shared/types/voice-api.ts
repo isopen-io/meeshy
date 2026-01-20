@@ -19,6 +19,17 @@ interface VoiceTranslateOptions {
   webhookUrl?: string;
   priority?: number;
   callbackMetadata?: Record<string, unknown>;
+  /**
+   * Transcription fournie par le gateway (optimisation)
+   * Évite de refaire la transcription Whisper si elle existe déjà
+   */
+  mobileTranscription?: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: string;
+    segments?: VoiceTranscriptionSegment[];
+  };
 }
 
 export interface VoiceTranslateRequest extends VoiceTranslateOptions {
@@ -723,6 +734,17 @@ export interface AudioTranslationOptions {
   originalSenderId?: string;
   existingVoiceProfile?: VoiceProfileData;
   useOriginalVoice?: boolean;
+  /**
+   * Transcription existante (optimisation performance)
+   * Si fournie, évite de refaire la transcription Whisper (~15-30s économisées)
+   */
+  existingTranscription?: {
+    text: string;
+    language: string;
+    confidence: number;
+    source: string;
+    segments?: VoiceTranscriptionSegment[];
+  };
   /**
    * Paramètres de clonage vocal (Chatterbox TTS)
    * Permet un contrôle fin de la génération vocale.

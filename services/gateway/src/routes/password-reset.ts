@@ -420,9 +420,8 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         include: {
           user: {
             select: {
-              userFeature: {
-                select: { twoFactorEnabledAt: true }
-              }
+              id: true,
+              twoFactorSecret: true
             }
           }
         }
@@ -461,7 +460,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         valid: true,
-        requires2FA: !!resetToken.user.userFeature?.twoFactorEnabledAt,
+        requires2FA: !!resetToken.user.twoFactorSecret,
         expiresAt: resetToken.expiresAt.toISOString()
       });
 

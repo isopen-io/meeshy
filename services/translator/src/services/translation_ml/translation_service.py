@@ -91,13 +91,17 @@ class TranslationService:
         # État d'initialisation
         self.is_initialized = False
         self.is_loading = False
-        self._startup_lock = asyncio.Lock()
+        self._startup_lock = None  # Sera créé dans initialize()
 
         self._initialized = True
         logger.info("🤖 TranslationService créé (Singleton)")
 
     async def initialize(self) -> bool:
         """Initialise le service ML (modèles + cache)"""
+        # Créer le lock dans le contexte async si nécessaire
+        if self._startup_lock is None:
+            self._startup_lock = asyncio.Lock()
+
         async with self._startup_lock:
             if self.is_initialized:
                 logger.info("✅ Service ML déjà initialisé")

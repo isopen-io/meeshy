@@ -1,3 +1,12 @@
+/**
+ * DEPRECATED: This component is not currently used in production.
+ * The active profile settings component is UserSettings.tsx
+ * This file is kept for reference/example purposes only.
+ *
+ * If you need to use this component, note that language preferences
+ * need to be updated to use /users/me API instead of /me/preferences/application
+ */
+
 'use client';
 
 import { useState } from 'react';
@@ -5,6 +14,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,10 +40,14 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Languages,
+  Monitor,
+  Wand2
 } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuth } from '@/hooks/use-auth';
+import { usePreferences } from '@/hooks/use-preferences';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
@@ -36,9 +56,27 @@ interface ProfileSettingsProps {
   onAccountDeleted?: () => void;
 }
 
+// Available languages
+const AVAILABLE_LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'es', name: 'Español', flag: '🇪🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+  { code: 'pt', name: 'Português', flag: '🇵🇹' },
+  { code: 'ja', name: '日本語', flag: '🇯🇵' },
+  { code: 'zh', name: '中文', flag: '🇨🇳' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+];
+
 export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
   const { t } = useI18n('settings');
   const { user, logout } = useAuth();
+
+  // NOTE: Message translation languages are now managed via /users/me API
+  // This component manages: systemLanguage, regionalLanguage, customDestinationLanguage
+  // Interface language (interfaceLanguage) is managed in ApplicationSettings via /me/preferences/application
 
   // Email change state
   const [emailData, setEmailData] = useState({
@@ -514,6 +552,162 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Languages Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Languages className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <CardTitle className="text-lg sm:text-xl">
+              {t('profile.languages.title', 'Language Preferences')}
+            </CardTitle>
+          </div>
+          <CardDescription className="text-sm sm:text-base">
+            {t('profile.languages.description', 'Configure your language settings')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 sm:space-y-6">
+          {/* Interface Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Languages className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.interface.label', 'Interface Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.interface.description', 'Language for menus and buttons')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={languagePrefs?.interfaceLanguage || 'en'}
+              onValueChange={(value) => handleLanguageChange('interfaceLanguage', value)}
+              disabled={isLanguageLoading}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* System Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Monitor className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.system.label', 'System Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.system.description', 'Main language for your messages')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={languagePrefs?.systemLanguage || 'en'}
+              onValueChange={(value) => handleLanguageChange('systemLanguage', value)}
+              disabled={isLanguageLoading}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Regional Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Languages className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.regional.label', 'Regional Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.regional.description', 'Secondary language (optional)')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={languagePrefs?.regionalLanguage || 'none'}
+              onValueChange={(value) => handleLanguageChange('regionalLanguage', value === 'none' ? undefined : value)}
+              disabled={isLanguageLoading}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Custom Destination Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Wand2 className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.custom.label', 'Custom Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.custom.description', 'Specific translation target (optional)')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={languagePrefs?.customDestinationLanguage || 'none'}
+              onValueChange={(value) =>
+                handleLanguageChange('customDestinationLanguage', value === 'none' ? undefined : value)
+              }
+              disabled={isLanguageLoading}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 

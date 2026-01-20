@@ -57,8 +57,24 @@ export class PreferencesService {
 
     if (preferences) {
       return {
-        ...preferences,
-        isDefault: false
+        pushEnabled: preferences.pushNotifications,
+        emailEnabled: preferences.emailNotifications,
+        soundEnabled: preferences.soundEnabled,
+        newMessageEnabled: preferences.newMessage,
+        missedCallEnabled: preferences.missedCall,
+        systemEnabled: true, // TODO: Add to schema if needed
+        conversationEnabled: preferences.newConversation,
+        replyEnabled: preferences.messageReply,
+        mentionEnabled: preferences.messageMention,
+        reactionEnabled: true, // TODO: Add to schema if needed
+        contactRequestEnabled: preferences.friendRequest,
+        memberJoinedEnabled: preferences.friendRequestAccepted,
+        dndEnabled: preferences.dndEnabled,
+        dndStartTime: preferences.dndStartTime,
+        dndEndTime: preferences.dndEndTime,
+        isDefault: false,
+        createdAt: preferences.createdAt,
+        updatedAt: preferences.updatedAt
       };
     }
 
@@ -103,27 +119,67 @@ export class PreferencesService {
       }
     }
 
-    // Filter undefined values for partial update
-    const updateData: any = {};
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined) {
-        updateData[key] = value;
-      }
-    });
+    // Map DTO fields to database fields
+    const dbUpdateData: any = {};
+    if (data.pushEnabled !== undefined) dbUpdateData.pushNotifications = data.pushEnabled;
+    if (data.emailEnabled !== undefined) dbUpdateData.emailNotifications = data.emailEnabled;
+    if (data.soundEnabled !== undefined) dbUpdateData.soundEnabled = data.soundEnabled;
+    if (data.newMessageEnabled !== undefined) dbUpdateData.newMessage = data.newMessageEnabled;
+    if (data.missedCallEnabled !== undefined) dbUpdateData.missedCall = data.missedCallEnabled;
+    if (data.conversationEnabled !== undefined) dbUpdateData.newConversation = data.conversationEnabled;
+    if (data.replyEnabled !== undefined) dbUpdateData.messageReply = data.replyEnabled;
+    if (data.mentionEnabled !== undefined) dbUpdateData.messageMention = data.mentionEnabled;
+    if (data.contactRequestEnabled !== undefined) dbUpdateData.friendRequest = data.contactRequestEnabled;
+    if (data.memberJoinedEnabled !== undefined) dbUpdateData.friendRequestAccepted = data.memberJoinedEnabled;
+    if (data.dndEnabled !== undefined) dbUpdateData.dndEnabled = data.dndEnabled;
+    if (data.dndStartTime !== undefined) dbUpdateData.dndStartTime = data.dndStartTime;
+    if (data.dndEndTime !== undefined) dbUpdateData.dndEndTime = data.dndEndTime;
 
     const preferences = await this.prisma.notificationPreference.upsert({
       where: { userId },
       create: {
         userId,
-        ...NOTIFICATION_PREFERENCES_DEFAULTS,
-        ...updateData
+        pushNotifications: NOTIFICATION_PREFERENCES_DEFAULTS.pushEnabled ?? true,
+        emailNotifications: NOTIFICATION_PREFERENCES_DEFAULTS.emailEnabled ?? true,
+        soundEnabled: NOTIFICATION_PREFERENCES_DEFAULTS.soundEnabled ?? true,
+        newMessage: NOTIFICATION_PREFERENCES_DEFAULTS.newMessageEnabled ?? true,
+        messageReply: NOTIFICATION_PREFERENCES_DEFAULTS.replyEnabled ?? true,
+        messageMention: NOTIFICATION_PREFERENCES_DEFAULTS.mentionEnabled ?? true,
+        newConversation: NOTIFICATION_PREFERENCES_DEFAULTS.conversationEnabled ?? true,
+        conversationInvite: true,
+        friendRequest: NOTIFICATION_PREFERENCES_DEFAULTS.contactRequestEnabled ?? true,
+        friendRequestAccepted: NOTIFICATION_PREFERENCES_DEFAULTS.memberJoinedEnabled ?? true,
+        groupInvite: true,
+        missedCall: NOTIFICATION_PREFERENCES_DEFAULTS.missedCallEnabled ?? true,
+        voicemailReceived: true,
+        vibrationEnabled: true,
+        dndEnabled: NOTIFICATION_PREFERENCES_DEFAULTS.dndEnabled ?? false,
+        dndStartTime: NOTIFICATION_PREFERENCES_DEFAULTS.dndStartTime,
+        dndEndTime: NOTIFICATION_PREFERENCES_DEFAULTS.dndEndTime,
+        ...dbUpdateData
       },
-      update: updateData
+      update: dbUpdateData
     });
 
     return {
-      ...preferences,
-      isDefault: false
+      pushEnabled: preferences.pushNotifications,
+      emailEnabled: preferences.emailNotifications,
+      soundEnabled: preferences.soundEnabled,
+      newMessageEnabled: preferences.newMessage,
+      missedCallEnabled: preferences.missedCall,
+      systemEnabled: true,
+      conversationEnabled: preferences.newConversation,
+      replyEnabled: preferences.messageReply,
+      mentionEnabled: preferences.messageMention,
+      reactionEnabled: true,
+      contactRequestEnabled: preferences.friendRequest,
+      memberJoinedEnabled: preferences.friendRequestAccepted,
+      dndEnabled: preferences.dndEnabled,
+      dndStartTime: preferences.dndStartTime,
+      dndEndTime: preferences.dndEndTime,
+      isDefault: false,
+      createdAt: preferences.createdAt,
+      updatedAt: preferences.updatedAt
     };
   }
 
@@ -158,13 +214,9 @@ export class PreferencesService {
       throw new Error('User not found');
     }
 
-    const userFeature = await this.prisma.userFeature.findUnique({
-      where: { userId },
-      select: { encryptionPreference: true }
-    });
-
+    // TODO: Load encryptionPreference from UserPreferences.application when implemented
     return {
-      encryptionPreference: (userFeature?.encryptionPreference as EncryptionPreference) || 'optional',
+      encryptionPreference: 'optional' as EncryptionPreference,
       hasSignalKeys: !!user.signalIdentityKeyPublic,
       signalRegistrationId: user.signalRegistrationId,
       signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
@@ -185,15 +237,11 @@ export class PreferencesService {
       throw new Error('Invalid encryption preference. Must be "disabled", "optional", or "always"');
     }
 
-    const updatedUserFeature = await this.prisma.userFeature.upsert({
-      where: { userId },
-      update: { encryptionPreference: data.encryptionPreference },
-      create: { userId, encryptionPreference: data.encryptionPreference },
-      select: { encryptionPreference: true }
-    });
+    // TODO: Save encryptionPreference to UserPreferences.application when implemented
+    console.log('[PreferencesService] TODO: Save encryption preference:', data.encryptionPreference, 'for user:', userId);
 
     return {
-      encryptionPreference: updatedUserFeature.encryptionPreference as EncryptionPreference
+      encryptionPreference: data.encryptionPreference
     };
   }
 

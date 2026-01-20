@@ -10,11 +10,8 @@ export const ApplicationPreferenceSchema = z.object({
   theme: z.enum(['light', 'dark', 'auto']).default('auto'),
   accentColor: z.string().default('blue'),
 
-  // Langue
+  // Langue de l'interface uniquement (les langues de traduction sont dans User)
   interfaceLanguage: z.string().default('en'),
-  systemLanguage: z.string().default('en'),
-  regionalLanguage: z.string().optional(),
-  customDestinationLanguage: z.string().optional(),
 
   // UI Settings
   fontSize: z.enum(['small', 'medium', 'large']).default('medium'),
@@ -47,7 +44,6 @@ export const APPLICATION_PREFERENCE_DEFAULTS: ApplicationPreference = {
   theme: 'auto',
   accentColor: 'blue',
   interfaceLanguage: 'en',
-  systemLanguage: 'en',
   fontSize: 'medium',
   fontFamily: 'inter',
   lineHeight: 'normal',

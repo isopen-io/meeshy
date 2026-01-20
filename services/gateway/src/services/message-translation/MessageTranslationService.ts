@@ -10,6 +10,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
+import { Redis } from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
 import { ZMQSingleton } from '../ZmqSingleton';
@@ -18,6 +19,9 @@ import { TranslationCache } from './TranslationCache';
 import { LanguageCache } from './LanguageCache';
 import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
+import { ConsentValidationService } from '../ConsentValidationService';
+import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
+import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation } from '@meeshy/shared/types/attachment-audio';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -46,6 +50,8 @@ export class MessageTranslationService extends EventEmitter {
   private readonly prisma: PrismaClient;
   private zmqClient: ZmqTranslationClient | null = null;
   private isInitialized: boolean = false;
+  private redis: Redis | null = null;
+  private jobMappingService: MultiLevelJobMappingCache | null = null;
 
   // Composition de modules
   private readonly translationCache: TranslationCache;
@@ -57,13 +63,17 @@ export class MessageTranslationService extends EventEmitter {
   private readonly processedMessages = new Set<string>();
   private readonly processedTasks = new Set<string>();
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, redis?: Redis) {
     super();
     this.prisma = prisma;
+    this.redis = redis || null;
     this.translationCache = new TranslationCache(1000);
     this.languageCache = new LanguageCache(5 * 60 * 1000, 100);
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
+
+    // Créer le cache multi-niveau (fonctionne avec ou sans Redis)
+    this.jobMappingService = new MultiLevelJobMappingCache(this.redis || undefined);
   }
 
   getZmqClient(): ZmqTranslationClient | null {
@@ -495,15 +505,7 @@ export class MessageTranslationService extends EventEmitter {
               select: {
                 systemLanguage: true,
                 regionalLanguage: true,
-                customDestinationLanguage: true,
-                userFeature: {
-                  select: {
-                    autoTranslateEnabled: true,
-                    translateToSystemLanguage: true,
-                    translateToRegionalLanguage: true,
-                    useCustomDestination: true
-                  }
-                }
+                customDestinationLanguage: true
               }
             }
           }
@@ -520,25 +522,20 @@ export class MessageTranslationService extends EventEmitter {
       ]);
       
       // Extraire TOUTES les langues des utilisateurs authentifiés
-      // On extrait toujours systemLanguage, et les autres langues selon les préférences
+      // On extrait toujours systemLanguage, et les autres langues configurées
+      // TODO: Utiliser UserPreferences pour filtrer selon autoTranslateEnabled
       for (const member of members) {
-        const userPrefs = member.user.userFeature;
-
         // Toujours ajouter la langue système du participant
         if (member.user.systemLanguage) {
           languages.add(member.user.systemLanguage);
         }
 
-        // Ajouter les langues additionnelles si l'utilisateur a activé la traduction automatique
-        if (userPrefs?.autoTranslateEnabled) {
-          // Langue régionale si activée
-          if (userPrefs.translateToRegionalLanguage && member.user.regionalLanguage) {
-            languages.add(member.user.regionalLanguage);
-          }
-          // Langue personnalisée si activée
-          if (userPrefs.useCustomDestination && member.user.customDestinationLanguage) {
-            languages.add(member.user.customDestinationLanguage);
-          }
+        // Ajouter les langues additionnelles (simplifié - pas de vérification des préférences pour l'instant)
+        if (member.user.regionalLanguage) {
+          languages.add(member.user.regionalLanguage);
+        }
+        if (member.user.customDestinationLanguage) {
+          languages.add(member.user.customDestinationLanguage);
         }
       }
       
@@ -710,17 +707,17 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
-      logger.info(`🎤 [TranslationService] ======== RÉCEPTION ASYNCHRONE DEPUIS TRANSLATOR ========`);
-      logger.info(`🎤 [TranslationService] Audio process completed: ${data.attachmentId}`);
-      logger.info(`   📝 Transcription: "${data.transcription.text.substring(0, 100)}..."`);
-      logger.info(`   🌍 Traductions: ${data.translatedAudios.length} langues`);
-      logger.info(`   ⏱️ Temps de traitement Translator: ${data.processingTimeMs}ms`);
-      logger.info(`   🎯 Task ID: ${data.taskId}`);
+      logger.info(
+        `🎤 [TranslationService] Audio process completed: ${data.attachmentId} | ` +
+        (data.transcription?.text ? `Transcription: "${data.transcription.text.substring(0, 50)}..." | ` : '') +
+        `Traductions: ${data.translatedAudios.length} | ` +
+        `Temps: ${data.processingTimeMs}ms | TaskID: ${data.taskId}`
+      );
 
-      // 1. Récupérer les infos de l'attachment pour vérifier
+      // 1. Récupérer les infos de l'attachment et traductions existantes
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: data.attachmentId },
-        select: { id: true, messageId: true, duration: true }
+        select: { id: true, messageId: true, duration: true, translations: true }
       });
 
       if (!attachment) {
@@ -728,33 +725,21 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. Sauvegarder la transcription (upsert)
-      await this.prisma.messageAudioTranscription.upsert({
-        where: { attachmentId: data.attachmentId },
-        update: {
-          transcribedText: data.transcription.text,
-          language: data.transcription.language,
-          confidence: data.transcription.confidence,
-          source: data.transcription.source,
-          segments: data.transcription.segments || null,
-          audioDurationMs: attachment.duration || 0
-        },
-        create: {
-          attachmentId: data.attachmentId,
-          messageId: data.messageId,
-          transcribedText: data.transcription.text,
-          language: data.transcription.language,
-          confidence: data.transcription.confidence,
-          source: data.transcription.source,
-          segments: data.transcription.segments || null,
-          audioDurationMs: attachment.duration || 0
-        }
-      });
+      // 2. Construire la structure transcription JSON
+      const transcriptionData = {
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence,
+        source: data.transcription.source,
+        segments: data.transcription.segments || undefined,
+        durationMs: attachment.duration || 0
+      };
 
-      logger.info(`   ✅ Transcription sauvegardée (${data.transcription.language})`);
+      logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
-      // 3. Sauvegarder chaque audio traduit (upsert pour éviter les doublons)
-      // Les données audio arrivent en base64 depuis le Translator (pas de fichier partagé)
+      // 3. Construire la structure translations JSON
+      const existingTranslations = (attachment.translations as Record<string, any>) || {};
+      const translationsData: Record<string, any> = { ...existingTranslations };
       const savedTranslatedAudios: typeof data.translatedAudios = [];
 
       for (const translatedAudio of data.translatedAudios) {
@@ -792,45 +777,49 @@ export class MessageTranslationService extends EventEmitter {
           }
         }
 
-        await this.prisma.messageTranslatedAudio.upsert({
-          where: {
-            attachmentId_targetLanguage: {
-              attachmentId: data.attachmentId,
-              targetLanguage: translatedAudio.targetLanguage
-            }
-          },
-          update: {
-            translatedText: translatedAudio.translatedText,
-            audioPath: localAudioPath,
-            audioUrl: localAudioUrl,
-            durationMs: translatedAudio.durationMs,
-            voiceCloned: translatedAudio.voiceCloned,
-            voiceQuality: translatedAudio.voiceQuality,
-            voiceModelId: data.voiceModelUserId || null
-          },
-          create: {
-            attachmentId: data.attachmentId,
-            messageId: data.messageId,
-            targetLanguage: translatedAudio.targetLanguage,
-            translatedText: translatedAudio.translatedText,
-            audioPath: localAudioPath,
-            audioUrl: localAudioUrl,
-            durationMs: translatedAudio.durationMs,
-            voiceCloned: translatedAudio.voiceCloned,
-            voiceQuality: translatedAudio.voiceQuality,
-            voiceModelId: data.voiceModelUserId || null
-          }
-        });
+        // Ajouter/mettre à jour la traduction dans le map
+        translationsData[translatedAudio.targetLanguage] = {
+          type: 'audio',
+          transcription: translatedAudio.translatedText,
+          path: localAudioPath,
+          url: localAudioUrl,
+          durationMs: translatedAudio.durationMs,
+          format: translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+          cloned: translatedAudio.voiceCloned,
+          quality: translatedAudio.voiceQuality,
+          voiceModelId: data.voiceModelUserId || undefined,
+          ttsModel: 'xtts',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
 
         // Mettre à jour l'URL locale dans l'objet pour l'événement
         savedTranslatedAudios.push({
-          ...translatedAudio,
+          targetLanguage: translatedAudio.targetLanguage,
+          translatedText: translatedAudio.translatedText,
           audioPath: localAudioPath,
-          audioUrl: localAudioUrl
+          audioUrl: localAudioUrl,
+          durationMs: translatedAudio.durationMs,
+          voiceCloned: translatedAudio.voiceCloned,
+          voiceQuality: translatedAudio.voiceQuality,
+          _audioBinary: translatedAudio._audioBinary,
+          audioMimeType: translatedAudio.audioMimeType,
+          audioDataBase64: translatedAudio.audioDataBase64
         });
 
-        logger.info(`   ✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
+        logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
       }
+
+      // 4. Mettre à jour l'attachment avec transcription et translations JSON
+      await this.prisma.messageAttachment.update({
+        where: { id: data.attachmentId },
+        data: {
+          transcription: transcriptionData as any,
+          translations: translationsData as any
+        }
+      });
+
+      logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
 
       // 4. Sauvegarder le nouveau profil vocal si créé par Translator
       if (data.newVoiceProfile) {
@@ -876,23 +865,20 @@ export class MessageTranslationService extends EventEmitter {
             }
           });
 
-          logger.info(`   ✅ Profil vocal sauvegardé: ${nvp.userId} (quality=${nvp.qualityScore.toFixed(2)})`);
+          logger.info(`✅ Profil vocal sauvegardé: ${nvp.userId} (quality=${nvp.qualityScore.toFixed(2)})`);
         } catch (voiceProfileError) {
-          logger.error(`   ⚠️ Erreur sauvegarde profil vocal: ${voiceProfileError}`);
+          logger.error(`⚠️ Erreur sauvegarde profil vocal: ${voiceProfileError}`);
           // Ne pas faire échouer le traitement principal
         }
       }
 
       // 5. Émettre événement pour notifier les clients (Socket.IO)
       // Utiliser savedTranslatedAudios qui contient les URLs locales accessibles
-      logger.info(`📡 [TranslationService] ======== ÉMISSION ÉVÉNEMENT SOCKET.IO ========`);
-      logger.info(`📡 [TranslationService] Émission 'audioTranslationReady' vers SocketIOManager`);
-      logger.info(`   🎯 Task ID: ${data.taskId}`);
-      logger.info(`   📨 Message ID: ${data.messageId}`);
-      logger.info(`   📎 Attachment ID: ${data.attachmentId}`);
-      logger.info(`   📝 Has Transcription: ${!!data.transcription}`);
-      logger.info(`   🌍 Translated Audios: ${savedTranslatedAudios.length}`);
-      logger.info(`   🔊 Langues: ${savedTranslatedAudios.map(ta => ta.targetLanguage).join(', ')}`);
+      logger.info(
+        `📡 [TranslationService] Émission audioTranslationReady | ` +
+        `TaskID: ${data.taskId} | Msg: ${data.messageId} | Att: ${data.attachmentId} | ` +
+        `HasTranscription: ${!!data.transcription} | Audios: ${savedTranslatedAudios.length} (${savedTranslatedAudios.map(ta => ta.targetLanguage).join(', ')})`
+      );
 
       this.emit('audioTranslationReady', {
         taskId: data.taskId,
@@ -964,9 +950,11 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
-      logger.info(`📝 [TranslationService] Transcription only completed: ${data.attachmentId}`);
-      logger.info(`   📝 Text: ${data.transcription.text.substring(0, 50)}...`);
-      logger.info(`   🌍 Language: ${data.transcription.language}`);
+      logger.info(
+        `📝 [TranslationService] Transcription only completed: ${data.attachmentId} | ` +
+        (data.transcription?.text ? `Text: "${data.transcription.text.substring(0, 50)}..." | ` : '') +
+        `Lang: ${data.transcription.language}`
+      );
 
       // 1. Récupérer les infos de l'attachment pour vérifier
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -979,32 +967,24 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. Sauvegarder la transcription (upsert)
-      const transcription = await this.prisma.messageAudioTranscription.upsert({
-        where: { attachmentId: data.attachmentId },
-        update: {
-          transcribedText: data.transcription.text,
-          language: data.transcription.language,
-          confidence: data.transcription.confidence,
-          source: data.transcription.source,
-          model: data.transcription.model || 'whisper_boost',
-          segments: data.transcription.segments || null,
-          audioDurationMs: data.transcription.durationMs || attachment.duration || 0
-        },
-        create: {
-          attachmentId: data.attachmentId,
-          messageId: data.messageId,
-          transcribedText: data.transcription.text,
-          language: data.transcription.language,
-          confidence: data.transcription.confidence,
-          source: data.transcription.source,
-          model: data.transcription.model || 'whisper_boost',
-          segments: data.transcription.segments || null,
-          audioDurationMs: data.transcription.durationMs || attachment.duration || 0
-        }
+      // 2. Construire la transcription JSON
+      const transcriptionData: AttachmentTranscription = {
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence,
+        source: data.transcription.source as 'mobile' | 'whisper' | 'voice_api',
+        model: 'whisper_boost',
+        segments: data.transcription.segments as any,
+        durationMs: data.transcription.durationMs || attachment.duration || 0
+      };
+
+      // Mettre à jour l'attachment avec la transcription
+      await this.prisma.messageAttachment.update({
+        where: { id: data.attachmentId },
+        data: { transcription: transcriptionData as any }
       });
 
-      logger.info(`   ✅ Transcription sauvegardée (${data.transcription.language})`);
+      logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
       // 3. Émettre événement pour notifier les clients (Socket.IO)
       this.emit('transcriptionReady', {
@@ -1012,7 +992,7 @@ export class MessageTranslationService extends EventEmitter {
         messageId: data.messageId,
         attachmentId: data.attachmentId,
         transcription: {
-          id: transcription.id,
+          id: data.attachmentId,
           text: data.transcription.text,
           language: data.transcription.language,
           confidence: data.transcription.confidence,
@@ -1065,6 +1045,7 @@ export class MessageTranslationService extends EventEmitter {
   /**
    * Traite les résultats de jobs de traduction vocale asynchrones.
    * Ces jobs sont créés via l'API Voice et ne sont pas nécessairement liés à un message.
+   * Utilise le format unifié VoiceTranslationResult de @meeshy/shared/types/voice-api
    */
   private async _handleVoiceTranslationCompleted(data: {
     jobId: string;
@@ -1072,44 +1053,175 @@ export class MessageTranslationService extends EventEmitter {
     userId: string;
     timestamp: number;
     result?: {
-      job_id: string;
-      success: boolean;
-      original_text: string;
-      original_language: string;
-      original_duration_ms: number;
-      transcription_confidence: number;
-      translations: {
-        [language: string]: {
-          text: string;
-          audio_url?: string;
-          audio_duration_ms?: number;
-          synthesis_model?: string;
-        };
+      translationId: string;
+      originalAudio: {
+        transcription: string;
+        language: string;
+        durationMs: number;
+        confidence: number;
       };
-      voice_cloned: boolean;
-      voice_quality: number;
-      voice_model_version: number;
+      translations: Array<{
+        targetLanguage: string;
+        translatedText: string;
+        audioUrl?: string;
+        audioBase64?: string;
+        durationMs: number;
+        voiceCloned: boolean;
+        voiceQuality: number;
+      }>;
+      voiceProfile?: {
+        profileId: string;
+        quality: number;
+        isNew: boolean;
+      };
+      processingTimeMs: number;
     };
   }) {
     try {
-      logger.info(`🎙️ [TranslationService] Voice translation job completed: ${data.jobId}`);
-      logger.info(`   👤 User ID: ${data.userId}`);
+      const transcription = data.result?.originalAudio?.transcription;
+      const langs = data.result?.translations?.map(t => t.targetLanguage).join(', ') || '';
+      const voiceProfile = data.result?.voiceProfile;
 
-      if (data.result) {
-        logger.info(`   📝 Original: "${data.result.original_text.substring(0, 50)}..."`);
-        logger.info(`   🌍 Languages: ${Object.keys(data.result.translations).join(', ')}`);
-        logger.info(`   🎤 Voice cloned: ${data.result.voice_cloned}`);
-        logger.info(`   ⭐ Voice quality: ${data.result.voice_quality.toFixed(2)}`);
+      logger.info(
+        `🎙️ [TranslationService] Voice job completed: ${data.jobId} | ` +
+        `User: ${data.userId} | ` +
+        (transcription ? `Original: "${transcription.substring(0, 50)}..." (${data.result.originalAudio.language}) | ` : '') +
+        (langs ? `Traductions: ${data.result.translations.length} (${langs}) | ` : '') +
+        (voiceProfile ? `Voice: ${voiceProfile.profileId} (quality: ${voiceProfile.quality.toFixed(2)})` : '')
+      );
+
+      // Récupérer les métadonnées du job depuis Redis
+      let jobMetadata = null;
+      if (this.jobMappingService) {
+        jobMetadata = await this.jobMappingService.getAndDeleteJobMapping(data.jobId);
       }
 
-      // Émettre événement pour notifier les clients (WebSocket, etc.)
-      this.emit('voiceTranslationJobCompleted', {
-        jobId: data.jobId,
-        userId: data.userId,
-        status: data.status,
-        timestamp: data.timestamp,
-        result: data.result
-      });
+      if (jobMetadata && jobMetadata.messageId && jobMetadata.attachmentId && data.result) {
+        // C'est un job d'attachment - SAUVEGARDER EN BASE + diffuser au frontend
+        logger.info(
+          `📡 [TranslationService] Attachment job - sauvegarde + diffusion | ` +
+          `Msg: ${jobMetadata.messageId} | Att: ${jobMetadata.attachmentId} | Conv: ${jobMetadata.conversationId}`
+        );
+
+        // 1. Vérifier que l'attachment existe et récupérer les traductions existantes
+        const attachment = await this.prisma.messageAttachment.findUnique({
+          where: { id: jobMetadata.attachmentId },
+          select: { id: true, messageId: true, duration: true, translations: true }
+        });
+
+        if (!attachment) {
+          logger.error(`❌ Attachment non trouvé: ${jobMetadata.attachmentId}`);
+          return;
+        }
+
+        // 2. Construire la structure transcription JSON
+        const transcriptionData: AttachmentTranscription | null = data.result.originalAudio ? {
+          text: data.result.originalAudio.transcription,
+          language: data.result.originalAudio.language,
+          confidence: data.result.originalAudio.confidence,
+          source: 'voice_api',
+          model: undefined,
+          segments: undefined,
+          speakerCount: undefined,
+          primarySpeakerId: undefined,
+          durationMs: data.result.originalAudio.durationMs
+        } : null;
+
+        // 3. Construire la structure translations JSON
+        const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
+        const translationsData: AttachmentTranslations = { ...existingTranslations };
+        const savedTranslatedAudios = [];
+
+        for (const translation of data.result.translations) {
+          let localAudioPath = '';
+          let localAudioUrl = translation.audioUrl || '';
+
+          // Sauvegarder le fichier audio localement si base64 fourni
+          if (translation.audioBase64) {
+            try {
+              const translatedDir = path.resolve(process.cwd(), 'uploads/attachments/translated');
+              await fs.mkdir(translatedDir, { recursive: true });
+
+              const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
+              localAudioPath = path.resolve(translatedDir, filename);
+
+              const audioBuffer = Buffer.from(translation.audioBase64, 'base64');
+              await fs.writeFile(localAudioPath, audioBuffer);
+
+              localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
+              logger.info(`📁 Audio sauvegardé: ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
+            } catch (fileError) {
+              logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
+            }
+          }
+
+          // Ajouter/mettre à jour la traduction dans le map
+          translationsData[translation.targetLanguage] = {
+            type: 'audio',
+            transcription: translation.translatedText,
+            path: localAudioPath,
+            url: localAudioUrl,
+            durationMs: translation.durationMs,
+            format: 'mp3',
+            cloned: translation.voiceCloned,
+            quality: translation.voiceQuality,
+            voiceModelId: data.userId || undefined,
+            ttsModel: 'xtts',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+
+          savedTranslatedAudios.push({
+            id: `${jobMetadata.attachmentId}_${translation.targetLanguage}`,
+            targetLanguage: translation.targetLanguage,
+            translatedText: translation.translatedText,
+            audioUrl: localAudioUrl,
+            durationMs: translation.durationMs,
+            voiceCloned: translation.voiceCloned,
+            voiceQuality: translation.voiceQuality
+          });
+
+          logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage}`);
+        }
+
+        // 4. Mettre à jour l'attachment avec transcription et translations JSON
+        await this.prisma.messageAttachment.update({
+          where: { id: jobMetadata.attachmentId },
+          data: {
+            transcription: transcriptionData as any,
+            translations: translationsData as any
+          }
+        });
+
+        logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
+
+        // 4. Émettre l'événement audioTranslationReady pour diffusion Socket.IO
+        this.emit('audioTranslationReady', {
+          taskId: data.jobId,
+          messageId: jobMetadata.messageId,
+          attachmentId: jobMetadata.attachmentId,
+          transcription: data.result.originalAudio ? {
+            text: data.result.originalAudio.transcription,
+            language: data.result.originalAudio.language,
+            confidence: data.result.originalAudio.confidence,
+            durationMs: data.result.originalAudio.durationMs
+          } : undefined,
+          translatedAudios: savedTranslatedAudios,
+          processingTimeMs: data.result.processingTimeMs
+        });
+
+        logger.info(`📡 Événement audioTranslationReady émis vers Socket.IO`);
+      } else {
+        // Job standalone (pas d'attachment) - juste émettre l'événement de job
+        logger.info(`📋 [TranslationService] Job standalone (pas d'attachment)`);
+        this.emit('voiceTranslationJobCompleted', {
+          jobId: data.jobId,
+          userId: data.userId,
+          status: data.status,
+          timestamp: data.timestamp,
+          result: data.result
+        });
+      }
 
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur traitement job vocal: ${error}`);
@@ -1128,10 +1240,10 @@ export class MessageTranslationService extends EventEmitter {
     error?: string;
     errorCode?: string;
   }) {
-    logger.error(`❌ [TranslationService] Voice translation job failed: ${data.jobId}`);
-    logger.error(`   👤 User ID: ${data.userId}`);
-    logger.error(`   Code: ${data.errorCode}`);
-    logger.error(`   Error: ${data.error}`);
+    logger.error(
+      `❌ [TranslationService] Voice job failed: ${data.jobId} | ` +
+      `User: ${data.userId} | Code: ${data.errorCode} | Error: ${data.error}`
+    );
 
     // Émettre événement d'erreur pour notifier les clients
     this.emit('voiceTranslationJobFailed', {
@@ -1181,68 +1293,73 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.info(`🎤 [TranslationService] Traitement audio pour message ${params.messageId}`);
-      logger.info(`   📎 Attachment: ${params.attachmentId}`);
-      logger.info(`   👤 Sender: ${params.senderId}`);
-      logger.info(`   ⏱️ Duration: ${params.audioDurationMs}ms`);
+      logger.info(
+        `🎤 [TranslationService] Traitement audio | ` +
+        `Msg: ${params.messageId} | Att: ${params.attachmentId} | ` +
+        `Sender: ${params.senderId} | Duration: ${params.audioDurationMs}ms`
+      );
 
       // ═══════════════════════════════════════════════════════════════════════════
       // VÉRIFICATION DES CONSENTEMENTS VOCAUX
       // ═══════════════════════════════════════════════════════════════════════════
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== VÉRIFICATION CONSENTEMENTS ========`);
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] Sender ID: ${params.senderId}`);
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] Generate voice clone: ${params.generateVoiceClone}`);
-
       const bypassConsentCheck = process.env.BYPASS_VOICE_CONSENT_CHECK === 'true';
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] Bypass consent check: ${bypassConsentCheck}`);
+      logger.info(
+        `🔍 [VOICE-PROFILE-TRACE] Vérification consentements | ` +
+        `Sender: ${params.senderId} | GenerateClone: ${params.generateVoiceClone} | Bypass: ${bypassConsentCheck}`
+      );
 
       let hasVoiceCloningConsent = false;
       let hasVoiceProfileConsent = false;
+      let canGenerateTranslatedAudio = true;
 
       try {
-        logger.info(`🔍 [VOICE-PROFILE-TRACE] Récupération consentements utilisateur depuis BDD...`);
-
-        // Récupérer les consentements de l'utilisateur
-        const userWithConsent = await this.prisma.user.findUnique({
-          where: { id: params.senderId },
-          select: {
-            userFeature: {
-              select: {
-                voiceProfileConsentAt: true,
-                voiceCloningConsentAt: true,
-                voiceCloningEnabledAt: true
-              }
-            }
-          }
-        });
-
-        logger.info(`🔍 [VOICE-PROFILE-TRACE] User found: ${!!userWithConsent}`);
-        logger.info(`🔍 [VOICE-PROFILE-TRACE] UserFeature found: ${!!userWithConsent?.userFeature}`);
-
-        if (userWithConsent?.userFeature) {
-          hasVoiceProfileConsent = userWithConsent.userFeature.voiceProfileConsentAt != null;
-          hasVoiceCloningConsent = userWithConsent.userFeature.voiceCloningEnabledAt != null ||
-                                   userWithConsent.userFeature.voiceCloningConsentAt != null;
-
-          logger.info(`🔍 [VOICE-PROFILE-TRACE] Consentements:`);
-          logger.info(`   - voiceProfileConsentAt: ${userWithConsent.userFeature.voiceProfileConsentAt}`);
-          logger.info(`   - voiceCloningConsentAt: ${userWithConsent.userFeature.voiceCloningConsentAt}`);
-          logger.info(`   - voiceCloningEnabledAt: ${userWithConsent.userFeature.voiceCloningEnabledAt}`);
-          logger.info(`   - hasVoiceProfileConsent: ${hasVoiceProfileConsent}`);
-          logger.info(`   - hasVoiceCloningConsent: ${hasVoiceCloningConsent}`);
-        } else {
-          logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ Pas de UserFeature trouvé pour ${params.senderId}`);
-        }
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] Vérification consentements...`);
 
         if (bypassConsentCheck) {
           logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ BYPASS activé - force consentements à TRUE`);
           hasVoiceCloningConsent = true;
           hasVoiceProfileConsent = true;
+          canGenerateTranslatedAudio = true;
+        } else {
+          // Utilisation du ConsentValidationService pour vérifier les consentements
+          const consentService = new ConsentValidationService(this.prisma);
+          const consentStatus = await consentService.getConsentStatus(params.senderId);
+
+          logger.info(`🔍 [VOICE-PROFILE-TRACE] Statut des consentements récupéré:`, {
+            canTranscribeAudio: consentStatus.canTranscribeAudio,
+            canTranslateAudio: consentStatus.canTranslateAudio,
+            canGenerateTranslatedAudio: consentStatus.canGenerateTranslatedAudio,
+            canUseVoiceCloning: consentStatus.canUseVoiceCloning
+          });
+
+          // Vérifier que l'utilisateur a les consentements de base pour le traitement audio
+          if (!consentStatus.canTranscribeAudio) {
+            logger.error(`❌ User ${params.senderId} lacks voice data consent for audio transcription`);
+            logger.error(`   Required: dataProcessingConsentAt + voiceDataConsentAt + audioTranscriptionEnabledAt`);
+            return null;
+          }
+
+          if (!consentStatus.canTranslateAudio) {
+            logger.warn(`⚠️ User ${params.senderId} lacks consent for audio translation`);
+            logger.warn(`   Required: audioTranslationEnabledAt + audioTranscriptionEnabledAt + textTranslationEnabledAt`);
+          }
+
+          // Définir les consentements pour le profil vocal et le clonage
+          hasVoiceProfileConsent = consentStatus.hasVoiceDataConsent;
+          hasVoiceCloningConsent = consentStatus.canUseVoiceCloning;
+          canGenerateTranslatedAudio = consentStatus.canGenerateTranslatedAudio;
+
+          if (!canGenerateTranslatedAudio) {
+            logger.warn(`⚠️ User ${params.senderId} lacks consent for translated audio generation`);
+            logger.warn(`   Required: translatedAudioGenerationEnabledAt + audioTranslationEnabledAt`);
+            logger.warn(`   → Audio sera transcrit mais pas traduit en fichiers audio`);
+          }
         }
 
-        logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Consentements finaux:`);
-        logger.info(`   - voiceProfile: ${hasVoiceProfileConsent}`);
-        logger.info(`   - voiceCloning: ${hasVoiceCloningConsent}`);
+        logger.info(
+          `🔍 [VOICE-PROFILE-TRACE] Consentements finaux: ` +
+          `voiceProfile=${hasVoiceProfileConsent} | voiceCloning=${hasVoiceCloningConsent}`
+        );
 
       } catch (consentError) {
         logger.error(`🔍 [VOICE-PROFILE-TRACE] ❌ ERREUR vérification consentements: ${consentError}`);
@@ -1251,6 +1368,10 @@ export class MessageTranslationService extends EventEmitter {
         if (bypassConsentCheck) {
           hasVoiceCloningConsent = true;
           hasVoiceProfileConsent = true;
+        } else {
+          // Par sécurité, désactiver le clonage vocal en cas d'erreur
+          hasVoiceCloningConsent = false;
+          hasVoiceProfileConsent = false;
         }
       }
 
@@ -1262,7 +1383,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // 1. Récupérer les langues cibles de la conversation
-      const targetLanguages = await this._extractConversationLanguages(params.conversationId);
+      let targetLanguages = await this._extractConversationLanguages(params.conversationId);
 
       if (targetLanguages.length === 0) {
         logger.warn(`[TranslationService] Aucune langue cible pour la conversation ${params.conversationId}`);
@@ -1270,7 +1391,16 @@ export class MessageTranslationService extends EventEmitter {
         targetLanguages.push('en', 'fr');
       }
 
-      logger.info(`   🌍 Target languages: [${targetLanguages.join(', ')}]`);
+      logger.info(`🌍 Target languages (extracted): [${targetLanguages.join(', ')}]`);
+
+      // Si l'utilisateur n'a pas le consentement pour générer des audios traduits,
+      // on vide le tableau targetLanguages pour que seule la transcription soit faite
+      if (!canGenerateTranslatedAudio) {
+        logger.warn(`⚠️ Génération d'audios traduits désactivée (pas de consentement) - transcription uniquement`);
+        targetLanguages = [];
+      }
+
+      logger.info(`🌍 Target languages (final): [${targetLanguages.join(', ')}]`);
 
       // 2. Récupérer le profil vocal existant de l'utilisateur (si disponible)
       let existingVoiceProfile: any = null;
@@ -1308,25 +1438,20 @@ export class MessageTranslationService extends EventEmitter {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);
       }
 
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== ENVOI REQUÊTE TRANSLATOR ========`);
-      logger.info(`🔍 [VOICE-PROFILE-TRACE] Paramètres de la requête:`);
-      logger.info(`   - messageId: ${params.messageId}`);
-      logger.info(`   - attachmentId: ${params.attachmentId}`);
-      logger.info(`   - conversationId: ${params.conversationId}`);
-      logger.info(`   - senderId: ${params.senderId}`);
-      logger.info(`   - audioPath: ${params.audioPath}`);
-      logger.info(`   - audioDurationMs: ${params.audioDurationMs}`);
-      logger.info(`   - targetLanguages: ${JSON.stringify(targetLanguages)}`);
-      logger.info(`   - shouldGenerateVoiceClone: ${shouldGenerateVoiceClone}`);
-      logger.info(`   - modelType: ${params.modelType || 'medium'}`);
-      logger.info(`   - existingVoiceProfile: ${existingVoiceProfile ? 'OUI' : 'NON'}`);
+      logger.info(
+        `🔍 [VOICE-PROFILE-TRACE] Envoi requête Translator | ` +
+        `Msg: ${params.messageId} | Att: ${params.attachmentId} | Conv: ${params.conversationId} | ` +
+        `Sender: ${params.senderId} | Duration: ${params.audioDurationMs}ms | ` +
+        `Langs: [${targetLanguages.join(', ')}] | Clone: ${shouldGenerateVoiceClone} | ` +
+        `Model: ${params.modelType || 'medium'} | ExistingProfile: ${existingVoiceProfile ? 'OUI' : 'NON'}`
+      );
 
       if (existingVoiceProfile) {
-        logger.info(`🔍 [VOICE-PROFILE-TRACE] Détails profil vocal existant:`);
-        logger.info(`   - profileId: ${existingVoiceProfile.profileId}`);
-        logger.info(`   - userId: ${existingVoiceProfile.userId}`);
-        logger.info(`   - qualityScore: ${existingVoiceProfile.qualityScore}`);
-        logger.info(`   - embedding size: ${existingVoiceProfile.embedding?.length || 0} chars`);
+        logger.info(
+          `🔍 [VOICE-PROFILE-TRACE] Profil existant: ${existingVoiceProfile.profileId} | ` +
+          `User: ${existingVoiceProfile.userId} | Quality: ${existingVoiceProfile.qualityScore} | ` +
+          `Embedding: ${existingVoiceProfile.embedding?.length || 0} chars`
+        );
       }
 
       // 3. Envoyer la requête au Translator (multipart binaire, pas d'URL)
@@ -1410,13 +1535,11 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.info(`🔍 [GATEWAY-TRACE] ✅ Attachment récupéré:`);
-      logger.info(`   - ID: ${attachment.id}`);
-      logger.info(`   - Message ID: ${attachment.messageId}`);
-      logger.info(`   - File: ${attachment.fileName}`);
-      logger.info(`   - MIME: ${attachment.mimeType}`);
-      logger.info(`   - Duration: ${attachment.duration}ms`);
-      logger.info(`   - URL: ${attachment.fileUrl}`);
+      logger.info(
+        `🔍 [GATEWAY-TRACE] Attachment récupéré: ${attachment.id} | ` +
+        `Msg: ${attachment.messageId} | File: ${attachment.fileName} | ` +
+        `MIME: ${attachment.mimeType} | Duration: ${attachment.duration}ms`
+      );
 
       // Vérifier que c'est un fichier audio
       if (!attachment.mimeType.startsWith('audio/')) {
@@ -1432,16 +1555,16 @@ export class MessageTranslationService extends EventEmitter {
       const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
       const audioPath = path.resolve(process.cwd(), relativePath);
 
-      logger.info(`🔍 [GATEWAY-TRACE] Chemins calculés:`);
-      logger.info(`   - Relative: ${relativePath}`);
-      logger.info(`   - Absolute: ${audioPath}`);
-      logger.info(`   - Exists: ${require('fs').existsSync(audioPath)}`);
+      const fileExists = require('fs').existsSync(audioPath);
+      const fileSize = fileExists ? require('fs').statSync(audioPath).size : 0;
 
-      if (!require('fs').existsSync(audioPath)) {
+      logger.info(
+        `🔍 [GATEWAY-TRACE] Chemins: ${audioPath} | ` +
+        `Exists: ${fileExists}${fileExists ? ` | Size: ${(fileSize / 1024).toFixed(2)} KB` : ''}`
+      );
+
+      if (!fileExists) {
         logger.error(`🔍 [GATEWAY-TRACE] ❌ FICHIER AUDIO INTROUVABLE: ${audioPath}`);
-      } else {
-        const stats = require('fs').statSync(audioPath);
-        logger.info(`🔍 [GATEWAY-TRACE] ✅ Fichier existant, taille: ${(stats.size / 1024).toFixed(2)} KB`);
       }
 
       logger.info(`🔍 [GATEWAY-TRACE] Étape 3: Envoi requête ZMQ vers Translator...`);
@@ -1493,15 +1616,56 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        include: {
+        select: {
+          id: true,
+          messageId: true,
+          fileName: true,
+          originalName: true,
+          fileUrl: true,
+          mimeType: true,
+          fileSize: true,
+          duration: true,
+          bitrate: true,
+          sampleRate: true,
+          codec: true,
+          channels: true,
+          createdAt: true,
           transcription: true,
-          translatedAudios: true
+          translations: true
         }
       });
 
       if (!attachment) {
         return null;
       }
+
+      // Convertir transcription JSON → ancien format
+      const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
+      const transcription = transcriptionData ? {
+        id: attachmentId,
+        text: transcriptionData.text,
+        language: transcriptionData.language,
+        confidence: transcriptionData.confidence,
+        source: transcriptionData.source,
+        segments: transcriptionData.segments,
+        durationMs: transcriptionData.durationMs,
+        createdAt: attachment.createdAt
+      } : null;
+
+      // Convertir translations JSON → ancien format
+      const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
+      const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
+        id: `${attachmentId}_${lang}`,
+        targetLanguage: lang,
+        translatedText: t.transcription,
+        audioUrl: t.url || '',
+        audioPath: t.path || '',
+        durationMs: t.durationMs || 0,
+        format: t.format || 'mp3',
+        voiceCloned: t.cloned || false,
+        voiceQuality: t.quality || 0,
+        createdAt: typeof t.createdAt === 'string' ? new Date(t.createdAt) : t.createdAt
+      })) : [];
 
       return {
         attachment: {
@@ -1519,28 +1683,8 @@ export class MessageTranslationService extends EventEmitter {
           channels: attachment.channels,
           createdAt: attachment.createdAt
         },
-        transcription: attachment.transcription ? {
-          id: attachment.transcription.id,
-          text: attachment.transcription.transcribedText,
-          language: attachment.transcription.language,
-          confidence: attachment.transcription.confidence,
-          source: attachment.transcription.source,
-          segments: attachment.transcription.segments,
-          durationMs: attachment.transcription.audioDurationMs,
-          createdAt: attachment.transcription.createdAt
-        } : null,
-        translatedAudios: attachment.translatedAudios.map(ta => ({
-          id: ta.id,
-          targetLanguage: ta.targetLanguage,
-          translatedText: ta.translatedText,
-          audioUrl: ta.audioUrl,
-          audioPath: ta.audioPath,
-          durationMs: ta.durationMs,
-          format: ta.format,
-          voiceCloned: ta.voiceCloned,
-          voiceQuality: ta.voiceQuality,
-          createdAt: ta.createdAt
-        }))
+        transcription,
+        translatedAudios
       };
 
     } catch (error) {
@@ -1612,9 +1756,10 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.info(`🎤 [TranslationService] Traduction de l'attachment ${attachmentId}`);
-      logger.info(`   📎 File: ${attachment.fileName}`);
-      logger.info(`   ⏱️ Duration: ${attachment.duration}ms`);
+      logger.info(
+        `🎤 [TranslationService] Traduction attachment: ${attachmentId} | ` +
+        `File: ${attachment.fileName} | Duration: ${attachment.duration}ms`
+      );
 
       // 2. Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
       const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
@@ -1650,7 +1795,7 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.info(`   ✅ Translation request sent: taskId=${taskId}`);
+      logger.info(`✅ Translation request sent: taskId=${taskId}`);
 
       return {
         taskId,

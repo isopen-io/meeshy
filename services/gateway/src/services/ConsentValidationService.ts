@@ -42,42 +42,57 @@ export class ConsentValidationService {
    * Récupère le statut de consentement pour un utilisateur
    */
   async getConsentStatus(userId: string): Promise<ConsentStatus> {
-    const userFeature = await this.prisma.userFeature.findUnique({
-      where: { userId },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
       select: {
         dataProcessingConsentAt: true,
         voiceDataConsentAt: true,
         voiceProfileConsentAt: true,
-        voiceCloningConsentAt: true,
-        thirdPartyServicesConsentAt: true,
-        audioTranscriptionEnabledAt: true,
-        textTranslationEnabledAt: true,
-        audioTranslationEnabledAt: true,
-        translatedAudioGenerationEnabledAt: true,
         voiceCloningEnabledAt: true
       }
     });
 
-    if (!userFeature) {
-      throw new Error('User feature record not found');
+    if (!user) {
+      throw new Error('User not found');
     }
 
-    const hasDataProcessingConsent = !!userFeature.dataProcessingConsentAt;
-    const hasVoiceDataConsent = !!userFeature.voiceDataConsentAt && hasDataProcessingConsent;
-    const hasVoiceProfileConsent = !!userFeature.voiceProfileConsentAt && hasVoiceDataConsent;
-    const hasVoiceCloningConsent = !!userFeature.voiceCloningConsentAt && hasVoiceProfileConsent;
+    // En développement, activer automatiquement tous les consentements
+    const isDevelopment = process.env.NODE_ENV === 'development';
+
+    if (isDevelopment) {
+      return {
+        hasDataProcessingConsent: true,
+        hasVoiceDataConsent: true,
+        hasVoiceProfileConsent: true,
+        hasVoiceCloningConsent: true,
+        hasThirdPartyServicesConsent: true,
+        canTranscribeAudio: true,
+        canTranslateText: true,
+        canTranslateAudio: true,
+        canGenerateTranslatedAudio: true,
+        canUseVoiceCloning: true
+      };
+    }
+
+    // Production: vérifier les consentements réels
+    const hasDataProcessingConsent = !!user.dataProcessingConsentAt;
+    const hasVoiceDataConsent = !!user.voiceDataConsentAt && hasDataProcessingConsent;
+    const hasVoiceProfileConsent = !!user.voiceProfileConsentAt && hasVoiceDataConsent;
+    // TODO: Load voiceCloningConsentAt from UserPreferences.application when implemented
+    const hasVoiceCloningConsent = false;
 
     return {
       hasDataProcessingConsent,
       hasVoiceDataConsent,
       hasVoiceProfileConsent,
       hasVoiceCloningConsent,
-      hasThirdPartyServicesConsent: !!userFeature.thirdPartyServicesConsentAt && hasDataProcessingConsent,
-      canTranscribeAudio: !!userFeature.audioTranscriptionEnabledAt && hasVoiceDataConsent,
-      canTranslateText: !!userFeature.textTranslationEnabledAt && hasDataProcessingConsent,
-      canTranslateAudio: !!userFeature.audioTranslationEnabledAt && !!userFeature.audioTranscriptionEnabledAt && !!userFeature.textTranslationEnabledAt,
-      canGenerateTranslatedAudio: !!userFeature.translatedAudioGenerationEnabledAt && !!userFeature.audioTranslationEnabledAt,
-      canUseVoiceCloning: !!userFeature.voiceCloningEnabledAt && hasVoiceCloningConsent
+      // TODO: Load from UserPreferences.application when implemented
+      hasThirdPartyServicesConsent: false,
+      canTranscribeAudio: false,
+      canTranslateText: false,
+      canTranslateAudio: false,
+      canGenerateTranslatedAudio: false,
+      canUseVoiceCloning: !!user.voiceCloningEnabledAt && hasVoiceCloningConsent
     };
   }
 

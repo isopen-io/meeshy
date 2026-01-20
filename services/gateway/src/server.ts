@@ -20,6 +20,7 @@ import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { Redis } from 'ioredis';
 import winston from 'winston';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -45,13 +46,13 @@ import { messagesRoutes } from './routes/admin/messages';
 // import { communityAdminRoutes } from './routes/admin/communities';
 // import { linksAdminRoutes } from './routes/admin/links';
 import { userRoutes } from './routes/users';
-import userFeaturesRoutes from './routes/user-features';
+// TODO: Migrer user-features vers UserPreferences + ConsentService
+// import userFeaturesRoutes from './routes/user-features';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
 import conversationEncryptionRoutes from './routes/conversation-encryption';
 import encryptionKeysRoutes from './routes/encryption-keys';
-import userEncryptionPreferencesRoutes from './routes/user-encryption-preferences';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
@@ -257,6 +258,7 @@ declare module 'fastify' {
 class MeeshyServer {
   private server: FastifyInstance;
   private prisma: PrismaClient;
+  private redis: Redis | null = null;
   private translationService: MessageTranslationService;
   private messagingService: MessagingService;
   private mentionService: MentionService;
@@ -321,14 +323,43 @@ class MeeshyServer {
       log: ['warn', 'error'] // Désactivation des logs query et info pour réduire le bruit
     });
 
+    // Initialiser Redis si l'URL est configurée (optionnel)
+    if (process.env.REDIS_URL) {
+      try {
+        this.redis = new Redis(process.env.REDIS_URL, {
+          maxRetriesPerRequest: 3,
+          enableReadyCheck: true,
+          lazyConnect: false,
+        });
+
+        this.redis.on('connect', () => {
+          logger.info('🔴 Redis connected successfully');
+        });
+
+        this.redis.on('error', (err) => {
+          logger.error('❌ Redis connection error:', err);
+          // Ne pas faire crash l'app si Redis est down
+          // Le cache multi-niveau fonctionnera en mode mémoire seule
+        });
+
+        logger.info('🔴 Redis initialization started...');
+      } catch (error) {
+        logger.error('❌ Failed to initialize Redis:', error);
+        logger.warn('⚠️ Continuing without Redis - cache will use memory only');
+        this.redis = null;
+      }
+    } else {
+      logger.info('ℹ️ REDIS_URL not configured - cache will use memory only');
+    }
+
     // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
     this.statusService = new StatusService(this.prisma);
 
     // Initialiser le middleware d'authentification unifié avec StatusService
     this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
 
-    // Initialiser le service de traduction
-    this.translationService = new MessageTranslationService(this.prisma);
+    // Initialiser le service de traduction avec Redis optionnel
+    this.translationService = new MessageTranslationService(this.prisma, this.redis || undefined);
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -336,7 +367,13 @@ class MeeshyServer {
     // Initialiser le service de mentions
     this.mentionService = new MentionService(this.prisma);
 
-    this.socketIOHandler = new MeeshySocketIOHandler(this.prisma, config.jwtSecret);
+    // Initialiser le handler Socket.IO avec l'instance de translationService qui reçoit les événements ZMQ
+    this.socketIOHandler = new MeeshySocketIOHandler(
+      this.prisma,
+      config.jwtSecret,
+      this.translationService, // ← Instance initialisée qui reçoit les événements ZMQ
+      this.redis || undefined
+    );
 
     // Initialiser le service de nettoyage automatique des appels
     this.callCleanupService = new CallCleanupService(this.prisma);
@@ -592,6 +629,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Decorators for dependency injection
     this.server.decorate('prisma', this.prisma);
+    this.server.decorate('redis', this.redis);
     this.server.decorate('translationService', this.translationService);
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);
@@ -800,7 +838,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     await this.server.register(pushTokenRoutes, { prefix: API_PREFIX });
 
     // Register user features routes with /api prefix (GDPR consents, feature toggles)
-    await this.server.register(userFeaturesRoutes, { prefix: API_PREFIX });
+    // TODO: Réactiver après migration vers UserPreferences + ConsentService
+    // await this.server.register(userFeaturesRoutes, { prefix: API_PREFIX });
 
     // Register conversation preferences routes with /api prefix
     await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });
@@ -813,9 +852,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register encryption key exchange routes with /api prefix
     await this.server.register(encryptionKeysRoutes, { prefix: '' });
-
-    // Register user encryption preferences routes
-    await this.server.register(userEncryptionPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register affiliate routes
     await this.server.register(affiliateRoutes, { prefix: API_PREFIX });

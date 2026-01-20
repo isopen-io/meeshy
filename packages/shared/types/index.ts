@@ -32,6 +32,8 @@ export * from './tracking-link.js';
 
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
+// V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment
+// export * from './attachment-transcription.js';
 
 // Export des types unifiés Phase 6 - Video Calls
 export * from './video-call.js';
@@ -79,8 +81,16 @@ export * from './signal-database.js';
 // Export des types DMA interopérabilité (WhatsApp, Messenger)
 export * from './dma.js';
 
-// Export des types transcription audio et clonage vocal
-export * from './audio-transcription.js';
+// Export des nouveaux types audio intégrés (JSON dans MessageAttachment)
+export * from './attachment-audio.js';
+
+// V2: Supprimé - utiliser attachment-audio.js à la place
+// Export des types transcription audio et clonage vocal (DEPRECATED - utiliser attachment-audio.js)
+// export * from './audio-transcription.js';
+
+// V2: Supprimé - utiliser attachment-audio.js à la place
+// Export des types pour les audios traduits (DEPRECATED - utiliser attachment-audio.js)
+// export * from './translated-audio.js';
 
 // Export des types suppression de messages
 export * from './message-deletion.js';
@@ -175,25 +185,29 @@ export {
 export {
   GlobalUserRole,
   type GlobalUserRoleType,
-  ConversationMemberRole as CanonicalConversationMemberRole,
-  type ConversationMemberRoleType,
-  CommunityMemberRole,
-  type CommunityMemberRoleType,
+  MemberRole,
+  type MemberRoleType,
   type WritePermissionLevel,
-  GLOBAL_ROLE_ALIASES,
   GLOBAL_ROLE_HIERARCHY,
-  CONVERSATION_ROLE_HIERARCHY,
-  COMMUNITY_ROLE_HIERARCHY,
+  MEMBER_ROLE_HIERARCHY,
   WRITE_PERMISSION_HIERARCHY,
   hasMinimumRole,
-  hasMinimumConversationRole,
+  hasMinimumMemberRole,
   normalizeGlobalRole,
   isGlobalUserRole,
-  isConversationMemberRole,
+  isMemberRole,
   isGlobalAdmin,
   isGlobalModerator,
-  isConversationAdmin as isCanonicalConversationAdmin,
-  isConversationModerator as isCanonicalConversationModerator,
+  isMemberAdmin,
+  isMemberModerator,
+  isMemberCreator,
+  // Aliases de compatibilité (deprecated)
+  hasMinimumConversationRole,
+  isConversationMemberRole,
+  isConversationAdmin,
+  isConversationModerator,
+  CONVERSATION_ROLE_HIERARCHY,
+  COMMUNITY_ROLE_HIERARCHY,
 } from './role-types.js';
 
 // Action types (pas de conflits majeurs)
@@ -216,14 +230,10 @@ export type { TranslationData, MessageTranslationCache, SocketIOUser };
 export enum UserRoleEnum {
   BIGBOSS = 'BIGBOSS',
   ADMIN = 'ADMIN',
-  MODO = 'MODO',        // Moderator global (schema.prisma)
+  MODERATOR = 'MODERATOR',  // Modérateur global (aligné avec Prisma)
   AUDIT = 'AUDIT',
   ANALYST = 'ANALYST',
-  USER = 'USER',
-  // Aliases pour rétrocompatibilité
-  MODERATOR = 'MODO',   // Alias de MODO
-  CREATOR = 'ADMIN',    // Alias de ADMIN (créateur de communauté)
-  MEMBER = 'USER'       // Alias de USER (membre standard)
+  USER = 'USER'
 }
 
 /**
@@ -361,12 +371,10 @@ export type UserRole = UserRoleEnum;
 export const ROLE_HIERARCHY: Readonly<Record<string, number>> = {
   [UserRoleEnum.BIGBOSS]: 7,
   [UserRoleEnum.ADMIN]: 5,
-  [UserRoleEnum.MODO]: 4,
+  [UserRoleEnum.MODERATOR]: 4,
   [UserRoleEnum.AUDIT]: 3,
   [UserRoleEnum.ANALYST]: 2,
-  [UserRoleEnum.USER]: 1,
-  // Aliases ne sont pas inclus dans le record car ils pointent vers les mêmes valeurs
-  // Pour récupérer la hiérarchie d'un alias, utilisez la valeur de l'enum directement
+  [UserRoleEnum.USER]: 1
 };
 
 export const DEFAULT_PERMISSIONS: Readonly<Record<string, UserPermissions>> = {
@@ -392,7 +400,7 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<string, UserPermissions>> = {
     canManageNotifications: true,
     canManageTranslations: false,
   },
-  [UserRoleEnum.MODO]: {
+  [UserRoleEnum.MODERATOR]: {
     canAccessAdmin: true,
     canManageUsers: false,
     canManageGroups: true,

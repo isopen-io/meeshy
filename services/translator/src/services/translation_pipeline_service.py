@@ -59,6 +59,7 @@ class TranslationJob:
     # Options
     webhook_url: Optional[str] = None
     callback_metadata: Dict[str, Any] = field(default_factory=dict)
+    mobile_transcription: Optional[Dict[str, Any]] = None  # Transcription existante pour optimisation
 
     # Progress
     progress: int = 0  # 0-100
@@ -127,23 +128,40 @@ class PipelineResult:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Convertit en dictionnaire au format attendu par le Gateway.
+
+        Format TypeScript attendu: VoiceTranslationResult
+        """
+        # Convertir translations dict en array pour le Gateway
+        translations_array = []
+        for lang, translation_data in self.translations.items():
+            translations_array.append({
+                "targetLanguage": lang,
+                "translatedText": translation_data.get("translated_text", ""),
+                "audioUrl": translation_data.get("audio_url"),
+                "audioBase64": translation_data.get("audio_base64"),
+                "durationMs": translation_data.get("duration_ms", 0),
+                "voiceCloned": translation_data.get("voice_cloned", False),
+                "voiceQuality": translation_data.get("voice_quality", 0.0)
+            })
+
         return {
-            "job_id": self.job_id,
-            "success": self.success,
-            "original": {
-                "text": self.original_text,
+            # Format Gateway: VoiceTranslationResult
+            "translationId": self.job_id,
+            "originalAudio": {
+                "transcription": self.original_text,
                 "language": self.original_language,
-                "duration_ms": self.original_duration_ms,
-                "transcription_confidence": self.transcription_confidence
+                "durationMs": self.original_duration_ms,
+                "confidence": self.transcription_confidence
             },
-            "translations": self.translations,
-            "voice": {
-                "cloned": self.voice_cloned,
+            "translations": translations_array,  # Array, pas dict
+            "voiceProfile": {
+                "profileId": f"voice_{self.job_id}",
                 "quality": self.voice_quality,
-                "model_version": self.voice_model_version
-            },
-            "processing_time_ms": self.processing_time_ms,
-            "timestamp": self.timestamp.isoformat()
+                "isNew": self.voice_model_version == 0
+            } if self.voice_cloned else None,
+            "processingTimeMs": self.processing_time_ms
         }
 
 
@@ -334,7 +352,8 @@ class TranslationPipelineService:
         generate_voice_clone: bool = True,
         webhook_url: Optional[str] = None,
         priority: JobPriority = JobPriority.NORMAL,
-        callback_metadata: Dict[str, Any] = None
+        callback_metadata: Dict[str, Any] = None,
+        mobile_transcription: Optional[Dict[str, Any]] = None
     ) -> TranslationJob:
         """
         Soumet un nouveau job de traduction async.
@@ -373,7 +392,8 @@ class TranslationPipelineService:
             generate_voice_clone=generate_voice_clone,
             webhook_url=webhook_url,
             priority=priority,
-            callback_metadata=callback_metadata or {}
+            callback_metadata=callback_metadata or {},
+            mobile_transcription=mobile_transcription
         )
 
         # Ajouter à la queue
@@ -443,9 +463,10 @@ class TranslationPipelineService:
             await self._update_job_progress(job, "transcribe_audio", 15)
 
             if self.transcription_service:
+                # Utiliser la transcription existante si disponible (optimisation)
                 transcription = await self.transcription_service.transcribe(
                     audio_path=audio_path,
-                    mobile_transcription=None,
+                    mobile_transcription=job.mobile_transcription,
                     return_timestamps=False
                 )
                 result.original_text = transcription.text
@@ -572,7 +593,9 @@ class TranslationPipelineService:
         """Traite une seule langue cible"""
         result = {
             "language": target_lang,
-            "success": True
+            "success": True,
+            "voice_cloned": False,
+            "voice_quality": 0.0
         }
 
         # Traduire le texte
@@ -622,6 +645,7 @@ class TranslationPipelineService:
             result["audio_url"] = tts_result.audio_url
             result["duration_ms"] = tts_result.duration_ms
             result["voice_cloned"] = tts_result.voice_cloned
+            result["voice_quality"] = tts_result.voice_quality
 
             # Encoder en base64 si demandé
             if os.path.exists(tts_result.audio_path):
@@ -731,7 +755,9 @@ class TranslationPipelineService:
         user_id: str,
         audio_path: str,
         target_languages: List[str],
-        generate_voice_clone: bool = True
+        generate_voice_clone: bool = True,
+        source_language: Optional[str] = None,
+        mobile_transcription: Optional[Dict[str, Any]] = None
     ) -> PipelineResult:
         """
         Traduction synchrone (attend le résultat).
@@ -743,8 +769,10 @@ class TranslationPipelineService:
             user_id=user_id,
             audio_path=audio_path,
             target_languages=target_languages,
+            source_language=source_language,
             generate_voice_clone=generate_voice_clone,
-            priority=JobPriority.HIGH
+            priority=JobPriority.HIGH,
+            mobile_transcription=mobile_transcription
         )
 
         # Attendre la fin

@@ -12,7 +12,7 @@ const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 
   const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'MODO', 'AUDIT'].includes(userRole);
+  const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
 
   if (!canView) {
     return reply.status(403).send({

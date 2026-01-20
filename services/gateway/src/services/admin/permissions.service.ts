@@ -23,13 +23,10 @@ export class PermissionsService {
   private readonly ROLE_HIERARCHY: Record<string, number> = {
     'BIGBOSS': 7,
     'ADMIN': 5,
-    'MODO': 4,
+    'MODERATOR': 4,
     'AUDIT': 3,
     'ANALYST': 2,
-    'USER': 1,
-    'MODERATOR': 4,  // Alias
-    'CREATOR': 5,    // Alias
-    'MEMBER': 1      // Alias
+    'USER': 1
   };
 
   private readonly PERMISSIONS_MATRIX: Record<string, AdminPermissions> = {
@@ -69,7 +66,7 @@ export class PermissionsService {
       canManageNotifications: true,
       canManageTranslations: true  // ADMIN can now manage translations
     },
-    'MODO': {
+    'MODERATOR': {
       canAccessAdmin: true,
       canViewUsers: true,
       canViewUserDetails: true,
@@ -146,14 +143,11 @@ export class PermissionsService {
 
   /**
    * Résout les alias vers les rôles réels
+   * Note: Les alias CREATOR et MEMBER ont été supprimés suite à l'unification des types
    */
   private resolveRole(role: UserRoleEnum): UserRoleEnum {
-    const aliasMap: Record<string, UserRoleEnum> = {
-      [UserRoleEnum.MODERATOR]: UserRoleEnum.MODO,
-      [UserRoleEnum.CREATOR]: UserRoleEnum.ADMIN,
-      [UserRoleEnum.MEMBER]: UserRoleEnum.USER
-    };
-    return aliasMap[role] || role;
+    // Plus d'aliases, retourner directement le rôle
+    return role;
   }
 
   /**

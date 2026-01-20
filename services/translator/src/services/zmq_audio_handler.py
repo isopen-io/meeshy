@@ -23,6 +23,16 @@ try:
 except ImportError:
     pass
 
+# Import du service audio fetcher
+AUDIO_FETCHER_AVAILABLE = False
+get_audio_fetcher = None
+try:
+    from .audio_fetcher import get_audio_fetcher
+    AUDIO_FETCHER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"⚠️ [AUDIO-HANDLER] AudioFetcher non disponible: {e}")
+    pass
+
 
 class AudioHandler:
     """Handler pour les traitements audio via ZMQ"""
@@ -94,9 +104,33 @@ class AudioHandler:
         logger.info(f"   - targetLanguages: {request_data.get('targetLanguages')}")
         logger.info(f"   - audioDurationMs: {request_data.get('audioDurationMs')}")
 
-        if request_data.get('existingVoiceProfile'):
+        # Reconstruire existingVoiceProfile avec l'embedding binaire si disponible
+        if request_data.get('_voiceProfileBinary'):
+            import base64
+            # Reconstruire le profil vocal avec l'embedding depuis le frame binaire
+            profile_metadata = request_data.get('existingVoiceProfile', {})
+            voice_profile_bytes = request_data.get('_voiceProfileBinary')
+
+            # Encoder l'embedding binaire en base64 pour compatibilité avec le pipeline
+            embedding_base64 = base64.b64encode(voice_profile_bytes).decode('utf-8')
+
+            # Reconstruire existingVoiceProfile complet
+            request_data['existingVoiceProfile'] = {
+                'profileId': profile_metadata.get('profileId'),
+                'userId': profile_metadata.get('userId'),
+                'qualityScore': profile_metadata.get('qualityScore'),
+                'embedding': embedding_base64  # Embedding reconstruit depuis frame binaire
+            }
+
+            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Profil vocal reconstruit depuis frame binaire:")
+            logger.info(f"   - profileId: {profile_metadata.get('profileId')}")
+            logger.info(f"   - userId: {profile_metadata.get('userId')}")
+            logger.info(f"   - qualityScore: {profile_metadata.get('qualityScore')}")
+            logger.info(f"   - embedding: {len(embedding_base64)} chars (depuis {len(voice_profile_bytes)} bytes binaires)")
+        elif request_data.get('existingVoiceProfile'):
+            # Ancien format (embedding dans le JSON) - pour rétro-compatibilité
             profile = request_data.get('existingVoiceProfile')
-            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Profil vocal existant fourni:")
+            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Profil vocal existant fourni (ancien format JSON):")
             logger.info(f"   - profileId: {profile.get('profileId')}")
             logger.info(f"   - userId: {profile.get('userId')}")
             logger.info(f"   - qualityScore: {profile.get('qualityScore')}")
@@ -137,6 +171,9 @@ class AudioHandler:
             # ═══════════════════════════════════════════════════════════════
             # ACQUISITION AUDIO (binaire multipart > base64 > URL > path legacy)
             # ═══════════════════════════════════════════════════════════════
+            if not AUDIO_FETCHER_AVAILABLE or get_audio_fetcher is None:
+                raise RuntimeError("AudioFetcher n'est pas disponible - service requis pour le traitement audio")
+
             audio_fetcher = get_audio_fetcher()
             local_audio_path, audio_source = await audio_fetcher.acquire_audio(
                 attachment_id=request_data.get('attachmentId'),
@@ -258,8 +295,9 @@ class AudioHandler:
             # Nettoyer le fichier temporaire en cas d'erreur
             try:
                 if 'should_cleanup_audio' in locals() and should_cleanup_audio and 'local_audio_path' in locals():
-                    audio_fetcher = get_audio_fetcher()
-                    audio_fetcher.cleanup_temp_file(local_audio_path)
+                    if AUDIO_FETCHER_AVAILABLE and get_audio_fetcher is not None:
+                        audio_fetcher = get_audio_fetcher()
+                        audio_fetcher.cleanup_temp_file(local_audio_path)
             except Exception:
                 pass  # Ignorer les erreurs de nettoyage
 

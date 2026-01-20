@@ -19,6 +19,7 @@ import type {
   VoiceAnalysisType,
   VoiceQualityMetrics
 } from '@meeshy/shared/types/voice-api';
+import type { AttachmentTranscription } from '@meeshy/shared/types/attachment-audio';
 import logger from '../utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -167,25 +168,30 @@ export class VoiceAnalysisService {
     messageId: string,
     analysis: VoiceQualityAnalysis
   ): Promise<void> {
-    // Chercher la transcription existante
-    const transcription = await this.prisma.messageAudioTranscription.findUnique({
-      where: { attachmentId }
+    // Chercher l'attachment et sa transcription
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      select: { transcription: true }
     });
 
-    if (!transcription) {
+    if (!attachment || !attachment.transcription) {
       logger.warn(
         `[VoiceAnalysis] No transcription found for attachment ${attachmentId}, skipping persistence`
       );
       return;
     }
 
-    // Mettre à jour avec l'analyse vocale
-    await this.prisma.messageAudioTranscription.update({
-      where: { attachmentId },
+    // Mettre à jour la transcription JSON avec l'analyse vocale
+    const transcriptionData = attachment.transcription as unknown as AttachmentTranscription;
+    const updatedTranscription: AttachmentTranscription = {
+      ...transcriptionData,
+      voiceQualityAnalysis: analysis
+    };
+
+    await this.prisma.messageAttachment.update({
+      where: { id: attachmentId },
       data: {
-        voiceQualityAnalysis: analysis as any, // Prisma Json type
-        voiceAnalysisAt: new Date(),
-        voiceAnalysisModel: 'voice_quality_analyzer_v1'
+        transcription: updatedTranscription as any
       }
     });
   }
@@ -357,16 +363,21 @@ export class VoiceAnalysisService {
    * Récupérer l'analyse d'un attachement
    */
   async getAttachmentAnalysis(attachmentId: string): Promise<VoiceQualityAnalysis | null> {
-    const transcription = await this.prisma.messageAudioTranscription.findUnique({
-      where: { attachmentId },
-      select: { voiceQualityAnalysis: true }
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      select: { transcription: true }
     });
 
-    if (!transcription?.voiceQualityAnalysis) {
+    if (!attachment?.transcription) {
       return null;
     }
 
-    return transcription.voiceQualityAnalysis as any;
+    const transcriptionData = attachment.transcription as unknown as AttachmentTranscription;
+    if (!transcriptionData?.voiceQualityAnalysis) {
+      return null;
+    }
+
+    return transcriptionData.voiceQualityAnalysis as VoiceQualityAnalysis;
   }
 
   /**

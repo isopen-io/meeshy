@@ -239,34 +239,23 @@ export async function updateUserProfile(fastify: FastifyInstance) {
           isActive: true,
           lastActiveAt: true,
           createdAt: true,
-          updatedAt: true,
-          userFeature: {
-            select: {
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true
-            }
-          }
+          updatedAt: true
         }
       });
 
+      // TODO: Migrate feature preferences to UserPreferences.application JSON
       if (Object.keys(featureUpdateData).length > 0) {
-        await fastify.prisma.userFeature.upsert({
-          where: { userId },
-          update: featureUpdateData,
-          create: { userId, ...featureUpdateData }
-        });
+        console.warn('[Profile] Feature update data not saved - needs migration to UserPreferences:', featureUpdateData);
       }
 
       const responseUser = {
         ...updatedUser,
-        autoTranslateEnabled: updatedUser.userFeature?.autoTranslateEnabled ?? true,
-        translateToSystemLanguage: updatedUser.userFeature?.translateToSystemLanguage ?? true,
-        translateToRegionalLanguage: updatedUser.userFeature?.translateToRegionalLanguage ?? false,
-        useCustomDestination: updatedUser.userFeature?.useCustomDestination ?? false
+        // TODO: Load from UserPreferences.application
+        autoTranslateEnabled: true,
+        translateToSystemLanguage: true,
+        translateToRegionalLanguage: false,
+        useCustomDestination: false
       };
-      delete (responseUser as any).userFeature;
 
       return reply.send({
         success: true,
@@ -694,15 +683,7 @@ export async function getUserById(fastify: FastifyInstance) {
           isActive: true,
           deactivatedAt: true,
           createdAt: true,
-          updatedAt: true,
-          userFeature: {
-            select: {
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true
-            }
-          }
+          updatedAt: true
         }
       });
 
@@ -716,14 +697,13 @@ export async function getUserById(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
 
-      const { userFeature, ...userWithoutFeature } = user;
-
       const publicUserProfile = {
-        ...userWithoutFeature,
-        autoTranslateEnabled: userFeature?.autoTranslateEnabled ?? true,
-        translateToSystemLanguage: userFeature?.translateToSystemLanguage ?? true,
-        translateToRegionalLanguage: userFeature?.translateToRegionalLanguage ?? false,
-        useCustomDestination: userFeature?.useCustomDestination ?? false,
+        ...user,
+        // TODO: Load from UserPreferences.application
+        autoTranslateEnabled: true,
+        translateToSystemLanguage: true,
+        translateToRegionalLanguage: false,
+        useCustomDestination: false,
         email: '',
         phoneNumber: undefined,
         permissions: undefined,

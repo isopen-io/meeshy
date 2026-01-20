@@ -405,7 +405,6 @@ export class UploadProcessor {
         serverKeyId: encryptionResult.serverCopy?.keyId,
         thumbnailEncryptionIv: encryptionResult.encryptedThumbnail?.iv,
         thumbnailEncryptionAuthTag: encryptionResult.encryptedThumbnail?.authTag,
-        serverCopyUrl: serverCopyUrl,
       },
     });
 

@@ -3,9 +3,12 @@
  * Harmonisation Gateway ↔ Frontend
  */
 
+import { MemberRole, MEMBER_ROLE_HIERARCHY } from './role-types.js';
+
 /**
  * Rôles des membres d'une communauté
- * Hiérarchie: ADMIN > MODERATOR > MEMBER
+ * Hiérarchie: CREATOR > ADMIN > MODERATOR > MEMBER
+ * @deprecated Utilisez MemberRole depuis role-types.ts à la place
  */
 export enum CommunityRole {
   /** Administrateur - Permissions complètes sur la communauté */
@@ -81,6 +84,7 @@ export const DEFAULT_COMMUNITY_PERMISSIONS: Readonly<Record<CommunityRole, Commu
 
 /**
  * Hiérarchie des rôles (pour comparaison)
+ * @deprecated Utilisez MEMBER_ROLE_HIERARCHY depuis role-types.ts à la place
  */
 export const COMMUNITY_ROLE_HIERARCHY: Readonly<Record<CommunityRole, number>> = {
   [CommunityRole.ADMIN]: 3,
@@ -90,9 +94,13 @@ export const COMMUNITY_ROLE_HIERARCHY: Readonly<Record<CommunityRole, number>> =
 
 /**
  * Vérifie si un rôle a une hiérarchie supérieure ou égale à un autre
+ * @deprecated Utilisez hasMinimumMemberRole depuis role-types.ts à la place
  */
 export function hasEqualOrHigherRole(userRole: CommunityRole, requiredRole: CommunityRole): boolean {
-  return COMMUNITY_ROLE_HIERARCHY[userRole] >= COMMUNITY_ROLE_HIERARCHY[requiredRole];
+  // Utiliser MEMBER_ROLE_HIERARCHY pour la comparaison
+  const userLevel = MEMBER_ROLE_HIERARCHY[userRole as unknown as MemberRole] || COMMUNITY_ROLE_HIERARCHY[userRole];
+  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole as unknown as MemberRole] || COMMUNITY_ROLE_HIERARCHY[requiredRole];
+  return userLevel >= requiredLevel;
 }
 
 /**

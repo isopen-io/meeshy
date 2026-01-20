@@ -10,10 +10,10 @@
 // MESSAGE AUDIO TRANSCRIPTION
 // =====================================================
 
-/**
- * Source de la transcription
- */
-export type TranscriptionSourceType = 'mobile' | 'whisper';
+// Import des types partagés depuis attachment-transcription
+import type { TranscriptionSourceType, TranscriptionSegment } from './attachment-transcription.js';
+
+export { TranscriptionSourceType, TranscriptionSegment };
 
 /**
  * Information sur un locuteur détecté
@@ -34,17 +34,6 @@ export interface SpeakerDiarizationAnalysis {
   readonly speakers: readonly SpeakerInfo[];
   readonly total_duration_ms: number;
   readonly overlap_ratio: number;
-}
-
-/**
- * Segment de transcription avec timestamps
- */
-export interface TranscriptionSegment {
-  readonly start_ms: number;
-  readonly end_ms: number;
-  readonly text: string;
-  readonly speaker_id?: string;
-  readonly confidence?: number;
 }
 
 /**

@@ -1,0 +1,20 @@
+BACKUP UTILISATEURS - MIGRATION RÔLES
+========================================
+
+Date du backup : 2026-01-20T07:38:03.938Z
+Nombre d'utilisateurs : 4
+
+Répartition par rôle :
+  BIGBOSS: 1
+  ADMIN: 2
+  USER: 1
+
+Fichiers :
+  - users-backup.json : Données complètes des utilisateurs
+  - backup-info.txt : Ce fichier
+
+Raison : Migration MODO → MODERATOR
+
+Restauration manuelle :
+  Si nécessaire, utilisez ce backup pour vérifier les données
+  avant/après migration et restaurer manuellement si besoin.

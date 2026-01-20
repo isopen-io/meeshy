@@ -232,7 +232,8 @@ class TranslationStage:
         attachment_id: str,
         model_type: str = "premium",
         cloning_params: Optional[Dict[str, Any]] = None,
-        max_workers: int = 4
+        max_workers: int = 4,
+        source_audio_path: Optional[str] = None
     ) -> Dict[str, TranslatedAudioVersion]:
         """
         Process multiple languages in parallel.
@@ -317,7 +318,8 @@ class TranslationStage:
             attachment_id=attachment_id,
             model_type=model_type,
             cloning_params=cloning_params,
-            max_workers=max_workers
+            max_workers=max_workers,
+            source_audio_path=source_audio_path
         )
         parallel_time = int((time.time() - parallel_start) * 1000)
 
@@ -392,7 +394,8 @@ class TranslationStage:
         attachment_id: str,
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
-        max_workers: int
+        max_workers: int,
+        source_audio_path: Optional[str] = None
     ) -> Dict[str, Optional[TranslatedAudioVersion]]:
         """
         Process languages in parallel using ThreadPoolExecutor.
@@ -417,7 +420,8 @@ class TranslationStage:
                         message_id,
                         attachment_id,
                         model_type,
-                        lang_cloning_params
+                        lang_cloning_params,
+                        source_audio_path
                     ): lang
                     for lang, lang_cloning_params in tasks
                 }
@@ -455,7 +459,8 @@ class TranslationStage:
         message_id: str,
         attachment_id: str,
         model_type: str,
-        cloning_params: Optional[Dict[str, Any]]
+        cloning_params: Optional[Dict[str, Any]],
+        source_audio_path: Optional[str] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process a single language synchronously (for ThreadPoolExecutor).
@@ -481,7 +486,8 @@ class TranslationStage:
                         attachment_id=attachment_id,
                         model_type=model_type,
                         cloning_params=cloning_params,
-                        lang_start=lang_start
+                        lang_start=lang_start,
+                        source_audio_path=source_audio_path
                     )
                 )
                 return result
@@ -505,7 +511,8 @@ class TranslationStage:
         attachment_id: str,
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
-        lang_start: float
+        lang_start: float,
+        source_audio_path: Optional[str] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process single language: translate + TTS + cache.
@@ -532,9 +539,24 @@ class TranslationStage:
 
             # 2. Generate TTS audio
             if voice_model:
+                # Utiliser l'audio source actuel comme référence pour le clonage vocal
+                # (plus récent et pertinent que l'audio de training du profil)
+                speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
+
+                if speaker_audio:
+                    logger.info(
+                        f"[TRANSLATION_STAGE] 🎤 Clonage vocal activé: "
+                        f"audio_ref={os.path.basename(speaker_audio) if speaker_audio else 'None'}"
+                    )
+                else:
+                    logger.warning(
+                        f"[TRANSLATION_STAGE] ⚠️ Pas d'audio de référence disponible "
+                        f"pour le clonage vocal → voix générique"
+                    )
+
                 tts_result = await self.tts_service.synthesize_with_voice(
                     text=translated_text,
-                    speaker_audio_path=getattr(voice_model, 'reference_audio_path', None),
+                    speaker_audio_path=speaker_audio,
                     target_language=target_lang,
                     output_format="mp3",
                     message_id=f"{message_id}_{attachment_id}",

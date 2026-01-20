@@ -356,6 +356,18 @@ export function createUnifiedAuthMiddleware(
         console.error('[UnifiedAuth] Failed to attach legacy request.user:', e);
       }
 
+      // Additional backwards compatibility: some routes expect `request.auth`
+      // Provide a minimal `auth` object with userId for preference routes compatibility
+      try {
+        (request as any).auth = {
+          userId: authContext.userId,
+          isAuthenticated: authContext.isAuthenticated,
+          isAnonymous: authContext.isAnonymous
+        };
+      } catch (e) {
+        // Non-blocking; if this fails, don't prevent request processing
+        console.error('[UnifiedAuth] Failed to attach request.auth:', e);
+      }
 
     } catch (error) {
       // Logging maîtrisé - éviter les stack traces complètes
@@ -497,7 +509,7 @@ export function requireRole(allowedRoles: string | string[]) {
 }
 
 export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
-export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODO']);
+export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
 export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {

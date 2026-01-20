@@ -15,6 +15,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import {
+  isConsentRequiredError,
+  isPreferenceErrorResponse,
+} from '@/types/preferences';
 import type {
   PreferenceCategory,
   PreferenceDataType,
@@ -22,8 +26,6 @@ import type {
   UsePreferencesOptions,
   UsePreferencesResult,
   ConsentViolation,
-  isConsentRequiredError,
-  isPreferenceErrorResponse,
 } from '@/types/preferences';
 
 // ===== CONSTANTES =====

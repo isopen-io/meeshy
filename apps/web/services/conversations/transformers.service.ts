@@ -18,6 +18,11 @@ import type {
   Attachment,
   ConversationType,
 } from '@meeshy/shared/types';
+import type {
+  AttachmentTranscription,
+  AttachmentTranslations,
+  SocketIOTranslatedAudio,
+} from '@meeshy/shared/types/attachment-audio';
 import type { BackendMessageData, BackendConversationData } from './types';
 
 /**
@@ -225,7 +230,8 @@ export class TransformersService {
       return undefined;
     }
 
-    return attachments.map((att: any): Attachment => ({
+    return attachments.map((att: any): Attachment => {
+      return {
       id: String(att.id || ''),
       messageId,
       fileName: String(att.fileName || ''),
@@ -257,7 +263,31 @@ export class TransformersService {
       downloadedCount: Number(att.downloadedCount) || 0,
       consumedCount: Number(att.consumedCount) || 0,
       isEncrypted: Boolean(att.isEncrypted),
-    }));
+
+      // ✅ V2: Mapper transcription JSON intégrée
+      transcription: att.transcription as AttachmentTranscription | undefined,
+
+      // ✅ V2: Mapper translations JSON intégrées
+      translationsJson: att.translationsJson as AttachmentTranslations | undefined,
+
+      // ✅ V2: Mapper translatedAudios (format Socket.IO converti depuis translationsJson)
+      translatedAudios: Array.isArray(att.translatedAudios)
+        ? att.translatedAudios.map((ta: any): SocketIOTranslatedAudio => ({
+            id: String(ta.id || ''),
+            targetLanguage: String(ta.targetLanguage || ''),
+            translatedText: String(ta.translatedText || ''),
+            audioUrl: String(ta.audioUrl || ''),
+            durationMs: Number(ta.durationMs) || 0,
+            voiceCloned: Boolean(ta.voiceCloned),
+            voiceQuality: Number(ta.voiceQuality) || 0,
+            audioPath: ta.audioPath ? String(ta.audioPath) : undefined,
+            format: ta.format ? String(ta.format) : undefined,
+            ttsModel: ta.ttsModel ? String(ta.ttsModel) : undefined,
+            voiceModelId: ta.voiceModelId ? String(ta.voiceModelId) : undefined,
+          }))
+        : undefined,
+      };
+    });
   }
 
   /**

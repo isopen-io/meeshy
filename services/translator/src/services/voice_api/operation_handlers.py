@@ -71,7 +71,8 @@ class OperationHandlers:
         target_languages: List[str],
         source_language: Optional[str],
         user_id: str,
-        generate_voice_clone: bool
+        generate_voice_clone: bool,
+        mobile_transcription: Optional[dict] = None
     ) -> VoiceAPIResult:
         """Handle synchronous voice translation"""
         try:
@@ -82,7 +83,8 @@ class OperationHandlers:
                     target_languages=target_languages,
                     source_language=source_language,
                     user_id=user_id,
-                    generate_voice_clone=generate_voice_clone
+                    generate_voice_clone=generate_voice_clone,
+                    mobile_transcription=mobile_transcription
                 )
 
                 return VoiceAPIResult(
@@ -115,7 +117,8 @@ class OperationHandlers:
         user_id: str,
         generate_voice_clone: bool,
         webhook_url: Optional[str],
-        priority: int
+        priority: int,
+        mobile_transcription: Optional[dict] = None
     ) -> VoiceAPIResult:
         """Handle asynchronous voice translation"""
         try:
@@ -134,7 +137,8 @@ class OperationHandlers:
                 user_id=user_id,
                 generate_voice_clone=generate_voice_clone,
                 webhook_url=webhook_url,
-                priority=priority
+                priority=priority,
+                mobile_transcription=mobile_transcription
             )
 
             return VoiceAPIResult(

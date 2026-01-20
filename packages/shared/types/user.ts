@@ -6,9 +6,10 @@
 import type { PaginationMeta } from './api-responses.js';
 
 /**
- * Roles utilisateur
+ * Rôles utilisateur globaux (aligné avec Prisma enum UserRole)
+ * @see schema.prisma UserRole enum
  */
-export type UserRole = 'USER' | 'ADMIN' | 'MODERATOR' | 'BIGBOSS' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'MEMBER';
+export type UserRole = 'USER' | 'ADMIN' | 'MODERATOR' | 'BIGBOSS' | 'AUDIT' | 'ANALYST';
 
 /**
  * Permissions utilisateur

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TranslatedAudioData } from '@meeshy/shared/types/socketio-events';
+import type { SocketIOTranslatedAudio } from '@meeshy/shared/types';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
@@ -13,7 +13,7 @@ interface UseAudioTranslationOptions {
   attachmentId: string;
   messageId?: string;
   initialTranscription?: AudioTranscription;
-  initialTranslatedAudios?: readonly TranslatedAudioData[];
+  initialTranslatedAudios?: readonly SocketIOTranslatedAudio[];
   attachmentFileUrl: string;
 }
 
@@ -26,7 +26,7 @@ interface UseAudioTranslationReturn {
   setIsTranscriptionExpanded: (expanded: boolean) => void;
 
   // État de traduction
-  translatedAudios: readonly TranslatedAudioData[];
+  translatedAudios: readonly SocketIOTranslatedAudio[];
   isTranslating: boolean;
   translationError: string | null;
 
@@ -60,7 +60,7 @@ export function useAudioTranslation({
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [isTranscriptionExpanded, setIsTranscriptionExpanded] = useState(false);
 
-  const [translatedAudios, setTranslatedAudios] = useState<readonly TranslatedAudioData[]>(initialTranslatedAudios || []);
+  const [translatedAudios, setTranslatedAudios] = useState<readonly SocketIOTranslatedAudio[]>(initialTranslatedAudios || []);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
 
@@ -118,7 +118,7 @@ export function useAudioTranslation({
     if (selectedLanguage === 'original') {
       return attachmentFileUrl;
     }
-    const translatedAudio = translatedAudios.find(t => t.language === selectedLanguage);
+    const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
     return translatedAudio?.audioUrl || attachmentFileUrl;
   })();
 

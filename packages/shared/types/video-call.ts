@@ -26,7 +26,7 @@ export type ParticipantRole = 'initiator' | 'participant';
 /**
  * Source de transcription
  */
-export type TranscriptionSource = 'client' | 'server';
+export type CallTranscriptionSource = 'client' | 'server';
 
 // ===== CALL SESSION =====
 
@@ -260,7 +260,7 @@ export interface Transcription {
   readonly id: string;
   readonly callSessionId: string;
   readonly participantId: string;
-  readonly source: TranscriptionSource;
+  readonly source: CallTranscriptionSource;
   readonly text: string;
   readonly language: string;
   readonly confidence?: number;           // 0-1

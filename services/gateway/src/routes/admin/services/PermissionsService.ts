@@ -18,7 +18,7 @@ export class PermissionsService {
   private readonly ROLE_HIERARCHY: Record<string, number> = {
     'BIGBOSS': 7,
     'ADMIN': 5,
-    'MODO': 4,
+    'MODERATOR': 4,
     'AUDIT': 3,
     'ANALYST': 2,
     'USER': 1,
@@ -47,7 +47,7 @@ export class PermissionsService {
       canManageNotifications: true,
       canManageTranslations: false,
     },
-    'MODO': {
+    'MODERATOR': {
       canAccessAdmin: true,
       canManageUsers: false,
       canManageCommunities: true,

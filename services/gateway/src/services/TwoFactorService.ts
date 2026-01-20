@@ -107,9 +107,7 @@ export class TwoFactorService {
           id: true,
           email: true,
           username: true,
-          userFeature: {
-            select: { twoFactorEnabledAt: true }
-          }
+          twoFactorEnabledAt: true
         }
       });
 
@@ -118,7 +116,7 @@ export class TwoFactorService {
       }
 
       // Vérifier si 2FA est déjà activé
-      if (user.userFeature?.twoFactorEnabledAt) {
+      if (user.twoFactorEnabledAt) {
         return { success: false, error: '2FA est déjà activé sur ce compte' };
       }
 
@@ -174,9 +172,7 @@ export class TwoFactorService {
           id: true,
           username: true,
           twoFactorPendingSecret: true,
-          userFeature: {
-            select: { twoFactorEnabledAt: true }
-          }
+          twoFactorEnabledAt: true
         }
       });
 
@@ -185,7 +181,7 @@ export class TwoFactorService {
       }
 
       // Vérifier si 2FA est déjà activé
-      if (user.userFeature?.twoFactorEnabledAt) {
+      if (user.twoFactorEnabledAt) {
         return { success: false, error: '2FA est déjà activé sur ce compte' };
       }
 
@@ -211,23 +207,15 @@ export class TwoFactorService {
       const hashedBackupCodes = backupCodes.map(c => this.hashBackupCode(c.replace('-', '')));
 
       // Activer le 2FA
-      await this.prisma.$transaction([
-        // Mettre à jour l'utilisateur
-        this.prisma.user.update({
-          where: { id: userId },
-          data: {
-            twoFactorSecret: user.twoFactorPendingSecret,
-            twoFactorPendingSecret: null, // Clear pending secret
-            twoFactorBackupCodes: hashedBackupCodes
-          }
-        }),
-        // Mettre à jour userFeature
-        this.prisma.userFeature.upsert({
-          where: { userId },
-          update: { twoFactorEnabledAt: new Date() },
-          create: { userId, twoFactorEnabledAt: new Date() }
-        })
-      ]);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          twoFactorSecret: user.twoFactorPendingSecret,
+          twoFactorPendingSecret: null, // Clear pending secret
+          twoFactorBackupCodes: hashedBackupCodes,
+          twoFactorEnabledAt: new Date()
+        }
+      });
 
       console.log('[2FA] Enabled for user:', user.username);
 
@@ -255,9 +243,7 @@ export class TwoFactorService {
           username: true,
           password: true,
           twoFactorSecret: true,
-          userFeature: {
-            select: { twoFactorEnabledAt: true }
-          }
+          twoFactorEnabledAt: true
         }
       });
 
@@ -266,7 +252,7 @@ export class TwoFactorService {
       }
 
       // Vérifier si 2FA est activé
-      if (!user.userFeature?.twoFactorEnabledAt || !user.twoFactorSecret) {
+      if (!user.twoFactorEnabledAt || !user.twoFactorSecret) {
         return { success: false, error: '2FA n\'est pas activé sur ce compte' };
       }
 
@@ -291,20 +277,15 @@ export class TwoFactorService {
       }
 
       // Désactiver le 2FA
-      await this.prisma.$transaction([
-        this.prisma.user.update({
-          where: { id: userId },
-          data: {
-            twoFactorSecret: null,
-            twoFactorPendingSecret: null,
-            twoFactorBackupCodes: []
-          }
-        }),
-        this.prisma.userFeature.update({
-          where: { userId },
-          data: { twoFactorEnabledAt: null }
-        })
-      ]);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          twoFactorSecret: null,
+          twoFactorPendingSecret: null,
+          twoFactorBackupCodes: [],
+          twoFactorEnabledAt: null
+        }
+      });
 
       console.log('[2FA] Disabled for user:', user.username);
 
@@ -327,9 +308,7 @@ export class TwoFactorService {
           id: true,
           twoFactorSecret: true,
           twoFactorBackupCodes: true,
-          userFeature: {
-            select: { twoFactorEnabledAt: true }
-          }
+          twoFactorEnabledAt: true
         }
       });
 
@@ -338,7 +317,7 @@ export class TwoFactorService {
       }
 
       // Vérifier si 2FA est activé
-      if (!user.userFeature?.twoFactorEnabledAt || !user.twoFactorSecret) {
+      if (!user.twoFactorEnabledAt || !user.twoFactorSecret) {
         return { success: false, error: '2FA n\'est pas activé sur ce compte' };
       }
 
@@ -396,9 +375,7 @@ export class TwoFactorService {
       where: { id: userId },
       select: {
         twoFactorBackupCodes: true,
-        userFeature: {
-          select: { twoFactorEnabledAt: true }
-        }
+        twoFactorEnabledAt: true
       }
     });
 
@@ -411,12 +388,12 @@ export class TwoFactorService {
       };
     }
 
-    const enabled = !!user.userFeature?.twoFactorEnabledAt;
+    const enabled = !!user.twoFactorEnabledAt;
     const backupCodesCount = user.twoFactorBackupCodes?.length || 0;
 
     return {
       enabled,
-      enabledAt: user.userFeature?.twoFactorEnabledAt || null,
+      enabledAt: user.twoFactorEnabledAt || null,
       hasBackupCodes: backupCodesCount > 0,
       backupCodesCount
     };
@@ -487,12 +464,10 @@ export class TwoFactorService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
-        userFeature: {
-          select: { twoFactorEnabledAt: true }
-        }
+        twoFactorEnabledAt: true
       }
     });
 
-    return !!user?.userFeature?.twoFactorEnabledAt;
+    return !!user?.twoFactorEnabledAt;
   }
 }

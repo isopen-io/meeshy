@@ -275,37 +275,9 @@ export function registerMessagesRoutes(
             uploadedBy: true,
             isAnonymous: true,
             createdAt: true,
-            // Inclure les transcriptions audio
-            transcription: {
-              select: {
-                id: true,
-                transcribedText: true,
-                language: true,
-                confidence: true,
-                source: true,
-                model: true,
-                segments: true,
-                audioDurationMs: true,
-                speakerCount: true,
-                createdAt: true
-              }
-            },
-            // Inclure les audios traduits
-            translatedAudios: {
-              select: {
-                id: true,
-                targetLanguage: true,
-                translatedText: true,
-                audioPath: true,
-                audioUrl: true,
-                durationMs: true,
-                format: true,
-                voiceCloned: true,
-                voiceQuality: true,
-                ttsModel: true,
-                createdAt: true
-              }
-            }
+            // V2: Champs JSON intégrés (pas de sous-sélection sur JSON scalaires)
+            transcription: true,
+            translations: true
           }
         },
         _count: {
@@ -406,6 +378,10 @@ export function registerMessagesRoutes(
                     language: true,
                     confidence: true,
                     source: true,
+                    segments: true,
+                    audioDurationMs: true,
+                    model: true,
+                    speakerCount: true,
                     voiceQualityAnalysis: true
                   }
                 }

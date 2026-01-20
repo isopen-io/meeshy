@@ -6,11 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User as UserType } from '@/types';
 import { getUserInitials } from '@/utils/user';
 import { toast } from 'sonner';
-import { Upload, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { Upload, Camera, Lock, Eye, EyeOff, Languages, Monitor, Wand2 } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { buildApiUrl } from '@/lib/config';
 import { validateAvatarFile } from '@/utils/avatar-upload';
@@ -24,9 +31,24 @@ interface UserSettingsProps {
   onUserUpdate: (user: UserType) => void;
 }
 
+// Available languages
+const AVAILABLE_LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'es', name: 'Español', flag: '🇪🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+  { code: 'pt', name: 'Português', flag: '🇵🇹' },
+  { code: 'ja', name: '日本語', flag: '🇯🇵' },
+  { code: 'zh', name: '中文', flag: '🇨🇳' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+];
+
 export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
   const { t } = useI18n('settings');
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -34,6 +56,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     email: '',
     phoneNumber: '',
     bio: '',
+    systemLanguage: '',
+    regionalLanguage: '',
+    customDestinationLanguage: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -64,6 +89,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
         bio: user.bio || '',
+        systemLanguage: user.systemLanguage || 'en',
+        regionalLanguage: user.regionalLanguage || '',
+        customDestinationLanguage: user.customDestinationLanguage || '',
       });
     }
   }, [user]);
@@ -493,6 +521,127 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
           </div>
 
+      </Card>
+
+      {/* Languages Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Languages className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <CardTitle className="text-lg sm:text-xl">
+              {t('profile.languages.title', 'Language Preferences')}
+            </CardTitle>
+          </div>
+          <CardDescription className="text-sm sm:text-base">
+            {t('profile.languages.description', 'Configure your language settings')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 sm:space-y-6">
+          {/* NOTE: Interface Language is managed in Application Settings tab */}
+
+          {/* System Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Monitor className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.system.label', 'System Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.system.description', 'Main language for your messages')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={formData.systemLanguage || 'en'}
+              onValueChange={(value) => handleInputChange('systemLanguage', value)}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Regional Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Languages className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.regional.label', 'Regional Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.regional.description', 'Secondary language (optional)')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={formData.regionalLanguage || 'none'}
+              onValueChange={(value) => handleInputChange('regionalLanguage', value === 'none' ? '' : value)}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Custom Destination Language */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <Wand2 className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-sm sm:text-base">
+                  {t('application.languages.custom.label', 'Custom Language')}
+                </Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t('application.languages.custom.description', 'Specific translation target (optional)')}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={formData.customDestinationLanguage || 'none'}
+              onValueChange={(value) =>
+                handleInputChange('customDestinationLanguage', value === 'none' ? '' : value)
+              }
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('translation.mainLanguages.none', 'None')}</SelectItem>
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Separator */}

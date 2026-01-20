@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Play, Pause, AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import type { AudioEffectType } from '@meeshy/shared/types/video-call';
+import type { TranslatedAudioData } from '@meeshy/shared/types';
 
 // Hooks personnalisés
 import { useAudioPlayback } from '@/hooks/use-audio-playback';
@@ -14,7 +15,7 @@ import { useAudioEffectsAnalysis } from '@/hooks/use-audio-effects-analysis';
 // Composants UI
 import { AudioProgressBar } from './AudioProgressBar';
 import { AudioControls } from './AudioControls';
-import { AudioTranscriptionPanel } from './AudioTranscriptionPanel';
+import { TranscriptionViewer } from './TranscriptionViewer';
 
 // Utilitaires
 import { snapPlaybackRate } from '@/utils/audio-formatters';
@@ -30,21 +31,21 @@ const AudioEffectsPanel = dynamic(
 interface SimpleAudioPlayerProps {
   attachment: UploadedAttachmentResponse;
   messageId?: string;
-  initialTranscription?: { text: string; language: string; confidence?: number };
-  initialTranslatedAudios?: readonly any[];
+  initialTranscription?: { text: string; language: string; confidence?: number; segments?: any[] };
+  initialTranslatedAudios?: readonly TranslatedAudioData[];
   className?: string;
 }
 
 /**
- * Lecteur audio moderne et performant
- * Refactorisé pour séparer la logique de l'UI
+ * Lecteur audio moderne avec design amélioré
  *
  * Fonctionnalités:
  * - Lecture/pause avec gestion globale des médias
  * - Contrôle de vitesse de lecture
- * - Transcription et traduction audio
+ * - Transcription avec effet fondu et surlignage dynamique
+ * - Menu de traduction complet avec aperçu et lecture
  * - Visualisation des effets audio appliqués
- * - Responsive et accessible
+ * - Design moderne et accessible
  */
 export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   attachment,
@@ -56,6 +57,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   // États UI locaux
   const [isSpeedPopoverOpen, setIsSpeedPopoverOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const [isTranslationDropdownOpen, setIsTranslationDropdownOpen] = useState(false);
   const [isEffectsDropdownOpen, setIsEffectsDropdownOpen] = useState(false);
 
   // Hook de traduction (doit être avant playback car il fournit currentAudioUrl)
@@ -138,44 +140,52 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     requestTranscription();
   }, [requestTranscription]);
 
-  const handleRequestTranslation = useCallback(() => {
-    requestTranslation();
+  const handleRequestTranslation = useCallback((targetLanguages: string[]) => {
+    requestTranslation({ targetLanguages });
   }, [requestTranslation]);
+
+  // Handler pour toggle de l'expansion de la transcription
+  const handleToggleTranscriptionExpanded = useCallback(() => {
+    setIsTranscriptionExpanded(!isTranscriptionExpanded);
+  }, [isTranscriptionExpanded, setIsTranscriptionExpanded]);
 
   return (
     <div
-      className={`relative flex flex-col gap-1.5 p-2 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg border ${
-        hasError ? 'border-red-300 dark:border-red-700' : 'border-blue-200 dark:border-gray-700'
-      } shadow-md hover:shadow-lg transition-all duration-200 w-full max-w-[90vw] sm:max-w-2xl ${className}`}
+      className={`relative group flex flex-col gap-3 p-4 bg-gradient-to-br from-slate-50/80 via-blue-50/50 to-indigo-50/80 dark:from-slate-900/80 dark:via-slate-800/50 dark:to-indigo-950/80 rounded-2xl border ${
+        hasError
+          ? 'border-red-300/50 dark:border-red-700/50 shadow-red-100 dark:shadow-red-900/20'
+          : 'border-slate-200/50 dark:border-slate-700/50 shadow-slate-100 dark:shadow-slate-900/20'
+      } shadow-lg hover:shadow-xl transition-all duration-300 ease-out w-full max-w-[90vw] sm:max-w-2xl backdrop-blur-sm ${className}`}
     >
       {/* Ligne principale: Play + Zone centrale */}
-      <div className="flex items-center gap-3">
-        {/* Bouton Play/Pause */}
-        <div className="flex flex-col gap-1 items-center">
+      <div className="flex items-start gap-4">
+        {/* Bouton Play/Pause avec design amélioré */}
+        <div className="flex flex-col gap-1.5 items-center flex-shrink-0 pt-1">
           <Button
             onClick={togglePlay}
             disabled={isLoading || hasError}
+            aria-label={isPlaying ? 'Pause' : 'Lecture'}
             size="sm"
-            className={`flex-shrink-0 w-7 h-7 rounded-full ${
+            className={`relative w-10 h-10 rounded-full ${
               hasError
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-blue-600 hover:bg-blue-700'
-            } text-white shadow-lg hover:shadow-xl transition-all duration-200 p-0 flex items-center justify-center disabled:opacity-50`}
+                ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
+                : 'bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+            } text-white shadow-lg hover:shadow-2xl transition-all duration-200 p-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isLoading ? (
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : hasError ? (
-              <AlertTriangle className="w-3 h-3" />
+              <AlertTriangle className="w-4 h-4" />
             ) : isPlaying ? (
-              <Pause className="w-3 h-3 fill-current" />
+              <Pause className="w-4 h-4 fill-current" />
             ) : (
-              <Play className="w-3 h-3 ml-0.5 fill-current" />
+              <Play className="w-4 h-4 ml-0.5 fill-current" />
             )}
           </Button>
         </div>
 
         {/* Zone centrale: Controls + Barre de progression */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <div className="flex-1 min-w-0 flex flex-col gap-2.5">
           {/* Ligne de contrôles */}
           <AudioControls
             isPlaying={isPlaying}
@@ -202,12 +212,14 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
             isTranslating={isTranslating}
             translationError={translationError}
             requestTranslation={handleRequestTranslation}
+            isTranslationDropdownOpen={isTranslationDropdownOpen}
+            setIsTranslationDropdownOpen={setIsTranslationDropdownOpen}
             objectUrl={objectUrl}
             downloadFileName={attachment.originalName}
             onTogglePlay={togglePlay}
           />
 
-          {/* Barre de progression + Download */}
+          {/* Barre de progression */}
           <div className="flex items-center gap-2">
             <AudioProgressBar
               currentTime={currentTime}
@@ -223,6 +235,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
               download={attachment.originalName}
               className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all"
               title="Télécharger l'audio"
+              aria-label="Télécharger l'audio"
               onClick={(e) => {
                 if (!objectUrl) {
                   e.preventDefault();
@@ -235,18 +248,17 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
         </div>
       </div>
 
-      {/* Panneau de transcription et erreurs */}
-      <AudioTranscriptionPanel
-        transcription={transcription}
-        isExpanded={isTranscriptionExpanded}
-        onToggleExpanded={() => setIsTranscriptionExpanded(!isTranscriptionExpanded)}
-        transcriptionError={transcriptionError}
-        translationError={translationError}
-        selectedLanguage={selectedLanguage}
-        translatedAudiosCount={translatedAudios.length}
-        onRequestTranscription={handleRequestTranscription}
-        onRequestTranslation={handleRequestTranslation}
-      />
+      {/* Transcription avec effet fondu et surlignage dynamique */}
+      {transcription && transcription.text && (
+        <TranscriptionViewer
+          transcription={transcription}
+          isExpanded={isTranscriptionExpanded}
+          onToggleExpanded={handleToggleTranscriptionExpanded}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          selectedLanguage={selectedLanguage}
+        />
+      )}
 
       {/* Panneau d'effets (chargé dynamiquement) */}
       {appliedEffects.length > 0 && (
@@ -327,6 +339,7 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
       <button
         onClick={togglePlay}
         disabled={!objectUrl}
+        aria-label={isPlaying ? 'Pause' : 'Lecture'}
         className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all duration-200 disabled:opacity-50"
       >
         {isPlaying ? (

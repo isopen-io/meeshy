@@ -35,6 +35,7 @@ export const AudioTranscriptionPanel = memo<AudioTranscriptionPanelProps>(({
   onRequestTranscription,
   onRequestTranslation,
 }) => {
+
   // Extraire les 10 premiers mots pour l'aperçu
   const transcriptionPreview = useMemo(() => {
     if (!transcription?.text) return null;

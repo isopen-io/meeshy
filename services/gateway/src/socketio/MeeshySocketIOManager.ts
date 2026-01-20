@@ -26,7 +26,9 @@ import type {
   SocketIOResponse,
   TypingEvent,
   TranslationEvent,
-  UserStatusEvent
+  UserStatusEvent,
+  TranslatedAudioData,
+  TranscriptionReadyEventData
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -74,9 +76,14 @@ export class MeeshySocketIOManager {
     errors: 0
   };
 
-  constructor(httpServer: HTTPServer, prisma: PrismaClient) {
+  constructor(
+    httpServer: HTTPServer,
+    prisma: PrismaClient,
+    translationService: MessageTranslationService,
+    redis?: any
+  ) {
     this.prisma = prisma;
-    this.translationService = new MessageTranslationService(prisma);
+    this.translationService = translationService;
 
     // Créer l'AttachmentService pour le cleanup automatique
     const attachmentService = new AttachmentService(prisma);
@@ -175,6 +182,9 @@ export class MeeshySocketIOManager {
 
       // Écouter les événements de traduction audio prêtes
       this.translationService.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));
+
+      // Écouter les événements de transcription seule prêtes
+      this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -1508,6 +1518,8 @@ export class MeeshySocketIOManager {
   /**
    * Gère la réception d'une traduction audio prête depuis le Translator
    * Diffuse l'événement AUDIO_TRANSLATION_READY aux clients de la conversation
+   * Utilise le type TranslatedAudioData unifié de @meeshy/shared/types
+   * Inclut les segments de transcription pour synchronisation audio/texte
    */
   private async _handleAudioTranslationReady(data: {
     taskId: string;
@@ -1517,14 +1529,12 @@ export class MeeshySocketIOManager {
       text: string;
       language: string;
       confidence?: number;
+      durationMs?: number;
+      source?: string;
+      model?: string;
+      segments?: Array<{ text: string; startMs: number; endMs: number; confidence?: number }>;
     };
-    translatedAudios: Array<{
-      language: string;
-      audioUrl: string;
-      audioDuration?: number;
-      voiceCloned: boolean;
-      modelUsed?: string;
-    }>;
+    translatedAudios: TranslatedAudioData[];
     processingTimeMs?: number;
   }) {
     try {
@@ -1535,9 +1545,13 @@ export class MeeshySocketIOManager {
         console.log(`   📝 Transcription Text: "${data.transcription.text?.substring(0, 100)}..."`);
         console.log(`   📝 Transcription Language: ${data.transcription.language}`);
         console.log(`   📝 Transcription Confidence: ${data.transcription.confidence}`);
+        console.log(`   📝 Transcription Segments: ${data.transcription.segments?.length || 0} segments`);
+        if (data.transcription.segments && data.transcription.segments.length > 0) {
+          console.log(`   📝 Premier segment: "${data.transcription.segments[0].text}" (${data.transcription.segments[0].startMs}ms - ${data.transcription.segments[0].endMs}ms)`);
+        }
       }
       console.log(`   🌍 Translated Audios: ${data.translatedAudios.length}`);
-      console.log(`   🔊 Langues: ${data.translatedAudios.map(ta => ta.language).join(', ')}`);
+      console.log(`   🔊 Langues: ${data.translatedAudios.map(ta => ta.targetLanguage).join(', ')}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1585,6 +1599,82 @@ export class MeeshySocketIOManager {
 
     } catch (error) {
       console.error(`❌ [SocketIOManager] Erreur envoi traduction audio:`, error);
+      this.stats.errors++;
+    }
+  }
+
+  /**
+   * Gère la réception d'une transcription seule prête depuis le Translator
+   * Diffuse l'événement TRANSCRIPTION_READY aux clients de la conversation
+   * Utilisé lorsque seule la transcription est demandée, sans génération d'audios traduits
+   */
+  private async _handleTranscriptionReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    transcription: {
+      id: string;
+      text: string;
+      language: string;
+      confidence?: number;
+      source?: string;
+      segments?: Array<{ text: string; startMs: number; endMs: number; confidence?: number }>;
+      durationMs?: number;
+    };
+    processingTimeMs?: number;
+  }) {
+    try {
+      console.log(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
+      console.log(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      console.log(`   📝 Transcription ID: ${data.transcription.id}`);
+      console.log(`   📝 Texte: "${data.transcription.text?.substring(0, 100)}..."`);
+      console.log(`   📝 Langue: ${data.transcription.language}`);
+      console.log(`   📝 Confiance: ${data.transcription.confidence}`);
+      console.log(`   📝 Segments: ${data.transcription.segments?.length || 0} segments`);
+
+      // Récupérer la conversation du message pour broadcast
+      let conversationId: string | null = null;
+      try {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        conversationId = msg?.conversationId || null;
+      } catch (error) {
+        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour transcription:`, error);
+      }
+
+      if (!conversationId) {
+        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
+        return;
+      }
+
+      // Normaliser l'ID de conversation
+      const normalizedId = await this.normalizeConversationId(conversationId);
+      const roomName = `conversation_${normalizedId}`;
+      const roomClients = this.io.sockets.adapter.rooms.get(roomName);
+      const clientCount = roomClients ? roomClients.size : 0;
+
+      console.log(`📢 [SocketIOManager] Diffusion transcription vers room ${roomName} (${clientCount} clients)`);
+
+      // Préparer les données au format TranscriptionReadyEventData
+      const transcriptionData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: normalizedId,
+        transcription: data.transcription,
+        processingTimeMs: data.processingTimeMs
+      };
+
+      // Diffuser dans la room de conversation
+      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
+      this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+
+      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
+      console.log(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
+
+    } catch (error) {
+      console.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
       this.stats.errors++;
     }
   }

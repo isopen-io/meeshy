@@ -127,16 +127,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               downloadedByAllAt: true,
               listenedByAllAt: true,
               watchedByAllAt: true,
-              transcription: {
-                select: {
-                  id: true,
-                  transcribedText: true,
-                  language: true,
-                  confidence: true,
-                  source: true,
-                  voiceQualityAnalysis: true
-                }
-              }
+              transcription: true,
+              translations: true
             }
           },
           translations: {

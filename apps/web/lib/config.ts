@@ -72,6 +72,18 @@ const parseArray = (value: string | undefined, defaultValue: string[] = []): str
 // Fonction helper pour vérifier si on est côté client
 const isBrowser = (): boolean => typeof window !== 'undefined';
 
+// Fonction helper pour détecter le mode de déploiement
+// - "local": Dev local (make start/start-network) → localhost:port ou IP:port
+// - "docker": Docker compose → noms de services (gateway:port, translator:port)
+// - "production": Production → domaines (gate.meeshy.me, etc.)
+const getDeploymentMode = (): 'local' | 'docker' | 'production' => {
+  const mode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE;
+  if (mode === 'docker') return 'docker';
+  if (mode === 'production') return 'production';
+  // Par défaut, en dev, on est en mode "local"
+  return process.env.NODE_ENV === 'production' ? 'production' : 'local';
+};
+
 // Fonction helper pour nettoyer les URLs
 const trimSlashes = (value: string): string => value.replace(/\/$/, '');
 const ensureLeadingSlash = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
@@ -234,23 +246,38 @@ export const API_ENDPOINTS = {
 // HTTP base URL for the Gateway - Gère automatiquement client/serveur
 export const getBackendUrl = (): string => {
   if (isBrowser()) {
-    // Priorité 1: Utiliser NEXT_PUBLIC_BACKEND_URL si défini (via docker-compose env)
+    // Priorité 1: Utiliser NEXT_PUBLIC_BACKEND_URL si défini explicitement
     const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
     if (envBackendUrl && !envBackendUrl.includes('__RUNTIME_')) {
       return trimSlashes(envBackendUrl);
     }
 
-    // Priorité 2: Dériver l'URL du gateway depuis l'origine actuelle
+    const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
 
-    // Si on accède via IP ou localhost, utiliser HTTP direct avec port 3000 (gateway)
-    // Ex: https://192.168.1.171 -> http://192.168.1.171:3000
+    // MODE LOCAL (make start/start-network): toujours utiliser localhost:port ou IP:port
+    if (deploymentMode === 'local') {
+      // Si on accède via IP, utiliser IP:3000
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+        return trimSlashes(`http://${hostname}:3000`);
+      }
+      // Sinon, toujours utiliser localhost:3000 (même si hostname = meeshy.local)
+      return trimSlashes('http://localhost:3000');
+    }
+
+    // MODE DOCKER: utiliser le nom du service gateway
+    if (deploymentMode === 'docker') {
+      // En Docker, le frontend accède au gateway via le nom de service
+      return trimSlashes('http://gateway:3000');
+    }
+
+    // MODE PRODUCTION: utiliser les sous-domaines
+    // Si on accède via IP ou localhost, utiliser HTTP direct avec port 3000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
       return trimSlashes(`http://${hostname}:3000`);
     }
 
     // Si on accède via un domaine, utiliser gate.{domain}
-    // Ex: meeshy.local -> gate.meeshy.local, smpdev02.local -> gate.smpdev02.local
     const parts = hostname.split('.');
     if (parts.length >= 2) {
       const gateDomain = parts[0] === 'www'
@@ -259,7 +286,7 @@ export const getBackendUrl = (): string => {
       return trimSlashes(`${window.location.protocol}//${gateDomain}`);
     }
 
-    // Fallback: utiliser le même protocole avec gate. prefix
+    // Fallback
     return trimSlashes(`${window.location.protocol}//gate.${hostname}`);
   }
   // Côté serveur (SSR) : utiliser INTERNAL_BACKEND_URL ou config.backend.url
@@ -279,17 +306,33 @@ export const getFrontendUrl = (): string => {
 // WebSocket base URL for the Gateway - Gère automatiquement client/serveur
 export const getWebSocketUrl = (): string => {
   if (isBrowser()) {
-    // Priorité 1: Utiliser NEXT_PUBLIC_WS_URL si défini (via docker-compose env)
+    // Priorité 1: Utiliser NEXT_PUBLIC_WS_URL si défini explicitement
     const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
     if (envWsUrl && !envWsUrl.includes('__RUNTIME_')) {
       return trimSlashes(envWsUrl);
     }
 
-    // Priorité 2: Dériver l'URL WebSocket depuis l'origine actuelle
+    const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
 
-    // Si on accède via IP ou localhost, utiliser WS direct avec port 3000 (gateway)
-    // Ex: https://192.168.1.171 -> ws://192.168.1.171:3000
+    // MODE LOCAL (make start/start-network): toujours utiliser ws://localhost:port ou ws://IP:port
+    if (deploymentMode === 'local') {
+      // Si on accède via IP, utiliser ws://IP:3000
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+        return trimSlashes(`ws://${hostname}:3000`);
+      }
+      // Sinon, toujours utiliser ws://localhost:3000 (même si hostname = meeshy.local)
+      return trimSlashes('ws://localhost:3000');
+    }
+
+    // MODE DOCKER: utiliser le nom du service gateway
+    if (deploymentMode === 'docker') {
+      // En Docker, le frontend accède au gateway via le nom de service
+      return trimSlashes('ws://gateway:3000');
+    }
+
+    // MODE PRODUCTION: utiliser les sous-domaines
+    // Si on accède via IP ou localhost, utiliser WS direct avec port 3000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
       return trimSlashes(`ws://${hostname}:3000`);
     }
@@ -304,7 +347,7 @@ export const getWebSocketUrl = (): string => {
       return trimSlashes(`${protocol}//${gateDomain}`);
     }
 
-    // Fallback: utiliser le même protocole avec gate. prefix
+    // Fallback
     return trimSlashes(`${protocol}//gate.${hostname}`);
   }
   // Côté serveur (SSR) : utiliser INTERNAL_WS_URL ou dériver depuis backend URL
@@ -347,16 +390,33 @@ export const buildWsUrl = (path = '/socket.io/'): string => {
 // Translation service URL - Gère automatiquement client/serveur
 export const getTranslationUrl = (): string => {
   if (isBrowser()) {
-    // Priorité 1: Utiliser NEXT_PUBLIC_TRANSLATION_URL si défini
+    // Priorité 1: Utiliser NEXT_PUBLIC_TRANSLATION_URL si défini explicitement
     const envTranslationUrl = process.env.NEXT_PUBLIC_TRANSLATION_URL;
     if (envTranslationUrl && !envTranslationUrl.includes('__RUNTIME_')) {
       return trimSlashes(envTranslationUrl);
     }
 
-    // Priorité 2: Dériver depuis l'origine actuelle
+    const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
 
-    // Si on accède via IP, utiliser HTTP direct avec port 8000 (translator)
+    // MODE LOCAL (make start/start-network): toujours utiliser localhost:port ou IP:port
+    if (deploymentMode === 'local') {
+      // Si on accède via IP, utiliser http://IP:8000
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+        return trimSlashes(`http://${hostname}:8000`);
+      }
+      // Sinon, toujours utiliser localhost:8000 (même si hostname = meeshy.local)
+      return trimSlashes('http://localhost:8000');
+    }
+
+    // MODE DOCKER: utiliser le nom du service translator
+    if (deploymentMode === 'docker') {
+      // En Docker, le frontend accède au translator via le nom de service
+      return trimSlashes('http://translator:8000');
+    }
+
+    // MODE PRODUCTION: utiliser les sous-domaines
+    // Si on accède via IP, utiliser HTTP direct avec port 8000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
       return trimSlashes(`http://${hostname}:8000`);
     }

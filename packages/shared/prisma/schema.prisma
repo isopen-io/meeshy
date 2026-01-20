@@ -14,6 +14,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Rôles utilisateur globaux de la plateforme
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR  // Modérateur global (anciennement MODO)
+  BIGBOSS
+  AUDIT
+  ANALYST
+}
+
 /// Utilisateur enregistré de la plateforme
 model User {
   id                        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -48,8 +58,8 @@ model User {
   /// Custom destination language for translations (if set, takes priority)
   customDestinationLanguage String?
 
-  /// USER, ADMIN, MODO, AUDIT, ANALYST, BIGBOSS
-  role          String    @default("USER")
+  /// Rôle global de l'utilisateur (enum typé fort)
+  role          UserRole  @default(USER)
   isActive      Boolean   @default(true)
   deactivatedAt DateTime?
 
@@ -68,6 +78,7 @@ model User {
   twoFactorSecret        String? // TOTP secret (base32 encoded)
   twoFactorBackupCodes   String[] @default([]) // Hashed backup codes for 2FA recovery
   twoFactorPendingSecret String? // Temporary secret during 2FA setup (before confirmation)
+  twoFactorEnabledAt     DateTime? // Date when 2FA was enabled
 
   // Account Lockout
   failedLoginAttempts Int       @default(0)
@@ -118,6 +129,24 @@ model User {
   /// Date de naissance déclarée (pour calcul expiration profil vocal)
   birthDate DateTime?
 
+  // ============================================
+  // VOICE PROFILE & CLONING CONSENTS (GDPR)
+  // ============================================
+  /// Consentement pour créer un profil vocal
+  voiceProfileConsentAt DateTime?
+
+  /// Consentement pour le traitement des données vocales
+  voiceDataConsentAt DateTime?
+
+  /// Consentement pour le traitement général des données
+  dataProcessingConsentAt DateTime?
+
+  /// Clonage vocal activé (DateTime non-null = activé)
+  voiceCloningEnabledAt DateTime?
+
+  /// Vérification de l'âge (requis pour profil vocal)
+  ageVerifiedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -139,8 +168,7 @@ model User {
   reactions              Reaction[]                    @relation("UserReactions")
   mentions               Mention[]                     @relation("UserMentions")
   notifications          Notification[]
-  userFeature            UserFeature?
-  userPreferences        UserPreferences?                  @relation("UserPreferences")
+  userPreferences        UserPreferences?              @relation("UserPreferences")
   stats                  UserStats?
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
@@ -506,10 +534,6 @@ model Message {
   sender          User?                 @relation("MessageSender", fields: [senderId], references: [id])
   conversation    Conversation          @relation(fields: [conversationId], references: [id])
 
-  // Audio processing relations
-  audioTranscriptions MessageAudioTranscription[]
-  translatedAudios    MessageTranslatedAudio[]
-
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
 
@@ -616,8 +640,54 @@ model MessageAttachment {
   isAnonymous Boolean @default(false)
 
   createdAt DateTime @default(now())
-  /// Attachment metadata
-  metadata  Json? // JSON blob for additional metadata
+
+  // =====================================================
+  // AUDIO/VIDEO PROCESSING (integrated)
+  // =====================================================
+
+  /// Transcription du contenu audio/vidéo original
+  /// Structure: {
+  ///   text: string,
+  ///   language: string,
+  ///   confidence: number,
+  ///   source: "mobile" | "whisper" | "voice_api",
+  ///   model?: string,
+  ///   segments?: Array<{
+  ///     text: string,
+  ///     start: number,
+  ///     end: number,
+  ///     speaker_id?: string,
+  ///     confidence?: number
+  ///   }>,
+  ///   speakerCount?: number,
+  ///   primarySpeakerId?: string,
+  ///   durationMs: number
+  /// }
+  transcription Json?
+
+  /// Traductions (audio/vidéo/texte) - map: langue -> données
+  /// Structure: {
+  ///   "en": {
+  ///     type: "audio" | "video" | "text",
+  ///     transcription: string,
+  ///     path?: string,
+  ///     url?: string,
+  ///     durationMs?: number,
+  ///     format?: string,
+  ///     cloned?: boolean,
+  ///     quality?: number,
+  ///     voiceModelId?: string,
+  ///     ttsModel?: string,
+  ///     createdAt: Date,
+  ///     updatedAt?: Date,
+  ///     deletedAt?: Date
+  ///   }
+  /// }
+  translations Json?
+
+  /// Métadonnées génériques extensibles
+  /// Structure libre pour données custom, EXIF, AI analysis, etc.
+  metadata Json?
 
   // =====================================================
   // SECURITY & MODERATION FIELDS
@@ -689,24 +759,11 @@ model MessageAttachment {
   /// Encrypted thumbnail auth tag
   thumbnailEncryptionAuthTag String?
 
-  /// For hybrid mode: URL to server-accessible copy for translation
-  serverCopyUrl String?
-
-  /// For hybrid mode: transcription of audio (server-generated)
-  transcriptionText String?
-
-  /// For hybrid mode: translations JSON { "en": { text: "...", audioUrl: "..." }, ... }
-  translationsJson Json?
-
   message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   // Status tracking (per-user per-attachment)
   statusEntries AttachmentStatusEntry[] @relation("AttachmentStatusEntries")
   reactions     AttachmentReaction[]    @relation("AttachmentReactions")
-
-  // Audio processing relations
-  transcription    MessageAudioTranscription?
-  translatedAudios MessageTranslatedAudio[]
 
   @@index([messageId])
   @@index([uploadedBy])
@@ -972,6 +1029,34 @@ model FriendRequest {
   sender   User @relation("FriendRequestSender", fields: [senderId], references: [id])
 }
 
+/// DEPRECATED: Use UserPreferences.notification JSON instead
+/// Kept temporarily for backward compatibility
+model NotificationPreference {
+  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                    String    @unique @db.ObjectId
+  newMessage                Boolean   @default(true)
+  messageReply              Boolean   @default(true)
+  messageMention            Boolean   @default(true)
+  newConversation           Boolean   @default(true)
+  conversationInvite        Boolean   @default(true)
+  friendRequest             Boolean   @default(true)
+  friendRequestAccepted     Boolean   @default(true)
+  groupInvite               Boolean   @default(true)
+  missedCall                Boolean   @default(true)
+  voicemailReceived         Boolean   @default(true)
+  soundEnabled              Boolean   @default(true)
+  vibrationEnabled          Boolean   @default(true)
+  dndEnabled                Boolean   @default(false)
+  dndStartTime              String?
+  dndEndTime                String?
+  emailNotifications        Boolean   @default(true)
+  pushNotifications         Boolean   @default(true)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@map("notification_preferences")
+}
+
 /// Notification pour un utilisateur
 model Notification {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -1016,142 +1101,6 @@ model Notification {
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
-/// Centralise tous les toggles de features et consentements GDPR
-/// Pattern: DateTime? = null (désactivé) | Date (activé à cette date - audit trail)
-model UserFeature {
-  id     String @id @default(auto()) @map("_id") @db.ObjectId
-  userId String @unique @db.ObjectId
-
-  // ============================================
-  // GDPR CONSENTS (DateTime? = audit trail obligatoire)
-  // null = pas de consentement, Date = consentement donné à cette date
-  // ============================================
-  /// Consentement général traitement des données (BASE OBLIGATOIRE)
-  dataProcessingConsentAt     DateTime?
-  /// Consentement traitement données vocales (requis pour audio)
-  voiceDataConsentAt          DateTime?
-  /// Consentement création profil vocal
-  voiceProfileConsentAt       DateTime?
-  /// Consentement clonage vocal (TTS avec sa voix)
-  voiceCloningConsentAt       DateTime?
-  /// Consentement envoi données à services tiers (Google, OpenAI, etc.)
-  thirdPartyServicesConsentAt DateTime?
-  /// Date de vérification d'âge (requis pour mineurs)
-  ageVerifiedAt               DateTime?
-
-  // ============================================
-  // SECURITY FEATURES
-  // ============================================
-  /// Authentification à deux facteurs activée
-  twoFactorEnabledAt   DateTime?
-  /// Préférence de chiffrement: disabled, optional, always
-  encryptionPreference String    @default("optional")
-
-  // ============================================
-  // TEXT TRANSLATION FEATURES
-  // ============================================
-  /// Traduction des messages texte activée
-  textTranslationEnabledAt DateTime?
-
-  // ============================================
-  // TRANSLATION DESTINATION PREFERENCES
-  // ============================================
-  /// Activer la traduction automatique
-  autoTranslateEnabled        Boolean @default(true)
-  /// Traduire vers la langue système
-  translateToSystemLanguage   Boolean @default(true)
-  /// Traduire vers la langue régionale
-  translateToRegionalLanguage Boolean @default(false)
-  /// Utiliser une langue de destination personnalisée
-  useCustomDestination        Boolean @default(false)
-
-  // ============================================
-  // AUDIO TRANSCRIPTION FEATURES
-  // ============================================
-  /// Transcription audio activée (speech-to-text)
-  audioTranscriptionEnabledAt DateTime?
-  /// Source de transcription préférée: "auto" | "mobile" | "server"
-  transcriptionSource         String    @default("auto")
-  /// Détection multi-locuteurs (speaker diarization)
-  speakerDiarizationEnabledAt DateTime?
-
-  // ============================================
-  // AUDIO TRANSLATION FEATURES
-  // Dépend de: audioTranscriptionEnabledAt + textTranslationEnabledAt
-  // ============================================
-  /// Traduction des audios en texte traduit
-  audioTranslationEnabledAt          DateTime?
-  /// Génération d'audio traduit (TTS)
-  translatedAudioGenerationEnabledAt DateTime?
-  /// Format audio traduit: "mp3" | "wav" | "ogg"
-  translatedAudioFormat              String    @default("mp3")
-
-  // ============================================
-  // VOICE CLONING FEATURES
-  // Dépend de: voiceCloningConsentAt
-  // ============================================
-  /// Clonage vocal actif pour mes messages
-  voiceCloningEnabledAt        DateTime?
-  /// Permettre aux autres d'entendre ma voix clonée sur mes audios traduits
-  allowOthersCloneMyVoiceAt    DateTime?
-  /// Date d'expiration du profil vocal (auto-calculée, mineurs: 60j, adultes: 90j)
-  voiceProfileExpiresAt        DateTime?
-  /// Prochaine date de recalibration suggérée
-  nextVoiceRecalibrationAt     DateTime?
-  /// Dernière notification de mise à jour du profil vocal
-  voiceProfileUpdateNotifiedAt DateTime?
-
-  // ============================================
-  // VOICE CLONING PARAMETERS (User-configurable)
-  // Ces paramètres contrôlent la qualité du clonage vocal
-  // ============================================
-  /// Exagération des caractéristiques vocales (0.0-1.0, default 0.5)
-  voiceCloningExaggeration   Float   @default(0.5)
-  /// Poids CFG pour la génération (0.0-1.0, default 0.5, 0.0 recommandé pour non-anglais)
-  voiceCloningCfgWeight      Float   @default(0.5)
-  /// Température de génération (0.1-2.0, default 1.0)
-  voiceCloningTemperature    Float   @default(1.0)
-  /// Top-P / Nucleus sampling (0.0-1.0, default 0.9)
-  voiceCloningTopP           Float   @default(0.9)
-  /// Preset de qualité: "fast" | "balanced" | "high_quality"
-  voiceCloningQualityPreset  String  @default("balanced")
-
-  // ============================================
-  // ATTACHMENT TRANSLATION FEATURES
-  // ============================================
-  /// OCR + traduction du texte dans les images
-  imageTextTranslationEnabledAt     DateTime?
-  /// Traduction des documents (PDF, DOCX, etc.)
-  documentTranslationEnabledAt      DateTime?
-  /// Traduction des sous-titres vidéo
-  videoSubtitleTranslationEnabledAt DateTime?
-
-  // ============================================
-  // PLAYBACK PREFERENCES
-  // ============================================
-  /// Lecture automatique des messages audio
-  autoplayAudioEnabledAt           DateTime?
-  /// Lecture automatique des audios traduits
-  autoplayTranslatedAudioEnabledAt DateTime?
-  /// Préférer l'audio traduit par défaut (au lieu de l'original)
-  preferTranslatedAudioAt          DateTime?
-
-  // ============================================
-  // DATA RETENTION (GDPR)
-  // ============================================
-  /// Suppression automatique des données expirées
-  autoDeleteExpiredDataAt DateTime?
-  /// Durée de rétention des données générales (jours)
-  dataRetentionDays       Int       @default(365)
-  /// Durée de rétention des données vocales (jours)
-  voiceDataRetentionDays  Int       @default(180)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 /// Communauté (représente une communauté de conversation)
 model Community {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -1256,6 +1205,24 @@ model UserPreferences {
   user User @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_preferences")
+}
+
+/// DEPRECATED: Use UserPreferences JSON instead
+/// Kept temporarily for backward compatibility
+model UserPreference {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  key         String
+  value       String
+  valueType   String   @default("string")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+  @@map("user_preference")
 }
 
 /// Préférence spécifique à une conversation
@@ -2204,183 +2171,6 @@ model PreKey {
   @@unique([signalEnrollmentId, preKeyId])
   @@index([isUsed])
   @@index([expiresAt])
-}
-
-/// =====================================================
-/// AUDIO TRANSCRIPTION & TTS / VOICE CLONING MODELS
-/// =====================================================
-
-/// Transcription d'un message audio
-model MessageAudioTranscription {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
-
-  /// Relation vers l'attachment source (unique - 1 transcription par attachment)
-  attachmentId String            @unique @db.ObjectId
-  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
-
-  /// Relation vers le message (pour requêtes directes)
-  messageId String  @db.ObjectId
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  /// Texte transcrit
-  transcribedText String
-
-  /// Langue détectée (code ISO 639-1: fr, en, es...)
-  language String
-
-  /// Score de confiance (0-1)
-  confidence Float
-
-  /// Source de la transcription: "mobile" (iOS/Android) ou "whisper" (serveur)
-  source String
-
-  /// Segments avec timestamps (JSON optionnel)
-  segments Json?
-
-  /// Durée audio en millisecondes
-  audioDurationMs Int
-
-  /// Modèle utilisé (si whisper: "whisper-large-v3")
-  model String?
-
-  /// ============================================
-  /// SPEAKER DIARIZATION (Multi-speaker support)
-  /// ============================================
-  /// Number of distinct speakers detected in the audio
-  speakerCount Int?
-
-  /// ID of the primary speaker (who speaks the most)
-  primarySpeakerId String?
-
-  /// Speaker analysis metadata as JSON:
-  /// {
-  ///   "speakers": [
-  ///     {
-  ///       "speaker_id": "speaker_0",
-  ///       "is_primary": true,
-  ///       "speaking_time_ms": 25000,
-  ///       "speaking_ratio": 0.7,
-  ///       "voice_characteristics": {...},
-  ///       "fingerprint": {...},
-  ///       "segments": [{"start": 0.0, "end": 5.0}, ...]
-  ///     }
-  ///   ],
-  ///   "clarity_score": 0.85,
-  ///   "has_background_noise": false,
-  ///   "noise_level_db": -45.0
-  /// }
-  speakerAnalysis Json?
-
-  /// Whether the sender's voice was identified in the audio
-  senderVoiceIdentified Boolean?
-
-  /// Matched speaker ID if sender was identified
-  senderSpeakerId String?
-
-  /// ============================================
-  /// VOICE QUALITY ANALYSIS (Advanced metrics)
-  /// ============================================
-  /// Comprehensive voice analysis for quality assessment and voice cloning
-  /// {
-  ///   "pitch": {
-  ///     "mean": 150.0,
-  ///     "std": 25.0,
-  ///     "min": 100.0,
-  ///     "max": 200.0,
-  ///     "contour": [150, 155, 148, ...]
-  ///   },
-  ///   "timbre": {
-  ///     "spectralCentroid": 2500.0,
-  ///     "spectralBandwidth": 1800.0,
-  ///     "spectralRolloff": 4500.0,
-  ///     "spectralFlatness": 0.15
-  ///   },
-  ///   "mfcc": {
-  ///     "coefficients": [13.5, -2.1, 5.8, ...],
-  ///     "mean": [12.0, -1.5, 5.0, ...],
-  ///     "std": [2.5, 1.2, 0.8, ...]
-  ///   },
-  ///   "energy": {
-  ///     "rms": 0.05,
-  ///     "peak": 0.8,
-  ///     "dynamicRange": 45.0
-  ///   },
-  ///   "classification": {
-  ///     "voiceType": "medium_male",
-  ///     "gender": "male",
-  ///     "ageRange": "adult",
-  ///     "confidence": 0.85
-  ///   },
-  ///   "qualityMetrics": {
-  ///     "overallScore": 0.82,
-  ///     "clarity": 0.85,
-  ///     "consistency": 0.78,
-  ///     "suitableForCloning": true
-  ///   }
-  /// }
-  voiceQualityAnalysis Json?
-
-  /// Timestamp when voice analysis was performed
-  voiceAnalysisAt DateTime?
-
-  /// Model/version used for voice analysis
-  voiceAnalysisModel String?
-
-  createdAt DateTime @default(now())
-
-  @@index([messageId])
-  @@index([language])
-  @@index([speakerCount])
-}
-
-/// Version audio traduite d'un message (une par langue destinataire)
-model MessageTranslatedAudio {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
-
-  /// Relation vers l'attachment source
-  attachmentId String            @db.ObjectId
-  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
-
-  /// Relation vers le message
-  messageId String  @db.ObjectId
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  /// Langue de cette version (code ISO 639-1)
-  targetLanguage String
-
-  /// Texte traduit utilisé pour la synthèse
-  translatedText String
-
-  /// Chemin du fichier audio généré
-  audioPath String
-
-  /// URL accessible pour lecture
-  audioUrl String
-
-  /// Durée en millisecondes
-  durationMs Int
-
-  /// Format audio (mp3, wav, ogg)
-  format String @default("mp3")
-
-  /// Voix clonée utilisée (true si clonage vocal actif)
-  voiceCloned Boolean @default(true)
-
-  /// Qualité du clonage vocal (0-1)
-  voiceQuality Float
-
-  /// ID du modèle de voix utilisé
-  voiceModelId String? @db.ObjectId
-
-  /// Modèle TTS utilisé (xtts, openvoice)
-  ttsModel String @default("xtts")
-
-  createdAt DateTime @default(now())
-
-  /// Une seule version par attachment + langue
-  @@unique([attachmentId, targetLanguage])
-  @@index([messageId])
-  @@index([targetLanguage])
 }
 
 /// Modèle de voix cloné d'un utilisateur

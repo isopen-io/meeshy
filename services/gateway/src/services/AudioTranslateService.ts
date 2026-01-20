@@ -50,6 +50,7 @@ import type {
   ServiceResult,
   VoiceProfileData
 } from '@meeshy/shared/types';
+import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 
 // Response timeout in milliseconds
 const DEFAULT_TIMEOUT = 60000; // 60 seconds for voice processing
@@ -303,20 +304,22 @@ export class AudioTranslateService extends EventEmitter {
   async transcribeAttachment(attachmentId: string): Promise<ServiceResult<TranscriptionResult>> {
     try {
       // Vérifier si une transcription existe déjà
-      const existing = await this.prisma.messageAudioTranscription.findFirst({
-        where: { attachmentId }
+      const existing = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { transcription: true }
       });
 
-      if (existing) {
+      if (existing?.transcription) {
+        const t = existing.transcription as unknown as AttachmentTranscription;
         return {
           success: true,
           data: {
-            text: existing.transcribedText,
-            language: existing.language,
-            confidence: existing.confidence,
-            durationMs: existing.audioDurationMs || 0,
-            source: existing.source,
-            segments: existing.segments as any,
+            text: t.text,
+            language: t.language,
+            confidence: t.confidence,
+            durationMs: t.durationMs,
+            source: t.source,
+            segments: t.segments as any,
             attachmentId,
             processingTimeMs: 0
           }
@@ -376,7 +379,14 @@ export class AudioTranslateService extends EventEmitter {
       audioPath: options.audioPath,
       targetLanguages: options.targetLanguages,
       sourceLanguage: options.sourceLanguage,
-      generateVoiceClone: options.generateVoiceClone ?? true
+      generateVoiceClone: options.generateVoiceClone ?? true,
+      mobileTranscription: options.existingTranscription ? {
+        text: options.existingTranscription.text,
+        language: options.existingTranscription.language,
+        confidence: options.existingTranscription.confidence,
+        source: options.existingTranscription.source,
+        segments: options.existingTranscription.segments
+      } : undefined
     };
 
     const result = await this._sendRequest<VoiceTranslationResult>(request);
@@ -411,7 +421,14 @@ export class AudioTranslateService extends EventEmitter {
       generateVoiceClone: options.generateVoiceClone ?? true,
       webhookUrl: options.webhookUrl,
       priority: options.priority ?? 1,
-      callbackMetadata: options.callbackMetadata
+      callbackMetadata: options.callbackMetadata,
+      mobileTranscription: options.existingTranscription ? {
+        text: options.existingTranscription.text,
+        language: options.existingTranscription.language,
+        confidence: options.existingTranscription.confidence,
+        source: options.existingTranscription.source,
+        segments: options.existingTranscription.segments
+      } : undefined
     };
 
     return this._sendRequest<{ jobId: string; status: string }>(request, ASYNC_SUBMIT_TIMEOUT);
@@ -429,37 +446,39 @@ export class AudioTranslateService extends EventEmitter {
   ): Promise<ServiceResult<VoiceTranslationResult>> {
     try {
       // Vérifier les traductions existantes
-      const existingTranslations = await this.prisma.messageTranslatedAudio.findMany({
-        where: { attachmentId }
+      const existing = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { transcription: true, translations: true }
       });
+
+      const translationsData = existing?.translations as unknown as AttachmentTranslations | undefined;
+      const existingTranslations = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
+        targetLanguage: lang,
+        translatedText: t.transcription,
+        audioUrl: t.url || undefined,
+        durationMs: t.durationMs,
+        voiceCloned: t.cloned,
+        voiceQuality: t.quality || undefined
+      })) : [];
 
       const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
       const languagesToTranslate = options.targetLanguages.filter(lang => !existingLanguages.has(lang));
 
       // Si toutes les langues sont déjà traduites, retourner le cache
       if (languagesToTranslate.length === 0) {
-        const transcription = await this.prisma.messageAudioTranscription.findFirst({
-          where: { attachmentId }
-        });
+        const transcription = existing?.transcription as unknown as AttachmentTranscription | null;
 
         return {
           success: true,
           data: {
             translationId: `cached_${attachmentId}`,
             originalAudio: transcription ? {
-              transcription: transcription.transcribedText,
+              transcription: transcription.text,
               language: transcription.language,
-              durationMs: transcription.audioDurationMs || 0,
+              durationMs: transcription.durationMs,
               confidence: transcription.confidence
             } : undefined,
-            translations: existingTranslations.map(t => ({
-              targetLanguage: t.targetLanguage,
-              translatedText: t.translatedText,
-              audioUrl: t.audioUrl || undefined,
-              durationMs: t.durationMs,
-              voiceCloned: t.voiceCloned,
-              voiceQuality: t.voiceQuality || undefined
-            })),
+            translations: existingTranslations,
             processingTimeMs: 0
           } as VoiceTranslationResult
         };
@@ -774,38 +793,25 @@ export class AudioTranslateService extends EventEmitter {
    */
   private async _saveTranscription(attachmentId: string, result: TranscriptionResult): Promise<void> {
     try {
-      // Récupérer le messageId à partir de l'attachment
-      const attachment = await this.prisma.messageAttachment.findUnique({
+      // Construire la transcription JSON
+      const transcriptionData: AttachmentTranscription = {
+        text: result.text,
+        language: result.language,
+        confidence: result.confidence,
+        source: result.source as 'mobile' | 'whisper' | 'voice_api',
+        model: undefined,
+        segments: result.segments as any,
+        durationMs: result.durationMs
+      };
+
+      // Mettre à jour l'attachment avec la transcription
+      await this.prisma.messageAttachment.update({
         where: { id: attachmentId },
-        select: { messageId: true }
-      });
-
-      if (!attachment?.messageId) {
-        logger.warn(`[AudioTranslateService] Cannot save transcription: no messageId for attachment ${attachmentId}`);
-        return;
-      }
-
-      await this.prisma.messageAudioTranscription.upsert({
-        where: { attachmentId },
-        create: {
-          attachmentId,
-          messageId: attachment.messageId,
-          transcribedText: result.text,
-          language: result.language,
-          confidence: result.confidence,
-          audioDurationMs: result.durationMs,
-          source: result.source,
-          segments: (result.segments || []) as any
-        },
-        update: {
-          transcribedText: result.text,
-          language: result.language,
-          confidence: result.confidence,
-          audioDurationMs: result.durationMs,
-          source: result.source,
-          segments: (result.segments || []) as any
+        data: {
+          transcription: transcriptionData as any
         }
       });
+
       logger.info(`[AudioTranslateService] Transcription saved for attachment ${attachmentId}`);
     } catch (error: any) {
       logger.error(`[AudioTranslateService] Failed to save transcription: ${error.message}`);
@@ -817,71 +823,48 @@ export class AudioTranslateService extends EventEmitter {
    */
   private async _saveTranslationResult(attachmentId: string, result: VoiceTranslationResult): Promise<void> {
     try {
-      // Récupérer le messageId à partir de l'attachment
+      // Récupérer l'attachment existant avec ses traductions
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        select: { messageId: true }
+        select: { translations: true }
       });
 
-      if (!attachment?.messageId) {
-        logger.warn(`[AudioTranslateService] Cannot save translation: no messageId for attachment ${attachmentId}`);
-        return;
-      }
+      // Construire la transcription JSON
+      const transcriptionData: AttachmentTranscription | undefined = result.originalAudio ? {
+        text: result.originalAudio.transcription,
+        language: result.originalAudio.language,
+        confidence: result.originalAudio.confidence,
+        source: 'whisper',
+        durationMs: result.originalAudio.durationMs || 0
+      } : undefined;
 
-      const messageId = attachment.messageId;
+      // Construire les traductions JSON
+      const existingTranslations = (attachment?.translations as unknown as AttachmentTranslations) || {};
+      const translationsData: AttachmentTranslations = { ...existingTranslations };
 
-      // Sauvegarder la transcription originale
-      if (result.originalAudio) {
-        await this.prisma.messageAudioTranscription.upsert({
-          where: { attachmentId },
-          create: {
-            attachmentId,
-            messageId,
-            transcribedText: result.originalAudio.transcription,
-            language: result.originalAudio.language,
-            confidence: result.originalAudio.confidence,
-            audioDurationMs: result.originalAudio.durationMs || 0,
-            source: 'whisper'
-          },
-          update: {
-            transcribedText: result.originalAudio.transcription,
-            language: result.originalAudio.language,
-            confidence: result.originalAudio.confidence,
-            audioDurationMs: result.originalAudio.durationMs || 0
-          }
-        });
-      }
-
-      // Sauvegarder les traductions audio
       for (const translation of result.translations) {
-        await this.prisma.messageTranslatedAudio.upsert({
-          where: {
-            attachmentId_targetLanguage: {
-              attachmentId,
-              targetLanguage: translation.targetLanguage
-            }
-          },
-          create: {
-            attachmentId,
-            messageId,
-            targetLanguage: translation.targetLanguage,
-            translatedText: translation.translatedText,
-            audioUrl: translation.audioUrl || '',
-            audioPath: translation.audioUrl || '', // Use audioUrl as path fallback
-            durationMs: translation.durationMs || 0,
-            voiceCloned: translation.voiceCloned,
-            voiceQuality: translation.voiceQuality || 0
-          },
-          update: {
-            translatedText: translation.translatedText,
-            audioUrl: translation.audioUrl || '',
-            audioPath: translation.audioUrl || '',
-            durationMs: translation.durationMs || 0,
-            voiceCloned: translation.voiceCloned,
-            voiceQuality: translation.voiceQuality || 0
-          }
-        });
+        translationsData[translation.targetLanguage] = {
+          type: 'audio',
+          transcription: translation.translatedText,
+          url: translation.audioUrl,
+          path: translation.audioUrl,
+          durationMs: translation.durationMs || 0,
+          format: 'mp3',
+          cloned: translation.voiceCloned,
+          quality: translation.voiceQuality || 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
       }
+
+      // Mettre à jour l'attachment avec transcription et traductions
+      await this.prisma.messageAttachment.update({
+        where: { id: attachmentId },
+        data: {
+          transcription: transcriptionData as any,
+          translations: translationsData as any
+        }
+      });
 
       logger.info(`[AudioTranslateService] Translation saved for attachment ${attachmentId} (${result.translations.length} languages)`);
     } catch (error: any) {
@@ -898,18 +881,51 @@ export class AudioTranslateService extends EventEmitter {
     translatedAudios: any[];
   } | null> {
     const attachment = await this.prisma.messageAttachment.findUnique({
-      where: { id: attachmentId }
+      where: { id: attachmentId },
+      select: {
+        id: true,
+        messageId: true,
+        fileName: true,
+        fileUrl: true,
+        mimeType: true,
+        fileSize: true,
+        duration: true,
+        transcription: true,
+        translations: true,
+        createdAt: true
+      }
     });
 
     if (!attachment) return null;
 
-    const transcription = await this.prisma.messageAudioTranscription.findFirst({
-      where: { attachmentId }
-    });
+    // Convertir transcription JSON → ancien format
+    const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
+    const transcription = transcriptionData ? {
+      id: attachmentId,
+      attachmentId,
+      text: transcriptionData.text,
+      language: transcriptionData.language,
+      confidence: transcriptionData.confidence,
+      source: transcriptionData.source,
+      segments: transcriptionData.segments,
+      durationMs: transcriptionData.durationMs,
+      createdAt: new Date()
+    } : null;
 
-    const translatedAudios = await this.prisma.messageTranslatedAudio.findMany({
-      where: { attachmentId }
-    });
+    // Convertir translations JSON → ancien format
+    const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
+    const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
+      id: `${attachmentId}_${lang}`,
+      attachmentId,
+      targetLanguage: lang,
+      translatedText: t.transcription,
+      audioUrl: t.url || '',
+      audioPath: t.path || '',
+      durationMs: t.durationMs || 0,
+      voiceCloned: t.cloned || false,
+      voiceQuality: t.quality || 0,
+      createdAt: new Date()
+    })) : [];
 
     return { attachment, transcription, translatedAudios };
   }

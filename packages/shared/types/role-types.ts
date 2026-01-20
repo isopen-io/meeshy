@@ -16,7 +16,7 @@
  * Ces rôles définissent les permissions système de l'utilisateur.
  *
  * Hiérarchie (du plus élevé au plus bas):
- * BIGBOSS > ADMIN > MODO > AUDIT > ANALYST > USER
+ * BIGBOSS > ADMIN > MODERATOR > AUDIT > ANALYST > USER
  *
  * @see schema.prisma User.role
  */
@@ -26,7 +26,7 @@ export enum GlobalUserRole {
   /** Administrateur - gestion complète sauf configuration système */
   ADMIN = 'ADMIN',
   /** Modérateur global - modération de contenu */
-  MODO = 'MODO',
+  MODERATOR = 'MODERATOR',
   /** Auditeur - accès aux logs et audits en lecture seule */
   AUDIT = 'AUDIT',
   /** Analyste - accès aux analytics en lecture seule */
@@ -42,19 +42,10 @@ export enum GlobalUserRole {
 export type GlobalUserRoleType =
   | 'BIGBOSS'
   | 'ADMIN'
-  | 'MODO'
+  | 'MODERATOR'
   | 'AUDIT'
   | 'ANALYST'
   | 'USER';
-
-/**
- * Alias pour rétrocompatibilité avec les anciens noms
- */
-export const GLOBAL_ROLE_ALIASES: Record<string, GlobalUserRole> = {
-  'MODERATOR': GlobalUserRole.MODO,
-  'CREATOR': GlobalUserRole.ADMIN,
-  'MEMBER': GlobalUserRole.USER,
-};
 
 /**
  * Hiérarchie numérique des rôles globaux
@@ -63,7 +54,7 @@ export const GLOBAL_ROLE_ALIASES: Record<string, GlobalUserRole> = {
 export const GLOBAL_ROLE_HIERARCHY: Record<GlobalUserRole, number> = {
   [GlobalUserRole.BIGBOSS]: 100,
   [GlobalUserRole.ADMIN]: 80,
-  [GlobalUserRole.MODO]: 60,
+  [GlobalUserRole.MODERATOR]: 60,
   [GlobalUserRole.AUDIT]: 40,
   [GlobalUserRole.ANALYST]: 30,
   [GlobalUserRole.USER]: 10,
@@ -86,11 +77,6 @@ export function hasMinimumRole(
  */
 export function normalizeGlobalRole(role: string): GlobalUserRole {
   const upper = role.toUpperCase();
-  // Vérifier les alias d'abord
-  const aliasRole = GLOBAL_ROLE_ALIASES[upper];
-  if (aliasRole !== undefined) {
-    return aliasRole;
-  }
   // Vérifier si c'est un rôle valide
   if (Object.values(GlobalUserRole).includes(upper as GlobalUserRole)) {
     return upper as GlobalUserRole;
@@ -100,85 +86,61 @@ export function normalizeGlobalRole(role: string): GlobalUserRole {
 }
 
 // ============================================================================
-// CONVERSATION MEMBER ROLES - Rôles dans une conversation
+// MEMBER ROLES - Rôles dans une conversation ou communauté (unifié)
 // ============================================================================
 
 /**
- * Rôles d'un membre dans une conversation
- * Ces rôles sont contextuels à une conversation spécifique.
+ * Rôles d'un membre dans une conversation ou une communauté
+ * Type unifié qui remplace ConversationMemberRole et CommunityMemberRole
  *
  * @see schema.prisma ConversationMember.role
+ * @see schema.prisma CommunityMember.role
  */
-export enum ConversationMemberRole {
-  /** Administrateur de la conversation */
+export enum MemberRole {
+  /** Créateur/propriétaire (conversation ou communauté) */
+  CREATOR = 'creator',
+  /** Administrateur */
   ADMIN = 'admin',
-  /** Modérateur de la conversation */
+  /** Modérateur */
   MODERATOR = 'moderator',
   /** Membre standard */
   MEMBER = 'member',
 }
 
 /**
- * Type string union pour les rôles de conversation
+ * Type string union pour les rôles de membre
  */
-export type ConversationMemberRoleType = 'admin' | 'moderator' | 'member';
+export type MemberRoleType = 'creator' | 'admin' | 'moderator' | 'member';
 
 /**
- * Hiérarchie des rôles de conversation
+ * Hiérarchie des rôles de membre
  */
-export const CONVERSATION_ROLE_HIERARCHY: Record<ConversationMemberRole, number> = {
-  [ConversationMemberRole.ADMIN]: 30,
-  [ConversationMemberRole.MODERATOR]: 20,
-  [ConversationMemberRole.MEMBER]: 10,
+export const MEMBER_ROLE_HIERARCHY: Record<MemberRole, number> = {
+  [MemberRole.CREATOR]: 40,
+  [MemberRole.ADMIN]: 30,
+  [MemberRole.MODERATOR]: 20,
+  [MemberRole.MEMBER]: 10,
 };
 
 /**
- * Vérifie si un rôle de conversation a un niveau égal ou supérieur à un autre
+ * Vérifie si un rôle de membre a un niveau égal ou supérieur à un autre
  */
-export function hasMinimumConversationRole(
-  userRole: ConversationMemberRole | ConversationMemberRoleType,
-  requiredRole: ConversationMemberRole | ConversationMemberRoleType
+export function hasMinimumMemberRole(
+  userRole: MemberRole | MemberRoleType | string,
+  requiredRole: MemberRole | MemberRoleType
 ): boolean {
-  const userLevel = CONVERSATION_ROLE_HIERARCHY[userRole as ConversationMemberRole] || 0;
-  const requiredLevel = CONVERSATION_ROLE_HIERARCHY[requiredRole as ConversationMemberRole] || 0;
+  const userLevel = MEMBER_ROLE_HIERARCHY[userRole as MemberRole] || 0;
+  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole as MemberRole] || 0;
   return userLevel >= requiredLevel;
 }
 
-// ============================================================================
-// COMMUNITY ROLES - Rôles dans une communauté
-// ============================================================================
-
-/**
- * Rôles d'un membre dans une communauté
- * Similaire aux rôles de conversation mais avec un contexte communauté.
- *
- * @see schema.prisma CommunityMember.role
- */
-export enum CommunityMemberRole {
-  /** Créateur/propriétaire de la communauté */
-  CREATOR = 'creator',
-  /** Administrateur de la communauté */
-  ADMIN = 'admin',
-  /** Modérateur de la communauté */
-  MODERATOR = 'moderator',
-  /** Membre standard */
-  MEMBER = 'member',
-}
-
-/**
- * Type string union pour les rôles de communauté
- */
-export type CommunityMemberRoleType = 'creator' | 'admin' | 'moderator' | 'member';
-
-/**
- * Hiérarchie des rôles de communauté
- */
-export const COMMUNITY_ROLE_HIERARCHY: Record<CommunityMemberRole, number> = {
-  [CommunityMemberRole.CREATOR]: 40,
-  [CommunityMemberRole.ADMIN]: 30,
-  [CommunityMemberRole.MODERATOR]: 20,
-  [CommunityMemberRole.MEMBER]: 10,
-};
+// Aliases de compatibilité (à supprimer progressivement)
+/** @deprecated Utilisez hasMinimumMemberRole à la place */
+export const hasMinimumConversationRole = hasMinimumMemberRole;
+/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
+export const CONVERSATION_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
+/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
+export const COMMUNITY_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
 
 // ============================================================================
 // WRITE PERMISSIONS - Permissions d'écriture dans une conversation
@@ -232,9 +194,9 @@ export type UserRole =
 /**
  * Type ConversationRole pour rétrocompatibilité
  *
- * @deprecated Utilisez ConversationMemberRole ou ConversationMemberRoleType à la place
+ * @deprecated Utilisez MemberRole ou MemberRoleType à la place
  */
-export type ConversationRole = ConversationMemberRoleType;
+export type ConversationRole = MemberRoleType;
 
 // ============================================================================
 // TYPE GUARDS
@@ -249,12 +211,15 @@ export function isGlobalUserRole(value: string): value is GlobalUserRoleType {
 }
 
 /**
- * Vérifie si une valeur est un rôle de conversation valide
+ * Vérifie si une valeur est un rôle de membre valide
  */
-export function isConversationMemberRole(value: string): value is ConversationMemberRoleType {
-  const validRoles: string[] = Object.values(ConversationMemberRole);
+export function isMemberRole(value: string): value is MemberRoleType {
+  const validRoles: string[] = Object.values(MemberRole);
   return validRoles.includes(value.toLowerCase());
 }
+
+/** @deprecated Utilisez isMemberRole à la place */
+export const isConversationMemberRole = isMemberRole;
 
 /**
  * Vérifie si un utilisateur est un administrateur global (ADMIN ou BIGBOSS)
@@ -269,20 +234,34 @@ export function isGlobalAdmin(role: GlobalUserRole | GlobalUserRoleType | string
  * Vérifie si un utilisateur est un modérateur global ou plus
  */
 export function isGlobalModerator(role: GlobalUserRole | GlobalUserRoleType): boolean {
-  return hasMinimumRole(role, GlobalUserRole.MODO);
+  return hasMinimumRole(role, GlobalUserRole.MODERATOR);
 }
 
 /**
- * Vérifie si un membre est admin de la conversation
+ * Vérifie si un membre est admin
  */
-export function isConversationAdmin(role: ConversationMemberRole | ConversationMemberRoleType | string): boolean {
+export function isMemberAdmin(role: MemberRole | MemberRoleType | string): boolean {
   const normalized = typeof role === 'string' ? role.toLowerCase() : role;
-  return normalized === ConversationMemberRole.ADMIN;
+  return normalized === MemberRole.ADMIN;
 }
 
 /**
- * Vérifie si un membre est modérateur de la conversation ou plus
+ * Vérifie si un membre est modérateur ou plus
  */
-export function isConversationModerator(role: ConversationMemberRole | ConversationMemberRoleType): boolean {
-  return hasMinimumConversationRole(role, ConversationMemberRole.MODERATOR);
+export function isMemberModerator(role: MemberRole | MemberRoleType): boolean {
+  return hasMinimumMemberRole(role, MemberRole.MODERATOR);
 }
+
+/**
+ * Vérifie si un membre est créateur
+ */
+export function isMemberCreator(role: MemberRole | MemberRoleType | string): boolean {
+  const normalized = typeof role === 'string' ? role.toLowerCase() : role;
+  return normalized === MemberRole.CREATOR;
+}
+
+// Aliases de compatibilité (à supprimer progressivement)
+/** @deprecated Utilisez isMemberAdmin à la place */
+export const isConversationAdmin = isMemberAdmin;
+/** @deprecated Utilisez isMemberModerator à la place */
+export const isConversationModerator = isMemberModerator;

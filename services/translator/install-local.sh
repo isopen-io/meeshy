@@ -57,6 +57,17 @@ prisma generate --schema="${SCRIPT_DIR}/schema.prisma" || {
 }
 
 echo ""
+echo "🎤 Installation des composants optionnels de clonage vocal..."
+echo ""
+
+# Installer OpenVoice (optionnel) - nécessite Python 3.9-3.10
+# Si échec, le service utilisera Chatterbox Multilingual pour le clonage vocal
+"${SCRIPT_DIR}/install-openvoice.sh" || {
+    echo ""
+    echo "ℹ️  OpenVoice non installé - utilisation de Chatterbox Multilingual pour le clonage vocal"
+}
+
+echo ""
 echo "✅ Installation terminée !"
 echo ""
 echo "💡 Pour utiliser le translator:"

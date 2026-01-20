@@ -93,7 +93,7 @@ class TranscriptionStage:
         self.audio_cache = audio_cache or get_audio_cache_service()
 
         self._initialized = False
-        self._init_lock = asyncio.Lock()
+        self._init_lock = None  # Sera créé dans initialize()
 
         logger.info("[TRANSCRIPTION_STAGE] Transcription stage created")
 
@@ -101,6 +101,10 @@ class TranscriptionStage:
         """Initialize transcription stage services"""
         if self._initialized:
             return True
+
+        # Créer le lock dans le contexte async si nécessaire
+        if self._init_lock is None:
+            self._init_lock = asyncio.Lock()
 
         async with self._init_lock:
             if self._initialized:
@@ -295,13 +299,24 @@ class TranscriptionStage:
     ) -> bool:
         """Store transcription result in cache"""
         try:
+            # Convertir les segments (dataclasses) en dictionnaires pour sérialisation JSON
+            segments_as_dicts = [
+                {
+                    "text": seg.text,
+                    "start_ms": seg.start_ms,
+                    "end_ms": seg.end_ms,
+                    "confidence": seg.confidence
+                }
+                for seg in (result.segments or [])
+            ]
+
             cache_data = {
                 "text": result.text,
                 "language": result.language,
                 "confidence": result.confidence,
                 "duration_ms": result.duration_ms,
                 "source": result.source,
-                "segments": result.segments
+                "segments": segments_as_dicts  # Segments en dictionnaires JSON-compatibles
             }
 
             await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data)

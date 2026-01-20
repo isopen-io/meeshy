@@ -140,7 +140,7 @@ class VoiceCloneInitializer:
                 return True
 
             if not OPENVOICE_AVAILABLE:
-                logger.warning("[VOICE_CLONE_INIT] OpenVoice non disponible - mode dégradé")
+                logger.info("[VOICE_CLONE_INIT] Configuration: Chatterbox Multilingual (clonage vocal natif)")
                 self.is_initialized = True
                 return True
 

@@ -3,7 +3,15 @@
  * Partagés entre frontend et backend
  */
 
-import type { MessageAudioTranscription, MessageTranslatedAudio } from './audio-transcription.js';
+// V2: Import pour compatibilité types legacy dans Attachment de base
+import type { AttachmentTranscription } from './attachment-transcription.js';
+
+// V2: Import nouveaux types JSON intégrés
+import type {
+  AttachmentTranscription as AttachmentTranscriptionV2,
+  AttachmentTranslations,
+  SocketIOTranslatedAudio,
+} from './attachment-audio.js';
 
 /**
  * Types d'attachements supportés
@@ -206,30 +214,31 @@ export interface Attachment {
   readonly thumbnailEncryptionIv?: string;
   readonly thumbnailEncryptionAuthTag?: string;
 
-  // ===== AUDIO PROCESSING =====
+  // ===== TRANSCRIPTION & TRANSLATION V2 (JSON intégré) =====
   readonly serverCopyUrl?: string;
 
   /**
-   * @deprecated Use transcription instead
+   * V2: Transcription JSON intégrée dans MessageAttachment
+   * Transcription complète avec métadonnées (segments, speakers, durée, etc.)
+   * Structure: AttachmentTranscription (audio/video)
    */
-  readonly transcriptionText?: string;
+  readonly transcription?: AttachmentTranscription;
 
   /**
-   * @deprecated Use translatedAudios instead
+   * V2: Traductions JSON intégrées dans MessageAttachment
+   * Map: langue cible → traduction complète
+   * Structure: AttachmentTranslations = Record<string, AttachmentTranslation>
+   * Chaque traduction contient: type, transcription, url, durationMs, cloned, quality, etc.
    */
-  readonly translationsJson?: Record<string, unknown>;
+  readonly translationsJson?: AttachmentTranslations;
 
   /**
-   * Audio transcription (Whisper)
-   * Populated when including the transcription relation from Prisma
+   * V2: Format Socket.IO converti depuis translationsJson
+   * Array de traductions pour compatibilité UI et événements temps réel
+   * Structure: SocketIOTranslatedAudio[] (id composite, targetLanguage, audioUrl, etc.)
+   * Généré automatiquement via toSocketIOAudios() depuis translationsJson
    */
-  readonly transcription?: MessageAudioTranscription;
-
-  /**
-   * Translated audio versions
-   * Populated when including the translatedAudios relation from Prisma
-   */
-  readonly translatedAudios?: readonly MessageTranslatedAudio[];
+  readonly translatedAudios?: readonly SocketIOTranslatedAudio[];
 
   /**
    * Metadata JSON contenant des données additionnelles
@@ -238,11 +247,6 @@ export interface Attachment {
     audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
     [key: string]: unknown;
   };
-
-  /**
-   * @deprecated Use metadata.audioEffectsTimeline instead
-   */
-  readonly audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
 }
 
 /**
@@ -644,8 +648,8 @@ export function getSizeLimit(type: AttachmentType): number {
 import type { VoiceQualityAnalysis } from './voice-api.js';
 
 /**
+ * @deprecated V1 legacy - Use AttachmentTranscription from './attachment-audio.js'
  * Minimal transcription data for API responses
- * Subset of MessageAudioTranscription with essential fields
  */
 export interface TranscriptionData {
   readonly id: string;
@@ -657,37 +661,37 @@ export interface TranscriptionData {
 }
 
 /**
- * Minimal translated audio data for API responses
- * Subset of MessageTranslatedAudio with essential fields
- * Note: Different from TranslatedAudioData in socketio-events (used for real-time events)
+ * @deprecated V2: Utiliser SocketIOTranslatedAudio depuis './attachment-audio.js'
+ * Type legacy conservé pour compatibilité - sera supprimé dans version future
  */
-export interface AttachmentTranslationData {
+export type AttachmentTranslationData = SocketIOTranslatedAudio;
+
+/**
+ * V2: Attachment with transcription JSON intégré
+ * Utilise la nouvelle structure JSON dans MessageAttachment
+ */
+export interface AttachmentWithTranscription {
   readonly id: string;
-  readonly targetLanguage: string;
-  readonly translatedText: string;
-  readonly audioUrl: string;
-  readonly durationMs: number;
-  readonly voiceCloned: boolean;
-  readonly voiceQuality: number;
+  readonly messageId: string;
+  readonly fileName: string;
+  readonly fileUrl: string;
+  readonly mimeType: string;
+  readonly transcription: AttachmentTranscriptionV2 | null;
 }
 
 /**
- * Attachment with transcription relation
- * Used when fetching attachments with transcription data
- * @deprecated Use Attachment with transcription field instead
+ * V2: Attachment with complete metadata including transcription and translations
+ * Utilise les nouveaux champs JSON intégrés dans MessageAttachment
  */
-export interface AttachmentWithTranscription extends Omit<Attachment, 'transcription' | 'translatedAudios'> {
-  readonly transcription: TranscriptionData | null;
-}
-
-/**
- * Attachment with complete metadata including transcription and translations
- * Used for comprehensive attachment data retrieval
- * @deprecated Use Attachment with transcription and translatedAudios fields instead
- */
-export interface AttachmentWithMetadata extends Omit<Attachment, 'transcription' | 'translatedAudios'> {
-  readonly transcription: TranscriptionData | null;
-  readonly translatedAudios: readonly AttachmentTranslationData[];
+export interface AttachmentWithMetadata {
+  readonly id: string;
+  readonly messageId: string;
+  readonly fileName: string;
+  readonly fileUrl: string;
+  readonly mimeType: string;
+  readonly transcription: AttachmentTranscriptionV2 | null;
+  readonly translatedAudios: SocketIOTranslatedAudio[];
+  readonly translationsJson: AttachmentTranslations;
 }
 
 /**

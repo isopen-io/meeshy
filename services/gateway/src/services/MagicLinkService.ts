@@ -175,17 +175,26 @@ export class MagicLinkService {
         where: { tokenHash },
         include: {
           user: {
-            include: {
-              userFeature: {
-                select: {
-                  twoFactorEnabledAt: true,
-                  autoTranslateEnabled: true,
-                  translateToSystemLanguage: true,
-                  translateToRegionalLanguage: true,
-                  useCustomDestination: true,
-                  encryptionPreference: true
-                }
-              }
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              displayName: true,
+              bio: true,
+              avatar: true,
+              role: true,
+              systemLanguage: true,
+              regionalLanguage: true,
+              customDestinationLanguage: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+              emailVerifiedAt: true,
+              phoneVerifiedAt: true,
+              twoFactorEnabledAt: true
             }
           }
         }
@@ -284,16 +293,17 @@ export class MagicLinkService {
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        autoTranslateEnabled: user.userFeature?.autoTranslateEnabled ?? true,
-        translateToSystemLanguage: user.userFeature?.translateToSystemLanguage ?? true,
-        translateToRegionalLanguage: user.userFeature?.translateToRegionalLanguage ?? false,
-        useCustomDestination: user.userFeature?.useCustomDestination ?? false,
+        // TODO: Load from UserPreferences.application
+        autoTranslateEnabled: true,
+        translateToSystemLanguage: true,
+        translateToRegionalLanguage: false,
+        useCustomDestination: false,
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         emailVerifiedAt: user.emailVerifiedAt,
         phoneVerifiedAt: user.phoneVerifiedAt,
-        twoFactorEnabledAt: user.userFeature?.twoFactorEnabledAt ?? null
+        twoFactorEnabledAt: user.twoFactorEnabledAt ?? null
       };
 
       return {

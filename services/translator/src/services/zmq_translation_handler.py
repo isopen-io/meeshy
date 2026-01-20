@@ -13,6 +13,9 @@ import time
 import uuid
 from typing import Dict, Optional
 
+# Import des modèles ZMQ
+from .zmq_models import TranslationTask
+
 logger = logging.getLogger(__name__)
 
 # Import du service de cache Redis
@@ -31,6 +34,23 @@ try:
     from services.zmq_audio_handler import AUDIO_PIPELINE_AVAILABLE
 except ImportError:
     AUDIO_PIPELINE_AVAILABLE = False
+
+# Définir les constantes Voice API et Voice Profile localement
+# (évite les imports circulaires avec services.__init__.py)
+VOICE_API_AVAILABLE = False
+VoiceAPIHandler = None
+try:
+    from .voice_api import VoiceAPIHandler, get_voice_api_handler
+    VOICE_API_AVAILABLE = True
+except ImportError:
+    pass
+
+VOICE_PROFILE_HANDLER_AVAILABLE = False
+try:
+    from .zmq_voice_handler import VoiceProfileHandler
+    VOICE_PROFILE_HANDLER_AVAILABLE = True
+except ImportError:
+    pass
 
 
 class TranslationHandler:
@@ -58,6 +78,33 @@ class TranslationHandler:
             self.cache_service = get_translation_cache_service()
         else:
             self.cache_service = None
+
+        # Voice API Handler si disponible
+        if VOICE_API_AVAILABLE:
+            try:
+                self.voice_api_handler = get_voice_api_handler()
+                logger.info("✅ VoiceAPIHandler initialisé")
+            except Exception as e:
+                logger.warning(f"⚠️ Impossible d'initialiser VoiceAPIHandler: {e}")
+                self.voice_api_handler = None
+        else:
+            self.voice_api_handler = None
+            logger.info("ℹ️ Voice API non disponible")
+
+        # Voice Profile Handler si disponible
+        if VOICE_PROFILE_HANDLER_AVAILABLE:
+            try:
+                self.voice_profile_handler = VoiceProfileHandler(
+                    pub_socket=pub_socket,
+                    database_service=database_service
+                )
+                logger.info("✅ VoiceProfileHandler initialisé")
+            except Exception as e:
+                logger.warning(f"⚠️ Impossible d'initialiser VoiceProfileHandler: {e}")
+                self.voice_profile_handler = None
+        else:
+            self.voice_profile_handler = None
+            logger.info("ℹ️ Voice Profile Handler non disponible")
     async def _handle_translation_request_multipart(self, frames: list[bytes]):
         """
         Traite une requête multipart ZMQ.
@@ -171,31 +218,44 @@ class TranslationHandler:
                     logger.error(f"❌ [TRANSLATOR] Socket PUB non disponible pour pong (port {self.gateway_sub_port})")
                 return
 
+            # === TEXT TRANSLATION ===
+            # Les requêtes de traduction texte peuvent avoir type='translation' ou pas de type (legacy)
+            if message_type == 'translation' or message_type is None:
+                # Vérifier que c'est une requête de traduction texte valide
+                if request_data.get('text') and request_data.get('targetLanguages'):
+                    # Continuer avec le traitement de traduction texte (suite du code ci-dessous)
+                    pass
+                else:
+                    logger.warning(f"⚠️ [TRANSLATOR] Requête de traduction invalide: type={message_type}, has_text={bool(request_data.get('text'))}, has_targets={bool(request_data.get('targetLanguages'))}")
+                    return
+
             # === AUDIO PROCESSING ===
-            if message_type == 'audio_process':
+            elif message_type == 'audio_process':
                 await self._handle_audio_process_request(request_data)
                 return
 
             # === TRANSCRIPTION ONLY ===
-            if message_type == 'transcription_only':
+            elif message_type == 'transcription_only':
                 await self._handle_transcription_only_request(request_data)
                 return
 
             # === VOICE API ===
-            if VOICE_API_AVAILABLE and self.voice_api_handler and self.voice_api_handler.is_voice_api_request(message_type):
+            elif VOICE_API_AVAILABLE and self.voice_api_handler and self.voice_api_handler.is_voice_api_request(message_type):
                 await self._handle_voice_api_request(request_data)
                 return
 
             # === VOICE PROFILE (internal processing for Gateway) ===
-            if VOICE_PROFILE_HANDLER_AVAILABLE and self.voice_profile_handler and self.voice_profile_handler.is_voice_profile_request(message_type):
+            elif VOICE_PROFILE_HANDLER_AVAILABLE and self.voice_profile_handler and self.voice_profile_handler.is_voice_profile_request(message_type):
                 await self._handle_voice_profile_request(request_data)
                 return
 
-            # Vérifier que c'est une requête de traduction valide
-            if not request_data.get('text') or not request_data.get('targetLanguages'):
-                logger.warning(f"⚠️ [TRANSLATOR] Requête invalide reçue: {request_data}")
+            # === UNKNOWN TYPE ===
+            else:
+                logger.warning(f"⚠️ [TRANSLATOR] Type de requête inconnu: {message_type}")
                 return
-            
+
+            # === TRAITEMENT TRADUCTION TEXTE (après validation ci-dessus) ===
+
             # Vérifier la longueur du message pour la traduction
             message_text = request_data.get('text', '')
             if not can_translate_message(message_text):
@@ -469,6 +529,61 @@ class TranslationHandler:
         for pattern, reason in error_patterns:
             if re.search(pattern, translated_text, re.IGNORECASE):
                 return reason
-        
+
         return "Erreur de validation inconnue"
+
+    async def _handle_audio_process_request(self, request_data: dict):
+        """
+        Délègue les requêtes audio_process au handler approprié.
+        Note: Cette fonctionnalité doit être implémentée dans zmq_audio_handler
+        """
+        logger.warning(f"⚠️ [TRANSLATOR] Requête audio_process reçue mais handler non disponible")
+        logger.warning(f"   Type: {request_data.get('type')}")
+        logger.warning(f"   MessageID: {request_data.get('messageId')}")
+        logger.warning(f"   → Les requêtes audio doivent être gérées par ZmqAudioHandler")
+
+    async def _handle_transcription_only_request(self, request_data: dict):
+        """
+        Délègue les requêtes transcription_only au handler approprié.
+        Note: Cette fonctionnalité doit être implémentée dans zmq_audio_handler
+        """
+        logger.warning(f"⚠️ [TRANSLATOR] Requête transcription_only reçue mais handler non disponible")
+        logger.warning(f"   Type: {request_data.get('type')}")
+        logger.warning(f"   MessageID: {request_data.get('messageId')}")
+        logger.warning(f"   → Les requêtes de transcription doivent être gérées par ZmqAudioHandler")
+
+    async def _handle_voice_api_request(self, request_data: dict):
+        """
+        Délègue les requêtes Voice API au VoiceAPIHandler.
+        """
+        try:
+            if not self.voice_api_handler:
+                logger.error("❌ [TRANSLATOR] VoiceAPIHandler non disponible")
+                return
+
+            logger.info(f"🎤 [TRANSLATOR] Traitement requête Voice API: {request_data.get('type')}")
+
+            # Déléguer au VoiceAPIHandler
+            response = await self.voice_api_handler.handle_request(request_data)
+
+            # Publier la réponse via PUB socket
+            if self.pub_socket and response:
+                await self.pub_socket.send(json.dumps(response).encode('utf-8'))
+                logger.info(f"📤 [TRANSLATOR] Réponse Voice API envoyée: {response.get('type')}")
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible ou réponse vide")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur traitement Voice API: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def _handle_voice_profile_request(self, request_data: dict):
+        """
+        Délègue les requêtes Voice Profile au VoiceProfileHandler.
+        Note: Cette fonctionnalité doit être implémentée dans zmq_voice_handler
+        """
+        logger.warning(f"⚠️ [TRANSLATOR] Requête voice_profile reçue mais handler non disponible")
+        logger.warning(f"   Type: {request_data.get('type')}")
+        logger.warning(f"   → Les requêtes voice profile doivent être gérées par VoiceProfileHandler")
     

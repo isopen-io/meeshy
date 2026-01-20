@@ -3,7 +3,7 @@
 /**
  * Video Settings Component
  * Configuration des préférences vidéo
- * Synchronisé avec l'API backend /user-preferences/video
+ * Synchronisé avec l'API backend /me/preferences/video
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -65,7 +65,7 @@ export function VideoSettings() {
       setError(null);
 
       const response = await apiService.get<{ success: boolean; data: VideoPreference }>(
-        '/user-preferences/video'
+        '/me/preferences/video'
       );
 
       if (response.success && response.data) {
@@ -92,7 +92,7 @@ export function VideoSettings() {
 
     try {
       const response = await apiService.put<{ success: boolean; data: VideoPreference }>(
-        '/user-preferences/video',
+        '/me/preferences/video',
         preferences
       );
 

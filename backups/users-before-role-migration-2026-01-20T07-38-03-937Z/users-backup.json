@@ -1,0 +1,59 @@
+{
+  "backupDate": "2026-01-20T07:38:03.938Z",
+  "totalUsers": 4,
+  "roleStats": {
+    "BIGBOSS": 1,
+    "ADMIN": 2,
+    "USER": 1
+  },
+  "users": [
+    {
+      "id": "696947ea46d132d2c65153b7",
+      "username": "meeshy",
+      "email": "meeshy@meeshy.me",
+      "role": "BIGBOSS",
+      "firstName": "Meeshy",
+      "lastName": "Sama",
+      "displayName": "Meeshy Sama",
+      "isActive": true,
+      "createdAt": "2026-01-15T20:02:50.009Z",
+      "updatedAt": "2026-01-15T20:32:51.519Z"
+    },
+    {
+      "id": "696947ea46d132d2c65153ba",
+      "username": "admin",
+      "email": "admin@meeshy.me",
+      "role": "ADMIN",
+      "firstName": "Admin",
+      "lastName": "Manager",
+      "displayName": "Admin Manager",
+      "isActive": true,
+      "createdAt": "2026-01-15T20:02:50.492Z",
+      "updatedAt": "2026-01-19T22:45:05.495Z"
+    },
+    {
+      "id": "696947eb46d132d2c65153bc",
+      "username": "atabeth",
+      "email": "atabeth@meeshy.me",
+      "role": "ADMIN",
+      "firstName": "André",
+      "lastName": "Tabeth",
+      "displayName": "André Tabeth",
+      "isActive": true,
+      "createdAt": "2026-01-15T20:02:51.017Z",
+      "updatedAt": "2026-01-16T22:49:38.227Z"
+    },
+    {
+      "id": "696957f0db0d5dbcf03faf4b",
+      "username": "jcnm",
+      "email": "zuymanto@gmail.com",
+      "role": "USER",
+      "firstName": "Charles",
+      "lastName": "Smith",
+      "displayName": "Charles Smith",
+      "isActive": true,
+      "createdAt": "2026-01-15T21:11:12.480Z",
+      "updatedAt": "2026-01-16T01:41:29.975Z"
+    }
+  ]
+}

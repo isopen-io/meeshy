@@ -185,6 +185,7 @@ class VoiceAPIHandler:
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
         generate_voice_clone = request_data.get('generateVoiceClone', True)
+        mobile_transcription = request_data.get('mobileTranscription')
 
         # STABILITÉ: Utiliser context manager pour nettoyage automatique
         if audio_base64 and not audio_path:
@@ -194,7 +195,8 @@ class VoiceAPIHandler:
                     target_languages=target_languages,
                     source_language=source_language,
                     user_id=user_id,
-                    generate_voice_clone=generate_voice_clone
+                    generate_voice_clone=generate_voice_clone,
+                    mobile_transcription=mobile_transcription
                 )
             # Fichier automatiquement nettoyé après le with, même si exception
 
@@ -204,7 +206,8 @@ class VoiceAPIHandler:
             target_languages=target_languages,
             source_language=source_language,
             user_id=user_id,
-            generate_voice_clone=generate_voice_clone
+            generate_voice_clone=generate_voice_clone,
+            mobile_transcription=mobile_transcription
         )
 
     async def _handle_translate_async(self, request_data: Dict) -> VoiceAPIResult:
@@ -221,6 +224,7 @@ class VoiceAPIHandler:
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
         generate_voice_clone = request_data.get('generateVoiceClone', True)
+        mobile_transcription = request_data.get('mobileTranscription')
         webhook_url = request_data.get('webhookUrl')
         priority = request_data.get('priority', 1)
 
@@ -236,7 +240,8 @@ class VoiceAPIHandler:
             user_id=user_id,
             generate_voice_clone=generate_voice_clone,
             webhook_url=webhook_url,
-            priority=priority
+            priority=priority,
+            mobile_transcription=mobile_transcription
         )
 
     # ═══════════════════════════════════════════════════════════════════════════
