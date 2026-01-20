@@ -5,15 +5,97 @@ Responsabilités:
 - Détection de langue
 - Gestion des pipelines thread-local
 - Optimisations performance (inference mode, batch processing)
+- Découpage intelligent de textes longs
 """
 
 import logging
 import asyncio
 import threading
+import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+
+def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
+    """
+    Découpe intelligemment un texte long en morceaux aux ponctuations naturelles.
+
+    Stratégie de découpage (par ordre de préférence):
+    1. Aux points, points d'exclamation, points d'interrogation (. ! ?)
+    2. Aux points-virgules et deux-points (; :)
+    3. Aux virgules (,)
+    4. Aux espaces si aucune ponctuation
+    5. Force le découpage si vraiment trop long
+
+    Args:
+        text: Texte à découper
+        max_chars: Taille maximale de chaque morceau (défaut: 200 caractères)
+
+    Returns:
+        Liste de morceaux de texte (≤ max_chars chacun)
+
+    Exemples:
+        >>> smart_split_text("Bonjour. Comment allez-vous? Très bien!", 25)
+        ['Bonjour.', 'Comment allez-vous?', 'Très bien!']
+
+        >>> smart_split_text("Un texte très très très long sans ponctuation", 20)
+        ['Un texte très très', 'très long sans', 'ponctuation']
+    """
+    if len(text) <= max_chars:
+        return [text]
+
+    chunks = []
+    remaining = text
+
+    while len(remaining) > max_chars:
+        # Chercher un point de coupure dans les premiers max_chars caractères
+        chunk = remaining[:max_chars]
+
+        # 1. Priorité: couper aux points forts (. ! ?)
+        strong_punct = max(
+            chunk.rfind('. '),
+            chunk.rfind('! '),
+            chunk.rfind('? ')
+        )
+
+        # 2. Sinon, couper aux points moyens (; :)
+        if strong_punct == -1:
+            medium_punct = max(
+                chunk.rfind('; '),
+                chunk.rfind(': ')
+            )
+            cut_pos = medium_punct
+        else:
+            cut_pos = strong_punct
+
+        # 3. Sinon, couper aux virgules
+        if cut_pos == -1:
+            cut_pos = chunk.rfind(', ')
+
+        # 4. Sinon, couper aux espaces
+        if cut_pos == -1:
+            cut_pos = chunk.rfind(' ')
+
+        # 5. Si aucune ponctuation/espace, forcer la coupure
+        if cut_pos == -1:
+            cut_pos = max_chars - 1
+        else:
+            # Inclure la ponctuation dans le chunk
+            cut_pos += 1
+            if cut_pos < len(chunk) and chunk[cut_pos] == ' ':
+                cut_pos += 1  # Inclure l'espace après la ponctuation
+
+        # Extraire le chunk et continuer avec le reste
+        chunks.append(remaining[:cut_pos].strip())
+        remaining = remaining[cut_pos:].strip()
+
+    # Ajouter le dernier morceau
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
 
 # Import conditionnel des dépendances ML
 ML_AVAILABLE = False
@@ -159,7 +241,10 @@ class TranslatorEngine:
         model_type: str
     ) -> str:
         """
-        Traduction ML d'un texte individuel avec pipeline réutilisable
+        Traduction ML d'un texte individuel avec pipeline réutilisable.
+
+        Pour les textes longs (>200 caractères), découpe intelligemment
+        aux ponctuations et traduit par morceaux pour éviter la troncature.
 
         Args:
             text: Texte à traduire
@@ -172,6 +257,64 @@ class TranslatorEngine:
         """
         if not self.model_loader.is_model_loaded(model_type):
             raise Exception(f"Modèle {model_type} non chargé")
+
+        # ═══════════════════════════════════════════════════════════════════
+        # DÉCOUPAGE INTELLIGENT: Textes longs découpés aux ponctuations
+        # ═══════════════════════════════════════════════════════════════════
+        if len(text) > 200:
+            logger.info(
+                f"[TRANSLATE] Texte long détecté ({len(text)} chars) → "
+                f"découpage intelligent aux ponctuations"
+            )
+
+            # Découper en morceaux de max 200 caractères
+            chunks = smart_split_text(text, max_chars=200)
+
+            logger.info(
+                f"[TRANSLATE] Texte découpé en {len(chunks)} morceaux "
+                f"(tailles: {[len(c) for c in chunks]})"
+            )
+
+            # Traduire chaque morceau
+            translated_chunks = []
+            for i, chunk in enumerate(chunks):
+                logger.debug(f"[TRANSLATE] Chunk {i+1}/{len(chunks)}: '{chunk[:50]}...'")
+                translated_chunk = await self._translate_single_chunk(
+                    chunk, source_lang, target_lang, model_type
+                )
+                translated_chunks.append(translated_chunk)
+
+            # Recoller les morceaux traduits
+            final_translation = ' '.join(translated_chunks)
+
+            logger.info(
+                f"[TRANSLATE] ✅ Traduction complète: {len(text)} → {len(final_translation)} chars"
+            )
+
+            return final_translation
+
+        # Texte court: traduction directe
+        return await self._translate_single_chunk(text, source_lang, target_lang, model_type)
+
+    async def _translate_single_chunk(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        model_type: str
+    ) -> str:
+        """
+        Traduit un seul morceau de texte (≤ 200 caractères).
+
+        Args:
+            text: Texte à traduire
+            source_lang: Langue source
+            target_lang: Langue cible
+            model_type: Type de modèle
+
+        Returns:
+            Texte traduit
+        """
 
         def translate_sync():
             """Traduction synchrone dans un thread"""
@@ -192,7 +335,7 @@ class TranslatorEngine:
                         text,
                         src_lang=nllb_source,
                         tgt_lang=nllb_target,
-                        max_length=512,       # Support textes longs (jusqu'à 512 tokens)
+                        max_length=256,       # Optimisé pour chunks courts (découpage intelligent avant)
                         num_beams=1,          # GREEDY (4x plus rapide!)
                         do_sample=False       # Déterministe
                         # early_stopping retiré: incompatible avec num_beams=1 (greedy decoding)
@@ -279,13 +422,13 @@ class TranslatorEngine:
                         # OPTIMISATIONS NLLB AVANCÉES:
                         # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
                         # - do_sample=False: Désactive sampling (déterministe)
-                        # - max_length=512: Support textes longs (jusqu'à 512 tokens)
+                        # - max_length=256: Optimisé pour segments courts
                         # ═══════════════════════════════════════════════════════════════
                         results = reusable_pipeline(
                             chunk,
                             src_lang=nllb_source,
                             tgt_lang=nllb_target,
-                            max_length=512,       # Support textes longs (augmenté de 256 → 512)
+                            max_length=256,       # Optimisé pour segments courts (découpage avant si besoin)
                             num_beams=1,          # GREEDY DECODING (4x plus rapide!)
                             do_sample=False       # Déterministe
                             # early_stopping retiré: incompatible avec num_beams=1
