@@ -338,6 +338,32 @@ class DiarizationService:
                     segments=data['segments']
                 ))
 
+            # ═══════════════════════════════════════════════════════════════════
+            # FILTRAGE DES FAUX POSITIFS
+            # Éliminer les speakers non significatifs (variations de pitch naturelles)
+            # ═══════════════════════════════════════════════════════════════════
+            MIN_SPEAKING_RATIO = 0.15  # Minimum 15% du temps de parole
+            MIN_SEGMENTS = 3            # Minimum 3 segments
+
+            initial_count = len(speakers)
+            speakers_filtered = [
+                s for s in speakers
+                if s.speaking_ratio >= MIN_SPEAKING_RATIO or len(s.segments) >= MIN_SEGMENTS
+            ]
+
+            # Si tous les speakers sont filtrés, garder au moins le plus important
+            if not speakers_filtered and speakers:
+                speakers_filtered = [max(speakers, key=lambda s: s.speaking_time_ms)]
+
+            if initial_count != len(speakers_filtered):
+                logger.info(
+                    f"[DIARIZATION] 🔍 Filtrage faux positifs: "
+                    f"{initial_count} → {len(speakers_filtered)} speakers "
+                    f"(seuils: {MIN_SPEAKING_RATIO*100:.0f}% temps OU {MIN_SEGMENTS} segments min)"
+                )
+
+            speakers = speakers_filtered
+
             # Identifier le locuteur principal
             if speakers:
                 primary = max(speakers, key=lambda s: s.speaking_time_ms)
