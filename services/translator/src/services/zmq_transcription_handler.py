@@ -301,25 +301,43 @@ class TranscriptionHandler:
                         'text': s.text,
                         'startMs': s.start_ms,
                         'endMs': s.end_ms,
-                        'confidence': s.confidence
+                        'confidence': s.confidence,
+                        'speakerId': getattr(s, 'speaker_id', None),
+                        'voiceSimilarityScore': getattr(s, 'voice_similarity_score', None),
+                        'language': getattr(s, 'language', None)
                     }
                     for s in segments
                 ]
+
+            # Construire le dictionnaire de transcription
+            transcription_dict = {
+                'text': result.text,
+                'language': result.language,
+                'confidence': result.confidence,
+                'durationMs': result.duration_ms,
+                'source': result.source,
+                'model': result.model or 'whisper_boost',
+                'segments': segments_dict
+            }
+
+            # Ajouter les champs de diarisation si disponibles
+            if getattr(result, 'speaker_count', None) is not None:
+                transcription_dict['speakerCount'] = result.speaker_count
+            if getattr(result, 'primary_speaker_id', None):
+                transcription_dict['primarySpeakerId'] = result.primary_speaker_id
+            if getattr(result, 'sender_voice_identified', None) is not None:
+                transcription_dict['senderVoiceIdentified'] = result.sender_voice_identified
+            if getattr(result, 'sender_speaker_id', None) is not None:
+                transcription_dict['senderSpeakerId'] = result.sender_speaker_id
+            if getattr(result, 'speaker_analysis', None):
+                transcription_dict['speakerAnalysis'] = result.speaker_analysis
 
             message = {
                 'type': 'transcription_completed',
                 'taskId': task_id,
                 'messageId': message_id,
                 'attachmentId': attachment_id,
-                'transcription': {
-                    'text': result.text,
-                    'language': result.language,
-                    'confidence': result.confidence,
-                    'durationMs': result.duration_ms,
-                    'source': result.source,
-                    'model': result.model or 'whisper_boost',
-                    'segments': segments_dict
-                },
+                'transcription': transcription_dict,
                 'processingTimeMs': processing_time,
                 'timestamp': time.time()
             }
