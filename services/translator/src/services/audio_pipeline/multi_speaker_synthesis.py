@@ -723,11 +723,31 @@ class MultiSpeakerSynthesizer:
         # Trier par index pour maintenir l'ordre
         final_results.sort(key=lambda x: x.segment_index)
 
+        # ═══════════════════════════════════════════════════════════════════
+        # VÉRIFICATION COMPLÈTE: Garantir que TOUS les segments sont synthétisés
+        # ═══════════════════════════════════════════════════════════════════
         success_count = sum(1 for r in final_results if r.success)
-        logger.info(
-            f"[MULTI_SPEAKER_SYNTH] ✅ Synthèse PARALLÈLE: "
-            f"{success_count}/{len(enriched_segments)} réussis"
-        )
+        failed_count = len(final_results) - success_count
+
+        logger.info("=" * 80)
+        logger.info(f"[MULTI_SPEAKER_SYNTH] 📊 RÉSUMÉ SYNTHÈSE PARALLÈLE")
+        logger.info(f"[MULTI_SPEAKER_SYNTH] Total segments: {len(final_results)}")
+        logger.info(f"[MULTI_SPEAKER_SYNTH] ✅ Réussis: {success_count} ({success_count/len(final_results)*100:.1f}%)")
+        logger.info(f"[MULTI_SPEAKER_SYNTH] ❌ Échoués: {failed_count} ({failed_count/len(final_results)*100:.1f}%)")
+
+        if failed_count > 0:
+            logger.warning(f"[MULTI_SPEAKER_SYNTH] ⚠️ ATTENTION: {failed_count} segment(s) NON synthétisé(s)!")
+            logger.warning("[MULTI_SPEAKER_SYNTH] Segments échoués:")
+            for r in final_results:
+                if not r.success:
+                    logger.warning(
+                        f"[MULTI_SPEAKER_SYNTH]   • Segment {r.segment_index}: "
+                        f"'{r.text[:50]}...' → {r.error_message}"
+                    )
+        else:
+            logger.info(f"[MULTI_SPEAKER_SYNTH] ✅ TOUS les segments ont été synthétisés avec succès!")
+
+        logger.info("=" * 80)
 
         return final_results
 

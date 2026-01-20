@@ -635,23 +635,31 @@ class TranslationStage:
             logger.info(f"[TRANSLATION_STAGE] 🎤 Début génération TTS pour {target_lang}...")
             if is_multi_speaker and source_segments:
                 # ═══════════════════════════════════════════════════════════
-                # MODE MULTI-SPEAKER: Synthèse COMPLÈTE avec clonage vocal
-                # (Comme chatterbox_voice_translation_test.py)
+                # MODE MULTI-SPEAKER SIMPLIFIÉ:
+                # Synthèse segment par segment avec VOIX DU SPEAKER PRINCIPAL
                 # ═══════════════════════════════════════════════════════════
                 logger.info(
-                    f"[TRANSLATION_STAGE] 🎭 Utilisation synthèse MULTI-SPEAKER: "
+                    f"[TRANSLATION_STAGE] 🎭 Mode MULTI-SPEAKER simplifié: "
                     f"{len(source_segments)} segments, {len(unique_speakers)} speakers"
                 )
+                logger.info(
+                    f"[TRANSLATION_STAGE] 🎤 Utilisation de la voix du speaker PRINCIPAL "
+                    f"pour tout l'audio (simplification)"
+                )
 
-                # 🆕 APPROCHE SCRIPT DE TEST: Traduire TOUT le texte en UNE fois
-                logger.info(f"[TRANSLATION_STAGE] 📝 Traduction du texte complet...")
-                full_text_translation = await self.translation_service.translate(
-                    text=full_text,
+                # Traduire chaque segment individuellement
+                logger.info(f"[TRANSLATION_STAGE] 📝 Traduction de {len(source_segments)} segments...")
+                translated_segments_list = await self._translate_segments(
+                    segments=source_segments,
                     source_language=source_language,
                     target_language=target_lang,
                     model_type=model_type
                 )
-                translated_text_full = full_text_translation.translated_text if full_text_translation else full_text
+
+                logger.info(
+                    f"[TRANSLATION_STAGE] ✅ Segments traduits: "
+                    f"{len(translated_segments_list)}/{len(source_segments)}"
+                )
 
                 # Créer les voice models par speaker (pour identifier le speaker principal)
                 speaker_voice_maps = await self.multi_speaker_synthesizer.create_speaker_voice_maps(
@@ -661,31 +669,61 @@ class TranslationStage:
                     user_voice_model=voice_model
                 )
 
-                # Trouver l'audio de référence (priorité: utilisateur > speaker principal)
-                reference_audio = source_audio_path
-                if voice_model and hasattr(voice_model, 'reference_audio_path'):
-                    reference_audio = voice_model.reference_audio_path or source_audio_path
+                # 🆕 SIMPLIFICATION: Utiliser SEULEMENT la voix du speaker principal
+                # Trouver le speaker principal (celui avec le plus de temps de parole)
+                main_speaker_id = None
+                if diarization_result:
+                    if isinstance(diarization_result, dict):
+                        main_speaker_id = diarization_result.get('primarySpeakerId')
+                    else:
+                        main_speaker_id = getattr(diarization_result, 'primary_speaker_id', None)
+
+                # Obtenir la voix à utiliser pour TOUS les segments
+                main_voice_audio = source_audio_path
+                if voice_model and hasattr(voice_model, 'reference_audio_path') and voice_model.reference_audio_path:
+                    main_voice_audio = voice_model.reference_audio_path
+                    logger.info(f"[TRANSLATION_STAGE] 🎤 Utilisation voix utilisateur: {main_voice_audio}")
+                elif main_speaker_id and main_speaker_id in speaker_voice_maps:
+                    main_voice_audio = speaker_voice_maps[main_speaker_id].audio_reference_path
+                    logger.info(f"[TRANSLATION_STAGE] 🎤 Utilisation voix speaker principal '{main_speaker_id}': {main_voice_audio}")
+                else:
+                    logger.info(f"[TRANSLATION_STAGE] 🎤 Utilisation audio source: {main_voice_audio}")
+
+                # Créer un speaker_voice_map simplifié : même voix pour tous
+                simplified_voice_map = {}
+                for speaker_id in speaker_voice_maps.keys():
+                    simplified_voice_map[speaker_id] = type('SpeakerVoiceMap', (), {
+                        'speaker_id': speaker_id,
+                        'voice_model': voice_model,  # Même voice model pour tous
+                        'audio_reference_path': main_voice_audio,  # Même audio pour tous
+                        'segment_count': speaker_voice_maps[speaker_id].segment_count,
+                        'total_duration_ms': speaker_voice_maps[speaker_id].total_duration_ms
+                    })()
+
+                logger.info(
+                    f"[TRANSLATION_STAGE] ✅ Configuration simplifiée: "
+                    f"{len(simplified_voice_map)} speakers → 1 voix unique"
+                )
 
                 output_path = os.path.join(
                     self.multi_speaker_synthesizer.temp_dir,
-                    f"{message_id}_{attachment_id}_{target_lang}_full.mp3"
+                    f"{message_id}_{attachment_id}_{target_lang}_multi.mp3"
                 )
 
-                # 🆕 Synthétiser TOUT le texte EN UNE FOIS avec clonage vocal
-                logger.info(f"[TRANSLATION_STAGE] 🎙️ Synthèse COMPLÈTE du texte ({len(translated_text_full)} cars)...")
-                synthesis_result = await self.multi_speaker_synthesizer.synthesize_full_text_with_cloning(
-                    full_text=translated_text_full,
-                    speaker_audio_path=reference_audio,
+                # Synthétiser segment par segment avec la voix principale
+                synthesis_result = await self.multi_speaker_synthesizer.synthesize_multi_speaker(
+                    segments=source_segments,
+                    translated_segments=translated_segments_list,
+                    speaker_voice_maps=simplified_voice_map,
                     target_language=target_lang,
                     output_path=output_path,
                     message_id=f"{message_id}_{attachment_id}"
                 )
 
                 if not synthesis_result:
-                    raise Exception("Full text synthesis failed")
+                    raise Exception("Multi-speaker synthesis failed")
 
-                audio_path, duration_ms = synthesis_result
-                synthesis_results = []  # Pas de résultats segment par segment
+                audio_path, duration_ms, synthesis_results = synthesis_result
 
                 # Créer un TTSResult-like object
                 tts_result = type('TTSResult', (), {
@@ -700,15 +738,32 @@ class TranslationStage:
                     'audio_mime_type': 'audio/mp3'
                 })()
 
-                # 🆕 RETRANSCRIPTION de l'audio multi-speaker pour obtenir les segments avec timings
-                logger.info(
-                    f"[TRANSLATION_STAGE] 📊 Résumé synthèse multi-speaker ({target_lang}):"
-                )
-                logger.info(f"[TRANSLATION_STAGE]    ├─ Segments synthétisés: {len(synthesis_results)}")
-                logger.info(f"[TRANSLATION_STAGE]    ├─ Segments réussis: {sum(1 for s in synthesis_results if s.success)}")
-                logger.info(f"[TRANSLATION_STAGE]    ├─ Segments échoués: {sum(1 for s in synthesis_results if not s.success)}")
-                logger.info(f"[TRANSLATION_STAGE]    ├─ Durée totale: {duration_ms}ms ({duration_ms/1000:.1f}s)")
-                logger.info(f"[TRANSLATION_STAGE]    └─ Audio généré: {audio_path}")
+                # ═══════════════════════════════════════════════════════════════════
+                # RÉSUMÉ FINAL: Synthèse multi-speaker
+                # ═══════════════════════════════════════════════════════════════════
+                success_count = sum(1 for s in synthesis_results if s.success)
+                failed_count = len(synthesis_results) - success_count
+
+                logger.info("=" * 80)
+                logger.info(f"[TRANSLATION_STAGE] 📊 RÉSUMÉ FINAL - Synthèse multi-speaker ({target_lang})")
+                logger.info(f"[TRANSLATION_STAGE] Segments à synthétiser: {len(source_segments)}")
+                logger.info(f"[TRANSLATION_STAGE] Segments traduits: {len(translated_segments_list)}")
+                logger.info(f"[TRANSLATION_STAGE] Segments synthétisés: {len(synthesis_results)}")
+                logger.info(f"[TRANSLATION_STAGE]    ├─ ✅ Réussis: {success_count} ({success_count/len(synthesis_results)*100:.1f}%)")
+                logger.info(f"[TRANSLATION_STAGE]    └─ ❌ Échoués: {failed_count} ({failed_count/len(synthesis_results)*100:.1f}%)")
+                logger.info(f"[TRANSLATION_STAGE] Durée totale: {duration_ms}ms ({duration_ms/1000:.1f}s)")
+                logger.info(f"[TRANSLATION_STAGE] Audio généré: {audio_path}")
+
+                if failed_count > 0:
+                    logger.warning(
+                        f"[TRANSLATION_STAGE] ⚠️ ATTENTION: {failed_count} segment(s) n'ont PAS été synthétisés!"
+                    )
+                else:
+                    logger.info(
+                        f"[TRANSLATION_STAGE] ✅ SUCCÈS COMPLET: Tous les {success_count} segments "
+                        f"ont été synthétisés avec la voix du speaker principal!"
+                    )
+                logger.info("=" * 80)
 
             else:
                 # ═══════════════════════════════════════════════════════════
