@@ -34,6 +34,25 @@ except ImportError as e:
     pass
 
 
+def _get_voice_similarity_score(seg) -> Optional[float]:
+    """
+    Extract voice_similarity_score from segment (dict or object).
+
+    Args:
+        seg: Segment as dict or dataclass object
+
+    Returns:
+        Voice similarity score as float, or None
+    """
+    if hasattr(seg, 'voice_similarity_score'):
+        score = seg.voice_similarity_score
+    elif isinstance(seg, dict):
+        score = seg.get('voiceSimilarityScore') or seg.get('voice_similarity_score')
+    else:
+        return None
+    return score if isinstance(score, (int, float)) else None
+
+
 class AudioHandler:
     """Handler pour les traitements audio via ZMQ"""
     
@@ -376,7 +395,7 @@ class AudioHandler:
                         logger.warning(f"[MULTIPART] Erreur lecture fichier audio {t.language}: {e}")
 
                 # Metadata sans base64 (contient juste le mapping vers le frame)
-                translated_audios_metadata.append({
+                translated_audio_dict = {
                     'targetLanguage': t.language,
                     'translatedText': t.translated_text,
                     'audioUrl': t.audio_url,
@@ -386,7 +405,24 @@ class AudioHandler:
                     'voiceQuality': t.voice_quality,
                     'audioMimeType': t.audio_mime_type or 'audio/mp3'
                     # Pas de audioDataBase64 - données dans binaryFrames
-                })
+                }
+
+                # Ajouter les segments si disponibles (convertir en dicts)
+                if hasattr(t, 'segments') and t.segments:
+                    translated_audio_dict['segments'] = [
+                        {
+                            'text': seg.text if hasattr(seg, 'text') else seg.get('text'),
+                            'startMs': seg.start_ms if hasattr(seg, 'start_ms') else seg.get('start_ms', seg.get('startMs', 0)),
+                            'endMs': seg.end_ms if hasattr(seg, 'end_ms') else seg.get('end_ms', seg.get('endMs', 0)),
+                            'confidence': seg.confidence if hasattr(seg, 'confidence') else seg.get('confidence'),
+                            'speakerId': (seg.speaker_id if hasattr(seg, 'speaker_id') else seg.get('speaker_id', seg.get('speakerId'))) or None,
+                            'voiceSimilarityScore': _get_voice_similarity_score(seg),
+                            'language': seg.language if hasattr(seg, 'language') else seg.get('language')
+                        }
+                        for seg in t.segments
+                    ]
+
+                translated_audios_metadata.append(translated_audio_dict)
 
             # ═══════════════════════════════════════════════════════════════
             # ÉTAPE 2: Ajouter l'embedding vocal si présent
@@ -427,18 +463,45 @@ class AudioHandler:
             # ═══════════════════════════════════════════════════════════════
             # ÉTAPE 3: Construire le JSON metadata (Frame 0)
             # ═══════════════════════════════════════════════════════════════
+            # Construire le dictionnaire de transcription avec diarisation
+            transcription_dict = {
+                'text': result.original.transcription,
+                'language': result.original.language,
+                'confidence': result.original.confidence,
+                'source': result.original.source,
+                'segments': [
+                    {
+                        'text': seg.text if hasattr(seg, 'text') else seg.get('text', ''),
+                        'startMs': seg.start_ms if hasattr(seg, 'start_ms') else seg.get('start_ms', seg.get('startMs', 0)),
+                        'endMs': seg.end_ms if hasattr(seg, 'end_ms') else seg.get('end_ms', seg.get('endMs', 0)),
+                        'confidence': seg.confidence if hasattr(seg, 'confidence') else seg.get('confidence'),
+                        'speakerId': (seg.speaker_id if hasattr(seg, 'speaker_id') else seg.get('speaker_id', seg.get('speakerId'))) or None,
+                        'voiceSimilarityScore': _get_voice_similarity_score(seg),
+                        'language': seg.language if hasattr(seg, 'language') else seg.get('language')
+                    }
+                    for seg in (result.original.segments or [])
+                ] if result.original.segments else None,
+                'durationMs': result.original.duration_ms
+            }
+
+            # Ajouter les champs de diarisation si disponibles
+            if result.original.speaker_count is not None:
+                transcription_dict['speakerCount'] = result.original.speaker_count
+            if result.original.primary_speaker_id:
+                transcription_dict['primarySpeakerId'] = result.original.primary_speaker_id
+            if result.original.sender_voice_identified is not None:
+                transcription_dict['senderVoiceIdentified'] = result.original.sender_voice_identified
+            if result.original.sender_speaker_id is not None:
+                transcription_dict['senderSpeakerId'] = result.original.sender_speaker_id
+            if result.original.speaker_analysis:
+                transcription_dict['speakerAnalysis'] = result.original.speaker_analysis
+
             metadata = {
                 'type': 'audio_process_completed',
                 'taskId': task_id,
                 'messageId': result.message_id,
                 'attachmentId': result.attachment_id,
-                'transcription': {
-                    'text': result.original.transcription,
-                    'language': result.original.language,
-                    'confidence': result.original.confidence,
-                    'source': result.original.source,
-                    'segments': result.original.segments
-                },
+                'transcription': transcription_dict,
                 'translatedAudios': translated_audios_metadata,
                 'voiceModelUserId': result.voice_model_user_id,
                 'voiceModelQuality': result.voice_model_quality,

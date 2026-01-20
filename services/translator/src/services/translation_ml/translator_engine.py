@@ -147,6 +147,8 @@ class TranslatorEngine:
 
             except Exception as e:
                 logger.error(f"❌ Erreur création pipeline thread-local: {e}")
+                import traceback
+                traceback.print_exc()
                 return None, False
 
     async def translate_text(
@@ -253,31 +255,59 @@ class TranslatorEngine:
 
         def translate_batch_sync():
             """Traduction batch synchrone"""
+            import signal
+            import functools
+
+            def timeout_handler(signum, frame):
+                raise TimeoutError("NLLB inference timeout (60s)")
+
             try:
+                logger.info(f"[BATCH-SYNC] 🔄 Début translate_batch_sync: {len(texts)} textes, {source_lang}→{target_lang}")
+
                 # Réutiliser le pipeline thread-local
                 reusable_pipeline, is_available = self._get_thread_local_pipeline(model_type)
+                logger.info(f"[BATCH-SYNC] Pipeline disponible: {is_available}, pipeline={reusable_pipeline is not None}")
 
                 if not is_available or reusable_pipeline is None:
                     raise Exception(f"Pipeline non disponible pour {model_type}")
 
                 nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
                 nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+                logger.info(f"[BATCH-SYNC] Codes NLLB: {nllb_source} → {nllb_target}")
 
                 all_results = []
 
                 # Traitement par chunks avec inference_mode
+                logger.info(f"[BATCH-SYNC] 📥 Entrée dans inference_context, batch_size={batch_size}")
                 with create_inference_context():
                     for i in range(0, len(texts), batch_size):
                         chunk = texts[i:i + batch_size]
+                        logger.info(f"[BATCH-SYNC] 🔄 Traitement chunk {i//batch_size + 1}: {len(chunk)} textes")
+                        logger.info(f"[BATCH-SYNC] Premier texte du chunk: '{chunk[0][:50]}...'")
 
-                        results = reusable_pipeline(
-                            chunk,
-                            src_lang=nllb_source,
-                            tgt_lang=nllb_target,
-                            max_length=512,
-                            num_beams=4,
-                            early_stopping=True
-                        )
+                        logger.info(f"[BATCH-SYNC] 🚀 Appel pipeline NLLB (timeout 60s)...")
+                        try:
+                            # Timeout de sécurité pour éviter blocage infini
+                            import concurrent.futures
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as inference_executor:
+                                future = inference_executor.submit(
+                                    reusable_pipeline,
+                                    chunk,
+                                    src_lang=nllb_source,
+                                    tgt_lang=nllb_target,
+                                    max_length=512,
+                                    num_beams=4,
+                                    early_stopping=True
+                                )
+                                results = future.result(timeout=60)  # 60 secondes max
+                        except concurrent.futures.TimeoutError:
+                            logger.error(f"[BATCH-SYNC] ⏰ TIMEOUT: NLLB inference bloquée après 60s")
+                            return [f"[NLLB-Timeout] {t}" for t in texts]
+                        except Exception as pipeline_err:
+                            logger.error(f"[BATCH-SYNC] ❌ Erreur pipeline: {pipeline_err}")
+                            return [f"[NLLB-Error] {t}" for t in texts]
+
+                        logger.info(f"[BATCH-SYNC] ✅ Pipeline retourné: {len(results)} résultats")
 
                         for result in results:
                             if isinstance(result, dict) and 'translation_text' in result:
@@ -287,21 +317,29 @@ class TranslatorEngine:
                             else:
                                 all_results.append('[Batch-No-Result]')
 
+                logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
+
                 # Nettoyage mémoire périodique
                 if self.perf_config.enable_memory_cleanup and len(texts) > 20:
                     from utils.performance import get_performance_optimizer
                     perf_optimizer = get_performance_optimizer()
                     perf_optimizer.cleanup_memory()
 
+                logger.info(f"[BATCH-SYNC] ✅ Fin translate_batch_sync: {len(all_results)} traductions")
                 return all_results
 
             except Exception as e:
-                logger.error(f"Erreur batch pipeline {model_type}: {e}")
+                logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {e}")
+                import traceback
+                traceback.print_exc()
                 return [f"[ML-Batch-Error] {t}" for t in texts]
 
         # Exécuter de manière asynchrone
+        logger.info(f"[BATCH] 🔄 Soumission à executor (threads actifs: {self.executor._max_workers})")
         loop = asyncio.get_event_loop()
+        logger.info(f"[BATCH] Event loop obtenue: {loop}")
         results = await loop.run_in_executor(self.executor, translate_batch_sync)
+        logger.info(f"[BATCH] ✅ run_in_executor terminé, {len(results)} résultats")
 
         logger.info(f"⚡ [BATCH] {len(texts)} textes traduits en batch ({source_lang}→{target_lang})")
         return results

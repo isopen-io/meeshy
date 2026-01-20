@@ -173,13 +173,22 @@ class OperationHandlers:
         transcription_text = ""
         detected_language = source_language or "en"
         transcription_confidence = 0.0
+        transcription_segments = None
+        trans_result = None
 
         if self.transcription_service:
-            trans_result = await self.transcription_service.transcribe(audio_path)
+            # ✅ Activer return_timestamps pour obtenir les segments
+            trans_result = await self.transcription_service.transcribe(
+                audio_path,
+                return_timestamps=True
+            )
             if trans_result:
                 transcription_text = trans_result.text
                 detected_language = trans_result.language or detected_language
                 transcription_confidence = trans_result.confidence or 0.9
+                # ✅ Stocker les segments si disponibles
+                if hasattr(trans_result, 'segments') and trans_result.segments:
+                    transcription_segments = trans_result.segments
 
         # Step 2: Voice cloning (if enabled)
         voice_profile = None
@@ -238,16 +247,36 @@ class OperationHandlers:
                 'voiceQuality': voice_quality
             })
 
+        # ✅ Construire originalAudio avec segments et diarisation si disponibles
+        original_audio = {
+            'transcription': transcription_text,
+            'language': detected_language,
+            'durationMs': 0,  # Would need audio analysis
+            'confidence': transcription_confidence
+        }
+
+        # Ajouter les segments avec informations de speaker
+        if transcription_segments:
+            original_audio['segments'] = transcription_segments
+
+        # Ajouter les informations de diarisation si disponibles
+        if trans_result:
+            if hasattr(trans_result, 'speaker_count') and trans_result.speaker_count is not None:
+                original_audio['speakerCount'] = trans_result.speaker_count
+            if hasattr(trans_result, 'primary_speaker_id') and trans_result.primary_speaker_id:
+                original_audio['primarySpeakerId'] = trans_result.primary_speaker_id
+            if hasattr(trans_result, 'sender_voice_identified') and trans_result.sender_voice_identified is not None:
+                original_audio['senderVoiceIdentified'] = trans_result.sender_voice_identified
+            if hasattr(trans_result, 'sender_speaker_id'):
+                original_audio['senderSpeakerId'] = trans_result.sender_speaker_id
+            if hasattr(trans_result, 'speaker_analysis') and trans_result.speaker_analysis:
+                original_audio['speakerAnalysis'] = trans_result.speaker_analysis
+
         return VoiceAPIResult(
             success=True,
             data={
                 'translationId': translation_id,
-                'originalAudio': {
-                    'transcription': transcription_text,
-                    'language': detected_language,
-                    'durationMs': 0,  # Would need audio analysis
-                    'confidence': transcription_confidence
-                },
+                'originalAudio': original_audio,
                 'translations': translations,
                 'voiceProfile': {
                     'profileId': voice_profile.id if voice_profile else None,

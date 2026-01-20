@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OriginalAudio:
-    """Original audio data"""
+    """Original audio data with speaker diarization support"""
     audio_path: str
     audio_url: str
     transcription: str
@@ -60,6 +60,12 @@ class OriginalAudio:
     confidence: float
     source: str  # "mobile", "whisper", or "cache"
     segments: Optional[List[Dict]] = None
+    # Speaker diarization fields
+    speaker_count: Optional[int] = None
+    primary_speaker_id: Optional[str] = None
+    sender_voice_identified: Optional[bool] = None
+    sender_speaker_id: Optional[str] = None
+    speaker_analysis: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -74,6 +80,9 @@ class NewVoiceProfileData:
     version: int
     fingerprint: Optional[Dict[str, Any]] = None
     voice_characteristics: Optional[Dict[str, Any]] = None
+    chatterbox_conditionals_base64: Optional[str] = None
+    reference_audio_id: Optional[str] = None
+    reference_audio_url: Optional[str] = None
 
 
 @dataclass
@@ -91,19 +100,33 @@ class AudioMessageResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
+        original_dict = {
+            "audio_path": self.original.audio_path,
+            "audio_url": self.original.audio_url,
+            "transcription": self.original.transcription,
+            "language": self.original.language,
+            "duration_ms": self.original.duration_ms,
+            "confidence": self.original.confidence,
+            "source": self.original.source,
+            "segments": self.original.segments
+        }
+
+        # Add speaker diarization fields if present
+        if self.original.speaker_count is not None:
+            original_dict["speaker_count"] = self.original.speaker_count
+        if self.original.primary_speaker_id:
+            original_dict["primary_speaker_id"] = self.original.primary_speaker_id
+        if self.original.sender_voice_identified is not None:
+            original_dict["sender_voice_identified"] = self.original.sender_voice_identified
+        if self.original.sender_speaker_id is not None:
+            original_dict["sender_speaker_id"] = self.original.sender_speaker_id
+        if self.original.speaker_analysis:
+            original_dict["speaker_analysis"] = self.original.speaker_analysis
+
         return {
             "message_id": self.message_id,
             "attachment_id": self.attachment_id,
-            "original": {
-                "audio_path": self.original.audio_path,
-                "audio_url": self.original.audio_url,
-                "transcription": self.original.transcription,
-                "language": self.original.language,
-                "duration_ms": self.original.duration_ms,
-                "confidence": self.original.confidence,
-                "source": self.original.source,
-                "segments": self.original.segments
-            },
+            "original": original_dict,
             "translations": {
                 lang: {
                     "language": t.language,
@@ -115,7 +138,8 @@ class AudioMessageResult:
                     "voice_cloned": t.voice_cloned,
                     "voice_quality": t.voice_quality,
                     "audio_data_base64": t.audio_data_base64,
-                    "audio_mime_type": t.audio_mime_type
+                    "audio_mime_type": t.audio_mime_type,
+                    "segments": t.segments  # Segments de la transcription de l'audio traduit
                 }
                 for lang, t in self.translations.items()
             },
@@ -131,7 +155,7 @@ class AudioMessageResult:
         if not self.new_voice_profile:
             return None
 
-        return {
+        result = {
             "user_id": self.new_voice_profile.user_id,
             "profile_id": self.new_voice_profile.profile_id,
             "embedding_base64": self.new_voice_profile.embedding_base64,
@@ -142,6 +166,16 @@ class AudioMessageResult:
             "fingerprint": self.new_voice_profile.fingerprint,
             "voice_characteristics": self.new_voice_profile.voice_characteristics
         }
+
+        # Add Chatterbox conditionals if present
+        if self.new_voice_profile.chatterbox_conditionals_base64:
+            result["chatterbox_conditionals_base64"] = self.new_voice_profile.chatterbox_conditionals_base64
+        if self.new_voice_profile.reference_audio_id:
+            result["reference_audio_id"] = self.new_voice_profile.reference_audio_id
+        if self.new_voice_profile.reference_audio_url:
+            result["reference_audio_url"] = self.new_voice_profile.reference_audio_url
+
+        return result
 
 
 class AudioMessagePipeline:
@@ -193,7 +227,8 @@ class AudioMessagePipeline:
         # Create pipeline stages
         self.transcription_stage = create_transcription_stage()
         self.translation_stage = create_translation_stage(
-            translation_service=translation_service
+            translation_service=translation_service,
+            transcription_service=self.transcription_stage.transcription_service
         )
 
         # Services
@@ -378,6 +413,16 @@ class AudioMessagePipeline:
         # ═══════════════════════════════════════════════════════════════
         logger.info("[PIPELINE] Stage 3: Voice model creation")
 
+        # En mode multi-speaker, le clonage vocal est géré par speaker individuellement
+        final_generate_voice_clone = generate_voice_clone
+        if transcription.speaker_count and transcription.speaker_count > 1:
+            logger.info(
+                f"[PIPELINE] 🎭 Mode multi-speaker détecté: "
+                f"{transcription.speaker_count} locuteurs → clonage vocal par speaker activé"
+            )
+        elif generate_voice_clone:
+            logger.info("[PIPELINE] 🎤 Clonage vocal activé: locuteur unique détecté")
+
         voice_model, voice_model_user_id = await self.translation_stage.create_voice_model(
             sender_id=sender_id,
             audio_path=audio_path,
@@ -385,7 +430,7 @@ class AudioMessagePipeline:
             original_sender_id=original_sender_id,
             existing_voice_profile=existing_voice_profile,
             use_original_voice=use_original_voice,
-            generate_voice_clone=generate_voice_clone
+            generate_voice_clone=final_generate_voice_clone
         )
 
         # ═══════════════════════════════════════════════════════════════
@@ -396,6 +441,47 @@ class AudioMessagePipeline:
         max_workers = min(
             len(target_languages),
             int(os.getenv("TTS_MAX_WORKERS", "4"))
+        )
+
+        # Préparer les segments pour le mode multi-speaker
+        source_segments = None
+        if transcription.segments:
+            # Convertir les segments en format dict si nécessaire
+            if isinstance(transcription.segments, list):
+                source_segments = []
+                for seg in transcription.segments:
+                    # Déterminer si c'est un dict ou un dataclass
+                    is_dict = isinstance(seg, dict)
+
+                    if is_dict:
+                        # Segment déjà en format dict (ex: depuis cache Redis)
+                        source_segments.append({
+                            'text': seg.get('text', ''),
+                            'start_ms': seg.get('start_ms', seg.get('startMs', 0)),
+                            'end_ms': seg.get('end_ms', seg.get('endMs', 0)),
+                            'speaker_id': seg.get('speaker_id', seg.get('speakerId')),
+                            'confidence': seg.get('confidence'),
+                            'voice_similarity_score': seg.get('voice_similarity_score', seg.get('voiceSimilarityScore')),
+                            'language': seg.get('language')
+                        })
+                    else:
+                        # Segment dataclass (TranscriptionSegment)
+                        source_segments.append({
+                            'text': seg.text if hasattr(seg, 'text') else '',
+                            'start_ms': seg.start_ms if hasattr(seg, 'start_ms') else 0,
+                            'end_ms': seg.end_ms if hasattr(seg, 'end_ms') else 0,
+                            'speaker_id': seg.speaker_id if hasattr(seg, 'speaker_id') else None,
+                            'confidence': seg.confidence if hasattr(seg, 'confidence') else None,
+                            'voice_similarity_score': seg.voice_similarity_score if hasattr(seg, 'voice_similarity_score') else None,
+                            'language': seg.language if hasattr(seg, 'language') else None
+                        })
+            else:
+                source_segments = transcription.segments
+
+        logger.info(
+            f"[PIPELINE] 🎭 Mode multi-speaker: "
+            f"segments={len(source_segments) if source_segments else 0}, "
+            f"speakers={transcription.speaker_count if transcription.speaker_count else 'unknown'}"
         )
 
         translations = await self.translation_stage.process_languages(
@@ -409,7 +495,9 @@ class AudioMessagePipeline:
             model_type=model_type,
             cloning_params=cloning_params,
             max_workers=max_workers,
-            source_audio_path=audio_path
+            source_audio_path=audio_path,
+            source_segments=source_segments,
+            diarization_result=transcription.speaker_analysis
         )
 
         logger.info(f"[PIPELINE] Generated {len(translations)} translations")
@@ -438,7 +526,12 @@ class AudioMessagePipeline:
                 duration_ms=transcription.duration_ms,
                 confidence=transcription.confidence,
                 source=transcription.source,
-                segments=self._serialize_segments(transcription.segments)
+                segments=self._serialize_segments(transcription.segments),
+                speaker_count=transcription.speaker_count,
+                primary_speaker_id=transcription.primary_speaker_id,
+                sender_voice_identified=transcription.sender_voice_identified,
+                sender_speaker_id=transcription.sender_speaker_id,
+                speaker_analysis=transcription.speaker_analysis
             ),
             translations=translations,
             voice_model_user_id=voice_model_user_id,
@@ -451,6 +544,16 @@ class AudioMessagePipeline:
             f"[PIPELINE] ✅ Pipeline complete: "
             f"{len(translations)} translations in {processing_time}ms"
         )
+
+        # Log des métadonnées de diarisation dans le résultat
+        if transcription.speaker_count:
+            logger.info(
+                f"[PIPELINE] 🎤 Diarisation dans résultat final: "
+                f"{transcription.speaker_count} speaker(s), "
+                f"primary={transcription.primary_speaker_id}, "
+                f"sender_identified={transcription.sender_voice_identified}, "
+                f"sender_speaker={transcription.sender_speaker_id}"
+            )
 
         return result
 
@@ -478,7 +581,12 @@ class AudioMessagePipeline:
                 duration_ms=transcription.duration_ms,
                 confidence=transcription.confidence,
                 source=transcription.source,
-                segments=self._serialize_segments(transcription.segments)
+                segments=self._serialize_segments(transcription.segments),
+                speaker_count=transcription.speaker_count,
+                primary_speaker_id=transcription.primary_speaker_id,
+                sender_voice_identified=transcription.sender_voice_identified,
+                sender_speaker_id=transcription.sender_speaker_id,
+                speaker_analysis=transcription.speaker_analysis
             ),
             translations={},
             voice_model_user_id=sender_id,
@@ -487,22 +595,60 @@ class AudioMessagePipeline:
         )
 
     def _serialize_segments(self, segments: Optional[Any]) -> Optional[List[Dict]]:
-        """Serialize transcription segments"""
+        """Serialize transcription segments with speaker diarization"""
         if not segments:
             return None
 
         try:
             if isinstance(segments, list):
-                return [
-                    {
-                        "text": s.text if hasattr(s, 'text') else str(s),
-                        "startMs": s.start_ms if hasattr(s, 'start_ms') else 0,
-                        "endMs": s.end_ms if hasattr(s, 'end_ms') else 0
-                    }
-                    for s in segments
-                ]
+                serialized = []
+                for s in segments:
+                    # Les segments peuvent être des dictionnaires (du cache) ou des objets dataclass
+                    if isinstance(s, dict):
+                        # Déjà un dictionnaire (venant du cache Redis)
+                        segment_dict = {
+                            "text": s.get('text', ''),
+                            "startMs": s.get('startMs', s.get('start_ms', 0)),
+                            "endMs": s.get('endMs', s.get('end_ms', 0)),
+                            "speakerId": s.get('speakerId', s.get('speaker_id')),
+                            "voiceSimilarityScore": s.get('voiceSimilarityScore', s.get('voice_similarity_score')),
+                            "confidence": s.get('confidence')
+                        }
+                    else:
+                        # Objet dataclass (TranscriptionSegment)
+                        segment_dict = {
+                            "text": s.text if hasattr(s, 'text') else str(s),
+                            "startMs": s.start_ms if hasattr(s, 'start_ms') else 0,
+                            "endMs": s.end_ms if hasattr(s, 'end_ms') else 0,
+                            "speakerId": s.speaker_id if hasattr(s, 'speaker_id') and s.speaker_id else None,
+                            "voiceSimilarityScore": s.voice_similarity_score if hasattr(s, 'voice_similarity_score') and s.voice_similarity_score is not None else None,
+                            "confidence": s.confidence if hasattr(s, 'confidence') and s.confidence is not None else None
+                        }
+
+                    serialized.append(segment_dict)
+
+                # DEBUG: Vérifier les segments sérialisés avec infos speakers
+                if len(serialized) > 0:
+                    # Compter combien de segments ont un speakerId
+                    segments_with_speaker = sum(1 for s in serialized if s.get('speakerId'))
+                    speaker_ids = set(s.get('speakerId') for s in serialized if s.get('speakerId'))
+
+                    logger.info(
+                        f"[PIPELINE] ✅ Segments sérialisés: {len(serialized)} segments - "
+                        f"Premier: {serialized[0]}"
+                    )
+
+                    if speaker_ids:
+                        logger.info(
+                            f"[PIPELINE] 🎤 Speakers dans segments: "
+                            f"{len(speaker_ids)} speaker(s) → {sorted(speaker_ids)} | "
+                            f"{segments_with_speaker}/{len(serialized)} segments avec speaker"
+                        )
+
+                return serialized
             return None
-        except Exception:
+        except Exception as e:
+            logger.error(f"[PIPELINE] Erreur sérialisation segments: {e}")
             return None
 
     def _serialize_voice_model(
@@ -545,6 +691,15 @@ class AudioMessagePipeline:
                     'confidence': vc.confidence
                 }
 
+            # Serialize Chatterbox conditionals
+            conditionals_base64 = None
+            if hasattr(voice_model, 'chatterbox_conditionals_bytes') and voice_model.chatterbox_conditionals_bytes:
+                conditionals_base64 = base64.b64encode(voice_model.chatterbox_conditionals_bytes).decode('utf-8')
+
+            # Reference audio metadata
+            reference_audio_id = getattr(voice_model, 'reference_audio_id', None)
+            reference_audio_url = getattr(voice_model, 'reference_audio_url', None)
+
             return NewVoiceProfileData(
                 user_id=user_id,
                 profile_id=voice_model.profile_id,
@@ -554,7 +709,10 @@ class AudioMessagePipeline:
                 total_duration_ms=voice_model.total_duration_ms,
                 version=voice_model.version,
                 fingerprint=fingerprint_dict,
-                voice_characteristics=voice_chars_dict
+                voice_characteristics=voice_chars_dict,
+                chatterbox_conditionals_base64=conditionals_base64,
+                reference_audio_id=reference_audio_id,
+                reference_audio_url=reference_audio_url
             )
 
         except Exception as e:

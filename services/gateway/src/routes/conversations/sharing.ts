@@ -123,7 +123,7 @@ export function registerSharingRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -145,14 +145,14 @@ export function registerSharingRoutes(
       if (!conversation) {
         return reply.status(404).send({
           success: false,
-          error: 'Conversation non trouvée'
+          error: 'Conversation not found'
         });
       }
 
       if (!membership) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -165,7 +165,7 @@ export function registerSharingRoutes(
       if (!user) {
         return reply.status(403).send({
           success: false,
-          error: 'Utilisateur non trouvé'
+          error: 'User not found'
         });
       }
 
@@ -273,7 +273,7 @@ export function registerSharingRoutes(
       console.error('[GATEWAY] Error creating new conversation link:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la création du lien'
+        error: 'Error creating link'
       });
     }
   });
@@ -338,7 +338,7 @@ export function registerSharingRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -357,7 +357,7 @@ export function registerSharingRoutes(
       if (!membership) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -516,7 +516,7 @@ export function registerSharingRoutes(
       if (!membership) {
         return reply.status(403).send({
           success: false,
-          error: 'Vous devez être membre de cette conversation pour voir ses liens de partage'
+          error: 'You must be a member of this conversation to see its sharing links'
         });
       }
 
@@ -567,7 +567,7 @@ export function registerSharingRoutes(
       console.error('[GATEWAY] Error fetching conversation links:', error);
       return reply.status(500).send({ 
         success: false, 
-        error: 'Erreur lors de la récupération des liens de la conversation' 
+        error: 'Error retrieving conversation links' 
       });
     }
   });
@@ -645,7 +645,7 @@ export function registerSharingRoutes(
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
         return reply.status(410).send({
           success: false,
-          error: 'Ce lien a expiré'
+          error: 'This link has expired'
         });
       }
 
@@ -801,7 +801,7 @@ export function registerSharingRoutes(
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
-          error: 'Utilisateur non authentifié'
+          error: 'User not authenticated'
         });
       }
 
@@ -831,7 +831,7 @@ export function registerSharingRoutes(
       if (!conversation) {
         return reply.status(404).send({
           success: false,
-          error: 'Conversation non trouvée'
+          error: 'Conversation not found'
         });
       }
 
@@ -873,7 +873,7 @@ export function registerSharingRoutes(
       if (!userToInvite) {
         return reply.status(404).send({
           success: false,
-          error: 'Utilisateur non trouvé'
+          error: 'User not found'
         });
       }
 
@@ -882,7 +882,7 @@ export function registerSharingRoutes(
       if (existingMember) {
         return reply.status(400).send({
           success: false,
-          error: 'Cet utilisateur est déjà membre de la conversation'
+          error: 'This user is already a member of the conversation'
         });
       }
 

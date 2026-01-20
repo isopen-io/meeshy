@@ -18,6 +18,7 @@ import type { UserRole } from './user.js';
  * @see role-types.ts MemberRole enum
  */
 import type { MemberRoleType } from './role-types.js';
+import { isMemberAdmin as isMemberAdminRole, isMemberModerator as isMemberModeratorRole } from './role-types.js';
 
 /**
  * Langue parlée avec statistiques
@@ -313,6 +314,7 @@ export interface ConversationParticipantInfo {
   readonly joinedAt: Date;
   readonly isActive: boolean;
   readonly permissions?: ParticipantPermissions;
+  readonly user?: any; // Enrichi par le frontend avec les données user depuis members
 }
 
 /**
@@ -369,8 +371,18 @@ export interface Conversation {
   readonly isArchived?: boolean;
   readonly memberCount: number;  // Denormalized for performance
 
+  // ===== LEGACY COMPATIBILITY =====
+  readonly isGroup?: boolean;    // Derived from type === 'group'
+  readonly isPrivate?: boolean;  // Derived from visibility === 'private'
+
   // ===== PARTICIPANTS =====
   readonly participants: readonly ConversationParticipantInfo[];
+
+  // ===== MEMBERS (ConversationMember avec user data) =====
+  readonly members?: readonly ConversationMember[];
+
+  // ===== USER PREFERENCES =====
+  readonly userPreferences?: any; // UserConversationPreference from DB
 
   // ===== MESSAGES =====
   readonly lastMessage?: Message;
@@ -793,17 +805,28 @@ export interface UserConversationPreferencesMap {
 // ===== TYPE GUARDS =====
 
 /**
- * Vérifie si un membre est un admin
+ * Vérifie si un membre (conversation ou communauté) est un admin
+ * Utilise la fonction centralisée de role-types.ts
  */
-export function isConversationAdmin(member: ConversationMember): boolean {
-  return member.role === 'admin';
+export function isMemberAdmin(member: { role: MemberRoleType | string }): boolean {
+  return isMemberAdminRole(member.role as string);
 }
 
 /**
- * Vérifie si un membre est un modérateur ou plus
+ * Vérifie si un membre (conversation ou communauté) est un modérateur ou plus
+ * Utilise la fonction centralisée de role-types.ts
  */
-export function isConversationModerator(member: ConversationMember): boolean {
-  return member.role === 'admin' || member.role === 'moderator';
+export function isMemberModerator(member: { role: MemberRoleType | string }): boolean {
+  return isMemberModeratorRole(member.role as MemberRoleType);
+}
+
+/**
+ * Vérifie si un membre (conversation ou communauté) est un créateur
+ * Utilise la fonction centralisée de role-types.ts
+ */
+export function isMemberCreator(member: { role: MemberRoleType | string }): boolean {
+  const normalized = typeof member.role === 'string' ? member.role.toLowerCase() : member.role;
+  return normalized === 'creator';
 }
 
 /**

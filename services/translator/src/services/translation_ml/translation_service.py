@@ -328,9 +328,11 @@ class TranslationService:
 
                 try:
                     # Appel BATCH ML
+                    logger.info(f"[BATCH-STRUCT] 📤 Appel translator_engine.translate_batch()...")
                     translated_texts = await self.translator_engine.translate_batch(
                         texts_to_translate, detected_lang, target_language, model_type
                     )
+                    logger.info(f"[BATCH-STRUCT] 📥 translate_batch retourné: {len(translated_texts)} résultats")
 
                     # Distribuer les résultats et mettre en cache
                     cache_items = []

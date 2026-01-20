@@ -36,6 +36,13 @@ except ImportError:
 src_path = Path(__file__).parent
 sys.path.insert(0, str(src_path))
 
+# ═══════════════════════════════════════════════════════════════════
+# FILTRAGE DES WARNINGS NON-CRITIQUES
+# ═══════════════════════════════════════════════════════════════════
+# IMPORTANT: À faire AVANT les imports de bibliothèques (torch, transformers, etc.)
+from utils.warning_filters import configure_warning_filters
+configure_warning_filters()
+
 from config.settings import Settings
 from services.zmq_server import ZMQTranslationServer
 from services.translation_ml_service import TranslationMLService

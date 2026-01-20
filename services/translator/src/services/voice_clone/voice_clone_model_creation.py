@@ -363,6 +363,128 @@ class VoiceCloneModelCreator:
             traceback.print_exc()
             return None
 
+    async def _validate_audio_quality_for_cloning(
+        self,
+        audio_path: str
+    ) -> Dict[str, Any]:
+        """
+        Valide la qualité audio avant clonage vocal.
+
+        Vérifie:
+        - SNR (Signal-to-Noise Ratio) estimé
+        - Présence de clipping
+        - Ratio de silence vs parole
+        - Énergie moyenne
+
+        Args:
+            audio_path: Chemin vers le fichier audio
+
+        Returns:
+            Dict avec:
+            - valid: bool - True si qualité suffisante pour clonage
+            - snr_db: float - SNR estimé en dB
+            - clipping_ratio: float - Ratio de samples écrêtés
+            - silence_ratio: float - Ratio de silence dans l'audio
+            - energy_db: float - Énergie moyenne en dB
+            - warnings: List[str] - Avertissements de qualité
+            - can_clone: bool - True si clonage recommandé
+        """
+        import soundfile as sf
+
+        warnings = []
+        result = {
+            "valid": True,
+            "snr_db": 0.0,
+            "clipping_ratio": 0.0,
+            "silence_ratio": 0.0,
+            "energy_db": -60.0,
+            "warnings": warnings,
+            "can_clone": True
+        }
+
+        try:
+            # Charger l'audio
+            audio, sr = sf.read(audio_path)
+            if len(audio.shape) > 1:
+                audio = audio.mean(axis=1)  # Convertir en mono
+
+            # 1. Calcul de l'énergie RMS
+            rms = np.sqrt(np.mean(audio ** 2))
+            energy_db = 20 * np.log10(max(rms, 1e-10))
+            result["energy_db"] = float(energy_db)
+
+            if energy_db < -40:
+                warnings.append(f"Audio très faible ({energy_db:.1f}dB)")
+                result["can_clone"] = False
+
+            # 2. Détection de clipping (samples > 0.99)
+            clipping_samples = np.sum(np.abs(audio) > 0.99)
+            clipping_ratio = clipping_samples / len(audio)
+            result["clipping_ratio"] = float(clipping_ratio)
+
+            if clipping_ratio > 0.05:  # Plus de 5% de clipping
+                warnings.append(f"Clipping excessif ({clipping_ratio*100:.1f}%)")
+                result["can_clone"] = False
+            elif clipping_ratio > 0.01:
+                warnings.append(f"Clipping modéré ({clipping_ratio*100:.1f}%)")
+
+            # 3. Détection des silences (RMS < -40dB par fenêtre)
+            frame_length = int(0.025 * sr)  # 25ms
+            hop_length = int(0.010 * sr)   # 10ms
+
+            frames = []
+            for i in range(0, len(audio) - frame_length, hop_length):
+                frame_rms = np.sqrt(np.mean(audio[i:i+frame_length] ** 2))
+                frames.append(frame_rms)
+
+            if frames:
+                frames = np.array(frames)
+                silence_threshold = 10 ** (-40 / 20)  # -40dB
+                silence_frames = np.sum(frames < silence_threshold)
+                silence_ratio = silence_frames / len(frames)
+                result["silence_ratio"] = float(silence_ratio)
+
+                if silence_ratio > 0.7:  # Plus de 70% de silence
+                    warnings.append(f"Trop de silence ({silence_ratio*100:.1f}%)")
+                    result["can_clone"] = False
+
+            # 4. Estimation du SNR (approximatif)
+            # On utilise les percentiles d'énergie comme proxy
+            if frames is not None and len(frames) > 0:
+                speech_level = np.percentile(frames, 90)  # Niveau parole
+                noise_level = np.percentile(frames, 10)   # Niveau bruit de fond
+
+                if noise_level > 1e-10:
+                    snr_db = 20 * np.log10(speech_level / noise_level)
+                    result["snr_db"] = float(snr_db)
+
+                    if snr_db < 10:  # SNR < 10dB est problématique
+                        warnings.append(f"SNR faible ({snr_db:.1f}dB)")
+                        result["can_clone"] = False
+                    elif snr_db < 15:
+                        warnings.append(f"SNR modéré ({snr_db:.1f}dB)")
+
+            # 5. Verdict final
+            result["valid"] = len([w for w in warnings if "excessif" in w or "Trop" in w or "SNR faible" in w]) == 0
+
+            if warnings:
+                logger.warning(
+                    f"[MODEL_CREATOR] ⚠️ Qualité audio: {', '.join(warnings)}"
+                )
+            else:
+                logger.info(
+                    f"[MODEL_CREATOR] ✅ Qualité audio OK: "
+                    f"SNR={result['snr_db']:.1f}dB, energy={result['energy_db']:.1f}dB"
+                )
+
+        except Exception as e:
+            logger.warning(f"[MODEL_CREATOR] Validation audio échouée: {e}")
+            result["warnings"].append(f"Erreur validation: {e}")
+            result["valid"] = False
+            result["can_clone"] = False
+
+        return result
+
     async def _create_voice_model(
         self,
         user_id: str,
@@ -393,6 +515,22 @@ class VoiceCloneModelCreator:
         valid_paths = [p for p in audio_paths if os.path.exists(p)]
         if not valid_paths:
             raise ValueError("Aucun fichier audio valide trouvé")
+
+        # =====================================================================
+        # VALIDATION QUALITÉ AUDIO AVANT CLONAGE
+        # Vérifie SNR, clipping, silences pour garantir un clonage de qualité
+        # =====================================================================
+        audio_quality_issues = []
+        for audio_path in valid_paths:
+            quality_result = await self._validate_audio_quality_for_cloning(audio_path)
+            if not quality_result["can_clone"]:
+                audio_quality_issues.extend(quality_result["warnings"])
+
+        if audio_quality_issues:
+            logger.warning(
+                f"[MODEL_CREATOR] ⚠️ Problèmes qualité détectés pour {user_id}: "
+                f"{', '.join(set(audio_quality_issues))} - clonage peut être dégradé"
+            )
 
         # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
         user_dir = self.voice_cache_dir / user_id

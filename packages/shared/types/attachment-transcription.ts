@@ -36,6 +36,8 @@ export interface TranscriptionSegment {
    */
   readonly voiceSimilarityScore?: number | null;
   readonly confidence?: number;
+  /** Langue détectée pour ce segment (ISO 639-1) */
+  readonly language?: string;
 }
 
 /**
@@ -45,15 +47,15 @@ export interface SpeakerInfo {
   /** ID court du locuteur (s0, s1, s2, ...) */
   readonly sid: string;
   /** Ce locuteur est-il le locuteur principal (celui qui parle le plus) */
-  readonly is_primary: boolean;
+  readonly isPrimary: boolean;
   /** Temps de parole en millisecondes */
-  readonly speaking_time_ms: number;
+  readonly speakingTimeMs: number;
   /** Ratio de temps de parole (0-1) */
-  readonly speaking_ratio: number;
+  readonly speakingRatio: number;
   /** Score de similarité vocale avec le profil utilisateur (0-1 ou null) */
-  readonly voice_similarity_score: number | null;
+  readonly voiceSimilarityScore: number | null;
   /** Segments de temps où ce locuteur parle */
-  readonly segments: readonly { start_ms: number; end_ms: number; duration_ms: number }[];
+  readonly segments: readonly { startMs: number; endMs: number; durationMs: number }[];
 }
 
 /**
@@ -63,7 +65,7 @@ export interface SpeakerAnalysis {
   /** Liste de tous les locuteurs détectés */
   readonly speakers: readonly SpeakerInfo[];
   /** Durée totale de l'audio en millisecondes */
-  readonly total_duration_ms: number;
+  readonly totalDurationMs: number;
   /** Méthode de diarisation utilisée */
   readonly method: 'pyannote' | 'pitch_clustering' | 'single_speaker';
 }

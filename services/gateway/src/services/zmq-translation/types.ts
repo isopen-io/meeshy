@@ -145,6 +145,13 @@ export interface AudioProcessRequest {
   };
 }
 
+// Import unified types from shared
+import type { TranslatedAudioData } from '@meeshy/shared/types';
+import type {
+  TranscriptionSegment,
+  SpeakerAnalysis
+} from '@meeshy/shared/types/attachment-transcription';
+
 export interface TranscriptionData {
   text: string;
   language: string;
@@ -152,11 +159,14 @@ export interface TranscriptionData {
   durationMs: number;
   source: 'mobile' | 'whisper';
   model?: string;
-  segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  segments?: TranscriptionSegment[];  // ✅ Utiliser le type partagé
+  // Diarization fields
+  speakerCount?: number;
+  primarySpeakerId?: string;
+  senderVoiceIdentified?: boolean;
+  senderSpeakerId?: string | null;
+  speakerAnalysis?: SpeakerAnalysis;  // ✅ Utiliser le type partagé
 }
-
-// Import unified type from shared
-import type { TranslatedAudioData } from '@meeshy/shared/types';
 
 // Re-export for convenience
 export type { TranslatedAudioData };

@@ -28,6 +28,7 @@ class TTSEngine(Enum):
     CHATTERBOX = "chatterbox"      # Best quality, ~23 languages
     XTTS = "xtts"                  # XTTS-v2, ~17 languages
     MMS = "mms"                    # Meta MMS, 1100+ languages (no voice cloning)
+    VITS = "vits"                  # ESPnet2 VITS with OpenVoice voice cloning (Lingala, etc.)
     NONE = "none"                  # No TTS available
 
 
@@ -293,12 +294,30 @@ class LanguageCapabilitiesService:
             )
 
         # =====================================================================
+        # VITS Languages (ESPnet2 + OpenVoice for voice cloning)
+        # Lingala uses DigitalUmuganda/lingala_vits_tts model
+        # =====================================================================
+        self._capabilities["ln"] = LanguageCapability(
+            code="ln",
+            name="Lingala",
+            native_name="Lingála",
+            tts_supported=True,
+            tts_engine=TTSEngine.VITS,  # ESPnet2 VITS avec clonage OpenVoice
+            tts_voice_cloning=True,      # OpenVoice ToneColorConverter
+            stt_supported=True,
+            stt_engine=STTEngine.MMS_ASR,
+            mms_tts_code=None,  # Uses VITS, not MMS
+            mms_asr_code="lin",
+            region="Africa",
+            notes="VITS (DigitalUmuganda) + OpenVoice voice cloning"
+        )
+
+        # =====================================================================
         # Languages WITHOUT MMS TTS support (HTTP 403 - not available)
         # These can still be transcribed via MMS ASR or Whisper, and translated
         # =====================================================================
         african_no_tts = [
             # Code, Name, Native, MMS ASR code, Has Whisper STT
-            ("ln", "Lingala", "Lingála", "lin", False),  # TTS NOT AVAILABLE
             ("ig", "Igbo", "Igbo", "ibo", False),        # TTS NOT AVAILABLE
             ("zu", "Zulu", "isiZulu", "zul", False),     # TTS NOT AVAILABLE
             ("xh", "Xhosa", "isiXhosa", "xho", False),   # TTS NOT AVAILABLE

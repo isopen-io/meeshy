@@ -286,6 +286,7 @@ class UnifiedTTSService:
         model: TTSModel = None,
         max_wait_seconds: int = 120,
         cloning_params: Optional[Dict[str, Any]] = None,
+        conditionals: Optional[Any] = None,
         **kwargs
     ) -> UnifiedTTSResult:
         """
@@ -300,6 +301,8 @@ class UnifiedTTSService:
             model: Modèle TTS à utiliser (optionnel)
             max_wait_seconds: Temps max d'attente si modèle en téléchargement
             cloning_params: Paramètres de clonage vocal (exaggeration, cfg_weight, etc.)
+            conditionals: Conditionals Chatterbox pré-calculés pour éviter de recalculer
+                         à chaque synthèse (optionnel)
 
         Returns:
             UnifiedTTSResult avec les informations de l'audio généré
@@ -350,6 +353,7 @@ class UnifiedTTSService:
             output_format=output_format,
             message_id=message_id,
             cloning_params=cloning_params,
+            conditionals=conditionals,
             **kwargs
         )
 

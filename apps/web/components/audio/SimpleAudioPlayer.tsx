@@ -32,7 +32,7 @@ interface SimpleAudioPlayerProps {
   attachment: UploadedAttachmentResponse;
   messageId?: string;
   initialTranscription?: { text: string; language: string; confidence?: number; segments?: any[] };
-  initialTranslatedAudios?: readonly TranslatedAudioData[];
+  initialTranslations?: Record<string, any>; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
   className?: string;
 }
 
@@ -51,7 +51,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   attachment,
   messageId,
   initialTranscription,
-  initialTranslatedAudios,
+  initialTranslations,
   className = '',
 }) => {
   // États UI locaux
@@ -63,6 +63,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   // Hook de traduction (doit être avant playback car il fournit currentAudioUrl)
   const {
     transcription,
+    currentTranscription,
     isTranscribing,
     transcriptionError,
     isTranscriptionExpanded,
@@ -73,13 +74,14 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     selectedLanguage,
     setSelectedLanguage,
     currentAudioUrl,
+    currentAudioDuration, // Durée de l'audio actuellement sélectionné
     requestTranscription,
     requestTranslation,
   } = useAudioTranslation({
     attachmentId: attachment.id,
     messageId,
     initialTranscription,
-    initialTranslatedAudios,
+    initialTranslations,
     attachmentFileUrl: attachment.fileUrl,
   });
 
@@ -104,7 +106,8 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   } = useAudioPlayback({
     audioUrl: currentAudioUrl,
     attachmentId: attachment.id,
-    attachmentDuration: attachment.duration ? attachment.duration / 1000 : undefined,
+    // Utiliser la durée de l'audio traduit si disponible, sinon celle de l'original
+    attachmentDuration: currentAudioDuration ?? (attachment.duration ? attachment.duration / 1000 : undefined),
     mimeType: attachment.mimeType,
   });
 
@@ -249,14 +252,15 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
       </div>
 
       {/* Transcription avec effet fondu et surlignage dynamique */}
-      {transcription && transcription.text && (
+      {currentTranscription && currentTranscription.text && (
         <TranscriptionViewer
-          transcription={transcription}
+          transcription={currentTranscription}
           isExpanded={isTranscriptionExpanded}
           onToggleExpanded={handleToggleTranscriptionExpanded}
           currentTime={currentTime}
           isPlaying={isPlaying}
           selectedLanguage={selectedLanguage}
+          translatedAudios={translatedAudios}
         />
       )}
 

@@ -67,6 +67,7 @@ class TranscriptionSegment:
     confidence: float = 0.0
     speaker_id: Optional[str] = None  # ID du locuteur (via diarisation)
     voice_similarity_score: Optional[float] = None  # Score de similarité vocale avec l utilisateur (0-1)
+    language: Optional[str] = None  # Langue détectée du segment
 
 
 @dataclass
@@ -195,6 +196,13 @@ class TranscriptionService:
                 load_time = time.time() - start_time
                 logger.info(f"[TRANSCRIPTION] ✅ Modèle Whisper chargé et enregistré en {load_time:.2f}s")
 
+                # Log de l'état de la diarisation
+                enable_diarization = os.getenv('ENABLE_DIARIZATION', 'true').lower() != 'false'
+                if enable_diarization:
+                    logger.info("[TRANSCRIPTION] 🎯 Diarisation des locuteurs ACTIVÉE (désactiver avec ENABLE_DIARIZATION=false)")
+                else:
+                    logger.info("[TRANSCRIPTION] ⚪ Diarisation des locuteurs DÉSACTIVÉE (activer avec ENABLE_DIARIZATION=true)")
+
                 self.is_initialized = True
                 return True
 
@@ -252,6 +260,7 @@ class TranscriptionService:
 
             # Parser les segments si disponibles
             segments = []
+            detected_language = mobile_transcription.get('language', 'auto')
             if mobile_transcription.get('segments'):
                 for seg in mobile_transcription['segments']:
                     segments.append(TranscriptionSegment(
@@ -260,7 +269,8 @@ class TranscriptionService:
                         end_ms=seg.get('endMs', 0),
                         confidence=seg.get('confidence', 0.9),
                         speaker_id=seg.get('speakerId'),
-                        voice_similarity_score=seg.get('isCurrentUser', False)
+                        voice_similarity_score=seg.get('voiceSimilarityScore'),  # None si absent
+                        language=seg.get('language', detected_language)  # Utiliser langue du segment ou langue globale
                     ))
 
             # Récupérer la durée audio
@@ -268,7 +278,7 @@ class TranscriptionService:
 
             processing_time = int((time.time() - start_time) * 1000)
 
-            return TranscriptionResult(
+            result = TranscriptionResult(
                 text=mobile_transcription['text'],
                 language=mobile_transcription.get('language', 'auto'),
                 confidence=mobile_transcription.get('confidence', 0.85),
@@ -278,6 +288,14 @@ class TranscriptionService:
                 model=mobile_transcription.get('source', 'mobile'),
                 processing_time_ms=processing_time
             )
+
+            # Appliquer la diarisation si demandé (même pour transcriptions mobiles)
+            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'false').lower() == 'true'
+            if enable_diarization and return_timestamps and segments:
+                logger.info("[TRANSCRIPTION] 🎯 Application de la diarisation (transcription mobile)")
+                result = await self._apply_diarization(audio_path, result)
+
+            return result
 
         # ─────────────────────────────────────────────────────
         # OPTION 2: Transcrire avec Whisper
@@ -317,6 +335,7 @@ class TranscriptionService:
 
             # Parser les segments
             segments = []
+            detected_language = info.language  # Langue détectée par Whisper
             if return_timestamps:
                 # ✅ Utiliser les timestamps NATIFS au niveau des mots fournis par Whisper
                 # Référence: CORRECTION_UTILISER_WHISPER_WORDS_NATIF.md
@@ -332,7 +351,8 @@ class TranscriptionService:
                                 confidence=getattr(word, 'probability', 0.0),
                                 # speaker_id sera ajouté par la diarisation ultérieure
                                 speaker_id=None,
-                                voice_similarity_score=None
+                                voice_similarity_score=None,
+                                language=detected_language
                             ))
                     else:
                         # Fallback : segment complet si pas de words
@@ -342,7 +362,8 @@ class TranscriptionService:
                             end_ms=int(s.end * 1000),
                             confidence=getattr(s, 'avg_logprob', 0.0),
                             speaker_id=None,
-                            voice_similarity_score=None
+                            voice_similarity_score=None,
+                            language=detected_language
                         ))
 
                 # ✅ Fusion intelligente des mots courts (Option D)
@@ -377,8 +398,8 @@ class TranscriptionService:
                 processing_time_ms=processing_time
             )
 
-            # Appliquer la diarisation si demandé (via flag ou config)
-            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'false').lower() == 'true'
+            # Appliquer la diarisation si demandé (activé par défaut, désactiver avec ENABLE_DIARIZATION=false)
+            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'true').lower() != 'false'
             if enable_diarization and return_timestamps:
                 logger.info("[TRANSCRIPTION] 🎯 Application de la diarisation")
                 result = await self._apply_diarization(audio_path, result)
@@ -444,7 +465,9 @@ class TranscriptionService:
             )
 
             # Taguer les segments avec les speaker_id
-            for segment in transcription.segments:
+            logger.info(f"[TRANSCRIPTION] 🎯 Tagging {len(transcription.segments)} segments with {len(diarization.speakers)} speakers")
+
+            for idx, segment in enumerate(transcription.segments):
                 # Trouver le locuteur correspondant à ce segment
                 segment_mid_ms = (segment.start_ms + segment.end_ms) // 2
 
@@ -452,10 +475,16 @@ class TranscriptionService:
                     for speaker_seg in speaker.segments:
                         if speaker_seg.start_ms <= segment_mid_ms <= speaker_seg.end_ms:
                             segment.speaker_id = speaker.speaker_id
-                            segment.voice_similarity_score = (
-                                diarization.sender_identified and
-                                speaker.speaker_id == diarization.sender_speaker_id
-                            )
+                            # Utiliser le score numérique du speaker (0-1) au lieu d'un booléen
+                            segment.voice_similarity_score = speaker.voice_similarity_score
+
+                            # DEBUG: Log pour les 3 premiers segments
+                            if idx < 3:
+                                logger.info(
+                                    f"[TRANSCRIPTION]   Segment {idx}: '{segment.text[:20]}' → "
+                                    f"speaker={speaker.speaker_id}, "
+                                    f"score={speaker.voice_similarity_score} (type={type(speaker.voice_similarity_score).__name__})"
+                                )
                             break
                     if segment.speaker_id:
                         break
@@ -466,28 +495,103 @@ class TranscriptionService:
             transcription.sender_voice_identified = diarization.sender_identified
             transcription.sender_speaker_id = diarization.sender_speaker_id
 
-            # Construire speaker_analysis pour la base de données
+            # Construire speaker_analysis pour la base de données (camelCase pour cohérence API)
             transcription.speaker_analysis = {
+                'speakerCount': diarization.speaker_count,
+                'primarySpeakerId': diarization.primary_speaker_id,
+                'senderIdentified': diarization.sender_identified,
+                'senderSpeakerId': diarization.sender_speaker_id,
                 'speakers': [
                     {
                         'sid': s.speaker_id,
-                        'is_primary': s.is_primary,
-                        'speaking_time_ms': s.speaking_time_ms,
-                        'speaking_ratio': s.speaking_ratio,
+                        'isPrimary': s.is_primary,
+                        'speakingTimeMs': s.speaking_time_ms,
+                        'speakingRatio': s.speaking_ratio,
+                        'voiceSimilarityScore': s.voice_similarity_score,
                         'segments': [
                             {
-                                'start': seg.start_ms / 1000,
-                                'end': seg.end_ms / 1000,
-                                'duration': seg.duration_ms / 1000
+                                'startMs': seg.start_ms,
+                                'endMs': seg.end_ms,
+                                'durationMs': seg.duration_ms
                             }
                             for seg in s.segments
                         ]
                     }
                     for s in diarization.speakers
                 ],
-                'total_duration_ms': diarization.total_duration_ms,
+                'totalDurationMs': diarization.total_duration_ms,
                 'method': diarization.method
             }
+
+            # ═══════════════════════════════════════════════════════════════
+            # LOGS DÉTAILLÉS PAR INTERLOCUTEUR
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("=" * 80)
+            logger.info(f"[DIARIZATION] 🎭 RÉSUMÉ DÉTAILLÉ DE LA DIARISATION")
+            logger.info(f"[DIARIZATION] Nombre d'interlocuteurs détectés: {diarization.speaker_count}")
+            logger.info(f"[DIARIZATION] Méthode utilisée: {diarization.method}")
+            logger.info(f"[DIARIZATION] Durée totale: {diarization.total_duration_ms}ms")
+            logger.info(f"[DIARIZATION] Interlocuteur principal: {diarization.primary_speaker_id}")
+            logger.info("=" * 80)
+
+            # Analyser les segments par speaker
+            for speaker in diarization.speakers:
+                # Compter les segments assignés à ce speaker
+                speaker_segments = [seg for seg in transcription.segments if seg.speaker_id == speaker.speaker_id]
+
+                if speaker_segments:
+                    # Détecter les langues présentes dans les segments de ce speaker
+                    # Utiliser getattr pour compatibilité avec différentes définitions de TranscriptionSegment
+                    languages = set(
+                        getattr(seg, 'language', None)
+                        for seg in speaker_segments
+                        if getattr(seg, 'language', None)
+                    )
+                    languages_str = ", ".join(sorted(languages)) if languages else "non détectée"
+
+                    logger.info(
+                        f"[DIARIZATION] 👤 Speaker {speaker.speaker_id} "
+                        f"({'PRINCIPAL' if speaker.is_primary else 'secondaire'}):"
+                    )
+                    logger.info(
+                        f"             ├─ Temps de parole: {speaker.speaking_time_ms}ms "
+                        f"({speaker.speaking_ratio * 100:.1f}%)"
+                    )
+                    logger.info(
+                        f"             ├─ Nombre de segments: {len(speaker_segments)}"
+                    )
+                    logger.info(
+                        f"             ├─ Langue(s) détectée(s): {languages_str}"
+                    )
+                    if speaker.voice_similarity_score is not None:
+                        logger.info(
+                            f"             ├─ Score de similarité vocale: {speaker.voice_similarity_score:.2f}"
+                        )
+
+                    # Afficher les 3 premiers segments comme exemples
+                    logger.info(f"             └─ Exemples de segments:")
+                    for i, seg in enumerate(speaker_segments[:3]):
+                        seg_lang = getattr(seg, 'language', None) or 'N/A'
+                        logger.info(
+                            f"                [{i+1}] {seg.start_ms/1000:.1f}s-{seg.end_ms/1000:.1f}s | "
+                            f"lang={seg_lang} | "
+                            f"\"{seg.text[:40]}{'...' if len(seg.text) > 40 else ''}\""
+                        )
+                    if len(speaker_segments) > 3:
+                        logger.info(f"                ... et {len(speaker_segments) - 3} autres segments")
+                    logger.info("")
+
+            # Segments non assignés
+            unassigned_segments = [seg for seg in transcription.segments if not seg.speaker_id]
+            if unassigned_segments:
+                logger.info(f"[DIARIZATION] ⚠️  {len(unassigned_segments)} segment(s) non assigné(s)")
+                for i, seg in enumerate(unassigned_segments[:3]):
+                    logger.info(
+                        f"             [{i+1}] {seg.start_ms/1000:.1f}s-{seg.end_ms/1000:.1f}s | "
+                        f"\"{seg.text[:40]}{'...' if len(seg.text) > 40 else ''}\""
+                    )
+
+            logger.info("=" * 80)
 
             return transcription
 

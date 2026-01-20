@@ -227,6 +227,8 @@ services:
       HF_HOME: /workspace/models
       TRANSFORMERS_CACHE: /workspace/models
       HUGGINGFACE_HUB_CACHE: /workspace/models
+      # Diarisation (activée par défaut)
+      ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-true}
     ports:
       - "8000:8000"
       - "5555:5555"

@@ -344,6 +344,10 @@ model ConversationMember {
 
   user         User         @relation(fields: [userId], references: [id])
   conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId, userId], name: "unique_conversation_member")
+  @@index([conversationId])
+  @@index([userId])
 }
 
 /// Lien de partage pour accès anonyme à une conversation
@@ -2196,6 +2200,20 @@ model UserVoiceModel {
 
   /// Legacy: Path to embedding file (deprecated, kept for migration)
   embeddingPath String?
+
+  /// ============================================
+  /// CHATTERBOX TTS CONDITIONALS (For voice cloning)
+  /// ============================================
+  /// Serialized Chatterbox conditionals (torch.save format) for voice cloning.
+  /// Contains speaker_emb, cond_prompt_speech_tokens, and s3gen reference dict.
+  /// Typically 50-200KB depending on audio reference length.
+  chatterboxConditionals Bytes?
+
+  /// Reference audio attachment ID used to generate the conditionals
+  referenceAudioId String? @db.ObjectId
+
+  /// URL to the reference audio (for quick access without fetching attachment)
+  referenceAudioUrl String?
 
   /// Nombre d'audios utilisés pour l'entraînement
   audioCount Int

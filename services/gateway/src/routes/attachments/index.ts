@@ -6,7 +6,6 @@
 import type { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
-import { MultiLevelJobMappingCache } from '../../services/MultiLevelJobMappingCache';
 import { registerUploadRoutes } from './upload';
 import { registerDownloadRoutes } from './download';
 import { registerMetadataRoutes } from './metadata';
@@ -26,14 +25,13 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   if (translationService) {
     const zmqClient = translationService.getZmqClient();
     if (zmqClient) {
-      // Créer le cache multi-niveau (fonctionne avec ou sans Redis)
-      const redis = (fastify as any).redis;
-      const jobMappingService = new MultiLevelJobMappingCache(redis || undefined);
+      // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
+      const jobMappingCache = (fastify as any).jobMappingCache;
 
       translateService = new AttachmentTranslateService(
         prisma,
         zmqClient,
-        jobMappingService
+        jobMappingCache
       );
     }
   }

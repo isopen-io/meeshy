@@ -643,6 +643,9 @@ export class AudioTranslateService extends EventEmitter {
       totalDurationMs?: number;
       fingerprint?: Record<string, any>;
       voiceCharacteristics?: Record<string, any>;
+      chatterboxConditionals?: Buffer;
+      referenceAudioId?: string;
+      referenceAudioUrl?: string;
     }
   ): Promise<any> {
     return this.prisma.userVoiceModel.upsert({
@@ -656,6 +659,9 @@ export class AudioTranslateService extends EventEmitter {
         totalDurationMs: profileData.totalDurationMs || 0,
         fingerprint: profileData.fingerprint || null,
         voiceCharacteristics: profileData.voiceCharacteristics || null,
+        chatterboxConditionals: profileData.chatterboxConditionals || null,
+        referenceAudioId: profileData.referenceAudioId || null,
+        referenceAudioUrl: profileData.referenceAudioUrl || null,
         version: 1
       },
       update: {
@@ -665,6 +671,9 @@ export class AudioTranslateService extends EventEmitter {
         totalDurationMs: profileData.totalDurationMs,
         fingerprint: profileData.fingerprint,
         voiceCharacteristics: profileData.voiceCharacteristics,
+        chatterboxConditionals: profileData.chatterboxConditionals,
+        referenceAudioId: profileData.referenceAudioId,
+        referenceAudioUrl: profileData.referenceAudioUrl,
         updatedAt: new Date()
       }
     });

@@ -35,6 +35,78 @@ async function resolveConversationId(prisma: PrismaClient, identifier: string): 
 }
 
 /**
+ * Nettoie les attachments pour l'API en transformant les valeurs invalides
+ * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
+ */
+function cleanAttachmentsForApi(attachments: any[]): any[] {
+  if (!attachments || !Array.isArray(attachments)) {
+    return attachments;
+  }
+
+  console.log(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+
+  return attachments.map((att, attIndex) => {
+    const cleaned = { ...att };
+
+    // Nettoyer la transcription
+    if (cleaned.transcription && cleaned.transcription.segments) {
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Transcription avec ${cleaned.transcription.segments.length} segments`);
+      const originalSegment = cleaned.transcription.segments[0];
+      console.log(`🧹 [CLEAN] Segment original [0]:`, {
+        hasStartMs: 'startMs' in originalSegment,
+        hasEndMs: 'endMs' in originalSegment,
+        hasSpeakerId: 'speakerId' in originalSegment,
+        voiceSimilarityScoreType: typeof originalSegment.voiceSimilarityScore,
+        voiceSimilarityScoreValue: originalSegment.voiceSimilarityScore
+      });
+
+      cleaned.transcription.segments = cleaned.transcription.segments.map((seg: any) => ({
+        ...seg,
+        // Convertir false/true en null (schéma attend number | null)
+        voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
+      }));
+
+      const cleanedSegment = cleaned.transcription.segments[0];
+      console.log(`🧹 [CLEAN] Segment nettoyé [0]:`, {
+        text: cleanedSegment.text,
+        startMs: cleanedSegment.startMs,
+        endMs: cleanedSegment.endMs,
+        speakerId: cleanedSegment.speakerId,
+        voiceSimilarityScore: cleanedSegment.voiceSimilarityScore,
+        confidence: cleanedSegment.confidence
+      });
+    }
+
+    // Nettoyer les traductions
+    if (cleaned.translations && typeof cleaned.translations === 'object') {
+      const langs = Object.keys(cleaned.translations);
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Traductions avec ${langs.length} langue(s): [${langs.join(', ')}]`);
+
+      const cleanedTranslations: any = {};
+      for (const [lang, translation] of Object.entries(cleaned.translations)) {
+        const trans = translation as any;
+        console.log(`🧹 [CLEAN]   - ${lang}: url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0}`);
+
+        cleanedTranslations[lang] = {
+          ...trans,
+          segments: trans.segments?.map((seg: any) => ({
+            ...seg,
+            // Convertir false/true en null (schéma attend number | null)
+            voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
+          }))
+        };
+      }
+      cleaned.translations = cleanedTranslations;
+      console.log(`🧹 [CLEAN] Traductions nettoyées:`, Object.keys(cleanedTranslations));
+    } else {
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée dans l'attachment`);
+    }
+
+    return cleaned;
+  });
+}
+
+/**
  * Enregistre les routes de base de gestion des messages (GET, POST, mark-read)
  */
 export function registerMessagesRoutes(
@@ -140,7 +212,7 @@ export function registerMessagesRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -150,7 +222,7 @@ export function registerMessagesRoutes(
       if (!canAccess) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -367,24 +439,36 @@ export function registerMessagesRoutes(
               select: {
                 id: true,
                 fileName: true,
+                originalName: true,
                 mimeType: true,
+                fileSize: true,
                 fileUrl: true,
                 thumbnailUrl: true,
+                width: true,
+                height: true,
+                duration: true,
+                bitrate: true,
+                sampleRate: true,
+                codec: true,
+                channels: true,
+                fps: true,
+                videoCodec: true,
+                pageCount: true,
+                lineCount: true,
                 metadata: true,
-                transcription: {
-                  select: {
-                    id: true,
-                    transcribedText: true,
-                    language: true,
-                    confidence: true,
-                    source: true,
-                    segments: true,
-                    audioDurationMs: true,
-                    model: true,
-                    speakerCount: true,
-                    voiceQualityAnalysis: true
-                  }
-                }
+                transcription: true,  // ✅ Champ JSON scalaire
+                translations: true,   // ✅ Champ JSON scalaire (pas translationsJson!)
+                uploadedBy: true,
+                isAnonymous: true,
+                createdAt: true,
+                isForwarded: true,
+                isViewOnce: true,
+                viewOnceCount: true,
+                isBlurred: true,
+                viewedCount: true,
+                downloadedCount: true,
+                consumedCount: true,
+                isEncrypted: true
               },
               take: 4
             },
@@ -488,12 +572,15 @@ export function registerMessagesRoutes(
                   console.log(`📝 [CONVERSATIONS] Message ${msg.id} - Audio avec transcription:`, {
                     attachmentId: att.id,
                     hasTranscription: true,
-                    transcriptionText: att.transcription.transcribedText?.substring(0, 100) + '...',
+                    transcriptionText: (att.transcription.text || att.transcription.transcribedText)?.substring(0, 100) + '...',
                     language: att.transcription.language,
                     confidence: att.transcription.confidence,
                     source: att.transcription.source,
                     model: att.transcription.model,
-                    audioDurationMs: att.transcription.audioDurationMs
+                    durationMs: att.transcription.durationMs || att.transcription.audioDurationMs,
+                    segmentsCount: att.transcription.segments?.length || 0,
+                    speakerCount: att.transcription.speakerCount,
+                    hasTranslations: !!att.translations
                   });
                 } else {
                   console.log(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription:`, {
@@ -504,13 +591,20 @@ export function registerMessagesRoutes(
                   });
                 }
 
-                // Vérifier les audios traduits
-                if (att.translatedAudios && att.translatedAudios.length > 0) {
+                // Vérifier les traductions audio (champ V2: translations au lieu de translatedAudios)
+                if (att.translations && typeof att.translations === 'object' && Object.keys(att.translations).length > 0) {
                   audioWithTranslatedAudiosCount++;
-                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio avec ${att.translatedAudios.length} traductions:`, {
+                  const langs = Object.keys(att.translations);
+                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio avec ${langs.length} traduction(s):`, {
                     attachmentId: att.id,
-                    translatedLanguages: att.translatedAudios.map((ta: any) => ta.targetLanguage),
-                    voiceCloned: att.translatedAudios.map((ta: any) => ta.voiceCloned)
+                    translatedLanguages: langs,
+                    translationsDetails: langs.map(lang => ({
+                      lang,
+                      url: att.translations[lang]?.url || '⚠️ VIDE',
+                      hasUrl: !!att.translations[lang]?.url,
+                      cloned: att.translations[lang]?.cloned,
+                      segmentsCount: att.translations[lang]?.segments?.length || 0
+                    }))
                   });
                 }
               }
@@ -592,7 +686,7 @@ export function registerMessagesRoutes(
           // Relations obligatoires
           sender: message.sender,
           anonymousSender: message.anonymousSender,
-          attachments: message.attachments,
+          attachments: cleanAttachmentsForApi(message.attachments),
           _count: message._count
         };
 
@@ -650,7 +744,7 @@ export function registerMessagesRoutes(
       console.error('[GATEWAY] Error fetching messages:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération des messages'
+        error: 'Error retrieving messages'
       });
     }
   });
@@ -700,7 +794,7 @@ export function registerMessagesRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -709,7 +803,7 @@ export function registerMessagesRoutes(
       if (!canAccess) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -843,7 +937,7 @@ export function registerMessagesRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -905,7 +999,7 @@ export function registerMessagesRoutes(
         if (!content || content.trim().length === 0) {
           return reply.status(400).send({
             success: false,
-            error: 'Le contenu du message ne peut pas être vide'
+            error: 'Message content cannot be empty'
           });
         }
       }
@@ -1177,7 +1271,7 @@ export function registerMessagesRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -1194,7 +1288,7 @@ export function registerMessagesRoutes(
       }
 
       if (!canAccess) {
-        return reply.status(403).send({ success: false, error: 'Accès non autorisé à cette conversation' });
+        return reply.status(403).send({ success: false, error: 'Unauthorized access to this conversation' });
       }
 
       // ✅ FIX: Utiliser uniquement le nouveau système de curseur

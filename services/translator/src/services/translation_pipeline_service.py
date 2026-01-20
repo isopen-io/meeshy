@@ -114,6 +114,7 @@ class PipelineResult:
     original_language: str = ""
     original_duration_ms: int = 0
     transcription_confidence: float = 0.0
+    transcription_segments: Optional[List[Dict[str, Any]]] = None  # ✅ Segments de transcription
 
     # Traductions
     translations: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -146,15 +147,22 @@ class PipelineResult:
                 "voiceQuality": translation_data.get("voice_quality", 0.0)
             })
 
+        # Construire originalAudio avec segments si disponibles
+        original_audio = {
+            "transcription": self.original_text,
+            "language": self.original_language,
+            "durationMs": self.original_duration_ms,
+            "confidence": self.transcription_confidence
+        }
+
+        # ✅ Ajouter segments si disponibles
+        if self.transcription_segments:
+            original_audio["segments"] = self.transcription_segments
+
         return {
             # Format Gateway: VoiceTranslationResult
             "translationId": self.job_id,
-            "originalAudio": {
-                "transcription": self.original_text,
-                "language": self.original_language,
-                "durationMs": self.original_duration_ms,
-                "confidence": self.transcription_confidence
-            },
+            "originalAudio": original_audio,
             "translations": translations_array,  # Array, pas dict
             "voiceProfile": {
                 "profileId": f"voice_{self.job_id}",
@@ -464,15 +472,30 @@ class TranslationPipelineService:
 
             if self.transcription_service:
                 # Utiliser la transcription existante si disponible (optimisation)
+                # ✅ Activer return_timestamps pour obtenir les segments
                 transcription = await self.transcription_service.transcribe(
                     audio_path=audio_path,
                     mobile_transcription=job.mobile_transcription,
-                    return_timestamps=False
+                    return_timestamps=True  # ✅ Activer pour whisper_boost
                 )
                 result.original_text = transcription.text
                 result.original_language = transcription.language
                 result.original_duration_ms = transcription.duration_ms
                 result.transcription_confidence = transcription.confidence
+
+                # ✅ Stocker les segments si disponibles (converti en dicts pour JSON)
+                if hasattr(transcription, 'segments') and transcription.segments:
+                    result.transcription_segments = [
+                        {
+                            "text": seg.text,
+                            "startMs": seg.start_ms,
+                            "endMs": seg.end_ms,
+                            "confidence": seg.confidence,
+                            "speakerId": seg.speaker_id if hasattr(seg, 'speaker_id') and seg.speaker_id else None,
+                            "voiceSimilarityScore": seg.voice_similarity_score if hasattr(seg, 'voice_similarity_score') else None
+                        }
+                        for seg in transcription.segments
+                    ]
             else:
                 raise ValueError("Transcription service non disponible")
 
@@ -512,7 +535,8 @@ class TranslationPipelineService:
                         text=result.original_text,
                         source_lang=result.original_language,
                         target_lang=target_lang,
-                        voice_model=voice_model
+                        voice_model=voice_model,
+                        audio_path=audio_path
                     )
                     result.translations[target_lang] = translation_result
 
@@ -588,7 +612,8 @@ class TranslationPipelineService:
         text: str,
         source_lang: str,
         target_lang: str,
-        voice_model=None
+        voice_model=None,
+        audio_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """Traite une seule langue cible"""
         result = {
@@ -614,8 +639,10 @@ class TranslationPipelineService:
                 logger.warning(f"[PIPELINE] Traduction fallback: {e}")
 
         result["translated_text"] = translated_text
+        logger.info(f"[PIPELINE] ✅ Texte traduit ({len(translated_text)} chars): {translated_text[:50]}...")
 
         # Générer l'audio
+        logger.info(f"[PIPELINE] 🎤 Début génération audio TTS (tts_service={self.tts_service is not None})")
         if self.tts_service:
             # Récupérer le profile_id du voice model si disponible
             profile_id = getattr(voice_model, 'profile_id', None) if voice_model else None
@@ -627,12 +654,23 @@ class TranslationPipelineService:
             output_path = self.audio_output_dir / output_filename
 
             if voice_model:
+                # Utiliser l'audio source comme référence pour le clonage
+                speaker_audio = None
+                if audio_path and os.path.exists(audio_path):
+                    speaker_audio = audio_path
+                elif hasattr(voice_model, 'reference_audio_path') and voice_model.reference_audio_path:
+                    speaker_audio = voice_model.reference_audio_path
+
+                # Récupérer les conditionals si disponibles
+                conditionals = getattr(voice_model, 'chatterbox_conditionals', None)
+
                 tts_result = await self.tts_service.synthesize_with_voice(
                     text=translated_text,
-                    voice_model=voice_model,
+                    speaker_audio_path=speaker_audio,
                     target_language=target_lang,
                     output_format="mp3",
-                    message_id=f"{job.id}_{target_lang}"
+                    message_id=f"{job.id}_{target_lang}",
+                    conditionals=conditionals
                 )
             else:
                 tts_result = await self.tts_service.synthesize(

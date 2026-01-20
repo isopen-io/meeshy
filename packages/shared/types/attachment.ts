@@ -230,13 +230,13 @@ export interface Attachment {
    * Structure: AttachmentTranslations = Record<string, AttachmentTranslation>
    * Chaque traduction contient: type, transcription, url, durationMs, cloned, quality, etc.
    */
-  readonly translationsJson?: AttachmentTranslations;
+  readonly translations?: AttachmentTranslations;
 
   /**
-   * V2: Format Socket.IO converti depuis translationsJson
+   * V2: Format Socket.IO converti depuis translations
    * Array de traductions pour compatibilité UI et événements temps réel
    * Structure: SocketIOTranslatedAudio[] (id composite, targetLanguage, audioUrl, etc.)
-   * Généré automatiquement via toSocketIOAudios() depuis translationsJson
+   * Généré automatiquement via toSocketIOAudios() depuis translations (pour événements Socket.IO uniquement)
    */
   readonly translatedAudios?: readonly SocketIOTranslatedAudio[];
 
@@ -691,7 +691,7 @@ export interface AttachmentWithMetadata {
   readonly mimeType: string;
   readonly transcription: AttachmentTranscriptionV2 | null;
   readonly translatedAudios: SocketIOTranslatedAudio[];
-  readonly translationsJson: AttachmentTranslations;
+  readonly translations: AttachmentTranslations;
 }
 
 /**

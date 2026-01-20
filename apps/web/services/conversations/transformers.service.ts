@@ -264,30 +264,11 @@ export class TransformersService {
       consumedCount: Number(att.consumedCount) || 0,
       isEncrypted: Boolean(att.isEncrypted),
 
-      // ✅ V2: Mapper transcription JSON intégrée
+      // ✅ V2: Transcription et translations - passés tels quels depuis la BD
       transcription: att.transcription as AttachmentTranscription | undefined,
-
-      // ✅ V2: Mapper translations JSON intégrées
-      translationsJson: att.translationsJson as AttachmentTranslations | undefined,
-
-      // ✅ V2: Mapper translatedAudios (format Socket.IO converti depuis translationsJson)
-      translatedAudios: Array.isArray(att.translatedAudios)
-        ? att.translatedAudios.map((ta: any): SocketIOTranslatedAudio => ({
-            id: String(ta.id || ''),
-            targetLanguage: String(ta.targetLanguage || ''),
-            translatedText: String(ta.translatedText || ''),
-            audioUrl: String(ta.audioUrl || ''),
-            durationMs: Number(ta.durationMs) || 0,
-            voiceCloned: Boolean(ta.voiceCloned),
-            voiceQuality: Number(ta.voiceQuality) || 0,
-            audioPath: ta.audioPath ? String(ta.audioPath) : undefined,
-            format: ta.format ? String(ta.format) : undefined,
-            ttsModel: ta.ttsModel ? String(ta.ttsModel) : undefined,
-            voiceModelId: ta.voiceModelId ? String(ta.voiceModelId) : undefined,
-          }))
-        : undefined,
-      };
-    });
+      translations: att.translations as AttachmentTranslations | undefined,
+    };
+  });
   }
 
   /**
@@ -412,8 +393,36 @@ export class TransformersService {
   transformConversationData(backendConversation: unknown): Conversation {
     const conv = backendConversation as Record<string, unknown>;
 
+    // Extract members with user data merged
+    const members = Array.isArray(conv.members)
+      ? conv.members.map((p: unknown) => {
+          const participant = p as Record<string, unknown>;
+          const user = participant.user as Record<string, unknown>;
+
+          return {
+            ...participant,
+            user: user ? {
+              id: String(user.id),
+              username: String(user.username || ''),
+              displayName: String(user.displayName || user.username || ''),
+              firstName: String(user.firstName || ''),
+              lastName: String(user.lastName || ''),
+              avatar: user.avatar as string | undefined,
+              isOnline: Boolean(user.isOnline),
+              lastActiveAt: user.lastActiveAt ? new Date(String(user.lastActiveAt)) : undefined,
+            } : undefined
+          };
+        })
+      : [];
+
+    // Create user map for participants
+    const userMap = new Map(
+      members.map(m => [String((m as any).userId), (m as any).user])
+    );
+
     return {
       id: String(conv.id),
+      identifier: conv.identifier as string | undefined,
       type: this.mapConversationType(String(conv.type) || 'direct'),
       visibility: this.mapConversationVisibility(String(conv.type) || 'direct'),
       status: 'active' as const,
@@ -421,28 +430,39 @@ export class TransformersService {
       description: conv.description as string,
       image: conv.image as string,
       avatar: conv.avatar as string,
+      banner: conv.banner as string,
       communityId: conv.communityId as string,
-      isActive: Boolean(conv.isActive),
-      isArchived: Boolean(conv.isArchived),
-      isGroup: Boolean(conv.isGroup) || String(conv.type) === 'group',
-      isPrivate: Boolean(conv.isPrivate),
-      memberCount: Array.isArray(conv.members) ? conv.members.length : 0,
+      isActive: Boolean(conv.isActive ?? true),
+      isArchived: Boolean(conv.isArchived ?? false),
+      isGroup: String(conv.type) === 'group',
+      isPrivate: this.mapConversationVisibility(String(conv.type) || 'direct') === 'private',
+      memberCount: members.length,
       lastMessageAt: conv.lastMessageAt ? new Date(String(conv.lastMessageAt)) : new Date(String(conv.updatedAt)),
       createdAt: new Date(String(conv.createdAt)),
       updatedAt: new Date(String(conv.updatedAt)),
-      participants: Array.isArray(conv.members) ? conv.members.map((p: unknown) => {
-        const participant = p as Record<string, unknown>;
-        const user = participant.user as Record<string, unknown>;
 
-        return {
-          userId: String(participant.userId),
-          role: String(participant.role || 'MEMBER').toUpperCase() as UserRole,
-          joinedAt: new Date(String(participant.joinedAt)),
-          isActive: Boolean(participant.isActive ?? true),
-        };
-      }) : [],
+      // Participants mappés depuis members (avec user data enrichi)
+      participants: members.map((m: any) => ({
+        userId: String(m.userId),
+        role: String(m.role || 'MEMBER').toUpperCase() as UserRole,
+        joinedAt: new Date(String(m.joinedAt)),
+        isActive: Boolean(m.isActive ?? true),
+        user: userMap.get(String(m.userId)), // ✅ Enrichir avec les données user
+      })),
+
+      // Members conservés pour compatibilité
+      members,
+
+      // Last message transformé
       lastMessage: conv.lastMessage ? this.transformMessageData(conv.lastMessage) : undefined,
-      unreadCount: Number(conv.unreadCount) || 0
+
+      // Unread count
+      unreadCount: Number(conv.unreadCount) || 0,
+
+      // User preferences si présentes
+      userPreferences: Array.isArray(conv.userPreferences) && conv.userPreferences.length > 0
+        ? conv.userPreferences[0] as any
+        : undefined,
     };
   }
 }

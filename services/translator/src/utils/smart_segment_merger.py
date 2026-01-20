@@ -16,12 +16,19 @@ PASSE 2 - Regroupement de segments :
 
 Préserve les timestamps exacts de Whisper (pas d'interpolation)
 
+RÈGLES DE NON-FUSION :
+  - NE PAS fusionner si le segment précédent se termine par une ponctuation forte (. ! ? : ;)
+  - NE PAS fusionner si le segment précédent se termine par un émoji
+  - NE PAS fusionner si le segment précédent contient un retour à la ligne
+
 Exemples :
   Passe 1: "le chat" → Segment (6 chars, pause < 90ms)
   Passe 1: "mange bien" → Segment (10 chars, pause < 90ms)
   Passe 2: "le chat" + "mange" → "le chat mange" (15 chars < 15, pause < 10ms)
+  Passe 2: "Bonjour." + "Comment" → PAS DE FUSION (ponctuation forte)
 """
 
+import re
 from typing import List, Optional
 from dataclasses import dataclass
 
@@ -35,6 +42,66 @@ class TranscriptionSegment:
     confidence: float = 0.0
     speaker_id: Optional[str] = None
     voice_similarity_score: Optional[float] = None
+
+
+# Regex pour détecter les emojis (Unicode emoji ranges)
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F300-\U0001F5FF"  # Symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # Transport & map symbols
+    "\U0001F700-\U0001F77F"  # Alchemical symbols
+    "\U0001F780-\U0001F7FF"  # Geometric shapes extended
+    "\U0001F800-\U0001F8FF"  # Supplemental arrows-C
+    "\U0001F900-\U0001F9FF"  # Supplemental symbols and pictographs
+    "\U0001FA00-\U0001FA6F"  # Chess symbols
+    "\U0001FA70-\U0001FAFF"  # Symbols and pictographs extended-A
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U000024C2-\U0001F251"  # Enclosed characters
+    "]+"
+)
+
+# Ponctuations fortes qui marquent une fin de phrase
+SENTENCE_ENDING_PUNCTUATION = {'.', '!', '?', ':', ';', '…'}
+
+
+def _ends_with_sentence_boundary(text: str) -> bool:
+    """
+    Vérifie si le texte se termine par une limite de phrase.
+
+    Une limite de phrase est :
+    - Une ponctuation forte (. ! ? : ; …)
+    - Un émoji
+    - Un retour à la ligne (\n)
+
+    Args:
+        text: Le texte à vérifier
+
+    Returns:
+        True si le texte se termine par une limite de phrase
+    """
+    if not text:
+        return False
+
+    text = text.rstrip()  # Enlever les espaces de fin
+
+    # Vérifier les retours à la ligne
+    if '\n' in text:
+        return True
+
+    # Vérifier les ponctuations fortes
+    if text and text[-1] in SENTENCE_ENDING_PUNCTUATION:
+        return True
+
+    # Vérifier les emojis à la fin
+    if EMOJI_PATTERN.search(text):
+        # Vérifier si un émoji est présent à la fin (2-4 derniers caractères)
+        # Les emojis peuvent faire plusieurs caractères
+        last_chars = text[-4:] if len(text) >= 4 else text
+        if EMOJI_PATTERN.search(last_chars):
+            return True
+
+    return False
 
 
 def merge_short_segments(
@@ -127,14 +194,21 @@ def _merge_by_criteria(
         total_text = " ".join([s.text for s in current_group] + [current_seg.text])
         total_chars = len(total_text)
 
+        # Vérifier si le segment précédent se termine par une limite de phrase
+        previous_ends_with_boundary = _ends_with_sentence_boundary(previous_seg.text)
+
         # Vérifier si on doit fusionner
+        # RÈGLES DE NON-FUSION :
+        # 1. Les speaker_id doivent être strictement identiques
+        # 2. Pas de ponctuation forte, émoji ou retour à la ligne à la fin du segment précédent
+        # 3. Respecter les limites de pause et de longueur
         should_merge = (
             pause_ms < max_pause_ms and
             total_chars <= max_total_chars and
-            # Même locuteur (si disponible)
-            (current_seg.speaker_id == previous_seg.speaker_id or
-             current_seg.speaker_id is None or
-             previous_seg.speaker_id is None)
+            # Même locuteur obligatoire (comparaison stricte)
+            current_seg.speaker_id == previous_seg.speaker_id and
+            # Pas de limite de phrase à la fin du segment précédent
+            not previous_ends_with_boundary
         )
 
         if should_merge:

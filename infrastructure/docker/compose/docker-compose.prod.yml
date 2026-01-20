@@ -207,6 +207,8 @@ services:
       - HF_HOME=/workspace/models
       - TRANSFORMERS_CACHE=/workspace/models
       - HUGGINGFACE_HUB_CACHE=/workspace/models
+      # Diarisation (activée par défaut)
+      - ENABLE_DIARIZATION=${ENABLE_DIARIZATION:-true}
     volumes:
       - models_data:/workspace/models
     depends_on:

@@ -19,7 +19,7 @@ Architecture:
 import os
 import logging
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
 # Import services
@@ -44,19 +44,25 @@ class AudioMessageMetadata:
     language: Optional[str] = None       # Language detected by mobile
     confidence: Optional[float] = None   # Confidence score
     source: Optional[str] = None         # Source (ios_speech, android_speech, etc.)
-    segments: Optional[Dict] = None      # Segments with timestamps
+    segments: Optional[List] = None      # Segments with timestamps (List[Dict] or List[TranscriptionSegment])
 
 
 @dataclass
 class TranscriptionStageResult:
-    """Result from transcription stage"""
+    """Result from transcription stage with speaker diarization support"""
     text: str
     language: str
     confidence: float
     duration_ms: int
     source: str  # "mobile", "whisper", or "cache"
-    segments: Optional[Dict] = None
+    segments: Optional[List] = None      # List[TranscriptionSegment] or List[Dict]
     audio_hash: str = ""
+    # Speaker diarization fields
+    speaker_count: Optional[int] = None
+    primary_speaker_id: Optional[str] = None
+    sender_voice_identified: Optional[bool] = None
+    sender_speaker_id: Optional[str] = None
+    speaker_analysis: Optional[Dict[str, Any]] = None
 
 
 class TranscriptionStage:
@@ -178,6 +184,16 @@ class TranscriptionStage:
                     f"'{cached_result.text[:50]}...' "
                     f"(lang={cached_result.language})"
                 )
+
+                # Log des infos de diarisation si présentes
+                if cached_result.speaker_count:
+                    logger.info(
+                        f"[TRANSCRIPTION_STAGE] 🎤 Diarisation cachée: "
+                        f"{cached_result.speaker_count} speaker(s), "
+                        f"primary={cached_result.primary_speaker_id}, "
+                        f"segments={len(cached_result.segments) if cached_result.segments else 0}"
+                    )
+
                 return cached_result
 
         # ═══════════════════════════════════════════════════════════════
@@ -198,11 +214,25 @@ class TranscriptionStage:
             duration_ms=transcription_result.duration_ms,
             source=transcription_result.source,
             segments=transcription_result.segments,
-            audio_hash=audio_hash
+            audio_hash=audio_hash,
+            speaker_count=transcription_result.speaker_count,
+            primary_speaker_id=transcription_result.primary_speaker_id,
+            sender_voice_identified=transcription_result.sender_voice_identified,
+            sender_speaker_id=transcription_result.sender_speaker_id,
+            speaker_analysis=transcription_result.speaker_analysis
         )
 
         if use_cache:
             await self._cache_transcription(audio_hash, result)
+
+            # Log confirmation sauvegarde avec speakers
+            if result.speaker_count:
+                logger.info(
+                    f"[TRANSCRIPTION_STAGE] 💾 Transcription+Diarisation cachée: "
+                    f"{result.speaker_count} speaker(s), "
+                    f"primary={result.primary_speaker_id}, "
+                    f"segments={len(result.segments) if result.segments else 0}"
+                )
 
         logger.info(
             f"[TRANSCRIPTION_STAGE] ✅ Transcribed: "
@@ -247,7 +277,12 @@ class TranscriptionStage:
                     duration_ms=cached.get("duration_ms", 0),
                     source="cache",
                     segments=cached.get("segments"),
-                    audio_hash=audio_hash
+                    audio_hash=audio_hash,
+                    speaker_count=cached.get("speaker_count"),
+                    primary_speaker_id=cached.get("primary_speaker_id"),
+                    sender_voice_identified=cached.get("sender_voice_identified"),
+                    sender_speaker_id=cached.get("sender_speaker_id"),
+                    speaker_analysis=cached.get("speaker_analysis")
                 )
 
             return None
@@ -303,9 +338,12 @@ class TranscriptionStage:
             segments_as_dicts = [
                 {
                     "text": seg.text,
-                    "start_ms": seg.start_ms,
-                    "end_ms": seg.end_ms,
-                    "confidence": seg.confidence
+                    "startMs": seg.start_ms,
+                    "endMs": seg.end_ms,
+                    "confidence": seg.confidence,
+                    "speakerId": seg.speaker_id if hasattr(seg, 'speaker_id') and seg.speaker_id else None,
+                    "voiceSimilarityScore": seg.voice_similarity_score if isinstance(seg.voice_similarity_score, (int, float)) else None,
+                    "language": seg.language if hasattr(seg, 'language') and seg.language else None
                 }
                 for seg in (result.segments or [])
             ]
@@ -316,7 +354,13 @@ class TranscriptionStage:
                 "confidence": result.confidence,
                 "duration_ms": result.duration_ms,
                 "source": result.source,
-                "segments": segments_as_dicts  # Segments en dictionnaires JSON-compatibles
+                "segments": segments_as_dicts,  # Segments en dictionnaires JSON-compatibles
+                # Diarization fields
+                "speaker_count": result.speaker_count,
+                "primary_speaker_id": result.primary_speaker_id,
+                "sender_voice_identified": result.sender_voice_identified,
+                "sender_speaker_id": result.sender_speaker_id,
+                "speaker_analysis": result.speaker_analysis
             }
 
             await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data)

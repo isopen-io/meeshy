@@ -21,7 +21,8 @@ import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
 import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
-import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation } from '@meeshy/shared/types/attachment-audio';
+import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
+import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -63,7 +64,7 @@ export class MessageTranslationService extends EventEmitter {
   private readonly processedMessages = new Set<string>();
   private readonly processedTasks = new Set<string>();
 
-  constructor(prisma: PrismaClient, redis?: Redis) {
+  constructor(prisma: PrismaClient, redis?: Redis, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
     this.prisma = prisma;
     this.redis = redis || null;
@@ -72,8 +73,8 @@ export class MessageTranslationService extends EventEmitter {
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
 
-    // Créer le cache multi-niveau (fonctionne avec ou sans Redis)
-    this.jobMappingService = new MultiLevelJobMappingCache(this.redis || undefined);
+    // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
+    this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache(this.redis || undefined);
   }
 
   getZmqClient(): ZmqTranslationClient | null {
@@ -669,7 +670,13 @@ export class MessageTranslationService extends EventEmitter {
       language: string;
       confidence: number;
       source: string;
-      segments?: Array<{ text: string; startMs: number; endMs: number }>;
+      durationMs?: number;
+      segments?: TranscriptionSegment[];
+      speakerCount?: number;
+      primarySpeakerId?: string;
+      senderVoiceIdentified?: boolean;
+      senderSpeakerId?: string | null;
+      speakerAnalysis?: any;
     };
     translatedAudios: Array<{
       targetLanguage: string;
@@ -684,6 +691,7 @@ export class MessageTranslationService extends EventEmitter {
       audioMimeType?: string;
       // Rétrocompatibilité base64 (legacy)
       audioDataBase64?: string;
+      segments?: TranscriptionSegment[];  // Segments de la transcription de l'audio traduit
     }>;
     voiceModelUserId: string;
     voiceModelQuality: number;
@@ -702,6 +710,10 @@ export class MessageTranslationService extends EventEmitter {
       version: number;
       fingerprint?: Record<string, any>;
       voiceCharacteristics?: Record<string, any>;
+      // Conditionals Chatterbox pour multi-speaker TTS
+      chatterbox_conditionals_base64?: string;
+      reference_audio_id?: string;
+      reference_audio_url?: string;
     };
   }) {
     try {
@@ -725,22 +737,58 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. Construire la structure transcription JSON
+      // 2. Construire la structure transcription JSON avec diarisation
       const transcriptionData = {
         text: data.transcription.text,
         language: data.transcription.language,
         confidence: data.transcription.confidence,
         source: data.transcription.source,
         segments: data.transcription.segments || undefined,
-        durationMs: attachment.duration || 0
+        speakerCount: data.transcription.speakerCount,
+        primarySpeakerId: data.transcription.primarySpeakerId,
+        senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+        senderSpeakerId: data.transcription.senderSpeakerId,
+        speakerAnalysis: data.transcription.speakerAnalysis,
+        durationMs: data.transcription.durationMs || attachment.duration || 0
       };
+
+      // DEBUG: Vérifier la structure des segments
+      if (data.transcription.segments && data.transcription.segments.length > 0) {
+        logger.info(`✅ Transcription avec ${data.transcription.segments.length} segments - Premier segment:`, JSON.stringify(data.transcription.segments[0]));
+
+        // Vérifier les types des champs
+        const firstSeg = data.transcription.segments[0];
+        logger.info(`🔍 [GATEWAY] Types des champs du segment:`);
+        logger.info(`   - text: ${typeof firstSeg.text} = "${firstSeg.text}"`);
+        logger.info(`   - startMs: ${typeof firstSeg.startMs} = ${firstSeg.startMs}`);
+        logger.info(`   - endMs: ${typeof firstSeg.endMs} = ${firstSeg.endMs}`);
+        logger.info(`   - speakerId: ${typeof firstSeg.speakerId} = ${firstSeg.speakerId}`);
+        logger.info(`   - voiceSimilarityScore: ${typeof firstSeg.voiceSimilarityScore} = ${firstSeg.voiceSimilarityScore}`);
+        logger.info(`   - confidence: ${typeof firstSeg.confidence} = ${firstSeg.confidence}`);
+      } else {
+        logger.warn(`⚠️ Transcription SANS segments!`);
+      }
+
+      // DEBUG: Vérifier les infos de diarisation
+      if (data.transcription.speakerCount) {
+        logger.info(`🎤 [GATEWAY] Diarisation: ${data.transcription.speakerCount} locuteur(s)`);
+        logger.info(`   - primarySpeakerId: ${data.transcription.primarySpeakerId}`);
+        logger.info(`   - senderVoiceIdentified: ${data.transcription.senderVoiceIdentified}`);
+        logger.info(`   - senderSpeakerId: ${data.transcription.senderSpeakerId}`);
+
+        if (data.transcription.speakerAnalysis) {
+          logger.info(`   - speakerAnalysis: ${data.transcription.speakerAnalysis.speakers.length} speakers`);
+          for (const sp of data.transcription.speakerAnalysis.speakers) {
+            logger.info(`     • ${sp.sid}: isPrimary=${sp.isPrimary}, score=${sp.voiceSimilarityScore}`);
+          }
+        }
+      }
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
       // 3. Construire la structure translations JSON
-      const existingTranslations = (attachment.translations as Record<string, any>) || {};
-      const translationsData: Record<string, any> = { ...existingTranslations };
-      const savedTranslatedAudios: typeof data.translatedAudios = [];
+      const existingTranslations = (attachment.translations as AttachmentTranslations) || {};
+      const translationsData: AttachmentTranslations = { ...existingTranslations };
 
       for (const translatedAudio of data.translatedAudios) {
         let localAudioPath = translatedAudio.audioPath;
@@ -777,7 +825,7 @@ export class MessageTranslationService extends EventEmitter {
           }
         }
 
-        // Ajouter/mettre à jour la traduction dans le map
+        // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
         translationsData[translatedAudio.targetLanguage] = {
           type: 'audio',
           transcription: translatedAudio.translatedText,
@@ -789,26 +837,18 @@ export class MessageTranslationService extends EventEmitter {
           quality: translatedAudio.voiceQuality,
           voiceModelId: data.voiceModelUserId || undefined,
           ttsModel: 'xtts',
+          segments: translatedAudio.segments,  // Segments de la transcription de l'audio traduit
           createdAt: new Date(),
           updatedAt: new Date()
         };
 
-        // Mettre à jour l'URL locale dans l'objet pour l'événement
-        savedTranslatedAudios.push({
-          targetLanguage: translatedAudio.targetLanguage,
-          translatedText: translatedAudio.translatedText,
-          audioPath: localAudioPath,
-          audioUrl: localAudioUrl,
-          durationMs: translatedAudio.durationMs,
-          voiceCloned: translatedAudio.voiceCloned,
-          voiceQuality: translatedAudio.voiceQuality,
-          _audioBinary: translatedAudio._audioBinary,
-          audioMimeType: translatedAudio.audioMimeType,
-          audioDataBase64: translatedAudio.audioDataBase64
-        });
-
         logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
       }
+
+      // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
+      const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
+        toSocketIOTranslation(data.attachmentId, lang, translation)
+      );
 
       // 4. Mettre à jour l'attachment avec transcription et translations JSON
       await this.prisma.messageAttachment.update({
@@ -820,6 +860,18 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
+
+      // Log confirmation sauvegarde speakers en BDD
+      if (transcriptionData.speakerCount) {
+        logger.info(
+          `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+          `${transcriptionData.speakerCount} speaker(s), ` +
+          `primary=${transcriptionData.primarySpeakerId}, ` +
+          `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +
+          `sender_speaker=${transcriptionData.senderSpeakerId}, ` +
+          `segments=${transcriptionData.segments?.length || 0}`
+        );
+      }
 
       // 4. Sauvegarder le nouveau profil vocal si créé par Translator
       if (data.newVoiceProfile) {
@@ -838,6 +890,13 @@ export class MessageTranslationService extends EventEmitter {
           const source = nvp._embeddingBinary ? 'multipart' : 'base64';
           logger.info(`   📦 Embedding (${source}): ${(embeddingBuffer.length / 1024).toFixed(1)}KB`);
 
+          // Décoder les conditionals Chatterbox si présents
+          let chatterboxConditionalsBuffer: Buffer | null = null;
+          if (nvp.chatterbox_conditionals_base64) {
+            chatterboxConditionalsBuffer = Buffer.from(nvp.chatterbox_conditionals_base64, 'base64');
+            logger.info(`   📦 Chatterbox conditionals: ${(chatterboxConditionalsBuffer.length / 1024).toFixed(1)}KB`);
+          }
+
           // Upsert le profil vocal dans UserVoiceModel
           await this.prisma.userVoiceModel.upsert({
             where: { userId: nvp.userId },
@@ -850,6 +909,10 @@ export class MessageTranslationService extends EventEmitter {
               version: nvp.version,
               fingerprint: nvp.fingerprint || null,
               voiceCharacteristics: nvp.voiceCharacteristics || null,
+              // Conditionals Chatterbox pour multi-speaker TTS
+              chatterboxConditionals: chatterboxConditionalsBuffer,
+              referenceAudioId: nvp.reference_audio_id || null,
+              referenceAudioUrl: nvp.reference_audio_url || null,
               updatedAt: new Date()
             },
             create: {
@@ -861,7 +924,11 @@ export class MessageTranslationService extends EventEmitter {
               totalDurationMs: nvp.totalDurationMs,
               version: nvp.version,
               fingerprint: nvp.fingerprint || null,
-              voiceCharacteristics: nvp.voiceCharacteristics || null
+              voiceCharacteristics: nvp.voiceCharacteristics || null,
+              // Conditionals Chatterbox pour multi-speaker TTS
+              chatterboxConditionals: chatterboxConditionalsBuffer,
+              referenceAudioId: nvp.reference_audio_id || null,
+              referenceAudioUrl: nvp.reference_audio_url || null
             }
           });
 
@@ -879,6 +946,12 @@ export class MessageTranslationService extends EventEmitter {
         `TaskID: ${data.taskId} | Msg: ${data.messageId} | Att: ${data.attachmentId} | ` +
         `HasTranscription: ${!!data.transcription} | Audios: ${savedTranslatedAudios.length} (${savedTranslatedAudios.map(ta => ta.targetLanguage).join(', ')})`
       );
+
+      // DEBUG: Vérifier que les URLs sont présentes dans savedTranslatedAudios
+      logger.info(`🔍 [TranslationService] URLs des audios traduits envoyées via WebSocket:`);
+      for (const ta of savedTranslatedAudios) {
+        logger.info(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}", path="${ta.path || '⚠️ VIDE'}"`);
+      }
 
       this.emit('audioTranslationReady', {
         taskId: data.taskId,
@@ -943,7 +1016,12 @@ export class MessageTranslationService extends EventEmitter {
       durationMs: number;
       source: string;
       model?: string;
-      segments?: Array<{ text: string; startMs: number; endMs: number }>;
+      segments?: TranscriptionSegment[];
+      speakerCount?: number;
+      primarySpeakerId?: string;
+      senderVoiceIdentified?: boolean;
+      senderSpeakerId?: string | null;
+      speakerAnalysis?: any;
     };
     processingTimeMs: number;
   }) {
@@ -967,7 +1045,7 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. Construire la transcription JSON
+      // 2. Construire la transcription JSON avec diarisation
       const transcriptionData: AttachmentTranscription = {
         text: data.transcription.text,
         language: data.transcription.language,
@@ -975,6 +1053,11 @@ export class MessageTranslationService extends EventEmitter {
         source: data.transcription.source as 'mobile' | 'whisper' | 'voice_api',
         model: 'whisper_boost',
         segments: data.transcription.segments as any,
+        speakerCount: data.transcription.speakerCount,
+        primarySpeakerId: data.transcription.primarySpeakerId,
+        senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+        senderSpeakerId: data.transcription.senderSpeakerId,
+        speakerAnalysis: data.transcription.speakerAnalysis,
         durationMs: data.transcription.durationMs || attachment.duration || 0
       };
 
@@ -985,6 +1068,18 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
+
+      // Log confirmation sauvegarde speakers en BDD
+      if (transcriptionData.speakerCount) {
+        logger.info(
+          `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+          `${transcriptionData.speakerCount} speaker(s), ` +
+          `primary=${transcriptionData.primarySpeakerId}, ` +
+          `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +
+          `sender_speaker=${transcriptionData.senderSpeakerId}, ` +
+          `segments=${transcriptionData.segments?.length || 0}`
+        );
+      }
 
       // 3. Émettre événement pour notifier les clients (Socket.IO)
       this.emit('transcriptionReady', {
@@ -1059,6 +1154,7 @@ export class MessageTranslationService extends EventEmitter {
         language: string;
         durationMs: number;
         confidence: number;
+        segments?: TranscriptionSegment[];  // ✅ Utiliser type partagé
       };
       translations: Array<{
         targetLanguage: string;
@@ -1068,6 +1164,7 @@ export class MessageTranslationService extends EventEmitter {
         durationMs: number;
         voiceCloned: boolean;
         voiceQuality: number;
+        segments?: TranscriptionSegment[];  // Segments de la transcription de l'audio traduit
       }>;
       voiceProfile?: {
         profileId: string;
@@ -1114,23 +1211,25 @@ export class MessageTranslationService extends EventEmitter {
           return;
         }
 
-        // 2. Construire la structure transcription JSON
+        // 2. Construire la structure transcription JSON avec diarisation
         const transcriptionData: AttachmentTranscription | null = data.result.originalAudio ? {
           text: data.result.originalAudio.transcription,
           language: data.result.originalAudio.language,
           confidence: data.result.originalAudio.confidence,
           source: 'voice_api',
           model: undefined,
-          segments: undefined,
-          speakerCount: undefined,
-          primarySpeakerId: undefined,
+          segments: data.result.originalAudio.segments,  // ✅ Inclut speakerId et voiceSimilarityScore
+          speakerCount: data.result.originalAudio.speakerCount,
+          primarySpeakerId: data.result.originalAudio.primarySpeakerId,
+          senderVoiceIdentified: data.result.originalAudio.senderVoiceIdentified,
+          senderSpeakerId: data.result.originalAudio.senderSpeakerId,
+          speakerAnalysis: data.result.originalAudio.speakerAnalysis,
           durationMs: data.result.originalAudio.durationMs
         } : null;
 
         // 3. Construire la structure translations JSON
         const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
         const translationsData: AttachmentTranslations = { ...existingTranslations };
-        const savedTranslatedAudios = [];
 
         for (const translation of data.result.translations) {
           let localAudioPath = '';
@@ -1155,7 +1254,7 @@ export class MessageTranslationService extends EventEmitter {
             }
           }
 
-          // Ajouter/mettre à jour la traduction dans le map
+          // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
           translationsData[translation.targetLanguage] = {
             type: 'audio',
             transcription: translation.translatedText,
@@ -1167,22 +1266,18 @@ export class MessageTranslationService extends EventEmitter {
             quality: translation.voiceQuality,
             voiceModelId: data.userId || undefined,
             ttsModel: 'xtts',
+            segments: translation.segments,  // Segments de la transcription de l'audio traduit
             createdAt: new Date(),
             updatedAt: new Date()
           };
 
-          savedTranslatedAudios.push({
-            id: `${jobMetadata.attachmentId}_${translation.targetLanguage}`,
-            targetLanguage: translation.targetLanguage,
-            translatedText: translation.translatedText,
-            audioUrl: localAudioUrl,
-            durationMs: translation.durationMs,
-            voiceCloned: translation.voiceCloned,
-            voiceQuality: translation.voiceQuality
-          });
-
           logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage}`);
         }
+
+        // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
+        const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
+          toSocketIOTranslation(jobMetadata.attachmentId, lang, translation)
+        );
 
         // 4. Mettre à jour l'attachment avec transcription et translations JSON
         await this.prisma.messageAttachment.update({
@@ -1194,6 +1289,18 @@ export class MessageTranslationService extends EventEmitter {
         });
 
         logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
+
+        // Log confirmation sauvegarde speakers en BDD
+        if (transcriptionData && transcriptionData.speakerCount) {
+          logger.info(
+            `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+            `${transcriptionData.speakerCount} speaker(s), ` +
+            `primary=${transcriptionData.primarySpeakerId}, ` +
+            `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +
+            `sender_speaker=${transcriptionData.senderSpeakerId}, ` +
+            `segments=${transcriptionData.segments?.length || 0}`
+          );
+        }
 
         // 4. Émettre l'événement audioTranslationReady pour diffusion Socket.IO
         this.emit('audioTranslationReady', {
@@ -1416,7 +1523,11 @@ export class MessageTranslationService extends EventEmitter {
             voiceCharacteristics: true,
             version: true,
             audioCount: true,
-            totalDurationMs: true
+            totalDurationMs: true,
+            // Conditionals Chatterbox pour multi-speaker TTS
+            chatterboxConditionals: true,
+            referenceAudioId: true,
+            referenceAudioUrl: true
           }
         });
 
@@ -1432,7 +1543,23 @@ export class MessageTranslationService extends EventEmitter {
             audioCount: voiceModel.audioCount,
             totalDurationMs: voiceModel.totalDurationMs
           };
+
+          // Ajouter les conditionals Chatterbox si présents
+          if (voiceModel.chatterboxConditionals) {
+            existingVoiceProfile.chatterbox_conditionals_base64 =
+              Buffer.from(voiceModel.chatterboxConditionals).toString('base64');
+          }
+          if (voiceModel.referenceAudioId) {
+            existingVoiceProfile.reference_audio_id = voiceModel.referenceAudioId;
+          }
+          if (voiceModel.referenceAudioUrl) {
+            existingVoiceProfile.reference_audio_url = voiceModel.referenceAudioUrl;
+          }
+
           logger.info(`   🎙️ Existing voice profile found (quality: ${voiceModel.qualityScore})`);
+          if (voiceModel.chatterboxConditionals) {
+            logger.info(`   📦 With Chatterbox conditionals: ${(voiceModel.chatterboxConditionals.length / 1024).toFixed(1)}KB`);
+          }
         }
       } catch (profileError) {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);

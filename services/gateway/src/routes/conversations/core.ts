@@ -147,7 +147,7 @@ export function registerCoreRoutes(
       if (!authRequest.authContext.isAuthenticated) {
         return reply.status(403).send({
           success: false,
-          error: 'Authentification requise pour accéder aux conversations'
+          error: 'Authentication required to access conversations'
         });
       }
 
@@ -414,7 +414,7 @@ export function registerCoreRoutes(
       console.error('[GATEWAY] Error fetching conversations:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération des conversations'
+        error: 'Error retrieving conversations'
       });
     }
   });
@@ -449,7 +449,7 @@ export function registerCoreRoutes(
       if (!authRequest.authContext.isAuthenticated) {
         return reply.status(403).send({
           success: false,
-          error: 'Authentification requise pour accéder à cette conversation'
+          error: 'Authentication required to access this conversation'
         });
       }
 
@@ -471,7 +471,9 @@ export function registerCoreRoutes(
       if (!canAccess) {
           return reply.status(403).send({
           success: false,
-          error: 'Unauthorized access to this conversation'
+          error: 'Access denied: you are not a member of this conversation or it no longer exists',
+          code: 'CONVERSATION_ACCESS_DENIED',
+          suggestion: 'Please return to the home page to see your available conversations'
         });
       }
 
@@ -564,7 +566,7 @@ export function registerCoreRoutes(
       console.error('[GATEWAY] Error fetching conversation:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération de la conversation'
+        error: 'Error retrieving conversation'
       });
     }
   });
@@ -627,7 +629,7 @@ export function registerCoreRoutes(
         if (!community) {
           return reply.status(404).send({
             success: false,
-            error: 'Communauté non trouvée'
+            error: 'Community not found'
           });
         }
 
@@ -638,7 +640,7 @@ export function registerCoreRoutes(
         if (!isMember) {
           return reply.status(403).send({
             success: false,
-            error: 'Vous devez être membre de cette communauté pour y créer une conversation'
+            error: 'You must be a member of this community to create a conversation'
           });
         }
       }
@@ -844,7 +846,7 @@ export function registerCoreRoutes(
       if (id === "meeshy") {
         return reply.status(403).send({
           success: false,
-          error: 'La conversation globale ne peut pas être modifiée'
+          error: 'The global conversation cannot be modified'
         });
       }
 
@@ -879,7 +881,7 @@ export function registerCoreRoutes(
       console.error('[GATEWAY] Error updating conversation:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la mise à jour de la conversation'
+        error: 'Error updating conversation'
       });
     }
   });
@@ -927,7 +929,7 @@ export function registerCoreRoutes(
       if (id === "meeshy") {
         return reply.status(403).send({
           success: false,
-          error: 'La conversation globale ne peut pas être supprimée'
+          error: 'The global conversation cannot be deleted'
         });
       }
 
@@ -936,7 +938,7 @@ export function registerCoreRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 

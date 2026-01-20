@@ -248,7 +248,7 @@ export function isMemberAdmin(role: MemberRole | MemberRoleType | string): boole
 /**
  * Vérifie si un membre est modérateur ou plus
  */
-export function isMemberModerator(role: MemberRole | MemberRoleType): boolean {
+export function isMemberModerator(role: MemberRole | MemberRoleType | string): boolean {
   return hasMinimumMemberRole(role, MemberRole.MODERATOR);
 }
 

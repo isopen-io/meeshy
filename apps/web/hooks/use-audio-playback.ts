@@ -100,6 +100,7 @@ export function useAudioPlayback({
       try {
         setIsLoading(true);
         setHasError(false);
+        setHasLoadedMetadata(false); // Réinitialiser le flag lors du chargement d'un nouvel audio
 
         let apiPath = audioUrl;
 
@@ -107,12 +108,24 @@ export function useAudioPlayback({
           try {
             const url = new URL(audioUrl);
             apiPath = url.pathname;
+            console.log('🎵 [useAudioPlayback] URL complète → pathname:', {
+              fullUrl: audioUrl,
+              pathname: apiPath
+            });
           } catch {
             // Si parsing échoue, utiliser tel quel
+            console.log('🎵 [useAudioPlayback] Parsing URL échoué, utilisation directe:', audioUrl);
           }
+        } else {
+          console.log('🎵 [useAudioPlayback] URL relative utilisée directement:', apiPath);
         }
 
+        console.log('🎵 [useAudioPlayback] Chargement audio via apiService.getBlob:', apiPath);
         const blob = await apiService.getBlob(apiPath);
+        console.log('✅ [useAudioPlayback] Audio chargé avec succès:', {
+          blobSize: `${(blob.size / 1024).toFixed(1)} KB`,
+          blobType: blob.type
+        });
 
         if (!isMounted) {
           return;
@@ -127,7 +140,14 @@ export function useAudioPlayback({
 
         setIsLoading(false);
       } catch (error: any) {
-        console.error('[useAudioPlayback] Failed to load audio:', error);
+        console.error('❌ [useAudioPlayback] Failed to load audio:', {
+          error,
+          status: error?.status,
+          code: error?.code,
+          message: error?.message,
+          audioUrl,
+          apiPath
+        });
 
         if (!isMounted) {
           return;
@@ -138,12 +158,16 @@ export function useAudioPlayback({
 
         if (error?.status === 404) {
           setErrorMessage('Fichier audio introuvable');
+          console.error('❌ [useAudioPlayback] 404: Fichier introuvable sur le serveur');
         } else if (error?.status === 500) {
           setErrorMessage('Erreur serveur');
+          console.error('❌ [useAudioPlayback] 500: Erreur serveur');
         } else if (error?.code === 'TIMEOUT') {
           setErrorMessage('Timeout - fichier trop volumineux');
+          console.error('❌ [useAudioPlayback] Timeout');
         } else {
           setErrorMessage('Erreur de chargement');
+          console.error('❌ [useAudioPlayback] Erreur générique');
         }
       }
     };
@@ -159,9 +183,11 @@ export function useAudioPlayback({
   }, [attachmentId, audioUrl]);
 
   // Initialiser la durée depuis l'attachment
+  // Force la mise à jour quand attachmentDuration change (ex: changement de langue audio)
   useEffect(() => {
     if (attachmentDuration && attachmentDuration > 0) {
       setDuration(attachmentDuration);
+      setHasLoadedMetadata(true); // Marquer comme chargé pour éviter l'écrasement par les métadonnées
     }
   }, [attachmentId, attachmentDuration]);
 
@@ -316,7 +342,7 @@ export function useAudioPlayback({
     }
   }, [duration]);
 
-  // Écouter les événements de pause
+  // Écouter les événements audio (pause et timeupdate)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -329,10 +355,26 @@ export function useAudioPlayback({
       }
     };
 
+    const handleTimeUpdate = () => {
+      if (audio.paused) return;
+      if (audio.readyState < 2) return;
+
+      const newTime = audio.currentTime;
+      const audioDuration = audio.duration;
+
+      if (isFinite(newTime) && newTime >= 0 && isFinite(audioDuration) && audioDuration > 0) {
+        if (newTime <= audioDuration) {
+          setCurrentTime(newTime);
+        }
+      }
+    };
+
     audio.addEventListener('pause', handlePause);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
 
     return () => {
       audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.pause();
       AudioManager.getInstance().stop(audio);
 

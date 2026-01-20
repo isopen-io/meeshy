@@ -12,10 +12,12 @@
  */
 export interface TranscriptionSegment {
   text: string;
-  start: number;      // Milliseconds
-  end: number;        // Milliseconds
-  speaker_id?: string;
+  startMs: number;      // Milliseconds (aligné avec DB)
+  endMs: number;        // Milliseconds (aligné avec DB)
+  speakerId?: string;   // ID du speaker (s0, s1, s2, ...)
+  voiceSimilarityScore?: number;  // Score de similarité vocale avec l'utilisateur (0-1)
   confidence?: number;
+  language?: string;    // Langue détectée pour ce segment (ISO 639-1)
 }
 
 /**
@@ -44,7 +46,7 @@ export type TranscriptionSource =
  * - Image: description via Vision API ou OCR
  */
 export interface AttachmentTranscription {
-  type: TranscriptableType;
+  type?: TranscriptableType; // Optionnel pour compatibilité avec transcriptions existantes (inféré depuis mimeType)
   text: string;
   language: string;
   confidence: number;
@@ -102,6 +104,7 @@ export interface AttachmentTranslation {
   quality?: number;           // Qualité (0-1)
   voiceModelId?: string;      // ID modèle vocal (audio uniquement)
   ttsModel?: string;          // Modèle TTS (xtts, openvoice)
+  segments?: TranscriptionSegment[];  // Segments avec timestamps pour l'audio traduit
 
   // Spécifique document/image
   pageCount?: number;         // Nombre de pages (document)
@@ -275,12 +278,13 @@ export interface SocketIOTranslation {
   readonly translatedText: string;
   readonly url: string;
   readonly durationMs?: number;
-  readonly voiceCloned?: boolean;
-  readonly voiceQuality?: number;
+  readonly cloned?: boolean;        // Clonage vocal (audio uniquement)
+  readonly quality?: number;         // Qualité (0-1)
   readonly path?: string;
   readonly format?: string;
   readonly ttsModel?: string;
   readonly voiceModelId?: string;
+  readonly segments?: readonly TranscriptionSegment[]; // Segments de transcription avec timestamps
   readonly pageCount?: number;
   readonly overlayApplied?: boolean;
 }
@@ -306,12 +310,13 @@ export function toSocketIOTranslation(
     translatedText: translation.transcription,
     url: translation.url || '',
     durationMs: translation.durationMs,
-    voiceCloned: translation.cloned,
-    voiceQuality: translation.quality,
+    cloned: translation.cloned,        // ✅ Mapping direct: cloned → cloned
+    quality: translation.quality,      // ✅ Mapping direct: quality → quality
     path: translation.path,
     format: translation.format,
     ttsModel: translation.ttsModel,
     voiceModelId: translation.voiceModelId,
+    segments: translation.segments, // Segments de transcription de l'audio traduit
     pageCount: translation.pageCount,
     overlayApplied: translation.overlayApplied
   };

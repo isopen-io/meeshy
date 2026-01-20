@@ -222,19 +222,19 @@ export const AudioControls = memo<AudioControlsProps>(({
                   </p>
                 </div>
                 {translatedAudios.map((audio, index) => {
-                  const langInfo = AVAILABLE_LANGUAGES.find(l => l.code === audio.language);
-                  const isActive = selectedLanguage === audio.language;
+                  const langInfo = AVAILABLE_LANGUAGES.find(l => l.code === audio.targetLanguage);
+                  const isActive = selectedLanguage === audio.targetLanguage;
                   return (
                     <DropdownMenuItem
-                      key={`${audio.language}-${index}`}
-                      onClick={() => setSelectedLanguage(audio.language)}
+                      key={`${audio.targetLanguage}-${index}`}
+                      onClick={() => setSelectedLanguage(audio.targetLanguage)}
                       className={`flex items-start gap-2 px-3 py-2 cursor-pointer ${
                         isActive ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                       }`}
                     >
                       <div className="relative flex-shrink-0 w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mt-0.5">
                         <span className="text-sm">{langInfo?.flag || '🌐'}</span>
-                        {audio.voiceCloned && (
+                        {audio.cloned && (
                           <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-purple-600 rounded-full flex items-center justify-center" title="Voix clonée">
                             <Sparkles className="w-2 h-2 text-white" />
                           </div>
@@ -243,7 +243,7 @@ export const AudioControls = memo<AudioControlsProps>(({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <span className="text-xs font-semibold">
-                            {langInfo?.name || audio.language}
+                            {langInfo?.name || audio.targetLanguage}
                           </span>
                           {isActive && (
                             <Check className="w-3 h-3 text-blue-600" />
@@ -263,7 +263,7 @@ export const AudioControls = memo<AudioControlsProps>(({
 
             {/* Langues disponibles non traduites */}
             {(() => {
-              const translatedLanguageCodes = translatedAudios.map(t => t.language);
+              const translatedLanguageCodes = translatedAudios.map(t => t.targetLanguage);
               const availableForTranslation = AVAILABLE_LANGUAGES.filter(
                 lang => !translatedLanguageCodes.includes(lang.code) && lang.code !== transcription?.language
               );

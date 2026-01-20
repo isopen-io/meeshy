@@ -1590,6 +1590,13 @@ export class MeeshySocketIOManager {
 
       // Diffuser dans la room de conversation
       console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.AUDIO_TRANSLATION_READY}' vers room '${roomName}' (${clientCount} clients)`);
+
+      // DEBUG: Vérifier que les URLs sont présentes dans les données envoyées
+      console.log(`🔍 [SocketIOManager] URLs des traductions envoyées aux clients:`);
+      for (const ta of data.translatedAudios) {
+        console.log(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}"`);
+      }
+
       this.io.to(roomName).emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, audioTranslationData);
 
       console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT SOCKET.IO DIFFUSÉ ========`);

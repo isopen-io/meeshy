@@ -89,7 +89,7 @@ export function registerParticipantsRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -98,7 +98,8 @@ export function registerParticipantsRoutes(
       if (!canAccess) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Access denied: you are not a member of this conversation or it no longer exists',
+          code: 'CONVERSATION_ACCESS_DENIED'
         });
       }
 
@@ -306,7 +307,7 @@ export function registerParticipantsRoutes(
       console.error('[GATEWAY] Error fetching conversation participants:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération des participants'
+        error: 'Error retrieving participants'
       });
     }
   });
@@ -368,7 +369,7 @@ export function registerParticipantsRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -384,7 +385,7 @@ export function registerParticipantsRoutes(
       if (!currentUserMembership) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -396,7 +397,7 @@ export function registerParticipantsRoutes(
       if (!userToAdd) {
         return reply.status(404).send({
           success: false,
-          error: 'Utilisateur non trouvé'
+          error: 'User not found'
         });
       }
 
@@ -487,7 +488,7 @@ export function registerParticipantsRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -506,7 +507,7 @@ export function registerParticipantsRoutes(
       if (!currentUserMembership) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -613,7 +614,7 @@ export function registerParticipantsRoutes(
       if (!['ADMIN', 'MODERATOR', 'MEMBER'].includes(role)) {
         return reply.status(400).send({
           success: false,
-          error: 'Rôle invalide. Les rôles acceptés sont: ADMIN, MODERATOR, MEMBER'
+          error: 'Invalid role. Accepted roles are: ADMIN, MODERATOR, MEMBER'
         });
       }
 
@@ -622,7 +623,7 @@ export function registerParticipantsRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -641,7 +642,7 @@ export function registerParticipantsRoutes(
       if (!currentUserMembership) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -660,7 +661,7 @@ export function registerParticipantsRoutes(
       if (userId === currentUserId) {
         return reply.status(400).send({
           success: false,
-          error: 'Vous ne pouvez pas modifier votre propre rôle'
+          error: 'You cannot modify your own role'
         });
       }
 
@@ -676,7 +677,7 @@ export function registerParticipantsRoutes(
       if (!targetMembership) {
         return reply.status(404).send({
           success: false,
-          error: 'Participant non trouvé ou inactif'
+          error: 'Participant not found or inactive'
         });
       }
 
@@ -684,7 +685,7 @@ export function registerParticipantsRoutes(
       if (targetMembership.role === 'CREATOR') {
         return reply.status(403).send({
           success: false,
-          error: 'Impossible de modifier le rôle du créateur de la conversation'
+          error: 'Cannot modify the conversation creator\'s role'
         });
       }
 
@@ -741,7 +742,7 @@ export function registerParticipantsRoutes(
       console.error('[GATEWAY] Error updating participant role:', error);
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la mise à jour du rôle du participant'
+        error: 'Error updating participant role'
       });
     }
   });

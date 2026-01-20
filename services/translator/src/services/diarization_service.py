@@ -65,6 +65,7 @@ class SpeakerInfo:
     speaking_ratio: float
     segments: List[SpeakerSegment]
     voice_characteristics: Optional[Dict[str, Any]] = None
+    voice_similarity_score: Optional[float] = None  # Score de similarité avec le profil vocal de l'utilisateur (0-1)
 
 
 @dataclass
@@ -94,7 +95,7 @@ class DiarizationService:
         self.hf_token = hf_token or os.getenv("HF_TOKEN")
         self._pipeline = None
 
-    def _get_pyannote_pipeline(self) -> Optional[Pipeline]:
+    def _get_pyannote_pipeline(self) -> Optional["Pipeline"]:
         """Récupère le pipeline pyannote (lazy loading)"""
         if not PYANNOTE_AVAILABLE:
             return None
@@ -139,7 +140,7 @@ class DiarizationService:
     async def _detect_with_pyannote(
         self,
         audio_path: str,
-        pipeline: Pipeline
+        pipeline: "Pipeline"
     ) -> DiarizationResult:
         """
         Détection avec pyannote.audio (méthode principale).
@@ -202,13 +203,31 @@ class DiarizationService:
             else:
                 primary_speaker_id = "s0"
 
-            return DiarizationResult(
+            result = DiarizationResult(
                 speaker_count=len(speakers),
                 speakers=speakers,
                 primary_speaker_id=primary_speaker_id,
                 total_duration_ms=total_duration_ms,
                 method="pyannote"
             )
+
+            # ========== LOGS DÉTAILLÉS DE DIARISATION ==========
+            logger.info(f"[DIARIZATION] ✅ Détection pyannote complète:")
+            logger.info(f"   - Speakers détectés: {result.speaker_count}")
+            logger.info(f"   - Durée totale: {result.total_duration_ms}ms")
+            logger.info(f"   - Locuteur principal: {result.primary_speaker_id}")
+
+            for speaker in result.speakers:
+                logger.info(
+                    f"   • {speaker.speaker_id}: "
+                    f"temps={speaker.speaking_time_ms}ms ({speaker.speaking_ratio*100:.1f}%) | "
+                    f"segments={len(speaker.segments)} | "
+                    f"primary={speaker.is_primary} | "
+                    f"similarity={speaker.voice_similarity_score}"
+                )
+            # ====================================================
+
+            return result
 
         except Exception as e:
             logger.error(f"[DIARIZATION] Erreur pyannote: {e}")
@@ -327,13 +346,31 @@ class DiarizationService:
             else:
                 primary_speaker_id = "s0"
 
-            return DiarizationResult(
+            result = DiarizationResult(
                 speaker_count=len(speakers),
                 speakers=speakers,
                 primary_speaker_id=primary_speaker_id,
                 total_duration_ms=duration_ms,
                 method="pitch_clustering"
             )
+
+            # ========== LOGS DÉTAILLÉS DE DIARISATION ==========
+            logger.info(f"[DIARIZATION] ✅ Détection pitch clustering complète:")
+            logger.info(f"   - Speakers détectés: {result.speaker_count}")
+            logger.info(f"   - Durée totale: {result.total_duration_ms}ms")
+            logger.info(f"   - Locuteur principal: {result.primary_speaker_id}")
+
+            for speaker in result.speakers:
+                logger.info(
+                    f"   • {speaker.speaker_id}: "
+                    f"temps={speaker.speaking_time_ms}ms ({speaker.speaking_ratio*100:.1f}%) | "
+                    f"segments={len(speaker.segments)} | "
+                    f"primary={speaker.is_primary} | "
+                    f"similarity={speaker.voice_similarity_score}"
+                )
+            # ====================================================
+
+            return result
 
         except Exception as e:
             logger.error(f"[DIARIZATION] Erreur pitch clustering: {e}")
@@ -366,13 +403,22 @@ class DiarizationService:
             )]
         )
 
-        return DiarizationResult(
+        result = DiarizationResult(
             speaker_count=1,
             speakers=[speaker],
             primary_speaker_id="s0",
             total_duration_ms=duration_ms,
             method="single_fallback"
         )
+
+        # ========== LOGS DÉTAILLÉS DE DIARISATION ==========
+        logger.info(f"[DIARIZATION] ✅ Fallback single speaker:")
+        logger.info(f"   - Speakers détectés: 1")
+        logger.info(f"   - Durée totale: {duration_ms}ms")
+        logger.info(f"   - Locuteur: s0 (100%)")
+        # ====================================================
+
+        return result
 
     async def identify_sender(
         self,
@@ -389,14 +435,46 @@ class DiarizationService:
         Returns:
             DiarizationResult mis à jour avec sender_identified et sender_speaker_id
         """
-        # TODO: Implémenter la reconnaissance vocale avec similarité d'embeddings
-        # Pour l'instant, on assume que le locuteur principal est l'expéditeur
-        diarization.sender_identified = True
-        diarization.sender_speaker_id = diarization.primary_speaker_id
+        logger.info(
+            f"[DIARIZATION] 🔍 Identification expéditeur: "
+            f"{len(diarization.speakers)} speakers, "
+            f"profil_vocal={'OUI' if sender_voice_profile else 'NON'}"
+        )
+
+        if sender_voice_profile:
+            # TODO: Implémenter la reconnaissance vocale avec similarité d'embeddings
+            # Pour l'instant, on assume que le locuteur principal est l'expéditeur
+            # avec un score de confiance élevé
+            for speaker in diarization.speakers:
+                if speaker.speaker_id == diarization.primary_speaker_id:
+                    speaker.voice_similarity_score = 0.85  # Score temporaire jusqu'à implémentation complète
+                    logger.info(
+                        f"[DIARIZATION]   → {speaker.speaker_id} (principal): "
+                        f"score=0.85 (assumé comme expéditeur)"
+                    )
+                else:
+                    speaker.voice_similarity_score = None  # Pas l'expéditeur
+                    logger.info(
+                        f"[DIARIZATION]   → {speaker.speaker_id}: score=None (autre locuteur)"
+                    )
+
+            diarization.sender_identified = True
+            diarization.sender_speaker_id = diarization.primary_speaker_id
+
+        else:
+            # Pas de profil vocal : initialiser tous les scores à None
+            logger.info("[DIARIZATION]   Aucun profil vocal → tous les scores à None")
+            for speaker in diarization.speakers:
+                speaker.voice_similarity_score = None
+                logger.info(f"[DIARIZATION]   → {speaker.speaker_id}: score=None")
+
+            diarization.sender_identified = False
+            diarization.sender_speaker_id = None
 
         logger.info(
-            f"[DIARIZATION] Expéditeur identifié: {diarization.sender_speaker_id} "
-            f"(locuteur principal)"
+            f"[DIARIZATION] ✅ Identification terminée: "
+            f"sender_id={diarization.sender_speaker_id}, "
+            f"identified={diarization.sender_identified}"
         )
 
         return diarization

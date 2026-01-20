@@ -766,6 +766,10 @@ export interface VoiceProfileData {
   version: number;
   audioCount: number;
   totalDurationMs: number;
+  // Conditionals Chatterbox pour multi-speaker TTS
+  chatterbox_conditionals_base64?: string; // Base64 encoded bytes
+  reference_audio_id?: string;
+  reference_audio_url?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

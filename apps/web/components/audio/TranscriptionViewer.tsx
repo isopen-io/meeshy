@@ -4,6 +4,12 @@ import React, { useMemo, useRef, useEffect, useState, memo } from 'react';
 import { User, Users } from 'lucide-react';
 import type { TranscriptionSegment, SpeakerAnalysis } from '@meeshy/shared/types/attachment-transcription';
 
+interface TranslatedAudio {
+  targetLanguage: string;
+  translatedText: string;
+  segments?: readonly TranscriptionSegment[];
+}
+
 interface TranscriptionViewerProps {
   transcription: {
     text: string;
@@ -21,6 +27,8 @@ interface TranscriptionViewerProps {
   currentTime: number;
   isPlaying: boolean;
   selectedLanguage: string;
+  /** Audios traduits avec leurs segments */
+  translatedAudios?: readonly TranslatedAudio[];
   /** Afficher les scores de similarité vocale */
   showScores?: boolean;
 }
@@ -149,6 +157,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
   currentTime,
   isPlaying,
   selectedLanguage,
+  translatedAudios,
   showScores = false,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -160,23 +169,50 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
     return () => clearTimeout(timer);
   }, []);
 
+  // Déterminer quelle transcription/segments afficher (original ou traduite)
+  const activeTranscription = useMemo(() => {
+    if (selectedLanguage === 'original' || !translatedAudios) {
+      return {
+        text: transcription.text,
+        segments: transcription.segments,
+        language: transcription.language
+      };
+    }
+
+    const translated = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
+    if (translated) {
+      return {
+        text: translated.translatedText,
+        segments: translated.segments || [],
+        language: translated.targetLanguage
+      };
+    }
+
+    // Fallback vers l'original si la traduction n'existe pas
+    return {
+      text: transcription.text,
+      segments: transcription.segments,
+      language: transcription.language
+    };
+  }, [transcription, selectedLanguage, translatedAudios]);
+
   // Trouver le segment actuel basé sur le temps de lecture
   // (règle rerender-derived-state: dérivé de currentTime)
   const activeSegmentIndex = useMemo(() => {
-    if (!transcription.segments || transcription.segments.length === 0) {
+    if (!activeTranscription.segments || activeTranscription.segments.length === 0) {
       return -1;
     }
 
     const currentTimeMs = currentTime * 1000;
 
-    for (let i = 0; i < transcription.segments.length; i++) {
-      const segment = transcription.segments[i];
+    for (let i = 0; i < activeTranscription.segments.length; i++) {
+      const segment = activeTranscription.segments[i];
       if (currentTimeMs >= segment.startMs && currentTimeMs <= segment.endMs) {
         return i;
       }
     }
     return -1;
-  }, [transcription.segments, currentTime]);
+  }, [activeTranscription.segments, currentTime]);
 
   // Auto-scroll vers le segment actif
   useEffect(() => {
@@ -218,7 +254,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
   // Rendre le texte avec surlignage coloré du segment actif
   // (règle rerender-memo: mémorisé pour éviter re-calcul à chaque render)
   const renderSegments = useMemo(() => {
-    if (!transcription.text) {
+    if (!activeTranscription.text) {
       return (
         <span className="text-slate-500 dark:text-slate-400 italic">
           Transcription en cours...
@@ -226,15 +262,15 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
       );
     }
 
-    if (!transcription.segments || transcription.segments.length === 0) {
+    if (!activeTranscription.segments || activeTranscription.segments.length === 0) {
       return (
         <span className="text-slate-700 dark:text-slate-300">
-          {transcription.text}
+          {activeTranscription.text}
         </span>
       );
     }
 
-    return transcription.segments.map((segment, index) => {
+    return activeTranscription.segments.map((segment, index) => {
       const isActive = index === activeSegmentIndex && isPlaying;
       const colors = getSpeakerColor(
         segment.speakerId,
@@ -262,21 +298,16 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
       );
     });
   }, [
-    transcription.text,
-    transcription.segments,
+    activeTranscription.text,
+    activeTranscription.segments,
     transcription.senderSpeakerId,
     activeSegmentIndex,
     isPlaying,
   ]);
 
-  // Calculer si on a besoin d'un bouton "Voir plus"
-  const needsExpansion = useMemo(() => {
-    return (transcription.segments?.length ?? 0) > 10;
-  }, [transcription.segments]);
-
   return (
     <div
-      className={`relative transition-all duration-300 ease-out ${
+      className={`transition-all duration-300 ease-out ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       }`}
       role="region"
@@ -303,56 +334,33 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
         id="transcription-content"
         ref={transcriptionRef}
         className={`text-sm leading-relaxed transition-all duration-300 ${
-          isExpanded ? 'max-h-96 overflow-y-auto' : 'max-h-32 overflow-y-scroll'
+          isExpanded ? 'max-h-96 overflow-y-auto' : 'max-h-32 overflow-y-auto'
         }`}
         style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(148, 163, 184, 0.5) transparent',
         }}
         aria-expanded={isExpanded}
       >
         {renderSegments}
       </div>
 
-      {/* Cacher la scrollbar sur WebKit */}
+      {/* Scrollbar visible sur WebKit */}
       <style jsx>{`
         #transcription-content::-webkit-scrollbar {
-          display: none;
+          width: 6px;
+        }
+        #transcription-content::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        #transcription-content::-webkit-scrollbar-thumb {
+          background-color: rgba(148, 163, 184, 0.5);
+          border-radius: 3px;
+        }
+        #transcription-content::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(148, 163, 184, 0.7);
         }
       `}</style>
-
-      {/* Gradient fade-out + bouton "voir plus" */}
-      {!isExpanded && needsExpansion && (
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <div className="h-8 bg-gradient-to-t from-white via-white/70 to-transparent dark:from-slate-900 dark:via-slate-900/70 dark:to-transparent" />
-          <div className="bg-white dark:bg-slate-900 pt-1 pb-1">
-            <button
-              onClick={onToggleExpanded}
-              type="button"
-              className="pointer-events-auto text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded transition-colors"
-              aria-expanded={false}
-              aria-label="Développer la transcription complète"
-              aria-controls="transcription-content"
-            >
-              voir plus
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Bouton "Voir moins" */}
-      {isExpanded && needsExpansion && (
-        <button
-          onClick={onToggleExpanded}
-          type="button"
-          className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded transition-colors"
-          aria-expanded={true}
-          aria-label="Réduire la transcription"
-          aria-controls="transcription-content"
-        >
-          voir moins
-        </button>
-      )}
 
       {/* Légende compacte des speakers */}
       {speakerMetadata && speakerMetadata.totalSpeakers > 1 && (
@@ -362,11 +370,11 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
             const colors = getSpeakerColor(
               speaker.sid,
               transcription.senderSpeakerId,
-              speaker.voice_similarity_score
+              speaker.voiceSimilarityScore
             );
             const { label, isUser } = getSpeakerLabel(
               speaker.sid,
-              speaker.voice_similarity_score,
+              speaker.voiceSimilarityScore,
               transcription.senderSpeakerId
             );
 
@@ -377,9 +385,9 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
               >
                 {isUser ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
                 {label}
-                {showScores && speaker.voice_similarity_score !== null && (
+                {showScores && speaker.voiceSimilarityScore !== null && (
                   <span className="tabular-nums opacity-70">
-                    {Math.round(speaker.voice_similarity_score * 100)}%
+                    {Math.round(speaker.voiceSimilarityScore * 100)}%
                   </span>
                 )}
               </span>

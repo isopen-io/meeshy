@@ -363,20 +363,63 @@ export const messageAttachmentSchema = {
         segments: {
           type: 'array',
           nullable: true,
-          description: 'Segments avec timestamps (audio/video)',
+          description: 'Segments avec timestamps et speakers (audio/video)',
           items: {
             type: 'object',
             properties: {
-              text: { type: 'string' },
-              start: { type: 'number', description: 'Start time (ms)' },
-              end: { type: 'number', description: 'End time (ms)' },
-              speaker_id: { type: 'string', nullable: true },
-              confidence: { type: 'number', nullable: true }
+              text: { type: 'string', description: 'Texte du segment' },
+              startMs: { type: 'number', description: 'Temps de début (millisecondes)' },
+              endMs: { type: 'number', description: 'Temps de fin (millisecondes)' },
+              speakerId: { type: 'string', nullable: true, description: 'ID du speaker (s0, s1, s2, ...)' },
+              voiceSimilarityScore: { type: 'number', nullable: true, description: 'Score de similarité vocale avec l\'utilisateur (0-1)' },
+              confidence: { type: 'number', nullable: true, description: 'Score de confiance (0-1)' },
+              language: { type: 'string', nullable: true, description: 'Langue détectée pour ce segment (ISO 639-1)' }
             }
           }
         },
-        speakerCount: { type: 'number', nullable: true, description: 'Nombre de locuteurs (audio)' },
-        primarySpeakerId: { type: 'string', nullable: true, description: 'ID locuteur principal (audio)' },
+        speakerCount: { type: 'number', nullable: true, description: 'Nombre de locuteurs détectés (audio)' },
+        primarySpeakerId: { type: 'string', nullable: true, description: 'ID du locuteur principal (audio)' },
+        senderVoiceIdentified: { type: 'boolean', nullable: true, description: 'Utilisateur identifié parmi les locuteurs (audio)' },
+        senderSpeakerId: { type: 'string', nullable: true, description: 'ID du locuteur identifié comme utilisateur (audio)' },
+        speakerAnalysis: {
+          type: 'object',
+          nullable: true,
+          description: 'Analyse détaillée des locuteurs (audio)',
+          properties: {
+            speakers: {
+              type: 'array',
+              description: 'Liste des locuteurs détectés',
+              items: {
+                type: 'object',
+                properties: {
+                  sid: { type: 'string', description: 'ID du speaker (s0, s1, s2, ...)' },
+                  isPrimary: { type: 'boolean', description: 'Est le locuteur principal' },
+                  speakingTimeMs: { type: 'number', description: 'Temps de parole en millisecondes' },
+                  speakingRatio: { type: 'number', description: 'Ratio de temps de parole (0-1)' },
+                  voiceSimilarityScore: { type: 'number', nullable: true, description: 'Score de similarité vocale avec l\'utilisateur (0-1)' },
+                  segments: {
+                    type: 'array',
+                    description: 'Segments de temps où ce locuteur parle',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        startMs: { type: 'number', description: 'Début en millisecondes' },
+                        endMs: { type: 'number', description: 'Fin en millisecondes' },
+                        durationMs: { type: 'number', description: 'Durée en millisecondes' }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            totalDurationMs: { type: 'number', description: 'Durée totale de l\'audio en millisecondes' },
+            method: {
+              type: 'string',
+              enum: ['pyannote', 'pitch_clustering', 'single_speaker'],
+              description: 'Méthode de diarisation utilisée'
+            }
+          }
+        },
         durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
         voiceQualityAnalysis: {
           type: 'object',
@@ -392,7 +435,7 @@ export const messageAttachmentSchema = {
         ocrRegions: { type: 'array', nullable: true, description: 'Régions OCR (image)' }
       }
     },
-    translationsJson: {
+    translations: {
       type: 'object',
       nullable: true,
       description: 'Traductions JSON intégrées (AttachmentTranslations V2) - Support audio/video/text/document/image - Map: langue → traduction',
@@ -415,6 +458,23 @@ export const messageAttachmentSchema = {
           quality: { type: 'number', nullable: true, description: 'Qualité (0-1)' },
           voiceModelId: { type: 'string', nullable: true, description: 'ID modèle vocal (audio)' },
           ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS (xtts, openvoice) - audio' },
+          segments: {
+            type: 'array',
+            nullable: true,
+            description: 'Segments de transcription de l\'audio traduit (audio)',
+            items: {
+              type: 'object',
+              properties: {
+                text: { type: 'string', description: 'Texte du segment' },
+                startMs: { type: 'number', description: 'Temps de début (millisecondes)' },
+                endMs: { type: 'number', description: 'Temps de fin (millisecondes)' },
+                speakerId: { type: 'string', nullable: true, description: 'ID du speaker (s0, s1, s2, ...)' },
+                voiceSimilarityScore: { type: 'number', nullable: true, description: 'Score de similarité vocale (0-1)' },
+                confidence: { type: 'number', nullable: true, description: 'Score de confiance (0-1)' },
+                language: { type: 'string', nullable: true, description: 'Langue détectée pour ce segment (ISO 639-1)' }
+              }
+            }
+          },
           // Spécifique document/image
           pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
           overlayApplied: { type: 'boolean', nullable: true, description: 'Overlay texte appliqué (image)' },
@@ -425,7 +485,7 @@ export const messageAttachmentSchema = {
         }
       }
     },
-    // V2: Format Socket.IO converti depuis translationsJson pour rétrocompatibilité
+    // V2: Format Socket.IO converti depuis translations pour événements temps réel
     translatedAudios: {
       type: 'array',
       nullable: true,
@@ -446,10 +506,27 @@ export const messageAttachmentSchema = {
           // Spécifique audio/video
           durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
           format: { type: 'string', nullable: true, description: 'Format fichier (mp3, mp4, pdf, png...)' },
-          voiceCloned: { type: 'boolean', nullable: true, description: 'Voix clonée utilisée (audio)' },
-          voiceQuality: { type: 'number', nullable: true, description: 'Qualité du clonage vocal (0-1) - audio' },
+          cloned: { type: 'boolean', nullable: true, description: 'Clonage vocal activé (audio)' },
+          quality: { type: 'number', nullable: true, description: 'Qualité (0-1)' },
           ttsModel: { type: 'string', nullable: true, description: 'Modèle TTS utilisé (xtts, openvoice) - audio' },
           voiceModelId: { type: 'string', nullable: true, description: 'ID du modèle vocal utilisé (audio)' },
+          segments: {
+            type: 'array',
+            nullable: true,
+            description: 'Segments de transcription de l\'audio traduit (audio)',
+            items: {
+              type: 'object',
+              properties: {
+                text: { type: 'string', description: 'Texte du segment' },
+                startMs: { type: 'number', description: 'Temps de début (millisecondes)' },
+                endMs: { type: 'number', description: 'Temps de fin (millisecondes)' },
+                speakerId: { type: 'string', nullable: true, description: 'ID du speaker (s0, s1, s2, ...)' },
+                voiceSimilarityScore: { type: 'number', nullable: true, description: 'Score de similarité vocale (0-1)' },
+                confidence: { type: 'number', nullable: true, description: 'Score de confiance (0-1)' },
+                language: { type: 'string', nullable: true, description: 'Langue détectée pour ce segment (ISO 639-1)' }
+              }
+            }
+          },
           // Spécifique document/image
           pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
           overlayApplied: { type: 'boolean', nullable: true, description: 'Overlay texte appliqué (image)' }

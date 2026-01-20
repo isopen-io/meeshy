@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { SocketIOTranslatedAudio } from '@meeshy/shared/types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SocketIOTranslatedAudio, AttachmentTranslations } from '@meeshy/shared/types';
+import { toSocketIOTranslation } from '@meeshy/shared/types';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
@@ -13,13 +14,14 @@ interface UseAudioTranslationOptions {
   attachmentId: string;
   messageId?: string;
   initialTranscription?: AudioTranscription;
-  initialTranslatedAudios?: readonly SocketIOTranslatedAudio[];
+  initialTranslations?: AttachmentTranslations; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
   attachmentFileUrl: string;
 }
 
 interface UseAudioTranslationReturn {
   // État de transcription
   transcription: AudioTranscription | undefined;
+  currentTranscription: AudioTranscription | undefined; // Transcription actuelle selon langue sélectionnée
   isTranscribing: boolean;
   transcriptionError: string | null;
   isTranscriptionExpanded: boolean;
@@ -34,6 +36,7 @@ interface UseAudioTranslationReturn {
   selectedLanguage: string;
   setSelectedLanguage: (language: string) => void;
   currentAudioUrl: string;
+  currentAudioDuration: number | undefined; // Durée en secondes de l'audio actuellement sélectionné
 
   // Actions
   requestTranscription: (options?: { useLocalTranscription?: boolean }) => Promise<void>;
@@ -52,7 +55,7 @@ export function useAudioTranslation({
   attachmentId,
   messageId,
   initialTranscription,
-  initialTranslatedAudios,
+  initialTranslations,
   attachmentFileUrl,
 }: UseAudioTranslationOptions): UseAudioTranslationReturn {
   const [transcription, setTranscription] = useState<AudioTranscription | undefined>(initialTranscription);
@@ -60,7 +63,30 @@ export function useAudioTranslation({
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [isTranscriptionExpanded, setIsTranscriptionExpanded] = useState(false);
 
-  const [translatedAudios, setTranslatedAudios] = useState<readonly SocketIOTranslatedAudio[]>(initialTranslatedAudios || []);
+  // Convertir initialTranslations JSON en array pour l'UI
+  const initialTranslatedAudios = useMemo(() => {
+    if (!initialTranslations || Object.keys(initialTranslations).length === 0) {
+      console.log('🎵 [useAudioTranslation] Aucune traduction initiale');
+      return [];
+    }
+
+    // Utiliser la fonction officielle de conversion depuis @meeshy/shared/types
+    const result = Object.entries(initialTranslations as AttachmentTranslations).map(([lang, translation]): SocketIOTranslatedAudio => {
+      return toSocketIOTranslation(attachmentId, lang, translation);
+    });
+
+    console.log('🎵 [useAudioTranslation] Traductions initiales depuis BD:',
+      result.map(t => ({
+        language: t.targetLanguage,
+        url: t.url || '⚠️ VIDE',
+        hasUrl: !!t.url
+      }))
+    );
+
+    return result;
+  }, [initialTranslations, attachmentId]);
+
+  const [translatedAudios, setTranslatedAudios] = useState<readonly SocketIOTranslatedAudio[]>(initialTranslatedAudios);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
 
@@ -73,15 +99,33 @@ export function useAudioTranslation({
     const unsubscribe = meeshySocketIOService.onAudioTranslation((data) => {
       if (data.attachmentId !== attachmentId) return;
 
+      console.log('🔔 [useAudioTranslation] Traduction audio reçue via WebSocket:', {
+        attachmentId: data.attachmentId,
+        hasTranscription: !!data.transcription,
+        translatedAudiosCount: data.translatedAudios?.length || 0,
+        translatedAudios: data.translatedAudios
+      });
+
       if (data.transcription) {
         setTranscription({
           text: data.transcription.text,
           language: data.transcription.language,
           confidence: data.transcription.confidence,
         });
+        console.log('✅ [useAudioTranslation] Transcription mise à jour:', {
+          language: data.transcription.language,
+          textLength: data.transcription.text.length
+        });
       }
 
       if (data.translatedAudios && data.translatedAudios.length > 0) {
+        console.log('✅ [useAudioTranslation] Traductions audio mises à jour:',
+          data.translatedAudios.map(t => ({
+            language: t.targetLanguage,
+            url: t.url || '⚠️ VIDE',
+            hasUrl: !!t.url
+          }))
+        );
         setTranslatedAudios(data.translatedAudios);
       }
     });
@@ -116,11 +160,70 @@ export function useAudioTranslation({
   // Calculer l'URL audio actuelle
   const currentAudioUrl = (() => {
     if (selectedLanguage === 'original') {
+      console.log('🎵 [useAudioTranslation] Langue originale sélectionnée, URL:', attachmentFileUrl);
       return attachmentFileUrl;
     }
     const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
-    return translatedAudio?.audioUrl || attachmentFileUrl;
+    const url = translatedAudio?.url || attachmentFileUrl;
+
+    console.log('🎵 [useAudioTranslation] Langue traduite sélectionnée:', {
+      selectedLanguage,
+      foundTranslation: !!translatedAudio,
+      translatedAudioUrl: translatedAudio?.url || '⚠️ VIDE',
+      fallbackToOriginal: !translatedAudio?.url,
+      finalUrl: url
+    });
+
+    return url;
   })();
+
+  // Calculer la durée actuelle selon la langue sélectionnée (rerender-derived-state)
+  // Utilisé par useAudioPlayback pour ajuster la barre de progression
+  const currentAudioDuration = useMemo(() => {
+    if (selectedLanguage === 'original') {
+      return undefined; // Laisse useAudioPlayback utiliser attachmentDuration
+    }
+
+    const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
+    if (translatedAudio?.durationMs) {
+      const durationSeconds = translatedAudio.durationMs / 1000;
+      console.log('🎵 [useAudioTranslation] Durée audio traduit:', {
+        language: selectedLanguage,
+        durationMs: translatedAudio.durationMs,
+        durationSeconds
+      });
+      return durationSeconds;
+    }
+
+    return undefined; // Fallback vers attachmentDuration
+  }, [selectedLanguage, translatedAudios]);
+
+  // Calculer la transcription actuelle selon la langue sélectionnée
+  const currentTranscription = useMemo(() => {
+    if (selectedLanguage === 'original') {
+      console.log('🎵 [useAudioTranslation] Transcription originale sélectionnée');
+      return transcription;
+    }
+
+    const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
+    if (translatedAudio && translatedAudio.segments && translatedAudio.segments.length > 0) {
+      console.log('🎵 [useAudioTranslation] Transcription traduite sélectionnée:', {
+        language: selectedLanguage,
+        text: translatedAudio.translatedText.substring(0, 50) + '...',
+        segmentsCount: translatedAudio.segments.length
+      });
+
+      return {
+        text: translatedAudio.translatedText,
+        language: selectedLanguage,
+        confidence: 1.0,
+        segments: translatedAudio.segments as any[]
+      };
+    }
+
+    console.log('🎵 [useAudioTranslation] Pas de transcription pour langue traduite, fallback vers original');
+    return transcription;
+  }, [selectedLanguage, translatedAudios, transcription]);
 
   // Demander uniquement la transcription
   const requestTranscription = useCallback(async (options?: {
@@ -230,6 +333,7 @@ export function useAudioTranslation({
 
   return {
     transcription,
+    currentTranscription,
     isTranscribing,
     transcriptionError,
     isTranscriptionExpanded,
@@ -240,6 +344,7 @@ export function useAudioTranslation({
     selectedLanguage,
     setSelectedLanguage,
     currentAudioUrl,
+    currentAudioDuration, // Durée en secondes de l'audio actuellement sélectionné
     requestTranscription,
     requestTranslation,
   };

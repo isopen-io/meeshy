@@ -22,14 +22,21 @@ from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Vérifier OpenVoice
+# Vérifier OpenVoice - CRITIQUE pour le clonage vocal Lingala
 OPENVOICE_AVAILABLE = False
+OPENVOICE_IMPORT_ERROR = None
 try:
     from openvoice.api import ToneColorConverter
     OPENVOICE_AVAILABLE = True
-    logger.info("✅ [VITS] OpenVoice disponible pour clonage vocal")
-except ImportError:
-    logger.info("ℹ️ [VITS] OpenVoice non disponible - clonage vocal désactivé")
+    logger.info("✅ [VITS] OpenVoice disponible pour clonage vocal (pipeline hybride)")
+except ImportError as e:
+    OPENVOICE_IMPORT_ERROR = str(e)
+    logger.warning(
+        "⚠️ [VITS] OpenVoice NON DISPONIBLE - clonage vocal désactivé pour Lingala!\n"
+        f"         Erreur: {e}\n"
+        "         Installation: pip install openvoice-cli\n"
+        "         Sans OpenVoice, seule la voix synthétique sera générée."
+    )
 
 
 class VITSBackend(BaseTTSBackend):
@@ -97,6 +104,24 @@ class VITSBackend(BaseTTSBackend):
         """VITS télécharge automatiquement"""
         return self._available
 
+    def get_voice_cloning_status(self) -> dict:
+        """
+        Retourne l'état détaillé du clonage vocal.
+
+        Returns:
+            Dict avec les informations sur la disponibilité du clonage vocal
+        """
+        return {
+            "available": self._openvoice_available,
+            "converter_loaded": self._tone_converter is not None,
+            "embeddings_cached": len(self._speaker_embeddings),
+            "import_error": OPENVOICE_IMPORT_ERROR,
+            "notes": (
+                "Clonage vocal opérationnel" if self._openvoice_available and self._tone_converter
+                else "Clonage vocal désactivé - OpenVoice manquant"
+            )
+        }
+
     async def initialize(self) -> bool:
         """Initialise VITS et OpenVoice si disponible"""
         if self._initialized:
@@ -105,12 +130,31 @@ class VITSBackend(BaseTTSBackend):
         if not self._available:
             return False
 
-        # Initialiser OpenVoice si disponible
+        # ═══════════════════════════════════════════════════════════════════
+        # INITIALISATION OPENVOICE (CRITIQUE POUR CLONAGE VOCAL)
+        # ═══════════════════════════════════════════════════════════════════
         if self._openvoice_available and self._tone_converter is None:
             await self._initialize_openvoice()
 
+            # Vérifier si l'initialisation a réussi
+            if self._tone_converter is None:
+                logger.error(
+                    "⚠️ [VITS] ALERTE: OpenVoice n'a pas pu être initialisé!\n"
+                    "         Le clonage vocal ne sera PAS disponible pour Lingala.\n"
+                    "         La synthèse fonctionnera avec une voix par défaut."
+                )
+        elif not self._openvoice_available:
+            logger.warning(
+                "⚠️ [VITS] Mode dégradé: clonage vocal désactivé (OpenVoice manquant)\n"
+                f"         Erreur d'import: {OPENVOICE_IMPORT_ERROR}\n"
+                "         La synthèse Lingala utilisera une voix par défaut."
+            )
+
         self._initialized = True
-        logger.info("✅ [TTS] VITS initialisé (modèles chargés à la demande)")
+
+        # Log récapitulatif
+        status = "avec clonage vocal OpenVoice" if self._tone_converter else "SANS clonage vocal"
+        logger.info(f"✅ [TTS] VITS initialisé ({status})")
         return True
 
     async def _initialize_openvoice(self):
@@ -385,6 +429,7 @@ class VITSBackend(BaseTTSBackend):
         output_path: str = None,
         voice_clone_tau: float = 0.3,
         postprocess: bool = True,
+        require_voice_cloning: bool = False,
         **kwargs
     ) -> str:
         """Synthétise le texte avec VITS et optionnellement clone la voix
@@ -402,14 +447,34 @@ class VITSBackend(BaseTTSBackend):
             output_path: Chemin de sortie
             voice_clone_tau: Paramètre de conversion (0.0-1.0, défaut 0.3)
             postprocess: Appliquer le post-traitement audio (défaut: True)
+            require_voice_cloning: Si True, échoue si le clonage n'est pas disponible
 
         Returns:
             Chemin du fichier audio généré
+
+        Raises:
+            RuntimeError: Si require_voice_cloning=True et clonage non disponible
         """
         import soundfile as sf
 
         if not self._initialized:
             await self.initialize()
+
+        # Vérifier si le clonage vocal est requis mais non disponible
+        if require_voice_cloning and speaker_audio_path:
+            if not self._openvoice_available or self._tone_converter is None:
+                raise RuntimeError(
+                    f"Clonage vocal requis mais OpenVoice non disponible.\n"
+                    f"Erreur d'import: {OPENVOICE_IMPORT_ERROR}\n"
+                    "Installation: pip install openvoice-cli"
+                )
+
+        # Log si clonage demandé mais non disponible
+        if speaker_audio_path and (not self._openvoice_available or self._tone_converter is None):
+            logger.warning(
+                f"[VITS] ⚠️ Audio de référence fourni mais clonage vocal indisponible.\n"
+                f"         Une voix synthétique par défaut sera utilisée pour {language}."
+            )
 
         model = await self._load_model_for_language(language)
 

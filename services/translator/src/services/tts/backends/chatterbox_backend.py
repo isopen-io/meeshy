@@ -14,8 +14,9 @@ INTÉGRATION: Ce backend utilise le ModelManager centralisé pour:
 import os
 import asyncio
 import logging
+import io
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from ..base import BaseTTSBackend
@@ -320,15 +321,17 @@ class ChatterboxBackend(BaseTTSBackend):
             traceback.print_exc()
             return False
 
-    # Valeurs par défaut des paramètres Chatterbox
+    # Valeurs par défaut des paramètres Chatterbox optimisées pour fluidité et naturel
+    # Ces valeurs ont été calibrées pour une synthèse vocale fluide avec clonage
+    # Recommandations ML Agent: cfg_weight min 0.30, repetition_penalty 1.20
     DEFAULT_PARAMS = {
-        "exaggeration": 0.5,      # 0.0-1.0: Expressivité vocale
-        "cfg_weight": 0.5,        # 0.0-1.0: Guidance du modèle
-        "temperature": 0.8,       # 0.0-2.0: Créativité/aléatoire
-        "repetition_penalty": 1.2,  # 1.0-3.0: Pénalité répétition (mono)
-        "repetition_penalty_multilingual": 2.0,  # 1.0-3.0: Pénalité répétition (multi)
-        "min_p": 0.05,           # 0.0-1.0: Probabilité minimum sampling
-        "top_p": 1.0,            # 0.0-1.0: Nucleus sampling
+        "exaggeration": 0.45,     # 0.0-1.0: Expressivité vocale (réduit pour plus de naturel)
+        "cfg_weight": 0.50,       # 0.0-1.0: Guidance du modèle (augmenté pour éviter artefacts)
+        "temperature": 0.85,      # 0.0-2.0: Créativité/aléatoire (équilibré pour fluidité)
+        "repetition_penalty": 1.15,  # 1.0-3.0: Pénalité répétition (mono) - réduit pour moins de saccades
+        "repetition_penalty_multilingual": 1.20,  # 1.0-3.0: Pénalité répétition (multi) - réduit pour plus de fluidité
+        "min_p": 0.04,           # 0.0-1.0: Probabilité minimum sampling (légèrement réduit)
+        "top_p": 0.95,           # 0.0-1.0: Nucleus sampling (légèrement réduit pour cohérence)
     }
 
     async def synthesize(
@@ -348,6 +351,8 @@ class ChatterboxBackend(BaseTTSBackend):
         # Options
         auto_optimize_params: bool = True,
         voice_characteristics: Optional[VoiceCharacteristics] = None,
+        # NOUVEAU: Conditionals Chatterbox pré-calculés
+        conditionals: Optional[Any] = None,  # Chatterbox Conditionals object
         **kwargs
     ) -> str:
         """
@@ -379,6 +384,8 @@ class ChatterboxBackend(BaseTTSBackend):
             OPTIONS:
             auto_optimize_params: Calculer automatiquement exaggeration/cfg_weight
             voice_characteristics: Caractéristiques vocales pré-analysées
+            conditionals: Conditionals Chatterbox pré-calculés pour éviter de recalculer
+                         à chaque synthèse. Si fourni, speaker_audio_path est ignoré.
         """
         import torchaudio
 
@@ -480,8 +487,17 @@ class ChatterboxBackend(BaseTTSBackend):
         # GÉNÉRATION AUDIO
         # ═══════════════════════════════════════════════════════════════════
         if use_multilingual:
-            # Pour le clonage cross-langue, cfg_weight=0 réduit le transfert d'accent
-            effective_cfg = 0.0 if lang_code != 'en' else cfg_weight
+            # Pour le clonage cross-langue, cfg_weight réduit améliore la qualité
+            # IMPORTANT: cfg_weight=0.0 désactive complètement la guidance et cause
+            # des artefacts vocaux imprévisibles. Valeur minimum recommandée: 0.30
+            # pour maintenir l'articulation tout en réduisant le transfert d'accent.
+            # ML Agent recommendation: minimum 0.30 pour éviter les artefacts et répétitions
+            if lang_code != 'en':
+                # Réduire légèrement le cfg pour langues non-anglaises mais garder minimum 0.30
+                effective_cfg = max(0.30, cfg_weight * 0.7)  # Minimum 0.30, sinon 70% de la valeur
+                logger.debug(f"[TTS] Cross-language cfg_weight: {cfg_weight:.2f} → {effective_cfg:.2f} (langue: {lang_code})")
+            else:
+                effective_cfg = cfg_weight
 
             # Capturer les paramètres locaux pour le lambda
             _model = model_multi
@@ -494,8 +510,28 @@ class ChatterboxBackend(BaseTTSBackend):
             _rep_pen = repetition_penalty
             _min_p = min_p
             _top_p = top_p
+            _conditionals = conditionals
 
-            if speaker_audio_path and os.path.exists(speaker_audio_path):
+            # Si des conditionals pré-calculés sont fournis, les utiliser directement
+            if _conditionals is not None:
+                logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés pour le clonage")
+                _model.conds = _conditionals
+                # Générer sans audio_prompt_path puisque les conditionals sont déjà prêts
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: _model.generate(
+                        text=_text,
+                        language_id=_lang_code,
+                        # PAS de audio_prompt_path car conditionals déjà chargés
+                        exaggeration=_exp,
+                        cfg_weight=_cfg,
+                        temperature=_temp,
+                        repetition_penalty=_rep_pen,
+                        min_p=_min_p,
+                        top_p=_top_p
+                    )
+                )
+            elif speaker_audio_path and os.path.exists(speaker_audio_path):
                 wav = await loop.run_in_executor(
                     None,
                     lambda: _model.generate(
@@ -538,8 +574,27 @@ class ChatterboxBackend(BaseTTSBackend):
             _rep_pen = repetition_penalty
             _min_p = min_p
             _top_p = top_p
+            _conditionals = conditionals
 
-            if speaker_audio_path and os.path.exists(speaker_audio_path):
+            # Si des conditionals pré-calculés sont fournis, les utiliser directement
+            if _conditionals is not None:
+                logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés pour le clonage")
+                _model.conds = _conditionals
+                # Générer sans audio_prompt_path puisque les conditionals sont déjà prêts
+                wav = await loop.run_in_executor(
+                    None,
+                    lambda: _model.generate(
+                        _text,
+                        # PAS de audio_prompt_path car conditionals déjà chargés
+                        exaggeration=_exp,
+                        cfg_weight=_cfg,
+                        temperature=_temp,
+                        repetition_penalty=_rep_pen,
+                        min_p=_min_p,
+                        top_p=_top_p
+                    )
+                )
+            elif speaker_audio_path and os.path.exists(speaker_audio_path):
                 wav = await loop.run_in_executor(
                     None,
                     lambda: _model.generate(
@@ -635,6 +690,143 @@ class ChatterboxBackend(BaseTTSBackend):
                 "confidence": 0.0,
                 "explanation": "Valeurs par défaut (erreur analyse)"
             }
+
+    async def prepare_voice_conditionals(
+        self,
+        audio_path: str,
+        exaggeration: float = 0.5,
+        serialize: bool = False
+    ) -> Tuple[Optional[Any], Optional[bytes]]:
+        """
+        Prépare les conditionals Chatterbox à partir d'un fichier audio.
+
+        Ces conditionals peuvent être stockés et réutilisés pour éviter
+        de recalculer à chaque synthèse.
+
+        Args:
+            audio_path: Chemin vers l'audio de référence
+            exaggeration: Niveau d'expressivité (0.0-1.0)
+            serialize: Si True, retourne aussi les bytes sérialisés
+
+        Returns:
+            Tuple (Conditionals, bytes_sérialisés) ou (Conditionals, None)
+        """
+        if not self.is_initialized and not self._initialized_multilingual:
+            logger.warning("[CHATTERBOX] Modèle non initialisé pour préparer conditionals")
+            return None, None
+
+        if not audio_path or not os.path.exists(audio_path):
+            logger.warning(f"[CHATTERBOX] Audio non trouvé: {audio_path}")
+            return None, None
+
+        try:
+            # Prioriser le modèle multilingual s'il est disponible
+            model = None
+            if self._initialized_multilingual:
+                model = self._get_model(self._model_id_multi)
+            elif self._initialized:
+                model = self._get_model(self._model_id)
+
+            if not model:
+                logger.warning("[CHATTERBOX] Aucun modèle disponible pour préparer conditionals")
+                return None, None
+
+            loop = asyncio.get_event_loop()
+
+            def _prepare():
+                model.prepare_conditionals(audio_path, exaggeration=exaggeration)
+                return model.conds
+
+            conditionals = await loop.run_in_executor(None, _prepare)
+            logger.info(f"[CHATTERBOX] ✅ Conditionals préparés depuis {audio_path}")
+
+            # Sérialiser si demandé
+            serialized = None
+            if serialize and conditionals:
+                serialized = await self.serialize_conditionals(conditionals)
+
+            return conditionals, serialized
+
+        except Exception as e:
+            logger.error(f"[CHATTERBOX] ❌ Erreur préparation conditionals: {e}")
+            return None, None
+
+    async def serialize_conditionals(self, conditionals) -> Optional[bytes]:
+        """
+        Sérialise les conditionals Chatterbox en bytes pour stockage.
+
+        Args:
+            conditionals: Objet Conditionals Chatterbox
+
+        Returns:
+            Bytes sérialisés ou None si échec
+        """
+        if conditionals is None:
+            return None
+
+        try:
+            import torch
+
+            # Créer un buffer en mémoire
+            buffer = io.BytesIO()
+
+            # Sérialiser avec torch.save (comme Conditionals.save())
+            arg_dict = dict(
+                t3=conditionals.t3.__dict__,
+                gen=conditionals.gen
+            )
+            torch.save(arg_dict, buffer)
+
+            # Retourner les bytes
+            buffer.seek(0)
+            serialized_bytes = buffer.read()
+
+            logger.info(f"[CHATTERBOX] ✅ Conditionals sérialisés ({len(serialized_bytes)} bytes)")
+            return serialized_bytes
+
+        except Exception as e:
+            logger.error(f"[CHATTERBOX] ❌ Erreur sérialisation conditionals: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    async def deserialize_conditionals(self, data: bytes, device: str = "cpu"):
+        """
+        Désérialise les conditionals Chatterbox depuis bytes.
+
+        Args:
+            data: Bytes sérialisés
+            device: Device cible (cpu, cuda, mps)
+
+        Returns:
+            Objet Conditionals ou None si échec
+        """
+        if data is None or len(data) == 0:
+            return None
+
+        try:
+            import torch
+            from chatterbox.tts import Conditionals
+            from chatterbox.models.t3.modules.cond_enc import T3Cond
+
+            # Charger depuis le buffer
+            buffer = io.BytesIO(data)
+            map_location = torch.device(device)
+
+            kwargs = torch.load(buffer, map_location=map_location, weights_only=True)
+            conditionals = Conditionals(T3Cond(**kwargs['t3']), kwargs['gen'])
+
+            # Déplacer vers le device approprié
+            conditionals = conditionals.to(device)
+
+            logger.info(f"[CHATTERBOX] ✅ Conditionals désérialisés ({len(data)} bytes)")
+            return conditionals
+
+        except Exception as e:
+            logger.error(f"[CHATTERBOX] ❌ Erreur désérialisation conditionals: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     async def close(self):
         # NOTE: Les modèles sont gérés par le ModelManager centralisé

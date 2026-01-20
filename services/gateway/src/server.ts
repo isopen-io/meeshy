@@ -78,6 +78,7 @@ import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
+import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -247,6 +248,7 @@ declare module 'fastify' {
     prisma: PrismaClient;
     translationService: MessageTranslationService;
     socketIOHandler: MeeshySocketIOHandler;
+    jobMappingCache: MultiLevelJobMappingCache;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
@@ -266,6 +268,7 @@ class MeeshyServer {
   private authMiddleware: AuthMiddleware;
   private socketIOHandler: MeeshySocketIOHandler;
   private callCleanupService: CallCleanupService;
+  private jobMappingCache: MultiLevelJobMappingCache;
 
   constructor() {
     // Check if HTTPS mode is enabled
@@ -358,8 +361,11 @@ class MeeshyServer {
     // Initialiser le middleware d'authentification unifié avec StatusService
     this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
 
-    // Initialiser le service de traduction avec Redis optionnel
-    this.translationService = new MessageTranslationService(this.prisma, this.redis || undefined);
+    // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
+    this.jobMappingCache = new MultiLevelJobMappingCache(this.redis || undefined);
+
+    // Initialiser le service de traduction avec Redis optionnel et le cache partagé
+    this.translationService = new MessageTranslationService(this.prisma, this.redis || undefined, this.jobMappingCache);
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -633,6 +639,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('translationService', this.translationService);
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);
+    this.server.decorate('jobMappingCache', this.jobMappingCache);
     this.server.decorate('authenticate', this.createAuthMiddleware());
 
     logger.info('✓ Middleware configured successfully');

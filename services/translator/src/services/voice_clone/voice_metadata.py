@@ -223,6 +223,23 @@ class VoiceModel:
     # Runtime only (not persisted)
     embedding: Optional[np.ndarray] = field(default=None, repr=False)
 
+    # NOUVEAU: Conditionals Chatterbox pour clonage vocal (runtime only)
+    # Contient: {'t3': T3Cond dict, 'gen': dict} quand préparé par Chatterbox
+    chatterbox_conditionals: Optional[Dict[str, Any]] = field(default=None, repr=False)
+
+    # NOUVEAU: Chemin vers l'audio de référence pour le clonage (runtime only)
+    # Utilisé par Chatterbox pour préparer les conditionals à la volée
+    reference_audio_path: Optional[str] = field(default=None, repr=False)
+
+    # NOUVEAU: Conditionals sérialisés en bytes pour stockage/transmission
+    chatterbox_conditionals_bytes: Optional[bytes] = field(default=None, repr=False)
+
+    # NOUVEAU: ID de l'audio de référence utilisé
+    reference_audio_id: Optional[str] = field(default=None)
+
+    # NOUVEAU: URL de l'audio de référence
+    reference_audio_url: Optional[str] = field(default=None)
+
     def generate_fingerprint(self) -> Optional[VoiceFingerprint]:
         """
         Génère l'empreinte vocale unique de ce modèle.
@@ -280,6 +297,18 @@ class VoiceModel:
             result["voice_characteristics"] = self.voice_characteristics.to_dict()
         if self.fingerprint:
             result["fingerprint"] = self.fingerprint.to_dict()
+
+        # Conditionals Chatterbox sérialisés (pour transmission au Gateway)
+        if self.chatterbox_conditionals_bytes:
+            import base64
+            result["chatterbox_conditionals_base64"] = base64.b64encode(self.chatterbox_conditionals_bytes).decode('utf-8')
+
+        # Audio de référence
+        if self.reference_audio_id:
+            result["reference_audio_id"] = self.reference_audio_id
+        if self.reference_audio_url:
+            result["reference_audio_url"] = self.reference_audio_url
+
         return result
 
     @classmethod
@@ -329,6 +358,15 @@ class VoiceModel:
         # Restaurer l'empreinte vocale si présente
         if data.get("fingerprint"):
             model.fingerprint = VoiceFingerprint.from_dict(data["fingerprint"])
+
+        # Restaurer les conditionals sérialisés si présents
+        if data.get("chatterbox_conditionals_base64"):
+            import base64
+            model.chatterbox_conditionals_bytes = base64.b64decode(data["chatterbox_conditionals_base64"])
+
+        # Restaurer l'audio de référence
+        model.reference_audio_id = data.get("reference_audio_id")
+        model.reference_audio_url = data.get("reference_audio_url")
 
         return model
 

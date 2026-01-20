@@ -258,6 +258,32 @@ class ApiService {
       }
 
       if (!response.ok) {
+        // Si 403 sur une conversation spécifique, c'est probablement une conversation
+        // qui n'existe plus (après reset DB par exemple) - rediriger vers l'accueil
+        if (response.status === 403 &&
+            endpoint.match(/\/conversations\/[a-f0-9]{24}(?:\/|$)/)) {
+          console.warn(
+            '[API_SERVICE] 403 Forbidden sur conversation - probable reset DB ou accès refusé',
+            { endpoint, conversationId: endpoint.match(/[a-f0-9]{24}/)?.[0] }
+          );
+
+          // Redirection côté client uniquement (pas SSR)
+          if (typeof window !== 'undefined') {
+            console.log('[API_SERVICE] Redirection vers l\'accueil...');
+
+            // Afficher un message informatif à l'utilisateur
+            const errorMessage = data.error || 'Cette conversation n\'est plus accessible';
+            const suggestion = data.suggestion || 'Vous allez être redirigé vers l\'accueil';
+
+            // Utiliser setTimeout pour permettre à l'utilisateur de voir le message
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 100);
+
+            // Lancer l'erreur quand même pour arrêter l'exécution en cours
+          }
+        }
+
         throw new ApiServiceError(
           data.message || data.error || `Erreur serveur (${response.status})`,
           response.status,

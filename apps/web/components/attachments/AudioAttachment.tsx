@@ -43,60 +43,49 @@ export const AudioAttachment = React.memo(function AudioAttachment({
       language: transcription.language,
       confidence: transcription.confidence,
       segments: transcription.segments,
+      speakerCount: transcription.speakerCount,
+      primarySpeakerId: transcription.primarySpeakerId,
+      senderVoiceIdentified: transcription.senderVoiceIdentified,
+      senderSpeakerId: transcription.senderSpeakerId,
+      speakerAnalysis: transcription.speakerAnalysis,
     };
 
     if (process.env.NODE_ENV === 'development') {
       console.log('🎵 [AudioAttachment] Transcription extraite:', {
-        ...result,
+        text: result.text.substring(0, 50) + '...',
+        language: result.language,
+        confidence: result.confidence,
         segmentsCount: result.segments?.length || 0,
+        speakerCount: result.speakerCount,
+        senderVoiceIdentified: result.senderVoiceIdentified,
+        firstSegment: result.segments?.[0],
       });
     }
 
     return result;
   }, [attachment.transcription]);
 
-  // Extraire les traductions audio depuis la nouvelle relation translatedAudios (Prisma MessageTranslatedAudio)
-  // Utilise le type TranslatedAudioData unifié de @meeshy/shared/types
-  const initialTranslatedAudios = useMemo(() => {
-    // Préférer translatedAudios (nouvelle structure Prisma) sur translationsJson (legacy)
-    if (attachment.translatedAudios && attachment.translatedAudios.length > 0) {
+  // Extraire les traductions audio directement depuis translations (structure BD)
+  const initialTranslations = useMemo(() => {
+    if (attachment.translations && Object.keys(attachment.translations).length > 0) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🎵 [AudioAttachment] Audios traduits (nouvelle structure):', attachment.translatedAudios);
+        console.log('🎵 [AudioAttachment] Traductions audio:', {
+          languages: Object.keys(attachment.translations),
+          details: attachment.translations
+        });
       }
-      // Les données sont déjà au bon format TranslatedAudioData
-      return attachment.translatedAudios;
-    }
-
-    // Fallback vers translationsJson (legacy) si translatedAudios n'est pas disponible
-    if (attachment.translationsJson && Object.keys(attachment.translationsJson).length > 0) {
-      const result = Object.values(attachment.translationsJson).map((translation: any) => ({
-        id: translation.id || '',
-        targetLanguage: translation.targetLanguage,
-        translatedText: translation.translatedText || '',
-        audioUrl: translation.audioUrl,
-        durationMs: translation.durationMs,
-        voiceCloned: translation.voiceCloned,
-        voiceQuality: translation.voiceQuality || 0,
-        format: translation.format,
-        ttsModel: translation.ttsModel,
-      }));
-
-      if (process.env.NODE_ENV === 'development' && result.length > 0) {
-        console.log('🎵 [AudioAttachment] Traductions extraites (legacy format):', result);
-      }
-
-      return result;
+      return attachment.translations;
     }
 
     return undefined;
-  }, [attachment.translatedAudios, attachment.translationsJson]);
+  }, [attachment.translations]);
 
   return (
     <SimpleAudioPlayer
       attachment={attachment as any}
       messageId={messageId || attachment.messageId}
       initialTranscription={initialTranscription}
-      initialTranslatedAudios={initialTranslatedAudios}
+      initialTranslations={initialTranslations}
     />
   );
 });

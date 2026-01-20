@@ -104,7 +104,7 @@ export function registerMessagesAdvancedRoutes(
       if (!conversationId) {
         return reply.status(404).send({
           success: false,
-          error: 'Conversation non trouvée'
+          error: 'Conversation not found'
         });
       }
 
@@ -125,7 +125,7 @@ export function registerMessagesAdvancedRoutes(
       if (!existingMessage) {
         return reply.status(404).send({
           success: false,
-          error: 'Message non trouvé'
+          error: 'Message not found'
         });
       }
 
@@ -142,7 +142,7 @@ export function registerMessagesAdvancedRoutes(
         if (!hasSpecialPrivileges) {
           return reply.status(403).send({
             success: false,
-            error: 'Vous ne pouvez plus modifier ce message (délai de 24 heures dépassé)'
+            error: 'You can no longer edit this message (24-hour limit exceeded)'
           });
         }
       }
@@ -182,7 +182,7 @@ export function registerMessagesAdvancedRoutes(
       if (!content || content.trim().length === 0) {
         return reply.status(400).send({
           success: false,
-          error: 'Le contenu du message ne peut pas être vide'
+          error: 'Message content cannot be empty'
         });
       }
 
@@ -538,7 +538,7 @@ export function registerMessagesAdvancedRoutes(
       if (!conversationId) {
         return reply.status(404).send({
           success: false,
-          error: 'Conversation non trouvée'
+          error: 'Conversation not found'
         });
       }
 
@@ -562,7 +562,7 @@ export function registerMessagesAdvancedRoutes(
       if (!existingMessage) {
         return reply.status(404).send({
           success: false,
-          error: 'Message non trouvé'
+          error: 'Message not found'
         });
       }
 
@@ -763,7 +763,7 @@ export function registerMessagesAdvancedRoutes(
         if (!membership) {
           return reply.status(403).send({
             success: false,
-            error: 'Accès non autorisé à cette conversation'
+            error: 'Unauthorized access to this conversation'
           });
         }
       }
@@ -854,7 +854,7 @@ export function registerMessagesAdvancedRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -863,7 +863,7 @@ export function registerMessagesAdvancedRoutes(
       if (!canAccess) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -939,7 +939,7 @@ export function registerMessagesAdvancedRoutes(
       console.error('[GATEWAY] Error fetching conversation reactions:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération des réactions'
+        error: 'Error retrieving reactions'
       });
     }
   });
@@ -995,7 +995,7 @@ export function registerMessagesAdvancedRoutes(
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -1004,7 +1004,7 @@ export function registerMessagesAdvancedRoutes(
       if (!canAccess) {
         return reply.status(403).send({
           success: false,
-          error: 'Accès non autorisé à cette conversation'
+          error: 'Unauthorized access to this conversation'
         });
       }
 
@@ -1082,7 +1082,7 @@ export function registerMessagesAdvancedRoutes(
       console.error('[GATEWAY] Error fetching conversation statuses:', error);
       return reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la récupération des statuts'
+        error: 'Error retrieving statuses'
       });
     }
   });

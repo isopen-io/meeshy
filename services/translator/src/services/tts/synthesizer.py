@@ -8,18 +8,27 @@ Responsabilités:
 - Calcul de durée audio
 - Encodage base64 pour transmission
 - Gestion des paramètres de synthèse
+- Segmentation intelligente pour textes longs
 """
 
 import os
+import re
+import shutil
 import logging
 import time
 import uuid
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Configuration segmentation texte long
+# Chatterbox max_new_tokens=1000 ≈ 71s audio max (1min11s)
+# On peut augmenter la limite de segment pour réduire les coupures
+MAX_SEGMENT_CHARS = 500  # Caractères max par segment (~40-50s audio)
+MIN_SEGMENT_CHARS = 50   # Caractères min (éviter segments trop courts)
 
 
 @dataclass
@@ -49,6 +58,7 @@ class Synthesizer:
     - Synthèse vocale avec ou sans clonage
     - Conversion de formats audio
     - Génération des résultats unifiés
+    - Segmentation intelligente pour textes longs (>150 chars)
     """
 
     def __init__(self, output_dir: Path, default_format: str = "mp3"):
@@ -65,8 +75,181 @@ class Synthesizer:
         # Créer les répertoires de sortie
         self.output_dir.mkdir(parents=True, exist_ok=True)
         (self.output_dir / "translated").mkdir(parents=True, exist_ok=True)
+        (self.output_dir / "segments").mkdir(parents=True, exist_ok=True)
 
         logger.info(f"[Synthesizer] Initialisé: output={output_dir}, format={default_format}")
+
+    def _segment_text(self, text: str, max_chars: int = MAX_SEGMENT_CHARS) -> List[str]:
+        """
+        Segmente un texte long en morceaux synthétisables.
+
+        Stratégie:
+        1. Découper par phrases (., !, ?)
+        2. Si phrase trop longue, découper par virgules
+        3. Si toujours trop long, découper par mots
+
+        Args:
+            text: Texte à segmenter
+            max_chars: Longueur maximale par segment
+
+        Returns:
+            Liste de segments de texte
+        """
+        if len(text) <= max_chars:
+            return [text]
+
+        segments = []
+        current_segment = ""
+
+        # Découper par phrases
+        # Pattern: fin de phrase + espace ou fin de texte
+        sentence_pattern = r'([^.!?]*[.!?]+\s*)'
+        sentences = re.findall(sentence_pattern, text)
+
+        # Ajouter le reste s'il y en a (sans ponctuation finale)
+        remaining = re.sub(sentence_pattern, '', text).strip()
+        if remaining:
+            sentences.append(remaining)
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            # Si la phrase tient dans le segment actuel
+            if len(current_segment) + len(sentence) + 1 <= max_chars:
+                current_segment = (current_segment + " " + sentence).strip()
+            else:
+                # Sauvegarder le segment actuel s'il n'est pas vide
+                if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                    segments.append(current_segment)
+                    current_segment = ""
+
+                # Si la phrase elle-même est trop longue
+                if len(sentence) > max_chars:
+                    # Découper par virgules
+                    sub_parts = sentence.split(',')
+                    for part in sub_parts:
+                        part = part.strip()
+                        if not part:
+                            continue
+
+                        if len(current_segment) + len(part) + 2 <= max_chars:
+                            current_segment = (current_segment + ", " + part).strip()
+                            if current_segment.startswith(", "):
+                                current_segment = current_segment[2:]
+                        else:
+                            if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                                segments.append(current_segment)
+                            current_segment = part
+
+                            # Si le part est encore trop long, découper par mots
+                            if len(current_segment) > max_chars:
+                                words = current_segment.split()
+                                current_segment = ""
+                                for word in words:
+                                    if len(current_segment) + len(word) + 1 <= max_chars:
+                                        current_segment = (current_segment + " " + word).strip()
+                                    else:
+                                        if current_segment:
+                                            segments.append(current_segment)
+                                        current_segment = word
+                else:
+                    current_segment = sentence
+
+        # Ajouter le dernier segment
+        if current_segment:
+            # Si le dernier segment est trop court, le fusionner avec le précédent
+            if len(current_segment) < MIN_SEGMENT_CHARS and segments:
+                last = segments.pop()
+                if len(last) + len(current_segment) + 1 <= max_chars * 1.2:  # Tolérance 20%
+                    segments.append(last + " " + current_segment)
+                else:
+                    segments.append(last)
+                    segments.append(current_segment)
+            else:
+                segments.append(current_segment)
+
+        logger.info(
+            f"[Synthesizer] Texte segmenté: {len(text)} chars → {len(segments)} segments "
+            f"(moy: {len(text)//max(1,len(segments))} chars/seg)"
+        )
+
+        return segments if segments else [text]
+
+    async def _concatenate_audios(
+        self,
+        audio_paths: List[str],
+        output_path: str,
+        silence_ms: int = 150
+    ) -> str:
+        """
+        Concatène plusieurs fichiers audio avec des silences entre eux.
+
+        Args:
+            audio_paths: Liste des chemins audio à concaténer
+            output_path: Chemin de sortie
+            silence_ms: Durée du silence entre segments (ms)
+
+        Returns:
+            Chemin du fichier concaténé
+        """
+        if len(audio_paths) == 1:
+            # Un seul fichier, le renommer simplement
+            if audio_paths[0] != output_path:
+                import shutil
+                shutil.move(audio_paths[0], output_path)
+            return output_path
+
+        try:
+            from pydub import AudioSegment
+
+            loop = asyncio.get_event_loop()
+
+            def concat():
+                combined = AudioSegment.empty()
+                silence = AudioSegment.silent(duration=silence_ms)
+
+                for i, path in enumerate(audio_paths):
+                    if not os.path.exists(path):
+                        logger.warning(f"[Synthesizer] Fichier segment manquant: {path}")
+                        continue
+
+                    # Détecter le format
+                    ext = path.rsplit(".", 1)[-1].lower() if "." in path else "wav"
+                    segment = AudioSegment.from_file(path, format=ext)
+                    combined += segment
+
+                    # Ajouter silence entre segments (pas après le dernier)
+                    if i < len(audio_paths) - 1:
+                        combined += silence
+
+                # Exporter
+                output_format = output_path.rsplit(".", 1)[-1].lower() if "." in output_path else "mp3"
+                combined.export(output_path, format=output_format)
+
+                # Nettoyer les fichiers temporaires
+                for path in audio_paths:
+                    if os.path.exists(path) and path != output_path:
+                        try:
+                            os.unlink(path)
+                        except Exception:
+                            pass
+
+                return output_path
+
+            result = await loop.run_in_executor(None, concat)
+            logger.info(
+                f"[Synthesizer] ✅ {len(audio_paths)} segments concaténés → {output_path}"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"[Synthesizer] ❌ Erreur concaténation: {e}")
+            # En cas d'erreur, retourner le premier segment
+            if audio_paths and os.path.exists(audio_paths[0]):
+                return audio_paths[0]
+            raise
 
     async def synthesize_with_voice(
         self,
@@ -87,6 +270,8 @@ class Synthesizer:
         top_p: Optional[float] = None,
         cloning_params: Optional[Dict[str, Any]] = None,
         auto_optimize: bool = True,
+        # NOUVEAU: Conditionals Chatterbox pré-calculés
+        conditionals: Optional[Any] = None,
         **kwargs
     ) -> UnifiedTTSResult:
         """
@@ -158,18 +343,68 @@ class Synthesizer:
 
         logger.info(
             f"[Synthesizer] 🎤 Synthèse: '{text[:50]}...' → {target_language} "
-            f"(model={model.value})"
+            f"(model={model.value}, len={len(text)} chars)"
         )
 
         try:
-            # Synthétiser avec le backend
-            await backend.synthesize(
-                text=text,
-                language=target_language,
-                speaker_audio_path=speaker_audio_path,
-                output_path=output_path,
-                **kwargs
-            )
+            # ═══════════════════════════════════════════════════════════════
+            # SEGMENTATION POUR TEXTES LONGS
+            # Chatterbox limite à ~71s audio (max_new_tokens=1000)
+            # On segmente les textes > 500 chars pour éviter la troncature
+            # ═══════════════════════════════════════════════════════════════
+            segments = self._segment_text(text)
+
+            if len(segments) > 1:
+                logger.info(
+                    f"[Synthesizer] 📝 Texte long détecté ({len(text)} chars) → "
+                    f"{len(segments)} segments à synthétiser"
+                )
+
+                # Synthétiser chaque segment
+                segment_paths = []
+                for i, segment_text in enumerate(segments):
+                    segment_filename = f"{file_id}_{target_language}_seg{i:03d}.wav"
+                    segment_path = str(self.output_dir / "segments" / segment_filename)
+
+                    logger.debug(
+                        f"[Synthesizer] Segment {i+1}/{len(segments)}: "
+                        f"'{segment_text[:40]}...' ({len(segment_text)} chars)"
+                    )
+
+                    await backend.synthesize(
+                        text=segment_text,
+                        language=target_language,
+                        speaker_audio_path=speaker_audio_path,
+                        output_path=segment_path,
+                        conditionals=conditionals,
+                        **kwargs
+                    )
+
+                    if os.path.exists(segment_path):
+                        segment_paths.append(segment_path)
+                    else:
+                        logger.warning(f"[Synthesizer] ⚠️ Segment {i+1} non généré")
+
+                # Concaténer tous les segments
+                if segment_paths:
+                    temp_concat_path = str(self.output_dir / "segments" / f"{file_id}_{target_language}_full.wav")
+                    await self._concatenate_audios(segment_paths, temp_concat_path)
+                    # Déplacer vers la destination finale
+                    output_path_wav = output_path.rsplit(".", 1)[0] + ".wav"
+                    shutil.move(temp_concat_path, output_path_wav)
+                    output_path = output_path_wav
+                else:
+                    raise RuntimeError("Aucun segment audio généré")
+            else:
+                # Texte court: synthèse directe
+                await backend.synthesize(
+                    text=text,
+                    language=target_language,
+                    speaker_audio_path=speaker_audio_path,
+                    output_path=output_path,
+                    conditionals=conditionals,
+                    **kwargs
+                )
 
             # Convertir le format si nécessaire
             if output_format != "wav":
