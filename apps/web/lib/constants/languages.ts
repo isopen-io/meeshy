@@ -55,15 +55,9 @@ export const MAX_MESSAGE_LENGTH_MODERATOR = 4000;
 
 /**
  * Obtient la limite de caractères pour un utilisateur en fonction de son rôle
- * MODERATOR et au-dessus (ADMIN, BIGBOSS, AUDIT, ANALYST) ont 4000 caractères
- * USER a 2000 caractères
+ * Limite uniforme de 4000 caractères pour tous les rôles
+ * Au-delà, un fichier .txt est automatiquement créé
  */
 export function getMaxMessageLength(userRole?: string): number {
-  const moderatorRoles = ['MODERATOR', 'MODO', 'ADMIN', 'BIGBOSS', 'AUDIT', 'ANALYST'];
-
-  if (userRole && moderatorRoles.includes(userRole.toUpperCase())) {
-    return MAX_MESSAGE_LENGTH_MODERATOR;
-  }
-
-  return 2000; // MAX_MESSAGE_LENGTH default
+  return MAX_MESSAGE_LENGTH_MODERATOR; // Limite uniforme de 4000 caractères
 }

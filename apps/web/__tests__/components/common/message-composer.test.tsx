@@ -55,7 +55,8 @@ jest.mock('@/stores/reply-store', () => ({
 
 // Mock language constants
 jest.mock('@/lib/constants/languages', () => ({
-  getMaxMessageLength: () => 2000,
+  getMaxMessageLength: () => 4000,
+  MAX_MESSAGE_LENGTH_MODERATOR: 4000,
 }));
 
 // Mock hooks
@@ -279,7 +280,7 @@ describe('MessageComposer', () => {
       render(<MessageComposer {...defaultProps} />);
 
       const textarea = screen.getByTestId('message-textarea');
-      expect(textarea).toHaveAttribute('maxLength', '2000');
+      expect(textarea).toHaveAttribute('maxLength', '4000');
     });
   });
 

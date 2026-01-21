@@ -376,42 +376,73 @@ async def process_multi_speaker_audio(
                 # ═══════════════════════════════════════════════════════════════
                 # ÉTAPE 8: RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS
                 # ═══════════════════════════════════════════════════════════════
-                logger.info(f"[MULTI_SPEAKER] 🎯 Re-transcription pour segments fins ({target_lang})...")
+                # Essayer la re-transcription, mais ne pas bloquer si elle échoue
+                fine_segments = None
+                try:
+                    logger.info(f"[MULTI_SPEAKER] 🎯 Re-transcription pour segments fins ({target_lang})...")
 
-                # Extraire les métadonnées des tours depuis turn_translations
-                turns_metadata = []
-                current_time_ms = 0
-                for turn_data in turn_translations:
-                    translation = turn_data['translation']
-                    turn = turn_data.get('turn')
-                    if translation and turn:
-                        # Récupérer les métadonnées complètes du speaker
-                        speaker_data = speakers_data.get(turn.speaker_id, {})
+                    # Extraire les métadonnées des tours depuis turn_translations
+                    turns_metadata = []
+                    current_time_ms = 0
+                    for turn_data in turn_translations:
+                        translation = turn_data['translation']
+                        turn = turn_data.get('turn')
+                        if translation and turn:
+                            # Récupérer les métadonnées complètes du speaker
+                            speaker_data = speakers_data.get(turn.speaker_id, {})
 
-                        turns_metadata.append({
-                            'start_ms': current_time_ms,
-                            'end_ms': current_time_ms + translation.duration_ms,
-                            'speaker_id': turn.speaker_id,
-                            'voice_similarity_score': speaker_data.get('voice_similarity_score')
-                        })
-                        current_time_ms += translation.duration_ms
+                            turns_metadata.append({
+                                'start_ms': current_time_ms,
+                                'end_ms': current_time_ms + translation.duration_ms,
+                                'speaker_id': turn.speaker_id,
+                                'voice_similarity_score': speaker_data.get('voice_similarity_score')
+                            })
+                            current_time_ms += translation.duration_ms
 
-                # Re-transcrire avec mapping speakers
-                from .retranscription_service import retranscribe_translated_audio
+                    # Re-transcrire avec mapping speakers
+                    from .retranscription_service import retranscribe_translated_audio
 
-                fine_segments = await retranscribe_translated_audio(
-                    audio_path=final_audio.audio_path,
-                    target_language=target_lang,
-                    turns_metadata=turns_metadata
-                )
+                    fine_segments = await retranscribe_translated_audio(
+                        audio_path=final_audio.audio_path,
+                        target_language=target_lang,
+                        turns_metadata=turns_metadata
+                    )
 
-                # Remplacer les segments grossiers par les segments fins
-                final_audio.segments = fine_segments
+                    # Remplacer les segments grossiers par les segments fins
+                    final_audio.segments = fine_segments
 
-                logger.info(
-                    f"[MULTI_SPEAKER] ✅ {len(fine_segments)} segments fins "
-                    f"au lieu de {len(turns_metadata)} segments grossiers"
-                )
+                    logger.info(
+                        f"[MULTI_SPEAKER] ✅ {len(fine_segments)} segments fins "
+                        f"au lieu de {len(turns_metadata)} segments grossiers"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[MULTI_SPEAKER] ⚠️ Échec re-transcription pour {target_lang}: {e}"
+                    )
+                    # Fallback: créer des segments grossiers basés sur les tours
+                    fine_segments = []
+                    current_time_ms = 0
+                    for turn_data in turn_translations:
+                        translation = turn_data['translation']
+                        turn = turn_data.get('turn')
+                        if translation and turn:
+                            speaker_data = speakers_data.get(turn.speaker_id, {})
+                            fine_segments.append({
+                                'text': translation.translated_text,
+                                'startMs': current_time_ms,
+                                'endMs': current_time_ms + translation.duration_ms,
+                                'speakerId': turn.speaker_id,
+                                'confidence': 0.9,  # Confiance par défaut
+                                'voiceSimilarityScore': speaker_data.get('voice_similarity_score'),
+                                'language': target_lang
+                            })
+                            current_time_ms += translation.duration_ms
+
+                    final_audio.segments = fine_segments
+                    logger.info(
+                        f"[MULTI_SPEAKER] 📝 Utilisation segments grossiers (fallback): "
+                        f"{len(fine_segments)} segments basés sur les tours"
+                    )
 
                 translations[target_lang] = final_audio
 

@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # Chatterbox max_new_tokens=2048 ≈ 140s audio max (2min20s)
 MAX_SEGMENT_CHARS = int(os.getenv("TTS_MAX_SEGMENT_CHARS", "1000"))  # Caractères max par segment (~70-80s audio)
 MIN_SEGMENT_CHARS = int(os.getenv("TTS_MIN_SEGMENT_CHARS", "50"))     # Caractères min (éviter segments trop courts)
+MIN_TEXT_LENGTH_FOR_TTS = int(os.getenv("MIN_TEXT_LENGTH_FOR_TTS", "10"))  # Longueur absolue minimale pour TTS
 
 # Configuration vitesse audio (DÉSACTIVÉ - contrôlé via paramètres Chatterbox)
 # La vitesse est maintenant gérée via exaggeration et cfg_weight dans chatterbox_backend.py
@@ -347,6 +348,33 @@ class Synthesizer:
 
         # Convertir text en string si nécessaire
         text_str = str(text) if not isinstance(text, str) else text
+        text_str = text_str.strip()
+
+        # ═══════════════════════════════════════════════════════════════
+        # VALIDATION LONGUEUR MINIMALE
+        # Chatterbox crash avec des textes trop courts (< 10 chars)
+        # ═══════════════════════════════════════════════════════════════
+        if len(text_str) < MIN_TEXT_LENGTH_FOR_TTS:
+            original_text = text_str
+
+            # Ajouter une ponctuation naturelle si absente
+            if not text_str.endswith(('.', '!', '?', ',')):
+                # Mots courts typiques → exclamation (plus naturel vocalement)
+                if len(text_str.split()) == 1 and len(text_str) <= 5:
+                    text_str += "!"
+                else:
+                    text_str += "."
+
+            # Si toujours trop court, ajouter des espaces (silences naturels)
+            # Chatterbox interprète les espaces comme des pauses légères
+            if len(text_str) < MIN_TEXT_LENGTH_FOR_TTS:
+                padding_needed = MIN_TEXT_LENGTH_FOR_TTS - len(text_str)
+                text_str = text_str + " " * padding_needed
+
+            logger.warning(
+                f"[Synthesizer] ⚠️ Texte court ({len(original_text)} chars): "
+                f"'{original_text}' → '{text_str.strip()}' + {len(text_str) - len(text_str.strip())} espaces"
+            )
 
         logger.info(
             f"[Synthesizer] 🎤 Synthèse: '{text_str[:50]}...' → {target_language} "

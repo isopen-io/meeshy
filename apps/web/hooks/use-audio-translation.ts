@@ -92,6 +92,34 @@ export function useAudioTranslation({
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>('original');
 
+  // S'abonner à la transcription seule (Phase 1: avant traduction)
+  useEffect(() => {
+    if (!messageId || !attachmentId) return;
+
+    const unsubscribe = meeshySocketIOService.onTranscription((data) => {
+      if (data.attachmentId !== attachmentId) return;
+
+      console.log('🔔 [useAudioTranslation] 📝 TRANSCRIPTION reçue via WebSocket (Phase 1):', {
+        attachmentId: data.attachmentId,
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence
+      });
+
+      setTranscription({
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence,
+      });
+
+      console.log('✅ [useAudioTranslation] Transcription mise à jour (affichage immédiat)');
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [messageId, attachmentId]);
+
   // S'abonner aux traductions audio via Socket.IO
   useEffect(() => {
     if (!messageId || !attachmentId) return;
@@ -132,6 +160,66 @@ export function useAudioTranslation({
 
     return () => {
       unsubscribe();
+    };
+  }, [messageId, attachmentId]);
+
+  // S'abonner aux traductions progressives (Phase 2: traductions une par une)
+  useEffect(() => {
+    if (!messageId || !attachmentId) return;
+
+    const unsubscribeProgressive = meeshySocketIOService.onAudioTranslationsProgressive((data) => {
+      if (data.attachmentId !== attachmentId) return;
+
+      console.log('🔔 [useAudioTranslation] 🌍 TRADUCTION PROGRESSIVE reçue via WebSocket:', {
+        attachmentId: data.attachmentId,
+        language: data.language,
+        hasUrl: !!data.translatedAudio?.url
+      });
+
+      // Ajouter ou mettre à jour la traduction dans la liste
+      setTranslatedAudios((prev) => {
+        const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
+        if (existingIndex >= 0) {
+          // Mettre à jour la traduction existante
+          const updated = [...prev];
+          updated[existingIndex] = data.translatedAudio;
+          return updated;
+        } else {
+          // Ajouter la nouvelle traduction
+          return [...prev, data.translatedAudio];
+        }
+      });
+
+      console.log('✅ [useAudioTranslation] Traduction progressive ajoutée:', data.language);
+    });
+
+    const unsubscribeCompleted = meeshySocketIOService.onAudioTranslationsCompleted((data) => {
+      if (data.attachmentId !== attachmentId) return;
+
+      console.log('🔔 [useAudioTranslation] ✅ DERNIÈRE TRADUCTION reçue via WebSocket:', {
+        attachmentId: data.attachmentId,
+        language: data.language,
+        hasUrl: !!data.translatedAudio?.url
+      });
+
+      // Ajouter ou mettre à jour la dernière traduction
+      setTranslatedAudios((prev) => {
+        const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = data.translatedAudio;
+          return updated;
+        } else {
+          return [...prev, data.translatedAudio];
+        }
+      });
+
+      console.log('✅ [useAudioTranslation] Toutes les traductions terminées !');
+    });
+
+    return () => {
+      unsubscribeProgressive();
+      unsubscribeCompleted();
     };
   }, [messageId, attachmentId]);
 

@@ -252,6 +252,18 @@ class MeeshySocketIOService {
     return this.orchestrator.onAudioTranslation(listener);
   }
 
+  public onTranscription(listener: (data: any) => void): () => void {
+    return this.orchestrator.onTranscription(listener);
+  }
+
+  public onAudioTranslationsProgressive(listener: (data: any) => void): () => void {
+    return this.orchestrator.onAudioTranslationsProgressive(listener);
+  }
+
+  public onAudioTranslationsCompleted(listener: (data: any) => void): () => void {
+    return this.orchestrator.onAudioTranslationsCompleted(listener);
+  }
+
   public onTyping(listener: (event: TypingEvent) => void): () => void {
     return this.orchestrator.onTyping(listener);
   }

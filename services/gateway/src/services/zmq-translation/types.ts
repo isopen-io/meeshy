@@ -104,6 +104,7 @@ export interface AudioProcessRequest {
   audioMimeType?: string;
   binaryFrames?: BinaryFrameInfo;
   audioDurationMs: number;
+  userLanguage?: string;  // Langue définie par l'utilisateur pour le fallback de détection
   mobileTranscription?: {
     text: string;
     language: string;

@@ -339,6 +339,18 @@ export class SocketIOOrchestrator {
     return this.translationService.onAudioTranslation(listener);
   }
 
+  onTranscription(listener: (data: any) => void): UnsubscribeFn {
+    return this.translationService.onTranscription(listener);
+  }
+
+  onAudioTranslationsProgressive(listener: (data: any) => void): UnsubscribeFn {
+    return this.translationService.onAudioTranslationsProgressive(listener);
+  }
+
+  onAudioTranslationsCompleted(listener: (data: any) => void): UnsubscribeFn {
+    return this.translationService.onAudioTranslationsCompleted(listener);
+  }
+
   onTyping(listener: (event: any) => void): UnsubscribeFn {
     return this.typingService.onTyping(listener);
   }

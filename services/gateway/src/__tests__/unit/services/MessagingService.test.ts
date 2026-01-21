@@ -482,8 +482,8 @@ describe('MessagingService', () => {
   });
 
   describe('handleMessage - Validation', () => {
-    it('should reject content exceeding 2000 characters', async () => {
-      const longContent = 'A'.repeat(2001);
+    it('should reject content exceeding 4000 characters', async () => {
+      const longContent = 'A'.repeat(4001);
       const request: MessageRequest = {
         conversationId: testConversationId,
         content: longContent
@@ -496,7 +496,7 @@ describe('MessagingService', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('2000');
+      expect(response.error).toContain('4000');
     });
 
     it('should allow message with only attachments and empty content', async () => {
@@ -1973,8 +1973,8 @@ describe('MessagingService - Edge Cases', () => {
     expect(createCall.data.content).toContain('\t');
   });
 
-  it('should handle exactly 2000 character content (boundary)', async () => {
-    const exactLimitContent = 'A'.repeat(2000);
+  it('should handle exactly 4000 character content (boundary)', async () => {
+    const exactLimitContent = 'A'.repeat(4000);
     const conversationId = '507f1f77bcf86cd799439012';
     const userId = '507f1f77bcf86cd799439011';
 

@@ -93,6 +93,10 @@ class AudioHandler:
             "audioUrl": str,
             "audioPath": str,
             "audioDurationMs": int,
+            "userLanguage": str,  // Langue définie par l'utilisateur (fallback détection)
+                                 // - Audio < 6s: userLanguage prévaut
+                                 // - Audio >= 6s + confiance > 80%: detected prévaut
+                                 // - Sinon: userLanguage si fourni
             "mobileTranscription": {
                 "text": str,
                 "language": str,
@@ -285,6 +289,7 @@ class AudioHandler:
                 message_id=request_data.get('messageId'),
                 attachment_id=request_data.get('attachmentId'),
                 audio_duration_ms=request_data.get('audioDurationMs', 0),
+                user_language=request_data.get('userLanguage'),  # Langue utilisateur pour fallback
                 metadata=metadata,
                 target_languages=request_data.get('targetLanguages'),
                 generate_voice_clone=request_data.get('generateVoiceClone', True),

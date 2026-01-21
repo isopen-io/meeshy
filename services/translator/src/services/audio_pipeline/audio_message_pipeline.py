@@ -304,6 +304,7 @@ class AudioMessagePipeline:
         message_id: str,
         attachment_id: str,
         audio_duration_ms: int = 0,
+        user_language: Optional[str] = None,
         metadata: Optional[AudioMessageMetadata] = None,
         target_languages: Optional[List[str]] = None,
         generate_voice_clone: bool = True,
@@ -333,6 +334,8 @@ class AudioMessagePipeline:
             message_id: Message ID
             attachment_id: Attachment ID
             audio_duration_ms: Audio duration (optional)
+            user_language: Langue définie par l'utilisateur pour fallback de détection
+                          (utilisée si audio < 6s ou si confiance détection < 80%)
             metadata: Mobile metadata (optional)
             target_languages: Target languages (auto-detect if None)
             generate_voice_clone: Enable voice cloning
@@ -368,6 +371,8 @@ class AudioMessagePipeline:
         transcription = await self.transcription_stage.process(
             audio_path=audio_path,
             attachment_id=attachment_id,
+            audio_duration_ms=audio_duration_ms,
+            user_language=user_language,
             metadata=metadata,
             use_cache=True
         )
@@ -577,7 +582,8 @@ class AudioMessagePipeline:
                     model_type=model_type,
                     cloning_params=cloning_params,
                     max_workers=max_workers,
-                    source_audio_path=audio_path
+                    source_audio_path=audio_path,
+                    on_translation_ready=on_translation_ready
                 )
         else:
             logger.info("[PIPELINE] 🎤 Mode MONO-SPEAKER: utilisation chaîne simple")
@@ -594,7 +600,8 @@ class AudioMessagePipeline:
                 model_type=model_type,
                 cloning_params=cloning_params,
                 max_workers=max_workers,
-                source_audio_path=audio_path
+                source_audio_path=audio_path,
+                on_translation_ready=on_translation_ready
             )
 
         logger.info(f"[PIPELINE] Generated {len(translations)} translations")

@@ -235,7 +235,8 @@ class TranslationStage:
         model_type: str = "premium",
         cloning_params: Optional[Dict[str, Any]] = None,
         max_workers: int = 4,
-        source_audio_path: Optional[str] = None
+        source_audio_path: Optional[str] = None,
+        on_translation_ready: Optional[any] = None
     ) -> Dict[str, TranslatedAudioVersion]:
         """
         Process multiple languages in parallel.
@@ -321,7 +322,9 @@ class TranslationStage:
             model_type=model_type,
             cloning_params=cloning_params,
             max_workers=max_workers,
-            source_audio_path=source_audio_path
+            source_audio_path=source_audio_path,
+            on_translation_ready=on_translation_ready,
+            target_languages=target_languages
         )
         parallel_time = int((time.time() - parallel_start) * 1000)
 
@@ -397,7 +400,9 @@ class TranslationStage:
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
         max_workers: int,
-        source_audio_path: Optional[str] = None
+        source_audio_path: Optional[str] = None,
+        on_translation_ready: Optional[any] = None,
+        target_languages: Optional[List[str]] = None
     ) -> Dict[str, Optional[TranslatedAudioVersion]]:
         """
         Process languages in parallel using ThreadPoolExecutor.
@@ -423,7 +428,9 @@ class TranslationStage:
                         attachment_id,
                         model_type,
                         lang_cloning_params,
-                        source_audio_path
+                        source_audio_path,
+                        on_translation_ready,
+                        target_languages
                     ): lang
                     for lang, lang_cloning_params in tasks
                 }
@@ -462,7 +469,9 @@ class TranslationStage:
         attachment_id: str,
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
-        source_audio_path: Optional[str] = None
+        source_audio_path: Optional[str] = None,
+        on_translation_ready: Optional[any] = None,
+        target_languages: Optional[List[str]] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process a single language synchronously (for ThreadPoolExecutor).
@@ -489,7 +498,9 @@ class TranslationStage:
                         model_type=model_type,
                         cloning_params=cloning_params,
                         lang_start=lang_start,
-                        source_audio_path=source_audio_path
+                        source_audio_path=source_audio_path,
+                        on_translation_ready=on_translation_ready,
+                        target_languages=target_languages
                     )
                 )
                 return result
@@ -514,7 +525,9 @@ class TranslationStage:
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
         lang_start: float,
-        source_audio_path: Optional[str] = None
+        source_audio_path: Optional[str] = None,
+        on_translation_ready: Optional[any] = None,
+        target_languages: Optional[List[str]] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process single language: translate + TTS + cache.
@@ -644,8 +657,8 @@ class TranslationStage:
                 tts_result=tts_result
             )
 
-            # 5. Return result avec segments
-            return (target_lang, TranslatedAudioVersion(
+            # 5. Créer le résultat
+            translation_result = TranslatedAudioVersion(
                 language=target_lang,
                 translated_text=translated_text,
                 audio_path=tts_result.audio_path,
@@ -658,7 +671,49 @@ class TranslationStage:
                 audio_data_base64=tts_result.audio_data_base64,
                 audio_mime_type=tts_result.audio_mime_type,
                 segments=fine_segments  # Segments fins avec timestamps exacts
-            ))
+            )
+
+            # 6. Callback pour remontée progressive (MONO-SPEAKER)
+            if on_translation_ready and target_languages:
+                try:
+                    logger.info(f"[TRANSLATION_STAGE] 📤 Remontée traduction {target_lang} à la gateway (mono-speaker)...")
+
+                    # Déterminer le type d'événement selon le nombre de langues
+                    total_languages = len(target_languages)
+                    is_single_language = total_languages == 1
+                    current_index = target_languages.index(target_lang) + 1
+                    is_last_language = current_index == total_languages
+
+                    translation_data = {
+                        'message_id': message_id,
+                        'attachment_id': attachment_id,
+                        'language': target_lang,
+                        'translation': translation_result,
+                        'segments': fine_segments,
+                        # Métadonnées pour déterminer le type d'événement
+                        'is_single_language': is_single_language,
+                        'is_last_language': is_last_language,
+                        'current_index': current_index,
+                        'total_languages': total_languages
+                    }
+
+                    # Appeler le callback (peut être async)
+                    if asyncio.iscoroutinefunction(on_translation_ready):
+                        await on_translation_ready(translation_data)
+                    else:
+                        on_translation_ready(translation_data)
+
+                    logger.info(
+                        f"[TRANSLATION_STAGE] ✅ Traduction {target_lang} remontée "
+                        f"({current_index}/{total_languages})"
+                    )
+                except Exception as e:
+                    logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # 7. Return result
+            return (target_lang, translation_result)
 
         except Exception as e:
             logger.error(f"[TRANSLATION_STAGE] Error processing {target_lang}: {e}")

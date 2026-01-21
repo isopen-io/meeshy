@@ -10,6 +10,7 @@ import type {
   MessagePermissionResult,
   AuthenticationContext
 } from '@meeshy/shared/types';
+import { MESSAGE_LIMITS } from '../../config/message-limits';
 
 export class MessageValidator {
   constructor(private readonly prisma: PrismaClient) {}
@@ -30,10 +31,10 @@ export class MessageValidator {
       });
     }
 
-    if (request.content && request.content.length > 2000) {
+    if (request.content && request.content.length > MESSAGE_LIMITS.MAX_MESSAGE_LENGTH) {
       errors.push({
         field: 'content',
-        message: 'Message content cannot exceed 2000 characters',
+        message: `Message content cannot exceed ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} characters`,
         code: 'CONTENT_TOO_LONG'
       });
     }
@@ -261,7 +262,7 @@ export class MessageValidator {
       canMentionUsers: true,
       canUseHighPriority: conversation.type !== 'public',
       restrictions: {
-        maxContentLength: 2000,
+        maxContentLength: MESSAGE_LIMITS.MAX_MESSAGE_LENGTH,
         maxAttachments: 100,
         allowedAttachmentTypes: ['image', 'file', 'audio', 'video'],
         rateLimitRemaining: 100

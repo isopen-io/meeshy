@@ -15,6 +15,11 @@ import type {
   ClientToServerEvents,
   AudioTranslationReadyEventData
 } from '@/types';
+import type {
+  TranscriptionReadyEventData,
+  AudioTranslationsProgressiveEventData,
+  AudioTranslationsCompletedEventData
+} from '@meeshy/shared/types/socketio-events';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
 /**
@@ -30,6 +35,9 @@ export type MessageEditListener = (message: Message) => void;
 export type MessageDeleteListener = (messageId: string) => void;
 export type TranslationListener = (data: TranslationEvent) => void;
 export type AudioTranslationListener = (data: AudioTranslationReadyEventData) => void;
+export type AudioTranslationsProgressiveListener = (data: AudioTranslationsProgressiveEventData) => void;
+export type AudioTranslationsCompletedListener = (data: AudioTranslationsCompletedEventData) => void;
+export type TranscriptionListener = (data: TranscriptionReadyEventData) => void;
 export type TypingListener = (event: TypingEvent) => void;
 export type UserStatusListener = (event: UserStatusEvent) => void;
 export type ConversationStatsListener = (data: { conversationId: string; stats: any }) => void;

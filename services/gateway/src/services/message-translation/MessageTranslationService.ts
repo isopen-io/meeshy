@@ -1704,6 +1704,7 @@ export class MessageTranslationService extends EventEmitter {
     };
     generateVoiceClone?: boolean;
     modelType?: string;
+    userLanguage?: string;
   }): Promise<string | null> {
     try {
       if (!this.zmqClient) {
@@ -1711,10 +1712,25 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
+      // Récupérer la langue de l'utilisateur si non fournie
+      let userLanguage = params.userLanguage;
+      if (!userLanguage) {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { id: params.senderId },
+            select: { systemLanguage: true }
+          });
+          userLanguage = user?.systemLanguage || undefined;
+        } catch (error) {
+          logger.warn(`⚠️ Impossible de récupérer la langue de l'utilisateur ${params.senderId}: ${error}`);
+        }
+      }
+
       logger.info(
         `🎤 [TranslationService] Traitement audio | ` +
         `Msg: ${params.messageId} | Att: ${params.attachmentId} | ` +
-        `Sender: ${params.senderId} | Duration: ${params.audioDurationMs}ms`
+        `Sender: ${params.senderId} | Duration: ${params.audioDurationMs}ms | ` +
+        `UserLang: ${userLanguage || 'N/A'}`
       );
 
       // ═══════════════════════════════════════════════════════════════════════════
@@ -1907,7 +1923,8 @@ export class MessageTranslationService extends EventEmitter {
         modelType: params.modelType || 'medium',
         originalSenderId: params.senderId,
         existingVoiceProfile: shouldGenerateVoiceClone ? existingVoiceProfile : undefined,
-        useOriginalVoice: shouldGenerateVoiceClone
+        useOriginalVoice: shouldGenerateVoiceClone,
+        userLanguage: userLanguage  // Langue de l'utilisateur pour fallback sur messages courts
       });
 
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);

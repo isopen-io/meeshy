@@ -11,11 +11,20 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { TranslationEvent, AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type {
+  TranslationEvent,
+  AudioTranslationReadyEventData,
+  AudioTranslationsProgressiveEventData,
+  AudioTranslationsCompletedEventData,
+  TranscriptionReadyEventData
+} from '@meeshy/shared/types/socketio-events';
 import type {
   TypedSocket,
   TranslationListener,
   AudioTranslationListener,
+  AudioTranslationsProgressiveListener,
+  AudioTranslationsCompletedListener,
+  TranscriptionListener,
   UnsubscribeFn
 } from './types';
 
@@ -26,6 +35,9 @@ import type {
 export class TranslationService {
   private translationListeners: Set<TranslationListener> = new Set();
   private audioTranslationListeners: Set<AudioTranslationListener> = new Set();
+  private audioTranslationsProgressiveListeners: Set<AudioTranslationsProgressiveListener> = new Set();
+  private audioTranslationsCompletedListeners: Set<AudioTranslationsCompletedListener> = new Set();
+  private transcriptionListeners: Set<TranscriptionListener> = new Set();
 
   // Translation caching and deduplication
   private translationCache: Map<string, any> = new Map();
@@ -45,11 +57,50 @@ export class TranslationService {
       logger.debug('[TranslationService]', 'Audio translation ready', {
         messageId: data.messageId,
         attachmentId: data.attachmentId,
-        hasTranscription: !!data.transcription,
-        translatedAudiosCount: data.translatedAudios?.length || 0
+        language: data.language,
+        hasUrl: !!data.translatedAudio?.url
       });
 
       this.audioTranslationListeners.forEach(listener => listener(data));
+    });
+
+    // Transcription ready (Phase 1: transcription seule avant traduction)
+    socket.on(SERVER_EVENTS.TRANSCRIPTION_READY, (data: TranscriptionReadyEventData) => {
+      logger.debug('[TranslationService]', 'Transcription ready', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence
+      });
+
+      this.transcriptionListeners.forEach(listener => listener(data));
+    });
+
+    // Audio translations progressive (traduction en cours, pas la dernière)
+    socket.on(SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, (data: AudioTranslationsProgressiveEventData) => {
+      logger.debug('[TranslationService]', 'Audio translation progressive', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        language: data.language,
+        hasTranscription: !!data.translatedAudio.transcription,
+        segmentsCount: data.translatedAudio.segments?.length || 0
+      });
+
+      this.audioTranslationsProgressiveListeners.forEach(listener => listener(data));
+    });
+
+    // Audio translations completed (dernière traduction, toutes terminées)
+    socket.on(SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED, (data: AudioTranslationsCompletedEventData) => {
+      logger.debug('[TranslationService]', 'Audio translations completed', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        language: data.language,
+        hasTranscription: !!data.translatedAudio.transcription,
+        segmentsCount: data.translatedAudio.segments?.length || 0
+      });
+
+      this.audioTranslationsCompletedListeners.forEach(listener => listener(data));
     });
   }
 
@@ -135,11 +186,38 @@ export class TranslationService {
   }
 
   /**
+   * Event listener: Transcription (Phase 1 avant traduction)
+   */
+  onTranscription(listener: TranscriptionListener): UnsubscribeFn {
+    this.transcriptionListeners.add(listener);
+    return () => this.transcriptionListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: Audio translations progressive (traduction en cours, pas la dernière)
+   */
+  onAudioTranslationsProgressive(listener: AudioTranslationsProgressiveListener): UnsubscribeFn {
+    this.audioTranslationsProgressiveListeners.add(listener);
+    return () => this.audioTranslationsProgressiveListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: Audio translations completed (dernière traduction, toutes terminées)
+   */
+  onAudioTranslationsCompleted(listener: AudioTranslationsCompletedListener): UnsubscribeFn {
+    this.audioTranslationsCompletedListeners.add(listener);
+    return () => this.audioTranslationsCompletedListeners.delete(listener);
+  }
+
+  /**
    * Cleanup all listeners and cache
    */
   cleanup(): void {
     this.translationListeners.clear();
     this.audioTranslationListeners.clear();
+    this.audioTranslationsProgressiveListeners.clear();
+    this.audioTranslationsCompletedListeners.clear();
+    this.transcriptionListeners.clear();
     this.translationCache.clear();
     this.processedTranslationEvents.clear();
   }

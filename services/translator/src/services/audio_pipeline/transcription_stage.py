@@ -134,6 +134,8 @@ class TranscriptionStage:
         self,
         audio_path: str,
         attachment_id: str,
+        audio_duration_ms: int = 0,
+        user_language: Optional[str] = None,
         metadata: Optional[AudioMessageMetadata] = None,
         use_cache: bool = True
     ) -> TranscriptionStageResult:
@@ -146,11 +148,14 @@ class TranscriptionStage:
         3. If cache miss:
            a. Try mobile metadata transcription
            b. Fallback to Whisper transcription
+           c. Apply user language fallback logic
         4. Store in cache
 
         Args:
             audio_path: Path to audio file
             attachment_id: Unique attachment ID
+            audio_duration_ms: Audio duration in milliseconds
+            user_language: Langue définie par l'utilisateur (fallback si audio court ou confiance basse)
             metadata: Optional mobile metadata
             use_cache: Enable cache lookup/storage
 
@@ -203,6 +208,48 @@ class TranscriptionStage:
             audio_path=audio_path,
             metadata=metadata
         )
+
+        # ═══════════════════════════════════════════════════════════════
+        # STEP 3.5: APPLY USER LANGUAGE FALLBACK LOGIC
+        # ═══════════════════════════════════════════════════════════════
+        # Logique de fallback selon durée audio et confiance de détection:
+        # - Audio < 6s: user_language prévaut (si fourni)
+        # - Audio >= 6s ET confiance > 80%: detected_language prévaut
+        # - Sinon: user_language si fourni, sinon detected_language
+        detected_language = transcription_result.language
+        detected_confidence = transcription_result.confidence
+        final_language = detected_language
+
+        if user_language:
+            if audio_duration_ms < 6000:
+                # Audio court: user_language prévaut
+                if detected_language != user_language:
+                    logger.info(
+                        f"[TRANSCRIPTION_STAGE] 🔄 Fallback langue (audio court): "
+                        f"{detected_language} → {user_language} "
+                        f"(durée={audio_duration_ms}ms < 6000ms)"
+                    )
+                    final_language = user_language
+            elif detected_confidence < 0.80:
+                # Confiance faible: user_language prévaut
+                logger.info(
+                    f"[TRANSCRIPTION_STAGE] 🔄 Fallback langue (confiance faible): "
+                    f"{detected_language} (conf={detected_confidence:.2f}) → {user_language} "
+                    f"(conf < 0.80)"
+                )
+                final_language = user_language
+            else:
+                # Audio long ET confiance haute: detected_language prévaut
+                if detected_language != user_language:
+                    logger.info(
+                        f"[TRANSCRIPTION_STAGE] ✅ Langue détectée retenue: "
+                        f"{detected_language} (conf={detected_confidence:.2f} >= 0.80, "
+                        f"durée={audio_duration_ms}ms >= 6000ms)"
+                    )
+
+            # Appliquer le fallback si nécessaire
+            if final_language != detected_language:
+                transcription_result.language = final_language
 
         # ═══════════════════════════════════════════════════════════════
         # STEP 4: CACHE RESULT

@@ -386,35 +386,16 @@ describe('Languages Constants Module', () => {
   });
 
   describe('getMaxMessageLength', () => {
-    describe('Regular users', () => {
-      it('should return 2000 for USER role', () => {
-        expect(getMaxMessageLength('USER')).toBe(2000);
-      });
-
-      it('should return 2000 for undefined role', () => {
-        expect(getMaxMessageLength(undefined)).toBe(2000);
-      });
-
-      it('should return 2000 for lowercase user', () => {
-        expect(getMaxMessageLength('user')).toBe(2000);
-      });
-
-      it('should return 2000 for unknown role', () => {
-        expect(getMaxMessageLength('UNKNOWN_ROLE')).toBe(2000);
-      });
+    it('should return 4000 for all roles (unified limit)', () => {
+      expect(getMaxMessageLength('USER')).toBe(4000);
+      expect(getMaxMessageLength(undefined)).toBe(4000);
+      expect(getMaxMessageLength('user')).toBe(4000);
+      expect(getMaxMessageLength('UNKNOWN_ROLE')).toBe(4000);
+      expect(getMaxMessageLength('MODERATOR')).toBe(4000);
+      expect(getMaxMessageLength('MODO')).toBe(4000);
+      expect(getMaxMessageLength('ADMIN')).toBe(4000);
     });
-
-    describe('Moderator and above', () => {
-      it('should return 4000 for MODERATOR role', () => {
-        expect(getMaxMessageLength('MODERATOR')).toBe(4000);
-      });
-
-      it('should return 4000 for MODO role', () => {
-        expect(getMaxMessageLength('MODO')).toBe(4000);
-      });
-
-      it('should return 4000 for ADMIN role', () => {
-        expect(getMaxMessageLength('ADMIN')).toBe(4000);
+  });
       });
 
       it('should return 4000 for BIGBOSS role', () => {
