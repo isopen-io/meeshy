@@ -261,6 +261,26 @@ export interface TranscriptionReadyEvent {
   timestamp: number;
 }
 
+export interface TranslationReadyEvent {
+  type: 'translation_ready';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  language: string;
+  translatedAudio: {
+    targetLanguage: string;
+    translatedText: string;
+    audioUrl: string;
+    audioPath: string;
+    durationMs: number;
+    voiceCloned: boolean;
+    voiceQuality: number;
+    audioMimeType: string;
+    segments?: TranscriptionSegment[];
+  };
+  timestamp: number;
+}
+
 export type TranscriptionEvent = TranscriptionCompletedEvent | TranscriptionErrorEvent | TranscriptionReadyEvent;
 
 // ═══════════════════════════════════════════════════════════════

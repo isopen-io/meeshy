@@ -103,6 +103,7 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
     this.zmqClient.on('transcriptionCompleted', this._handleTranscriptionOnlyCompleted.bind(this));
     this.zmqClient.on('transcriptionReady', this._handleTranscriptionReady.bind(this));  // Transcription prête (avant traduction)
+    this.zmqClient.on('translationReady', this._handleTranslationReady.bind(this));  // Traduction individuelle prête (progressive)
     this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
     this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
     this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
@@ -1249,6 +1250,103 @@ export class MessageTranslationService extends EventEmitter {
 
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur gestion transcription ready: ${error}`);
+      this.stats.incrementErrors();
+    }
+  }
+
+  /**
+   * Gère un événement de traduction individuelle prête (PROGRESSIVE).
+   * Permet de sauvegarder et notifier le frontend dès qu'une traduction est prête,
+   * sans attendre la fin de toutes les traductions.
+   */
+  private async _handleTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: {
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+      audioMimeType: string;
+      segments?: TranscriptionSegment[];
+    };
+  }) {
+    try {
+      const startTime = Date.now();
+
+      logger.info(
+        `🌍 [TranslationService] Translation READY (progressive): ${data.attachmentId} | ` +
+        `Lang: ${data.language} | Segments: ${data.translatedAudio.segments?.length || 0}`
+      );
+
+      // 1. Récupérer l'attachment pour mise à jour
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: data.attachmentId },
+        select: { id: true, messageId: true, translations: true }
+      });
+
+      if (!attachment) {
+        logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
+        return;
+      }
+
+      // 2. Mettre à jour le champ translations JSON avec la nouvelle traduction
+      const existingTranslations = (attachment.translations as AttachmentTranslations) || {};
+
+      existingTranslations[data.language] = {
+        type: 'audio',
+        transcription: data.translatedAudio.translatedText,
+        path: data.translatedAudio.audioPath,
+        url: data.translatedAudio.audioUrl,
+        durationMs: data.translatedAudio.durationMs,
+        format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+        cloned: data.translatedAudio.voiceCloned,
+        quality: data.translatedAudio.voiceQuality,
+        ttsModel: 'xtts',
+        segments: data.translatedAudio.segments as any,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await this.prisma.messageAttachment.update({
+        where: { id: data.attachmentId },
+        data: { translations: existingTranslations as any }
+      });
+
+      logger.info(
+        `✅ [Phase 2 Progressive] Traduction ${data.language} sauvegardée | ` +
+        `Segments: ${data.translatedAudio.segments?.length || 0}`
+      );
+
+      // 3. Émettre événement Socket.IO pour notifier le client IMMÉDIATEMENT
+      // Convertir la traduction au format Socket.IO
+      const translationSocketIO = toSocketIOTranslation(
+        data.attachmentId,
+        data.language,
+        existingTranslations[data.language]
+      );
+
+      this.emit('translationReady', {
+        taskId: data.taskId,
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        language: data.language,
+        translatedAudio: translationSocketIO,
+        phase: 'translation'  // Indique que c'est une phase progressive
+      });
+
+      const totalTime = Date.now() - startTime;
+      logger.info(
+        `   ⏱️ [Phase 2 Progressive] Traduction ${data.language} envoyée au client en ${totalTime}ms`
+      );
+
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur gestion translation ready: ${error}`);
       this.stats.incrementErrors();
     }
   }
