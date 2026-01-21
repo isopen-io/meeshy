@@ -357,6 +357,60 @@ class UnifiedTTSService:
             **kwargs
         )
 
+    async def synthesize_with_conditionals(
+        self,
+        text: str,
+        conditionals: Any,
+        target_language: str,
+        output_format: str = None,
+        message_id: Optional[str] = None,
+        model: TTSModel = None,
+        max_wait_seconds: int = 120,
+        cloning_params: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> UnifiedTTSResult:
+        """
+        Synthétise du texte avec conditionals Chatterbox pré-calculés.
+
+        Optimisation: Utilise les conditionals pré-calculés stockés dans le profil vocal
+        au lieu de les recalculer à chaque synthèse. Cela améliore les performances et
+        garantit une qualité vocale constante entre les sessions.
+
+        Args:
+            text: Texte à synthétiser
+            conditionals: Conditionals Chatterbox pré-calculés (T3Cond + gen params)
+            target_language: Langue cible (code ISO 639-1)
+            output_format: Format de sortie (mp3, wav, etc.)
+            message_id: ID du message pour le nommage du fichier
+            model: Modèle TTS à utiliser (optionnel)
+            max_wait_seconds: Temps max d'attente si modèle en téléchargement
+            cloning_params: Paramètres de clonage vocal supplémentaires
+
+        Returns:
+            UnifiedTTSResult avec les informations de l'audio généré
+
+        Raises:
+            RuntimeError: Si le modèle TTS n'est pas disponible
+        """
+        logger.info(
+            f"[TTS] Synthèse avec conditionals pré-calculés "
+            f"(optimisé - pas de recalcul)"
+        )
+
+        # Utiliser synthesize_with_voice() mais avec conditionals au lieu de speaker_audio
+        return await self.synthesize_with_voice(
+            text=text,
+            speaker_audio_path=None,  # Pas d'audio car on utilise les conditionals
+            target_language=target_language,
+            output_format=output_format,
+            message_id=message_id,
+            model=model,
+            max_wait_seconds=max_wait_seconds,
+            cloning_params=cloning_params,
+            conditionals=conditionals,  # Conditionals pré-calculés
+            **kwargs
+        )
+
     async def synthesize(
         self,
         text: str,

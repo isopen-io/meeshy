@@ -348,10 +348,53 @@ class VoiceCloneModelCreator:
                 fingerprint=fingerprint
             )
 
+            # ═══════════════════════════════════════════════════════════════
+            # DÉSÉRIALISER LES CONDITIONALS CHATTERBOX SI DISPONIBLES
+            # ═══════════════════════════════════════════════════════════════
+            chatterbox_conditionals_base64 = profile_data.get('chatterbox_conditionals_base64')
+            if chatterbox_conditionals_base64:
+                try:
+                    logger.info(
+                        f"[MODEL_CREATOR] 🎤 Désérialisation conditionals Chatterbox..."
+                    )
+
+                    conditionals_bytes = base64.b64decode(chatterbox_conditionals_base64)
+                    model.chatterbox_conditionals_bytes = conditionals_bytes
+
+                    # Désérialiser les conditionals pour utilisation immédiate
+                    # NOTE: Import local pour éviter dépendance circulaire
+                    from ..tts.backends.chatterbox_backend import ChatterboxBackend
+
+                    backend = ChatterboxBackend(device='cpu')
+                    model.chatterbox_conditionals = await backend.deserialize_conditionals(
+                        conditionals_bytes,
+                        device='cpu'
+                    )
+
+                    logger.info(
+                        f"[MODEL_CREATOR] ✅ Conditionals Chatterbox chargés: "
+                        f"{len(conditionals_bytes)} bytes → objet désérialisé"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[MODEL_CREATOR] ⚠️ Impossible de charger conditionals Chatterbox: {e}"
+                    )
+                    import traceback
+                    traceback.print_exc()
+
+            # Référence audio si fournie
+            reference_audio_id = profile_data.get('reference_audio_id')
+            reference_audio_url = profile_data.get('reference_audio_url')
+            if reference_audio_id:
+                model.reference_audio_id = reference_audio_id
+            if reference_audio_url:
+                model.reference_audio_url = reference_audio_url
+
             logger.info(
                 f"[MODEL_CREATOR] ✅ VoiceModel créé depuis Gateway: "
                 f"user={profile_user_id}, quality={model.quality_score:.2f}, "
-                f"profile_id={profile_id}"
+                f"profile_id={profile_id}, "
+                f"conditionals={'YES' if model.chatterbox_conditionals else 'NO'}"
             )
 
             return model

@@ -541,29 +541,50 @@ class TranslationStage:
 
             # 2. Generate TTS audio
             if voice_model:
-                # Utiliser l'audio source actuel comme référence pour le clonage vocal
-                # (plus récent et pertinent que l'audio de training du profil)
-                speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
+                # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
+                # (plus rapide et qualité constante - évite recalcul à chaque synthèse)
+                has_conditionals = (
+                    hasattr(voice_model, 'chatterbox_conditionals') and
+                    voice_model.chatterbox_conditionals is not None
+                )
 
-                if speaker_audio:
+                if has_conditionals:
                     logger.info(
-                        f"[TRANSLATION_STAGE] 🎤 Clonage vocal activé: "
-                        f"audio_ref={os.path.basename(speaker_audio) if speaker_audio else 'None'}"
+                        f"[TRANSLATION_STAGE] 🎤 Clonage vocal: conditionals pré-calculés "
+                        f"(profil vocal réutilisé - optimisé)"
+                    )
+                    tts_result = await self.tts_service.synthesize_with_conditionals(
+                        text=translated_text,
+                        conditionals=voice_model.chatterbox_conditionals,
+                        target_language=target_lang,
+                        output_format="mp3",
+                        message_id=f"{message_id}_{attachment_id}",
+                        cloning_params=cloning_params
                     )
                 else:
-                    logger.warning(
-                        f"[TRANSLATION_STAGE] ⚠️ Pas d'audio de référence disponible "
-                        f"pour le clonage vocal → voix générique"
-                    )
+                    # PRIORITÉ 2: Calculer depuis l'audio de référence
+                    # (fallback si pas de conditionals pré-calculés)
+                    speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
 
-                tts_result = await self.tts_service.synthesize_with_voice(
-                    text=translated_text,
-                    speaker_audio_path=speaker_audio,
-                    target_language=target_lang,
-                    output_format="mp3",
-                    message_id=f"{message_id}_{attachment_id}",
-                    cloning_params=cloning_params
-                )
+                    if speaker_audio:
+                        logger.info(
+                            f"[TRANSLATION_STAGE] 🎤 Clonage vocal: calcul depuis audio "
+                            f"(ref={os.path.basename(speaker_audio)})"
+                        )
+                    else:
+                        logger.warning(
+                            f"[TRANSLATION_STAGE] ⚠️ Pas d'audio de référence ni conditionals "
+                            f"→ voix générique"
+                        )
+
+                    tts_result = await self.tts_service.synthesize_with_voice(
+                        text=translated_text,
+                        speaker_audio_path=speaker_audio,
+                        target_language=target_lang,
+                        output_format="mp3",
+                        message_id=f"{message_id}_{attachment_id}",
+                        cloning_params=cloning_params
+                    )
             else:
                 tts_result = await self.tts_service.synthesize(
                     text=translated_text,
