@@ -102,6 +102,28 @@ soundfile>=0.12.1
 scipy>=1.10.0
 ffmpeg-python==0.2.0
 
+# ─────────────────────────────────────────────────────────────────────────────────
+# SPEAKER DIARIZATION - Identification des locuteurs (MANDATORY)
+# ─────────────────────────────────────────────────────────────────────────────────
+# pyannote.audio provides state-of-the-art speaker diarization with neural embeddings
+# Automatically detects who is speaking and when with ≥95% accuracy
+# Supports short utterances (e.g., "Oui") and prevents false positives on mono-speaker audio
+#
+# Fonctionnalités:
+#   ✅ Détection automatique de plusieurs locuteurs
+#   ✅ Identification du locuteur principal
+#   ✅ Détection de courtes interjections (1 mot)
+#   ✅ Prévention des faux positifs sur audio mono-speaker
+#   ✅ Support pyannote.audio (précis) avec fallback pitch clustering
+#
+# Configuration:
+#   ENABLE_DIARIZATION=true dans .env (activé par défaut)
+#   HF_TOKEN=your_token (optionnel mais recommandé pour pyannote.audio)
+# ─────────────────────────────────────────────────────────────────────────────────
+pyannote.audio>=3.1.0
+scikit-learn>=1.3.0
+# librosa déjà inclus dans requirements.txt via chatterbox-tts
+
 # Logging et monitoring
 loguru==0.7.3
 prometheus-client==0.21.1

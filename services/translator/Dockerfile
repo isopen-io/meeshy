@@ -63,24 +63,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copier requirements
 COPY requirements.txt requirements-optional.txt ./
 
-# Installer dépendances Python principales
+# Installer dépendances Python (inclut maintenant pyannote.audio + scikit-learn)
+# Note: pyannote.audio et scikit-learn sont maintenant dans requirements.txt (installation par défaut)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    echo "✅ Dépendances principales installées (incluant pyannote.audio + scikit-learn)"
 
-# Installer dépendances de diarisation (pyannote.audio + scikit-learn)
-# Note: librosa est déjà inclus via chatterbox-tts
-RUN echo "🎯 Installation des dépendances de diarisation..." && \
-    pip install --no-cache-dir pyannote.audio>=3.1.0 scikit-learn>=1.3.0 && \
-    echo "✅ Dépendances de diarisation installées" || \
-    echo "⚠️  Installation de diarisation échouée - utilisation du fallback pitch clustering"
-
-# Vérifier l'installation pyannote.audio
-RUN python -c "from pyannote.audio import Pipeline; print('✅ pyannote.audio disponible pour diarisation précise')" || \
-    echo "ℹ️  pyannote.audio non disponible - fallback pitch clustering sera utilisé"
-
-# Vérifier scikit-learn
-RUN python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn disponible')" || \
-    echo "⚠️  scikit-learn non disponible - fonctionnalités de clustering limitées"
+# Vérifier l'installation des composants critiques
+RUN python -c "from pyannote.audio import Pipeline; print('✅ pyannote.audio disponible pour diarisation précise')" && \
+    python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn disponible')" && \
+    echo "🎯 Diarisation des locuteurs configurée avec succès"
 
 # Copier le code source
 COPY . .

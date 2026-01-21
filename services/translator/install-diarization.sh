@@ -2,22 +2,29 @@
 # =============================================================================
 # Script d'installation des dépendances de diarisation (identification locuteurs)
 # =============================================================================
-# Ce script installe pyannote.audio et ses dépendances pour activer la
-# diarisation (identification des locuteurs) dans le service Translator.
+# ℹ️  NOTE: Ce script n'est PLUS NÉCESSAIRE depuis la version 2.0
 #
-# Fonctionnalités:
+# Les dépendances de diarisation (pyannote.audio + scikit-learn) sont maintenant
+# installées AUTOMATIQUEMENT via requirements.txt lors de:
+#   - make install (développement local)
+#   - docker build (conteneur Docker)
+#   - pip install -r requirements.txt (installation manuelle)
+#
+# Ce script est conservé pour compatibilité ascendante mais vous pouvez
+# simplement utiliser:
+#   cd /path/to/v2_meeshy && make install
+#
+# Fonctionnalités (maintenant incluses par défaut):
 #   ✅ Détection automatique de plusieurs locuteurs
 #   ✅ Identification du locuteur principal
 #   ✅ Flag isCurrentUser pour distinguer l'expéditeur
 #   ✅ Affichage coloré par locuteur au frontend
+#   ✅ Support courtes interjections ("Oui")
+#   ✅ Prévention faux positifs mono-speaker
 #
-# Usage:
-#   ./install-diarization.sh
-#
-# Configuration requise après installation:
-#   Dans services/translator/.env:
-#   - ENABLE_DIARIZATION=true
-#   - HF_TOKEN=your_token (optionnel mais recommandé)
+# Configuration (dans services/translator/.env):
+#   ENABLE_DIARIZATION=true (activé par défaut)
+#   HF_TOKEN=your_token (optionnel mais recommandé)
 #
 # =============================================================================
 
@@ -28,7 +35,32 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║                  ℹ️  SCRIPT OBSOLÈTE                          ║${NC}"
+echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${YELLOW}📢 Ce script n'est PLUS NÉCESSAIRE !${NC}"
+echo ""
+echo -e "Les dépendances de diarisation sont maintenant installées"
+echo -e "AUTOMATIQUEMENT via requirements.txt lors de:"
+echo ""
+echo -e "  ${GREEN}✓${NC} make install (développement local)"
+echo -e "  ${GREEN}✓${NC} docker build (conteneur Docker)"
+echo -e "  ${GREEN}✓${NC} pip install -r requirements.txt"
+echo ""
+echo -e "${BLUE}💡 Utilisez plutôt:${NC}"
+echo -e "   cd /path/to/v2_meeshy && make install"
+echo ""
+echo -e "${YELLOW}Voulez-vous continuer avec ce script de toute façon? (y/N)${NC}"
+read -r response
+if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    echo -e "${GREEN}✓ Utilisez 'make install' à la place !${NC}"
+    exit 0
+fi
+echo ""
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║     Installation des dépendances de diarisation              ║${NC}"

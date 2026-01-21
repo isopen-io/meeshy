@@ -669,12 +669,9 @@ endif
 		fi && \
 		. .venv/bin/activate && \
 		pip install -q --upgrade pip && \
-		echo "  $(BLUE)📦 Installation des dépendances principales...$(NC)" && \
+		echo "  $(BLUE)📦 Installation des dépendances (incluant pyannote.audio + scikit-learn)...$(NC)" && \
 		pip install -r requirements.txt && \
-		echo "  $(BLUE)🎯 Installation des dépendances de diarisation...$(NC)" && \
-		(pip install pyannote.audio>=3.1.0 scikit-learn>=1.3.0 && \
-		 echo "  $(GREEN)✅ Diarisation installée (pyannote.audio + scikit-learn)$(NC)") || \
-		echo "  $(YELLOW)⚠️  Diarisation non disponible - le fallback pitch clustering sera utilisé$(NC)"
+		echo "  $(GREEN)✅ Toutes les dépendances installées (diarisation incluse)$(NC)"
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les dépendances installées$(NC)"
 	@echo ""
