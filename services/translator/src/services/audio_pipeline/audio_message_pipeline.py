@@ -312,7 +312,8 @@ class AudioMessagePipeline:
         existing_voice_profile: Optional[Dict[str, Any]] = None,
         use_original_voice: bool = True,
         cloning_params: Optional[Dict[str, Any]] = None,
-        on_transcription_ready: Optional[Callable] = None
+        on_transcription_ready: Optional[Callable] = None,
+        on_translation_ready: Optional[Callable] = None
     ) -> AudioMessageResult:
         """
         Process complete audio message through pipeline.
@@ -342,6 +343,8 @@ class AudioMessagePipeline:
             cloning_params: Voice cloning parameters
             on_transcription_ready: Callback called when transcription is ready
                                    (before translation starts)
+            on_translation_ready: Callback called when each translation is ready
+                                 (called per language, allows progressive updates)
 
         Returns:
             AudioMessageResult with transcription + translations
@@ -553,7 +556,8 @@ class AudioMessagePipeline:
                 attachment_id=attachment_id,
                 user_voice_model=voice_model,
                 sender_speaker_id=transcription.sender_speaker_id,
-                model_type=model_type
+                model_type=model_type,
+                on_translation_ready=on_translation_ready
             )
 
             if not translations:

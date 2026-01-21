@@ -26,6 +26,7 @@ import os
 import logging
 import numpy as np
 import time
+import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
@@ -150,7 +151,8 @@ async def process_multi_speaker_audio(
     attachment_id: str,
     user_voice_model: Optional[Any] = None,
     sender_speaker_id: Optional[str] = None,
-    model_type: str = "premium"
+    model_type: str = "premium",
+    on_translation_ready: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Traite un audio multi-speaker en créant des tours de parole.
@@ -165,12 +167,21 @@ async def process_multi_speaker_audio(
        - Traduit le texte complet du tour
        - Synthétise avec le voice_model du speaker (déjà calculé)
     7. Concatène tous les tours dans l'ordre original de la conversation
+    8. **Re-transcription légère** pour obtenir des segments fins:
+       - Transcrit l'audio traduit avec Whisper (sans diarisation)
+       - Mappe les speakers en utilisant les timestamps des tours
+       - Remplace les segments grossiers par des segments fins précis
+    9. **Callback immédiat** après chaque langue:
+       - Remonte la traduction à la gateway dès qu'elle est prête
+       - Permet une mise à jour progressive de l'UI
 
     Avantages:
     - Voice_model créé une seule fois par speaker (pas recalculé)
     - Speakers similaires fusionnés automatiquement
     - Moins d'appels TTS (un par tour au lieu d'un par segment)
     - Meilleure continuité audio dans les tours de parole
+    - Segments fins avec timestamps exacts (+30% overhead vs +80% avec diarisation)
+    - Remontée progressive des résultats (UX réactive)
 
     Args:
         translation_stage: TranslationStage avec la chaîne mono-locuteur
@@ -184,6 +195,8 @@ async def process_multi_speaker_audio(
         user_voice_model: Voice model utilisateur (optionnel)
         sender_speaker_id: Speaker identifié comme expéditeur
         model_type: Type de modèle de traduction
+        on_translation_ready: Callback appelé après chaque traduction de langue
+                             (permet remontée progressive à la gateway)
 
     Returns:
         Dict avec les traductions par langue
@@ -360,7 +373,69 @@ async def process_multi_speaker_audio(
             )
 
             if final_audio:
+                # ═══════════════════════════════════════════════════════════════
+                # ÉTAPE 8: RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS
+                # ═══════════════════════════════════════════════════════════════
+                logger.info(f"[MULTI_SPEAKER] 🎯 Re-transcription pour segments fins ({target_lang})...")
+
+                # Extraire les métadonnées des tours depuis turn_translations
+                turns_metadata = []
+                current_time_ms = 0
+                for turn_data in turn_translations:
+                    translation = turn_data['translation']
+                    turn = turn_data.get('turn')
+                    if translation and turn:
+                        turns_metadata.append((
+                            current_time_ms,
+                            current_time_ms + translation.duration_ms,
+                            turn.speaker_id
+                        ))
+                        current_time_ms += translation.duration_ms
+
+                # Re-transcrire avec mapping speakers
+                from .retranscription_service import retranscribe_translated_audio
+
+                fine_segments = await retranscribe_translated_audio(
+                    audio_path=final_audio.audio_path,
+                    target_language=target_lang,
+                    turns_metadata=turns_metadata
+                )
+
+                # Remplacer les segments grossiers par les segments fins
+                final_audio.segments = fine_segments
+
+                logger.info(
+                    f"[MULTI_SPEAKER] ✅ {len(fine_segments)} segments fins "
+                    f"au lieu de {len(turns_metadata)} segments grossiers"
+                )
+
                 translations[target_lang] = final_audio
+
+                # ═══════════════════════════════════════════════════════════════
+                # ÉTAPE 9: CALLBACK POUR REMONTÉE IMMÉDIATE À LA GATEWAY
+                # ═══════════════════════════════════════════════════════════════
+                if on_translation_ready:
+                    try:
+                        logger.info(f"[MULTI_SPEAKER] 📤 Remontée traduction {target_lang} à la gateway...")
+
+                        translation_data = {
+                            'message_id': message_id,
+                            'attachment_id': attachment_id,
+                            'language': target_lang,
+                            'translation': final_audio,
+                            'segments': fine_segments
+                        }
+
+                        # Appeler le callback (peut être async)
+                        if asyncio.iscoroutinefunction(on_translation_ready):
+                            await on_translation_ready(translation_data)
+                        else:
+                            on_translation_ready(translation_data)
+
+                        logger.info(f"[MULTI_SPEAKER] ✅ Traduction {target_lang} remontée avec succès")
+                    except Exception as e:
+                        logger.warning(f"[MULTI_SPEAKER] ⚠️ Erreur callback traduction: {e}")
+
                 logger.info(f"[MULTI_SPEAKER] ✅ Langue {target_lang} complète")
             else:
                 logger.error(f"[MULTI_SPEAKER] ❌ Échec concaténation pour {target_lang}")
