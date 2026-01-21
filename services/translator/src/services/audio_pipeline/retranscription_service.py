@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def retranscribe_translated_audio(
     audio_path: str,
     target_language: str,
-    turns_metadata: List[Tuple[int, int, str]],
+    turns_metadata: List[Dict[str, Any]],
     transcription_service=None
 ) -> List[Dict[str, Any]]:
     """
@@ -37,11 +37,19 @@ async def retranscribe_translated_audio(
     Args:
         audio_path: Chemin audio traduit
         target_language: Langue cible (pour Whisper)
-        turns_metadata: Métadonnées des tours [(start_ms, end_ms, speaker_id), ...]
+        turns_metadata: Métadonnées des tours [
+            {
+                'start_ms': int,
+                'end_ms': int,
+                'speaker_id': str,
+                'voice_similarity_score': Optional[float]
+            },
+            ...
+        ]
         transcription_service: Service de transcription (injecté)
 
     Returns:
-        Segments fins avec speaker_id mappés
+        Segments fins avec speaker_id et voiceSimilarityScore mappés
     """
     logger.info(
         f"[RETRANSCRIBE] 🎤 Re-transcription légère: {target_language}, "
@@ -84,25 +92,30 @@ async def retranscribe_translated_audio(
             segment_mid_ms = (seg.start_ms + seg.end_ms) // 2
 
             speaker_id = None
-            for turn_start, turn_end, turn_speaker in turns_metadata:
+            voice_similarity_score = None
+
+            for turn_meta in turns_metadata:
+                turn_start = turn_meta['start_ms']
+                turn_end = turn_meta['end_ms']
+
                 if turn_start <= segment_mid_ms <= turn_end:
-                    speaker_id = turn_speaker
+                    speaker_id = turn_meta['speaker_id']
+                    voice_similarity_score = turn_meta.get('voice_similarity_score')
                     break
 
             # Si pas trouvé, utiliser le speaker du tour le plus proche
             if not speaker_id:
-                speaker_id = _find_closest_speaker(
-                    segment_mid_ms,
-                    turns_metadata
-                )
+                closest_turn = _find_closest_turn(segment_mid_ms, turns_metadata)
+                speaker_id = closest_turn['speaker_id']
+                voice_similarity_score = closest_turn.get('voice_similarity_score')
 
             segments_with_speakers.append({
                 'text': seg.text,
                 'startMs': seg.start_ms,
                 'endMs': seg.end_ms,
                 'speakerId': speaker_id,
-                'confidence': seg.confidence,
-                'language': target_language
+                'voiceSimilarityScore': voice_similarity_score,
+                'confidence': seg.confidence
             })
 
         # ════════════════════════════════════════════════════════════
@@ -126,32 +139,35 @@ async def retranscribe_translated_audio(
         return _create_coarse_segments_from_turns(turns_metadata)
 
 
-def _find_closest_speaker(
+def _find_closest_turn(
     segment_mid_ms: int,
-    turns_metadata: List[Tuple[int, int, str]]
-) -> str:
+    turns_metadata: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     """
-    Trouve le speaker du tour le plus proche temporellement.
+    Trouve le tour le plus proche temporellement.
     Utile pour segments en bordure de tours.
     """
     min_distance = float('inf')
-    closest_speaker = turns_metadata[0][2] if turns_metadata else 'SPEAKER_00'
+    closest_turn = turns_metadata[0] if turns_metadata else {
+        'speaker_id': 'SPEAKER_00',
+        'voice_similarity_score': None
+    }
 
-    for turn_start, turn_end, turn_speaker in turns_metadata:
+    for turn_meta in turns_metadata:
         # Distance au centre du tour
-        turn_mid = (turn_start + turn_end) // 2
+        turn_mid = (turn_meta['start_ms'] + turn_meta['end_ms']) // 2
         distance = abs(segment_mid_ms - turn_mid)
 
         if distance < min_distance:
             min_distance = distance
-            closest_speaker = turn_speaker
+            closest_turn = turn_meta
 
-    return closest_speaker
+    return closest_turn
 
 
 def _validate_speaker_mapping(
     segments: List[Dict[str, Any]],
-    turns_metadata: List[Tuple[int, int, str]]
+    turns_metadata: List[Dict[str, Any]]
 ) -> None:
     """
     Valide que le mapping des speakers est cohérent.
@@ -163,7 +179,7 @@ def _validate_speaker_mapping(
         speaker_counts[speaker_id] = speaker_counts.get(speaker_id, 0) + 1
 
     # Compter tours par speaker
-    turn_speakers = set(turn[2] for turn in turns_metadata)
+    turn_speakers = set(turn['speaker_id'] for turn in turns_metadata)
 
     logger.info("[RETRANSCRIBE] 📊 Validation mapping:")
     logger.info(f"  • Speakers dans tours: {sorted(turn_speakers)}")
@@ -186,7 +202,7 @@ def _validate_speaker_mapping(
 
 
 def _create_coarse_segments_from_turns(
-    turns_metadata: List[Tuple[int, int, str]]
+    turns_metadata: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     """
     Fallback: créer segments grossiers (1 par tour) si re-transcription échoue.
@@ -196,11 +212,12 @@ def _create_coarse_segments_from_turns(
     return [
         {
             'text': f"[Tour de parole {i+1}]",
-            'startMs': turn_start,
-            'endMs': turn_end,
-            'speakerId': speaker_id,
+            'startMs': turn_meta['start_ms'],
+            'endMs': turn_meta['end_ms'],
+            'speakerId': turn_meta['speaker_id'],
+            'voiceSimilarityScore': turn_meta.get('voice_similarity_score'),
             'confidence': 0.5,
             'fallback': True
         }
-        for i, (turn_start, turn_end, speaker_id) in enumerate(turns_metadata)
+        for i, turn_meta in enumerate(turns_metadata)
     ]

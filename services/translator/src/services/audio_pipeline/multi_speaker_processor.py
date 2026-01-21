@@ -385,11 +385,15 @@ async def process_multi_speaker_audio(
                     translation = turn_data['translation']
                     turn = turn_data.get('turn')
                     if translation and turn:
-                        turns_metadata.append((
-                            current_time_ms,
-                            current_time_ms + translation.duration_ms,
-                            turn.speaker_id
-                        ))
+                        # Récupérer les métadonnées complètes du speaker
+                        speaker_data = speakers_data.get(turn.speaker_id, {})
+
+                        turns_metadata.append({
+                            'start_ms': current_time_ms,
+                            'end_ms': current_time_ms + translation.duration_ms,
+                            'speaker_id': turn.speaker_id,
+                            'voice_similarity_score': speaker_data.get('voice_similarity_score')
+                        })
                         current_time_ms += translation.duration_ms
 
                 # Re-transcrire avec mapping speakers
@@ -466,7 +470,8 @@ async def _group_segments_by_speaker(
                 'segments': [],
                 'full_text': '',
                 'segment_positions': [],
-                'total_duration_ms': 0
+                'total_duration_ms': 0,
+                'voice_similarity_score': None  # Sera extrait du premier segment
             }
 
         speakers[speaker_id]['segments'].append(seg)
@@ -476,6 +481,13 @@ async def _group_segments_by_speaker(
             seg.get('end_ms', seg.get('endMs', 0)) -
             seg.get('start_ms', seg.get('startMs', 0))
         )
+
+        # Extraire voiceSimilarityScore du premier segment de ce speaker
+        if speakers[speaker_id]['voice_similarity_score'] is None:
+            speakers[speaker_id]['voice_similarity_score'] = seg.get(
+                'voice_similarity_score',
+                seg.get('voiceSimilarityScore')
+            )
 
     # Nettoyer les espaces
     for speaker_id in speakers:

@@ -97,10 +97,18 @@ export function useAudioPlayback({
         return;
       }
 
+      // Arrêter la lecture en cours avant de charger un nouvel audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        AudioManager.getInstance().stop(audioRef.current);
+      }
+
       try {
         setIsLoading(true);
         setHasError(false);
         setHasLoadedMetadata(false); // Réinitialiser le flag lors du chargement d'un nouvel audio
+        setCurrentTime(0); // Réinitialiser le temps de lecture à 0
 
         let apiPath = audioUrl;
 
@@ -136,6 +144,7 @@ export function useAudioPlayback({
 
         if (audioRef.current) {
           audioRef.current.load();
+          audioRef.current.currentTime = 0; // Forcer le reset du temps après le chargement
         }
 
         setIsLoading(false);
