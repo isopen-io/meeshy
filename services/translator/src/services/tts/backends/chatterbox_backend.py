@@ -15,6 +15,7 @@ import os
 import asyncio
 import logging
 import io
+import threading
 from pathlib import Path
 from typing import Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
@@ -81,7 +82,9 @@ class ChatterboxBackend(BaseTTSBackend):
         self._models_path = Path(self._settings.huggingface_cache_path)
 
         # Verrou pour sérialiser les appels de synthèse (ChatterBox n'est pas thread-safe)
-        self._synthesis_lock = asyncio.Lock()
+        # NOTE: Utilisation de threading.Lock() au lieu d'asyncio.Lock() pour compatibilité
+        # avec ThreadPoolExecutor qui crée plusieurs event loops
+        self._synthesis_lock = threading.Lock()
 
         try:
             from chatterbox.tts import ChatterboxTTS
@@ -459,8 +462,9 @@ class ChatterboxBackend(BaseTTSBackend):
         # GÉNÉRATION AUDIO - PARAMÈTRES SIMPLES UNIQUEMENT
         # Comme dans chatterbox_voice_translation_test.py
         # VERROU: ChatterBox n'est pas thread-safe, sérialisation des appels
+        # NOTE: Utilisation de threading.Lock() pour compatibilité ThreadPoolExecutor
         # ═══════════════════════════════════════════════════════════════════
-        async with self._synthesis_lock:
+        with self._synthesis_lock:
             if use_multilingual:
                 _model = model_multi
                 _text = text

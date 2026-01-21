@@ -129,6 +129,60 @@ export class MetadataManager {
   }
 
   /**
+   * Extrait les métadonnées audio avec ffprobe (fallback pour formats non supportés par music-metadata)
+   * Utilisé pour M4A, AAC, et autres formats problématiques
+   */
+  private async extractAudioWithFfprobe(fullPath: string): Promise<AudioMetadata | null> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('[MetadataManager] Timeout ffprobe après 10 secondes');
+        resolve(null);
+      }, 10000);
+
+      ffmpeg.ffprobe(fullPath, (err, metadata) => {
+        clearTimeout(timeout);
+
+        if (err) {
+          console.warn('[MetadataManager] ffprobe error:', err);
+          resolve(null);
+          return;
+        }
+
+        const audioStream = metadata.streams?.find((s) => s.codec_type === 'audio');
+
+        if (!audioStream) {
+          console.warn('[MetadataManager] No audio stream found in file');
+          resolve(null);
+          return;
+        }
+
+        const duration = Math.round((metadata.format?.duration || 0) * 1000); // Secondes -> millisecondes
+        const bitrate = parseInt(String(metadata.format?.bit_rate || audioStream.bit_rate || 0), 10);
+        const sampleRate = audioStream.sample_rate || 0;
+        const codec = audioStream.codec_name || 'unknown';
+        const channels = audioStream.channels || 1;
+
+        console.log('📊 [MetadataManager] ffprobe extraction:', {
+          duration,
+          durationSeconds: duration / 1000,
+          bitrate,
+          sampleRate,
+          codec,
+          channels
+        });
+
+        resolve({
+          duration,
+          bitrate,
+          sampleRate,
+          codec,
+          channels
+        });
+      });
+    });
+  }
+
+  /**
    * Calcule la durée d'un fichier WAV à partir de son header
    * Format WAV: Header RIFF (12 bytes) + fmt chunk (24 bytes) + data chunk header (8 bytes)
    */
@@ -311,16 +365,32 @@ export class MetadataManager {
           codec: metadata.codec
         });
       } catch (parseError) {
-        console.warn('[MetadataManager] music-metadata failed, trying WAV header:', parseError);
+        console.warn('[MetadataManager] music-metadata failed, trying fallback methods:', parseError);
       }
 
-      // Si échec ou format WAV, essayer de lire le header WAV
+      // Fallback 1: Si échec ou format WAV, essayer de lire le header WAV
       if ((!metadata || metadata.duration === 0) &&
           mimeType && (mimeType.includes('wav') || mimeType.includes('wave'))) {
         const wavMetadata = await this.calculateWavDuration(fullPath, fileSize);
         if (wavMetadata) {
           metadata = wavMetadata;
           console.log('✅ [MetadataManager] WAV duration calculated from header');
+        }
+      }
+
+      // Fallback 2: Pour M4A/AAC/MP4, utiliser ffprobe si music-metadata échoue
+      if ((!metadata || metadata.duration === 0) &&
+          mimeType && (mimeType.includes('m4a') || mimeType.includes('aac') ||
+                       mimeType.includes('mp4') || mimeType.includes('x-m4a'))) {
+        try {
+          console.log('🔍 [MetadataManager] Trying ffprobe for M4A/AAC format...');
+          const ffprobeMetadata = await this.extractAudioWithFfprobe(fullPath);
+          if (ffprobeMetadata) {
+            metadata = ffprobeMetadata;
+            console.log('✅ [MetadataManager] M4A/AAC metadata extracted with ffprobe');
+          }
+        } catch (ffprobeError) {
+          console.warn('[MetadataManager] ffprobe fallback failed:', ffprobeError);
         }
       }
 
