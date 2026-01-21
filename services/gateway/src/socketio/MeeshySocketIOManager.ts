@@ -186,6 +186,9 @@ export class MeeshySocketIOManager {
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
 
+      // Écouter les événements de traduction individuelle prêtes (progressive)
+      this.translationService.on('translationReady', this._handleTranslationReady.bind(this));
+
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
@@ -1682,6 +1685,73 @@ export class MeeshySocketIOManager {
 
     } catch (error) {
       console.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
+      this.stats.errors++;
+    }
+  }
+
+  /**
+   * Gère la réception d'une traduction individuelle prête depuis le Translator (PROGRESSIVE)
+   * Diffuse l'événement TRANSLATION_READY aux clients de la conversation
+   * Permet d'envoyer chaque traduction dès qu'elle est prête, sans attendre les autres
+   */
+  private async _handleTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: any;
+    phase?: string;
+  }) {
+    try {
+      console.log(`🌍 [SocketIOManager] ======== DIFFUSION TRADUCTION PROGRESSIVE VERS CLIENTS ========`);
+      console.log(`🌍 [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      console.log(`   🔊 Langue: ${data.language}`);
+      console.log(`   📝 Segments: ${data.translatedAudio.segments?.length || 0}`);
+
+      // Récupérer la conversation du message pour broadcast
+      let conversationId: string | null = null;
+      try {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        conversationId = msg?.conversationId || null;
+      } catch (error) {
+        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour traduction:`, error);
+      }
+
+      if (!conversationId) {
+        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
+        return;
+      }
+
+      // Normaliser l'ID de conversation
+      const normalizedId = await this.normalizeConversationId(conversationId);
+      const roomName = `conversation_${normalizedId}`;
+      const roomClients = this.io.sockets.adapter.rooms.get(roomName);
+      const clientCount = roomClients ? roomClients.size : 0;
+
+      console.log(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
+
+      // Préparer les données au format TranslationReadyEventData
+      const translationData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: normalizedId,
+        language: data.language,
+        translatedAudio: data.translatedAudio,
+        phase: data.phase || 'translation'
+      };
+
+      // Diffuser dans la room de conversation
+      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSLATION_READY}' vers room '${roomName}' (${clientCount} clients)`);
+      this.io.to(roomName).emit(SERVER_EVENTS.TRANSLATION_READY, translationData);
+
+      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION PROGRESSIVE DIFFUSÉ ========`);
+      console.log(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
+
+    } catch (error) {
+      console.error(`❌ [SocketIOManager] Erreur envoi traduction progressive:`, error);
       this.stats.errors++;
     }
   }
