@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
+import { UserRoleEnum, ErrorCode, MemberRole } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -669,7 +669,7 @@ export function registerSharingRoutes(
         data: {
           conversationId: shareLink.conversationId,
           userId: userToken.userId,
-          role: 'member',
+          role: MemberRole.MEMBER,
           joinedAt: new Date()
         }
       });

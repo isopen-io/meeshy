@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -164,7 +164,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       } else if (body.newConversation) {
         // Créer une nouvelle conversation avec les données fournies
         const membersToCreate = [
-          { userId, role: 'admin' }
+          { userId, role: MemberRole.CREATOR }
         ];
 
         if (body.newConversation.memberIds && body.newConversation.memberIds.length > 0) {
@@ -179,7 +179,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             if (userExists) {
               membersToCreate.push({
                 userId: memberId,
-                role: 'member'
+                role: MemberRole.MEMBER
               });
             }
           }
@@ -213,7 +213,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             members: {
               create: [{
                 userId,
-                role: 'admin'
+                role: MemberRole.CREATOR
               }]
             }
           }

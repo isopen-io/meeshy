@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
+import { UserRoleEnum, ErrorCode, MemberRole } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
@@ -676,12 +676,12 @@ export function registerCoreRoutes(
               // Créateur de la conversation
               {
                 userId,
-                role: 'admin'
+                role: MemberRole.CREATOR
               },
               // Autres participants (sans doublons et sans le créateur)
               ...uniqueParticipantIds.map((participantId: string) => ({
                 userId: participantId,
-                role: 'member'
+                role: MemberRole.MEMBER
               }))
             ]
           }

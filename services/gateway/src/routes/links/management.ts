@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -110,7 +110,10 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const isCreator = shareLink.createdBy === userId;
       const member = shareLink.conversation.members[0];
-      const isConversationAdmin = member && member.role === 'admin';
+      const isConversationAdmin = member && (
+        member.role === MemberRole.ADMIN ||
+        member.role === MemberRole.CREATOR
+      );
 
       if (!isCreator && !isConversationAdmin) {
         return reply.status(403).send({
