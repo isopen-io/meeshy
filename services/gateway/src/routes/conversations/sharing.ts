@@ -669,7 +669,7 @@ export function registerSharingRoutes(
         data: {
           conversationId: shareLink.conversationId,
           userId: userToken.userId,
-          role: UserRoleEnum.MEMBER,
+          role: 'member',
           joinedAt: new Date()
         }
       });

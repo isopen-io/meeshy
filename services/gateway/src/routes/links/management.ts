@@ -110,10 +110,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const isCreator = shareLink.createdBy === userId;
       const member = shareLink.conversation.members[0];
-      const isConversationAdmin = member && (
-        member.role === UserRoleEnum.ADMIN ||
-        member.role === UserRoleEnum.CREATOR
-      );
+      const isConversationAdmin = member && member.role === 'admin';
 
       if (!isCreator && !isConversationAdmin) {
         return reply.status(403).send({

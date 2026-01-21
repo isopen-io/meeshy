@@ -164,7 +164,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       } else if (body.newConversation) {
         // Créer une nouvelle conversation avec les données fournies
         const membersToCreate = [
-          { userId, role: UserRoleEnum.CREATOR }
+          { userId, role: 'admin' }
         ];
 
         if (body.newConversation.memberIds && body.newConversation.memberIds.length > 0) {
@@ -179,7 +179,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             if (userExists) {
               membersToCreate.push({
                 userId: memberId,
-                role: UserRoleEnum.MEMBER
+                role: 'member'
               });
             }
           }
@@ -213,7 +213,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             members: {
               create: [{
                 userId,
-                role: UserRoleEnum.CREATOR
+                role: 'admin'
               }]
             }
           }

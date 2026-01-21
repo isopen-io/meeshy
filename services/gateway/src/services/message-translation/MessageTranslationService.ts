@@ -781,7 +781,7 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
       // 3. Construire la structure translations JSON
-      const existingTranslations = (attachment.translations as AttachmentTranslations) || {};
+      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
       const translationsData: AttachmentTranslations = { ...existingTranslations };
 
       for (const translatedAudio of data.translatedAudios) {
@@ -1291,7 +1291,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // 2. Mettre à jour le champ translations JSON avec la nouvelle traduction
-      const existingTranslations = (attachment.translations as AttachmentTranslations) || {};
+      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
 
       existingTranslations[data.language] = {
         type: 'audio',

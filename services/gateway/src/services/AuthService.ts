@@ -1080,19 +1080,6 @@ export class AuthService {
           canManageNotifications: true,
         };
 
-      case UserRoleEnum.CREATOR:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canViewAuditLogs: true,
-          canManageNotifications: true,
-        };
-
       case UserRoleEnum.MODERATOR:
         return {
           ...basePermissions,

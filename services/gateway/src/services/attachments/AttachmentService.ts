@@ -373,7 +373,7 @@ export class AttachmentService {
       isEncrypted: att.isEncrypted ?? false,
       transcription: att.transcription as unknown as AttachmentTranscription | null,
       translatedAudios: toSocketIOAudios(att.id, att.translations as unknown as AttachmentTranslations | undefined),
-      translationsJson: (att.translations as unknown as AttachmentTranslations | undefined) || {}
+      translations: (att.translations as unknown as AttachmentTranslations | undefined) || {}
     }));
   }
 

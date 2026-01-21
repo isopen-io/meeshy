@@ -676,12 +676,12 @@ export function registerCoreRoutes(
               // Créateur de la conversation
               {
                 userId,
-                role: UserRoleEnum.CREATOR
+                role: 'admin'
               },
               // Autres participants (sans doublons et sans le créateur)
               ...uniqueParticipantIds.map((participantId: string) => ({
                 userId: participantId,
-                role: UserRoleEnum.MEMBER
+                role: 'member'
               }))
             ]
           }
