@@ -270,6 +270,11 @@ class AudioHandler:
             async def on_transcription_ready(transcription_data: dict):
                 await self._publish_transcription_result(task_id, transcription_data)
 
+            # Callback pour publier chaque traduction dès qu'elle est prête
+            # (envoi progressif des traductions au lieu d'attendre la fin)
+            async def on_translation_ready(translation_data: dict):
+                await self._publish_translation_ready(task_id, translation_data)
+
             # Exécuter le pipeline audio avec le chemin local acquis
             logger.info(f"🔄 [TRANSLATOR] Démarrage pipeline audio: {task_id}")
             result = await pipeline.process_audio_message(
@@ -291,7 +296,9 @@ class AudioHandler:
                 # Paramètres de clonage vocal configurables
                 cloning_params=cloning_params,
                 # Callback pour envoi progressif de la transcription
-                on_transcription_ready=on_transcription_ready
+                on_transcription_ready=on_transcription_ready,
+                # Callback pour envoi progressif des traductions
+                on_translation_ready=on_translation_ready
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -625,6 +632,113 @@ class AudioHandler:
 
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def _publish_translation_ready(self, task_id: str, translation_data: dict):
+        """
+        Publie le résultat d'une traduction individuelle via PUB (dès qu'elle est prête).
+
+        Permet à la gateway de recevoir chaque traduction progressivement,
+        sans attendre la fin de toutes les traductions.
+
+        Type: 'translation_ready' (distinct de 'audio_process_completed')
+
+        Args:
+            task_id: ID de la tâche
+            translation_data: Données de la traduction {
+                'message_id': str,
+                'attachment_id': str,
+                'language': str,
+                'translation': TranslatedAudio (avec segments complets)
+            }
+        """
+        try:
+            import base64
+
+            translation = translation_data['translation']
+
+            # Décoder l'audio base64 → bytes pour envoi binaire (multipart)
+            audio_bytes = None
+            if translation.audio_data_base64:
+                try:
+                    audio_bytes = base64.b64decode(translation.audio_data_base64)
+                except Exception as e:
+                    logger.warning(f"[MULTIPART] Erreur décodage audio {translation.language}: {e}")
+            elif translation.audio_path and os.path.exists(translation.audio_path):
+                # Si pas de base64, charger depuis le fichier
+                try:
+                    with open(translation.audio_path, 'rb') as f:
+                        audio_bytes = f.read()
+                except Exception as e:
+                    logger.warning(f"[MULTIPART] Erreur lecture fichier audio {translation.language}: {e}")
+
+            # Préparer le metadata JSON (Frame 0)
+            translated_audio_dict = {
+                'targetLanguage': translation.language,
+                'translatedText': translation.translated_text,
+                'audioUrl': translation.audio_url,
+                'audioPath': translation.audio_path,
+                'durationMs': translation.duration_ms,
+                'voiceCloned': translation.voice_cloned,
+                'voiceQuality': translation.voice_quality,
+                'audioMimeType': translation.audio_mime_type or 'audio/mp3'
+            }
+
+            # Ajouter les segments si disponibles (convertir en dicts)
+            if hasattr(translation, 'segments') and translation.segments:
+                translated_audio_dict['segments'] = [
+                    {
+                        'text': seg.text if hasattr(seg, 'text') else seg.get('text'),
+                        'startMs': seg.start_ms if hasattr(seg, 'start_ms') else seg.get('start_ms', seg.get('startMs', 0)),
+                        'endMs': seg.end_ms if hasattr(seg, 'end_ms') else seg.get('end_ms', seg.get('endMs', 0)),
+                        'confidence': seg.confidence if hasattr(seg, 'confidence') else seg.get('confidence'),
+                        'speakerId': (seg.speaker_id if hasattr(seg, 'speaker_id') else seg.get('speaker_id', seg.get('speakerId'))) or None,
+                        'voiceSimilarityScore': _get_voice_similarity_score(seg),
+                        'language': seg.language if hasattr(seg, 'language') else seg.get('language')
+                    }
+                    for seg in translation.segments
+                ]
+                logger.info(f"[ZMQ] ✅ {translation.language}: {len(translated_audio_dict['segments'])} segments traduits inclus")
+            else:
+                logger.warning(f"[ZMQ] ⚠️ {translation.language}: Pas de segments traduits")
+
+            metadata = {
+                'type': 'translation_ready',  # Type distinct pour traduction individuelle
+                'taskId': task_id,
+                'messageId': translation_data['message_id'],
+                'attachmentId': translation_data['attachment_id'],
+                'language': translation.language,
+                'translatedAudio': translated_audio_dict,
+                'timestamp': time.time()
+            }
+
+            # Envoyer via multipart si audio disponible, sinon simple JSON
+            if self.pub_socket:
+                if audio_bytes:
+                    # Multipart: JSON + binaire
+                    frames = [
+                        json.dumps(metadata).encode('utf-8'),
+                        audio_bytes
+                    ]
+                    await self.pub_socket.send_multipart(frames)
+                    logger.info(
+                        f"✅ [TRANSLATOR] Translation ready (multipart) publié: "
+                        f"{translation.language}, "
+                        f"{len(audio_bytes):,} bytes"
+                    )
+                else:
+                    # Simple JSON (pas d'audio binaire)
+                    await self.pub_socket.send_json(metadata)
+                    logger.info(
+                        f"✅ [TRANSLATOR] Translation ready (JSON) publié: "
+                        f"{translation.language}"
+                    )
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour translation ready")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {e}")
             import traceback
             traceback.print_exc()
 

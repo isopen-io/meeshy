@@ -25,6 +25,7 @@ import type {
   VoiceProfileErrorEvent,
   TranscriptionCompletedEvent,
   TranscriptionReadyEvent,
+  TranslationReadyEvent,
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
   VoiceTranslationFailedEvent
@@ -158,6 +159,11 @@ export class ZmqMessageHandler extends EventEmitter {
       case 'transcription_ready':
         // Transcription prête (avant traduction) - envoi progressif
         this.handleTranscriptionReady(event as unknown as TranscriptionReadyEvent);
+        break;
+
+      case 'translation_ready':
+        // Traduction individuelle prête - envoi progressif
+        this.handleTranslationReady(event as unknown as TranslationReadyEvent);
         break;
 
       case 'transcription_error':
@@ -489,6 +495,26 @@ export class ZmqMessageHandler extends EventEmitter {
       attachmentId: event.attachmentId,
       transcription: event.transcription,
       processingTimeMs: event.processingTimeMs
+    });
+  }
+
+  /**
+   * Gère un événement de traduction individuelle prête.
+   * Permet d'envoyer chaque traduction dès qu'elle est prête,
+   * sans attendre que toutes les traductions soient terminées.
+   */
+  private handleTranslationReady(event: TranslationReadyEvent): void {
+    console.log(`[GATEWAY] 🌍 Translation READY (progressive): ${event.messageId}`);
+    console.log(`[GATEWAY]    🔊 Langue: ${event.language}`);
+    console.log(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Émettre l'événement de traduction prête (progressive)
+    this.emit('translationReady', {
+      taskId: event.taskId,
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      language: event.language,
+      translatedAudio: event.translatedAudio
     });
   }
 
