@@ -25,7 +25,7 @@ import time
 import asyncio
 import threading
 import base64
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -227,8 +227,7 @@ class AudioMessagePipeline:
         # Create pipeline stages
         self.transcription_stage = create_transcription_stage()
         self.translation_stage = create_translation_stage(
-            translation_service=translation_service,
-            transcription_service=self.transcription_stage.transcription_service
+            translation_service=translation_service
         )
 
         # Services
@@ -312,13 +311,14 @@ class AudioMessagePipeline:
         original_sender_id: Optional[str] = None,
         existing_voice_profile: Optional[Dict[str, Any]] = None,
         use_original_voice: bool = True,
-        cloning_params: Optional[Dict[str, Any]] = None
+        cloning_params: Optional[Dict[str, Any]] = None,
+        on_transcription_ready: Optional[Callable] = None
     ) -> AudioMessageResult:
         """
         Process complete audio message through pipeline.
 
         Pipeline Orchestration:
-        1. Transcription Stage → text + language
+        1. Transcription Stage → text + language → callback (if provided)
         2. Filter target languages (exclude source language)
         3. Translation Stage → voice model + translations
         4. Serialize voice profile for Gateway
@@ -340,6 +340,8 @@ class AudioMessagePipeline:
             existing_voice_profile: Voice profile from Gateway
             use_original_voice: Use original sender's voice
             cloning_params: Voice cloning parameters
+            on_transcription_ready: Callback called when transcription is ready
+                                   (before translation starts)
 
         Returns:
             AudioMessageResult with transcription + translations
@@ -371,6 +373,35 @@ class AudioMessagePipeline:
             f"[PIPELINE] Transcribed: '{transcription.text[:50]}...' "
             f"(lang={transcription.language}, source={transcription.source})"
         )
+
+        # ═══════════════════════════════════════════════════════════════
+        # CALLBACK: Notify transcription ready (before translation)
+        # Permet à la gateway de recevoir la transcription immédiatement
+        # ═══════════════════════════════════════════════════════════════
+        if on_transcription_ready:
+            try:
+                transcription_time = int((time.time() - start_time) * 1000)
+                logger.info(f"[PIPELINE] 📤 Calling on_transcription_ready callback ({transcription_time}ms)")
+
+                # Préparer les données de transcription pour le callback
+                transcription_data = {
+                    'message_id': message_id,
+                    'attachment_id': attachment_id,
+                    'audio_path': audio_path,
+                    'audio_url': audio_url,
+                    'transcription': transcription,
+                    'processing_time_ms': transcription_time
+                }
+
+                # Appeler le callback (peut être async)
+                if asyncio.iscoroutinefunction(on_transcription_ready):
+                    await on_transcription_ready(transcription_data)
+                else:
+                    on_transcription_ready(transcription_data)
+
+                logger.info(f"[PIPELINE] ✅ Transcription callback completed")
+            except Exception as e:
+                logger.warning(f"[PIPELINE] ⚠️ Transcription callback error: {e}")
 
         # ═══════════════════════════════════════════════════════════════
         # STAGE 2: DETERMINE TARGET LANGUAGES
@@ -479,26 +510,88 @@ class AudioMessagePipeline:
                 source_segments = transcription.segments
 
         logger.info(
-            f"[PIPELINE] 🎭 Mode multi-speaker: "
+            f"[PIPELINE] 🎭 Mode: "
             f"segments={len(source_segments) if source_segments else 0}, "
             f"speakers={transcription.speaker_count if transcription.speaker_count else 'unknown'}"
         )
 
-        translations = await self.translation_stage.process_languages(
-            target_languages=target_languages,
-            source_text=transcription.text,
-            source_language=source_language,
-            audio_hash=transcription.audio_hash,
-            voice_model=voice_model,
-            message_id=message_id,
-            attachment_id=attachment_id,
-            model_type=model_type,
-            cloning_params=cloning_params,
-            max_workers=max_workers,
-            source_audio_path=audio_path,
-            source_segments=source_segments,
-            diarization_result=transcription.speaker_analysis
+        # ═══════════════════════════════════════════════════════════════
+        # CHOIX DE LA MÉTHODE: Multi-speaker ou simple
+        # ═══════════════════════════════════════════════════════════════
+        is_multi_speaker = (
+            transcription.speaker_count is not None and
+            transcription.speaker_count > 1 and
+            source_segments and
+            len(source_segments) > 0
         )
+
+        if is_multi_speaker:
+            logger.info(
+                f"[PIPELINE] 🎤 Mode MULTI-SPEAKER activé: "
+                f"{transcription.speaker_count} speakers, "
+                f"{len(source_segments)} segments"
+            )
+            logger.info(
+                f"[PIPELINE] Architecture: "
+                f"Extraction audio par speaker → "
+                f"Voice model par speaker → "
+                f"Chaîne mono-locuteur par speaker → "
+                f"Réassemblage"
+            )
+
+            # Utiliser le processeur multi-speaker qui réutilise la chaîne mono-locuteur
+            from .multi_speaker_processor import process_multi_speaker_audio
+
+            translations = await process_multi_speaker_audio(
+                translation_stage=self.translation_stage,
+                voice_clone_service=self.translation_stage.voice_clone_service,
+                segments=source_segments,
+                source_audio_path=audio_path,
+                target_languages=target_languages,
+                source_language=source_language,
+                message_id=message_id,
+                attachment_id=attachment_id,
+                user_voice_model=voice_model,
+                sender_speaker_id=transcription.sender_speaker_id,
+                model_type=model_type
+            )
+
+            if not translations:
+                logger.warning(
+                    "[PIPELINE] ⚠️ Échec traitement multi-speaker, "
+                    "fallback sur méthode simple"
+                )
+                # Fallback sur méthode simple
+                translations = await self.translation_stage.process_languages(
+                    target_languages=target_languages,
+                    source_text=transcription.text,
+                    source_language=source_language,
+                    audio_hash=transcription.audio_hash,
+                    voice_model=voice_model,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    model_type=model_type,
+                    cloning_params=cloning_params,
+                    max_workers=max_workers,
+                    source_audio_path=audio_path
+                )
+        else:
+            logger.info("[PIPELINE] 🎤 Mode MONO-SPEAKER: utilisation chaîne simple")
+
+            # Méthode simple (chaîne mono-locuteur qui fonctionne)
+            translations = await self.translation_stage.process_languages(
+                target_languages=target_languages,
+                source_text=transcription.text,
+                source_language=source_language,
+                audio_hash=transcription.audio_hash,
+                voice_model=voice_model,
+                message_id=message_id,
+                attachment_id=attachment_id,
+                model_type=model_type,
+                cloning_params=cloning_params,
+                max_workers=max_workers,
+                source_audio_path=audio_path
+            )
 
         logger.info(f"[PIPELINE] Generated {len(translations)} translations")
 

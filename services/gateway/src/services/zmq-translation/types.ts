@@ -247,7 +247,21 @@ export interface TranscriptionErrorEvent {
   timestamp: number;
 }
 
-export type TranscriptionEvent = TranscriptionCompletedEvent | TranscriptionErrorEvent;
+/**
+ * Événement envoyé dès que la transcription est prête (AVANT la traduction).
+ * Permet d'afficher la transcription immédiatement sans attendre la traduction.
+ */
+export interface TranscriptionReadyEvent {
+  type: 'transcription_ready';
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  transcription: TranscriptionData;
+  processingTimeMs: number;
+  timestamp: number;
+}
+
+export type TranscriptionEvent = TranscriptionCompletedEvent | TranscriptionErrorEvent | TranscriptionReadyEvent;
 
 // ═══════════════════════════════════════════════════════════════
 // VOICE API TYPES

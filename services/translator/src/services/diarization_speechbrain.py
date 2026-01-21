@@ -39,6 +39,9 @@ try:
 except ImportError:
     SKLEARN_AVAILABLE = False
 
+# Import unified voice characteristics model
+from models.voice_models import VoiceCharacteristics
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,19 +53,6 @@ class SpeakerSegment:
     end_ms: int
     duration_ms: int
     confidence: float = 1.0
-
-
-@dataclass
-class VoiceCharacteristics:
-    """Caractéristiques vocales d'un speaker"""
-    gender: str  # "homme", "femme", "enfant"
-    pitch_level: str  # "grave", "medium", "aigu"
-    age_group: str  # "enfant", "adolescent", "adulte", "senior"
-    tone: str  # "monotone", "expressif", "très expressif"
-    speech_rate: str  # "lent", "normal", "rapide"
-    avg_pitch_hz: float
-    pitch_variance: float
-    syllables_per_second: float
 
 
 @dataclass
@@ -105,6 +95,10 @@ class SpeechBrainDiarization:
         )
         self._encoder = None
 
+        # Initialiser le service d'analyse vocale
+        from services.voice_analyzer_service import VoiceAnalyzerService
+        self._voice_analyzer = VoiceAnalyzerService()
+
     def _get_encoder(self) -> "EncoderClassifier":
         """Charge le modèle d'embedding (lazy loading)"""
         if not SPEECHBRAIN_AVAILABLE:
@@ -125,21 +119,24 @@ class SpeechBrainDiarization:
 
         return self._encoder
 
-    def _analyze_voice_characteristics(
+    async def _analyze_voice_characteristics(
         self,
         audio_path: str,
         segments: List[SpeakerSegment]
     ) -> Optional[VoiceCharacteristics]:
         """
-        Analyse les caractéristiques vocales d'un speaker.
+        Analyse les caractéristiques vocales d'un speaker en utilisant VoiceAnalyzerService.
 
         Args:
             audio_path: Chemin de l'audio source
             segments: Segments du speaker à analyser
 
         Returns:
-            VoiceCharacteristics ou None si échec
+            VoiceCharacteristics complètes ou None si échec
         """
+        import tempfile
+        import soundfile as sf
+
         try:
             # Charger l'audio complet
             audio_data, sr = librosa.load(audio_path, sr=None)
@@ -160,115 +157,99 @@ class SpeechBrainDiarization:
             # Concaténer les chunks
             speaker_audio = np.concatenate(speaker_audio_chunks)
 
-            # ═══════════════════════════════════════════════════════════
-            # 1. ANALYSE DU PITCH (fréquence fondamentale F0)
-            # ═══════════════════════════════════════════════════════════
-            pitches, magnitudes = librosa.piptrack(
-                y=speaker_audio,
-                sr=sr,
-                fmin=50,  # Hz min
-                fmax=500  # Hz max
-            )
+            # Créer un fichier temporaire avec l'audio du speaker
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                temp_audio_path = tmp_file.name
+                sf.write(temp_audio_path, speaker_audio, sr)
 
-            # Extraire les pitches valides (magnitude > seuil)
-            valid_pitches = []
-            for t in range(pitches.shape[1]):
-                index = magnitudes[:, t].argmax()
-                pitch = pitches[index, t]
-                if pitch > 0 and magnitudes[index, t] > 0.1:
-                    valid_pitches.append(pitch)
+            try:
+                # Initialiser le service d'analyse vocale si nécessaire
+                if not self._voice_analyzer.is_initialized:
+                    await self._voice_analyzer.initialize()
 
-            if not valid_pitches:
-                return None
+                # Utiliser VoiceAnalyzerService pour l'analyse complète
+                characteristics = await self._voice_analyzer.analyze(
+                    audio_path=temp_audio_path,
+                    use_cache=False  # Ne pas mettre en cache les fichiers temporaires
+                )
 
-            avg_pitch = np.mean(valid_pitches)
-            pitch_variance = np.std(valid_pitches)
+                return characteristics
 
-            # ═══════════════════════════════════════════════════════════
-            # 2. DÉTERMINATION DU GENRE ET REGISTRE
-            # ═══════════════════════════════════════════════════════════
-            # Références approximatives:
-            # - Enfant: 250-400 Hz
-            # - Femme adulte: 165-255 Hz
-            # - Homme adulte: 85-180 Hz
-
-            if avg_pitch > 250:
-                gender = "enfant"
-                pitch_level = "aigu"
-                age_group = "enfant"
-            elif avg_pitch > 200:
-                gender = "femme"
-                pitch_level = "aigu"
-                age_group = "adulte"
-            elif avg_pitch > 165:
-                gender = "femme"
-                pitch_level = "medium"
-                age_group = "adulte"
-            elif avg_pitch > 140:
-                gender = "adolescent"
-                pitch_level = "medium"
-                age_group = "adolescent"
-            elif avg_pitch > 120:
-                gender = "homme"
-                pitch_level = "medium"
-                age_group = "adulte"
-            elif avg_pitch > 90:
-                gender = "homme"
-                pitch_level = "grave"
-                age_group = "adulte"
-            else:
-                gender = "homme"
-                pitch_level = "très grave"
-                age_group = "senior"
-
-            # ═══════════════════════════════════════════════════════════
-            # 3. ANALYSE DU TON (expressivité)
-            # ═══════════════════════════════════════════════════════════
-            # Variance du pitch indique l'expressivité
-            if pitch_variance > 40:
-                tone = "très expressif"
-            elif pitch_variance > 20:
-                tone = "expressif"
-            else:
-                tone = "monotone"
-
-            # ═══════════════════════════════════════════════════════════
-            # 4. ANALYSE DE LA RAPIDITÉ DE PAROLE
-            # ═══════════════════════════════════════════════════════════
-            # Estimer le nombre de syllabes via détection d'onsets
-            onset_env = librosa.onset.onset_strength(y=speaker_audio, sr=sr)
-            onsets = librosa.onset.onset_detect(
-                onset_envelope=onset_env,
-                sr=sr,
-                units='time'
-            )
-
-            duration_s = len(speaker_audio) / sr
-            syllables_per_second = len(onsets) / duration_s if duration_s > 0 else 0
-
-            # Classification de la rapidité
-            # Références: ~4-5 syllabes/sec = normal
-            if syllables_per_second > 6:
-                speech_rate = "rapide"
-            elif syllables_per_second > 3:
-                speech_rate = "normal"
-            else:
-                speech_rate = "lent"
-
-            return VoiceCharacteristics(
-                gender=gender,
-                pitch_level=pitch_level,
-                age_group=age_group,
-                tone=tone,
-                speech_rate=speech_rate,
-                avg_pitch_hz=float(avg_pitch),
-                pitch_variance=float(pitch_variance),
-                syllables_per_second=float(syllables_per_second)
-            )
+            finally:
+                # Supprimer le fichier temporaire
+                import os
+                if os.path.exists(temp_audio_path):
+                    os.unlink(temp_audio_path)
 
         except Exception as e:
             logger.warning(f"[SPEECHBRAIN] ⚠️ Erreur analyse caractéristiques vocales: {e}")
+            import traceback
+            traceback.print_exc()
             return None
+
+    @staticmethod
+    def _get_gender_label(chars: VoiceCharacteristics) -> str:
+        """Extract gender label from VoiceCharacteristics (English)"""
+        gender = chars.estimated_gender
+        if gender == "child":
+            return "child"
+        elif gender == "female":
+            return "female"
+        elif gender == "male":
+            return "male"
+        return "unknown"
+
+    @staticmethod
+    def _get_pitch_level_label(chars: VoiceCharacteristics) -> str:
+        """Extract pitch level from VoiceCharacteristics (English)"""
+        pitch = chars.pitch_mean
+        if pitch > 250:
+            return "very_high"
+        elif pitch > 200:
+            return "high"
+        elif pitch > 120:
+            return "medium"
+        elif pitch > 90:
+            return "low"
+        else:
+            return "very_low"
+
+    @staticmethod
+    def _get_age_label(chars: VoiceCharacteristics) -> str:
+        """Extract age group from VoiceCharacteristics (English)"""
+        age = chars.estimated_age_range
+        if "child" in age:
+            return "child"
+        elif "teen" in age or "young" in age:
+            return "teen"
+        elif "senior" in age:
+            return "senior"
+        return "adult"
+
+    @staticmethod
+    def _get_tone_label(chars: VoiceCharacteristics) -> str:
+        """Extract tone/expressiveness from VoiceCharacteristics (English)"""
+        variance = chars.pitch_std
+        if variance > 40:
+            return "very_expressive"
+        elif variance > 20:
+            return "expressive"
+        else:
+            return "monotone"
+
+    @staticmethod
+    def _get_speech_rate_label(chars: VoiceCharacteristics) -> str:
+        """Extrait la rapidité de parole depuis VoiceCharacteristics"""
+        # Convertir speech_rate_wpm en syllabes/sec (approximation: 1 mot ≈ 2 syllabes)
+        wpm = chars.speech_rate_wpm
+        syl_per_sec = (wpm * 2) / 60 if wpm > 0 else 0
+
+        if syl_per_sec > 6:
+            return "rapide"
+        elif syl_per_sec > 3:
+            return "normal"
+        else:
+            return "lent"
 
     async def diarize(
         self,
@@ -332,7 +313,10 @@ class SpeechBrainDiarization:
         best_score = -1
 
         if len(embeddings) >= 4:  # Minimum pour clustering
-            for n in range(2, min(max_speakers + 1, len(embeddings) // 2)):
+            # Limiter le nombre max de clusters testés
+            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 4)
+
+            for n in range(2, max_clusters_to_test):
                 clustering = AgglomerativeClustering(
                     n_clusters=n,
                     metric='cosine',
@@ -343,9 +327,14 @@ class SpeechBrainDiarization:
                 # Score de silhouette (qualité du clustering)
                 score = silhouette_score(embeddings, labels, metric='cosine')
 
-                if score > best_score and score > 0.3:  # Seuil de qualité
+                logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
+
+                # Seuil de 0.25 : acceptable pour voix humaines réelles
+                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.25-0.5=acceptable, <0.25=faible
+                if score > best_score and score > 0.25:  # Seuil réaliste pour voix humaines
                     best_score = score
                     best_n_clusters = n
+                    logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
 
         # Appliquer le clustering final
         if best_n_clusters > 1:
@@ -417,20 +406,24 @@ class SpeechBrainDiarization:
             data['segments'] = segments_sorted
             data['total_duration_ms'] = total_duration
 
-        # Filtrer les faux positifs (speakers avec <5% du temps OU <2 segments)
-        MIN_SPEAKING_RATIO = 0.05
-        MIN_SEGMENTS = 2
+        # Filtrer uniquement les speakers avec durée vraiment insignifiante
+        # On fait confiance au clustering SpeechBrain (basé sur embeddings vocaux)
+        # pour différencier les speakers, même si quelqu'un dit juste "OK"
+        MIN_DURATION_MS = 300  # Au moins 300ms (un mot court comme "OK")
 
         speakers_filtered = {}
         for speaker_id, data in speakers_data.items():
             speaking_ratio = data['total_duration_ms'] / duration_ms if duration_ms > 0 else 0
 
-            if speaking_ratio >= MIN_SPEAKING_RATIO or len(data['segments']) >= MIN_SEGMENTS:
+            # Seul critère: durée minimale
+            # La fusion post-traitement s'occupera de regrouper les speakers trop similaires
+            if data['total_duration_ms'] >= MIN_DURATION_MS:
                 speakers_filtered[speaker_id] = data
             else:
                 logger.info(
                     f"[SPEECHBRAIN]    Filtré {speaker_id}: "
-                    f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments"
+                    f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
+                    f"{data['total_duration_ms']}ms (trop court, min={MIN_DURATION_MS}ms)"
                 )
 
         speakers_data = speakers_filtered
@@ -442,7 +435,7 @@ class SpeechBrainDiarization:
 
             # Analyser les caractéristiques vocales
             logger.info(f"[SPEECHBRAIN] 🎤 Analyse des caractéristiques vocales de {speaker_id}...")
-            voice_chars = self._analyze_voice_characteristics(
+            voice_chars = await self._analyze_voice_characteristics(
                 audio_path=audio_path,
                 segments=data['segments']
             )
@@ -455,6 +448,12 @@ class SpeechBrainDiarization:
                 segments=data['segments'],
                 voice_characteristics=voice_chars
             ))
+
+        # Fusionner les speakers avec caractéristiques vocales très similaires
+        if len(speakers) > 1:
+            logger.info(f"[SPEECHBRAIN] 🔍 Analyse de similarité entre {len(speakers)} speakers...")
+            speakers = self._merge_similar_speakers_by_characteristics(speakers)
+            logger.info(f"[SPEECHBRAIN] ✅ Après fusion: {len(speakers)} speakers")
 
         # Identifier le speaker principal (qui parle le plus)
         if speakers:
@@ -491,19 +490,199 @@ class SpeechBrainDiarization:
             # Afficher les caractéristiques vocales si disponibles
             if speaker.voice_characteristics:
                 vc = speaker.voice_characteristics
+                gender = self._get_gender_label(vc)
+                pitch_level = self._get_pitch_level_label(vc)
+                age = self._get_age_label(vc)
+                tone = self._get_tone_label(vc)
+                speech_rate = self._get_speech_rate_label(vc)
+
+                # Calculer syllabes/sec pour affichage (approximation depuis wpm)
+                syl_per_sec = (vc.speech_rate_wpm * 2) / 60 if vc.speech_rate_wpm > 0 else 0
+
                 logger.info(
-                    f"[SPEECHBRAIN]    ├─ Voix: {vc.gender} | "
-                    f"Registre: {vc.pitch_level} ({vc.avg_pitch_hz:.0f}Hz) | "
-                    f"Âge: {vc.age_group}"
+                    f"[SPEECHBRAIN]    ├─ Voix: {gender} | "
+                    f"Registre: {pitch_level} ({vc.pitch_mean:.0f}Hz) | "
+                    f"Âge: {age}"
                 )
                 logger.info(
-                    f"[SPEECHBRAIN]    └─ Ton: {vc.tone} | "
-                    f"Rapidité: {vc.speech_rate} ({vc.syllables_per_second:.1f} syl/s)"
+                    f"[SPEECHBRAIN]    └─ Ton: {tone} | "
+                    f"Rapidité: {speech_rate} ({syl_per_sec:.1f} syl/s)"
                 )
 
         logger.info("=" * 80)
 
         return result
+
+    def _merge_similar_speakers_by_characteristics(
+        self,
+        speakers: List[SpeakerInfo]
+    ) -> List[SpeakerInfo]:
+        """
+        Fusionne les speakers avec des caractéristiques vocales très similaires.
+
+        Critères de similarité:
+        - Même genre (male/female/child)
+        - Pitch similaire (±20Hz)
+        - Âge similaire (même catégorie)
+
+        Args:
+            speakers: Liste des SpeakerInfo à analyser
+
+        Returns:
+            Liste fusionnée des SpeakerInfo
+        """
+        if len(speakers) <= 1:
+            return speakers
+
+        # Créer des groupes de speakers similaires
+        merged_groups = []
+        used_indices = set()
+
+        for i, speaker1 in enumerate(speakers):
+            if i in used_indices:
+                continue
+
+            # Créer un nouveau groupe avec ce speaker
+            group = [speaker1]
+            used_indices.add(i)
+
+            # Comparer avec les autres speakers
+            for j, speaker2 in enumerate(speakers[i+1:], start=i+1):
+                if j in used_indices:
+                    continue
+
+                # Vérifier similarité
+                if self._are_speakers_similar(speaker1, speaker2):
+                    logger.info(
+                        f"[SPEECHBRAIN] 🔗 Fusion détectée: "
+                        f"{speaker1.speaker_id} ↔️ {speaker2.speaker_id}"
+                    )
+                    group.append(speaker2)
+                    used_indices.add(j)
+
+            merged_groups.append(group)
+
+        # Créer des SpeakerInfo fusionnés pour chaque groupe
+        merged_speakers = []
+        for group_idx, group in enumerate(merged_groups):
+            if len(group) == 1:
+                # Pas de fusion nécessaire
+                merged_speakers.append(group[0])
+            else:
+                # Fusionner le groupe
+                merged_speaker = self._merge_speaker_group(group, group_idx)
+                merged_speakers.append(merged_speaker)
+                logger.info(
+                    f"[SPEECHBRAIN] ✅ Groupe fusionné: "
+                    f"{[s.speaker_id for s in group]} → {merged_speaker.speaker_id}"
+                )
+
+        return merged_speakers
+
+    @staticmethod
+    def _are_speakers_similar(
+        speaker1: SpeakerInfo,
+        speaker2: SpeakerInfo,
+        pitch_tolerance_hz: float = 25.0  # Légèrement augmenté pour tolérance naturelle
+    ) -> bool:
+        """
+        Compare deux speakers pour déterminer s'ils sont similaires.
+
+        Critères stricts pour fusionner uniquement les vraies duplications :
+        - Même genre (male/female/child)
+        - Pitch très proche (±25Hz)
+        - Même catégorie d'âge
+
+        Returns:
+            True si les speakers sont très similaires (probablement même personne)
+        """
+        chars1 = speaker1.voice_characteristics
+        chars2 = speaker2.voice_characteristics
+
+        if not chars1 or not chars2:
+            logger.debug(
+                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
+                f"Pas de caractéristiques vocales"
+            )
+            return False
+
+        # 1. Comparer le genre (doit être identique)
+        if chars1.estimated_gender != chars2.estimated_gender:
+            logger.debug(
+                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
+                f"Genre différent ({chars1.estimated_gender} ≠ {chars2.estimated_gender})"
+            )
+            return False
+
+        # 2. Comparer le pitch (±25Hz)
+        pitch_diff = abs(chars1.pitch_mean - chars2.pitch_mean)
+        if pitch_diff > pitch_tolerance_hz:
+            logger.debug(
+                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
+                f"Pitch trop différent ({chars1.pitch_mean:.0f}Hz vs {chars2.pitch_mean:.0f}Hz, "
+                f"diff={pitch_diff:.0f}Hz > {pitch_tolerance_hz}Hz)"
+            )
+            return False
+
+        # 3. Comparer l'âge (même catégorie)
+        if chars1.estimated_age_range != chars2.estimated_age_range:
+            logger.debug(
+                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
+                f"Âge différent ({chars1.estimated_age_range} ≠ {chars2.estimated_age_range})"
+            )
+            return False
+
+        # Si tous les critères sont satisfaits, les speakers sont similaires
+        logger.info(
+            f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
+            f"SIMILAIRES (genre={chars1.estimated_gender}, pitch={chars1.pitch_mean:.0f}Hz/"
+            f"{chars2.pitch_mean:.0f}Hz, âge={chars1.estimated_age_range})"
+        )
+        return True
+
+    @staticmethod
+    def _merge_speaker_group(
+        group: List[SpeakerInfo],
+        group_idx: int
+    ) -> SpeakerInfo:
+        """
+        Fusionne un groupe de speakers similaires en un seul SpeakerInfo.
+
+        Args:
+            group: Groupe de speakers à fusionner
+            group_idx: Index du groupe (pour l'ID)
+
+        Returns:
+            SpeakerInfo fusionné
+        """
+        # Prendre le speaker dominant (qui parle le plus) comme base
+        primary = max(group, key=lambda s: s.speaking_time_ms)
+
+        # Fusionner les segments de tous les speakers
+        all_segments = []
+        total_speaking_time = 0
+        total_speaking_ratio = 0.0
+
+        for speaker in group:
+            all_segments.extend(speaker.segments)
+            total_speaking_time += speaker.speaking_time_ms
+            total_speaking_ratio += speaker.speaking_ratio
+
+        # Trier les segments par start_ms
+        all_segments = sorted(all_segments, key=lambda s: s.start_ms)
+
+        # Créer le speaker fusionné avec les caractéristiques du dominant
+        merged_speaker = SpeakerInfo(
+            speaker_id=f"merged_s{group_idx}",
+            is_primary=primary.is_primary,
+            speaking_time_ms=total_speaking_time,
+            speaking_ratio=total_speaking_ratio,
+            segments=all_segments,
+            voice_characteristics=primary.voice_characteristics,
+            voice_similarity_score=primary.voice_similarity_score
+        )
+
+        return merged_speaker
 
 
 # Singleton global

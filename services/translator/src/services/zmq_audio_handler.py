@@ -265,6 +265,11 @@ class AudioHandler:
                     f"[TRANSLATOR] Paramètres clonage personnalisés: {cloning_params}"
                 )
 
+            # Callback pour publier la transcription dès qu'elle est prête
+            # (avant la traduction pour une réponse plus rapide à la gateway)
+            async def on_transcription_ready(transcription_data: dict):
+                await self._publish_transcription_result(task_id, transcription_data)
+
             # Exécuter le pipeline audio avec le chemin local acquis
             logger.info(f"🔄 [TRANSLATOR] Démarrage pipeline audio: {task_id}")
             result = await pipeline.process_audio_message(
@@ -284,7 +289,9 @@ class AudioHandler:
                 existing_voice_profile=request_data.get('existingVoiceProfile'),
                 use_original_voice=request_data.get('useOriginalVoice', True),
                 # Paramètres de clonage vocal configurables
-                cloning_params=cloning_params
+                cloning_params=cloning_params,
+                # Callback pour envoi progressif de la transcription
+                on_transcription_ready=on_transcription_ready
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -422,6 +429,9 @@ class AudioHandler:
                         }
                         for seg in t.segments
                     ]
+                    logger.info(f"[ZMQ] ✅ {t.language}: {len(translated_audio_dict['segments'])} segments traduits inclus")
+                else:
+                    logger.warning(f"[ZMQ] ⚠️ {t.language}: Pas de segments traduits (hasattr={hasattr(t, 'segments')}, value={t.segments if hasattr(t, 'segments') else 'N/A'})")
 
                 translated_audios_metadata.append(translated_audio_dict)
 
@@ -534,6 +544,87 @@ class AudioHandler:
 
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def _publish_transcription_result(self, task_id: str, transcription_data: dict):
+        """
+        Publie le résultat de transcription seule via PUB (avant traduction).
+
+        Permet à la gateway de recevoir la transcription immédiatement,
+        sans attendre la fin de la traduction/TTS.
+
+        Type: 'transcription_ready' (distinct de 'audio_process_completed')
+        """
+        try:
+            transcription = transcription_data['transcription']
+
+            # Construire le dictionnaire de transcription avec diarisation
+            transcription_dict = {
+                'text': transcription.text,
+                'language': transcription.language,
+                'confidence': transcription.confidence,
+                'source': transcription.source,
+                'segments': [
+                    {
+                        'text': getattr(seg, 'text', ''),
+                        'startMs': getattr(seg, 'start_ms', getattr(seg, 'startMs', 0)),
+                        'endMs': getattr(seg, 'end_ms', getattr(seg, 'endMs', 0)),
+                        'confidence': getattr(seg, 'confidence', None),
+                        'speakerId': getattr(seg, 'speaker_id', getattr(seg, 'speakerId', None)),
+                        'voiceSimilarityScore': _get_voice_similarity_score(seg),
+                        'language': getattr(seg, 'language', None)
+                    }
+                    for seg in (transcription.segments or [])
+                ] if transcription.segments else None,
+                'durationMs': transcription.duration_ms
+            }
+
+            # Ajouter les champs de diarisation si disponibles
+            if transcription.speaker_count is not None:
+                transcription_dict['speakerCount'] = transcription.speaker_count
+            if transcription.primary_speaker_id:
+                transcription_dict['primarySpeakerId'] = transcription.primary_speaker_id
+            if transcription.sender_voice_identified is not None:
+                transcription_dict['senderVoiceIdentified'] = transcription.sender_voice_identified
+            if transcription.sender_speaker_id is not None:
+                transcription_dict['senderSpeakerId'] = transcription.sender_speaker_id
+            if transcription.speaker_analysis:
+                transcription_dict['speakerAnalysis'] = transcription.speaker_analysis
+
+            metadata = {
+                'type': 'transcription_ready',  # Type distinct pour différencier
+                'taskId': task_id,
+                'messageId': transcription_data['message_id'],
+                'attachmentId': transcription_data['attachment_id'],
+                'transcription': transcription_dict,
+                'processingTimeMs': transcription_data['processing_time_ms'],
+                'timestamp': time.time()
+            }
+
+            if self.pub_socket:
+                # Debug: Afficher la taille du payload
+                import json
+                payload_str = json.dumps(metadata)
+                logger.info(f"[DEBUG] Transcription payload size: {len(payload_str)} bytes")
+                logger.info(f"[DEBUG] Transcription payload type: {metadata['type']}")
+                logger.info(f"[DEBUG] Transcription text preview: {transcription.text[:50]}...")
+
+                # Envoyer en simple frame (pas de binaire pour la transcription)
+                await self.pub_socket.send_json(metadata)
+
+                logger.info(
+                    f"✅ [TRANSLATOR] Transcription ready publié: "
+                    f"msg={transcription_data['message_id']}, "
+                    f"lang={transcription.language}, "
+                    f"segments={len(transcription.segments) if transcription.segments else 0}, "
+                    f"time={transcription_data['processing_time_ms']}ms"
+                )
+            else:
+                logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription")
+
+        except Exception as e:
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {e}")
             import traceback
             traceback.print_exc()
 

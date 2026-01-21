@@ -45,21 +45,13 @@ from ..redis_service import (
     get_translation_cache_service
 )
 
-# Import multi-speaker synthesis
-from .multi_speaker_synthesis import (
-    MultiSpeakerSynthesizer,
-    create_multi_speaker_synthesizer
-)
-from .audio_silence_manager import AudioSilenceManager
-from utils.audio_format_converter import convert_to_wav_if_needed
-
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class TranslatedAudioVersion:
-    """Translated audio version for a language with transcription segments"""
+    """Translated audio version for a language"""
     language: str
     translated_text: str
     audio_path: str
@@ -71,7 +63,8 @@ class TranslatedAudioVersion:
     processing_time_ms: int
     audio_data_base64: Optional[str] = None
     audio_mime_type: Optional[str] = None
-    segments: Optional[List[Dict]] = None  # Segments de la transcription de l'audio traduit
+    # Segments traduits pour synchronisation audio
+    segments: Optional[List[Dict[str, Any]]] = None
 
 
 class TranslationStage:
@@ -98,10 +91,7 @@ class TranslationStage:
         tts_service: Optional[TTSService] = None,
         voice_clone_service: Optional[VoiceCloneService] = None,
         audio_cache: Optional[AudioCacheService] = None,
-        translation_cache: Optional[TranslationCacheService] = None,
-        transcription_service=None,
-        multi_speaker_synthesizer: Optional[MultiSpeakerSynthesizer] = None,
-        preserve_silences: bool = True
+        translation_cache: Optional[TranslationCacheService] = None
     ):
         """
         Initialize translation stage.
@@ -112,32 +102,17 @@ class TranslationStage:
             voice_clone_service: Voice cloning service
             audio_cache: Redis cache for audio
             translation_cache: Redis cache for text translations
-            transcription_service: Transcription service for re-transcribing translated audio
-            multi_speaker_synthesizer: Multi-speaker synthesizer (créé si None)
-            preserve_silences: Préserver les silences naturels entre les segments
         """
         self.translation_service = translation_service
         self.tts_service = tts_service or get_tts_service()
         self.voice_clone_service = voice_clone_service or get_voice_clone_service()
         self.audio_cache = audio_cache or get_audio_cache_service()
         self.translation_cache = translation_cache or get_translation_cache_service()
-        self.transcription_service = transcription_service
-        self.preserve_silences = preserve_silences
-
-        # Multi-speaker synthesizer
-        self.multi_speaker_synthesizer = multi_speaker_synthesizer or create_multi_speaker_synthesizer(
-            tts_service=self.tts_service,
-            voice_clone_service=self.voice_clone_service,
-            preserve_silences=preserve_silences
-        )
 
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        logger.info(
-            f"[TRANSLATION_STAGE] Translation stage created: "
-            f"preserve_silences={preserve_silences}"
-        )
+        logger.info("[TRANSLATION_STAGE] Translation stage created")
 
     async def initialize(self) -> bool:
         """Initialize translation stage services"""
@@ -237,40 +212,6 @@ class TranslationStage:
             )
 
             if voice_model:
-                # Stocker l'audio de référence dans le VoiceModel
-                if audio_path:
-                    voice_model.reference_audio_path = audio_path
-                    logger.info(f"[TRANSLATION_STAGE] 📎 Audio de référence stocké: {audio_path}")
-
-                    # Calculer et sérialiser les conditionals Chatterbox
-                    try:
-                        # Vérifier si le TTS utilise Chatterbox
-                        if self.tts_service and hasattr(self.tts_service, 'model_manager'):
-                            backend = self.tts_service.model_manager.active_backend
-                            if backend and hasattr(backend, 'prepare_voice_conditionals'):
-                                logger.info(f"[TRANSLATION_STAGE] 🎤 Calcul des conditionals Chatterbox...")
-
-                                conditionals, conditionals_bytes = await backend.prepare_voice_conditionals(
-                                    audio_path=audio_path,
-                                    exaggeration=0.5,
-                                    serialize=True
-                                )
-
-                                if conditionals:
-                                    voice_model.chatterbox_conditionals = conditionals
-                                    logger.info(f"[TRANSLATION_STAGE] ✅ Conditionals calculés")
-
-                                if conditionals_bytes:
-                                    voice_model.chatterbox_conditionals_bytes = conditionals_bytes
-                                    logger.info(f"[TRANSLATION_STAGE] ✅ Conditionals sérialisés: {len(conditionals_bytes)} bytes")
-
-                                # Stocker les métadonnées audio de référence
-                                voice_model.reference_audio_url = audio_path  # ou URL si disponible
-                    except Exception as e:
-                        logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur calcul conditionals: {e}")
-                        import traceback
-                        traceback.print_exc()
-
                 logger.info(
                     f"[TRANSLATION_STAGE] ✅ Voice model (Audio): "
                     f"user={sender_id}, quality={voice_model.quality_score:.2f}"
@@ -294,9 +235,7 @@ class TranslationStage:
         model_type: str = "premium",
         cloning_params: Optional[Dict[str, Any]] = None,
         max_workers: int = 4,
-        source_audio_path: Optional[str] = None,
-        source_segments: Optional[List[Dict[str, Any]]] = None,
-        diarization_result: Optional[Any] = None
+        source_audio_path: Optional[str] = None
     ) -> Dict[str, TranslatedAudioVersion]:
         """
         Process multiple languages in parallel.
@@ -382,9 +321,7 @@ class TranslationStage:
             model_type=model_type,
             cloning_params=cloning_params,
             max_workers=max_workers,
-            source_audio_path=source_audio_path,
-            source_segments=source_segments,
-            diarization_result=diarization_result
+            source_audio_path=source_audio_path
         )
         parallel_time = int((time.time() - parallel_start) * 1000)
 
@@ -460,9 +397,7 @@ class TranslationStage:
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
         max_workers: int,
-        source_audio_path: Optional[str] = None,
-        source_segments: Optional[List[Dict[str, Any]]] = None,
-        diarization_result: Optional[Any] = None
+        source_audio_path: Optional[str] = None
     ) -> Dict[str, Optional[TranslatedAudioVersion]]:
         """
         Process languages in parallel using ThreadPoolExecutor.
@@ -488,9 +423,7 @@ class TranslationStage:
                         attachment_id,
                         model_type,
                         lang_cloning_params,
-                        source_audio_path,
-                        source_segments,
-                        diarization_result
+                        source_audio_path
                     ): lang
                     for lang, lang_cloning_params in tasks
                 }
@@ -529,9 +462,7 @@ class TranslationStage:
         attachment_id: str,
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
-        source_audio_path: Optional[str] = None,
-        source_segments: Optional[List[Dict[str, Any]]] = None,
-        diarization_result: Optional[Any] = None
+        source_audio_path: Optional[str] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process a single language synchronously (for ThreadPoolExecutor).
@@ -558,9 +489,7 @@ class TranslationStage:
                         model_type=model_type,
                         cloning_params=cloning_params,
                         lang_start=lang_start,
-                        source_audio_path=source_audio_path,
-                        source_segments=source_segments,
-                        diarization_result=diarization_result
+                        source_audio_path=source_audio_path
                     )
                 )
                 return result
@@ -585,9 +514,7 @@ class TranslationStage:
         model_type: str,
         cloning_params: Optional[Dict[str, Any]],
         lang_start: float,
-        source_audio_path: Optional[str] = None,
-        source_segments: Optional[List[Dict[str, Any]]] = None,
-        diarization_result: Optional[Any] = None
+        source_audio_path: Optional[str] = None
     ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
         """
         Process single language: translate + TTS + cache.
@@ -600,170 +527,50 @@ class TranslationStage:
         """
         try:
             # 1. Translate text
-            logger.info(f"[TRANSLATION_STAGE] 🔄 Début traduction pour {target_lang}...")
             translated_text = await self._translate_text_with_cache(
                 text=source_text,
                 source_language=source_language,
                 target_language=target_lang,
                 model_type=model_type
             )
-            logger.info(f"[TRANSLATION_STAGE] ✅ Traduction terminée pour {target_lang}")
 
             logger.info(
                 f"[TRANSLATION_STAGE] Translated ({target_lang}): "
                 f"'{translated_text[:50]}...'"
             )
 
-            # 2. Détecter si c'est multi-speakers
-            is_multi_speaker = False
-            unique_speakers = set()
+            # 2. Generate TTS audio
+            if voice_model:
+                # Utiliser l'audio source actuel comme référence pour le clonage vocal
+                # (plus récent et pertinent que l'audio de training du profil)
+                speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
 
-            if source_segments:
-                for seg in source_segments:
-                    speaker_id = seg.get('speaker_id', seg.get('speakerId'))
-                    if speaker_id:
-                        unique_speakers.add(speaker_id)
-
-                is_multi_speaker = len(unique_speakers) > 1
-
-            logger.info(
-                f"[TRANSLATION_STAGE] Mode détecté: "
-                f"{'MULTI-SPEAKER' if is_multi_speaker else 'MONO-SPEAKER'} "
-                f"({len(unique_speakers)} speaker(s) unique(s))"
-            )
-
-            # 3. Generate TTS audio
-            logger.info(f"[TRANSLATION_STAGE] 🎤 Début génération TTS pour {target_lang}...")
-            if is_multi_speaker and source_segments:
-                # ═══════════════════════════════════════════════════════════
-                # NOUVELLE ARCHITECTURE: TRADUCTION GLOBALE PAR SPEAKER
-                #
-                # Pipeline optimisé:
-                # 1. Créer voice models par speaker
-                # 2. Appeler synthesize_multi_speaker_global() qui fait:
-                #    - Regroupement des segments par speaker
-                #    - Traduction du texte COMPLET de chaque speaker (contexte global)
-                #    - Synthèse audio COMPLÈTE de chaque speaker (1 appel TTS/speaker)
-                #    - Extraction word-level timestamps (Whisper)
-                #    - Re-découpage par segments originaux
-                #    - Réassemblage avec silences
-                #
-                # Avantages:
-                # - 94% moins d'appels API (34 segments → 2 speakers)
-                # - 79% plus rapide (31s → 6.4s)
-                # - Contexte complet préservé
-                # - Cohérence vocale garantie (1 seul calcul conditionals/speaker)
-                # ═══════════════════════════════════════════════════════════
-                logger.info("=" * 80)
-                logger.info(
-                    f"[TRANSLATION_STAGE] 🚀 NOUVELLE ARCHITECTURE: TRADUCTION GLOBALE"
-                )
-                logger.info(
-                    f"[TRANSLATION_STAGE] {len(source_segments)} segments, "
-                    f"{len(unique_speakers)} speakers"
-                )
-                logger.info("=" * 80)
-
-                # Créer les voice models par speaker
-                logger.info(f"[TRANSLATION_STAGE] 🎤 Création voice models...")
-                speaker_voice_maps = await self.multi_speaker_synthesizer.create_speaker_voice_maps(
-                    segments=source_segments,
-                    source_audio_path=source_audio_path,
-                    diarization_result=diarization_result,
-                    user_voice_model=voice_model
-                )
-
-                # Préparer le fichier de sortie
-                output_audio_path = os.path.join(
-                    self.multi_speaker_synthesizer.temp_dir,
-                    f"{message_id}_{attachment_id}_{target_lang}_global.mp3"
-                )
-
-                # Appeler la nouvelle architecture globale
-                result = await self.multi_speaker_synthesizer.synthesize_multi_speaker_global(
-                    segments=source_segments,
-                    speaker_voice_maps=speaker_voice_maps,
-                    source_language=source_language,
-                    target_language=target_lang,
-                    translation_service=self.translation_service,
-                    output_path=output_audio_path,
-                    message_id=f"{message_id}_{attachment_id}"
-                )
-
-                if not result:
-                    raise Exception("Échec synthèse multi-speaker globale")
-
-                audio_path, duration_ms, segment_results = result
-
-                # Créer un TTSResult-like object
-                tts_result = type('TTSResult', (), {
-                    'audio_path': audio_path,
-                    'audio_url': f"/audio/{os.path.basename(audio_path)}",
-                    'duration_ms': duration_ms,
-                    'format': 'mp3',
-                    'voice_cloned': True,
-                    'voice_quality': 0.95,  # Qualité supérieure (contexte complet)
-                    'processing_time_ms': int((time.time() - lang_start) * 1000),
-                    'audio_data_base64': None,
-                    'audio_mime_type': 'audio/mp3'
-                })()
-
-                logger.info("=" * 80)
-                logger.info(f"[TRANSLATION_STAGE] ✅ TRADUCTION GLOBALE TERMINÉE")
-                logger.info(f"[TRANSLATION_STAGE] Speakers: {len(speaker_voice_maps)}")
-                logger.info(f"[TRANSLATION_STAGE] Segments: {len(segment_results)}")
-                logger.info(f"[TRANSLATION_STAGE] Durée: {duration_ms}ms ({duration_ms/1000:.1f}s)")
-                logger.info(f"[TRANSLATION_STAGE] Audio: {audio_path}")
-                logger.info("=" * 80)
-
-            else:
-                # ═══════════════════════════════════════════════════════════
-                # MODE MONO-SPEAKER: Synthèse classique
-                # ═══════════════════════════════════════════════════════════
-                logger.info(
-                    f"[TRANSLATION_STAGE] 🎤 Utilisation synthèse MONO-SPEAKER"
-                )
-
-                if voice_model:
-                    # Priorité 1: Audio source actuel (le plus récent et pertinent)
-                    speaker_audio = None
-                    if source_audio_path and os.path.exists(source_audio_path):
-                        speaker_audio = source_audio_path
-                        logger.info(f"[TRANSLATION_STAGE] 🎤 Clonage avec audio source actuel: {source_audio_path}")
-                    # Priorité 2: Audio de référence stocké dans le profil
-                    elif voice_model.reference_audio_path and os.path.exists(voice_model.reference_audio_path):
-                        speaker_audio = voice_model.reference_audio_path
-                        logger.info(f"[TRANSLATION_STAGE] 🎤 Clonage avec audio de référence du profil: {voice_model.reference_audio_path}")
-                    else:
-                        logger.warning(
-                            f"[TRANSLATION_STAGE] ⚠️ Aucun audio de référence disponible pour le clonage. "
-                            f"source_audio_path={source_audio_path}, "
-                            f"voice_model.reference_audio_path={getattr(voice_model, 'reference_audio_path', None)}"
-                        )
-
-                    # Récupérer les conditionals pré-calculés si disponibles
-                    conditionals = getattr(voice_model, 'chatterbox_conditionals', None)
-
-                    tts_result = await self.tts_service.synthesize_with_voice(
-                        text=translated_text,
-                        speaker_audio_path=speaker_audio,
-                        target_language=target_lang,
-                        output_format="mp3",
-                        message_id=f"{message_id}_{attachment_id}",
-                        cloning_params=cloning_params,
-                        conditionals=conditionals
+                if speaker_audio:
+                    logger.info(
+                        f"[TRANSLATION_STAGE] 🎤 Clonage vocal activé: "
+                        f"audio_ref={os.path.basename(speaker_audio) if speaker_audio else 'None'}"
                     )
                 else:
-                    logger.info(
-                        f"[TRANSLATION_STAGE] 🔊 Voix générique utilisée "
-                        f"(clonage vocal désactivé ou non disponible)"
+                    logger.warning(
+                        f"[TRANSLATION_STAGE] ⚠️ Pas d'audio de référence disponible "
+                        f"pour le clonage vocal → voix générique"
                     )
-                    tts_result = await self.tts_service.synthesize(
-                        text=translated_text,
-                        language=target_lang,
-                        output_format="mp3",
-                        cloning_params=cloning_params
-                    )
+
+                tts_result = await self.tts_service.synthesize_with_voice(
+                    text=translated_text,
+                    speaker_audio_path=speaker_audio,
+                    target_language=target_lang,
+                    output_format="mp3",
+                    message_id=f"{message_id}_{attachment_id}",
+                    cloning_params=cloning_params
+                )
+            else:
+                tts_result = await self.tts_service.synthesize(
+                    text=translated_text,
+                    language=target_lang,
+                    output_format="mp3",
+                    cloning_params=cloning_params
+                )
 
             lang_time = int((time.time() - lang_start) * 1000)
             logger.info(
@@ -771,56 +578,7 @@ class TranslationStage:
                 f"{tts_result.audio_url} [{lang_time}ms]"
             )
 
-            # 3. Utiliser les segments traduits (préserve la structure de la transcription originale)
-            translated_segments = None
-
-            # Re-transcrire l'audio traduit pour obtenir les vrais timings et diarisation
-            if self.transcription_service and tts_result.audio_path:
-                try:
-                    retranscription_start = time.time()
-                    logger.info(f"[TRANSLATION_STAGE] 🎙️ Re-transcription audio synthétisé ({target_lang})...")
-
-                    retranscription_result = await self.transcription_service.transcribe(
-                        tts_result.audio_path,
-                        return_timestamps=True  # Important pour obtenir les segments
-                    )
-
-                    if retranscription_result and retranscription_result.segments:
-                        # Sérialiser les segments
-                        translated_segments = [
-                            {
-                                "text": s.text if hasattr(s, 'text') else str(s),
-                                "startMs": s.start_ms if hasattr(s, 'start_ms') else 0,
-                                "endMs": s.end_ms if hasattr(s, 'end_ms') else 0,
-                                "speakerId": s.speaker_id if hasattr(s, 'speaker_id') and s.speaker_id else None,
-                                "voiceSimilarityScore": s.voice_similarity_score if hasattr(s, 'voice_similarity_score') else None,
-                                "confidence": s.confidence if hasattr(s, 'confidence') else None
-                            }
-                            for s in retranscription_result.segments
-                        ]
-                        retranscription_time = int((time.time() - retranscription_start) * 1000)
-
-                        # Compter combien de segments ont un speakerId
-                        segments_with_speaker = sum(1 for s in translated_segments if s.get('speakerId'))
-                        speaker_ids = set(s.get('speakerId') for s in translated_segments if s.get('speakerId'))
-
-                        logger.info(
-                            f"[TRANSLATION_STAGE] ✅ Re-transcription ({target_lang}): "
-                            f"{len(translated_segments)} segments [{retranscription_time}ms]"
-                        )
-
-                        if speaker_ids:
-                            logger.info(
-                                f"[TRANSLATION_STAGE] 🎤 Speakers dans segments traduits: "
-                                f"{len(speaker_ids)} speaker(s) → {sorted(speaker_ids)} | "
-                                f"{segments_with_speaker}/{len(translated_segments)} segments avec speaker"
-                            )
-                    else:
-                        logger.warning(f"[TRANSLATION_STAGE] ⚠️ Re-transcription ({target_lang}): no segments")
-                except Exception as e:
-                    logger.warning(f"[TRANSLATION_STAGE] ⚠️ Re-transcription failed ({target_lang}): {e}")
-
-            # 4. Cache audio
+            # 3. Cache audio
             await self._cache_translated_audio(
                 audio_hash=audio_hash,
                 language=target_lang,
@@ -828,7 +586,7 @@ class TranslationStage:
                 tts_result=tts_result
             )
 
-            # 5. Return result with segments
+            # 4. Return result
             return (target_lang, TranslatedAudioVersion(
                 language=target_lang,
                 translated_text=translated_text,
@@ -840,8 +598,7 @@ class TranslationStage:
                 voice_quality=tts_result.voice_quality,
                 processing_time_ms=tts_result.processing_time_ms,
                 audio_data_base64=tts_result.audio_data_base64,
-                audio_mime_type=tts_result.audio_mime_type,
-                segments=translated_segments
+                audio_mime_type=tts_result.audio_mime_type
             ))
 
         except Exception as e:
@@ -858,8 +615,6 @@ class TranslationStage:
         model_type: str
     ) -> str:
         """Translate text with cache lookup"""
-        logger.info(f"[TRANSLATION_STAGE] 🔍 _translate_text_with_cache: {source_language}→{target_language}")
-
         # Check cache
         cached = await self.translation_cache.get_translation(
             text=text,
@@ -869,21 +624,19 @@ class TranslationStage:
         )
 
         if cached:
-            logger.info(
-                f"[TRANSLATION_STAGE] ⚡ Translation cache hit: "
+            logger.debug(
+                f"[TRANSLATION_STAGE] Translation cache hit: "
                 f"{source_language}→{target_language}"
             )
             return cached.get("translated_text", text)
 
         # Translate
-        logger.info(f"[TRANSLATION_STAGE] 📤 Appel _translate_text ({source_language}→{target_language})...")
         translated = await self._translate_text(
             text,
             source_language,
             target_language,
             model_type
         )
-        logger.info(f"[TRANSLATION_STAGE] 📥 _translate_text retourné: {len(translated)} chars")
 
         # Cache result
         await self.translation_cache.set_translation(
@@ -904,8 +657,6 @@ class TranslationStage:
         model_type: str
     ) -> str:
         """Translate text via ML service"""
-        logger.info(f"[TRANSLATION_STAGE] 🔄 _translate_text: translation_service={self.translation_service is not None}")
-
         if not self.translation_service:
             logger.warning(
                 "[TRANSLATION_STAGE] Translation service unavailable, "
@@ -914,7 +665,6 @@ class TranslationStage:
             return text
 
         try:
-            logger.info(f"[TRANSLATION_STAGE] 📤 Appel translate_with_structure (text={len(text)} chars)...")
             result = await self.translation_service.translate_with_structure(
                 text=text,
                 source_language=source_language,
@@ -922,222 +672,11 @@ class TranslationStage:
                 model_type=model_type,
                 source_channel="audio_pipeline"
             )
-            logger.info(f"[TRANSLATION_STAGE] 📥 translate_with_structure retourné: {result.keys()}")
             return result.get('translated_text', text)
 
         except Exception as e:
-            logger.error(f"[TRANSLATION_STAGE] ❌ Translation error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"[TRANSLATION_STAGE] Translation error: {e}")
             return text
-
-    async def _translate_segments(
-        self,
-        segments: List[Dict[str, Any]],
-        source_language: str,
-        target_language: str,
-        model_type: str
-    ) -> List[Dict[str, Any]]:
-        """
-        Traduit chaque segment individuellement.
-
-        Args:
-            segments: Segments source avec texte à traduire
-            source_language: Langue source
-            target_language: Langue cible
-            model_type: Type de modèle de traduction
-
-        Returns:
-            Liste des segments traduits (même structure que l'entrée)
-        """
-        translated_segments = []
-
-        logger.info(
-            f"[TRANSLATION_STAGE] Traduction de {len(segments)} segments: "
-            f"{source_language} → {target_language}"
-        )
-
-        for i, seg in enumerate(segments):
-            try:
-                source_text = seg.get('text', '')
-
-                if not source_text:
-                    logger.warning(f"[TRANSLATION_STAGE] Segment {i} sans texte, ignoré")
-                    continue
-
-                # Traduire le texte du segment
-                translated_text = await self._translate_text_with_cache(
-                    text=source_text,
-                    source_language=source_language,
-                    target_language=target_language,
-                    model_type=model_type
-                )
-
-                # Créer le segment traduit (copier la structure)
-                translated_seg = {
-                    'text': translated_text,
-                    'start_ms': seg.get('start_ms', seg.get('startMs', 0)),
-                    'end_ms': seg.get('end_ms', seg.get('endMs', 0)),
-                    'speaker_id': seg.get('speaker_id', seg.get('speakerId')),
-                    'confidence': seg.get('confidence'),
-                    'voice_similarity_score': seg.get('voice_similarity_score', seg.get('voiceSimilarityScore'))
-                }
-
-                translated_segments.append(translated_seg)
-
-                logger.debug(
-                    f"[TRANSLATION_STAGE]   Segment {i+1}/{len(segments)}: "
-                    f"'{source_text[:30]}...' → '{translated_text[:30]}...'"
-                )
-
-            except Exception as e:
-                logger.error(f"[TRANSLATION_STAGE] Erreur traduction segment {i}: {e}")
-                # Garder le texte original en cas d'erreur
-                translated_segments.append(seg)
-
-        logger.info(
-            f"[TRANSLATION_STAGE] ✅ {len(translated_segments)}/{len(segments)} segments traduits"
-        )
-
-        return translated_segments
-
-    async def _translate_by_speaker(
-        self,
-        segments: List[Dict[str, Any]],
-        source_language: str,
-        target_language: str,
-        model_type: str
-    ) -> Dict[str, str]:
-        """
-        Traduit le texte COMPLET de chaque speaker (pas segment par segment).
-
-        Avantages:
-        - Meilleure qualité de traduction (contexte complet)
-        - Phrases plus naturelles et fluides
-        - Moins d'appels à l'API de traduction
-
-        Args:
-            segments: Segments source avec speaker_id et texte
-            source_language: Langue source
-            target_language: Langue cible
-            model_type: Type de modèle de traduction
-
-        Returns:
-            Dict {speaker_id: texte_traduit_complet}
-        """
-        # 1. Grouper le texte par speaker (dans l'ordre d'apparition)
-        speaker_texts = {}  # {speaker_id: [texte1, texte2, ...]}
-        speaker_order = []  # Ordre d'apparition des speakers
-
-        for seg in segments:
-            speaker_id = seg.get('speaker_id', seg.get('speakerId', 'unknown'))
-            text = seg.get('text', '').strip()
-
-            if not text:
-                continue
-
-            if speaker_id not in speaker_texts:
-                speaker_texts[speaker_id] = []
-                speaker_order.append(speaker_id)
-
-            speaker_texts[speaker_id].append(text)
-
-        logger.info("=" * 80)
-        logger.info(f"[TRANSLATION_STAGE] 🎭 TRADUCTION PAR SPEAKER")
-        logger.info(f"[TRANSLATION_STAGE] {len(speaker_order)} speaker(s) détecté(s): {speaker_order}")
-
-        # 2. Traduire le texte complet de chaque speaker
-        speaker_translations = {}
-
-        for speaker_id in speaker_order:
-            texts = speaker_texts[speaker_id]
-            # Joindre tous les textes du speaker
-            full_text = ' '.join(texts)
-
-            logger.info(
-                f"[TRANSLATION_STAGE] 🔄 Speaker '{speaker_id}': "
-                f"{len(texts)} segments, {len(full_text)} caractères"
-            )
-
-            # Traduire le texte complet
-            translated_full_text = await self._translate_text_with_cache(
-                text=full_text,
-                source_language=source_language,
-                target_language=target_language,
-                model_type=model_type
-            )
-
-            speaker_translations[speaker_id] = translated_full_text
-
-            logger.info(
-                f"[TRANSLATION_STAGE] ✅ Speaker '{speaker_id}' traduit: "
-                f"'{translated_full_text[:50]}...'"
-            )
-
-        logger.info("=" * 80)
-
-        return speaker_translations
-
-    def _get_speaker_turns(
-        self,
-        segments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Extrait les tours de parole dans l'ordre chronologique.
-
-        Un tour de parole = séquence de segments consécutifs du même speaker.
-
-        Args:
-            segments: Segments source avec speaker_id
-
-        Returns:
-            Liste des tours de parole:
-            [
-                {"speaker_id": "SPEAKER_00", "start_ms": 0, "end_ms": 5000},
-                {"speaker_id": "SPEAKER_01", "start_ms": 5000, "end_ms": 8000},
-                ...
-            ]
-        """
-        if not segments:
-            return []
-
-        turns = []
-        current_turn = None
-
-        for seg in segments:
-            speaker_id = seg.get('speaker_id', seg.get('speakerId', 'unknown'))
-            start_ms = seg.get('start_ms', seg.get('startMs', 0))
-            end_ms = seg.get('end_ms', seg.get('endMs', 0))
-
-            if current_turn is None:
-                # Premier segment
-                current_turn = {
-                    "speaker_id": speaker_id,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms
-                }
-            elif speaker_id == current_turn["speaker_id"]:
-                # Même speaker - étendre le tour
-                current_turn["end_ms"] = end_ms
-            else:
-                # Nouveau speaker - sauvegarder et commencer un nouveau tour
-                turns.append(current_turn)
-                current_turn = {
-                    "speaker_id": speaker_id,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms
-                }
-
-        # Ne pas oublier le dernier tour
-        if current_turn:
-            turns.append(current_turn)
-
-        logger.info(
-            f"[TRANSLATION_STAGE] 🎤 Tours de parole détectés: "
-            f"{len(segments)} segments → {len(turns)} tours"
-        )
-
-        return turns
 
     async def _cache_translated_audio(
         self,
@@ -1207,9 +746,7 @@ def create_translation_stage(
     tts_service: Optional[TTSService] = None,
     voice_clone_service: Optional[VoiceCloneService] = None,
     audio_cache: Optional[AudioCacheService] = None,
-    translation_cache: Optional[TranslationCacheService] = None,
-    transcription_service=None,
-    preserve_silences: bool = True
+    translation_cache: Optional[TranslationCacheService] = None
 ) -> TranslationStage:
     """
     Create a new translation stage instance.
@@ -1220,8 +757,6 @@ def create_translation_stage(
         voice_clone_service: Voice cloning service
         audio_cache: Audio cache service
         translation_cache: Translation cache service
-        transcription_service: Transcription service for re-transcribing translated audio
-        preserve_silences: Préserver les silences naturels entre segments (default: True)
 
     Returns:
         TranslationStage instance
@@ -1231,7 +766,5 @@ def create_translation_stage(
         tts_service=tts_service,
         voice_clone_service=voice_clone_service,
         audio_cache=audio_cache,
-        translation_cache=translation_cache,
-        transcription_service=transcription_service,
-        preserve_silences=preserve_silences
+        translation_cache=translation_cache
     )

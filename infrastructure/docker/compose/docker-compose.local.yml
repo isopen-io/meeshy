@@ -229,6 +229,10 @@ services:
       HUGGINGFACE_HUB_CACHE: /workspace/models
       # Diarisation (activée par défaut)
       ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-true}
+      # TTS Configuration
+      TTS_MAX_NEW_TOKENS: ${TTS_MAX_NEW_TOKENS:-2048}
+      TTS_MAX_SEGMENT_CHARS: ${TTS_MAX_SEGMENT_CHARS:-1000}
+      TTS_MIN_SEGMENT_CHARS: ${TTS_MIN_SEGMENT_CHARS:-50}
     ports:
       - "8000:8000"
       - "5555:5555"

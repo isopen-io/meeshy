@@ -107,7 +107,9 @@ class RedisService:
 
         except Exception as e:
             self.connection_attempts += 1
-            logger.warning(f"[REDIS] ⚠️ Connexion échouée ({self.connection_attempts}/{self.max_connection_attempts}): {e}")
+            # Log seulement le type et message pour éviter problème event loop
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            logger.warning(f"[REDIS] ⚠️ Connexion échouée ({self.connection_attempts}/{self.max_connection_attempts}): {error_type}")
 
             if self.connection_attempts >= self.max_connection_attempts:
                 self.permanently_disabled = True
@@ -157,7 +159,11 @@ class RedisService:
                 value = await self.redis.get(key)
                 return value
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur get: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                # Ne pas essayer de convertir en string car l'exception peut contenir
+                # des références à des Tasks/Futures liés à un autre event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur get ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire
@@ -182,7 +188,9 @@ class RedisService:
                     await self.redis.set(key, value)
                 return True
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur set: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur set ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire
@@ -202,7 +210,9 @@ class RedisService:
                 await self.redis.delete(key)
                 return True
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur delete: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur delete ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire
@@ -218,7 +228,9 @@ class RedisService:
                 keys = await self.redis.keys(pattern)
                 return keys
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur keys: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur keys ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire avec regex
@@ -233,7 +245,9 @@ class RedisService:
             try:
                 return await self.redis.exists(key) > 0
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur exists: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur exists ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire
@@ -249,7 +263,9 @@ class RedisService:
             try:
                 return await self.redis.ttl(key)
             except Exception as e:
-                logger.warning(f"[REDIS] Erreur ttl: {e} - fallback mémoire")
+                # Log seulement le type pour éviter problème event loop
+                error_type = type(e).__name__
+                logger.warning(f"[REDIS] Erreur ttl ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
         # Fallback cache mémoire
@@ -506,7 +522,9 @@ class AudioCacheService:
                 content = f.read()
             return hashlib.sha256(content).hexdigest()[:32]
         except Exception as e:
-            logger.warning(f"[CACHE] Impossible de hasher l'audio: {e}")
+            # Log seulement le type et message pour éviter problème event loop
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            logger.warning(f"[CACHE] Impossible de hasher l'audio ({error_type})")
             # Fallback sur le chemin
             return hashlib.sha256(audio_path.encode()).hexdigest()[:32]
 

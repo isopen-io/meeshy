@@ -302,14 +302,15 @@ class VoiceAnalyzer:
             f0_valid = f0[~np.isnan(f0)]
 
             if len(f0_valid) > 0:
-                chars.pitch_mean_hz = float(np.mean(f0_valid))
-                chars.pitch_std_hz = float(np.std(f0_valid))
-                chars.pitch_min_hz = float(np.min(f0_valid))
-                chars.pitch_max_hz = float(np.max(f0_valid))
+                chars.pitch_mean = float(np.mean(f0_valid))
+                chars.pitch_std = float(np.std(f0_valid))
+                chars.pitch_min = float(np.min(f0_valid))
+                chars.pitch_max = float(np.max(f0_valid))
+                chars.pitch_range = chars.pitch_max - chars.pitch_min
 
                 # Classification vocale
-                chars.voice_type, chars.estimated_gender = self._classify_voice(chars.pitch_mean_hz)
-                chars.estimated_age_range = self._estimate_age(chars.pitch_mean_hz, chars.pitch_std_hz)
+                chars.voice_type, chars.estimated_gender = self._classify_voice(chars.pitch_mean)
+                chars.estimated_age_range = self._estimate_age(chars.pitch_mean, chars.pitch_std)
 
             # Caractéristiques spectrales
             # Brightness (centroïde spectral)
@@ -323,7 +324,7 @@ class VoiceAnalyzer:
 
             # Énergie
             rms = librosa.feature.rms(y=audio)[0]
-            chars.energy_mean = float(np.mean(rms))
+            chars.rms_energy = float(np.mean(rms))
             chars.energy_std = float(np.std(rms))
 
             # Ratio de silence

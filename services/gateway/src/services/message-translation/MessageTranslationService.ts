@@ -102,6 +102,7 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('audioProcessCompleted', this._handleAudioProcessCompleted.bind(this));
     this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
     this.zmqClient.on('transcriptionCompleted', this._handleTranscriptionOnlyCompleted.bind(this));
+    this.zmqClient.on('transcriptionReady', this._handleTranscriptionReady.bind(this));  // Transcription prête (avant traduction)
     this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
     this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
     this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
@@ -842,7 +843,7 @@ export class MessageTranslationService extends EventEmitter {
           updatedAt: new Date()
         };
 
-        logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage}`);
+        logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage} | segments=${translatedAudio.segments?.length || 0}`);
       }
 
       // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
@@ -1093,7 +1094,13 @@ export class MessageTranslationService extends EventEmitter {
           confidence: data.transcription.confidence,
           source: data.transcription.source,
           segments: data.transcription.segments,
-          durationMs: data.transcription.durationMs
+          durationMs: data.transcription.durationMs,
+          // Speaker analysis with voice characteristics
+          speakerCount: data.transcription.speakerCount,
+          primarySpeakerId: data.transcription.primarySpeakerId,
+          senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+          senderSpeakerId: data.transcription.senderSpeakerId,
+          speakerAnalysis: data.transcription.speakerAnalysis
         },
         processingTimeMs: data.processingTimeMs
       });
@@ -1131,6 +1138,119 @@ export class MessageTranslationService extends EventEmitter {
     });
 
     this.stats.incrementErrors();
+  }
+
+  /**
+   * Gère la transcription prête AVANT la traduction (architecture 2 phases).
+   * Phase 1: Transcription terminée → envoyer immédiatement au client
+   * Phase 2: Traduction + TTS terminés → envoyés séparément avec l'audio traduit
+   */
+  private async _handleTranscriptionReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    transcription: {
+      text: string;
+      language: string;
+      confidence: number;
+      durationMs: number;
+      source: string;
+      model?: string;
+      segments?: TranscriptionSegment[];
+      speakerCount?: number;
+      primarySpeakerId?: string;
+      senderVoiceIdentified?: boolean;
+      senderSpeakerId?: string | null;
+      speakerAnalysis?: any;
+    };
+    processingTimeMs: number;
+  }) {
+    try {
+      const startTime = Date.now();
+
+      logger.info(
+        `🎯 [TranslationService] Transcription READY (avant traduction): ${data.attachmentId} | ` +
+        (data.transcription?.text ? `Text: "${data.transcription.text.substring(0, 50)}..." | ` : '') +
+        `Lang: ${data.transcription.language} | Segments: ${data.transcription.segments?.length || 0}`
+      );
+
+      // 1. Récupérer les infos de l'attachment pour vérifier
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: data.attachmentId },
+        select: { id: true, messageId: true, duration: true }
+      });
+
+      if (!attachment) {
+        logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
+        return;
+      }
+
+      // 2. Construire la transcription JSON avec diarisation
+      const transcriptionData: AttachmentTranscription = {
+        text: data.transcription.text,
+        language: data.transcription.language,
+        confidence: data.transcription.confidence,
+        source: data.transcription.source as 'mobile' | 'whisper' | 'voice_api',
+        model: data.transcription.model || 'whisper_boost',
+        segments: data.transcription.segments as any,
+        speakerCount: data.transcription.speakerCount,
+        primarySpeakerId: data.transcription.primarySpeakerId,
+        senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+        senderSpeakerId: data.transcription.senderSpeakerId,
+        speakerAnalysis: data.transcription.speakerAnalysis,
+        durationMs: data.transcription.durationMs || attachment.duration || 0
+      };
+
+      // 3. Mettre à jour l'attachment avec la transcription
+      await this.prisma.messageAttachment.update({
+        where: { id: data.attachmentId },
+        data: { transcription: transcriptionData as any }
+      });
+
+      logger.info(`✅ [Phase 1] Transcription sauvegardée: ${data.transcription.language} | ${transcriptionData.segments?.length || 0} segments`);
+
+      // Log diarisation si présente
+      if (transcriptionData.speakerCount) {
+        logger.info(
+          `💾 [GATEWAY] Transcription avec diarisation: ` +
+          `${transcriptionData.speakerCount} speaker(s), ` +
+          `primary=${transcriptionData.primarySpeakerId}, ` +
+          `sender_identified=${transcriptionData.senderVoiceIdentified}`
+        );
+      }
+
+      // 4. Émettre événement Socket.IO pour notifier les clients IMMÉDIATEMENT
+      // (La traduction arrivera plus tard via audioProcessCompleted)
+      this.emit('transcriptionReady', {
+        taskId: data.taskId,
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        transcription: {
+          id: data.attachmentId,
+          text: data.transcription.text,
+          language: data.transcription.language,
+          confidence: data.transcription.confidence,
+          source: data.transcription.source,
+          segments: data.transcription.segments,
+          durationMs: data.transcription.durationMs,
+          // Speaker analysis with voice characteristics
+          speakerCount: data.transcription.speakerCount,
+          primarySpeakerId: data.transcription.primarySpeakerId,
+          senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+          senderSpeakerId: data.transcription.senderSpeakerId,
+          speakerAnalysis: data.transcription.speakerAnalysis
+        },
+        processingTimeMs: data.processingTimeMs,
+        phase: 'transcription'  // Indique que c'est la phase 1
+      });
+
+      const totalTime = Date.now() - startTime;
+      logger.info(`   ⏱️ [Phase 1] Transcription envoyée au client en ${totalTime}ms (traduction en cours...)`);
+
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur gestion transcription ready: ${error}`);
+      this.stats.incrementErrors();
+    }
   }
 
   // ============================================================================
@@ -1276,7 +1396,7 @@ export class MessageTranslationService extends EventEmitter {
             updatedAt: new Date()
           };
 
-          logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage}`);
+          logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage} | segments=${translation.segments?.length || 0}`);
         }
 
         // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle

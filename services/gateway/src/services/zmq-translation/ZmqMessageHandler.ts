@@ -24,6 +24,7 @@ import type {
   VoiceProfileCompareResult,
   VoiceProfileErrorEvent,
   TranscriptionCompletedEvent,
+  TranscriptionReadyEvent,
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
   VoiceTranslationFailedEvent
@@ -152,6 +153,11 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'transcription_completed':
         this.handleTranscriptionCompleted(event as unknown as TranscriptionCompletedEvent);
+        break;
+
+      case 'transcription_ready':
+        // Transcription prête (avant traduction) - envoi progressif
+        this.handleTranscriptionReady(event as unknown as TranscriptionReadyEvent);
         break;
 
       case 'transcription_error':
@@ -451,6 +457,33 @@ export class ZmqMessageHandler extends EventEmitter {
 
     // Émettre l'événement de succès transcription
     this.emit('transcriptionCompleted', {
+      taskId: event.taskId,
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      transcription: event.transcription,
+      processingTimeMs: event.processingTimeMs
+    });
+  }
+
+  /**
+   * Gère un événement de transcription prête (AVANT traduction).
+   * Permet d'envoyer la transcription au client immédiatement,
+   * sans attendre que la traduction soit terminée.
+   */
+  private handleTranscriptionReady(event: TranscriptionReadyEvent): void {
+    console.log(`[GATEWAY] 📤 Transcription READY (avant traduction): ${event.messageId}`);
+    if (event.transcription?.text) {
+      console.log(`[GATEWAY]    📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
+    }
+    if (event.transcription?.language) {
+      console.log(`[GATEWAY]    🌍 Langue: ${event.transcription.language}`);
+    }
+    if (event.transcription?.speakerCount) {
+      console.log(`[GATEWAY]    🎤 Speakers: ${event.transcription.speakerCount}`);
+    }
+
+    // Émettre l'événement de transcription prête (avant traduction)
+    this.emit('transcriptionReady', {
       taskId: event.taskId,
       messageId: event.messageId,
       attachmentId: event.attachmentId,

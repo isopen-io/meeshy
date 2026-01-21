@@ -508,6 +508,8 @@ class TranscriptionService:
                         'speakingTimeMs': s.speaking_time_ms,
                         'speakingRatio': s.speaking_ratio,
                         'voiceSimilarityScore': s.voice_similarity_score,
+                        # Voice characteristics in structured format
+                        'voiceCharacteristics': s.voice_characteristics.to_dict() if hasattr(s, 'voice_characteristics') and s.voice_characteristics else None,
                         'segments': [
                             {
                                 'startMs': seg.start_ms,
@@ -571,14 +573,56 @@ class TranscriptionService:
                     # Afficher les caractéristiques vocales si disponibles
                     if hasattr(speaker, 'voice_characteristics') and speaker.voice_characteristics:
                         vc = speaker.voice_characteristics
+
+                        # Extract labels from VoiceCharacteristics (English)
+                        gender = vc.estimated_gender or "unknown"
+
+                        pitch = vc.pitch_mean
+                        if pitch > 250:
+                            pitch_level = "very_high"
+                        elif pitch > 200:
+                            pitch_level = "high"
+                        elif pitch > 120:
+                            pitch_level = "medium"
+                        elif pitch > 90:
+                            pitch_level = "low"
+                        else:
+                            pitch_level = "very_low"
+
+                        age_range = vc.estimated_age_range
+                        if "child" in age_range:
+                            age = "child"
+                        elif "teen" in age_range or "young" in age_range:
+                            age = "teen"
+                        elif "senior" in age_range:
+                            age = "senior"
+                        else:
+                            age = "adult"
+
+                        variance = vc.pitch_std
+                        if variance > 40:
+                            tone = "very_expressive"
+                        elif variance > 20:
+                            tone = "expressive"
+                        else:
+                            tone = "monotone"
+
+                        syl_per_sec = (vc.speech_rate_wpm * 2) / 60 if vc.speech_rate_wpm > 0 else 0
+                        if syl_per_sec > 6:
+                            speech_rate = "rapide"
+                        elif syl_per_sec > 3:
+                            speech_rate = "normal"
+                        else:
+                            speech_rate = "lent"
+
                         logger.info(
-                            f"             ├─ Voix: {vc.gender} | "
-                            f"Registre: {vc.pitch_level} ({vc.avg_pitch_hz:.0f}Hz) | "
-                            f"Âge: {vc.age_group}"
+                            f"             ├─ Voix: {gender} | "
+                            f"Registre: {pitch_level} ({pitch:.0f}Hz) | "
+                            f"Âge: {age}"
                         )
                         logger.info(
-                            f"             ├─ Ton: {vc.tone} | "
-                            f"Rapidité: {vc.speech_rate} ({vc.syllables_per_second:.1f} syl/s)"
+                            f"             ├─ Ton: {tone} | "
+                            f"Rapidité: {speech_rate} ({syl_per_sec:.1f} syl/s)"
                         )
 
                     # Afficher les 3 premiers segments comme exemples

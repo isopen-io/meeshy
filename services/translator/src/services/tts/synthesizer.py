@@ -24,11 +24,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Configuration segmentation texte long
-# Chatterbox max_new_tokens=1000 ≈ 71s audio max (1min11s)
-# On peut augmenter la limite de segment pour réduire les coupures
-MAX_SEGMENT_CHARS = 500  # Caractères max par segment (~40-50s audio)
-MIN_SEGMENT_CHARS = 50   # Caractères min (éviter segments trop courts)
+# Configuration segmentation texte long (configurable via .env)
+# Chatterbox max_new_tokens=2048 ≈ 140s audio max (2min20s)
+MAX_SEGMENT_CHARS = int(os.getenv("TTS_MAX_SEGMENT_CHARS", "1000"))  # Caractères max par segment (~70-80s audio)
+MIN_SEGMENT_CHARS = int(os.getenv("TTS_MIN_SEGMENT_CHARS", "50"))     # Caractères min (éviter segments trop courts)
 
 # Configuration vitesse audio (DÉSACTIVÉ - contrôlé via paramètres Chatterbox)
 # La vitesse est maintenant gérée via exaggeration et cfg_weight dans chatterbox_backend.py
@@ -346,16 +345,19 @@ class Synthesizer:
         output_filename = f"{file_id}_{target_language}.{output_format}"
         output_path = str(self.output_dir / "translated" / output_filename)
 
+        # Convertir text en string si nécessaire
+        text_str = str(text) if not isinstance(text, str) else text
+
         logger.info(
-            f"[Synthesizer] 🎤 Synthèse: '{text[:50]}...' → {target_language} "
-            f"(model={model.value}, len={len(text)} chars)"
+            f"[Synthesizer] 🎤 Synthèse: '{text_str[:50]}...' → {target_language} "
+            f"(model={model.value}, len={len(text_str)} chars)"
         )
 
         try:
             # ═══════════════════════════════════════════════════════════════
             # SEGMENTATION POUR TEXTES LONGS
-            # Chatterbox limite à ~71s audio (max_new_tokens=1000)
-            # On segmente les textes > 500 chars pour éviter la troncature
+            # Chatterbox limite à ~140s audio (max_new_tokens=2048)
+            # On segmente les textes > 1000 chars pour éviter la troncature
             # ═══════════════════════════════════════════════════════════════
             segments = self._segment_text(text)
 

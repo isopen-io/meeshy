@@ -46,6 +46,9 @@ except Exception as e:
 
 _background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tts_download")
 
+# Note: max_new_tokens n'est plus supporté par ChatterboxMultilingualTTS.generate()
+# La durée de l'audio est maintenant déterminée automatiquement par le modèle
+
 
 class ChatterboxBackend(BaseTTSBackend):
     """Backend Chatterbox (Resemble AI) - MODÈLE PAR DÉFAUT ET FALLBACK
