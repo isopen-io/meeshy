@@ -844,7 +844,11 @@ export class AudioTranslateService extends EventEmitter {
         language: result.originalAudio.language,
         confidence: result.originalAudio.confidence,
         source: 'whisper',
-        durationMs: result.originalAudio.durationMs || 0
+        durationMs: result.originalAudio.durationMs || 0,
+        // Segments de transcription avec timestamps et speakers
+        segments: result.originalAudio.segments,
+        speakerCount: result.originalAudio.speakerCount,
+        primarySpeakerId: result.originalAudio.primarySpeakerId
       } : undefined;
 
       // Construire les traductions JSON
@@ -861,6 +865,8 @@ export class AudioTranslateService extends EventEmitter {
           format: 'mp3',
           cloned: translation.voiceCloned,
           quality: translation.voiceQuality || 0,
+          // Segments traduits avec timestamps et speakers
+          segments: translation.segments,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };

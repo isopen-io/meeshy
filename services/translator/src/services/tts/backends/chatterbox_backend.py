@@ -26,6 +26,24 @@ from ...model_manager import TTSBackend as TTSBackendEnum
 
 logger = logging.getLogger(__name__)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# INITIALISATION EINOPS POUR COMPATIBILITÉ AVEC ThreadPoolExecutor
+# einops doit "découvrir" le backend torch dans le thread principal
+# AVANT d'être utilisé dans un executor, sinon: "Tensor type unknown to einops"
+# ═══════════════════════════════════════════════════════════════════════════════
+try:
+    import torch
+    from einops import rearrange
+    # Forcer einops à enregistrer le backend torch avec une opération factice
+    _dummy_tensor = torch.randn(2, 3)
+    _dummy_result = rearrange(_dummy_tensor, "a b -> b a")
+    del _dummy_tensor, _dummy_result
+    logger.debug("[CHATTERBOX] ✅ einops backend torch initialisé")
+except ImportError:
+    pass
+except Exception as e:
+    logger.warning(f"[CHATTERBOX] ⚠️ Initialisation einops: {e}")
+
 _background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tts_download")
 
 
@@ -58,6 +76,9 @@ class ChatterboxBackend(BaseTTSBackend):
         self._initialized_multilingual = False
         self._settings = get_settings()
         self._models_path = Path(self._settings.huggingface_cache_path)
+
+        # Verrou pour sérialiser les appels de synthèse (ChatterBox n'est pas thread-safe)
+        self._synthesis_lock = asyncio.Lock()
 
         try:
             from chatterbox.tts import ChatterboxTTS
@@ -321,17 +342,25 @@ class ChatterboxBackend(BaseTTSBackend):
             traceback.print_exc()
             return False
 
-    # Valeurs par défaut des paramètres Chatterbox optimisées pour fluidité et naturel
-    # Ces valeurs ont été calibrées pour une synthèse vocale fluide avec clonage
-    # Recommandations ML Agent: cfg_weight min 0.30, repetition_penalty 1.20
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PARAMÈTRES CHATTERBOX - VALEURS PAR DÉFAUT OFFICIELLES
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Basé sur chatterbox_voice_translation_test.py qui fonctionne correctement.
+    # IMPORTANT: Ne pas surcharger avec des paramètres non-standards (temperature,
+    # repetition_penalty, min_p, top_p) car ils causent des troncatures audio.
+    #
+    # Pour les langues non-anglaises: cfg_weight=0.0 réduit le transfert d'accent
+    # ═══════════════════════════════════════════════════════════════════════════
     DEFAULT_PARAMS = {
-        "exaggeration": 0.45,     # 0.0-1.0: Expressivité vocale (réduit pour plus de naturel)
-        "cfg_weight": 0.50,       # 0.0-1.0: Guidance du modèle (augmenté pour éviter artefacts)
-        "temperature": 0.85,      # 0.0-2.0: Créativité/aléatoire (équilibré pour fluidité)
-        "repetition_penalty": 1.15,  # 1.0-3.0: Pénalité répétition (mono) - réduit pour moins de saccades
-        "repetition_penalty_multilingual": 1.20,  # 1.0-3.0: Pénalité répétition (multi) - réduit pour plus de fluidité
-        "min_p": 0.04,           # 0.0-1.0: Probabilité minimum sampling (légèrement réduit)
-        "top_p": 0.95,           # 0.0-1.0: Nucleus sampling (légèrement réduit pour cohérence)
+        "exaggeration": 0.5,      # 0.0-1.0: Expressivité vocale (défaut officiel)
+        "cfg_weight": 0.5,        # 0.0-1.0: Guidance du modèle (défaut officiel)
+        # NOTE: Pour non-anglais, cfg_weight sera mis à 0.0 automatiquement
+    }
+
+    # Mode TURBO pour synthèse plus neutre/stable
+    FAST_PARAMS = {
+        "exaggeration": 0.3,      # Expressivité réduite pour stabilité
+        "cfg_weight": 0.5,        # Guidance standard
     }
 
     async def synthesize(
@@ -340,52 +369,27 @@ class ChatterboxBackend(BaseTTSBackend):
         language: str,
         speaker_audio_path: Optional[str] = None,
         output_path: str = None,
-        # Paramètres de clonage vocal
+        # Paramètres de clonage vocal (seuls paramètres officiels Chatterbox)
         exaggeration: Optional[float] = None,
         cfg_weight: Optional[float] = None,
-        # Paramètres de génération
-        temperature: Optional[float] = None,
-        repetition_penalty: Optional[float] = None,
-        min_p: Optional[float] = None,
-        top_p: Optional[float] = None,
         # Options
         auto_optimize_params: bool = True,
         voice_characteristics: Optional[VoiceCharacteristics] = None,
-        # NOUVEAU: Conditionals Chatterbox pré-calculés
-        conditionals: Optional[Any] = None,  # Chatterbox Conditionals object
-        **kwargs
+        # Conditionals Chatterbox pré-calculés
+        conditionals: Optional[Any] = None,
+        # MODE RAPIDE
+        fast_mode: bool = False,
+        **kwargs  # Ignorer les paramètres non-standards
     ) -> str:
         """
         Synthèse vocale avec Chatterbox.
 
-        Args:
-            text: Texte à synthétiser
-            language: Code langue (ex: 'fr', 'en', 'es')
-            speaker_audio_path: Chemin vers l'audio de référence pour le clonage
-            output_path: Chemin de sortie
+        IMPORTANT: Utilise UNIQUEMENT les paramètres officiels Chatterbox:
+        - exaggeration: Expressivité vocale (0.0-1.0, défaut 0.5)
+        - cfg_weight: Guidance du modèle (0.0-1.0, défaut 0.5, 0.0 pour non-anglais)
 
-            PARAMÈTRES DE CLONAGE VOCAL:
-            exaggeration: Expressivité (0.0-1.0). Amplifie les caractéristiques vocales.
-                         0.0 = neutre, 1.0 = très expressif. Si None, auto-calculé
-            cfg_weight: Guidance (0.0-1.0). Contrôle la fidélité au texte.
-                       0.0 = créatif, 1.0 = strict. Si None, auto-calculé
-
-            PARAMÈTRES DE GÉNÉRATION:
-            temperature: Créativité (0.0-2.0). Contrôle le caractère aléatoire.
-                        0.0 = déterministe, 2.0 = très créatif. Défaut: 0.8
-            repetition_penalty: Pénalité répétition (1.0-3.0). Évite les répétitions.
-                               1.0 = pas de pénalité, 3.0 = forte pénalité.
-                               Défaut: 1.2 (mono), 2.0 (multi)
-            min_p: Probabilité minimum (0.0-1.0). Filtre les tokens improbables.
-                   Défaut: 0.05
-            top_p: Nucleus sampling (0.0-1.0). Limite aux tokens les plus probables.
-                   Défaut: 1.0
-
-            OPTIONS:
-            auto_optimize_params: Calculer automatiquement exaggeration/cfg_weight
-            voice_characteristics: Caractéristiques vocales pré-analysées
-            conditionals: Conditionals Chatterbox pré-calculés pour éviter de recalculer
-                         à chaque synthèse. Si fourni, speaker_audio_path est ignoré.
+        Les paramètres non-standards (temperature, repetition_penalty, min_p, top_p)
+        sont IGNORÉS car ils causent des troncatures audio.
         """
         import torchaudio
 
@@ -393,69 +397,34 @@ class ChatterboxBackend(BaseTTSBackend):
         lang_code = language.split('-')[0].lower() if language else 'en'
 
         # Déterminer si on utilise le modèle multilingue
-        # Note: On utilise le multilingual pour TOUTES les langues supportées,
-        # y compris l'anglais, car le modèle est chargé au démarrage.
-        # Le modèle monolingual n'est plus utilisé par défaut.
         use_multilingual = (
             lang_code in self.MULTILINGUAL_LANGUAGES and
             self._available_multilingual
         )
 
-        # ═══════════════════════════════════════════════════════════════════
-        # AUTO-OPTIMISATION DES PARAMÈTRES DE CLONAGE
-        # ═══════════════════════════════════════════════════════════════════
-        # Si au moins un paramètre n'est pas spécifié et qu'on a un audio de référence
-        any_param_missing = any(p is None for p in [exaggeration, cfg_weight, temperature, repetition_penalty, min_p, top_p])
+        # Sélectionner les paramètres par défaut
+        params_source = self.FAST_PARAMS if fast_mode else self.DEFAULT_PARAMS
+        if fast_mode:
+            logger.info("[TTS] ⚡ MODE RAPIDE activé")
 
-        if auto_optimize_params and speaker_audio_path and os.path.exists(speaker_audio_path) and any_param_missing:
-            optimal_params = await self._get_optimal_params(
-                speaker_audio_path,
-                lang_code,
-                voice_characteristics
-            )
-            # Appliquer les paramètres optimaux uniquement pour ceux non spécifiés
-            if exaggeration is None:
-                exaggeration = optimal_params["exaggeration"]
-            if cfg_weight is None:
-                cfg_weight = optimal_params["cfg_weight"]
-            if temperature is None:
-                temperature = optimal_params.get("temperature", self.DEFAULT_PARAMS["temperature"])
-            if repetition_penalty is None:
-                repetition_penalty = optimal_params.get("repetition_penalty", self.DEFAULT_PARAMS["repetition_penalty"])
-            if min_p is None:
-                min_p = optimal_params.get("min_p", self.DEFAULT_PARAMS["min_p"])
-            if top_p is None:
-                top_p = optimal_params.get("top_p", self.DEFAULT_PARAMS["top_p"])
-
-            logger.info(
-                f"[TTS] Auto-optimisation: exp={exaggeration:.2f}, cfg={cfg_weight:.2f}, "
-                f"temp={temperature:.2f}, rep_pen={repetition_penalty:.2f} "
-                f"({optimal_params.get('explanation', '')})"
-            )
-
-        # ═══════════════════════════════════════════════════════════════════
-        # APPLIQUER LES VALEURS PAR DÉFAUT
-        # ═══════════════════════════════════════════════════════════════════
+        # Appliquer les valeurs par défaut
         if exaggeration is None:
-            exaggeration = self.DEFAULT_PARAMS["exaggeration"]
+            exaggeration = params_source["exaggeration"]
         if cfg_weight is None:
-            cfg_weight = self.DEFAULT_PARAMS["cfg_weight"]
-        if temperature is None:
-            temperature = self.DEFAULT_PARAMS["temperature"]
-        if repetition_penalty is None:
-            repetition_penalty = (
-                self.DEFAULT_PARAMS["repetition_penalty_multilingual"]
-                if use_multilingual
-                else self.DEFAULT_PARAMS["repetition_penalty"]
-            )
-        if min_p is None:
-            min_p = self.DEFAULT_PARAMS["min_p"]
-        if top_p is None:
-            top_p = self.DEFAULT_PARAMS["top_p"]
+            cfg_weight = params_source["cfg_weight"]
 
-        logger.debug(
-            f"[TTS] Params: lang={lang_code}, exp={exaggeration:.2f}, cfg={cfg_weight:.2f}, "
-            f"temp={temperature:.2f}, rep_pen={repetition_penalty:.2f}, min_p={min_p:.2f}, top_p={top_p:.2f}"
+        # ═══════════════════════════════════════════════════════════════════
+        # RÈGLE CRUCIALE: cfg_weight=0.0 pour les langues non-anglaises
+        # Basé sur chatterbox_voice_translation_test.py qui fonctionne
+        # ═══════════════════════════════════════════════════════════════════
+        if lang_code != 'en':
+            effective_cfg = 0.0  # Réduit le transfert d'accent pour cross-langue
+            logger.info(f"[TTS] Cross-language: cfg_weight=0.0 pour {lang_code} (réduit transfert accent)")
+        else:
+            effective_cfg = cfg_weight
+
+        logger.info(
+            f"[TTS] Params: lang={lang_code}, exaggeration={exaggeration:.2f}, cfg_weight={effective_cfg:.2f}"
         )
 
         # ═══════════════════════════════════════════════════════════════════
@@ -484,153 +453,105 @@ class ChatterboxBackend(BaseTTSBackend):
         loop = asyncio.get_event_loop()
 
         # ═══════════════════════════════════════════════════════════════════
-        # GÉNÉRATION AUDIO
+        # GÉNÉRATION AUDIO - PARAMÈTRES SIMPLES UNIQUEMENT
+        # Comme dans chatterbox_voice_translation_test.py
+        # VERROU: ChatterBox n'est pas thread-safe, sérialisation des appels
         # ═══════════════════════════════════════════════════════════════════
-        if use_multilingual:
-            # Pour le clonage cross-langue, cfg_weight réduit améliore la qualité
-            # IMPORTANT: cfg_weight=0.0 désactive complètement la guidance et cause
-            # des artefacts vocaux imprévisibles. Valeur minimum recommandée: 0.30
-            # pour maintenir l'articulation tout en réduisant le transfert d'accent.
-            # ML Agent recommendation: minimum 0.30 pour éviter les artefacts et répétitions
-            if lang_code != 'en':
-                # Réduire légèrement le cfg pour langues non-anglaises mais garder minimum 0.30
-                effective_cfg = max(0.30, cfg_weight * 0.7)  # Minimum 0.30, sinon 70% de la valeur
-                logger.debug(f"[TTS] Cross-language cfg_weight: {cfg_weight:.2f} → {effective_cfg:.2f} (langue: {lang_code})")
+        async with self._synthesis_lock:
+            if use_multilingual:
+                _model = model_multi
+                _text = text
+                _lang_code = lang_code
+                _speaker = speaker_audio_path
+                _exp = exaggeration
+                _cfg = effective_cfg
+                _conditionals = conditionals
+
+                # Si des conditionals pré-calculés sont fournis
+                if _conditionals is not None:
+                    logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés")
+                    _model.conds = _conditionals
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            text=_text,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
+                    )
+                elif speaker_audio_path and os.path.exists(speaker_audio_path):
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            text=_text,
+                            audio_prompt_path=_speaker,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
+                    )
+                else:
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            text=_text,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
+                    )
+
+                sample_rate = model_multi.sr
+                logger.debug(f"[TTS] Synthèse multilingue: {lang_code}")
             else:
-                effective_cfg = cfg_weight
+                _model = model_mono
+                _text = text
+                _speaker = speaker_audio_path
+                _exp = exaggeration
+                _cfg = effective_cfg
+                _conditionals = conditionals
 
-            # Capturer les paramètres locaux pour le lambda
-            _model = model_multi
-            _text = text
-            _lang_code = lang_code
-            _speaker = speaker_audio_path
-            _exp = exaggeration
-            _cfg = effective_cfg
-            _temp = temperature
-            _rep_pen = repetition_penalty
-            _min_p = min_p
-            _top_p = top_p
-            _conditionals = conditionals
-
-            # Si des conditionals pré-calculés sont fournis, les utiliser directement
-            if _conditionals is not None:
-                logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés pour le clonage")
-                _model.conds = _conditionals
-                # Générer sans audio_prompt_path puisque les conditionals sont déjà prêts
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        text=_text,
-                        language_id=_lang_code,
-                        # PAS de audio_prompt_path car conditionals déjà chargés
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
+                if _conditionals is not None:
+                    logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés")
+                    _model.conds = _conditionals
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            _text,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
                     )
-                )
-            elif speaker_audio_path and os.path.exists(speaker_audio_path):
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        text=_text,
-                        language_id=_lang_code,
-                        audio_prompt_path=_speaker,
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
+                elif speaker_audio_path and os.path.exists(speaker_audio_path):
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            _text,
+                            audio_prompt_path=_speaker,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
                     )
-                )
-            else:
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        text=_text,
-                        language_id=_lang_code,
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
+                else:
+                    wav = await loop.run_in_executor(
+                        None,
+                        lambda: _model.generate(
+                            _text,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
+                        )
                     )
-                )
 
-            sample_rate = model_multi.sr
-            logger.debug(f"[TTS] Synthèse multilingue: {lang_code}")
-        else:
-            # Capturer les paramètres locaux pour le lambda
-            _model = model_mono
-            _text = text
-            _speaker = speaker_audio_path
-            _exp = exaggeration
-            _cfg = cfg_weight
-            _temp = temperature
-            _rep_pen = repetition_penalty
-            _min_p = min_p
-            _top_p = top_p
-            _conditionals = conditionals
+                sample_rate = model_mono.sr
+                logger.debug(f"[TTS] Synthèse monolingual: en")
 
-            # Si des conditionals pré-calculés sont fournis, les utiliser directement
-            if _conditionals is not None:
-                logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés pour le clonage")
-                _model.conds = _conditionals
-                # Générer sans audio_prompt_path puisque les conditionals sont déjà prêts
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        _text,
-                        # PAS de audio_prompt_path car conditionals déjà chargés
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
-                    )
-                )
-            elif speaker_audio_path and os.path.exists(speaker_audio_path):
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        _text,
-                        audio_prompt_path=_speaker,
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
-                    )
-                )
-            else:
-                wav = await loop.run_in_executor(
-                    None,
-                    lambda: _model.generate(
-                        _text,
-                        exaggeration=_exp,
-                        cfg_weight=_cfg,
-                        temperature=_temp,
-                        repetition_penalty=_rep_pen,
-                        min_p=_min_p,
-                        top_p=_top_p
-                    )
-                )
+            await loop.run_in_executor(
+                None,
+                lambda: torchaudio.save(output_path, wav, sample_rate)
+            )
 
-            sample_rate = model_mono.sr
-            logger.debug(f"[TTS] Synthèse monolingual: en")
-
-        await loop.run_in_executor(
-            None,
-            lambda: torchaudio.save(output_path, wav, sample_rate)
-        )
-
-        return output_path
+            return output_path
 
     async def _get_optimal_params(
         self,
@@ -641,54 +562,35 @@ class ChatterboxBackend(BaseTTSBackend):
         """
         Calcule les paramètres optimaux basés sur l'analyse vocale.
 
-        Args:
-            speaker_audio_path: Chemin vers l'audio de référence
-            target_language: Langue cible
-            voice_characteristics: Caractéristiques pré-analysées (optionnel)
-
-        Returns:
-            Dict avec tous les paramètres Chatterbox optimisés:
-            - exaggeration, cfg_weight, temperature, repetition_penalty, min_p, top_p
+        NOTE: Simplifié pour n'utiliser que exaggeration et cfg_weight (params officiels).
         """
         try:
             analyzer = VoiceAnalyzerService()
             await analyzer.initialize()
 
-            # Utiliser les caractéristiques fournies ou analyser
             if voice_characteristics is None:
                 characteristics = await analyzer.analyze(speaker_audio_path)
             else:
                 characteristics = voice_characteristics
 
-            # Obtenir les paramètres optimaux (tous les 6 paramètres)
             optimal = analyzer.get_optimal_clone_params(characteristics, target_language)
 
             logger.debug(
                 f"[TTS] Analyse vocale: type={characteristics.voice_type}, "
-                f"pitch={characteristics.pitch_mean:.1f}Hz, "
-                f"expressivité={optimal['analysis']['expressiveness_score']:.2f}, "
-                f"stabilité={optimal['analysis']['stability_score']:.2f}"
-            )
-            logger.debug(
-                f"[TTS] Params optimaux: exp={optimal['exaggeration']:.2f}, "
-                f"cfg={optimal['cfg_weight']:.2f}, temp={optimal['temperature']:.2f}, "
-                f"rep_pen={optimal['repetition_penalty']:.2f}, "
-                f"min_p={optimal['min_p']:.3f}, top_p={optimal['top_p']:.2f}"
+                f"pitch={characteristics.pitch_mean:.1f}Hz"
             )
 
-            return optimal
+            # Retourner uniquement les paramètres officiels
+            return {
+                "exaggeration": optimal.get("exaggeration", self.DEFAULT_PARAMS["exaggeration"]),
+                "cfg_weight": optimal.get("cfg_weight", self.DEFAULT_PARAMS["cfg_weight"]),
+            }
 
         except Exception as e:
             logger.warning(f"[TTS] Erreur auto-optimisation, utilisation valeurs par défaut: {e}")
             return {
                 "exaggeration": self.DEFAULT_PARAMS["exaggeration"],
                 "cfg_weight": self.DEFAULT_PARAMS["cfg_weight"],
-                "temperature": self.DEFAULT_PARAMS["temperature"],
-                "repetition_penalty": self.DEFAULT_PARAMS["repetition_penalty"],
-                "min_p": self.DEFAULT_PARAMS["min_p"],
-                "top_p": self.DEFAULT_PARAMS["top_p"],
-                "confidence": 0.0,
-                "explanation": "Valeurs par défaut (erreur analyse)"
             }
 
     async def prepare_voice_conditionals(

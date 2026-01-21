@@ -12,20 +12,20 @@ import * as ffmpeg from 'fluent-ffmpeg';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 
 export interface AudioMetadata {
-  duration: number;
-  bitrate: number;
-  sampleRate: number;
+  duration: number;      // En millisecondes
+  bitrate: number;       // En bits/sec
+  sampleRate: number;    // En Hz
   codec: string;
   channels: number;
 }
 
 export interface VideoMetadata {
-  duration: number;
+  duration: number;      // En millisecondes
   width: number;
   height: number;
   fps: number;
   videoCodec: string;
-  bitrate: number;
+  bitrate: number;       // En bits/sec
 }
 
 export interface ImageMetadata {
@@ -129,23 +129,233 @@ export class MetadataManager {
   }
 
   /**
-   * Extrait les métadonnées d'un fichier audio
-   * Supporte WebM, MP4, OGG, MP3, WAV, etc.
+   * Calcule la durée d'un fichier WAV à partir de son header
+   * Format WAV: Header RIFF (12 bytes) + fmt chunk (24 bytes) + data chunk header (8 bytes)
    */
-  async extractAudioMetadata(audioPath: string): Promise<AudioMetadata> {
+  async calculateWavDuration(fullPath: string, fileSize: number): Promise<AudioMetadata | null> {
     try {
-      const fullPath = path.join(this.uploadBasePath, audioPath);
-      const metadata = await parseFile(fullPath);
+      const fd = await fs.open(fullPath, 'r');
+      const headerBuffer = Buffer.alloc(44);
+      await fd.read(headerBuffer, 0, 44, 0);
+      await fd.close();
 
-      const format = metadata.format;
+      // Vérifier signature RIFF
+      const riffSignature = headerBuffer.toString('ascii', 0, 4);
+      const waveSignature = headerBuffer.toString('ascii', 8, 12);
+
+      if (riffSignature !== 'RIFF' || waveSignature !== 'WAVE') {
+        return null;
+      }
+
+      // Lire les informations du chunk fmt
+      const audioFormat = headerBuffer.readUInt16LE(20);
+      const channels = headerBuffer.readUInt16LE(22);
+      const sampleRate = headerBuffer.readUInt32LE(24);
+      const byteRate = headerBuffer.readUInt32LE(28);
+      const bitsPerSample = headerBuffer.readUInt16LE(34);
+
+      // Calculer la taille des données audio (taille totale - header)
+      const dataSize = fileSize - 44;
+
+      // Calculer la durée: dataSize / byteRate (en secondes, puis convertir en ms)
+      const durationSeconds = byteRate > 0 ? dataSize / byteRate : 0;
+      const duration = Math.round(durationSeconds * 1000); // Convertir en millisecondes
+
+      console.log('📊 [MetadataManager] WAV header analysis:', {
+        audioFormat,
+        channels,
+        sampleRate,
+        byteRate,
+        bitsPerSample,
+        dataSize,
+        durationMs: duration,
+        durationSeconds: durationSeconds,
+        fileSize
+      });
 
       return {
-        duration: Math.round(format.duration || 0),
-        bitrate: format.bitrate || 0,
-        sampleRate: format.sampleRate || 0,
-        codec: format.codec || format.codecProfile || 'unknown',
-        channels: format.numberOfChannels || 1,
+        duration,
+        bitrate: byteRate * 8,
+        sampleRate,
+        codec: audioFormat === 1 ? 'pcm' : `wav_format_${audioFormat}`,
+        channels,
       };
+    } catch (error) {
+      console.error('[MetadataManager] Erreur lecture header WAV:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Valide la cohérence entre durée et taille de fichier
+   * Détecte les incohérences (ex: 1 seconde ne peut pas peser 50MB)
+   * @param duration Durée en millisecondes
+   * @param fileSize Taille du fichier en bytes
+   * @param bitrate Bitrate en bits/sec
+   * @param mimeType Type MIME du fichier
+   */
+  validateAudioCoherence(
+    duration: number,
+    fileSize: number,
+    bitrate: number,
+    mimeType: string
+  ): { isValid: boolean; reason?: string; estimatedDuration?: number } {
+    if (duration <= 0 || fileSize <= 0) {
+      return { isValid: false, reason: 'Durée ou taille invalide' };
+    }
+
+    // Calculer le bitrate moyen réel (en bits/sec)
+    // duration est en ms, donc on divise par 1000 pour avoir des secondes
+    const durationSeconds = duration / 1000;
+    const actualBitrate = (fileSize * 8) / durationSeconds;
+
+    // Bitrates typiques par format (en bits/sec)
+    const expectedBitrates: Record<string, { min: number; max: number }> = {
+      'audio/wav': { min: 128_000, max: 2_304_000 },      // 16kHz mono 8-bit à 48kHz stereo 24-bit
+      'audio/wave': { min: 128_000, max: 2_304_000 },
+      'audio/x-wav': { min: 128_000, max: 2_304_000 },
+      'audio/mp3': { min: 32_000, max: 320_000 },         // MP3 standard
+      'audio/mpeg': { min: 32_000, max: 320_000 },
+      'audio/ogg': { min: 45_000, max: 500_000 },         // OGG Vorbis
+      'audio/opus': { min: 6_000, max: 510_000 },         // Opus
+      'audio/webm': { min: 24_000, max: 510_000 },        // WebM (Opus/Vorbis)
+      'audio/aac': { min: 32_000, max: 256_000 },         // AAC
+      'audio/m4a': { min: 32_000, max: 256_000 },
+      'audio/mp4': { min: 32_000, max: 256_000 },
+    };
+
+    const expected = expectedBitrates[mimeType] || { min: 8_000, max: 5_000_000 };
+
+    // Vérifier si le bitrate réel est cohérent
+    if (actualBitrate < expected.min * 0.5) {
+      // Bitrate trop faible: durée probablement trop longue
+      const estimatedDurationSeconds = (fileSize * 8) / expected.min;
+      const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
+      console.warn('⚠️ [MetadataManager] Bitrate trop faible détecté:', {
+        durationMs: duration,
+        durationSeconds: durationSeconds,
+        fileSize,
+        actualBitrate: Math.round(actualBitrate),
+        expectedMin: expected.min,
+        estimatedDurationMs: estimatedDuration,
+        mimeType
+      });
+      return {
+        isValid: false,
+        reason: 'Bitrate trop faible',
+        estimatedDuration
+      };
+    }
+
+    if (actualBitrate > expected.max * 2) {
+      // Bitrate trop élevé: durée probablement trop courte ou fichier corrompu
+      const estimatedDurationSeconds = (fileSize * 8) / expected.max;
+      const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
+      console.warn('⚠️ [MetadataManager] Bitrate trop élevé détecté:', {
+        durationMs: duration,
+        durationSeconds: durationSeconds,
+        actualBitrate: Math.round(actualBitrate),
+        expectedMax: expected.max,
+        estimatedDurationMs: estimatedDuration,
+        mimeType
+      });
+      return {
+        isValid: false,
+        reason: 'Bitrate trop élevé',
+        estimatedDuration
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Extrait les métadonnées d'un fichier audio
+   * Supporte WebM, MP4, OGG, MP3, WAV, etc.
+   * Avec fallback sur calcul WAV et validation de cohérence
+   */
+  async extractAudioMetadata(
+    audioPath: string,
+    fileSize?: number,
+    mimeType?: string
+  ): Promise<AudioMetadata> {
+    try {
+      const fullPath = path.join(this.uploadBasePath, audioPath);
+
+      // Obtenir la taille du fichier si non fournie
+      if (!fileSize) {
+        const stats = await fs.stat(fullPath);
+        fileSize = stats.size;
+      }
+
+      let metadata: AudioMetadata | null = null;
+
+      // Tenter d'extraire avec music-metadata d'abord
+      try {
+        const parsedMetadata = await parseFile(fullPath);
+        const format = parsedMetadata.format;
+
+        metadata = {
+          duration: Math.round((format.duration || 0) * 1000), // Convertir secondes -> millisecondes
+          bitrate: format.bitrate || 0,
+          sampleRate: format.sampleRate || 0,
+          codec: format.codec || format.codecProfile || 'unknown',
+          channels: format.numberOfChannels || 1,
+        };
+
+        console.log('📊 [MetadataManager] music-metadata extraction:', {
+          filePath: audioPath,
+          duration: metadata.duration,
+          durationSeconds: metadata.duration / 1000,
+          bitrate: metadata.bitrate,
+          codec: metadata.codec
+        });
+      } catch (parseError) {
+        console.warn('[MetadataManager] music-metadata failed, trying WAV header:', parseError);
+      }
+
+      // Si échec ou format WAV, essayer de lire le header WAV
+      if ((!metadata || metadata.duration === 0) &&
+          mimeType && (mimeType.includes('wav') || mimeType.includes('wave'))) {
+        const wavMetadata = await this.calculateWavDuration(fullPath, fileSize);
+        if (wavMetadata) {
+          metadata = wavMetadata;
+          console.log('✅ [MetadataManager] WAV duration calculated from header');
+        }
+      }
+
+      // Si toujours pas de métadonnées valides
+      if (!metadata || metadata.duration === 0) {
+        console.warn('[MetadataManager] No valid metadata extracted');
+        return {
+          duration: 0,
+          bitrate: 0,
+          sampleRate: 0,
+          codec: 'unknown',
+          channels: 1,
+        };
+      }
+
+      // Valider la cohérence durée/taille
+      if (mimeType && metadata.duration > 0 && fileSize > 0) {
+        const validation = this.validateAudioCoherence(
+          metadata.duration,
+          fileSize,
+          metadata.bitrate,
+          mimeType
+        );
+
+        if (!validation.isValid && validation.estimatedDuration) {
+          console.warn('⚠️ [MetadataManager] Using estimated duration instead:', {
+            originalDuration: metadata.duration,
+            estimatedDuration: validation.estimatedDuration,
+            reason: validation.reason
+          });
+          metadata.duration = validation.estimatedDuration;
+        }
+      }
+
+      return metadata;
     } catch (error) {
       console.error('[MetadataManager] Erreur extraction métadonnées audio:', {
         filePath: audioPath,
@@ -229,7 +439,7 @@ export class MetadataManager {
         }
 
         resolve({
-          duration: Math.round(metadata.format?.duration || 0),
+          duration: Math.round((metadata.format?.duration || 0) * 1000), // Convertir secondes -> millisecondes
           width: videoStream.width || 0,
           height: videoStream.height || 0,
           fps: Math.round(fps * 100) / 100,
@@ -266,14 +476,27 @@ export class MetadataManager {
 
   /**
    * Extrait les métadonnées complètes selon le type
+   * Avec validation intelligente utilisant les métadonnées du frontend
    */
   async extractMetadata(
     filePath: string,
     attachmentType: string,
     mimeType: string,
-    providedMetadata?: any
+    providedMetadata?: any,
+    fileSize?: number
   ): Promise<AttachmentMetadata> {
     const metadata: AttachmentMetadata = {};
+
+    // Obtenir la taille du fichier si non fournie
+    if (!fileSize && attachmentType === 'audio') {
+      try {
+        const fullPath = path.join(this.uploadBasePath, filePath);
+        const stats = await fs.stat(fullPath);
+        fileSize = stats.size;
+      } catch (error) {
+        console.warn('[MetadataManager] Could not get file size:', error);
+      }
+    }
 
     if (attachmentType === 'image') {
       const imageMeta = await this.extractImageMetadata(filePath);
@@ -282,23 +505,108 @@ export class MetadataManager {
     }
 
     if (attachmentType === 'audio') {
+      // Toujours extraire les métadonnées du serveur
+      const extractedMeta = await this.extractAudioMetadata(filePath, fileSize, mimeType);
+
+      // Si on a des métadonnées fournies par le frontend
       if (providedMetadata && providedMetadata.duration !== undefined) {
-        metadata.duration = Math.round(providedMetadata.duration);
-        metadata.bitrate = providedMetadata.bitrate || 0;
-        metadata.sampleRate = providedMetadata.sampleRate || 0;
-        metadata.codec = providedMetadata.codec || 'unknown';
-        metadata.channels = providedMetadata.channels || 1;
+        const frontendDuration = Math.round(providedMetadata.duration); // En millisecondes
+        const backendDuration = extractedMeta.duration; // En millisecondes
+
+        console.log('🔍 [MetadataManager] Comparing frontend vs backend metadata:', {
+          frontendDurationMs: frontendDuration,
+          backendDurationMs: backendDuration,
+          frontendDurationSec: frontendDuration / 1000,
+          backendDurationSec: backendDuration / 1000,
+          fileSize,
+          mimeType
+        });
+
+        // Si les deux sources ont des valeurs valides, les comparer
+        if (frontendDuration > 0 && backendDuration > 0) {
+          const difference = Math.abs(frontendDuration - backendDuration);
+          const percentDifference = (difference / Math.max(frontendDuration, backendDuration)) * 100;
+
+          // Si la différence est supérieure à 10%, c'est suspect
+          if (percentDifference > 10) {
+            console.warn('⚠️ [MetadataManager] Durée incohérente entre frontend et backend:', {
+              frontendDurationMs: frontendDuration,
+              backendDurationMs: backendDuration,
+              frontendDurationSec: frontendDuration / 1000,
+              backendDurationSec: backendDuration / 1000,
+              differenceMs: difference,
+              percentDifference: Math.round(percentDifference)
+            });
+
+            // Valider avec la taille du fichier si disponible
+            if (fileSize && fileSize > 0) {
+              const frontendValidation = this.validateAudioCoherence(
+                frontendDuration,
+                fileSize,
+                providedMetadata.bitrate || 128000,
+                mimeType
+              );
+
+              const backendValidation = this.validateAudioCoherence(
+                backendDuration,
+                fileSize,
+                extractedMeta.bitrate || 128000,
+                mimeType
+              );
+
+              // Utiliser la valeur la plus cohérente avec la taille du fichier
+              if (frontendValidation.isValid && !backendValidation.isValid) {
+                console.log('✅ [MetadataManager] Using frontend duration (more coherent with file size)');
+                metadata.duration = frontendDuration;
+              } else if (!frontendValidation.isValid && backendValidation.isValid) {
+                console.log('✅ [MetadataManager] Using backend duration (more coherent with file size)');
+                metadata.duration = backendDuration;
+              } else if (backendValidation.estimatedDuration) {
+                console.log('⚠️ [MetadataManager] Using estimated duration from validation');
+                metadata.duration = backendValidation.estimatedDuration;
+              } else {
+                // Par défaut, privilégier le backend si pas de consensus
+                console.log('⚠️ [MetadataManager] Using backend duration by default');
+                metadata.duration = backendDuration;
+              }
+            } else {
+              // Sans taille de fichier, privilégier le backend
+              console.log('⚠️ [MetadataManager] Using backend duration (no file size for validation)');
+              metadata.duration = backendDuration;
+            }
+          } else {
+            // Les durées sont cohérentes, utiliser le backend (plus fiable)
+            console.log('✅ [MetadataManager] Durations are coherent, using backend');
+            metadata.duration = backendDuration;
+          }
+        } else if (frontendDuration > 0 && backendDuration === 0) {
+          // Le backend n'a pas réussi à extraire, utiliser le frontend comme fallback
+          console.log('⚠️ [MetadataManager] Backend extraction failed, using frontend as fallback');
+          metadata.duration = frontendDuration;
+        } else if (backendDuration > 0) {
+          // Utiliser le backend
+          metadata.duration = backendDuration;
+        } else {
+          // Aucune source valide
+          metadata.duration = 0;
+        }
+
+        // Utiliser les autres métadonnées du backend si disponibles, sinon frontend
+        metadata.bitrate = extractedMeta.bitrate || providedMetadata.bitrate || 0;
+        metadata.sampleRate = extractedMeta.sampleRate || providedMetadata.sampleRate || 0;
+        metadata.codec = extractedMeta.codec !== 'unknown' ? extractedMeta.codec : (providedMetadata.codec || 'unknown');
+        metadata.channels = extractedMeta.channels || providedMetadata.channels || 1;
 
         if (providedMetadata.audioEffectsTimeline) {
           metadata.audioEffectsTimeline = providedMetadata.audioEffectsTimeline;
         }
       } else {
-        const audioMeta = await this.extractAudioMetadata(filePath);
-        metadata.duration = audioMeta.duration;
-        metadata.bitrate = audioMeta.bitrate;
-        metadata.sampleRate = audioMeta.sampleRate;
-        metadata.codec = audioMeta.codec;
-        metadata.channels = audioMeta.channels;
+        // Pas de métadonnées frontend, utiliser uniquement le backend
+        metadata.duration = extractedMeta.duration;
+        metadata.bitrate = extractedMeta.bitrate;
+        metadata.sampleRate = extractedMeta.sampleRate;
+        metadata.codec = extractedMeta.codec;
+        metadata.channels = extractedMeta.channels;
       }
     }
 

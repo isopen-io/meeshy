@@ -210,7 +210,6 @@ class SpeechBrainDiarization:
             if speaker_id not in speakers_data:
                 speakers_data[speaker_id] = {
                     'segments': [],
-                    'total_duration_ms': 0
                 }
 
             segment = SpeakerSegment(
@@ -222,7 +221,42 @@ class SpeechBrainDiarization:
             )
 
             speakers_data[speaker_id]['segments'].append(segment)
-            speakers_data[speaker_id]['total_duration_ms'] += segment.duration_ms
+
+        # Calculer les durées réelles en fusionnant les overlaps
+        # mais garder les segments originaux pour le tagging de transcription
+        for speaker_id, data in speakers_data.items():
+            # Trier par start_ms
+            segments_sorted = sorted(data['segments'], key=lambda s: s.start_ms)
+
+            # Fusionner les segments chevauchants pour calculer la durée RÉELLE
+            merged_intervals = []
+            current_start = None
+            current_end = None
+
+            for seg in segments_sorted:
+                if current_start is None:
+                    # Premier segment
+                    current_start = seg.start_ms
+                    current_end = seg.end_ms
+                elif seg.start_ms <= current_end:
+                    # Chevauchement ou consécutif: étendre
+                    current_end = max(current_end, seg.end_ms)
+                else:
+                    # Gap: sauvegarder l'intervalle fusionné
+                    merged_intervals.append((current_start, current_end))
+                    current_start = seg.start_ms
+                    current_end = seg.end_ms
+
+            # Ajouter le dernier intervalle
+            if current_start is not None:
+                merged_intervals.append((current_start, current_end))
+
+            # Calculer la durée totale (sans overlap)
+            total_duration = sum(end - start for start, end in merged_intervals)
+
+            # Garder les segments originaux (pour tagging) mais avec durée corrigée
+            data['segments'] = segments_sorted
+            data['total_duration_ms'] = total_duration
 
         # Filtrer les faux positifs (speakers avec <5% du temps OU <2 segments)
         MIN_SPEAKING_RATIO = 0.05

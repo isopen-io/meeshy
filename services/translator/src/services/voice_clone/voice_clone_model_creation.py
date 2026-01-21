@@ -29,6 +29,7 @@ from .voice_metadata import VoiceModel
 from .voice_analyzer import get_voice_analyzer
 from models.voice_models import VoiceCharacteristics
 from .voice_fingerprint import VoiceFingerprint
+from utils.audio_format_converter import convert_to_wav_if_needed
 
 logger = logging.getLogger(__name__)
 
@@ -403,8 +404,11 @@ class VoiceCloneModelCreator:
         }
 
         try:
+            # Convertir en WAV si nécessaire (M4A, AAC non supportés par soundfile)
+            wav_path = convert_to_wav_if_needed(audio_path)
+
             # Charger l'audio
-            audio, sr = sf.read(audio_path)
+            audio, sr = sf.read(wav_path)
             if len(audio.shape) > 1:
                 audio = audio.mean(axis=1)  # Convertir en mono
 

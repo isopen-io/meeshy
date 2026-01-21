@@ -3,6 +3,8 @@
  * Shared between Gateway, Frontend, and Translator
  */
 
+import type { TranscriptionSegment } from './attachment-audio';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // REQUEST TYPES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -512,6 +514,12 @@ export interface VoiceTranslationOriginalAudio {
   language: string;
   durationMs: number;
   confidence: number;
+  /** Segments de transcription originaux avec timestamps et speakers */
+  segments?: TranscriptionSegment[];
+  /** Nombre de speakers détectés */
+  speakerCount?: number;
+  /** ID du speaker principal */
+  primarySpeakerId?: string;
 }
 
 export interface VoiceTranslationOutput {
@@ -522,6 +530,8 @@ export interface VoiceTranslationOutput {
   durationMs: number;
   voiceCloned: boolean;
   voiceQuality: number;
+  /** Segments traduits avec timestamps et speakers */
+  segments?: TranscriptionSegment[];
 }
 
 export interface VoiceTranslationProfile {

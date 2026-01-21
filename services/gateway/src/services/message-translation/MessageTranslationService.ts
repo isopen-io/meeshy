@@ -1155,6 +1155,11 @@ export class MessageTranslationService extends EventEmitter {
         durationMs: number;
         confidence: number;
         segments?: TranscriptionSegment[];  // ✅ Utiliser type partagé
+        speakerCount?: number;
+        primarySpeakerId?: string;
+        senderVoiceIdentified?: boolean;
+        senderSpeakerId?: string;
+        speakerAnalysis?: any;
       };
       translations: Array<{
         targetLanguage: string;

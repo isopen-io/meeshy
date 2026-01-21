@@ -222,7 +222,8 @@ export class UploadProcessor {
       filePath,
       attachmentType,
       file.mimeType,
-      providedMetadata
+      providedMetadata,
+      file.size  // Passer la taille du fichier pour validation de cohérence
     );
 
     let thumbnailPath: string | null = null;

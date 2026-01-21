@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 MAX_SEGMENT_CHARS = 500  # Caractères max par segment (~40-50s audio)
 MIN_SEGMENT_CHARS = 50   # Caractères min (éviter segments trop courts)
 
+# Configuration vitesse audio (DÉSACTIVÉ - contrôlé via paramètres Chatterbox)
+# La vitesse est maintenant gérée via exaggeration et cfg_weight dans chatterbox_backend.py
+# Facteur de vitesse: 1.0 = normal, 0.9 = 10% plus lent, 1.1 = 10% plus rapide
+AUDIO_SPEED_FACTOR = 1.0  # Désactivé - pas de post-traitement
+
 
 @dataclass
 class UnifiedTTSResult:
@@ -357,33 +362,48 @@ class Synthesizer:
             if len(segments) > 1:
                 logger.info(
                     f"[Synthesizer] 📝 Texte long détecté ({len(text)} chars) → "
-                    f"{len(segments)} segments à synthétiser"
+                    f"{len(segments)} segments à synthétiser SÉQUENTIELLEMENT"
                 )
 
-                # Synthétiser chaque segment
+                # ═══════════════════════════════════════════════════════════════
+                # SYNTHÈSE SÉQUENTIELLE des segments
+                # Note: La synthèse parallèle cause des erreurs de tenseurs avec
+                # Chatterbox car le modèle n'est pas thread-safe. Les appels
+                # concurrents interfèrent au niveau des tenseurs internes.
+                # ═══════════════════════════════════════════════════════════════
+
                 segment_paths = []
                 for i, segment_text in enumerate(segments):
                     segment_filename = f"{file_id}_{target_language}_seg{i:03d}.wav"
                     segment_path = str(self.output_dir / "segments" / segment_filename)
 
                     logger.debug(
-                        f"[Synthesizer] Segment {i+1}/{len(segments)}: "
+                        f"[Synthesizer] 🔄 Segment {i+1}/{len(segments)}: "
                         f"'{segment_text[:40]}...' ({len(segment_text)} chars)"
                     )
 
-                    await backend.synthesize(
-                        text=segment_text,
-                        language=target_language,
-                        speaker_audio_path=speaker_audio_path,
-                        output_path=segment_path,
-                        conditionals=conditionals,
-                        **kwargs
-                    )
+                    try:
+                        await backend.synthesize(
+                            text=segment_text,
+                            language=target_language,
+                            speaker_audio_path=speaker_audio_path,
+                            output_path=segment_path,
+                            conditionals=conditionals,
+                            **kwargs
+                        )
 
-                    if os.path.exists(segment_path):
-                        segment_paths.append(segment_path)
-                    else:
-                        logger.warning(f"[Synthesizer] ⚠️ Segment {i+1} non généré")
+                        if os.path.exists(segment_path):
+                            logger.debug(f"[Synthesizer] ✅ Segment {i+1} synthétisé")
+                            segment_paths.append(segment_path)
+                        else:
+                            logger.warning(f"[Synthesizer] ⚠️ Segment {i+1} non généré")
+                    except Exception as e:
+                        logger.error(f"[Synthesizer] ❌ Erreur segment {i+1}: {e}")
+
+                logger.info(
+                    f"[Synthesizer] ✅ Synthèse séquentielle terminée: "
+                    f"{len(segment_paths)}/{len(segments)} segments réussis"
+                )
 
                 # Concaténer tous les segments
                 if segment_paths:
@@ -405,6 +425,10 @@ class Synthesizer:
                     conditionals=conditionals,
                     **kwargs
                 )
+
+            # Ajuster la vitesse de l'audio (ralentir de 10% par défaut)
+            if AUDIO_SPEED_FACTOR != 1.0:
+                output_path = await self._adjust_speed(output_path, AUDIO_SPEED_FACTOR)
 
             # Convertir le format si nécessaire
             if output_format != "wav":
@@ -509,6 +533,54 @@ class Synthesizer:
         except Exception as e:
             logger.warning(f"[Synthesizer] Erreur calcul durée: {e}")
             return 0
+
+    async def _adjust_speed(self, audio_path: str, speed_factor: float = AUDIO_SPEED_FACTOR) -> str:
+        """
+        Ajuste la vitesse de l'audio sans modifier le pitch.
+
+        Utilise librosa time_stretch pour un time-stretching de qualité.
+
+        Args:
+            audio_path: Chemin du fichier audio
+            speed_factor: Facteur de vitesse (0.9 = 10% plus lent, 1.1 = 10% plus rapide)
+
+        Returns:
+            Chemin du fichier modifié (même fichier, écrasé)
+        """
+        if speed_factor == 1.0:
+            return audio_path
+
+        try:
+            import librosa
+            import soundfile as sf
+
+            loop = asyncio.get_event_loop()
+
+            def stretch_audio():
+                # Charger l'audio
+                y, sr = librosa.load(audio_path, sr=None)
+
+                # Time-stretch: rate > 1 = plus rapide, rate < 1 = plus lent
+                # Pour ralentir de 10%, on utilise rate=0.9
+                y_stretched = librosa.effects.time_stretch(y, rate=speed_factor)
+
+                # Sauvegarder (écraser le fichier original)
+                sf.write(audio_path, y_stretched, sr)
+
+                return audio_path
+
+            result = await loop.run_in_executor(None, stretch_audio)
+
+            logger.info(
+                f"[Synthesizer] 🎚️ Vitesse ajustée: {speed_factor:.2f}x "
+                f"({'ralenti' if speed_factor < 1 else 'accéléré'} de {abs(1-speed_factor)*100:.0f}%)"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"[Synthesizer] Erreur ajustement vitesse: {e}")
+            return audio_path
 
     async def _encode_audio_base64(
         self,
