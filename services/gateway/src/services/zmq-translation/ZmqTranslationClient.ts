@@ -165,6 +165,28 @@ export class ZmqTranslationClient extends EventEmitter {
       this.emit('transcriptionError', event);
     });
 
+    // Transcription ready (avant traduction)
+    this.messageHandler.on('transcriptionReady', (event) => {
+      this.emit('transcriptionReady', event);
+    });
+
+    // Translation ready events (progressive)
+    this.messageHandler.on('translationReady', (event) => {
+      this.emit('translationReady', event);
+    });
+
+    this.messageHandler.on('audioTranslationReady', (event) => {
+      this.emit('audioTranslationReady', event);
+    });
+
+    this.messageHandler.on('audioTranslationsProgressive', (event) => {
+      this.emit('audioTranslationsProgressive', event);
+    });
+
+    this.messageHandler.on('audioTranslationsCompleted', (event) => {
+      this.emit('audioTranslationsCompleted', event);
+    });
+
     // Voice Translation Job events
     this.messageHandler.on('voiceTranslationCompleted', (event) => {
       this.emit('voiceTranslationCompleted', event);

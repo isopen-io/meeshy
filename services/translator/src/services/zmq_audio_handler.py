@@ -703,8 +703,34 @@ class AudioHandler:
             else:
                 logger.warning(f"[ZMQ] ⚠️ {translation.language}: Pas de segments traduits")
 
+            # Déterminer le type d'événement selon le contexte
+            is_single_language = translation_data.get('is_single_language', False)
+            is_last_language = translation_data.get('is_last_language', False)
+            current_index = translation_data.get('current_index', 1)
+            total_languages = translation_data.get('total_languages', 1)
+
+            # Logique de choix du type d'événement:
+            # - 1 seule langue → 'audio_translation_ready'
+            # - Dernière langue (multi) → 'audio_translations_completed'
+            # - Autre langue (multi) → 'audio_translations_progressive'
+            if is_single_language:
+                event_type = 'audio_translation_ready'
+                logger.info(f"[ZMQ] 📤 Événement: AUDIO_TRANSLATION_READY (langue unique)")
+            elif is_last_language:
+                event_type = 'audio_translations_completed'
+                logger.info(
+                    f"[ZMQ] 📤 Événement: AUDIO_TRANSLATIONS_COMPLETED "
+                    f"(dernière: {current_index}/{total_languages})"
+                )
+            else:
+                event_type = 'audio_translations_progressive'
+                logger.info(
+                    f"[ZMQ] 📤 Événement: AUDIO_TRANSLATIONS_PROGRESSIVE "
+                    f"({current_index}/{total_languages})"
+                )
+
             metadata = {
-                'type': 'translation_ready',  # Type distinct pour traduction individuelle
+                'type': event_type,
                 'taskId': task_id,
                 'messageId': translation_data['message_id'],
                 'attachmentId': translation_data['attachment_id'],

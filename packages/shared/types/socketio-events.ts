@@ -55,7 +55,21 @@ export const SERVER_EVENTS = {
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
   READ_STATUS_UPDATED: 'read-status:updated',
+  /**
+   * UNE seule traduction quand une seule langue est demandée
+   */
   AUDIO_TRANSLATION_READY: 'audio:translation-ready',
+  /**
+   * UNE traduction parmi plusieurs (progressif, pas la dernière)
+   */
+  AUDIO_TRANSLATIONS_PROGRESSIVE: 'audio:translations-progressive',
+  /**
+   * DERNIÈRE traduction + signal que toutes les traductions sont terminées
+   */
+  AUDIO_TRANSLATIONS_COMPLETED: 'audio:translations-completed',
+  /**
+   * Transcription originale prête (avant traductions)
+   */
   TRANSCRIPTION_READY: 'audio:transcription-ready'
 } as const;
 
@@ -250,29 +264,52 @@ import type { TranscriptionSegment } from './attachment-transcription.js';
 export type { TranslatedAudioData };
 
 /**
- * Données pour l'événement de traduction audio prête
- * Inclut les segments de transcription pour synchronisation audio/texte en temps réel
+ * Structure commune pour les événements de traduction audio (une traduction)
+ * Utilisée pour:
+ * - AUDIO_TRANSLATION_READY (langue unique)
+ * - AUDIO_TRANSLATIONS_PROGRESSIVE (une traduction parmi plusieurs)
+ * - AUDIO_TRANSLATIONS_COMPLETED (dernière traduction)
  */
-export interface AudioTranslationReadyEventData {
+export interface AudioTranslationEventData {
   readonly messageId: string;
   readonly attachmentId: string;
   readonly conversationId: string;
-  readonly transcription?: {
-    readonly text: string;
-    readonly language: string;
-    readonly confidence?: number;
-    readonly durationMs?: number;
-    readonly source?: string;
-    readonly model?: string;
+  readonly language: string;
+  readonly translatedAudio: {
+    readonly id: string;
+    readonly targetLanguage: string;
+    readonly url: string;
+    readonly path?: string;
+    readonly transcription: string;
+    readonly durationMs: number;
+    readonly format: string;
+    readonly cloned: boolean;
+    readonly quality: number;
+    readonly voiceModelId?: string;
+    readonly ttsModel: string;
     /**
-     * Segments de transcription avec timestamps pour synchronisation audio/texte
-     * Divisés en morceaux de 1-5 mots pour synchronisation fine
+     * Segments de transcription traduits avec timestamps pour synchronisation audio/texte
+     * Inclut speakerId et voiceSimilarityScore pour diarisation
      */
     readonly segments?: readonly TranscriptionSegment[];
   };
-  readonly translatedAudios: readonly TranslatedAudioData[];
   readonly processingTimeMs?: number;
 }
+
+/**
+ * Événement pour UNE seule traduction quand une seule langue est demandée
+ */
+export type AudioTranslationReadyEventData = AudioTranslationEventData;
+
+/**
+ * Événement pour UNE traduction parmi plusieurs (progressif, pas la dernière)
+ */
+export type AudioTranslationsProgressiveEventData = AudioTranslationEventData;
+
+/**
+ * Événement pour la DERNIÈRE traduction + signal que toutes sont terminées
+ */
+export type AudioTranslationsCompletedEventData = AudioTranslationEventData;
 
 /**
  * Données pour l'événement de transcription seule prête (sans traduction)
@@ -328,6 +365,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
 }
 

@@ -422,12 +422,23 @@ async def process_multi_speaker_audio(
                     try:
                         logger.info(f"[MULTI_SPEAKER] 📤 Remontée traduction {target_lang} à la gateway...")
 
+                        # Déterminer le type d'événement selon le nombre de langues
+                        total_languages = len(target_languages)
+                        is_single_language = total_languages == 1
+                        current_index = list(target_languages).index(target_lang) + 1
+                        is_last_language = current_index == total_languages
+
                         translation_data = {
                             'message_id': message_id,
                             'attachment_id': attachment_id,
                             'language': target_lang,
                             'translation': final_audio,
-                            'segments': fine_segments
+                            'segments': fine_segments,
+                            # Métadonnées pour déterminer le type d'événement
+                            'is_single_language': is_single_language,
+                            'is_last_language': is_last_language,
+                            'current_index': current_index,
+                            'total_languages': total_languages
                         }
 
                         # Appeler le callback (peut être async)
@@ -436,7 +447,10 @@ async def process_multi_speaker_audio(
                         else:
                             on_translation_ready(translation_data)
 
-                        logger.info(f"[MULTI_SPEAKER] ✅ Traduction {target_lang} remontée avec succès")
+                        logger.info(
+                            f"[MULTI_SPEAKER] ✅ Traduction {target_lang} remontée "
+                            f"({current_index}/{total_languages})"
+                        )
                     except Exception as e:
                         logger.warning(f"[MULTI_SPEAKER] ⚠️ Erreur callback traduction: {e}")
 

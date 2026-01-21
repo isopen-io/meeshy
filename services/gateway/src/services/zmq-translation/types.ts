@@ -67,7 +67,14 @@ export interface PongEvent {
   audio_pipeline_available?: boolean;
 }
 
-export type TranslationEvent = TranslationCompletedEvent | TranslationErrorEvent | PongEvent;
+export type TranslationEvent =
+  | TranslationCompletedEvent
+  | TranslationErrorEvent
+  | TranslationReadyEvent
+  | AudioTranslationReadyEvent
+  | AudioTranslationsProgressiveEvent
+  | AudioTranslationsCompletedEvent
+  | PongEvent;
 
 // ═══════════════════════════════════════════════════════════════
 // AUDIO PROCESSING TYPES
@@ -279,6 +286,49 @@ export interface TranslationReadyEvent {
     segments?: TranscriptionSegment[];
   };
   timestamp: number;
+}
+
+/**
+ * Structure commune pour tous les événements de traduction audio
+ */
+interface BaseTranslationEvent {
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  language: string;
+  translatedAudio: {
+    targetLanguage: string;
+    translatedText: string;
+    audioUrl: string;
+    audioPath: string;
+    durationMs: number;
+    voiceCloned: boolean;
+    voiceQuality: number;
+    audioMimeType: string;
+    segments?: TranscriptionSegment[];
+  };
+  timestamp: number;
+}
+
+/**
+ * Événement: traduction audio unique (1 seule langue demandée)
+ */
+export interface AudioTranslationReadyEvent extends BaseTranslationEvent {
+  type: 'audio_translation_ready';
+}
+
+/**
+ * Événement: traduction progressive (multi-langues, pas la dernière)
+ */
+export interface AudioTranslationsProgressiveEvent extends BaseTranslationEvent {
+  type: 'audio_translations_progressive';
+}
+
+/**
+ * Événement: dernière traduction terminée (multi-langues)
+ */
+export interface AudioTranslationsCompletedEvent extends BaseTranslationEvent {
+  type: 'audio_translations_completed';
 }
 
 export type TranscriptionEvent = TranscriptionCompletedEvent | TranscriptionErrorEvent | TranscriptionReadyEvent;

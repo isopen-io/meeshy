@@ -103,7 +103,15 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
     this.zmqClient.on('transcriptionCompleted', this._handleTranscriptionOnlyCompleted.bind(this));
     this.zmqClient.on('transcriptionReady', this._handleTranscriptionReady.bind(this));  // Transcription prête (avant traduction)
-    this.zmqClient.on('translationReady', this._handleTranslationReady.bind(this));  // Traduction individuelle prête (progressive)
+
+    // Événements de traduction progressifs avec contexte sémantique
+    this.zmqClient.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));  // Traduction unique (1 langue)
+    this.zmqClient.on('audioTranslationsProgressive', this._handleAudioTranslationsProgressive.bind(this));  // Traduction progressive (multi-langues)
+    this.zmqClient.on('audioTranslationsCompleted', this._handleAudioTranslationsCompleted.bind(this));  // Dernière traduction (multi-langues)
+
+    // DEPRECATED: conservé pour rétrocompatibilité
+    this.zmqClient.on('translationReady', this._handleTranslationReady.bind(this));
+
     this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
     this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
     this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
@@ -756,34 +764,18 @@ export class MessageTranslationService extends EventEmitter {
 
       // DEBUG: Vérifier la structure des segments
       if (data.transcription.segments && data.transcription.segments.length > 0) {
-        logger.info(`✅ Transcription avec ${data.transcription.segments.length} segments - Premier segment:`, JSON.stringify(data.transcription.segments[0]));
-
-        // Vérifier les types des champs
         const firstSeg = data.transcription.segments[0];
-        logger.info(`🔍 [GATEWAY] Types des champs du segment:`);
-        logger.info(`   - text: ${typeof firstSeg.text} = "${firstSeg.text}"`);
-        logger.info(`   - startMs: ${typeof firstSeg.startMs} = ${firstSeg.startMs}`);
-        logger.info(`   - endMs: ${typeof firstSeg.endMs} = ${firstSeg.endMs}`);
-        logger.info(`   - speakerId: ${typeof firstSeg.speakerId} = ${firstSeg.speakerId}`);
-        logger.info(`   - voiceSimilarityScore: ${typeof firstSeg.voiceSimilarityScore} = ${firstSeg.voiceSimilarityScore}`);
-        logger.info(`   - confidence: ${typeof firstSeg.confidence} = ${firstSeg.confidence}`);
+        logger.info(`✅ Transcription: ${data.transcription.segments.length} segments | Premier: text="${firstSeg.text}" (${typeof firstSeg.text}), startMs=${firstSeg.startMs} (${typeof firstSeg.startMs}), endMs=${firstSeg.endMs}, speakerId=${firstSeg.speakerId}, voiceSim=${firstSeg.voiceSimilarityScore}, conf=${firstSeg.confidence}`);
       } else {
         logger.warn(`⚠️ Transcription SANS segments!`);
       }
 
       // DEBUG: Vérifier les infos de diarisation
       if (data.transcription.speakerCount) {
-        logger.info(`🎤 [GATEWAY] Diarisation: ${data.transcription.speakerCount} locuteur(s)`);
-        logger.info(`   - primarySpeakerId: ${data.transcription.primarySpeakerId}`);
-        logger.info(`   - senderVoiceIdentified: ${data.transcription.senderVoiceIdentified}`);
-        logger.info(`   - senderSpeakerId: ${data.transcription.senderSpeakerId}`);
-
-        if (data.transcription.speakerAnalysis) {
-          logger.info(`   - speakerAnalysis: ${data.transcription.speakerAnalysis.speakers.length} speakers`);
-          for (const sp of data.transcription.speakerAnalysis.speakers) {
-            logger.info(`     • ${sp.sid}: isPrimary=${sp.isPrimary}, score=${sp.voiceSimilarityScore}`);
-          }
-        }
+        const speakersInfo = data.transcription.speakerAnalysis
+          ? data.transcription.speakerAnalysis.speakers.map((sp: any) => `${sp.sid}(primary=${sp.isPrimary}, score=${sp.voiceSimilarityScore})`).join(', ')
+          : 'N/A';
+        logger.info(`🎤 [GATEWAY] Diarisation: ${data.transcription.speakerCount} locuteur(s) | primary=${data.transcription.primarySpeakerId} | senderIdentified=${data.transcription.senderVoiceIdentified} | senderSpeaker=${data.transcription.senderSpeakerId} | speakers=[${speakersInfo}]`);
       }
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
@@ -1255,32 +1247,35 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   /**
-   * Gère un événement de traduction individuelle prête (PROGRESSIVE).
-   * Permet de sauvegarder et notifier le frontend dès qu'une traduction est prête,
-   * sans attendre la fin de toutes les traductions.
+   * Helper générique pour gérer les événements de traduction audio.
+   * Sauvegarde la traduction en DB et émet l'événement Socket.IO approprié.
    */
-  private async _handleTranslationReady(data: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    language: string;
-    translatedAudio: {
-      targetLanguage: string;
-      translatedText: string;
-      audioUrl: string;
-      audioPath: string;
-      durationMs: number;
-      voiceCloned: boolean;
-      voiceQuality: number;
-      audioMimeType: string;
-      segments?: TranscriptionSegment[];
-    };
-  }) {
+  private async _processTranslationEvent(
+    data: {
+      taskId: string;
+      messageId: string;
+      attachmentId: string;
+      language: string;
+      translatedAudio: {
+        targetLanguage: string;
+        translatedText: string;
+        audioUrl: string;
+        audioPath: string;
+        durationMs: number;
+        voiceCloned: boolean;
+        voiceQuality: number;
+        audioMimeType: string;
+        segments?: TranscriptionSegment[];
+      };
+    },
+    eventName: string,
+    logPrefix: string
+  ) {
     try {
       const startTime = Date.now();
 
       logger.info(
-        `🌍 [TranslationService] Translation READY (progressive): ${data.attachmentId} | ` +
+        `${logPrefix} [TranslationService] ${data.attachmentId} | ` +
         `Lang: ${data.language} | Segments: ${data.translatedAudio.segments?.length || 0}`
       );
 
@@ -1319,7 +1314,7 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       logger.info(
-        `✅ [Phase 2 Progressive] Traduction ${data.language} sauvegardée | ` +
+        `✅ Traduction ${data.language} sauvegardée | ` +
         `Segments: ${data.translatedAudio.segments?.length || 0}`
       );
 
@@ -1331,24 +1326,117 @@ export class MessageTranslationService extends EventEmitter {
         existingTranslations[data.language]
       );
 
-      this.emit('translationReady', {
+      this.emit(eventName, {
         taskId: data.taskId,
         messageId: data.messageId,
         attachmentId: data.attachmentId,
         language: data.language,
         translatedAudio: translationSocketIO,
-        phase: 'translation'  // Indique que c'est une phase progressive
+        phase: 'translation'
       });
 
       const totalTime = Date.now() - startTime;
       logger.info(
-        `   ⏱️ [Phase 2 Progressive] Traduction ${data.language} envoyée au client en ${totalTime}ms`
+        `   ⏱️ Traduction ${data.language} envoyée au client en ${totalTime}ms`
       );
 
     } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur gestion translation ready: ${error}`);
+      logger.error(`❌ [TranslationService] Erreur traitement traduction: ${error}`);
       this.stats.incrementErrors();
     }
+  }
+
+  /**
+   * Gère un événement de traduction audio unique (1 seule langue demandée).
+   */
+  private async _handleAudioTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: {
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+      audioMimeType: string;
+      segments?: TranscriptionSegment[];
+    };
+  }) {
+    await this._processTranslationEvent(data, 'audioTranslationReady', '🎯');
+  }
+
+  /**
+   * Gère un événement de traduction progressive (multi-langues, pas la dernière).
+   */
+  private async _handleAudioTranslationsProgressive(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: {
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+      audioMimeType: string;
+      segments?: TranscriptionSegment[];
+    };
+  }) {
+    await this._processTranslationEvent(data, 'audioTranslationsProgressive', '🔄');
+  }
+
+  /**
+   * Gère un événement de dernière traduction terminée (multi-langues).
+   */
+  private async _handleAudioTranslationsCompleted(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: {
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+      audioMimeType: string;
+      segments?: TranscriptionSegment[];
+    };
+  }) {
+    await this._processTranslationEvent(data, 'audioTranslationsCompleted', '✅');
+  }
+
+  /**
+   * Gère un événement de traduction individuelle prête (PROGRESSIVE).
+   * @deprecated Utilisez _handleAudioTranslationReady, _handleAudioTranslationsProgressive ou _handleAudioTranslationsCompleted
+   */
+  private async _handleTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: {
+      targetLanguage: string;
+      translatedText: string;
+      audioUrl: string;
+      audioPath: string;
+      durationMs: number;
+      voiceCloned: boolean;
+      voiceQuality: number;
+      audioMimeType: string;
+      segments?: TranscriptionSegment[];
+    };
+  }) {
+    await this._processTranslationEvent(data, 'translationReady', '🌍 [DEPRECATED]');
   }
 
   // ============================================================================

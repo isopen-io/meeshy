@@ -177,16 +177,15 @@ export class MeeshySocketIOManager {
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
 
-      // Écouter les événements de traduction prêtes
-      this.translationService.on('translationReady', this._handleTranslationReady.bind(this));
-
-      // Écouter les événements de traduction audio prêtes
-      this.translationService.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));
-
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
 
-      // Écouter les événements de traduction individuelle prêtes (progressive)
+      // Écouter les événements de traduction audio avec contexte sémantique
+      this.translationService.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));  // Langue unique
+      this.translationService.on('audioTranslationsProgressive', this._handleAudioTranslationsProgressive.bind(this));  // Progressive (multi)
+      this.translationService.on('audioTranslationsCompleted', this._handleAudioTranslationsCompleted.bind(this));  // Dernière (multi)
+
+      // DEPRECATED: Conservé pour rétrocompatibilité
       this.translationService.on('translationReady', this._handleTranslationReady.bind(this));
 
       // Configurer les événements Socket.IO
@@ -1419,9 +1418,13 @@ export class MeeshySocketIOManager {
     }
   }
 
-  private async _handleTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
+  /**
+   * @deprecated Cette fonction gère les anciennes traductions de texte (non audio).
+   * Les nouvelles traductions audio utilisent _handleAudioTranslationReady et variants.
+   */
+  private async _handleTextTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
     try {
-      const { result, targetLanguage } = data;
+      const { result, targetLanguage} = data;
       
       
       // Récupérer la conversation du message pour broadcast
@@ -1519,101 +1522,6 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Gère la réception d'une traduction audio prête depuis le Translator
-   * Diffuse l'événement AUDIO_TRANSLATION_READY aux clients de la conversation
-   * Utilise le type TranslatedAudioData unifié de @meeshy/shared/types
-   * Inclut les segments de transcription pour synchronisation audio/texte
-   */
-  private async _handleAudioTranslationReady(data: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    transcription?: {
-      text: string;
-      language: string;
-      confidence?: number;
-      durationMs?: number;
-      source?: string;
-      model?: string;
-      segments?: Array<{ text: string; startMs: number; endMs: number; confidence?: number }>;
-    };
-    translatedAudios: TranslatedAudioData[];
-    processingTimeMs?: number;
-  }) {
-    try {
-      console.log(`🎵 [SocketIOManager] ======== DIFFUSION SOCKET.IO VERS CLIENTS ========`);
-      console.log(`🎵 [SocketIOManager] Audio translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      console.log(`   📝 Has Transcription: ${!!data.transcription}`);
-      if (data.transcription) {
-        console.log(`   📝 Transcription Text: "${data.transcription.text?.substring(0, 100)}..."`);
-        console.log(`   📝 Transcription Language: ${data.transcription.language}`);
-        console.log(`   📝 Transcription Confidence: ${data.transcription.confidence}`);
-        console.log(`   📝 Transcription Segments: ${data.transcription.segments?.length || 0} segments`);
-        if (data.transcription.segments && data.transcription.segments.length > 0) {
-          console.log(`   📝 Premier segment: "${data.transcription.segments[0].text}" (${data.transcription.segments[0].startMs}ms - ${data.transcription.segments[0].endMs}ms)`);
-        }
-      }
-      console.log(`   🌍 Translated Audios: ${data.translatedAudios.length}`);
-      console.log(`   🔊 Langues: ${data.translatedAudios.map(ta => ta.targetLanguage).join(', ')}`);
-
-      // Récupérer la conversation du message pour broadcast
-      let conversationId: string | null = null;
-      try {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: data.messageId },
-          select: { conversationId: true }
-        });
-        conversationId = msg?.conversationId || null;
-      } catch (error) {
-        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour audio:`, error);
-      }
-
-      if (!conversationId) {
-        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message audio ${data.messageId}`);
-        return;
-      }
-
-      // Normaliser l'ID de conversation
-      const normalizedId = await this.normalizeConversationId(conversationId);
-      const roomName = `conversation_${normalizedId}`;
-      const roomClients = this.io.sockets.adapter.rooms.get(roomName);
-      const clientCount = roomClients ? roomClients.size : 0;
-
-      console.log(`📢 [SocketIOManager] Diffusion traduction audio vers room ${roomName} (${clientCount} clients)`);
-
-      // Préparer les données au format AudioTranslationReadyEventData
-      const audioTranslationData = {
-        messageId: data.messageId,
-        attachmentId: data.attachmentId,
-        conversationId: normalizedId,
-        transcription: data.transcription,
-        translatedAudios: data.translatedAudios,
-        processingTimeMs: data.processingTimeMs
-      };
-
-      // Diffuser dans la room de conversation
-      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.AUDIO_TRANSLATION_READY}' vers room '${roomName}' (${clientCount} clients)`);
-
-      // DEBUG: Vérifier que les URLs sont présentes dans les données envoyées
-      console.log(`🔍 [SocketIOManager] URLs des traductions envoyées aux clients:`);
-      for (const ta of data.translatedAudios) {
-        console.log(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}"`);
-      }
-
-      this.io.to(roomName).emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, audioTranslationData);
-
-      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT SOCKET.IO DIFFUSÉ ========`);
-      console.log(`✅ [SocketIOManager] Traduction audio diffusée vers ${clientCount} client(s)`);
-      console.log(`   📝 Transcription: ${data.transcription ? 'OUI' : 'NON'}`);
-      console.log(`   🌍 Audios traduits: ${data.translatedAudios.length}`);
-
-    } catch (error) {
-      console.error(`❌ [SocketIOManager] Erreur envoi traduction audio:`, error);
-      this.stats.errors++;
-    }
-  }
-
-  /**
    * Gère la réception d'une transcription seule prête depuis le Translator
    * Diffuse l'événement TRANSCRIPTION_READY aux clients de la conversation
    * Utilisé lorsque seule la transcription est demandée, sans génération d'audios traduits
@@ -1691,8 +1599,8 @@ export class MeeshySocketIOManager {
 
   /**
    * Gère la réception d'une traduction individuelle prête depuis le Translator (PROGRESSIVE)
-   * Diffuse l'événement TRANSLATION_READY aux clients de la conversation
-   * Permet d'envoyer chaque traduction dès qu'elle est prête, sans attendre les autres
+   * @deprecated Utilisez _handleAudioTranslationReady, _handleAudioTranslationsProgressive ou _handleAudioTranslationsCompleted
+   * Délègue au helper générique avec un événement générique
    */
   private async _handleTranslationReady(data: {
     taskId: string;
@@ -1702,9 +1610,33 @@ export class MeeshySocketIOManager {
     translatedAudio: any;
     phase?: string;
   }) {
+    console.log(`🌍 [DEPRECATED] _handleTranslationReady appelé - délégation au nouveau système`);
+    // Déléguer au handler audioTranslationsProgressive par défaut pour rétrocompatibilité
+    await this._handleAudioTranslationsProgressive(data);
+  }
+
+  /**
+   * Helper générique pour broadcaster les événements de traduction audio.
+   */
+  private async _broadcastTranslationEvent(
+    data: {
+      taskId: string;
+      messageId: string;
+      attachmentId: string;
+      language: string;
+      translatedAudio: any;
+      phase?: string;
+    },
+    eventName: string,
+    eventConstant:
+      | typeof SERVER_EVENTS.AUDIO_TRANSLATION_READY
+      | typeof SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE
+      | typeof SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
+    logPrefix: string
+  ) {
     try {
-      console.log(`🌍 [SocketIOManager] ======== DIFFUSION TRADUCTION PROGRESSIVE VERS CLIENTS ========`);
-      console.log(`🌍 [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      console.log(`${logPrefix} [SocketIOManager] ======== DIFFUSION TRADUCTION VERS CLIENTS ========`);
+      console.log(`${logPrefix} [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
       console.log(`   🔊 Langue: ${data.language}`);
       console.log(`   📝 Segments: ${data.translatedAudio.segments?.length || 0}`);
 
@@ -1733,27 +1665,108 @@ export class MeeshySocketIOManager {
 
       console.log(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
 
-      // Préparer les données au format TranslationReadyEventData
-      const translationData = {
+      // Préparer les données au format structure officielle de shared
+      // Note: AudioTranslationReadyEventData, AudioTranslationsProgressiveEventData, AudioTranslationsCompletedEventData
+      // sont des type aliases de AudioTranslationEventData, donc on peut utiliser n'importe lequel
+      const translationData: import('@meeshy/shared/types/socketio-events').AudioTranslationEventData = {
         messageId: data.messageId,
         attachmentId: data.attachmentId,
         conversationId: normalizedId,
         language: data.language,
-        translatedAudio: data.translatedAudio,
-        phase: data.phase || 'translation'
+        translatedAudio: {
+          id: data.attachmentId,
+          targetLanguage: data.translatedAudio.targetLanguage || data.language,
+          url: data.translatedAudio.url,
+          path: data.translatedAudio.path,
+          transcription: data.translatedAudio.transcription || '',
+          durationMs: data.translatedAudio.durationMs || 0,
+          format: data.translatedAudio.format || 'mp3',
+          cloned: data.translatedAudio.cloned || false,
+          quality: data.translatedAudio.quality || 0,
+          voiceModelId: data.translatedAudio.voiceModelId,
+          ttsModel: data.translatedAudio.ttsModel || 'xtts',
+          segments: data.translatedAudio.segments  // ← SEGMENTS COMPLETS
+        },
+        processingTimeMs: data.phase ? undefined : 0
       };
 
-      // Diffuser dans la room de conversation
-      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSLATION_READY}' vers room '${roomName}' (${clientCount} clients)`);
-      this.io.to(roomName).emit(SERVER_EVENTS.TRANSLATION_READY, translationData);
+      // Vérification et log des segments
+      if (translationData.translatedAudio.segments && translationData.translatedAudio.segments.length > 0) {
+        console.log(`   ✅ Segments inclus: ${translationData.translatedAudio.segments.length}`);
+        const firstSeg = translationData.translatedAudio.segments[0];
+        console.log(`   📝 Premier segment: "${firstSeg.text}" (${firstSeg.startMs}ms-${firstSeg.endMs}ms, speaker=${firstSeg.speakerId}, score=${firstSeg.voiceSimilarityScore})`);
+      } else {
+        console.warn(`   ⚠️ Aucun segment dans translatedAudio!`);
+      }
 
-      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION PROGRESSIVE DIFFUSÉ ========`);
+      // Diffuser dans la room de conversation
+      console.log(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
+      this.io.to(roomName).emit(eventConstant, translationData);
+
+      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
       console.log(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
-      console.error(`❌ [SocketIOManager] Erreur envoi traduction progressive:`, error);
+      console.error(`❌ [SocketIOManager] Erreur envoi traduction:`, error);
       this.stats.errors++;
     }
+  }
+
+  /**
+   * Gère un événement de traduction audio unique (1 seule langue demandée).
+   */
+  private async _handleAudioTranslationReady(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: any;
+    phase?: string;
+  }) {
+    await this._broadcastTranslationEvent(
+      data,
+      'audioTranslationReady',
+      SERVER_EVENTS.AUDIO_TRANSLATION_READY,
+      '🎯'
+    );
+  }
+
+  /**
+   * Gère un événement de traduction progressive (multi-langues, pas la dernière).
+   */
+  private async _handleAudioTranslationsProgressive(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: any;
+    phase?: string;
+  }) {
+    await this._broadcastTranslationEvent(
+      data,
+      'audioTranslationsProgressive',
+      SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE,
+      '🔄'
+    );
+  }
+
+  /**
+   * Gère un événement de dernière traduction terminée (multi-langues).
+   */
+  private async _handleAudioTranslationsCompleted(data: {
+    taskId: string;
+    messageId: string;
+    attachmentId: string;
+    language: string;
+    translatedAudio: any;
+    phase?: string;
+  }) {
+    await this._broadcastTranslationEvent(
+      data,
+      'audioTranslationsCompleted',
+      SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
+      '✅'
+    );
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {

@@ -26,6 +26,9 @@ import type {
   TranscriptionCompletedEvent,
   TranscriptionReadyEvent,
   TranslationReadyEvent,
+  AudioTranslationReadyEvent,
+  AudioTranslationsProgressiveEvent,
+  AudioTranslationsCompletedEvent,
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
   VoiceTranslationFailedEvent
@@ -161,8 +164,23 @@ export class ZmqMessageHandler extends EventEmitter {
         this.handleTranscriptionReady(event as unknown as TranscriptionReadyEvent);
         break;
 
+      case 'audio_translation_ready':
+        // Traduction unique (1 seule langue demandée)
+        this.handleAudioTranslationReady(event as unknown as AudioTranslationReadyEvent);
+        break;
+
+      case 'audio_translations_progressive':
+        // Traduction progressive (multi-langues, pas la dernière)
+        this.handleAudioTranslationsProgressive(event as unknown as AudioTranslationsProgressiveEvent);
+        break;
+
+      case 'audio_translations_completed':
+        // Dernière traduction terminée (multi-langues)
+        this.handleAudioTranslationsCompleted(event as unknown as AudioTranslationsCompletedEvent);
+        break;
+
       case 'translation_ready':
-        // Traduction individuelle prête - envoi progressif
+        // DEPRECATED: Ancien événement conservé pour rétrocompatibilité
         this.handleTranslationReady(event as unknown as TranslationReadyEvent);
         break;
 
@@ -502,14 +520,72 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de traduction individuelle prête.
    * Permet d'envoyer chaque traduction dès qu'elle est prête,
    * sans attendre que toutes les traductions soient terminées.
+   * @deprecated Utilisez handleAudioTranslationReady, handleAudioTranslationsProgressive ou handleAudioTranslationsCompleted
    */
   private handleTranslationReady(event: TranslationReadyEvent): void {
-    console.log(`[GATEWAY] 🌍 Translation READY (progressive): ${event.messageId}`);
+    console.log(`[GATEWAY] 🌍 Translation READY (progressive - DEPRECATED): ${event.messageId}`);
     console.log(`[GATEWAY]    🔊 Langue: ${event.language}`);
     console.log(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
 
     // Émettre l'événement de traduction prête (progressive)
     this.emit('translationReady', {
+      taskId: event.taskId,
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      language: event.language,
+      translatedAudio: event.translatedAudio
+    });
+  }
+
+  /**
+   * Gère un événement de traduction audio unique (1 seule langue demandée).
+   * Événement final pour les traductions mono-langue.
+   */
+  private handleAudioTranslationReady(event: AudioTranslationReadyEvent): void {
+    console.log(`[GATEWAY] 🎯 AUDIO_TRANSLATION_READY (langue unique): ${event.messageId}`);
+    console.log(`[GATEWAY]    🔊 Langue: ${event.language}`);
+    console.log(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Émettre l'événement de traduction unique prête
+    this.emit('audioTranslationReady', {
+      taskId: event.taskId,
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      language: event.language,
+      translatedAudio: event.translatedAudio
+    });
+  }
+
+  /**
+   * Gère un événement de traduction progressive (multi-langues, pas la dernière).
+   * Permet d'envoyer chaque traduction au fur et à mesure.
+   */
+  private handleAudioTranslationsProgressive(event: AudioTranslationsProgressiveEvent): void {
+    console.log(`[GATEWAY] 🔄 AUDIO_TRANSLATIONS_PROGRESSIVE: ${event.messageId}`);
+    console.log(`[GATEWAY]    🔊 Langue: ${event.language}`);
+    console.log(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Émettre l'événement de traduction progressive
+    this.emit('audioTranslationsProgressive', {
+      taskId: event.taskId,
+      messageId: event.messageId,
+      attachmentId: event.attachmentId,
+      language: event.language,
+      translatedAudio: event.translatedAudio
+    });
+  }
+
+  /**
+   * Gère un événement de dernière traduction terminée (multi-langues).
+   * Signale que toutes les traductions sont complètes.
+   */
+  private handleAudioTranslationsCompleted(event: AudioTranslationsCompletedEvent): void {
+    console.log(`[GATEWAY] ✅ AUDIO_TRANSLATIONS_COMPLETED (dernière): ${event.messageId}`);
+    console.log(`[GATEWAY]    🔊 Langue: ${event.language}`);
+    console.log(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Émettre l'événement de traductions complétées
+    this.emit('audioTranslationsCompleted', {
       taskId: event.taskId,
       messageId: event.messageId,
       attachmentId: event.attachmentId,
