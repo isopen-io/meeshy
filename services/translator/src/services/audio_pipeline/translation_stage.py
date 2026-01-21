@@ -599,7 +599,44 @@ class TranslationStage:
                 f"{tts_result.audio_url} [{lang_time}ms]"
             )
 
-            # 3. Cache audio
+            # 3. RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS (mono-locuteur)
+            # ═══════════════════════════════════════════════════════════════
+            fine_segments = None
+            if tts_result.audio_path and os.path.exists(tts_result.audio_path):
+                try:
+                    logger.info(
+                        f"[TRANSLATION_STAGE] 🎯 Re-transcription pour segments fins "
+                        f"({target_lang}, mono-speaker)..."
+                    )
+
+                    # Créer métadonnées de "tour" unique pour mono-speaker
+                    turns_metadata = [{
+                        'start_ms': 0,
+                        'end_ms': tts_result.duration_ms,
+                        'speaker_id': 'SPEAKER_00',  # Speaker unique pour mono
+                        'voice_similarity_score': tts_result.voice_quality if tts_result.voice_cloned else None
+                    }]
+
+                    # Re-transcrire l'audio traduit
+                    from .retranscription_service import retranscribe_translated_audio
+                    fine_segments = await retranscribe_translated_audio(
+                        audio_path=tts_result.audio_path,
+                        target_language=target_lang,
+                        turns_metadata=turns_metadata
+                    )
+
+                    logger.info(
+                        f"[TRANSLATION_STAGE] ✅ {len(fine_segments)} segments fins créés "
+                        f"pour mono-speaker"
+                    )
+
+                except Exception as e:
+                    logger.warning(
+                        f"[TRANSLATION_STAGE] ⚠️ Échec re-transcription segments fins: {e}"
+                    )
+                    # Continuer sans segments fins (fallback)
+
+            # 4. Cache audio
             await self._cache_translated_audio(
                 audio_hash=audio_hash,
                 language=target_lang,
@@ -607,7 +644,7 @@ class TranslationStage:
                 tts_result=tts_result
             )
 
-            # 4. Return result
+            # 5. Return result avec segments
             return (target_lang, TranslatedAudioVersion(
                 language=target_lang,
                 translated_text=translated_text,
@@ -619,7 +656,8 @@ class TranslationStage:
                 voice_quality=tts_result.voice_quality,
                 processing_time_ms=tts_result.processing_time_ms,
                 audio_data_base64=tts_result.audio_data_base64,
-                audio_mime_type=tts_result.audio_mime_type
+                audio_mime_type=tts_result.audio_mime_type,
+                segments=fine_segments  # Segments fins avec timestamps exacts
             ))
 
         except Exception as e:
