@@ -568,6 +568,19 @@ class TranscriptionService:
                             f"             ├─ Score de similarité vocale: {speaker.voice_similarity_score:.2f}"
                         )
 
+                    # Afficher les caractéristiques vocales si disponibles
+                    if hasattr(speaker, 'voice_characteristics') and speaker.voice_characteristics:
+                        vc = speaker.voice_characteristics
+                        logger.info(
+                            f"             ├─ Voix: {vc.gender} | "
+                            f"Registre: {vc.pitch_level} ({vc.avg_pitch_hz:.0f}Hz) | "
+                            f"Âge: {vc.age_group}"
+                        )
+                        logger.info(
+                            f"             ├─ Ton: {vc.tone} | "
+                            f"Rapidité: {vc.speech_rate} ({vc.syllables_per_second:.1f} syl/s)"
+                        )
+
                     # Afficher les 3 premiers segments comme exemples
                     logger.info(f"             └─ Exemples de segments:")
                     for i, seg in enumerate(speaker_segments[:3]):

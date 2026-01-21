@@ -53,6 +53,19 @@ class SpeakerSegment:
 
 
 @dataclass
+class VoiceCharacteristics:
+    """Caractéristiques vocales d'un speaker"""
+    gender: str  # "homme", "femme", "enfant"
+    pitch_level: str  # "grave", "medium", "aigu"
+    age_group: str  # "enfant", "adolescent", "adulte", "senior"
+    tone: str  # "monotone", "expressif", "très expressif"
+    speech_rate: str  # "lent", "normal", "rapide"
+    avg_pitch_hz: float
+    pitch_variance: float
+    syllables_per_second: float
+
+
+@dataclass
 class SpeakerInfo:
     """Information sur un locuteur"""
     speaker_id: str
@@ -61,6 +74,7 @@ class SpeakerInfo:
     speaking_ratio: float
     segments: List[SpeakerSegment]
     voice_similarity_score: Optional[float] = None
+    voice_characteristics: Optional[VoiceCharacteristics] = None
 
 
 @dataclass
@@ -110,6 +124,151 @@ class SpeechBrainDiarization:
             logger.info("[SPEECHBRAIN] ✅ Modèle chargé (ECAPA-TDNN)")
 
         return self._encoder
+
+    def _analyze_voice_characteristics(
+        self,
+        audio_path: str,
+        segments: List[SpeakerSegment]
+    ) -> Optional[VoiceCharacteristics]:
+        """
+        Analyse les caractéristiques vocales d'un speaker.
+
+        Args:
+            audio_path: Chemin de l'audio source
+            segments: Segments du speaker à analyser
+
+        Returns:
+            VoiceCharacteristics ou None si échec
+        """
+        try:
+            # Charger l'audio complet
+            audio_data, sr = librosa.load(audio_path, sr=None)
+
+            # Extraire les segments du speaker
+            speaker_audio_chunks = []
+            for seg in segments[:10]:  # Limiter à 10 premiers segments pour performance
+                start_sample = int(seg.start_ms * sr / 1000)
+                end_sample = int(seg.end_ms * sr / 1000)
+
+                if start_sample < len(audio_data) and end_sample <= len(audio_data):
+                    chunk = audio_data[start_sample:end_sample]
+                    speaker_audio_chunks.append(chunk)
+
+            if not speaker_audio_chunks:
+                return None
+
+            # Concaténer les chunks
+            speaker_audio = np.concatenate(speaker_audio_chunks)
+
+            # ═══════════════════════════════════════════════════════════
+            # 1. ANALYSE DU PITCH (fréquence fondamentale F0)
+            # ═══════════════════════════════════════════════════════════
+            pitches, magnitudes = librosa.piptrack(
+                y=speaker_audio,
+                sr=sr,
+                fmin=50,  # Hz min
+                fmax=500  # Hz max
+            )
+
+            # Extraire les pitches valides (magnitude > seuil)
+            valid_pitches = []
+            for t in range(pitches.shape[1]):
+                index = magnitudes[:, t].argmax()
+                pitch = pitches[index, t]
+                if pitch > 0 and magnitudes[index, t] > 0.1:
+                    valid_pitches.append(pitch)
+
+            if not valid_pitches:
+                return None
+
+            avg_pitch = np.mean(valid_pitches)
+            pitch_variance = np.std(valid_pitches)
+
+            # ═══════════════════════════════════════════════════════════
+            # 2. DÉTERMINATION DU GENRE ET REGISTRE
+            # ═══════════════════════════════════════════════════════════
+            # Références approximatives:
+            # - Enfant: 250-400 Hz
+            # - Femme adulte: 165-255 Hz
+            # - Homme adulte: 85-180 Hz
+
+            if avg_pitch > 250:
+                gender = "enfant"
+                pitch_level = "aigu"
+                age_group = "enfant"
+            elif avg_pitch > 200:
+                gender = "femme"
+                pitch_level = "aigu"
+                age_group = "adulte"
+            elif avg_pitch > 165:
+                gender = "femme"
+                pitch_level = "medium"
+                age_group = "adulte"
+            elif avg_pitch > 140:
+                gender = "adolescent"
+                pitch_level = "medium"
+                age_group = "adolescent"
+            elif avg_pitch > 120:
+                gender = "homme"
+                pitch_level = "medium"
+                age_group = "adulte"
+            elif avg_pitch > 90:
+                gender = "homme"
+                pitch_level = "grave"
+                age_group = "adulte"
+            else:
+                gender = "homme"
+                pitch_level = "très grave"
+                age_group = "senior"
+
+            # ═══════════════════════════════════════════════════════════
+            # 3. ANALYSE DU TON (expressivité)
+            # ═══════════════════════════════════════════════════════════
+            # Variance du pitch indique l'expressivité
+            if pitch_variance > 40:
+                tone = "très expressif"
+            elif pitch_variance > 20:
+                tone = "expressif"
+            else:
+                tone = "monotone"
+
+            # ═══════════════════════════════════════════════════════════
+            # 4. ANALYSE DE LA RAPIDITÉ DE PAROLE
+            # ═══════════════════════════════════════════════════════════
+            # Estimer le nombre de syllabes via détection d'onsets
+            onset_env = librosa.onset.onset_strength(y=speaker_audio, sr=sr)
+            onsets = librosa.onset.onset_detect(
+                onset_envelope=onset_env,
+                sr=sr,
+                units='time'
+            )
+
+            duration_s = len(speaker_audio) / sr
+            syllables_per_second = len(onsets) / duration_s if duration_s > 0 else 0
+
+            # Classification de la rapidité
+            # Références: ~4-5 syllabes/sec = normal
+            if syllables_per_second > 6:
+                speech_rate = "rapide"
+            elif syllables_per_second > 3:
+                speech_rate = "normal"
+            else:
+                speech_rate = "lent"
+
+            return VoiceCharacteristics(
+                gender=gender,
+                pitch_level=pitch_level,
+                age_group=age_group,
+                tone=tone,
+                speech_rate=speech_rate,
+                avg_pitch_hz=float(avg_pitch),
+                pitch_variance=float(pitch_variance),
+                syllables_per_second=float(syllables_per_second)
+            )
+
+        except Exception as e:
+            logger.warning(f"[SPEECHBRAIN] ⚠️ Erreur analyse caractéristiques vocales: {e}")
+            return None
 
     async def diarize(
         self,
@@ -276,16 +435,25 @@ class SpeechBrainDiarization:
 
         speakers_data = speakers_filtered
 
-        # Créer SpeakerInfo
+        # Créer SpeakerInfo avec analyse des caractéristiques vocales
         speakers = []
         for speaker_id, data in speakers_data.items():
             speaking_ratio = data['total_duration_ms'] / duration_ms if duration_ms > 0 else 0
+
+            # Analyser les caractéristiques vocales
+            logger.info(f"[SPEECHBRAIN] 🎤 Analyse des caractéristiques vocales de {speaker_id}...")
+            voice_chars = self._analyze_voice_characteristics(
+                audio_path=audio_path,
+                segments=data['segments']
+            )
+
             speakers.append(SpeakerInfo(
                 speaker_id=speaker_id,
                 is_primary=False,
                 speaking_time_ms=data['total_duration_ms'],
                 speaking_ratio=speaking_ratio,
-                segments=data['segments']
+                segments=data['segments'],
+                voice_characteristics=voice_chars
             ))
 
         # Identifier le speaker principal (qui parle le plus)
@@ -313,12 +481,25 @@ class SpeechBrainDiarization:
         logger.info("=" * 80)
 
         for speaker in result.speakers:
+            status = 'PRINCIPAL' if speaker.is_primary else 'secondaire'
             logger.info(
-                f"[SPEECHBRAIN] 👤 {speaker.speaker_id} "
-                f"({'PRINCIPAL' if speaker.is_primary else 'secondaire'}): "
+                f"[SPEECHBRAIN] 👤 {speaker.speaker_id} ({status}): "
                 f"{speaker.speaking_time_ms}ms ({speaker.speaking_ratio*100:.1f}%) | "
                 f"{len(speaker.segments)} segments"
             )
+
+            # Afficher les caractéristiques vocales si disponibles
+            if speaker.voice_characteristics:
+                vc = speaker.voice_characteristics
+                logger.info(
+                    f"[SPEECHBRAIN]    ├─ Voix: {vc.gender} | "
+                    f"Registre: {vc.pitch_level} ({vc.avg_pitch_hz:.0f}Hz) | "
+                    f"Âge: {vc.age_group}"
+                )
+                logger.info(
+                    f"[SPEECHBRAIN]    └─ Ton: {vc.tone} | "
+                    f"Rapidité: {vc.speech_rate} ({vc.syllables_per_second:.1f} syl/s)"
+                )
 
         logger.info("=" * 80)
 
