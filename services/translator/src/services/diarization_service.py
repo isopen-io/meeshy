@@ -96,19 +96,42 @@ class DiarizationService:
         self._pipeline = None
 
     def _get_pyannote_pipeline(self) -> Optional["Pipeline"]:
-        """Récupère le pipeline pyannote (lazy loading)"""
+        """
+        Récupère le pipeline pyannote (lazy loading).
+
+        Le token HuggingFace est OPTIONNEL :
+        - Si présent : utilisé pour télécharger les modèles
+        - Si absent : charge depuis le cache local (~/.cache/huggingface/)
+
+        Pour télécharger les modèles localement une fois :
+        1. Créer un token HF temporaire sur https://huggingface.co/
+        2. Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-3.1
+        3. Exécuter : HF_TOKEN=xxx python -c "from pyannote.audio import Pipeline; Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', use_auth_token='xxx')"
+        4. Supprimer le token - les modèles sont en cache !
+        """
         if not PYANNOTE_AVAILABLE:
             return None
 
-        if self._pipeline is None and self.hf_token:
+        if self._pipeline is None:
             try:
+                # Essayer de charger avec token (si fourni) ou depuis cache local (si absent)
                 self._pipeline = Pipeline.from_pretrained(
                     "pyannote/speaker-diarization-3.1",
-                    use_auth_token=self.hf_token
+                    use_auth_token=self.hf_token  # None = utilise le cache local
                 )
-                logger.info("[DIARIZATION] Pipeline pyannote chargé")
+
+                if self.hf_token:
+                    logger.info("[DIARIZATION] ✅ Pipeline pyannote chargé avec authentification")
+                else:
+                    logger.info("[DIARIZATION] ✅ Pipeline pyannote chargé depuis cache local (pas de token requis)")
+
             except Exception as e:
-                logger.warning(f"[DIARIZATION] Échec chargement pyannote: {e}")
+                logger.warning(f"[DIARIZATION] ⚠️  Échec chargement pyannote: {e}")
+                if not self.hf_token:
+                    logger.info(f"[DIARIZATION] 💡 Pour télécharger les modèles localement :")
+                    logger.info(f"[DIARIZATION]    1. Token HF sur https://huggingface.co/settings/tokens")
+                    logger.info(f"[DIARIZATION]    2. Accepter https://huggingface.co/pyannote/speaker-diarization-3.1")
+                    logger.info(f"[DIARIZATION]    3. Voir DIARIZATION_SANS_HUGGINGFACE.md pour détails")
                 return None
 
         return self._pipeline
@@ -121,6 +144,11 @@ class DiarizationService:
         """
         Détecte les locuteurs dans un fichier audio.
 
+        Ordre de priorité:
+        1. pyannote.audio (si token HF fourni) - ~95% précision
+        2. SpeechBrain (SANS token, comme NLLB) - ~85% précision
+        3. Pitch clustering (fallback ultime) - ~70% précision
+
         Args:
             audio_path: Chemin vers le fichier audio
             max_speakers: Nombre maximum de locuteurs attendus
@@ -128,12 +156,24 @@ class DiarizationService:
         Returns:
             DiarizationResult avec informations sur les locuteurs
         """
-        # Essayer pyannote d'abord
-        pipeline = self._get_pyannote_pipeline()
-        if pipeline:
-            return await self._detect_with_pyannote(audio_path, pipeline)
+        # PRIORITÉ 1: Essayer pyannote SI token fourni
+        if self.hf_token:
+            pipeline = self._get_pyannote_pipeline()
+            if pipeline:
+                return await self._detect_with_pyannote(audio_path, pipeline)
 
-        # Fallback: clustering par pitch
+        # PRIORITÉ 2: Utiliser SpeechBrain (SANS token, comme NLLB)
+        try:
+            from .diarization_speechbrain import get_speechbrain_diarization
+
+            logger.info("[DIARIZATION] 🎯 Utilisation de SpeechBrain (sans token HF)")
+            diarizer = get_speechbrain_diarization()
+            return await diarizer.diarize(audio_path, max_speakers=max_speakers)
+
+        except Exception as e:
+            logger.warning(f"[DIARIZATION] Échec SpeechBrain: {e}")
+
+        # PRIORITÉ 3: Fallback ultime - clustering par pitch
         logger.info("[DIARIZATION] Utilisation du fallback pitch clustering")
         return await self._detect_with_pitch_clustering(audio_path, max_speakers)
 
