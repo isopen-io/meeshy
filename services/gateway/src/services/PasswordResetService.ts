@@ -71,15 +71,15 @@ export class PasswordResetService {
     const { email, captchaToken, deviceFingerprint, ipAddress, userAgent } = request;
 
     logger.info('[PasswordResetService] 📧 ======== PASSWORD RESET REQUEST ========');
-    logger.info('[PasswordResetService] 📧 Email:', email);
-    logger.info('[PasswordResetService] 📧 IP:', ipAddress);
-    logger.info('[PasswordResetService] 📧 BYPASS_CAPTCHA:', process.env.BYPASS_CAPTCHA);
+    logger.info(`[PasswordResetService] 📧 Email email=${email}`);
+    logger.info(`[PasswordResetService] 📧 IP ipAddress=${ipAddress}`);
+    logger.info(`[PasswordResetService] 📧 BYPASS_CAPTCHA process.env.BYPASS_CAPTCHA=${process.env.BYPASS_CAPTCHA}`);
 
     try {
       // 1. Verify CAPTCHA (optional - rate limiting middleware handles most protection)
       if (captchaToken) {
         const isCaptchaValid = await this.verifyCaptcha(captchaToken, ipAddress);
-        logger.info('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
+        logger.info(`[PasswordResetService] 📧 CAPTCHA valid isCaptchaValid=${isCaptchaValid}`);
         if (!isCaptchaValid) {
           logger.info('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
           // Return generic response (don't reveal CAPTCHA failure)
@@ -91,7 +91,7 @@ export class PasswordResetService {
 
       // 2. Rate limiting
       const isRateLimited = await this.checkRateLimit(email, ipAddress);
-      logger.info('[PasswordResetService] 📧 Rate limited:', isRateLimited);
+      logger.info(`[PasswordResetService] 📧 Rate limited isRateLimited=${isRateLimited}`);
       if (isRateLimited) {
         logger.info('[PasswordResetService] ❌ Rate limited - returning generic response');
         await this.logSecurityEvent(null, 'RATE_LIMIT_EXCEEDED', 'MEDIUM', {
@@ -103,7 +103,6 @@ export class PasswordResetService {
       }
 
       // 3. Find user by email (case-insensitive)
-      logger.info('[PasswordResetService] 📧 Looking for user with email:', email.toLowerCase().trim());
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: email.toLowerCase().trim(), mode: 'insensitive' },
@@ -126,7 +125,6 @@ export class PasswordResetService {
         logger.info('[PasswordResetService] ❌ User not found - returning generic response');
         return this.genericSuccessResponse();
       }
-      logger.info('[PasswordResetService] ✅ User found:', user.id, user.email);
 
       // 5. Email not verified - return generic response
       if (!user.emailVerifiedAt) {

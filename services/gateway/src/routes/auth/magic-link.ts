@@ -219,19 +219,19 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
       const { token, email } = validatedData;
 
-      logger.info('[AUTH] Tentative de vérification email pour:', email);
+      logger.info(`[AUTH] Tentative de vérification email pour email=${email}`);
 
       const result = await authService.verifyEmail(token, email);
 
       if (!result.success) {
-        logger.warn('[AUTH] ❌ Échec de vérification email:', result.error);
+        logger.warn(`[AUTH] ❌ Échec de vérification email result.error=${result.error}`);
         return reply.status(400).send({
           success: false,
           error: result.error
         });
       }
 
-      logger.info('[AUTH] ✅ Email vérifié avec succès pour:', email);
+      logger.info(`[AUTH] ✅ Email vérifié avec succès pour email=${email}`);
 
       return reply.send({
         success: true,
@@ -273,7 +273,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.resendVerification, request.body, 'resend-verification');
       const { email } = validatedData;
 
-      logger.info('[AUTH] Demande de renvoi de vérification pour:', email);
+      logger.info(`[AUTH] Demande de renvoi de vérification pour email=${email}`);
 
       const result = await authService.resendVerificationEmail(email);
 
@@ -328,12 +328,12 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.sendPhoneCode, request.body, 'send-phone-code');
       const { phoneNumber } = validatedData;
 
-      logger.info('[AUTH] Envoi code SMS pour:', phoneNumber);
+      logger.info(`[AUTH] Envoi code SMS pour phoneNumber=${phoneNumber}`);
 
       const result = await authService.sendPhoneVerificationCode(phoneNumber);
 
       if (!result.success) {
-        logger.warn('[AUTH] ❌ Échec envoi code SMS:', result.error);
+        logger.warn(`[AUTH] ❌ Échec envoi code SMS result.error=${result.error}`);
         return reply.status(400).send({
           success: false,
           error: result.error
@@ -382,12 +382,12 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.verifyPhone, request.body, 'verify-phone');
       const { phoneNumber, code } = validatedData;
 
-      logger.info('[AUTH] Vérification téléphone:', phoneNumber);
+      logger.info(`[AUTH] Vérification téléphone phoneNumber=${phoneNumber}`);
 
       const result = await authService.verifyPhone(phoneNumber, code);
 
       if (!result.success) {
-        logger.warn('[AUTH] ❌ Échec vérification téléphone:', result.error);
+        logger.warn(`[AUTH] ❌ Échec vérification téléphone result.error=${result.error}`);
         return reply.status(400).send({
           success: false,
           error: result.error
@@ -515,7 +515,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = (request as any).user.userId;
       const { sessionId } = request.params as { sessionId: string };
 
-      logger.info('[AUTH] Révocation session:', sessionId, 'pour user:', userId);
+      logger.info(`[AUTH] Révocation session:', sessionId, 'pour user userId=${userId}`);
 
       const sessions = await authService.getUserActiveSessions(userId);
       const sessionBelongsToUser = sessions.some(s => s.id === sessionId);
@@ -536,7 +536,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         });
       }
 
-      logger.info('[AUTH] ✅ Session révoquée:', sessionId);
+      logger.info(`[AUTH] ✅ Session révoquée sessionId=${sessionId}`);
 
       return reply.send({
         success: true,
@@ -587,11 +587,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = (request as any).user.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
-      logger.info('[AUTH] Révocation de toutes les sessions pour:', userId, '(sauf courante)');
+      logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);
 
       const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
 
-      logger.info('[AUTH] ✅', revokedCount, 'session(s) révoquée(s)');
+        logger.info(`Sessions révoquées count=${revokedCount}`);
 
       return reply.send({
         success: true,

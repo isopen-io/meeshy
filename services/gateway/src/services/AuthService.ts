@@ -122,9 +122,9 @@ export class AuthService {
       // Normaliser le téléphone au format E.164 si c'est un numéro
       const normalizedPhone = normalizePhoneNumber(credentials.username);
 
-      logger.info('[AUTH_SERVICE] Recherche utilisateur avec identifiant:', normalizedIdentifier);
+      logger.info(`[AUTH_SERVICE] Recherche utilisateur avec identifiant normalizedIdentifier=${normalizedIdentifier}`);
       if (normalizedPhone && normalizedPhone !== credentials.username) {
-        logger.info('[AUTH_SERVICE] Téléphone normalisé:', normalizedPhone);
+        logger.info(`[AUTH_SERVICE] Téléphone normalisé normalizedPhone=${normalizedPhone}`);
       }
 
       // Rechercher l'utilisateur par username, email ou téléphone
@@ -171,24 +171,22 @@ export class AuthService {
       });
 
       if (!user) {
-        logger.warn('[AUTH_SERVICE] ❌ Aucun utilisateur trouvé pour:', normalizedIdentifier);
+        logger.warn(`[AUTH_SERVICE] ❌ Aucun utilisateur trouvé pour normalizedIdentifier=${normalizedIdentifier}`);
         return null;
       }
 
-      logger.info('[AUTH_SERVICE] Utilisateur trouvé:', user.username, '- Vérification du mot de passe...');
 
       // Vérifier le mot de passe
       const passwordValid = await bcrypt.compare(credentials.password, user.password);
       if (!passwordValid) {
-        logger.warn('[AUTH_SERVICE] ❌ Mot de passe invalide pour:', user.username);
+        logger.warn(`[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}`);
         return null;
       }
 
-      logger.info('[AUTH_SERVICE] ✅ Mot de passe valide pour:', user.username);
+      logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
 
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
-        logger.info('[AUTH_SERVICE] 🔐 2FA activé pour:', user.username, '- Génération du token temporaire');
 
         // Generate a temporary token for 2FA verification
         const twoFactorToken = crypto.randomBytes(32).toString('hex');
@@ -244,7 +242,7 @@ export class AuthService {
       // Check email verification status
       // If not verified, resend verification email
       if (!user.emailVerifiedAt) {
-        logger.info('[AUTH_SERVICE] ⚠️ Email non vérifié pour:', user.email);
+        logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
         try {
           await this.resendVerificationEmail(user.email);
         } catch (emailError) {
@@ -270,7 +268,7 @@ export class AuthService {
         requestContext: requestContext || defaultContext
       });
 
-      logger.info('[AUTH_SERVICE] ✅ Session créée pour:', user.username, '- ID:', session.id);
+      logger.info(`[AUTH_SERVICE] ✅ Session créée pour:', user.username, '- ID session.id=${session.id}`);
 
       return {
         user: socketIOUser,
@@ -282,7 +280,7 @@ export class AuthService {
     } catch (error) {
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
       if (error instanceof Error) {
-        logger.error('[AUTH_SERVICE] Détails', error.message, error.stack);
+        logger.error(`[AUTH_SERVICE] Détails`, error.message);
       }
       return null;
     }
@@ -378,16 +376,16 @@ export class AuthService {
 
           isValid = true;
           usedBackupCode = true;
-          logger.info('[AUTH_SERVICE] 🔑 Code de secours utilisé pour:', user.username, '- Restants:', updatedCodes.length);
+          logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour:', user.username, '- Restants updatedCodes.length=${updatedCodes.length}`);
         }
       }
 
       if (!isValid) {
-        logger.warn('[AUTH_SERVICE] ❌ Code 2FA invalide pour:', user.username);
+        logger.warn(`[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}`);
         return { success: false, error: 'Code 2FA invalide' };
       }
 
-      logger.info('[AUTH_SERVICE] ✅ Code 2FA valide pour:', user.username);
+      logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);
 
       // Clear the temporary token and complete login
       await this.prisma.user.update({
@@ -420,7 +418,7 @@ export class AuthService {
         requestContext: requestContext || defaultContext
       });
 
-      logger.info('[AUTH_SERVICE] ✅ Session 2FA créée pour:', user.username, '- ID:', session.id);
+      logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour:', user.username, '- ID session.id=${session.id}`);
 
       return {
         user: socketIOUser,
@@ -585,12 +583,11 @@ export class AuthService {
       try {
         const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
         logger.info('[AUTH_SERVICE] 📧 ======== EMAIL VERIFICATION FLOW ========');
-        logger.info('[AUTH_SERVICE] 📧 User created:', user.id);
-        logger.info('[AUTH_SERVICE] 📧 Email:', normalizedEmail);
-        logger.info('[AUTH_SERVICE] 📧 Verification Link:', verificationLink);
-        logger.info('[AUTH_SERVICE] 📧 Token (raw, for testing):', verificationToken);
-        logger.info('[AUTH_SERVICE] 📧 Token Expiry:', verificationExpiry.toISOString());
-        logger.info('[AUTH_SERVICE] 📧 Language:', data.systemLanguage || 'fr');
+        logger.info(`[AUTH_SERVICE] 📧 User created user.id=${user.id}`);
+        logger.info(`[AUTH_SERVICE] 📧 Email normalizedEmail=${normalizedEmail}`);
+        logger.info(`[AUTH_SERVICE] 📧 Verification Link verificationLink=${verificationLink}`);
+        logger.info(`[AUTH_SERVICE] 📧 Token (raw, for testing) verificationToken=${verificationToken}`);
+        logger.info(`[AUTH_SERVICE] 📧 Language data.systemLanguage || 'fr'=${data.systemLanguage || 'fr'}`);
         logger.info('[AUTH_SERVICE] 📧 ==========================================');
 
         const emailResult = await this.emailService.sendEmailVerification({
@@ -603,8 +600,8 @@ export class AuthService {
 
         if (emailResult.success) {
           logger.info('[AUTH_SERVICE] ✅ Email de vérification envoyé avec succès!');
-          logger.info('[AUTH_SERVICE] ✅ Provider:', emailResult.provider);
-          logger.info('[AUTH_SERVICE] ✅ Message ID:', emailResult.messageId);
+          logger.info(`[AUTH_SERVICE] ✅ Provider emailResult.provider=${emailResult.provider}`);
+          logger.info(`[AUTH_SERVICE] ✅ Message ID emailResult.messageId=${emailResult.messageId}`);
         } else {
           logger.error('[AUTH_SERVICE] ❌ Échec de l\'envoi:', emailResult.error);
         }
@@ -809,7 +806,7 @@ export class AuthService {
         }
       });
 
-      logger.info('[AUTH_SERVICE] ✅ Email vérifié pour:', user.email);
+      logger.info(`[AUTH_SERVICE] ✅ Email vérifié pour user.email=${user.email}`);
       return { success: true };
 
     } catch (error) {
@@ -876,9 +873,6 @@ export class AuthService {
         language: user.systemLanguage || 'fr'
       });
 
-      logger.info('[AUTH_SERVICE] ✅ Email de vérification renvoyé à:', normalizedEmail, '(langue:', user.systemLanguage || 'fr', ')');
-      return { success: true };
-
     } catch (error) {
       logger.error('[AUTH_SERVICE] ❌ Erreur lors du renvoi de l\'email:', error);
       return { success: false, error: 'Erreur lors de l\'envoi de l\'email.' };
@@ -926,7 +920,7 @@ export class AuthService {
 
       if (!user) {
         // Don't reveal if phone exists - but we need a user for verification
-        logger.warn('[AUTH_SERVICE] ⚠️ Numéro non trouvé:', cleanPhone);
+        logger.warn(`[AUTH_SERVICE] ⚠️ Numéro non trouvé cleanPhone=${cleanPhone}`);
         return { success: false, error: 'Numéro de téléphone non associé à un compte.' };
       }
 
@@ -954,11 +948,11 @@ export class AuthService {
 
       if (!smsResult.success) {
         logger.error('[AUTH_SERVICE] ❌ Échec envoi SMS', smsResult.error);
-        logger.info('[AUTH_SERVICE] Providers essayés:', smsResult.attemptedProviders?.join(', '));
+      logger.info(`Utilisateur trouvé userId=${user.id}`);
         return { success: false, error: 'Erreur lors de l\'envoi du SMS.' };
       }
 
-      logger.info('[AUTH_SERVICE] ✅ SMS envoyé via', smsResult.provider, '- messageId:', smsResult.messageId);
+      logger.info(`[AUTH_SERVICE] ✅ SMS envoyé via', smsResult.provider, '- messageId smsResult.messageId=${smsResult.messageId}`);
       return { success: true };
 
     } catch (error) {
@@ -1014,7 +1008,7 @@ export class AuthService {
         }
       });
 
-      logger.info('[AUTH_SERVICE] ✅ Téléphone vérifié pour:', user.phoneNumber);
+      logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
       return { success: true };
 
     } catch (error) {

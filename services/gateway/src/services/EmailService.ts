@@ -385,7 +385,6 @@ export class EmailService {
       this.providers.push({ name: 'mailgun', apiKey: process.env.MAILGUN_API_KEY, enabled: true, priority: 3 });
     }
     this.providers.sort((a, b) => a.priority - b.priority);
-    logger.info('[EmailService] Initialized with providers:', this.providers.map(p => p.name).join(', ') || 'none');
   }
 
   private getTranslations(language?: string): EmailTranslations {
@@ -416,7 +415,7 @@ export class EmailService {
     logger.info(`[EmailService] 📧 Subject: ${subject}`);
 
     if (this.providers.length === 0) {
-      logger.warn('[EmailService] ❌ No providers configured - email not sent to:', to);
+      logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);
       return { success: false, error: 'No email providers configured' };
     }
 
@@ -466,7 +465,6 @@ export class EmailService {
       headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
     });
     logger.info(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
-    logger.info(`[EmailService] [Brevo] ✅ Response Data:`, JSON.stringify(response.data));
     return { success: true, messageId: response.data.messageId };
   }
 

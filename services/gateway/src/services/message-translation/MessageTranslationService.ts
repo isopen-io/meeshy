@@ -929,7 +929,6 @@ export class MessageTranslationService extends EventEmitter {
             where: { userId: nvp.userId },
             update: {
               profileId: nvp.profileId,
-              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               embedding: embeddingBuffer,
               qualityScore: nvp.qualityScore,
               audioCount: nvp.audioCount,
@@ -938,7 +937,6 @@ export class MessageTranslationService extends EventEmitter {
               fingerprint: nvp.fingerprint || null,
               voiceCharacteristics: nvp.voiceCharacteristics || null,
               // Conditionals Chatterbox pour multi-speaker TTS
-              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               chatterboxConditionals: chatterboxConditionalsBuffer,
               referenceAudioId: nvp.reference_audio_id || null,
               referenceAudioUrl: nvp.reference_audio_url || null,
@@ -947,7 +945,6 @@ export class MessageTranslationService extends EventEmitter {
             create: {
               userId: nvp.userId,
               profileId: nvp.profileId,
-              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               embedding: embeddingBuffer,
               qualityScore: nvp.qualityScore,
               audioCount: nvp.audioCount,
@@ -956,7 +953,6 @@ export class MessageTranslationService extends EventEmitter {
               fingerprint: nvp.fingerprint || null,
               voiceCharacteristics: nvp.voiceCharacteristics || null,
               // Conditionals Chatterbox pour multi-speaker TTS
-              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               chatterboxConditionals: chatterboxConditionalsBuffer,
               referenceAudioId: nvp.reference_audio_id || null,
               referenceAudioUrl: nvp.reference_audio_url || null

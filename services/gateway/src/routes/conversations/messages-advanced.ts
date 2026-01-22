@@ -192,11 +192,11 @@ export function registerMessagesAdvancedRoutes(
 
       // ÉTAPE: Traiter les liens [[url]] et <url> AVANT de sauvegarder le message
       let processedContent = content.trim();
-      logger.info('[GATEWAY] Edit - Original content:', content.trim());
+        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
 
       try {
         logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        logger.info('[GATEWAY] Processing tracking links in edited message:', messageId);
+        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
         const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
           content: content.trim(),
           conversationId: conversationId,
@@ -204,7 +204,7 @@ export function registerMessagesAdvancedRoutes(
           createdBy: userId
         });
         processedContent = contentWithLinks;
-        logger.info('[GATEWAY] Edit - Processed content after links:', processedContent);
+        logger.info(`Edit - Processed content after links processedContent=${processedContent}`);
 
         if (trackingLinks.length > 0) {
           logger.info(`[GATEWAY] ✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
@@ -258,16 +258,16 @@ export function registerMessagesAdvancedRoutes(
       });
 
       logger.info('[GATEWAY] ===== POST MESSAGE UPDATE - BEFORE MENTIONS =====');
-      logger.info('[GATEWAY] Message updated successfully, ID:', messageId);
+      logger.info(`Message updated successfully, ID messageId=${messageId}`);
       // ÉTAPE: Traitement des mentions @username lors de l'édition
       logger.info('[GATEWAY] ===== STARTING MENTION PROCESSING BLOCK =====');
       try {
         logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const mentionService = (fastify as any).mentionService;
-        logger.info('[GATEWAY] Edit - MentionService available:', !!mentionService);
+        logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
 
         if (mentionService) {
-          logger.info('[GATEWAY] Edit - Processing mentions for edited message:', messageId);
+          logger.info(`Edit - Processing mentions for edited message messageId=${messageId}`);
 
           // Supprimer les anciennes mentions
           await prisma.mention.deleteMany({
@@ -276,7 +276,7 @@ export function registerMessagesAdvancedRoutes(
 
           // Extraire les nouvelles mentions du contenu traité (avec tracking links déjà remplacés)
           const mentionedUsernames = mentionService.extractMentions(processedContent);
-          logger.info('[GATEWAY] Edit - Extracting mentions from:', processedContent);
+          logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
           logger.info('[GATEWAY] Edit - Mentions extracted:', mentionedUsernames);
           logger.info('[GATEWAY] Edit - Number of mentions:', mentionedUsernames.length);
 

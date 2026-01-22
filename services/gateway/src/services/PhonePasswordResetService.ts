@@ -185,9 +185,9 @@ export class PhonePasswordResetService {
     const { phoneNumber, countryCode, ipAddress, userAgent } = request;
 
     logger.info('[PhonePasswordReset] 📱 ======== PHONE LOOKUP ========');
-    logger.info('[PhonePasswordReset] 📱 Phone:', phoneNumber);
-    logger.info('[PhonePasswordReset] 📱 Country:', countryCode);
-    logger.info('[PhonePasswordReset] 📱 IP:', ipAddress);
+    logger.info(`[PhonePasswordReset] 📱 Phone phoneNumber=${phoneNumber}`);
+    logger.info(`[PhonePasswordReset] 📱 Country countryCode=${countryCode}`);
+    logger.info(`[PhonePasswordReset] 📱 IP ipAddress=${ipAddress}`);
 
     try {
       // 1. Rate limiting by IP
@@ -284,8 +284,8 @@ export class PhonePasswordResetService {
     const { tokenId, fullUsername, fullEmail, ipAddress, userAgent } = request;
 
     logger.info('[PhonePasswordReset] 🔐 ======== IDENTITY VERIFICATION ========');
-    logger.info('[PhonePasswordReset] 🔐 Token:', tokenId);
-    logger.info('[PhonePasswordReset] 🔐 IP:', ipAddress);
+    logger.info(`[PhonePasswordReset] 🔐 Token tokenId=${tokenId}`);
+    logger.info(`[PhonePasswordReset] 🔐 IP ipAddress=${ipAddress}`);
 
     try {
       // 1. Find token
@@ -411,8 +411,8 @@ export class PhonePasswordResetService {
     const { tokenId, code, ipAddress, userAgent } = request;
 
     logger.info('[PhonePasswordReset] ✉️ ======== CODE VERIFICATION ========');
-    logger.info('[PhonePasswordReset] ✉️ Token:', tokenId);
-    logger.info('[PhonePasswordReset] ✉️ IP:', ipAddress);
+    logger.info(`[PhonePasswordReset] ✉️ Token tokenId=${tokenId}`);
+    logger.info(`[PhonePasswordReset] ✉️ IP ipAddress=${ipAddress}`);
 
     try {
       // 1. Find token
@@ -592,9 +592,8 @@ export class PhonePasswordResetService {
     const { fromUserId, toUserId, phoneNumber, phoneCountryCode, ipAddress } = request;
 
     logger.info('[PhonePasswordReset] 📲 ======== PHONE TRANSFER ========');
-    logger.info('[PhonePasswordReset] 📲 From:', fromUserId);
-    logger.info('[PhonePasswordReset] 📲 To:', toUserId);
-    logger.info('[PhonePasswordReset] 📲 Phone:', this.hashForLog(phoneNumber));
+    logger.info(`[PhonePasswordReset] 📲 From fromUserId=${fromUserId}`);
+    logger.info(`[PhonePasswordReset] 📲 To toUserId=${toUserId}`);
 
     try {
       // Atomic transaction
