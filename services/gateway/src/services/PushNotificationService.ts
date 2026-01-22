@@ -130,6 +130,7 @@ export class PushNotificationService {
       try {
         // Using @parse/node-apn or similar library
         // Note: You may need to install: npm install @parse/node-apn
+        // @ts-expect-error - Optional dependency, may not be installed
         const apn = await import('@parse/node-apn').catch(() => null);
 
         if (apn) {
@@ -353,6 +354,7 @@ export class PushNotificationService {
     }
 
     try {
+      // @ts-expect-error - Optional dependency loaded during initialization
       const apn = await import('@parse/node-apn');
       const notification = new apn.Notification();
 

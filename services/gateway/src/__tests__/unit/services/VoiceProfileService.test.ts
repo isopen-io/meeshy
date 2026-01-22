@@ -33,6 +33,20 @@ jest.mock('crypto', () => ({
   randomUUID: () => 'test-uuid-1234'
 }));
 
+// Mock logger-enhanced to prevent fs.write errors in tests
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: jest.fn(() => ({
+      trace: jest.fn(),
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      fatal: jest.fn()
+    }))
+  }
+}));
+
 // Mock ZmqTranslationClient
 class MockZMQClient extends EventEmitter {
   sendVoiceProfileRequest = jest.fn() as jest.Mock<any>;

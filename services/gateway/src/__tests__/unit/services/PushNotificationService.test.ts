@@ -63,7 +63,7 @@ jest.mock('@parse/node-apn', () => ({
   },
   Provider: MockApnsProvider,
   Notification: MockApnsNotification,
-}));
+}), { virtual: true });
 
 // File system mock
 const mockExistsSync = jest.fn();
