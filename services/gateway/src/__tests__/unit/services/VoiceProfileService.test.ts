@@ -88,11 +88,9 @@ describe('VoiceProfileService', () => {
   const createMockUser = (overrides: any = {}) => ({
     id: 'user-123',
     birthDate: new Date('1990-05-15'),
-    userFeature: {
-      voiceProfileConsentAt: new Date(),
-      voiceCloningEnabledAt: new Date(),
-      ageVerifiedAt: new Date()
-    },
+    voiceProfileConsentAt: new Date(),
+    voiceCloningEnabledAt: new Date(),
+    ageVerifiedAt: new Date(),
     voiceModel: null,
     ...overrides
   });
@@ -155,8 +153,18 @@ describe('VoiceProfileService', () => {
   describe('updateConsent', () => {
     it('should update voice recording consent and activate dependencies', async () => {
       // Simuler qu'aucune dépendance n'est activée
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
+      mockPrisma.user.update.mockResolvedValue({
+        userId: 'user-123',
+        voiceProfileConsentAt: new Date(),
+        voiceDataConsentAt: new Date(),
+        dataProcessingConsentAt: new Date()
+      });
 
       const result = await service.updateConsent('user-123', {
         voiceRecordingConsent: true,
@@ -165,31 +173,30 @@ describe('VoiceProfileService', () => {
 
       expect(result.success).toBe(true);
       expect(result.data?.consentUpdated).toBe(true);
-      // Vérifie que upsert est appelé avec les dépendances activées
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
+      // Vérifie que update est appelé avec les dépendances activées
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: expect.objectContaining({
           voiceProfileConsentAt: expect.any(Date),
           voiceDataConsentAt: expect.any(Date),
           dataProcessingConsentAt: expect.any(Date)
         }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          voiceProfileConsentAt: expect.any(Date),
-          voiceDataConsentAt: expect.any(Date),
-          dataProcessingConsentAt: expect.any(Date)
-        })
+        select: expect.any(Object)
       });
     });
 
     it('should not re-activate existing dependencies', async () => {
       // Simuler que les dépendances sont déjà activées
-      mockPrisma.userFeature.findUnique.mockResolvedValue({
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
         dataProcessingConsentAt: new Date('2024-01-01'),
         voiceDataConsentAt: new Date('2024-01-01'),
         voiceProfileConsentAt: null
       });
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.update.mockResolvedValue({
+        userId: 'user-123',
+        voiceProfileConsentAt: new Date()
+      });
 
       const result = await service.updateConsent('user-123', {
         voiceRecordingConsent: true,
@@ -198,25 +205,33 @@ describe('VoiceProfileService', () => {
 
       expect(result.success).toBe(true);
       // Vérifie que seul voiceProfileConsentAt est mis à jour (pas les dépendances existantes)
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: expect.objectContaining({
           voiceProfileConsentAt: expect.any(Date)
         }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          voiceProfileConsentAt: expect.any(Date)
-        })
+        select: expect.any(Object)
       });
       // Vérifie que dataProcessingConsentAt et voiceDataConsentAt ne sont PAS dans l'update
-      const upsertCall = (mockPrisma.userFeature.upsert as jest.Mock).mock.calls[0][0] as any;
-      expect(upsertCall.update.dataProcessingConsentAt).toBeUndefined();
-      expect(upsertCall.update.voiceDataConsentAt).toBeUndefined();
+      const updateCall = (mockPrisma.user.update as jest.Mock).mock.calls[0][0] as any;
+      expect(updateCall.data.dataProcessingConsentAt).toBeUndefined();
+      expect(updateCall.data.voiceDataConsentAt).toBeUndefined();
     });
 
     it('should update voice cloning consent with all dependencies', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
+      mockPrisma.user.update.mockResolvedValue({
+        userId: 'user-123',
+        voiceCloningEnabledAt: new Date(),
+        voiceProfileConsentAt: new Date(),
+        voiceDataConsentAt: new Date(),
+        dataProcessingConsentAt: new Date()
+      });
 
       const result = await service.updateConsent('user-123', {
         voiceRecordingConsent: false,
@@ -224,27 +239,25 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: expect.objectContaining({
           voiceCloningEnabledAt: expect.any(Date),
           voiceProfileConsentAt: expect.any(Date),
           voiceDataConsentAt: expect.any(Date),
           dataProcessingConsentAt: expect.any(Date)
         }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          voiceCloningEnabledAt: expect.any(Date),
-          voiceProfileConsentAt: expect.any(Date),
-          voiceDataConsentAt: expect.any(Date),
-          dataProcessingConsentAt: expect.any(Date)
-        })
+        select: expect.any(Object)
       });
     });
 
     it('should update birth date with age verification', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
       mockPrisma.user.update.mockResolvedValue({ id: 'user-123' });
 
       const result = await service.updateConsent('user-123', {
@@ -254,29 +267,24 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      // birthDate va dans user.update
+      // birthDate et ageVerifiedAt vont tous deux dans user.update
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: expect.objectContaining({
-          birthDate: expect.any(Date)
-        })
-      });
-      // ageVerifiedAt va dans userFeature.upsert
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
+          birthDate: expect.any(Date),
           ageVerifiedAt: expect.any(Date)
         }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          ageVerifiedAt: expect.any(Date)
-        })
+        select: expect.any(Object)
       });
     });
 
     it('should update all consent fields at once', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
       mockPrisma.user.update.mockResolvedValue({ id: 'user-123' });
 
       const result = await service.updateConsent('user-123', {
@@ -286,35 +294,28 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
-          voiceProfileConsentAt: expect.any(Date),
-          voiceCloningEnabledAt: expect.any(Date),
-          ageVerifiedAt: expect.any(Date)
-        }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          voiceProfileConsentAt: expect.any(Date),
-          voiceCloningEnabledAt: expect.any(Date),
-          ageVerifiedAt: expect.any(Date)
-        })
-      });
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: expect.objectContaining({
-          birthDate: expect.any(Date)
-        })
+          voiceProfileConsentAt: expect.any(Date),
+          voiceCloningEnabledAt: expect.any(Date),
+          ageVerifiedAt: expect.any(Date),
+          birthDate: expect.any(Date),
+          voiceDataConsentAt: expect.any(Date),
+          dataProcessingConsentAt: expect.any(Date)
+        }),
+        select: expect.any(Object)
       });
     });
 
     it('should revoke consents when set to false', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue({
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
         dataProcessingConsentAt: new Date(),
         voiceDataConsentAt: new Date(),
         voiceProfileConsentAt: new Date()
       });
-      mockPrisma.userFeature.upsert.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.update.mockResolvedValue({ userId: 'user-123' });
 
       const result = await service.updateConsent('user-123', {
         voiceRecordingConsent: false,
@@ -322,34 +323,40 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.userFeature.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        update: expect.objectContaining({
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: expect.objectContaining({
           voiceProfileConsentAt: null,
           voiceCloningEnabledAt: null
         }),
-        create: expect.objectContaining({
-          userId: 'user-123',
-          voiceProfileConsentAt: null,
-          voiceCloningEnabledAt: null
-        })
+        select: expect.any(Object)
       });
     });
 
     it('should return error when no consent data provided', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
 
       // Pas de champs de consentement passés
       const result = await service.updateConsent('user-123', {} as any);
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe('NO_CONSENT_DATA');
-      expect(mockPrisma.userFeature.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
     it('should handle database errors gracefully', async () => {
-      mockPrisma.userFeature.findUnique.mockResolvedValue(null);
-      mockPrisma.userFeature.upsert.mockRejectedValue(new Error('Database error'));
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-123',
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null
+      });
+      mockPrisma.user.update.mockRejectedValue(new Error('Database error'));
 
       const result = await service.updateConsent('user-123', {
         voiceRecordingConsent: true,
@@ -378,11 +385,9 @@ describe('VoiceProfileService', () => {
 
     it('should return consent status for user with no consents', async () => {
       const mockUser = createMockUser({
-        userFeature: {
-          voiceProfileConsentAt: null,
-          voiceCloningEnabledAt: null,
-          ageVerifiedAt: null
-        }
+        voiceProfileConsentAt: null,
+        voiceCloningEnabledAt: null,
+        ageVerifiedAt: null
       });
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
 
@@ -403,8 +408,12 @@ describe('VoiceProfileService', () => {
       expect(result.errorCode).toBe('USER_NOT_FOUND');
     });
 
-    it('should handle user with no userFeature record', async () => {
-      const mockUser = createMockUser({ userFeature: null });
+    it('should handle user with no consents', async () => {
+      const mockUser = createMockUser({
+        voiceProfileConsentAt: null,
+        voiceCloningEnabledAt: null,
+        ageVerifiedAt: null
+      });
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
 
       const result = await service.getConsentStatus('user-123');
@@ -513,7 +522,7 @@ describe('VoiceProfileService', () => {
 
     it('should return error if consent not given', async () => {
       const mockUser = createMockUser({
-        userFeature: { voiceProfileConsentAt: null }
+        voiceProfileConsentAt: null
       });
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
 
@@ -973,7 +982,7 @@ describe('VoiceProfileService', () => {
   describe('deleteProfile', () => {
     it('should delete profile and reset consent', async () => {
       mockPrisma.userVoiceModel.delete.mockResolvedValue({ userId: 'user-123' });
-      mockPrisma.userFeature.update.mockResolvedValue({ userId: 'user-123' });
+      mockPrisma.user.update.mockResolvedValue({ userId: 'user-123' });
 
       const result = await service.deleteProfile('user-123');
 
@@ -982,8 +991,8 @@ describe('VoiceProfileService', () => {
       expect(mockPrisma.userVoiceModel.delete).toHaveBeenCalledWith({
         where: { userId: 'user-123' }
       });
-      expect(mockPrisma.userFeature.update).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
         data: {
           voiceProfileConsentAt: null,
           voiceCloningEnabledAt: null
