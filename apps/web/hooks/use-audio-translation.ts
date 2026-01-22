@@ -1,8 +1,34 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SocketIOTranslatedAudio, AttachmentTranslations } from '@meeshy/shared/types';
+import type { AudioTranslationEventData } from '@meeshy/shared/types/socketio-events';
 import { toSocketIOTranslation } from '@meeshy/shared/types';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+
+// Type pour l'audio traduit provenant de Socket.IO (utilise directement shared)
+type TranslatedAudioFromSocket = AudioTranslationEventData['translatedAudio'];
+
+/**
+ * Convertit TranslatedAudioFromSocket (événement Socket.IO) vers SocketIOTranslatedAudio (format UI)
+ * Cette fonction garantit la cohérence des types via TypeScript
+ */
+function convertSocketAudioToUI(data: TranslatedAudioFromSocket): SocketIOTranslatedAudio {
+  return {
+    id: data.id,
+    type: 'audio' as const,
+    targetLanguage: data.targetLanguage,
+    translatedText: data.transcription, // ← Mapping garanti par TypeScript
+    url: data.url,
+    durationMs: data.durationMs,
+    cloned: data.cloned,
+    quality: data.quality,
+    path: data.path,
+    format: data.format,
+    ttsModel: data.ttsModel,
+    voiceModelId: data.voiceModelId,
+    segments: data.segments
+  };
+}
 
 interface AudioTranscription {
   text: string;
@@ -120,42 +146,36 @@ export function useAudioTranslation({
     };
   }, [messageId, attachmentId]);
 
-  // S'abonner aux traductions audio via Socket.IO
+  // S'abonner aux traductions audio via Socket.IO (DEPRECATED - conservé pour rétrocompatibilité)
+  // NOTE: Les nouveaux événements sont onAudioTranslationsProgressive et onAudioTranslationsCompleted
   useEffect(() => {
     if (!messageId || !attachmentId) return;
 
-    const unsubscribe = meeshySocketIOService.onAudioTranslation((data) => {
+    const unsubscribe = meeshySocketIOService.onAudioTranslation((data: AudioTranslationEventData) => {
       if (data.attachmentId !== attachmentId) return;
 
-      console.log('🔔 [useAudioTranslation] Traduction audio reçue via WebSocket:', {
+      console.log('🔔 [useAudioTranslation] Traduction audio reçue via WebSocket (DEPRECATED):', {
         attachmentId: data.attachmentId,
-        hasTranscription: !!data.transcription,
-        translatedAudiosCount: data.translatedAudios?.length || 0,
-        translatedAudios: data.translatedAudios
+        language: data.language,
+        hasUrl: !!data.translatedAudio?.url
       });
 
-      if (data.transcription) {
-        setTranscription({
-          text: data.transcription.text,
-          language: data.transcription.language,
-          confidence: data.transcription.confidence,
-        });
-        console.log('✅ [useAudioTranslation] Transcription mise à jour:', {
-          language: data.transcription.language,
-          textLength: data.transcription.text.length
-        });
-      }
+      // Conversion type-safe via fonction dédiée
+      const uiAudio = convertSocketAudioToUI(data.translatedAudio);
 
-      if (data.translatedAudios && data.translatedAudios.length > 0) {
-        console.log('✅ [useAudioTranslation] Traductions audio mises à jour:',
-          data.translatedAudios.map(t => ({
-            language: t.targetLanguage,
-            url: t.url || '⚠️ VIDE',
-            hasUrl: !!t.url
-          }))
-        );
-        setTranslatedAudios(data.translatedAudios);
-      }
+      // Ajouter ou mettre à jour la traduction dans la liste
+      setTranslatedAudios((prev) => {
+        const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = uiAudio;
+          return updated;
+        } else {
+          return [...prev, uiAudio];
+        }
+      });
+
+      console.log('✅ [useAudioTranslation] Traduction audio ajoutée:', data.language);
     });
 
     return () => {
@@ -167,7 +187,7 @@ export function useAudioTranslation({
   useEffect(() => {
     if (!messageId || !attachmentId) return;
 
-    const unsubscribeProgressive = meeshySocketIOService.onAudioTranslationsProgressive((data) => {
+    const unsubscribeProgressive = meeshySocketIOService.onAudioTranslationsProgressive((data: AudioTranslationEventData) => {
       if (data.attachmentId !== attachmentId) return;
 
       console.log('🔔 [useAudioTranslation] 🌍 TRADUCTION PROGRESSIVE reçue via WebSocket:', {
@@ -176,24 +196,27 @@ export function useAudioTranslation({
         hasUrl: !!data.translatedAudio?.url
       });
 
+      // Conversion type-safe via fonction dédiée
+      const uiAudio = convertSocketAudioToUI(data.translatedAudio);
+
       // Ajouter ou mettre à jour la traduction dans la liste
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
         if (existingIndex >= 0) {
           // Mettre à jour la traduction existante
           const updated = [...prev];
-          updated[existingIndex] = data.translatedAudio;
+          updated[existingIndex] = uiAudio;
           return updated;
         } else {
           // Ajouter la nouvelle traduction
-          return [...prev, data.translatedAudio];
+          return [...prev, uiAudio];
         }
       });
 
       console.log('✅ [useAudioTranslation] Traduction progressive ajoutée:', data.language);
     });
 
-    const unsubscribeCompleted = meeshySocketIOService.onAudioTranslationsCompleted((data) => {
+    const unsubscribeCompleted = meeshySocketIOService.onAudioTranslationsCompleted((data: AudioTranslationEventData) => {
       if (data.attachmentId !== attachmentId) return;
 
       console.log('🔔 [useAudioTranslation] ✅ DERNIÈRE TRADUCTION reçue via WebSocket:', {
@@ -202,15 +225,18 @@ export function useAudioTranslation({
         hasUrl: !!data.translatedAudio?.url
       });
 
+      // Conversion type-safe via fonction dédiée
+      const uiAudio = convertSocketAudioToUI(data.translatedAudio);
+
       // Ajouter ou mettre à jour la dernière traduction
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
         if (existingIndex >= 0) {
           const updated = [...prev];
-          updated[existingIndex] = data.translatedAudio;
+          updated[existingIndex] = uiAudio;
           return updated;
         } else {
-          return [...prev, data.translatedAudio];
+          return [...prev, uiAudio];
         }
       });
 

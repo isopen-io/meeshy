@@ -626,7 +626,7 @@ class TranslationStage:
                     turns_metadata = [{
                         'start_ms': 0,
                         'end_ms': tts_result.duration_ms,
-                        'speaker_id': 'SPEAKER_00',  # Speaker unique pour mono
+                        'speaker_id': 's0',  # Speaker unique pour mono
                         'voice_similarity_score': tts_result.voice_quality if tts_result.voice_cloned else None
                     }]
 

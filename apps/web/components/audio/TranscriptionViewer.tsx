@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useMemo, useRef, useEffect, useState, memo } from 'react';
-import { User, Users } from 'lucide-react';
+import { User, Users, UserCircle2, Baby } from 'lucide-react';
 import type { TranscriptionSegment, SpeakerAnalysis } from '@meeshy/shared/types/attachment-transcription';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface TranslatedAudio {
   targetLanguage: string;
@@ -31,6 +37,8 @@ interface TranscriptionViewerProps {
   translatedAudios?: readonly TranslatedAudio[];
   /** Afficher les scores de similarité vocale */
   showScores?: boolean;
+  /** Avatar de l'utilisateur connecté (pour l'afficher si identifié) */
+  userAvatar?: string | null;
 }
 
 /**
@@ -134,6 +142,49 @@ const getSpeakerLabel = (
 };
 
 /**
+ * Obtient l'icône de genre basée sur voiceCharacteristics
+ */
+const getGenderIcon = (voiceCharacteristics: any) => {
+  if (!voiceCharacteristics?.classification?.estimated_gender) {
+    return UserCircle2;
+  }
+
+  const gender = voiceCharacteristics.classification.estimated_gender;
+
+  if (gender === 'child') {
+    return Baby;
+  } else if (gender === 'female') {
+    return User; // Icône féminine
+  } else if (gender === 'male') {
+    return Users; // Icône masculine
+  }
+
+  return UserCircle2; // Unknown
+};
+
+/**
+ * Formate les détails vocaux pour l'affichage dans le tooltip
+ */
+const formatVoiceDetails = (voiceCharacteristics: any) => {
+  if (!voiceCharacteristics) return null;
+
+  const { pitch, classification, spectral, energy, quality } = voiceCharacteristics;
+
+  return {
+    pitch: pitch?.mean_hz ? `${Math.round(pitch.mean_hz)} Hz` : 'N/A',
+    pitchRange: pitch?.min_hz && pitch?.max_hz
+      ? `${Math.round(pitch.min_hz)}-${Math.round(pitch.max_hz)} Hz`
+      : 'N/A',
+    gender: classification?.estimated_gender || 'inconnu',
+    ageRange: classification?.estimated_age_range || 'inconnu',
+    voiceType: classification?.voice_type || 'inconnu',
+    brightness: spectral?.brightness ? Math.round(spectral.brightness) : null,
+    warmth: spectral?.warmth ? Math.round(spectral.warmth) : null,
+    quality: quality?.harmonics_to_noise ? quality.harmonics_to_noise.toFixed(2) : null,
+  };
+};
+
+/**
  * Composant optimisé pour afficher la transcription avec coloration des speakers
  *
  * Fonctionnalités:
@@ -159,6 +210,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
   selectedLanguage,
   translatedAudios,
   showScores = false,
+  userAvatar,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const transcriptionRef = useRef<HTMLDivElement>(null);
@@ -314,21 +366,6 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
       aria-label="Transcription audio avec speakers"
       aria-live="polite"
     >
-      {/* En-tête avec info sur les speakers */}
-      {speakerMetadata && speakerMetadata.totalSpeakers > 0 && (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <Users className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          <span className="text-xs text-gray-600 dark:text-gray-400">
-            {speakerMetadata.totalSpeakers} locuteur{speakerMetadata.totalSpeakers > 1 ? 's' : ''} détecté{speakerMetadata.totalSpeakers > 1 ? 's' : ''}
-          </span>
-          {!transcription.senderSpeakerId && (
-            <span className="text-xs text-amber-600 dark:text-amber-400 ml-auto">
-              Créez un profil vocal pour vous identifier
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Contenu de la transcription avec coloration par speaker */}
       <div
         id="transcription-content"
@@ -362,37 +399,96 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
         }
       `}</style>
 
-      {/* Légende compacte des speakers */}
+      {/* Badges des speakers avec détails vocaux au survol - Afficher uniquement si plusieurs locuteurs */}
       {speakerMetadata && speakerMetadata.totalSpeakers > 1 && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <span>Locuteurs:</span>
-          {speakerMetadata.speakers.map((speaker) => {
-            const colors = getSpeakerColor(
-              speaker.sid,
-              transcription.senderSpeakerId,
-              speaker.voiceSimilarityScore
-            );
-            const { label, isUser } = getSpeakerLabel(
-              speaker.sid,
-              speaker.voiceSimilarityScore,
-              transcription.senderSpeakerId
-            );
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <TooltipProvider>
+            {speakerMetadata.speakers.map((speaker) => {
+              const colors = getSpeakerColor(
+                speaker.sid,
+                transcription.senderSpeakerId,
+                speaker.voiceSimilarityScore
+              );
+              const { label, isUser } = getSpeakerLabel(
+                speaker.sid,
+                speaker.voiceSimilarityScore,
+                transcription.senderSpeakerId
+              );
+              const GenderIcon = getGenderIcon(speaker.voiceCharacteristics);
+              const voiceDetails = formatVoiceDetails(speaker.voiceCharacteristics);
+              const hasVoiceProfile = !!speaker.voiceCharacteristics;
 
-            return (
-              <span
-                key={speaker.sid}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${colors.bg} ${colors.text} text-xs font-medium`}
-              >
-                {isUser ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
-                {label}
-                {showScores && speaker.voiceSimilarityScore !== null && (
-                  <span className="tabular-nums opacity-70">
-                    {Math.round(speaker.voiceSimilarityScore * 100)}%
-                  </span>
-                )}
-              </span>
-            );
-          })}
+              return (
+                <Tooltip key={speaker.sid} delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${colors.bg} ${colors.border} border-2 ${colors.text} cursor-pointer transition-all hover:shadow-md hover:scale-110`}
+                    >
+                      {/* Avatar de l'utilisateur ou icône de genre avec couleur */}
+                      {isUser && userAvatar ? (
+                        <div className="relative w-full h-full rounded-full overflow-hidden">
+                          <img
+                            src={userAvatar}
+                            alt="Vous"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <GenderIcon className="w-4 h-4" />
+                      )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    {hasVoiceProfile && voiceDetails ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="font-semibold border-b pb-1">
+                          Profil vocal{isUser ? ' - Vous' : ''}
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                          <div className="text-gray-500">Pitch moyen:</div>
+                          <div className="font-mono">{voiceDetails.pitch}</div>
+
+                          <div className="text-gray-500">Plage:</div>
+                          <div className="font-mono text-[10px]">{voiceDetails.pitchRange}</div>
+
+                          <div className="text-gray-500">Genre:</div>
+                          <div className="capitalize">{voiceDetails.gender}</div>
+
+                          <div className="text-gray-500">Âge:</div>
+                          <div className="capitalize">{voiceDetails.ageRange}</div>
+
+                          <div className="text-gray-500">Type vocal:</div>
+                          <div className="capitalize text-[10px]">{voiceDetails.voiceType}</div>
+
+                          {voiceDetails.quality && (
+                            <>
+                              <div className="text-gray-500">Qualité (HNR):</div>
+                              <div className="font-mono">{voiceDetails.quality}</div>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-400 pt-1 border-t">
+                          Temps de parole: {Math.round(speaker.speakingTimeMs / 1000)}s
+                          {speaker.isPrimary && ' • Locuteur principal'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-xs">
+                        <div className="font-semibold">Locuteur inconnu</div>
+                        <div className="text-gray-400 italic">
+                          Créez une identité vocale pour vous identifier et voir les détails
+                        </div>
+                        <div className="text-[10px] text-gray-400 pt-1 border-t">
+                          Temps de parole: {Math.round(speaker.speakingTimeMs / 1000)}s
+                          {speaker.isPrimary && ' • Locuteur principal'}
+                        </div>
+                      </div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </TooltipProvider>
         </div>
       )}
     </div>

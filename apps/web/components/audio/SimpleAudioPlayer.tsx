@@ -11,6 +11,7 @@ import type { TranslatedAudioData } from '@meeshy/shared/types';
 import { useAudioPlayback } from '@/hooks/use-audio-playback';
 import { useAudioTranslation } from '@/hooks/use-audio-translation';
 import { useAudioEffectsAnalysis } from '@/hooks/use-audio-effects-analysis';
+import { useAuth } from '@/hooks/use-auth';
 
 // Composants UI
 import { AudioProgressBar } from './AudioProgressBar';
@@ -54,6 +55,9 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   initialTranslations,
   className = '',
 }) => {
+  // Utilisateur connecté (pour afficher son avatar)
+  const { user } = useAuth();
+
   // États UI locaux
   const [isSpeedPopoverOpen, setIsSpeedPopoverOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -261,6 +265,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
           isPlaying={isPlaying}
           selectedLanguage={selectedLanguage}
           translatedAudios={translatedAudios}
+          userAvatar={user?.avatar || null}
         />
       )}
 

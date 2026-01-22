@@ -158,9 +158,9 @@ export class PhoneTransferService {
     const { phoneNumber, phoneCountryCode, newUserId, ipAddress, userAgent } = request;
 
     logger.info('[PhoneTransfer] 📱 ======== INITIATE TRANSFER ========');
-    logger.info('[PhoneTransfer] 📱 Phone:', phoneNumber);
-    logger.info('[PhoneTransfer] 📱 New User ID:', newUserId);
-    logger.info('[PhoneTransfer] 📱 IP:', ipAddress);
+    logger.info(`[PhoneTransfer] 📱 Phone: ${phoneNumber}`);
+    logger.info(`[PhoneTransfer] 📱 New User ID: ${newUserId}`);
+    logger.info(`[PhoneTransfer] 📱 IP: ${ipAddress}`);
 
     try {
       // 1. Find current owner
@@ -249,8 +249,8 @@ export class PhoneTransferService {
     const { transferId, code, ipAddress } = request;
 
     logger.info('[PhoneTransfer] ✉️ ======== VERIFY TRANSFER ========');
-    logger.info('[PhoneTransfer] ✉️ Transfer ID:', transferId);
-    logger.info('[PhoneTransfer] ✉️ IP:', ipAddress);
+    logger.info(`[PhoneTransfer] ✉️ Transfer ID: ${transferId}`);
+    logger.info(`[PhoneTransfer] ✉️ IP: ${ipAddress}`);
 
     try {
       // 1. Get transfer data from Redis
@@ -440,9 +440,9 @@ export class PhoneTransferService {
     const { phoneNumber, phoneCountryCode, pendingUsername, pendingEmail, ipAddress, userAgent } = request;
 
     logger.info('[PhoneTransfer] 📱 ======== INITIATE REGISTRATION TRANSFER ========');
-    logger.info('[PhoneTransfer] 📱 Phone:', phoneNumber);
-    logger.info('[PhoneTransfer] 📱 Pending Username:', pendingUsername);
-    logger.info('[PhoneTransfer] 📱 IP:', ipAddress);
+    logger.info(`[PhoneTransfer] 📱 Phone: ${phoneNumber}`);
+    logger.info(`[PhoneTransfer] 📱 Pending Username: ${pendingUsername}`);
+    logger.info(`[PhoneTransfer] 📱 IP: ${ipAddress}`);
 
     try {
       // 1. Find current owner

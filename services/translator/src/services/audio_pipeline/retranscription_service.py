@@ -149,7 +149,7 @@ def _find_closest_turn(
     """
     min_distance = float('inf')
     closest_turn = turns_metadata[0] if turns_metadata else {
-        'speaker_id': 'SPEAKER_00',
+        'speaker_id': 's0',
         'voice_similarity_score': None
     }
 

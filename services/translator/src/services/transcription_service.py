@@ -496,34 +496,43 @@ class TranscriptionService:
             transcription.sender_speaker_id = diarization.sender_speaker_id
 
             # Construire speaker_analysis pour la base de données (camelCase pour cohérence API)
+            # NOTE: Les segments sont déjà dans transcription.segments, pas besoin de les dupliquer ici
+            # On garde uniquement les métadonnées et caractéristiques vocales de chaque speaker
+            speakers_list = []
+            for s in diarization.speakers:
+                # Construire les voiceCharacteristics si disponibles
+                voice_chars = None
+                if hasattr(s, 'voice_characteristics') and s.voice_characteristics:
+                    try:
+                        voice_chars = s.voice_characteristics.to_dict()
+                        logger.info(f"   ✅ [VOICE-CHARS] Speaker {s.speaker_id}: voiceCharacteristics inclus (pitch={voice_chars.get('pitch', {}).get('mean_hz', 'N/A')} Hz)")
+                    except Exception as e:
+                        logger.error(f"   ❌ [VOICE-CHARS] Erreur conversion voiceCharacteristics pour {s.speaker_id}: {e}")
+                else:
+                    logger.warning(f"   ⚠️ [VOICE-CHARS] Speaker {s.speaker_id}: Pas de voiceCharacteristics disponibles")
+
+                speakers_list.append({
+                    'sid': s.speaker_id,
+                    'isPrimary': s.is_primary,
+                    'speakingTimeMs': s.speaking_time_ms,
+                    'speakingRatio': s.speaking_ratio,
+                    'voiceSimilarityScore': s.voice_similarity_score,
+                    # Voice characteristics: fréquences, pitch, timbre, etc.
+                    'voiceCharacteristics': voice_chars
+                    # ⚠️ segments supprimés car déjà présents dans transcription.segments avec speakerId
+                })
+
             transcription.speaker_analysis = {
                 'speakerCount': diarization.speaker_count,
                 'primarySpeakerId': diarization.primary_speaker_id,
                 'senderIdentified': diarization.sender_identified,
                 'senderSpeakerId': diarization.sender_speaker_id,
-                'speakers': [
-                    {
-                        'sid': s.speaker_id,
-                        'isPrimary': s.is_primary,
-                        'speakingTimeMs': s.speaking_time_ms,
-                        'speakingRatio': s.speaking_ratio,
-                        'voiceSimilarityScore': s.voice_similarity_score,
-                        # Voice characteristics in structured format
-                        'voiceCharacteristics': s.voice_characteristics.to_dict() if hasattr(s, 'voice_characteristics') and s.voice_characteristics else None,
-                        'segments': [
-                            {
-                                'startMs': seg.start_ms,
-                                'endMs': seg.end_ms,
-                                'durationMs': seg.duration_ms
-                            }
-                            for seg in s.segments
-                        ]
-                    }
-                    for s in diarization.speakers
-                ],
+                'speakers': speakers_list,
                 'totalDurationMs': diarization.total_duration_ms,
                 'method': diarization.method
             }
+
+            logger.info(f"   📊 [SPEAKER-ANALYSIS] Construit avec {len(speakers_list)} speaker(s), voiceCharacteristics: {sum(1 for s in speakers_list if s.get('voiceCharacteristics'))}/{len(speakers_list)}")
 
             # ═══════════════════════════════════════════════════════════════
             # LOGS DÉTAILLÉS PAR INTERLOCUTEUR

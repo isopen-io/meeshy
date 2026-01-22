@@ -481,7 +481,7 @@ export class MetadataManager {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        logger.warn('[MetadataManager] Timeout ffprobe pour:', videoPath);
+        logger.warn(`[MetadataManager] Timeout ffprobe pour: ${videoPath}`);
         reject(new Error('ffprobe timeout after 30 seconds'));
       }, 30000);
 

@@ -494,16 +494,19 @@ export class MessageTranslationService extends EventEmitter {
    */
   private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
     try {
+      logger.info(`🔍 [LANG-TRACE] Extraction langues pour conversation: ${conversationId}`);
+
       // OPTIMISATION: Vérifier le cache d'abord
       const cached = this.languageCache.get(conversationId);
 
       if (cached) {
+        logger.info(`💾 [LANG-TRACE] Langues depuis cache: [${cached.join(', ')}]`);
         return cached;
       }
-      
+
       const startTime = Date.now();
       const languages = new Set<string>();
-      
+
       // OPTIMISATION: Faire les 2 requêtes en parallèle au lieu de séquentiellement
       const [members, anonymousParticipants] = await Promise.all([
         this.prisma.conversationMember.findMany({
@@ -514,6 +517,8 @@ export class MessageTranslationService extends EventEmitter {
           include: {
             user: {
               select: {
+                id: true,
+                username: true,
                 systemLanguage: true,
                 regionalLanguage: true,
                 customDestinationLanguage: true
@@ -522,49 +527,73 @@ export class MessageTranslationService extends EventEmitter {
           }
         }),
         this.prisma.anonymousParticipant.findMany({
-          where: { 
+          where: {
             conversationId: conversationId,
-            isActive: true 
+            isActive: true
           },
           select: {
+            id: true,
+            username: true,
             language: true
           }
         })
       ]);
+
+      logger.info(`👥 [LANG-TRACE] Membres trouvés: ${members.length} auth + ${anonymousParticipants.length} anon`);
       
       // Extraire TOUTES les langues des utilisateurs authentifiés
       // On extrait toujours systemLanguage, et les autres langues configurées
       // TODO: Utiliser UserPreferences pour filtrer selon autoTranslateEnabled
       for (const member of members) {
+        logger.info(
+          `   👤 [LANG-TRACE] Membre auth: ${member.user.username} (${member.user.id}) | ` +
+          `systemLang=${member.user.systemLanguage} | regionalLang=${member.user.regionalLanguage} | ` +
+          `customDestinationLang=${member.user.customDestinationLanguage}`
+        );
+
         // Toujours ajouter la langue système du participant
         if (member.user.systemLanguage) {
           languages.add(member.user.systemLanguage);
+          logger.info(`      ✅ Ajouté systemLanguage: ${member.user.systemLanguage}`);
         }
 
         // Ajouter les langues additionnelles (simplifié - pas de vérification des préférences pour l'instant)
         if (member.user.regionalLanguage) {
           languages.add(member.user.regionalLanguage);
+          logger.info(`      ✅ Ajouté regionalLanguage: ${member.user.regionalLanguage}`);
         }
         if (member.user.customDestinationLanguage) {
           languages.add(member.user.customDestinationLanguage);
+          logger.info(`      ✅ Ajouté customDestinationLanguage: ${member.user.customDestinationLanguage}`);
         }
       }
-      
+
       // Extraire les langues des participants anonymes
       for (const anonymousParticipant of anonymousParticipants) {
+        logger.info(
+          `   👻 [LANG-TRACE] Participant anonyme: ${anonymousParticipant.username} (${anonymousParticipant.id}) | ` +
+          `language=${anonymousParticipant.language}`
+        );
+
         if (anonymousParticipant.language) {
-          languages.add(anonymousParticipant.language); 
+          languages.add(anonymousParticipant.language);
+          logger.info(`      ✅ Ajouté language: ${anonymousParticipant.language}`);
         }
       }
-      
+
       // Retourner toutes les langues (le filtrage se fera dans les méthodes de traitement)
       const allLanguages = Array.from(languages);
 
       // OPTIMISATION: Mettre en cache le résultat
       this.languageCache.set(conversationId, allLanguages);
-      
+
       const queryTime = Date.now() - startTime;
-      
+
+      logger.info(
+        `✅ [LANG-TRACE] Langues extraites en ${queryTime}ms: [${allLanguages.join(', ')}] | ` +
+        `Total: ${allLanguages.length} langue(s) unique(s)`
+      );
+
       return allLanguages;
       
     } catch (error) {
@@ -874,20 +903,24 @@ export class MessageTranslationService extends EventEmitter {
           logger.info(`   📦 Sauvegarde nouveau profil vocal: ${nvp.userId}`);
 
           // MULTIPART: Utiliser binaire direct ou décoder base64 (fallback)
-          const embeddingBuffer = nvp._embeddingBinary || (nvp.embedding ? Buffer.from(nvp.embedding, 'base64') : null);
+          const embeddingBufferRaw = nvp._embeddingBinary || (nvp.embedding ? Buffer.from(nvp.embedding, 'base64') : null);
 
-          if (!embeddingBuffer) {
+          if (!embeddingBufferRaw) {
             logger.error(`   ❌ Pas d'embedding disponible pour le profil vocal`);
             throw new Error('Missing embedding data');
           }
+
+          // Convertir Buffer en Uint8Array pour Prisma (avec cast explicite)
+          const embeddingBuffer = new Uint8Array(embeddingBufferRaw.buffer, embeddingBufferRaw.byteOffset, embeddingBufferRaw.byteLength) as Uint8Array;
 
           const source = nvp._embeddingBinary ? 'multipart' : 'base64';
           logger.info(`   📦 Embedding (${source}): ${(embeddingBuffer.length / 1024).toFixed(1)}KB`);
 
           // Décoder les conditionals Chatterbox si présents
-          let chatterboxConditionalsBuffer: Buffer | null = null;
+          let chatterboxConditionalsBuffer: Uint8Array | null = null;
           if (nvp.chatterbox_conditionals_base64) {
-            chatterboxConditionalsBuffer = Buffer.from(nvp.chatterbox_conditionals_base64, 'base64');
+            const chatterboxBufferRaw = Buffer.from(nvp.chatterbox_conditionals_base64, 'base64');
+            chatterboxConditionalsBuffer = new Uint8Array(chatterboxBufferRaw.buffer, chatterboxBufferRaw.byteOffset, chatterboxBufferRaw.byteLength) as Uint8Array;
             logger.info(`   📦 Chatterbox conditionals: ${(chatterboxConditionalsBuffer.length / 1024).toFixed(1)}KB`);
           }
 
@@ -896,6 +929,7 @@ export class MessageTranslationService extends EventEmitter {
             where: { userId: nvp.userId },
             update: {
               profileId: nvp.profileId,
+              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               embedding: embeddingBuffer,
               qualityScore: nvp.qualityScore,
               audioCount: nvp.audioCount,
@@ -904,6 +938,7 @@ export class MessageTranslationService extends EventEmitter {
               fingerprint: nvp.fingerprint || null,
               voiceCharacteristics: nvp.voiceCharacteristics || null,
               // Conditionals Chatterbox pour multi-speaker TTS
+              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               chatterboxConditionals: chatterboxConditionalsBuffer,
               referenceAudioId: nvp.reference_audio_id || null,
               referenceAudioUrl: nvp.reference_audio_url || null,
@@ -912,6 +947,7 @@ export class MessageTranslationService extends EventEmitter {
             create: {
               userId: nvp.userId,
               profileId: nvp.profileId,
+              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               embedding: embeddingBuffer,
               qualityScore: nvp.qualityScore,
               audioCount: nvp.audioCount,
@@ -920,6 +956,7 @@ export class MessageTranslationService extends EventEmitter {
               fingerprint: nvp.fingerprint || null,
               voiceCharacteristics: nvp.voiceCharacteristics || null,
               // Conditionals Chatterbox pour multi-speaker TTS
+              // @ts-expect-error - TypeScript strict sur ArrayBuffer vs ArrayBufferLike, mais Buffer fonctionne avec Prisma
               chatterboxConditionals: chatterboxConditionalsBuffer,
               referenceAudioId: nvp.reference_audio_id || null,
               referenceAudioUrl: nvp.reference_audio_url || null

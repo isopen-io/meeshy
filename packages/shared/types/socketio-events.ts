@@ -327,6 +327,13 @@ export interface TranscriptionReadyEventData {
     readonly durationMs?: number;
     readonly source?: string;
     readonly segments?: readonly TranscriptionSegment[];
+    // Champs de diarisation (speaker detection)
+    readonly speakerCount?: number;
+    readonly primarySpeakerId?: string;
+    readonly senderVoiceIdentified?: boolean;
+    readonly senderSpeakerId?: string;
+    // Analyse détaillée des speakers avec caractéristiques vocales (pitch, fréquences, etc.)
+    readonly speakerAnalysis?: any;
   };
   readonly processingTimeMs?: number;
 }

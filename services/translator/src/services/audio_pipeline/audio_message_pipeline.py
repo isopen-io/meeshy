@@ -354,10 +354,20 @@ class AudioMessagePipeline:
         """
         start_time = time.time()
 
-        logger.info(
-            f"[PIPELINE] Processing audio message: "
-            f"msg={message_id}, sender={sender_id}"
-        )
+        logger.info("=" * 80)
+        logger.info(f"[PIPELINE] 🎵 Processing audio message START")
+        logger.info(f"[PIPELINE]    Message ID: {message_id}")
+        logger.info(f"[PIPELINE]    Attachment ID: {attachment_id}")
+        logger.info(f"[PIPELINE]    Conversation ID: {conversation_id}")
+        logger.info(f"[PIPELINE]    Sender ID: {sender_id}")
+        logger.info(f"[PIPELINE]    Duration: {audio_duration_ms}ms")
+        logger.info(f"[PIPELINE]    📝 User Language (defined by sender): {user_language or 'None'}")
+        logger.info(f"[PIPELINE]    🌍 Target Languages (from Gateway): {target_languages or 'None (will auto-detect)'}")
+        logger.info(f"[PIPELINE]    🎤 Generate Voice Clone: {generate_voice_clone}")
+        logger.info(f"[PIPELINE]    🔊 Use Original Voice: {use_original_voice}")
+        logger.info(f"[PIPELINE]    📊 Model Type: {model_type}")
+        logger.info(f"[PIPELINE]    👤 Existing Voice Profile: {'YES' if existing_voice_profile else 'NO'}")
+        logger.info("=" * 80)
 
         # Ensure initialized
         if not self.is_initialized:

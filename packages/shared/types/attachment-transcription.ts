@@ -54,8 +54,22 @@ export interface SpeakerInfo {
   readonly speakingRatio: number;
   /** Score de similarité vocale avec le profil utilisateur (0-1 ou null) */
   readonly voiceSimilarityScore: number | null;
-  /** Segments de temps où ce locuteur parle */
-  readonly segments: readonly { startMs: number; endMs: number; durationMs: number }[];
+  /**
+   * Caractéristiques vocales détaillées (pitch, fréquences, timbre, etc.)
+   * Structure:
+   * {
+   *   pitch: { mean_hz, std_hz, min_hz, max_hz, range_hz },
+   *   classification: { voice_type, estimated_gender, estimated_age_range },
+   *   spectral: { centroid_hz, bandwidth_hz, rolloff_hz, flatness, brightness, warmth, breathiness, nasality },
+   *   energy: { mean, std, dynamic_range_db, silence_ratio },
+   *   quality: { harmonics_to_noise, jitter, shimmer },
+   *   prosody: { speech_rate_wpm },
+   *   mfcc: { mean: number[], std: number[] },
+   *   metadata: { sample_rate, bit_depth, channels, codec, duration_seconds, analysis_time_ms, confidence }
+   * }
+   */
+  readonly voiceCharacteristics?: any;
+  // NOTE: Les segments temporels sont dans transcription.segments avec speakerId, pas ici (évite duplication)
 }
 
 /**
