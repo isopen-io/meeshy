@@ -4,10 +4,10 @@ generator client {
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
-// Python client generator (disabled - requires prisma-client-py installed)
-// generator client_py {
-//   provider = "prisma-client-py"
-// }
+// Python client generator
+generator client_py {
+  provider = "prisma-client-py"
+}
 
 datasource db {
   provider = "mongodb"
