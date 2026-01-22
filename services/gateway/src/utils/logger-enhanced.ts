@@ -63,18 +63,48 @@ function redactPII(obj: any): any {
 }
 
 /**
+ * ANSI color codes for terminal output
+ */
+const colors = {
+  reset: '\x1b[0m',
+  green: '\x1b[32m',   // INFO
+  yellow: '\x1b[33m',  // WARN
+  red: '\x1b[31m',     // ERROR
+  magenta: '\x1b[35m', // FATAL
+  cyan: '\x1b[36m',    // DEBUG
+  gray: '\x1b[90m',    // TRACE
+};
+
+/**
  * Custom formatter for Gateway logs
- * Format: YYYY-MM-DD HH:MM:SS UTC [LEVEL] [GWY] [Module] Message {context}
+ * Format: [YYYY-MM-DD HH:MM:SS UTC] [LEVEL] [GWY] [Module] {msg="...", data={...}}
  */
 function customGatewayFormatter(logObject: any): string {
   const timestamp = new Date(logObject.time).toISOString().replace('T', ' ').replace('Z', ' UTC');
-  const level = logObject.level === 30 ? 'INFO'
-    : logObject.level === 40 ? 'WARN'
-    : logObject.level === 50 ? 'ERROR'
-    : logObject.level === 60 ? 'FATAL'
-    : logObject.level === 20 ? 'DEBUG'
-    : logObject.level === 10 ? 'TRACE'
-    : 'INFO';
+
+  // Déterminer le niveau et sa couleur
+  let level = 'INFO';
+  let levelColor = colors.green;
+
+  if (logObject.level === 10) {
+    level = 'TRACE';
+    levelColor = colors.gray;
+  } else if (logObject.level === 20) {
+    level = 'DEBUG';
+    levelColor = colors.cyan;
+  } else if (logObject.level === 30) {
+    level = 'INFO';
+    levelColor = colors.green;
+  } else if (logObject.level === 40) {
+    level = 'WARN';
+    levelColor = colors.yellow;
+  } else if (logObject.level === 50) {
+    level = 'ERROR';
+    levelColor = colors.red;
+  } else if (logObject.level === 60) {
+    level = 'FATAL';
+    levelColor = colors.magenta;
+  }
 
   const module = logObject.module || 'Gateway';
   const message = logObject.msg || '';
@@ -90,13 +120,17 @@ function customGatewayFormatter(logObject: any): string {
   delete contextFields.env;
   delete contextFields.service;
 
-  // Build context string
-  let contextStr = '';
+  // Format: {msg="...", data={...}}
+  let output = `{msg="${message}"`;
+
   if (Object.keys(contextFields).length > 0) {
-    contextStr = ' ' + JSON.stringify(contextFields);
+    output += `, data=${JSON.stringify(contextFields)}`;
   }
 
-  return `${timestamp} [${level}] [GWY] [${module}] ${message}${contextStr}`;
+  output += '}';
+
+  // Format complet avec timestamp entre crochets et niveau coloré
+  return `[${timestamp}] ${levelColor}[${level}]${colors.reset} [GWY] [${module}] ${output}`;
 }
 
 /**
@@ -416,6 +450,7 @@ export function requestLogger() {
 /**
  * Helper function for direct console.log replacement
  * Usage: gwLog('info', 'RedisWrapper', 'Message', { context: 'data' })
+ * Format: [YYYY-MM-DD HH:MM:SS UTC] [LEVEL] [GWY] [Module] {msg="...", data={...}}
  */
 export function gwLog(
   level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
@@ -426,12 +461,23 @@ export function gwLog(
   const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', ' UTC');
   const levelUpper = level.toUpperCase();
 
-  let contextStr = '';
-  if (context && Object.keys(context).length > 0) {
-    contextStr = ' ' + JSON.stringify(context);
-  }
+  // Couleur selon le niveau
+  let levelColor = colors.green;
+  if (level === 'trace') levelColor = colors.gray;
+  else if (level === 'debug') levelColor = colors.cyan;
+  else if (level === 'info') levelColor = colors.green;
+  else if (level === 'warn') levelColor = colors.yellow;
+  else if (level === 'error') levelColor = colors.red;
+  else if (level === 'fatal') levelColor = colors.magenta;
 
-  console.log(`${timestamp} [${levelUpper}] [GWY] [${module}] ${message}${contextStr}`);
+  // Format: {msg="...", data={...}}
+  let output = `{msg="${message}"`;
+  if (context && Object.keys(context).length > 0) {
+    output += `, data=${JSON.stringify(context)}`;
+  }
+  output += '}';
+
+  console.log(`[${timestamp}] ${levelColor}[${levelUpper}]${colors.reset} [GWY] [${module}] ${output}`);
 }
 
 /**
