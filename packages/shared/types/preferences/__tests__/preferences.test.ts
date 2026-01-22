@@ -35,7 +35,11 @@ describe('PrivacyPreferenceSchema', () => {
       allowAnalytics: true,
       shareUsageData: false,
       blockScreenshots: false,
-      hideProfileFromSearch: false
+      hideProfileFromSearch: false,
+      encryptionPreference: 'optional' as const,
+      autoEncryptNewConversations: false,
+      showEncryptionStatus: true,
+      warnOnUnencrypted: false
     };
 
     const result = PrivacyPreferenceSchema.parse(valid);
@@ -301,9 +305,6 @@ describe('ApplicationPreferenceSchema', () => {
       theme: 'dark' as const,
       accentColor: 'purple',
       interfaceLanguage: 'fr',
-      systemLanguage: 'fr',
-      regionalLanguage: 'fr-CA',
-      customDestinationLanguage: 'en',
       fontSize: 'large' as const,
       fontFamily: 'roboto',
       lineHeight: 'relaxed' as const,

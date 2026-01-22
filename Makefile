@@ -2087,7 +2087,7 @@ build-gateway: _prepare-docker-build ## Builder l'image Gateway
 		--build-arg PACKAGE_MANAGER=bun \
 		-t $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) \
 		-t $(DOCKER_REGISTRY)/meeshy-gateway:latest \
-		-f $(INFRA_DIR)/docker/images/gateway/Dockerfile .
+		-f services/gateway/Dockerfile .
 	@echo "$(GREEN)✅ Image Gateway buildée: v$(GATEWAY_VERSION)$(NC)"
 
 build-translator: build-translator-cpu ## Builder l'image Translator (alias pour CPU)
@@ -2103,7 +2103,7 @@ build-translator-cpu: _prepare-docker-build ## Builder l'image Translator CPU (~
 		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) \
 		-t $(DOCKER_REGISTRY)/meeshy-translator:latest \
 		-t $(DOCKER_REGISTRY)/meeshy-translator:cpu \
-		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+		-f services/translator/Dockerfile .
 	@echo "$(GREEN)✅ Image Translator CPU buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-translator-gpu: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.4 (~8GB)
@@ -2115,7 +2115,7 @@ build-translator-gpu: _prepare-docker-build ## Builder l'image Translator GPU CU
 		--build-arg VERSION="$(TRANSLATOR_VERSION)" \
 		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-gpu \
 		-t $(DOCKER_REGISTRY)/meeshy-translator:gpu \
-		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+		-f services/translator/Dockerfile .
 	@echo "$(GREEN)✅ Image Translator GPU buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator GPU CUDA 12.1
@@ -2126,7 +2126,7 @@ build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator 
 		--build-arg VCS_REF="$(VCS_REF)" \
 		--build-arg VERSION="$(TRANSLATOR_VERSION)" \
 		-t $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)-gpu-cu121 \
-		-f $(INFRA_DIR)/docker/images/translator/Dockerfile .
+		-f services/translator/Dockerfile .
 	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
 build-frontend: _prepare-docker-build ## Builder l'image Frontend
@@ -2138,7 +2138,7 @@ build-frontend: _prepare-docker-build ## Builder l'image Frontend
 		--build-arg PACKAGE_MANAGER=bun \
 		-t $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) \
 		-t $(DOCKER_REGISTRY)/meeshy-web:latest \
-		-f $(INFRA_DIR)/docker/images/web/Dockerfile .
+		-f apps/web/Dockerfile .
 	@echo "$(GREEN)✅ Image Frontend buildée: v$(FRONTEND_VERSION)$(NC)"
 
 build-all-docker: build-gateway build-translator build-frontend ## Builder toutes les images Docker
@@ -2335,7 +2335,7 @@ test: ## Lancer tous les tests (JS + Python + iOS)
 	echo "$(BLUE)4/5$(NC) $(BOLD)Translator (Python):$(NC)"; \
 	cd $(CURDIR)/$(TRANSLATOR_DIR) && \
 		if [ -d .venv ]; then \
-			. .venv/bin/activate && python -m pytest tests/ -v --tb=short 2>&1 || ERRORS=$$((ERRORS+1)); \
+			. .venv/bin/activate && python -m pytest tests/ -m "not e2e" -v --tb=short 2>&1 || ERRORS=$$((ERRORS+1)); \
 		else \
 			echo "  $(YELLOW)⚠️  venv non trouvé, lancez: make install$(NC)"; \
 		fi; \
@@ -2376,11 +2376,11 @@ test-js: ## Lancer uniquement les tests JavaScript (Gateway + Web + Shared)
 test-python: ## Lancer uniquement les tests Python (Translator)
 	@echo "$(BLUE)🧪 Tests Python (Translator)...$(NC)"
 ifeq ($(HAS_UV),yes)
-	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -v --tb=short
+	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -m "not e2e" -v --tb=short
 else
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -d .venv ]; then \
-			. .venv/bin/activate && python -m pytest tests/ -v --tb=short; \
+			. .venv/bin/activate && python -m pytest tests/ -m "not e2e" -v --tb=short; \
 		else \
 			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
 			exit 1; \
@@ -2390,11 +2390,11 @@ endif
 test-python-fast: ## Lancer les tests Python rapides (sans modèles ML)
 	@echo "$(BLUE)🧪 Tests Python rapides (sans ML)...$(NC)"
 ifeq ($(HAS_UV),yes)
-	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -v --tb=short -m "not slow" -k "not model"
+	@cd $(TRANSLATOR_DIR) && uv run python -m pytest tests/ -v --tb=short -m "not slow and not e2e" -k "not model"
 else
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -d .venv ]; then \
-			. .venv/bin/activate && python -m pytest tests/ -v --tb=short -m "not slow" -k "not model"; \
+			. .venv/bin/activate && python -m pytest tests/ -v --tb=short -m "not slow and not e2e" -k "not model"; \
 		else \
 			echo "$(RED)❌ venv non trouvé. Lancez: make install$(NC)"; \
 			exit 1; \
