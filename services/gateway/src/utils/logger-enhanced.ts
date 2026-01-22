@@ -1,6 +1,8 @@
 /**
  * Enhanced Structured Logger
  *
+ * Format unifié Gateway : YYYY-MM-DD HH:MM:SS UTC [LEVEL] [GWY] [Module] Message {context}
+ *
  * Provides production-grade structured logging with:
  * - Pino for high-performance JSON logging
  * - Log levels: trace, debug, info, warn, error, fatal
@@ -8,6 +10,7 @@
  * - Sampling in production (reduces log volume)
  * - Context enrichment (request ID, user ID, etc.)
  * - Error stack traces
+ * - Unified format with [GWY] prefix for log aggregation
  *
  * @module logger-enhanced
  */
@@ -60,20 +63,54 @@ function redactPII(obj: any): any {
 }
 
 /**
- * Create Pino logger instance
+ * Custom formatter for Gateway logs
+ * Format: YYYY-MM-DD HH:MM:SS UTC [LEVEL] [GWY] [Module] Message {context}
+ */
+function customGatewayFormatter(logObject: any): string {
+  const timestamp = new Date(logObject.time).toISOString().replace('T', ' ').replace('Z', ' UTC');
+  const level = logObject.level === 30 ? 'INFO'
+    : logObject.level === 40 ? 'WARN'
+    : logObject.level === 50 ? 'ERROR'
+    : logObject.level === 60 ? 'FATAL'
+    : logObject.level === 20 ? 'DEBUG'
+    : logObject.level === 10 ? 'TRACE'
+    : 'INFO';
+
+  const module = logObject.module || 'Gateway';
+  const message = logObject.msg || '';
+
+  // Extract context (exclude standard fields)
+  const contextFields = { ...logObject };
+  delete contextFields.time;
+  delete contextFields.level;
+  delete contextFields.msg;
+  delete contextFields.pid;
+  delete contextFields.hostname;
+  delete contextFields.module;
+  delete contextFields.env;
+  delete contextFields.service;
+
+  // Build context string
+  let contextStr = '';
+  if (Object.keys(contextFields).length > 0) {
+    contextStr = ' ' + JSON.stringify(contextFields);
+  }
+
+  return `${timestamp} [${level}] [GWY] [${module}] ${message}${contextStr}`;
+}
+
+/**
+ * Create Pino logger instance with custom formatting
  */
 const logger = pino({
   level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
 
-  // Pretty print in development, JSON in production
+  // Custom formatter in development, JSON in production
   transport: isDevelopment
     ? {
-        target: 'pino-pretty',
+        target: 'pino/file',
         options: {
-          colorize: true,
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
-          singleLine: true
+          destination: 1, // stdout
         }
       }
     : undefined,
@@ -104,9 +141,40 @@ const logger = pino({
     err: pino.stdSerializers.err
   },
 
+  // Custom formatters
+  formatters: {
+    log(object: any) {
+      if (isDevelopment) {
+        // In development, print custom format to console
+        const formatted = customGatewayFormatter({ ...object, time: Date.now() });
+        return object; // Return object for pino, but we'll handle printing
+      }
+      return object;
+    }
+  },
+
   // Timestamp format
-  timestamp: () => `,"time":"${new Date().toISOString()}"`
+  timestamp: () => `,"time":${Date.now()}`
 });
+
+// Override console methods in development to use custom format
+if (isDevelopment) {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  (process.stdout as any).write = (chunk: any, encoding?: any, callback?: any) => {
+    try {
+      if (typeof chunk === 'string' && chunk.startsWith('{')) {
+        const logObj = JSON.parse(chunk);
+        if (logObj.time && logObj.level) {
+          const formatted = customGatewayFormatter(logObj);
+          return originalWrite(formatted + '\n', encoding, callback);
+        }
+      }
+    } catch (e) {
+      // If parsing fails, use original
+    }
+    return originalWrite(chunk, encoding, callback);
+  };
+}
 
 /**
  * Sampling helper for production (log only X% of debug messages)
@@ -343,6 +411,27 @@ export function requestLogger() {
       });
     });
   };
+}
+
+/**
+ * Helper function for direct console.log replacement
+ * Usage: gwLog('info', 'RedisWrapper', 'Message', { context: 'data' })
+ */
+export function gwLog(
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+  module: string,
+  message: string,
+  context?: Record<string, any>
+) {
+  const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', ' UTC');
+  const levelUpper = level.toUpperCase();
+
+  let contextStr = '';
+  if (context && Object.keys(context).length > 0) {
+    contextStr = ' ' + JSON.stringify(context);
+  }
+
+  console.log(`${timestamp} [${levelUpper}] [GWY] [${module}] ${message}${contextStr}`);
 }
 
 /**

@@ -13,11 +13,15 @@
  */
 
 import Redis from 'ioredis';
+import { enhancedLogger } from '../utils/logger-enhanced';
 
 interface CacheEntry {
   value: string;
   expiresAt: number;
 }
+
+// Logger dédié pour RedisWrapper
+const logger = enhancedLogger.child({ module: 'RedisWrapper' });
 
 export class RedisWrapper {
   private redis: Redis | null = null;
@@ -40,7 +44,7 @@ export class RedisWrapper {
    */
   private initializeRedis(): void {
     if (this.permanentlyDisabled) {
-      console.log('[RedisWrapper] 💾 Using memory cache only (Redis disabled)');
+      logger.info('💾 Using memory cache only (Redis disabled)');
       return;
     }
 
@@ -50,7 +54,7 @@ export class RedisWrapper {
           // Arrêter complètement après max tentatives
           if (times > this.maxConnectionAttempts) {
             this.permanentlyDisabled = true;
-            console.warn('[RedisWrapper] ⚠️ Max connection attempts reached, permanently switching to memory cache');
+            logger.warn('⚠️ Max connection attempts reached, permanently switching to memory cache');
             return null; // Arrête de réessayer définitivement
           }
           // Réessayer après 2 secondes
@@ -68,7 +72,7 @@ export class RedisWrapper {
       // Événements Redis
       this.redis.on('connect', () => {
         if (this.connectionAttempts === 0) {
-          console.log('[RedisWrapper] ✅ Redis connected successfully');
+          logger.info('✅ Redis connected successfully');
         }
         this.isRedisAvailable = true;
         this.connectionAttempts++;
@@ -76,7 +80,7 @@ export class RedisWrapper {
 
       this.redis.on('ready', () => {
         if (this.connectionAttempts === 1) {
-          console.log('[RedisWrapper] ✅ Redis ready - using Redis cache');
+          logger.info('✅ Redis ready - using Redis cache');
         }
         this.isRedisAvailable = true;
       });
@@ -87,7 +91,7 @@ export class RedisWrapper {
             !error.message.includes('ECONNREFUSED') &&
             !error.message.includes('EPIPE')) {
           if (!this.permanentlyDisabled) {
-            console.warn('[RedisWrapper] ⚠️ Redis error:', error.message);
+            logger.warn('⚠️ Redis error', { error: error.message });
           }
         }
         this.isRedisAvailable = false;
@@ -101,7 +105,7 @@ export class RedisWrapper {
 
       this.redis.on('close', () => {
         if (!this.permanentlyDisabled && this.connectionAttempts > 0) {
-          console.warn('[RedisWrapper] ⚠️ Redis connection lost - switching to memory cache');
+          logger.warn('⚠️ Redis connection lost - switching to memory cache');
           this.permanentlyDisabled = true;
           this.closeRedisConnection();
         }
@@ -115,13 +119,13 @@ export class RedisWrapper {
 
       // Tenter de se connecter (lazy connect)
       this.redis.connect().catch((error) => {
-        console.warn('[RedisWrapper] ⚠️ Redis connection failed - using memory cache only');
+        logger.warn('⚠️ Redis connection failed - using memory cache only');
         this.permanentlyDisabled = true;
         this.isRedisAvailable = false;
       });
 
     } catch (error) {
-      console.warn('[RedisWrapper] ⚠️ Redis initialization failed - using memory cache only');
+      logger.warn('⚠️ Redis initialization failed - using memory cache only');
       this.redis = null;
       this.isRedisAvailable = false;
       this.permanentlyDisabled = true;
@@ -159,7 +163,7 @@ export class RedisWrapper {
       }
 
       if (deletedCount > 0) {
-        console.log(`[RedisWrapper] 🧹 Cleaned ${deletedCount} expired entries from memory cache`);
+        logger.info(`🧹 Cleaned ${deletedCount} expired entries from memory cache`);
       }
     }, 60000); // 60 secondes
   }
@@ -383,7 +387,7 @@ export class RedisWrapper {
 
     this.closeRedisConnection();
     this.memoryCache.clear();
-    console.log('[RedisWrapper] 🛑 Cache closed and cleaned up');
+    logger.info('🛑 Cache closed and cleaned up');
   }
 
   /**
