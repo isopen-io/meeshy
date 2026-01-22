@@ -87,6 +87,11 @@ class VoiceAPIHandler:
 
         logger.info("[VoiceAPIHandler] Initialized with modular architecture")
 
+    @property
+    def temp_dir(self) -> str:
+        """Get temporary directory path (backward compatibility property)"""
+        return self.request_handler.temp_dir
+
     def is_voice_api_request(self, request_type: str) -> bool:
         """Check if request type is a Voice API request"""
         return request_type in self.SUPPORTED_TYPES
