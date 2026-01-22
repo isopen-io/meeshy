@@ -271,14 +271,6 @@ jobs:
       - name: Setup Python via uv
         run: uv python install ${{ env.PYTHON_VERSION }}
 
-      # Generate JavaScript Prisma client (needed for Python tests that import from shared)
-      - name: Generate Prisma client (JavaScript only)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd packages/shared
-          npx prisma generate --generator client
-
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
@@ -490,14 +482,6 @@ jobs:
 
       - name: Setup Python via uv
         run: uv python install ${{ env.PYTHON_VERSION }}
-
-      # Generate JavaScript Prisma client (needed for Python tests that import from shared)
-      - name: Generate Prisma client (JavaScript only)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd packages/shared
-          npx prisma generate --generator client
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
