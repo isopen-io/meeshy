@@ -223,15 +223,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node.js is required by Python Prisma for client generation
+      # Node.js and package manager setup for Prisma CLI
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # pnpm is required by Python Prisma to install Prisma CLI
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      # Install Node.js dependencies (required for Prisma CLI)
+      - name: Install Node.js dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install Node.js dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
@@ -302,15 +322,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node.js is required by Python Prisma for client generation
+      # Node.js and package manager setup for Prisma CLI
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # pnpm is required by Python Prisma to install Prisma CLI
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      # Install Node.js dependencies (required for Prisma CLI)
+      - name: Install Node.js dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install Node.js dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
@@ -395,15 +435,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node.js is required by Python Prisma for client generation
+      # Node.js and package manager setup for Prisma CLI
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # pnpm is required by Python Prisma to install Prisma CLI
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      # Install Node.js dependencies (required for Prisma CLI)
+      - name: Install Node.js dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install Node.js dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
