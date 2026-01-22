@@ -181,6 +181,14 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
+      # Generate Prisma client before building
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
+
       # Build shared package first (required for gateway tests)
       - name: Build shared package (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -617,6 +625,14 @@ jobs:
           cd services/translator
           uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
+      # Generate JavaScript Prisma client (required for Gateway Voice API tests)
+      - name: Generate Prisma client (JavaScript)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
+
       # Build shared package (required for gateway tests)
       - name: Build shared package (bun)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -863,6 +879,14 @@ jobs:
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
+
+      # Generate Prisma client before building
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
 
       # Build shared package (like in Dockerfiles)
       - name: Build shared package (bun)
