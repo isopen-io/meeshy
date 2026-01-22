@@ -207,10 +207,10 @@ check_image_size() {
     fi
 }
 
-# Frontend-specific checks
-check_frontend_placeholders() {
+# Web-specific checks
+check_web_placeholders() {
     local image="$1"
-    log_info "Checking frontend placeholder configuration..."
+    log_info "Checking web placeholder configuration..."
 
     # Create temporary container to check files
     container_id=$(docker create "$image" 2>/dev/null)
@@ -266,8 +266,8 @@ validate_image() {
 
     # Type-specific checks
     case "$image_type" in
-        frontend)
-            check_frontend_placeholders "$image"
+        web)
+            check_web_placeholders "$image"
             ;;
         translator)
             check_translator_backend "$image"
@@ -290,20 +290,20 @@ main() {
 
     # Get versions from VERSION files
     GATEWAY_VERSION=$(cat services/gateway/VERSION 2>/dev/null || echo "latest")
-    FRONTEND_VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "latest")
+    WEB_VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "latest")
     TRANSLATOR_VERSION=$(cat services/translator/VERSION 2>/dev/null || echo "latest")
 
     case "$target" in
         --all|all)
             validate_image "${DOCKER_REGISTRY}/meeshy-gateway:v${GATEWAY_VERSION}" "gateway"
-            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${FRONTEND_VERSION}" "frontend"
+            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${WEB_VERSION}" "web"
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"
             ;;
         gateway)
             validate_image "${DOCKER_REGISTRY}/meeshy-gateway:v${GATEWAY_VERSION}" "gateway"
             ;;
-        frontend|web)
-            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${FRONTEND_VERSION}" "frontend"
+        web|frontend)
+            validate_image "${DOCKER_REGISTRY}/meeshy-web:v${WEB_VERSION}" "web"
             ;;
         translator)
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"

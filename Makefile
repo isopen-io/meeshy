@@ -10,15 +10,15 @@
         logs status clean reset health urls docker-infra docker-infra-simple \
         docker-start docker-start-local docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
         docker-test docker-test-dev docker-test-local docker-test-prod \
-        build-gateway build-translator build-frontend build-all-docker \
-        push-gateway push-translator push-frontend push-all release \
+        build-gateway build-translator build-web build-all-docker \
+        push-gateway push-translator push-web push-all release \
         dev-tmux dev-bg dev-fg check verify _preflight-check \
         test test-js test-python test-python-fast test-ios test-ios-ui \
         test-gateway test-web test-shared test-translator lint type-check \
         uv-install uv-sync uv-sync-cpu uv-sync-gpu uv-sync-gpu-cu121 uv-sync-gpu-cu118 \
         uv-lock uv-add uv-add-dev uv-run uv-upgrade uv-info \
         build-translator-cpu build-translator-gpu build-translator-gpu-cu121 security-scan validate-images \
-        validate-docker-full validate-docker-gateway validate-docker-frontend validate-docker-translator
+        validate-docker-full validate-docker-gateway validate-docker-web validate-docker-translator
 
 # Couleurs
 BLUE := \033[0;34m
@@ -135,8 +135,8 @@ help: ## Afficher cette aide
 	@grep -E '^(docker-test|docker-test-dev|docker-test-local|docker-test-prod):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)📦 BUILD & PUSH IMAGES:$(NC)"
-	@grep -E '^(build-gateway|build-translator|build-frontend|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
-	@grep -E '^(push-gateway|push-translator|push-frontend|push-all|release):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(build-gateway|build-translator|build-web|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(push-gateway|push-translator|push-web|push-all|release):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo "  $(DIM)Options: TAG=v1.0.0 DOCKER_REGISTRY=myrepo$(NC)"
 	@echo ""
 	@echo "$(BLUE)🔍 UTILITAIRES:$(NC)"
@@ -173,7 +173,7 @@ setup: ## 🚀 Installation complète: prérequis OS + certs + DNS + install + g
 	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@echo "$(BOLD)📱 URLs disponibles après 'make start':$(NC)"
-	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Web:          $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 
@@ -1173,7 +1173,7 @@ _show-domain-urls:
 	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (HTTPS):$(NC)"
-	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Web:          $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 	@echo ""
@@ -1470,12 +1470,12 @@ _show-network-urls:
 	@echo "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (depuis n'importe quel appareil):$(NC)"
-	@echo "   Frontend:      $(GREEN)https://$(HOST):3100$(NC)"
+	@echo "   Web:           $(GREEN)https://$(HOST):3100$(NC)"
 	@echo "   Gateway API:   $(GREEN)https://$(HOST):3000$(NC)"
 	@echo "   Translator:    $(GREEN)http://$(HOST):8000$(NC)"
 	@echo ""
 	@echo "$(BOLD)🔧 Via domaine local:$(NC)"
-	@echo "   Frontend:      $(GREEN)https://$(LOCAL_DOMAIN):3100$(NC)"
+	@echo "   Web:           $(GREEN)https://$(LOCAL_DOMAIN):3100$(NC)"
 	@echo ""
 	@echo "$(BOLD)📡 Serveur DNS local:$(NC)"
 	@echo "   $(CYAN)$(HOST_IP):53$(NC) (configurez vos appareils pour l'utiliser)"
@@ -1587,7 +1587,7 @@ network-info: ## 📡 Afficher les informations réseau
 	@echo "   Hostname:      $(GREEN)$$(hostname)$(NC)"
 	@echo ""
 	@echo "$(BOLD)📱 Sous-domaines disponibles (avec docker-start-network):$(NC)"
-	@echo "   Frontend:      $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Web:           $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Gateway API:   $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:    $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://translate.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   MongoDB UI:    $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)"
@@ -1995,7 +1995,7 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "$(GREEN)✅ Services démarrés avec accès réseau$(NC)"
 	@echo ""
 	@echo "$(BOLD)📱 Accès par sous-domaine:$(NC)"
-	@echo "   Frontend:     $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Web:          $(GREEN)https://$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://app.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://translate.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   MongoDB UI:   $(GREEN)https://mongo.$(LOCAL_DOMAIN)$(NC)  (admin/admin)"
@@ -2055,7 +2055,7 @@ TAG ?= latest
 
 # Version reading from service VERSION files
 GATEWAY_VERSION := $(shell cat services/gateway/VERSION 2>/dev/null || echo "1.0.0")
-FRONTEND_VERSION := $(shell cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
+WEB_VERSION := $(shell cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
 TRANSLATOR_VERSION := $(shell cat services/translator/VERSION 2>/dev/null || echo "1.0.0")
 BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 VCS_REF := $(shell git rev-parse --short HEAD 2>/dev/null || echo "local")
@@ -2129,24 +2129,24 @@ build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator 
 		-f services/translator/Dockerfile .
 	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
-build-frontend: _prepare-docker-build ## Builder l'image Frontend
-	@echo "$(BLUE)🔨 Build de l'image Frontend ($(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION))...$(NC)"
+build-web: _prepare-docker-build ## Builder l'image Web
+	@echo "$(BLUE)🔨 Build de l'image Web ($(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION))...$(NC)"
 	@docker build \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg VCS_REF="$(VCS_REF)" \
-		--build-arg VERSION="$(FRONTEND_VERSION)" \
+		--build-arg VERSION="$(WEB_VERSION)" \
 		--build-arg PACKAGE_MANAGER=bun \
-		-t $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) \
+		-t $(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION) \
 		-t $(DOCKER_REGISTRY)/meeshy-web:latest \
 		-f apps/web/Dockerfile .
-	@echo "$(GREEN)✅ Image Frontend buildée: v$(FRONTEND_VERSION)$(NC)"
+	@echo "$(GREEN)✅ Image Web buildée: v$(WEB_VERSION)$(NC)"
 
-build-all-docker: build-gateway build-translator build-frontend ## Builder toutes les images Docker
+build-all-docker: build-gateway build-translator build-web ## Builder toutes les images Docker
 	@echo "$(GREEN)✅ Toutes les images buildées$(NC)"
 	@echo ""
 	@echo "$(BLUE)📦 Images créées:$(NC)"
 	@echo "   - Gateway:    v$(GATEWAY_VERSION)"
-	@echo "   - Frontend:   v$(FRONTEND_VERSION)"
+	@echo "   - Web:        v$(WEB_VERSION)"
 	@echo "   - Translator: v$(TRANSLATOR_VERSION)"
 	@echo ""
 	@docker images | grep "$(DOCKER_REGISTRY)/meeshy" | head -10
@@ -2168,25 +2168,25 @@ push-translator: ## Push l'image Translator vers Docker Hub
 	@docker push $(DOCKER_REGISTRY)/meeshy-translator:cpu
 	@echo "$(GREEN)✅ Translator pushée: v$(TRANSLATOR_VERSION)$(NC)"
 
-push-frontend: ## Push l'image Frontend vers Docker Hub
-	@echo "$(BLUE)📤 Push de l'image Frontend v$(FRONTEND_VERSION)...$(NC)"
-	@docker push $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION)
+push-web: ## Push l'image Web vers Docker Hub
+	@echo "$(BLUE)📤 Push de l'image Web v$(WEB_VERSION)...$(NC)"
+	@docker push $(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION)
 	@docker push $(DOCKER_REGISTRY)/meeshy-web:latest
-	@echo "$(GREEN)✅ Frontend pushée: v$(FRONTEND_VERSION)$(NC)"
+	@echo "$(GREEN)✅ Web pushée: v$(WEB_VERSION)$(NC)"
 
-push-all: push-gateway push-translator push-frontend ## Push toutes les images vers Docker Hub
+push-all: push-gateway push-translator push-web ## Push toutes les images vers Docker Hub
 	@echo ""
 	@echo "$(GREEN)✅ Toutes les images pushées vers $(DOCKER_REGISTRY)$(NC)"
 	@echo "   - $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION)"
 	@echo "   - $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION)"
-	@echo "   - $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION)"
+	@echo "   - $(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION)"
 
 # Build + Push en une commande
 release: build-all-docker push-all ## Builder et pusher toutes les images
 	@echo ""
 	@echo "$(GREEN)🚀 Release publiée!$(NC)"
 	@echo "   Gateway:    v$(GATEWAY_VERSION)"
-	@echo "   Frontend:   v$(FRONTEND_VERSION)"
+	@echo "   Frontend:   v$(WEB_VERSION)"
 	@echo "   Translator: v$(TRANSLATOR_VERSION)"
 
 # =============================================================================
@@ -2200,8 +2200,8 @@ security-scan: ## Scanner les vulnérabilités des images Docker
 	@echo "$(CYAN)=== Gateway v$(GATEWAY_VERSION) ===$(NC)"
 	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) || true
 	@echo ""
-	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
-	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) || true
+	@echo "$(CYAN)=== Web v$(WEB_VERSION) ===$(NC)"
+	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION) || true
 	@echo ""
 	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
 	@trivy image --severity HIGH,CRITICAL $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) || true
@@ -2212,8 +2212,8 @@ validate-images: ## Valider les labels et métadonnées des images (rapide)
 	@echo "$(CYAN)=== Gateway v$(GATEWAY_VERSION) ===$(NC)"
 	@docker inspect $(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
 	@echo ""
-	@echo "$(CYAN)=== Frontend v$(FRONTEND_VERSION) ===$(NC)"
-	@docker inspect $(DOCKER_REGISTRY)/meeshy-web:v$(FRONTEND_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
+	@echo "$(CYAN)=== Web v$(WEB_VERSION) ===$(NC)"
+	@docker inspect $(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
 	@echo ""
 	@echo "$(CYAN)=== Translator v$(TRANSLATOR_VERSION) ===$(NC)"
 	@docker inspect $(DOCKER_REGISTRY)/meeshy-translator:v$(TRANSLATOR_VERSION) --format '{{json .Config.Labels}}' 2>/dev/null | jq . || echo "$(RED)Image not found$(NC)"
@@ -2225,8 +2225,8 @@ validate-docker-full: ## Validation complète des images Docker (labels, securit
 validate-docker-gateway: ## Valider l'image Gateway
 	@./scripts/docker/validate-docker-build.sh gateway
 
-validate-docker-frontend: ## Valider l'image Frontend
-	@./scripts/docker/validate-docker-build.sh frontend
+validate-docker-web: ## Valider l'image Web
+	@./scripts/docker/validate-docker-build.sh web
 
 validate-docker-translator: ## Valider l'image Translator
 	@./scripts/docker/validate-docker-build.sh translator
@@ -2439,6 +2439,87 @@ test-shared: ## Lancer les tests du shared
 	@cd $(SHARED_DIR) && $(JS_RUNTIME) run test
 
 test-translator: test-python ## Alias pour test-python
+
+# =============================================================================
+# Tests avec gestion des prérequis
+# =============================================================================
+
+test-with-prereqs: ## Lancer tous les tests avec vérification des prérequis
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║     MEESHY - Tests avec Vérification des Prérequis          ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BLUE)🔍 Vérification des prérequis...$(NC)"
+	@./scripts/check-test-prerequisites.sh all || true
+	@echo ""
+	@$(MAKE) test
+
+test-integration: ## Lancer les tests d'intégration (nécessite services Docker)
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          MEESHY - Tests d'Intégration                        ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BLUE)🔍 Vérification des prérequis pour tests d'intégration...$(NC)"
+	@if ! VERBOSE=true ./scripts/check-test-prerequisites.sh integration; then \
+		echo ""; \
+		echo "$(YELLOW)⚠️  Certains prérequis manquent pour les tests d'intégration$(NC)"; \
+		echo "$(YELLOW)💡 Conseil: Lancez 'make services-up' pour démarrer les services$(NC)"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "$(GREEN)✓ Tous les prérequis satisfaits$(NC)"
+	@echo ""
+	@echo "$(BLUE)🧪 Lancement des tests d'intégration...$(NC)"
+	@ERRORS=0; \
+	echo "$(CYAN)Gateway:$(NC)"; \
+	cd $(GATEWAY_DIR) && $(JS_RUNTIME) run test:integration 2>&1 || ERRORS=$$((ERRORS+1)); \
+	echo ""; \
+	echo "$(CYAN)Translator:$(NC)"; \
+	cd $(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && python -m pytest tests/integration/ -v --tb=short -m "not e2e" 2>&1 || ERRORS=$$((ERRORS+1)); \
+		else \
+			echo "  $(YELLOW)⚠️  venv non trouvé$(NC)"; \
+		fi; \
+	echo ""; \
+	if [ $$ERRORS -gt 0 ]; then \
+		echo "$(RED)❌ $$ERRORS test(s) d'intégration en échec$(NC)"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)✅ Tous les tests d'intégration passés$(NC)"; \
+	fi
+
+test-e2e: ## Lancer les tests end-to-end (nécessite tous les services actifs)
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║          MEESHY - Tests End-to-End                           ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BLUE)🔍 Vérification des prérequis pour tests e2e...$(NC)"
+	@if ! VERBOSE=true ./scripts/check-test-prerequisites.sh e2e; then \
+		echo ""; \
+		echo "$(YELLOW)⚠️  Certains prérequis manquent pour les tests e2e$(NC)"; \
+		echo "$(YELLOW)💡 Conseil:$(NC)"; \
+		echo "  1. Démarrez les services: make services-up"; \
+		echo "  2. Démarrez le translator: make dev-translator"; \
+		echo "  3. Démarrez le gateway: make dev-gateway"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "$(GREEN)✓ Tous les prérequis satisfaits$(NC)"
+	@echo ""
+	@echo "$(BLUE)🧪 Lancement des tests e2e...$(NC)"
+	@cd $(TRANSLATOR_DIR) && \
+		if [ -d .venv ]; then \
+			. .venv/bin/activate && python -m pytest tests/integration/ -v --tb=short -m e2e 2>&1; \
+		else \
+			echo "  $(RED)❌ venv non trouvé$(NC)"; \
+			exit 1; \
+		fi
+
+check-test-prereqs: ## Vérifier les prérequis pour tous les types de tests
+	@VERBOSE=true ./scripts/check-test-prerequisites.sh all
 
 lint: ## Lancer le linter sur tout le projet
 	@echo "$(BLUE)🔍 Vérification du code...$(NC)"

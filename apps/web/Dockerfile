@@ -1,8 +1,8 @@
 # syntax=docker.io/docker/dockerfile:1
 # =============================================================================
 # MEESHY WEB - Next.js Application
-# Build context: monorepo root
-# Dockerfile: infrastructure/docker/images/web/Dockerfile
+# Build context: monorepo root (../../)
+# Dockerfile: apps/web/Dockerfile
 # Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
 # =============================================================================
 FROM node:22-alpine AS base
@@ -184,7 +184,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy entrypoint script for runtime URL injection
-COPY infrastructure/docker/images/web/entrypoint.sh /app/entrypoint.sh
+COPY apps/web/docker-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Create logs directory and set permissions

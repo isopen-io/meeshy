@@ -1,8 +1,8 @@
 # syntax=docker.io/docker/dockerfile:1
 # =============================================================================
 # MEESHY GATEWAY - Fastify Service (Optimized Multi-Stage Build)
-# Build context: monorepo root
-# Dockerfile: infrastructure/docker/images/gateway/Dockerfile
+# Build context: monorepo root (../../)
+# Dockerfile: services/gateway/Dockerfile
 # Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
 # =============================================================================
 

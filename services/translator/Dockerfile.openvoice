@@ -1,14 +1,15 @@
 # =============================================================================
 # Dockerfile OpenVoice - Service Translator avec clonage vocal avancé
 # =============================================================================
+# Build context: monorepo root (../../)
 # Utilise Python 3.9 pour compatibilité avec OpenVoice (PyAV requirements)
 # Ce Dockerfile est optionnel - utilisez Dockerfile principal pour Chatterbox seul
 #
-# Build:
-#   docker build -f Dockerfile.openvoice -t meeshy-translator:openvoice .
+# Build from monorepo root:
+#   docker build -f services/translator/Dockerfile.openvoice -t meeshy-translator:openvoice .
 #
 # Run:
-#   docker run -p 8002:8002 -p 5555:5555 meeshy-translator:openvoice
+#   docker run -p 8002:8002 -p 5555:5555 -p 5558:5558 meeshy-translator:openvoice
 # =============================================================================
 
 FROM python:3.9-slim
@@ -30,7 +31,10 @@ ENV PYTHONUNBUFFERED=1 \
     TRANSFORMERS_CACHE=/app/models/huggingface \
     # Configuration service
     PYTHONPATH=/app/src \
-    TTS_MODEL=chatterbox
+    TTS_MODEL=chatterbox \
+    # ZMQ Ports
+    ZMQ_TRANSLATOR_PUSH_PORT=5555 \
+    ZMQ_TRANSLATOR_PUB_PORT=5558
 
 WORKDIR /app
 
@@ -56,8 +60,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Nettoyage
     && rm -rf /var/lib/apt/lists/*
 
-# Copier requirements
-COPY requirements.txt requirements-optional.txt ./
+# Copier requirements depuis le monorepo
+COPY services/translator/requirements.txt ./
 
 # Installer dépendances Python (inclut maintenant pyannote.audio + scikit-learn)
 # Note: pyannote.audio et scikit-learn sont maintenant dans requirements.txt (installation par défaut)
@@ -79,8 +83,8 @@ RUN python -c "from pyannote.audio import Pipeline; print('✅ pyannote.audio di
     python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn disponible')" && \
     echo "🎯 Diarisation des locuteurs configurée avec succès"
 
-# Copier le code source
-COPY . .
+# Copier le code source depuis le monorepo
+COPY services/translator/ .
 
 # Créer les répertoires nécessaires
 RUN mkdir -p \
