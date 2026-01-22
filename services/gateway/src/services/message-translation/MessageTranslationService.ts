@@ -911,16 +911,16 @@ export class MessageTranslationService extends EventEmitter {
           }
 
           // Convertir Buffer en Uint8Array pour Prisma (copie pour compatibilité de type)
-          const embeddingBuffer = Uint8Array.from(embeddingBufferRaw);
+          const embeddingBuffer: Uint8Array<ArrayBuffer> = Uint8Array.from(embeddingBufferRaw) as Uint8Array<ArrayBuffer>;
 
           const source = nvp._embeddingBinary ? 'multipart' : 'base64';
           logger.info(`   📦 Embedding (${source}): ${(embeddingBuffer.length / 1024).toFixed(1)}KB`);
 
           // Décoder les conditionals Chatterbox si présents
-          let chatterboxConditionalsBuffer: Uint8Array | null = null;
+          let chatterboxConditionalsBuffer: Uint8Array<ArrayBuffer> | null = null;
           if (nvp.chatterbox_conditionals_base64) {
             const chatterboxBufferRaw = Buffer.from(nvp.chatterbox_conditionals_base64, 'base64');
-            chatterboxConditionalsBuffer = Uint8Array.from(chatterboxBufferRaw);
+            chatterboxConditionalsBuffer = Uint8Array.from(chatterboxBufferRaw) as Uint8Array<ArrayBuffer>;
             logger.info(`   📦 Chatterbox conditionals: ${(chatterboxConditionalsBuffer.length / 1024).toFixed(1)}KB`);
           }
 
