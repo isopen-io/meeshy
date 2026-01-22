@@ -50,15 +50,23 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Transcription avec ${cleaned.transcription.segments.length} segments`);
       const originalSegment = cleaned.transcription.segments[0];
-      console.log(`🧹 [CLEAN] Segment original [0]:`, {
-        hasStartMs: 'startMs' in originalSegment,
-        hasEndMs: 'endMs' in originalSegment,
-        hasSpeakerId: 'speakerId' in originalSegment,
-        voiceSimilarityScoreType: typeof originalSegment.voiceSimilarityScore,
-        voiceSimilarityScoreValue: originalSegment.voiceSimilarityScore
-      });
+
+      // Log speakerAnalysis
+      let speakerInfo = '';
+      if (cleaned.transcription.speakerAnalysis) {
+        const speakers = cleaned.transcription.speakerAnalysis.speakers || [];
+        const withVoiceChars = speakers.filter((s: any) => s.voiceCharacteristics).length;
+        speakerInfo = `speakerAnalysis: ${speakers.length} speaker(s), voiceChars: ${withVoiceChars}/${speakers.length}`;
+        if (withVoiceChars > 0) {
+          const firstSpeaker = speakers.find((s: any) => s.voiceCharacteristics);
+          speakerInfo += `, firstSpeaker: sid=${firstSpeaker.sid}, pitch=${firstSpeaker.voiceCharacteristics.pitch?.mean_hz}Hz`;
+        }
+      } else {
+        speakerInfo = '⚠️ AUCUN speakerAnalysis';
+      }
+
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
 
       cleaned.transcription.segments = cleaned.transcription.segments.map((seg: any) => ({
         ...seg,
@@ -67,26 +75,22 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
       }));
 
       const cleanedSegment = cleaned.transcription.segments[0];
-      console.log(`🧹 [CLEAN] Segment nettoyé [0]:`, {
-        text: cleanedSegment.text,
-        startMs: cleanedSegment.startMs,
-        endMs: cleanedSegment.endMs,
-        speakerId: cleanedSegment.speakerId,
-        voiceSimilarityScore: cleanedSegment.voiceSimilarityScore,
-        confidence: cleanedSegment.confidence
-      });
+      console.log(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
     }
 
     // Nettoyer les traductions
     if (cleaned.translations && typeof cleaned.translations === 'object') {
       const langs = Object.keys(cleaned.translations);
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Traductions avec ${langs.length} langue(s): [${langs.join(', ')}]`);
+      const translationsInfo = langs.map(lang => {
+        const trans = cleaned.translations[lang] as any;
+        return `${lang}(url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0})`;
+      }).join(', ');
+
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
         const trans = translation as any;
-        console.log(`🧹 [CLEAN]   - ${lang}: url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0}`);
-
         cleanedTranslations[lang] = {
           ...trans,
           segments: trans.segments?.map((seg: any) => ({
@@ -97,9 +101,8 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
         };
       }
       cleaned.translations = cleanedTranslations;
-      console.log(`🧹 [CLEAN] Traductions nettoyées:`, Object.keys(cleanedTranslations));
     } else {
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée dans l'attachment`);
+      console.log(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
     }
 
     return cleaned;
@@ -569,56 +572,44 @@ export function registerMessagesRoutes(
                 // Vérifier si l'audio a une transcription
                 if (att.transcription) {
                   audioWithTranscriptionCount++;
-                  console.log(`📝 [CONVERSATIONS] Message ${msg.id} - Audio avec transcription:`, {
-                    attachmentId: att.id,
-                    hasTranscription: true,
-                    transcriptionText: (att.transcription.text || att.transcription.transcribedText)?.substring(0, 100) + '...',
-                    language: att.transcription.language,
-                    confidence: att.transcription.confidence,
-                    source: att.transcription.source,
-                    model: att.transcription.model,
-                    durationMs: att.transcription.durationMs || att.transcription.audioDurationMs,
-                    segmentsCount: att.transcription.segments?.length || 0,
-                    speakerCount: att.transcription.speakerCount,
-                    hasTranslations: !!att.translations
-                  });
+                  const transcriptionText = (att.transcription.text || att.transcription.transcribedText)?.substring(0, 50) + '...';
+
+                  // Vérifier speakerAnalysis AVANT nettoyage
+                  let speakerAnalysisInfo = '';
+                  if (att.transcription.speakerAnalysis) {
+                    const speakers = att.transcription.speakerAnalysis.speakers || [];
+                    const withVoiceChars = speakers.filter((s: any) => s.voiceCharacteristics).length;
+                    speakerAnalysisInfo = ` | speakerAnalysis: ${speakers.length} speaker(s), voiceChars: ${withVoiceChars}/${speakers.length}`;
+                    if (withVoiceChars > 0) {
+                      const firstSpeaker = speakers.find((s: any) => s.voiceCharacteristics);
+                      speakerAnalysisInfo += `, firstSpeaker: sid=${firstSpeaker.sid}, pitch=${firstSpeaker.voiceCharacteristics.pitch?.mean_hz}Hz, gender=${firstSpeaker.voiceCharacteristics.classification?.estimated_gender}`;
+                    }
+                  } else {
+                    speakerAnalysisInfo = ' | ⚠️ AUCUN speakerAnalysis';
+                  }
+
+                  console.log(`📝 [CONVERSATIONS] Message ${msg.id} - Audio transcription: attachmentId=${att.id}, text="${transcriptionText}", lang=${att.transcription.language}, confidence=${att.transcription.confidence}, source=${att.transcription.source}, model=${att.transcription.model}, durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs}, segments=${att.transcription.segments?.length || 0}, speakerCount=${att.transcription.speakerCount}, hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
                 } else {
-                  console.log(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription:`, {
-                    attachmentId: att.id,
-                    hasTranscription: false,
-                    mimeType: att.mimeType,
-                    fileUrl: att.fileUrl
-                  });
+                  console.log(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription: attachmentId=${att.id}, mimeType=${att.mimeType}, fileUrl=${att.fileUrl}`);
                 }
 
                 // Vérifier les traductions audio (champ V2: translations au lieu de translatedAudios)
                 if (att.translations && typeof att.translations === 'object' && Object.keys(att.translations).length > 0) {
                   audioWithTranslatedAudiosCount++;
                   const langs = Object.keys(att.translations);
-                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio avec ${langs.length} traduction(s):`, {
-                    attachmentId: att.id,
-                    translatedLanguages: langs,
-                    translationsDetails: langs.map(lang => ({
-                      lang,
-                      url: att.translations[lang]?.url || '⚠️ VIDE',
-                      hasUrl: !!att.translations[lang]?.url,
-                      cloned: att.translations[lang]?.cloned,
-                      segmentsCount: att.translations[lang]?.segments?.length || 0
-                    }))
-                  });
+                  const translationsInfo = langs.map(lang => {
+                    const trans = att.translations[lang];
+                    return `${lang}(url="${trans?.url || '⚠️ VIDE'}", cloned=${trans?.cloned}, segments=${trans?.segments?.length || 0})`;
+                  }).join(', ');
+                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio traductions: attachmentId=${att.id}, ${langs.length} traduction(s) [${translationsInfo}]`);
                 }
               }
             });
           }
         });
 
-        console.log(`📊 [CONVERSATIONS] Statistiques audio:`, {
-          totalMessages: messages.length,
-          audioAttachments: audioAttachmentCount,
-          audioWithTranscription: audioWithTranscriptionCount,
-          audioWithTranslatedAudios: audioWithTranslatedAudiosCount,
-          transcriptionRate: audioAttachmentCount > 0 ? `${(audioWithTranscriptionCount / audioAttachmentCount * 100).toFixed(1)}%` : '0%'
-        });
+        const transcriptionRate = audioAttachmentCount > 0 ? `${(audioWithTranscriptionCount / audioAttachmentCount * 100).toFixed(1)}%` : '0%';
+        console.log(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types

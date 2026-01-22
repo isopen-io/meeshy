@@ -289,10 +289,7 @@ export function registerMessagesAdvancedRoutes(
                 mentionedUserIds,
                 userId
               );
-              console.log('[GATEWAY] Validation result:', {
-                isValid: validationResult.isValid,
-                validUserIdsCount: validationResult.validUserIds.length
-              });
+              console.log(`[GATEWAY] Validation result: isValid=${validationResult.isValid}, validUserIdsCount=${validationResult.validUserIds.length}`);
 
               if (validationResult.validUserIds.length > 0) {
                 // Créer les nouvelles entrées de mention
