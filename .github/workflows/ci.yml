@@ -246,14 +246,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # Generate JavaScript Prisma client first (before install to avoid Python generator error)
-      - name: Generate Prisma client (JavaScript only)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd packages/shared
-          npx prisma generate --generator client
-
       # Install Node.js dependencies (required for Prisma CLI)
       - name: Install Node.js dependencies (bun with retry)
         if: env.PACKAGE_MANAGER == 'bun'
@@ -278,6 +270,14 @@ jobs:
 
       - name: Setup Python via uv
         run: uv python install ${{ env.PYTHON_VERSION }}
+
+      # Generate JavaScript Prisma client (needed for Python tests that import from shared)
+      - name: Generate Prisma client (JavaScript only)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
@@ -490,6 +490,14 @@ jobs:
 
       - name: Setup Python via uv
         run: uv python install ${{ env.PYTHON_VERSION }}
+
+      # Generate JavaScript Prisma client (needed for Python tests that import from shared)
+      - name: Generate Prisma client (JavaScript only)
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
 
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
