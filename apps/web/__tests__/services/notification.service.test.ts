@@ -24,7 +24,8 @@ const mockApiService = apiService as jest.Mocked<typeof apiService>;
 describe('NotificationService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {
@@ -443,7 +444,8 @@ describe('NotificationServiceWrapper', () => {
 
   describe('initialize', () => {
     it('should initialize and call onConnect', async () => {
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
       const onConnect = jest.fn();
 
       notificationService.initialize({
@@ -500,7 +502,8 @@ describe('NotificationServiceWrapper', () => {
 
   describe('markAsRead (wrapper)', () => {
     it('should mark local notification as read and call API', async () => {
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
       mockApiService.patch.mockResolvedValue({
         success: true,
@@ -523,7 +526,8 @@ describe('NotificationServiceWrapper', () => {
     });
 
     it('should update counts after marking as read', async () => {
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
       mockApiService.patch.mockResolvedValue({
         success: true,
@@ -553,7 +557,8 @@ describe('NotificationServiceWrapper', () => {
 
   describe('markAllAsRead (wrapper)', () => {
     it('should mark all local notifications as read', async () => {
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
       mockApiService.patch.mockResolvedValue({
         success: true,

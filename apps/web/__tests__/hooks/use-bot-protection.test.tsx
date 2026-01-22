@@ -14,7 +14,8 @@ import { renderHook, act } from '@testing-library/react';
 import { useBotProtection, getBotProtectionPayload } from '@/hooks/use-bot-protection';
 
 // Mock timers
-jest.useFakeTimers();
+// Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
 describe('useBotProtection', () => {
   beforeEach(() => {

@@ -461,7 +461,8 @@ describe('TextLightbox', () => {
     });
 
     it('should show check icon temporarily after copying', async () => {
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
       const attachment = createMockAttachment();
 
       await act(async () => {

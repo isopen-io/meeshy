@@ -6,7 +6,8 @@ import { debounce, debounceWithCancel } from '../../utils/debounce';
 
 describe('debounce', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {

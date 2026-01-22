@@ -18,7 +18,8 @@ import { useConversationTyping } from '@/hooks/conversations/useConversationTypi
 import type { ThreadMember } from '@meeshy/shared/types';
 
 // Use fake timers for timeout testing
-jest.useFakeTimers();
+// Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
 describe('useConversationTyping', () => {
   const mockConversationId = 'conv-123';

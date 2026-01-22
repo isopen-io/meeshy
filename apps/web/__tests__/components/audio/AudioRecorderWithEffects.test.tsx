@@ -232,7 +232,8 @@ describe('AudioRecorderWithEffects', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
     mockPerformanceNow.mockReturnValue(0);
   });
 

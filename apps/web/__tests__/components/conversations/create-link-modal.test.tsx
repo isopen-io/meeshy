@@ -241,7 +241,8 @@ describe('CreateLinkModalV2', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
     (conversationsService.getConversations as jest.Mock).mockResolvedValue({
       conversations: mockConversations,

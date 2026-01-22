@@ -24,7 +24,8 @@ describe('AppStore', () => {
     });
     jest.clearAllMocks();
     localStorage.clear();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {

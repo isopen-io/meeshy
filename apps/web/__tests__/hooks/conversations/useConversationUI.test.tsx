@@ -43,7 +43,8 @@ describe('useConversationUI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocalStorage.clear();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
     // Default to desktop size
     Object.defineProperty(window, 'innerWidth', {

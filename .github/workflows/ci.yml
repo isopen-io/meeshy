@@ -256,7 +256,7 @@ jobs:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
+          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       - name: Run tests with coverage (80% minimum)
         env:
@@ -331,7 +331,7 @@ jobs:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
+          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       - name: Create audio output directory
         run: |
@@ -420,7 +420,7 @@ jobs:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
+          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       - name: Run UnifiedTTSService tests
         env:
@@ -543,7 +543,7 @@ jobs:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate
+          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       # Build shared package (required for gateway tests)
       - name: Build shared package (bun)

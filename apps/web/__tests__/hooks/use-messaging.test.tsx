@@ -16,7 +16,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useMessaging } from '@/hooks/use-messaging';
 
 // Mock timer functions
-jest.useFakeTimers();
+// Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
 // Mock toast
 const mockToastError = jest.fn();

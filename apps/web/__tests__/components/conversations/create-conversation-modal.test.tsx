@@ -265,7 +265,8 @@ describe('CreateConversationModal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
     (apiService.get as jest.Mock).mockImplementation((url: string) => {
       if (url.includes('/users/search')) {

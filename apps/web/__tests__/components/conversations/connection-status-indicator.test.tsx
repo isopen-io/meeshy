@@ -20,7 +20,8 @@ jest.mock('@/lib/utils', () => ({
 describe('ConnectionStatusIndicator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {

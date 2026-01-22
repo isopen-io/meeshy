@@ -20,7 +20,8 @@ describe('ConversationUIStore', () => {
       });
     });
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {

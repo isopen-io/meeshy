@@ -745,7 +745,8 @@ describe('useAttachmentUpload', () => {
       } as unknown as React.ChangeEvent<HTMLInputElement>;
 
       // Use fake timers to handle setTimeout in handleFileInputChange
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
       act(() => {
         result.current.handleFileInputChange(mockInputEvent);
@@ -777,7 +778,8 @@ describe('useAttachmentUpload', () => {
         },
       } as unknown as React.ChangeEvent<HTMLInputElement>;
 
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
       act(() => {
         result.current.handleFileInputChange(mockInputEvent);

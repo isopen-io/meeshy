@@ -50,7 +50,8 @@ describe('ApiService', () => {
     mockFetch.mockReset();
     mockGetAuthToken.mockReturnValue('test-jwt-token');
     mockDecodeJWT.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 }); // Valid token
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
   });
 
   afterEach(() => {

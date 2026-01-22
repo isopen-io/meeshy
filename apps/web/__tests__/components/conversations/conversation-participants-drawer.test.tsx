@@ -242,7 +242,8 @@ describe('ConversationParticipantsDrawer', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
 
     (conversationsService.removeParticipant as jest.Mock).mockResolvedValue({});
     (conversationsService.addParticipant as jest.Mock).mockResolvedValue({});

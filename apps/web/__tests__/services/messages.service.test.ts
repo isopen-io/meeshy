@@ -238,7 +238,8 @@ describe('MessagesService', () => {
   describe('formatMessageDate', () => {
     beforeEach(() => {
       // Mock Date to have consistent tests
-      jest.useFakeTimers();
+      // Use real timers for async operations (promises, setTimeout, etc.)
+    jest.useRealTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
     });
 
