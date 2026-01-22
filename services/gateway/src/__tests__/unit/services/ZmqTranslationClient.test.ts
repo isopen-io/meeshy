@@ -707,6 +707,7 @@ describe('ZmqTranslationClient', () => {
         },
         translatedAudios: [
           {
+            id: 'translated-audio-123',
             targetLanguage: 'fr',
             translatedText: 'Bonjour le monde',
             audioUrl: 'https://example.com/fr.mp3',

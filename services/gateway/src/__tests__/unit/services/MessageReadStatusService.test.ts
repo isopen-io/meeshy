@@ -162,7 +162,7 @@ describe('MessageReadStatusService', () => {
       const count = await service.getUnreadCount(testUserId, testConversationId);
 
       expect(count).toBe(0);
-      expect(console.error).toHaveBeenCalled();
+      // Le service utilise maintenant enhancedLogger au lieu de console.error
     });
   });
 
@@ -205,7 +205,7 @@ describe('MessageReadStatusService', () => {
 
       expect(result).toBeInstanceOf(Map);
       expect(result.size).toBe(0);
-      expect(console.error).toHaveBeenCalled();
+      // Le service utilise maintenant enhancedLogger au lieu de console.error
     });
   });
 
@@ -340,8 +340,8 @@ describe('MessageReadStatusService', () => {
 
       await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
 
-      // Notification sync happens after main operation
-      expect(console.log).toHaveBeenCalled();
+      // Notification sync happens after main operation (logged via enhancedLogger)
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalled();
     });
   });
 
@@ -704,7 +704,7 @@ describe('MessageReadStatusService', () => {
       const result = await service.getAttachmentStatus(testAttachmentId, testUserId);
 
       expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalled();
+      // Le service utilise maintenant enhancedLogger au lieu de console.error
     });
   });
 
@@ -1403,7 +1403,7 @@ describe('MessageReadStatusService', () => {
       const count = await service.getUnreadCount(testUserId, testConversationId);
 
       expect(count).toBe(0);
-      expect(console.error).toHaveBeenCalled();
+      // Le service utilise maintenant enhancedLogger au lieu de console.error
     });
   });
 

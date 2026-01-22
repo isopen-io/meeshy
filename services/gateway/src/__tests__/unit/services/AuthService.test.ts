@@ -261,18 +261,16 @@ describe('AuthService', () => {
           ],
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
-        }
+        select: expect.objectContaining({
+          id: true,
+          username: true,
+          password: true,
+          email: true,
+          twoFactorEnabledAt: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true
+        })
       });
       expect(mockBcryptCompare).toHaveBeenCalledWith('password123', mockUser.password);
     });
@@ -396,18 +394,16 @@ describe('AuthService', () => {
           ],
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
-        }
+        select: expect.objectContaining({
+          id: true,
+          username: true,
+          password: true,
+          email: true,
+          twoFactorEnabledAt: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true
+        })
       });
     });
   });
@@ -643,18 +639,15 @@ describe('AuthService', () => {
           id: 'user-123',
           isActive: true
         },
-        include: {
-          userFeature: {
-            select: {
-              twoFactorEnabledAt: true,
-              autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: true,
-              useCustomDestination: true,
-              encryptionPreference: true
-            }
-          }
-        }
+        select: expect.objectContaining({
+          id: true,
+          username: true,
+          email: true,
+          twoFactorEnabledAt: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true
+        })
       });
     });
 
