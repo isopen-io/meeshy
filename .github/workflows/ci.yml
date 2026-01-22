@@ -809,12 +809,12 @@ jobs:
           npx prisma format --check || true
         continue-on-error: true
 
-      - name: Generate Prisma client
+      - name: Generate Prisma client (JavaScript only)
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
           cd packages/shared
-          npx prisma generate
+          npx prisma generate --generator client
 
   # ===========================================================================
   # BUILD: Verify builds work (like in Dockerfiles)
