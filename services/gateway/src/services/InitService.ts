@@ -1,6 +1,11 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour InitService
+const logger = enhancedLogger.child({ module: 'InitService' });
+
 
 export class InitService {
   private prisma: PrismaClient;
@@ -24,9 +29,9 @@ export class InitService {
     // GARDE-FOU CRITIQUE: Empêcher FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
       const errorMessage = '🚨 ERREUR CRITIQUE: FORCE_DB_RESET=true détecté en PRODUCTION! Ceci supprimerait TOUTES les données!';
-      console.error(`[INIT] ${errorMessage}`);
-      console.error('[INIT] 🛡️ Protection activée: Réinitialisation bloquée pour protéger les données de production');
-      console.error('[INIT] 💡 Si vous devez vraiment réinitialiser en production, contactez un administrateur');
+      logger.error(`[INIT] ${errorMessage}`);
+      logger.error('[INIT] 🛡️ Protection activée: Réinitialisation bloquée pour protéger les données de production');
+      logger.error('[INIT] 💡 Si vous devez vraiment réinitialiser en production, contactez un administrateur');
       throw new Error('FORCE_DB_RESET=true est interdit en production pour protéger les données');
     }
     
@@ -52,8 +57,8 @@ export class InitService {
       await this.ensureAllUsersInMeeshyConversation();
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de l\'initialisation:', error);
-      console.error('[INIT] 💡 Détails de l\'erreur:', error.message);
+      logger.error('[INIT] ❌ Erreur lors de l\'initialisation:', error);
+      logger.error('[INIT] 💡 Détails de l\'erreur:', error.message);
       
       // En mode développement, on ne fait pas échouer le serveur
       if (process.env.NODE_ENV === 'development') {
@@ -94,7 +99,7 @@ export class InitService {
       this.globalConversationId = newConversation.id;
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la création de la conversation globale:', error);
+      logger.error('[INIT] ❌ Erreur lors de la création de la conversation globale', error);
       throw error;
     }
   }
@@ -112,7 +117,7 @@ export class InitService {
       await this.createAdminUser();
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la création des utilisateurs par défaut:', error);
+      logger.error('[INIT] ❌ Erreur lors de la création des utilisateurs par défaut', error);
       throw error;
     }
   }
@@ -181,7 +186,7 @@ export class InitService {
       });
 
     } catch (error) {
-      console.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur Bigboss "${username}":`, error);
+      logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur Bigboss "${username}":`, error);
       throw error;
     }
   }
@@ -252,7 +257,7 @@ export class InitService {
       await this.addUserToMeeshyConversation(userId, username);
 
     } catch (error) {
-      console.error(`[INIT] ❌ Erreur lors de la configuration de l'utilisateur Admin "${username}":`, error);
+      logger.error(`[INIT] ❌ Erreur lors de la configuration de l'utilisateur Admin "${username}":`, error);
       throw error;
     }
   }
@@ -287,7 +292,7 @@ export class InitService {
       }
       
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la réinitialisation de la base de données:', error);
+      logger.error('[INIT] ❌ Erreur lors de la réinitialisation de la base de données', error);
       throw error;
     }
   }
@@ -349,7 +354,7 @@ export class InitService {
       await this.addUserToMeeshyConversation(user.id, username);
 
     } catch (error) {
-      console.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur André Tabeth "${username}":`, error);
+      logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur André Tabeth "${username}":`, error);
       throw error;
     }
   }
@@ -395,7 +400,7 @@ export class InitService {
       } else {
       }
     } catch (error) {
-      console.error(`[INIT] ❌ Erreur lors de l'ajout de l'utilisateur "${username}" à la conversation meeshy:`, error);
+      logger.error(`[INIT] ❌ Erreur lors de l'ajout de l'utilisateur "${username}" à la conversation meeshy:`, error);
       throw error;
     }
   }
@@ -416,7 +421,7 @@ export class InitService {
       }
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la vérification des membres de la conversation meeshy:', error);
+      logger.error('[INIT] ❌ Erreur lors de la vérification des membres de la conversation meeshy', error);
       throw error;
     }
   }
@@ -443,7 +448,7 @@ export class InitService {
       await this.createGroupConversation([atabethUser.id, adminUser.id, meeshyUser.id]);
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la création des conversations supplémentaires:', error);
+      logger.error('[INIT] ❌ Erreur lors de la création des conversations supplémentaires', error);
       throw error;
     }
   }
@@ -502,7 +507,7 @@ export class InitService {
       });
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la création de la conversation directe:', error);
+      logger.error('[INIT] ❌ Erreur lors de la création de la conversation directe', error);
       throw error;
     }
   }
@@ -554,7 +559,7 @@ export class InitService {
       });
 
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la création de la conversation de groupe:', error);
+      logger.error('[INIT] ❌ Erreur lors de la création de la conversation de groupe', error);
       throw error;
     }
   }
@@ -568,7 +573,7 @@ export class InitService {
     
     // GARDE-FOU CRITIQUE: Bloquer FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
-      console.error('[INIT] 🚨 FORCE_DB_RESET=true détecté en PRODUCTION - BLOQUÉ pour protection des données');
+      logger.error('[INIT] 🚨 FORCE_DB_RESET=true détecté en PRODUCTION - BLOQUÉ pour protection des données');
       return false;
     }
     
@@ -626,7 +631,7 @@ export class InitService {
       
       return needsInit;
     } catch (error) {
-      console.error('[INIT] ❌ Erreur lors de la vérification de l\'initialisation:', error);
+      logger.error('[INIT] ❌ Erreur lors de la vérification de l\'initialisation:', error);
       // En cas d'erreur, on considère qu'une initialisation est nécessaire
       return true;
     }

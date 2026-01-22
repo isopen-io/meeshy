@@ -11,6 +11,11 @@
  */
 
 import axios from 'axios';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour EmailService
+const logger = enhancedLogger.child({ module: 'EmailService' });
+
 
 // ============================================================================
 // INTERFACES
@@ -380,7 +385,7 @@ export class EmailService {
       this.providers.push({ name: 'mailgun', apiKey: process.env.MAILGUN_API_KEY, enabled: true, priority: 3 });
     }
     this.providers.sort((a, b) => a.priority - b.priority);
-    console.log('[EmailService] Initialized with providers:', this.providers.map(p => p.name).join(', ') || 'none');
+    logger.info('[EmailService] Initialized with providers:', this.providers.map(p => p.name).join(', ') || 'none');
   }
 
   private getTranslations(language?: string): EmailTranslations {
@@ -407,11 +412,11 @@ export class EmailService {
 
   private async sendEmail(data: EmailData): Promise<EmailResult> {
     const { to, subject, html, text } = data;
-    console.log(`[EmailService] 📧 Preparing to send email to: ${to}`);
-    console.log(`[EmailService] 📧 Subject: ${subject}`);
+    logger.info(`[EmailService] 📧 Preparing to send email to: ${to}`);
+    logger.info(`[EmailService] 📧 Subject: ${subject}`);
 
     if (this.providers.length === 0) {
-      console.warn('[EmailService] ❌ No providers configured - email not sent to:', to);
+      logger.warn('[EmailService] ❌ No providers configured - email not sent to:', to);
       return { success: false, error: 'No email providers configured' };
     }
 
@@ -419,7 +424,7 @@ export class EmailService {
     for (const provider of this.providers) {
       if (!provider.enabled) continue;
       try {
-        console.log(`[EmailService] 🔄 Trying provider: ${provider.name}`);
+        logger.info(`[EmailService] 🔄 Trying provider: ${provider.name}`);
         let result: EmailResult;
         switch (provider.name) {
           case 'brevo': result = await this.sendViaBrevo(provider.apiKey, data); break;
@@ -428,29 +433,29 @@ export class EmailService {
           default: continue;
         }
         if (result.success) {
-          console.log(`[EmailService] ✅ Email sent successfully via ${provider.name}`);
-          console.log(`[EmailService] ✅ Recipient: ${to}`);
-          console.log(`[EmailService] ✅ Message ID: ${result.messageId || 'N/A'}`);
+          logger.info(`[EmailService] ✅ Email sent successfully via ${provider.name}`);
+          logger.info(`[EmailService] ✅ Recipient: ${to}`);
+          logger.info(`[EmailService] ✅ Message ID: ${result.messageId || 'N/A'}`);
           return { ...result, provider: provider.name };
         }
-        console.warn(`[EmailService] ⚠️ Provider ${provider.name} failed: ${result.error}`);
+        logger.warn(`[EmailService] ⚠️ Provider ${provider.name} failed: ${result.error}`);
         errors.push(`${provider.name}: ${result.error}`);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[EmailService] ❌ Provider ${provider.name} threw exception: ${errorMsg}`);
+        logger.error(`[EmailService] ❌ Provider ${provider.name} threw exception: ${errorMsg}`);
         if (error instanceof Error && error.stack) {
-          console.error(`[EmailService] Stack trace: ${error.stack}`);
+          logger.error(`[EmailService] Stack trace: ${error.stack}`);
         }
         errors.push(`${provider.name}: ${errorMsg}`);
       }
     }
-    console.error('[EmailService] ❌ All providers failed for:', to);
-    console.error('[EmailService] ❌ Errors:', errors.join(' | '));
+    logger.error('[EmailService] ❌ All providers failed for', to);
+    logger.error('[EmailService] ❌ Errors', errors.join(' | '));
     return { success: false, error: `All providers failed: ${errors.join('; ')}` };
   }
 
   private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
-    console.log(`[EmailService] [Brevo] 📤 Sending to Brevo API...`);
+    logger.info(`[EmailService] [Brevo] 📤 Sending to Brevo API...`);
     const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
       sender: { name: this.fromName, email: this.fromEmail },
       to: [{ email: data.to }],
@@ -460,8 +465,8 @@ export class EmailService {
     }, {
       headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
     });
-    console.log(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
-    console.log(`[EmailService] [Brevo] ✅ Response Data:`, JSON.stringify(response.data));
+    logger.info(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
+    logger.info(`[EmailService] [Brevo] ✅ Response Data:`, JSON.stringify(response.data));
     return { success: true, messageId: response.data.messageId };
   }
 

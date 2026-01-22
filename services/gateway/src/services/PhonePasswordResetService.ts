@@ -21,6 +21,11 @@ import { RedisWrapper } from './RedisWrapper';
 import { SmsService } from './SmsService';
 import { GeoIPService } from './GeoIPService';
 import { normalizePhoneWithCountry } from '../utils/normalize';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour PhonePasswordResetService
+const logger = enhancedLogger.child({ module: 'PhonePasswordResetService' });
+
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_IDENTITY_ATTEMPTS = 3;
@@ -179,16 +184,16 @@ export class PhonePasswordResetService {
   async lookupByPhone(request: PhoneLookupRequest): Promise<PhoneLookupResult> {
     const { phoneNumber, countryCode, ipAddress, userAgent } = request;
 
-    console.log('[PhonePasswordReset] 📱 ======== PHONE LOOKUP ========');
-    console.log('[PhonePasswordReset] 📱 Phone:', phoneNumber);
-    console.log('[PhonePasswordReset] 📱 Country:', countryCode);
-    console.log('[PhonePasswordReset] 📱 IP:', ipAddress);
+    logger.info('[PhonePasswordReset] 📱 ======== PHONE LOOKUP ========');
+    logger.info('[PhonePasswordReset] 📱 Phone:', phoneNumber);
+    logger.info('[PhonePasswordReset] 📱 Country:', countryCode);
+    logger.info('[PhonePasswordReset] 📱 IP:', ipAddress);
 
     try {
       // 1. Rate limiting by IP
       const isRateLimited = await this.checkLookupRateLimit(ipAddress);
       if (isRateLimited) {
-        console.log('[PhonePasswordReset] ❌ Rate limited');
+        logger.info('[PhonePasswordReset] ❌ Rate limited');
         await this.logSecurityEvent(null, 'PHONE_RESET_RATE_LIMIT', 'MEDIUM', {
           phoneNumber: this.hashForLog(phoneNumber),
           ipAddress
@@ -199,7 +204,7 @@ export class PhonePasswordResetService {
       // 2. Normalize phone number
       const normalized = normalizePhoneWithCountry(phoneNumber, countryCode);
       if (!normalized || !normalized.isValid) {
-        console.log('[PhonePasswordReset] ❌ Invalid phone number');
+        logger.info('[PhonePasswordReset] ❌ Invalid phone number');
         return { success: false, error: 'invalid_phone' };
       }
 
@@ -220,14 +225,14 @@ export class PhonePasswordResetService {
       });
 
       if (!user) {
-        console.log('[PhonePasswordReset] ❌ User not found');
+        logger.info('[PhonePasswordReset] ❌ User not found');
         // Don't reveal that user doesn't exist
         return { success: false, error: 'user_not_found' };
       }
 
       // 4. Phone must be verified
       if (!user.phoneVerifiedAt) {
-        console.log('[PhonePasswordReset] ❌ Phone not verified');
+        logger.info('[PhonePasswordReset] ❌ Phone not verified');
         return { success: false, error: 'phone_not_verified' };
       }
 
@@ -266,7 +271,7 @@ export class PhonePasswordResetService {
       };
 
     } catch (error) {
-      console.error('[PhonePasswordReset] Error in lookupByPhone:', error);
+      logger.error('[PhonePasswordReset] Error in lookupByPhone', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -278,9 +283,9 @@ export class PhonePasswordResetService {
   async verifyIdentity(request: IdentityVerificationRequest): Promise<IdentityVerificationResult> {
     const { tokenId, fullUsername, fullEmail, ipAddress, userAgent } = request;
 
-    console.log('[PhonePasswordReset] 🔐 ======== IDENTITY VERIFICATION ========');
-    console.log('[PhonePasswordReset] 🔐 Token:', tokenId);
-    console.log('[PhonePasswordReset] 🔐 IP:', ipAddress);
+    logger.info('[PhonePasswordReset] 🔐 ======== IDENTITY VERIFICATION ========');
+    logger.info('[PhonePasswordReset] 🔐 Token:', tokenId);
+    logger.info('[PhonePasswordReset] 🔐 IP:', ipAddress);
 
     try {
       // 1. Find token
@@ -378,7 +383,7 @@ export class PhonePasswordResetService {
       );
 
       if (!smsResult.success) {
-        console.error('[PhonePasswordReset] ❌ SMS send failed:', smsResult.error);
+        logger.error('[PhonePasswordReset] ❌ SMS send failed', smsResult.error);
         return { success: false, error: 'sms_send_failed' };
       }
 
@@ -389,11 +394,11 @@ export class PhonePasswordResetService {
         ipAddress
       });
 
-      console.log('[PhonePasswordReset] ✅ Identity verified, SMS sent');
+      logger.info('[PhonePasswordReset] ✅ Identity verified, SMS sent');
       return { success: true, codeSent: true };
 
     } catch (error) {
-      console.error('[PhonePasswordReset] Error in verifyIdentity:', error);
+      logger.error('[PhonePasswordReset] Error in verifyIdentity', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -405,9 +410,9 @@ export class PhonePasswordResetService {
   async verifyCode(request: CodeVerificationRequest): Promise<CodeVerificationResult> {
     const { tokenId, code, ipAddress, userAgent } = request;
 
-    console.log('[PhonePasswordReset] ✉️ ======== CODE VERIFICATION ========');
-    console.log('[PhonePasswordReset] ✉️ Token:', tokenId);
-    console.log('[PhonePasswordReset] ✉️ IP:', ipAddress);
+    logger.info('[PhonePasswordReset] ✉️ ======== CODE VERIFICATION ========');
+    logger.info('[PhonePasswordReset] ✉️ Token:', tokenId);
+    logger.info('[PhonePasswordReset] ✉️ IP:', ipAddress);
 
     try {
       // 1. Find token
@@ -502,11 +507,11 @@ export class PhonePasswordResetService {
         ipAddress
       });
 
-      console.log('[PhonePasswordReset] ✅ Code verified, reset token generated');
+      logger.info('[PhonePasswordReset] ✅ Code verified, reset token generated');
       return { success: true, resetToken };
 
     } catch (error) {
-      console.error('[PhonePasswordReset] Error in verifyCode:', error);
+      logger.error('[PhonePasswordReset] Error in verifyCode', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -574,7 +579,7 @@ export class PhonePasswordResetService {
 
       return { success: true };
     } catch (error) {
-      console.error('[PhonePasswordReset] Error in resendCode:', error);
+      logger.error('[PhonePasswordReset] Error in resendCode', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -586,10 +591,10 @@ export class PhonePasswordResetService {
   async transferPhone(request: PhoneTransferRequest): Promise<{ success: boolean; error?: string }> {
     const { fromUserId, toUserId, phoneNumber, phoneCountryCode, ipAddress } = request;
 
-    console.log('[PhonePasswordReset] 📲 ======== PHONE TRANSFER ========');
-    console.log('[PhonePasswordReset] 📲 From:', fromUserId);
-    console.log('[PhonePasswordReset] 📲 To:', toUserId);
-    console.log('[PhonePasswordReset] 📲 Phone:', this.hashForLog(phoneNumber));
+    logger.info('[PhonePasswordReset] 📲 ======== PHONE TRANSFER ========');
+    logger.info('[PhonePasswordReset] 📲 From:', fromUserId);
+    logger.info('[PhonePasswordReset] 📲 To:', toUserId);
+    logger.info('[PhonePasswordReset] 📲 Phone:', this.hashForLog(phoneNumber));
 
     try {
       // Atomic transaction
@@ -651,11 +656,11 @@ export class PhonePasswordResetService {
         });
       });
 
-      console.log('[PhonePasswordReset] ✅ Phone transferred successfully');
+      logger.info('[PhonePasswordReset] ✅ Phone transferred successfully');
       return { success: true };
 
     } catch (error) {
-      console.error('[PhonePasswordReset] Error in transferPhone:', error);
+      logger.error('[PhonePasswordReset] Error in transferPhone', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -716,7 +721,7 @@ export class PhonePasswordResetService {
         }
       });
     } catch (error) {
-      console.error('[PhonePasswordReset] Failed to log security event:', error);
+      logger.error('[PhonePasswordReset] Failed to log security event', error);
     }
   }
 }

@@ -9,6 +9,11 @@
  */
 
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour MessageReadStatusService
+const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
+
 
 // Helper pour retry des transactions en cas de deadlock (P2034)
 async function withRetry<T>(
@@ -98,7 +103,7 @@ export class MessageReadStatusService {
         },
       });
     } catch (error) {
-      console.error("[MessageReadStatus] Error getting unread count:", error);
+      logger.error("[MessageReadStatus] Error getting unread count", error);
       return 0;
     }
   }
@@ -133,7 +138,7 @@ export class MessageReadStatusService {
 
       return unreadCounts;
     } catch (error) {
-      console.error("[MessageReadStatus] Error getting unread counts:", error);
+      logger.error("[MessageReadStatus] Error getting unread counts", error);
       return new Map();
     }
   }
@@ -200,11 +205,11 @@ export class MessageReadStatusService {
       // Mettre à jour le compteur (au cas où de nouveaux messages seraient arrivés entre temps)
       await this.updateUnreadCount(userId, conversationId);
 
-      console.log(
+      logger.info(
         `✅ [MessageReadStatus] User ${userId} received update in conversation ${conversationId}`
       );
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking messages as received:",
         error
       );
@@ -269,7 +274,7 @@ export class MessageReadStatusService {
         },
       });
 
-      console.log(
+      logger.info(
         `✅ [MessageReadStatus] User ${userId} marked conversation ${conversationId} as read`
       );
 
@@ -284,13 +289,13 @@ export class MessageReadStatusService {
           conversationId
         );
       } catch (notifError) {
-        console.warn(
+        logger.warn(
           "[MessageReadStatus] Error syncing notifications:",
           notifError
         );
       }
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking messages as read:",
         error
       );
@@ -382,7 +387,7 @@ export class MessageReadStatusService {
         readBy,
       };
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error getting message read status:",
         error
       );
@@ -436,7 +441,7 @@ export class MessageReadStatusService {
 
       return statusMap;
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error getting conversation read statuses:",
         error
       );
@@ -529,7 +534,7 @@ export class MessageReadStatusService {
         },
       };
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error getting message status details:",
         error
       );
@@ -615,7 +620,7 @@ export class MessageReadStatusService {
         },
       };
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error getting attachment status details:",
         error
       );
@@ -680,7 +685,7 @@ export class MessageReadStatusService {
 
       await this.updateAttachmentComputedStatus(attachmentId);
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking audio as listened:",
         error
       );
@@ -745,7 +750,7 @@ export class MessageReadStatusService {
 
       await this.updateAttachmentComputedStatus(attachmentId);
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking video as watched:",
         error
       );
@@ -803,7 +808,7 @@ export class MessageReadStatusService {
 
       await this.updateAttachmentComputedStatus(attachmentId);
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking image as viewed:",
         error
       );
@@ -853,7 +858,7 @@ export class MessageReadStatusService {
 
       await this.updateAttachmentComputedStatus(attachmentId);
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error marking attachment as downloaded:",
         error
       );
@@ -900,7 +905,7 @@ export class MessageReadStatusService {
         lastWatchPositionMs: status.lastWatchPositionMs,
       };
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error getting attachment status:",
         error
       );
@@ -947,7 +952,7 @@ export class MessageReadStatusService {
         });
       }
     } catch (error) {
-      console.error("[MessageReadStatus] Error updating unread count:", error);
+      logger.error("[MessageReadStatus] Error updating unread count", error);
     }
   }
 
@@ -1106,7 +1111,7 @@ export class MessageReadStatusService {
         },
       });
     } catch (error) {
-      console.error(
+      logger.error(
         "[MessageReadStatus] Error updating attachment computed status:",
         error
       );
@@ -1151,12 +1156,12 @@ export class MessageReadStatusService {
         });
       }
 
-      console.log(
+      logger.info(
         `✅ [MessageReadStatus] Cleaned up ${obsoleteCursorIds.length} obsolete cursors in conversation ${conversationId}`
       );
       return obsoleteCursorIds.length;
     } catch (error) {
-      console.error("[MessageReadStatus] Error cleaning up cursors:", error);
+      logger.error("[MessageReadStatus] Error cleaning up cursors", error);
       throw error;
     }
   }

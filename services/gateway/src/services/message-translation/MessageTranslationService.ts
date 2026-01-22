@@ -188,18 +188,18 @@ export class MessageTranslationService extends EventEmitter {
               const requestedModelType = (messageData as any).modelType;
               await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, requestedModelType);
             } else {
-              console.error(`❌ [TranslationService] Message ${messageId} non trouvé en base`);
+              logger.error(`❌ [TranslationService] Message ${messageId} non trouvé en base`);
             }
           }
         } catch (error) {
-          console.error(`❌ Erreur traitement asynchrone des traductions: ${error}`);
+          logger.error(`❌ Erreur traitement asynchrone des traductions: ${error}`);
           this.stats.incrementErrors();
         }
       });
 
       return response;
     } catch (error) {
-      console.error(`❌ Erreur traitement message: ${error}`);
+      logger.error(`❌ Erreur traitement message: ${error}`);
       this.stats.incrementErrors();
       throw error;
     }
@@ -245,7 +245,7 @@ export class MessageTranslationService extends EventEmitter {
 
       return message;
     } catch (error) {
-      console.error(`❌ Erreur sauvegarde message: ${error}`);
+      logger.error(`❌ Erreur sauvegarde message: ${error}`);
       throw error;
     }
   }
@@ -285,7 +285,7 @@ export class MessageTranslationService extends EventEmitter {
       const zmqHealth = await this.zmqClient.healthCheck();
       return zmqHealth;
     } catch (error) {
-      console.error(`❌ Health check échoué: ${error}`);
+      logger.error(`❌ Health check échoué: ${error}`);
       return false;
     }
   }
@@ -294,7 +294,7 @@ export class MessageTranslationService extends EventEmitter {
     try {
       await this.zmqClient.close();
     } catch (error) {
-      console.error(`❌ Erreur fermeture TranslationService: ${error}`);
+      logger.error(`❌ Erreur fermeture TranslationService: ${error}`);
     }
   }
 
@@ -337,7 +337,7 @@ export class MessageTranslationService extends EventEmitter {
       const startTime = Date.now();
       
       if (!this.zmqClient) {
-        console.error('[GATEWAY] ❌ ZMQ Client non disponible pour les traductions');
+        logger.error('[GATEWAY] ❌ ZMQ Client non disponible pour les traductions');
         return;
       }
       
@@ -391,7 +391,7 @@ export class MessageTranslationService extends EventEmitter {
       const processingTime = Date.now() - startTime;
       
     } catch (error) {
-      console.error(`❌ Erreur traitement asynchrone: ${error}`);
+      logger.error(`❌ Erreur traitement asynchrone: ${error}`);
       this.stats.incrementErrors();
     }
   }
@@ -478,7 +478,7 @@ export class MessageTranslationService extends EventEmitter {
       
       
     } catch (error) {
-      console.error(`❌ Erreur retraduction: ${error}`);
+      logger.error(`❌ Erreur retraduction: ${error}`);
       this.stats.incrementErrors();
     }
   }
@@ -568,7 +568,7 @@ export class MessageTranslationService extends EventEmitter {
       return allLanguages;
       
     } catch (error) {
-      console.error(`❌ [TranslationService] Erreur extraction langues: ${error}`);
+      logger.error(`❌ [TranslationService] Erreur extraction langues: ${error}`);
       return ['en', 'fr']; // Fallback
     }
   }
@@ -583,7 +583,7 @@ export class MessageTranslationService extends EventEmitter {
       
       return lastMessage?.originalLanguage || 'fr';
     } catch (error) {
-      console.error(`❌ Erreur récupération langue source: ${error}`);
+      logger.error(`❌ Erreur récupération langue source: ${error}`);
       return 'fr';
     }
   }
@@ -622,7 +622,7 @@ export class MessageTranslationService extends EventEmitter {
       try {
         translationId = await this._saveTranslationToDatabase(data.result, data.metadata);
       } catch (error) {
-        console.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error}`);
+        logger.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error}`);
         // Continuer même si la sauvegarde échoue
       }
       
@@ -645,14 +645,14 @@ export class MessageTranslationService extends EventEmitter {
       const processingTime = Date.now() - startTime;
       
     } catch (error) {
-      console.error(`❌ [TranslationService] Erreur traitement: ${error}`);
-      console.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
+      logger.error(`❌ [TranslationService] Erreur traitement: ${error}`);
+      logger.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
       this.stats.incrementErrors();
     }
   }
 
   private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
-    console.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
+    logger.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
 
     if (data.error === 'translation pool full') {
       this.stats.incrementPoolFullRejections();
@@ -2310,7 +2310,7 @@ export class MessageTranslationService extends EventEmitter {
         
       }
     } catch (error) {
-      console.error(`❌ [TranslationService] Erreur lors de l'incrémentation des stats: ${error}`);
+      logger.error(`❌ [TranslationService] Erreur lors de l'incrémentation des stats: ${error}`);
     }
   }
 
@@ -2423,11 +2423,11 @@ export class MessageTranslationService extends EventEmitter {
       return translation.id;
 
     } catch (error: any) {
-      console.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error.message}`);
+      logger.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error.message}`);
 
       // Fallback: Si l'erreur est due à une contrainte manquante, utiliser l'ancienne méthode
       if (error.code === 'P2025' || error.message?.includes('messageId_targetLanguage')) {
-        console.warn(`⚠️ [TranslationService] Contrainte unique manquante, fallback vers méthode legacy`);
+        logger.warn(`⚠️ [TranslationService] Contrainte unique manquante, fallback vers méthode legacy`);
         return await this._saveTranslationToDatabase_Legacy(result, metadata);
       }
 
@@ -2509,7 +2509,7 @@ export class MessageTranslationService extends EventEmitter {
         return created.id;
       }
     } catch (error) {
-      console.error(`❌ [TranslationService] Erreur legacy: ${error}`);
+      logger.error(`❌ [TranslationService] Erreur legacy: ${error}`);
       throw error;
     }
   }
@@ -2595,7 +2595,7 @@ export class MessageTranslationService extends EventEmitter {
       return null;
 
     } catch (error) {
-      console.error(`❌ Erreur récupération traduction: ${error}`);
+      logger.error(`❌ Erreur récupération traduction: ${error}`);
       return null;
     }
   }
@@ -2659,7 +2659,7 @@ export class MessageTranslationService extends EventEmitter {
       return response;
       
     } catch (error) {
-      console.error(`❌ [REST] Erreur traduction directe: ${error}`);
+      logger.error(`❌ [REST] Erreur traduction directe: ${error}`);
       this.stats.incrementErrors();
       
       // Fallback en cas d'erreur

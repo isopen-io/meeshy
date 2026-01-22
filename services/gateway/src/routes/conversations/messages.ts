@@ -20,6 +20,10 @@ import type {
   SendMessageBody,
   MessagesQuery
 } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+// Logger dédié pour messages
+const logger = enhancedLogger.child({ module: 'messages' });
+
 
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant
@@ -43,7 +47,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
     return attachments;
   }
 
-  console.log(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  logger.info(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
 
   return attachments.map((att, attIndex) => {
     const cleaned = { ...att };
@@ -66,7 +70,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
         speakerInfo = '⚠️ AUCUN speakerAnalysis';
       }
 
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
+      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
 
       cleaned.transcription.segments = cleaned.transcription.segments.map((seg: any) => ({
         ...seg,
@@ -75,7 +79,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
       }));
 
       const cleanedSegment = cleaned.transcription.segments[0];
-      console.log(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
+      logger.info(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
     }
 
     // Nettoyer les traductions
@@ -86,7 +90,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
         return `${lang}(url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0})`;
       }).join(', ');
 
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
+      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
@@ -102,7 +106,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
       }
       cleaned.translations = cleanedTranslations;
     } else {
-      console.log(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
+      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
     }
 
     return cleaned;
@@ -555,7 +559,7 @@ export function registerMessagesRoutes(
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
       if (messages.length > 0) {
-        console.log(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
+        logger.info(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
 
         // Compter les messages avec attachments audio
         let audioAttachmentCount = 0;
@@ -588,9 +592,9 @@ export function registerMessagesRoutes(
                     speakerAnalysisInfo = ' | ⚠️ AUCUN speakerAnalysis';
                   }
 
-                  console.log(`📝 [CONVERSATIONS] Message ${msg.id} - Audio transcription: attachmentId=${att.id}, text="${transcriptionText}", lang=${att.transcription.language}, confidence=${att.transcription.confidence}, source=${att.transcription.source}, model=${att.transcription.model}, durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs}, segments=${att.transcription.segments?.length || 0}, speakerCount=${att.transcription.speakerCount}, hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
+                  logger.info(`📝 [CONVERSATIONS] Message ${msg.id} - Audio transcription: attachmentId=${att.id}, text="${transcriptionText}", lang=${att.transcription.language}, confidence=${att.transcription.confidence}, source=${att.transcription.source}, model=${att.transcription.model}, durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs}, segments=${att.transcription.segments?.length || 0}, speakerCount=${att.transcription.speakerCount}, hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
                 } else {
-                  console.log(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription: attachmentId=${att.id}, mimeType=${att.mimeType}, fileUrl=${att.fileUrl}`);
+                  logger.info(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription: attachmentId=${att.id}, mimeType=${att.mimeType}, fileUrl=${att.fileUrl}`);
                 }
 
                 // Vérifier les traductions audio (champ V2: translations au lieu de translatedAudios)
@@ -601,7 +605,7 @@ export function registerMessagesRoutes(
                     const trans = att.translations[lang];
                     return `${lang}(url="${trans?.url || '⚠️ VIDE'}", cloned=${trans?.cloned}, segments=${trans?.segments?.length || 0})`;
                   }).join(', ');
-                  console.log(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio traductions: attachmentId=${att.id}, ${langs.length} traduction(s) [${translationsInfo}]`);
+                  logger.info(`🌍 [CONVERSATIONS] Message ${msg.id} - Audio traductions: attachmentId=${att.id}, ${langs.length} traduction(s) [${translationsInfo}]`);
                 }
               }
             });
@@ -609,7 +613,7 @@ export function registerMessagesRoutes(
         });
 
         const transcriptionRate = audioAttachmentCount > 0 ? `${(audioWithTranscriptionCount / audioAttachmentCount * 100).toFixed(1)}%` : '0%';
-        console.log(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
+        logger.info(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
@@ -713,7 +717,7 @@ export function registerMessagesRoutes(
           // Marquer les messages comme reçus (curseur automatiquement placé sur le dernier message)
           await readStatusService.markMessagesAsReceived(userId, conversationId);
         } catch (error) {
-          console.warn('[GATEWAY] Error marking messages as received:', error);
+          logger.warn('[GATEWAY] Error marking messages as received:', error);
         }
       }
 
@@ -732,7 +736,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error fetching messages:', error);
+      logger.error('[GATEWAY] Error fetching messages', error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving messages'
@@ -831,7 +835,7 @@ export function registerMessagesRoutes(
         // Marquer comme lu (curseur automatiquement placé sur le dernier message)
         await readStatusService.markMessagesAsRead(userId, conversationId);
       } catch (err) {
-        console.warn('[GATEWAY] Error marking messages as read:', err);
+        logger.warn('[GATEWAY] Error marking messages as read:', err);
       }
 
       return reply.send({
@@ -840,7 +844,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error marking conversation as read:', error);
+      logger.error('[GATEWAY] Error marking conversation as read', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du marquage des messages comme lus'
@@ -1082,7 +1086,7 @@ export function registerMessagesRoutes(
             const readStatusService = new MessageReadStatusService(prisma);
             await readStatusService.markMessagesAsRead(userId, conversationId, message.id);
           } catch (err) {
-            console.warn('[GATEWAY] Error marking message as read for sender:', err);
+            logger.warn('[GATEWAY] Error marking message as read for sender:', err);
           }
         })()
       );
@@ -1096,17 +1100,17 @@ export function registerMessagesRoutes(
 
       if (mentionService && notificationService) {
         try {
-          console.log('[GATEWAY REST] ===== TRAITEMENT DES MENTIONS =====');
+          logger.info('[GATEWAY REST] ===== TRAITEMENT DES MENTIONS =====');
 
           // Extraire les mentions du contenu
           const mentionedUsernames = mentionService.extractMentions(processedContent);
-          console.log('[GATEWAY REST] Mentions extraites:', mentionedUsernames);
+          logger.info('[GATEWAY REST] Mentions extraites:', mentionedUsernames);
 
           if (mentionedUsernames.length > 0) {
             // Résoudre les usernames en utilisateurs
             const userMap = await mentionService.resolveUsernames(mentionedUsernames);
             const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
-            console.log('[GATEWAY REST] UserIds trouvés:', mentionedUserIds);
+            logger.info('[GATEWAY REST] UserIds trouvés:', mentionedUserIds);
 
             if (mentionedUserIds.length > 0) {
               // Valider les permissions de mention
@@ -1134,7 +1138,7 @@ export function registerMessagesRoutes(
                 // Mettre à jour l'objet message en mémoire
                 (message as any).validatedMentions = validatedUsernames;
 
-                console.log(`[GATEWAY REST] ✅ ${validationResult.validUserIds.length} mention(s) créée(s)`);
+                logger.info(`[GATEWAY REST] ✅ ${validationResult.validUserIds.length} mention(s) créée(s)`);
 
                 // OPTIMIZED: Charger sender et conversation en PARALLÈLE
                 const [sender, conversationForNotif] = await Promise.all([
@@ -1173,13 +1177,13 @@ export function registerMessagesRoutes(
                     },
                     memberIds
                   );
-                  console.log(`[GATEWAY REST] 📩 ${count} notifications de mention créées en batch`);
+                  logger.info(`[GATEWAY REST] 📩 ${count} notifications de mention créées en batch`);
                 }
               }
             }
           }
         } catch (mentionError) {
-          console.error('[GATEWAY REST] Erreur traitement mentions:', mentionError);
+          logger.error('[GATEWAY REST] Erreur traitement mentions', mentionError);
           // Ne pas bloquer l'envoi du message
         }
       }
@@ -1196,7 +1200,7 @@ export function registerMessagesRoutes(
           replyToId
         } as any);
       } catch (error) {
-        console.error('[GATEWAY] Error queuing translations via MessageTranslationService:', error);
+        logger.error('[GATEWAY] Error queuing translations via MessageTranslationService', error);
         // Ne pas faire échouer l'envoi du message si la traduction échoue
       }
 
@@ -1217,7 +1221,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error sending message:', error);
+      logger.error('[GATEWAY] Error sending message', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'envoi du message'
@@ -1295,7 +1299,7 @@ export function registerMessagesRoutes(
 
       reply.send({ success: true, data: { markedCount: unreadCount } });
     } catch (error) {
-      console.error('[GATEWAY] Error marking conversation as read:', error);
+      logger.error('[GATEWAY] Error marking conversation as read', error);
       reply.status(500).send({ success: false, error: 'Erreur lors du marquage comme lu' });
     }
   });

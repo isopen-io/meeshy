@@ -25,6 +25,10 @@ import type {
   VoiceAPIRequest,
   VoiceProfileRequest
 } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+// Logger dédié pour ZmqTranslationClient
+const logger = enhancedLogger.child({ module: 'ZmqTranslationClient' });
+
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -202,13 +206,13 @@ export class ZmqTranslationClient extends EventEmitter {
    */
   async initialize(): Promise<void> {
     try {
-      console.log(`[GATEWAY] 🔧 Début initialisation ZmqTranslationClient...`);
+      logger.info(`[GATEWAY] 🔧 Début initialisation ZmqTranslationClient...`);
 
       // Initialiser le connection manager
       await this.connectionManager.initialize();
 
       // Démarrer l'écoute des résultats
-      console.log(`[GATEWAY] 🔧 Démarrage de l'écoute des résultats...`);
+      logger.info(`[GATEWAY] 🔧 Démarrage de l'écoute des résultats...`);
       this._startResultListener();
 
       // Vérification de connectivité après un délai
@@ -217,12 +221,12 @@ export class ZmqTranslationClient extends EventEmitter {
       }, 2000);
 
       this.running = true;
-      console.log('[GATEWAY] ✅ ZmqTranslationClient initialisé avec succès');
-      console.log(`[GATEWAY] 🔌 Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`);
-      console.log(`[GATEWAY] 🔌 Socket SUB connecté: ${this.host}:${this.subPort} (réception résultats)`);
+      logger.info('[GATEWAY] ✅ ZmqTranslationClient initialisé avec succès');
+      logger.info(`[GATEWAY] 🔌 Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`);
+      logger.info(`[GATEWAY] 🔌 Socket SUB connecté: ${this.host}:${this.subPort} (réception résultats)`);
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Erreur initialisation ZmqTranslationClient: ${error}`);
+      logger.error(`[GATEWAY] ❌ Erreur initialisation ZmqTranslationClient: ${error}`);
       throw error;
     }
   }
@@ -232,21 +236,21 @@ export class ZmqTranslationClient extends EventEmitter {
    * COPIÉ DU FICHIER MONOLITHIQUE pour garantir compatibilité avec jest.useFakeTimers()
    */
   private async _startResultListener(): Promise<void> {
-    console.log('[GATEWAY] 🎧 Démarrage écoute des résultats de traduction...');
+    logger.info('[GATEWAY] 🎧 Démarrage écoute des résultats de traduction...');
 
     // Approche simple avec setInterval (compatible Jest)
     let heartbeatCount = 0;
 
     const checkForMessages = async () => {
       if (!this.running) {
-        console.log('[GATEWAY] 🛑 Arrêt de l\'écoute - running=false');
+        logger.info('[GATEWAY] 🛑 Arrêt de l\'écoute - running=false');
         return;
       }
 
       try {
         // Log périodique pour vérifier que la boucle fonctionne
         if (heartbeatCount % 50 === 0) { // Toutes les 5 secondes
-          console.log(`[GATEWAY] 💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
+          logger.info(`[GATEWAY] 💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
         }
         heartbeatCount++;
 
@@ -258,11 +262,11 @@ export class ZmqTranslationClient extends EventEmitter {
             // LOG APRÈS RÉCEPTION
             if (Array.isArray(message)) {
               const totalSize = message.reduce((sum, f) => sum + f.length, 0);
-              console.log(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
-              console.log(`[GATEWAY]    📋 Message multipart: ${message.length} frames, ${totalSize} bytes total`);
+              logger.info(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
+              logger.info(`[GATEWAY]    📋 Message multipart: ${message.length} frames, ${totalSize} bytes total`);
             } else {
-              console.log(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
-              console.log(`[GATEWAY]    📋 Message simple (taille): ${message.length} bytes`);
+              logger.info(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
+              logger.info(`[GATEWAY]    📋 Message simple (taille): ${message.length} bytes`);
             }
 
             // Passer au message handler
@@ -275,13 +279,13 @@ export class ZmqTranslationClient extends EventEmitter {
 
       } catch (error) {
         if (this.running) {
-          console.error(`[GATEWAY] ❌ Erreur réception résultat: ${error}`);
+          logger.error(`[GATEWAY] ❌ Erreur réception résultat: ${error}`);
         }
       }
     };
 
     // Démarrer le polling avec setInterval
-    console.log('[GATEWAY] 🔄 Démarrage polling avec setInterval...');
+    logger.info('[GATEWAY] 🔄 Démarrage polling avec setInterval...');
     this.pollingIntervalId = setInterval(checkForMessages, 100); // 100ms entre chaque vérification
   }
 
@@ -388,7 +392,7 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Health check échoué: ${error}`);
+      logger.error(`[GATEWAY] ❌ Health check échoué: ${error}`);
       return false;
     }
   }
@@ -417,7 +421,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * Ferme le client et nettoie les ressources
    */
   async close(): Promise<void> {
-    console.log('[GATEWAY] 🛑 Arrêt ZmqTranslationClient...');
+    logger.info('[GATEWAY] 🛑 Arrêt ZmqTranslationClient...');
 
     this.running = false;
 
@@ -435,10 +439,10 @@ export class ZmqTranslationClient extends EventEmitter {
       this.requestSender.clear();
       this.messageHandler.clear();
 
-      console.log('[GATEWAY] ✅ ZmqTranslationClient arrêté');
+      logger.info('[GATEWAY] ✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Erreur arrêt ZmqTranslationClient: ${error}`);
+      logger.error(`[GATEWAY] ❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
 
@@ -446,22 +450,22 @@ export class ZmqTranslationClient extends EventEmitter {
    * Méthode de test pour vérifier la réception (pour tests)
    */
   async testReception(): Promise<void> {
-    console.log('[GATEWAY] 🧪 [ZMQ-Client] Test de réception des messages...');
+    logger.info('[GATEWAY] 🧪 [ZMQ-Client] Test de réception des messages...');
 
     // Envoyer un ping et attendre la réponse
     try {
       await this.connectionManager.sendPing();
-      console.log(`[GATEWAY] 🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
+      logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
 
       // Attendre un peu pour voir si on reçoit quelque chose
       setTimeout(() => {
-        console.log(`[GATEWAY] 🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
-        console.log(`[GATEWAY] 🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
-        console.log(`[GATEWAY] 🧪 [ZMQ-Client] Running: ${this.running}`);
+        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
+        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
+        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Running: ${this.running}`);
       }, 3000);
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ [ZMQ-Client] Erreur test réception: ${error}`);
+      logger.error(`[GATEWAY] ❌ [ZMQ-Client] Erreur test réception: ${error}`);
     }
   }
 }

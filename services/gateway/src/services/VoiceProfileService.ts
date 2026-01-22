@@ -37,6 +37,10 @@ import {
   DEFAULT_VOICE_CLONING_SETTINGS,
   VoicePreviewSample
 } from '@meeshy/shared/types/voice-api';
+import { enhancedLogger } from '../utils/logger-enhanced';
+// Logger dédié pour VoiceProfileService
+const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -284,7 +288,7 @@ export class VoiceProfileService extends EventEmitter {
     consent: ConsentRequest
   ): Promise<ServiceResult<{ consentUpdated: boolean }>> {
     try {
-      console.log('[VoiceProfileService] updateConsent called:', { userId, consent });
+      logger.info('[VoiceProfileService] updateConsent called:', { userId, consent });
       const now = new Date();
       const userData: any = {};
 
@@ -297,7 +301,7 @@ export class VoiceProfileService extends EventEmitter {
           voiceProfileConsentAt: true,
         }
       });
-      console.log('[VoiceProfileService] Existing user consents:', existingUser);
+      logger.info('[VoiceProfileService] Existing user consents:', existingUser);
 
       // Les consentements vocaux sont maintenant dans User
       // IMPORTANT: Respecter la chaîne de dépendances:
@@ -353,7 +357,7 @@ export class VoiceProfileService extends EventEmitter {
       }
 
       // Mettre à jour User
-      console.log('[VoiceProfileService] Updating user with:', userData);
+      logger.info('[VoiceProfileService] Updating user with:', userData);
       const result = await this.prisma.user.update({
         where: { id: userId },
         data: userData,
@@ -365,15 +369,15 @@ export class VoiceProfileService extends EventEmitter {
           ageVerifiedAt: true
         }
       });
-      console.log('[VoiceProfileService] Update result:', result);
+      logger.info('[VoiceProfileService] Update result:', result);
 
-      console.log('[VoiceProfileService] Consent updated successfully');
+      logger.info('[VoiceProfileService] Consent updated successfully');
       return {
         success: true,
         data: { consentUpdated: true }
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error updating consent:', error);
+      logger.error('[VoiceProfileService] Error updating consent', error);
       return {
         success: false,
         error: 'Failed to update consent',
@@ -393,7 +397,7 @@ export class VoiceProfileService extends EventEmitter {
     ageVerificationConsentAt: string | null;
   }>> {
     try {
-      console.log('[VoiceProfileService] getConsentStatus called for userId:', userId);
+      logger.info(`getConsentStatus called userId=${userId}`);
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -405,7 +409,7 @@ export class VoiceProfileService extends EventEmitter {
       });
 
       if (!user) {
-        console.log('[VoiceProfileService] User not found');
+        logger.info('[VoiceProfileService] User not found');
         return {
           success: false,
           error: 'User not found',
@@ -413,7 +417,7 @@ export class VoiceProfileService extends EventEmitter {
         };
       }
 
-      console.log('[VoiceProfileService] User consents from DB:', {
+      logger.info('[VoiceProfileService] User consents from DB:', {
         voiceProfileConsentAt: user.voiceProfileConsentAt,
         voiceCloningEnabledAt: user.voiceCloningEnabledAt,
         ageVerifiedAt: user.ageVerifiedAt
@@ -435,13 +439,13 @@ export class VoiceProfileService extends EventEmitter {
         ageVerificationConsentAt: toISOString(user.ageVerifiedAt)
       };
 
-      console.log('[VoiceProfileService] Returning consent status:', result);
+      logger.info('[VoiceProfileService] Returning consent status:', result);
       return {
         success: true,
         data: result
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error getting consent status:', error);
+      logger.error('[VoiceProfileService] Error getting consent status', error);
       return {
         success: false,
         error: 'Failed to get consent status',
@@ -574,8 +578,8 @@ export class VoiceProfileService extends EventEmitter {
         // TODO: Save voice cloning settings to UserPreferences.audio JSON
         // These settings (temperature, topP, qualityPreset) need to be migrated
         if (Object.keys(updateData).length > 0) {
-          console.log('[VoiceProfileService] Voice cloning settings to save:', updateData);
-          console.warn('[VoiceProfileService] Voice cloning settings storage not yet migrated to UserPreferences');
+          logger.info('[VoiceProfileService] Voice cloning settings to save:', updateData);
+          logger.warn('[VoiceProfileService] Voice cloning settings storage not yet migrated to UserPreferences');
         }
       }
 
@@ -628,7 +632,7 @@ export class VoiceProfileService extends EventEmitter {
           durationMs: preview.duration_ms,
           generatedAt: preview.generated_at
         }));
-        console.log(`[VoiceProfileService] Generated ${profileDetails.voicePreviews.length} voice previews`);
+        logger.info(`[VoiceProfileService] Generated ${profileDetails.voicePreviews.length} voice previews`);
       }
 
       return {
@@ -636,7 +640,7 @@ export class VoiceProfileService extends EventEmitter {
         data: profileDetails
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error registering profile:', error);
+      logger.error('[VoiceProfileService] Error registering profile', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Registration failed',
@@ -749,7 +753,7 @@ export class VoiceProfileService extends EventEmitter {
         data: this.formatProfileDetails(updated, voiceModel.user)
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error calibrating profile:', error);
+      logger.error('[VoiceProfileService] Error calibrating profile', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Calibration failed',
@@ -799,7 +803,7 @@ export class VoiceProfileService extends EventEmitter {
         data: this.formatProfileDetails(voiceModel, voiceModel.user)
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error getting profile:', error);
+      logger.error('[VoiceProfileService] Error getting profile', error);
       return {
         success: false,
         error: 'Failed to get profile',
@@ -833,7 +837,7 @@ export class VoiceProfileService extends EventEmitter {
         data: { deleted: true }
       };
     } catch (error) {
-      console.error('[VoiceProfileService] Error deleting profile:', error);
+      logger.error('[VoiceProfileService] Error deleting profile', error);
       return {
         success: false,
         error: 'Failed to delete profile',

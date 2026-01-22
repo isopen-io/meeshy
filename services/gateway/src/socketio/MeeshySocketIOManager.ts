@@ -34,6 +34,10 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { MessageRequest, MessageResponse } from '@meeshy/shared/types/messaging';
 import type { Message } from '@meeshy/shared/types/index';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour SocketIOManager
+const logger = enhancedLogger.child({ module: 'SocketIOManager' });
 
 export interface SocketUser {
   id: string;
@@ -153,7 +157,7 @@ export class MeeshySocketIOManager {
       // Si non trouvé, retourner tel quel (peut-être un ObjectId invalide ou identifier inconnu)
       return conversationId;
     } catch (error) {
-      console.error('❌ [NORMALIZE] Erreur normalisation:', error);
+      logger.error('❌ [NORMALIZE] Erreur normalisation', error);
       // En cas d'erreur, retourner l'identifiant original
       return conversationId;
     }
@@ -199,15 +203,15 @@ export class MeeshySocketIOManager {
       try {
         await this.maintenanceService.startMaintenanceTasks();
       } catch (error) {
-        console.error('[GATEWAY] ❌ Erreur lors du démarrage des tâches de maintenance:', error);
-        console.error('[GATEWAY] ❌ Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+        logger.error('[GATEWAY] ❌ Erreur lors du démarrage des tâches de maintenance', error);
+        logger.error('[GATEWAY] ❌ Stack trace', error instanceof Error ? error.stack : 'No stack trace');
       }
       
       // Note: Les événements de traduction sont gérés via le singleton ZMQ
       
       
     } catch (error) {
-      console.error('[GATEWAY] ❌ Erreur initialisation MeeshySocketIOManager:', error);
+      logger.error('[GATEWAY] ❌ Erreur initialisation MeeshySocketIOManager', error);
       throw error;
     }
   }
@@ -238,8 +242,8 @@ export class MeeshySocketIOManager {
           const userIdOrToken = this.socketToUser.get(socket.id);
 
           if (!userIdOrToken) {
-            console.error(`❌ [MESSAGE_SEND] Socket ${socket.id} non authentifié`);
-            console.error(`  └─ Sockets connectés:`, Array.from(this.socketToUser.keys()).slice(0, 5));
+            logger.error(`❌ [MESSAGE_SEND] Socket ${socket.id} non authentifié`);
+            logger.error(`  └─ Sockets connectés:`, Array.from(this.socketToUser.keys()).slice(0, 5));
 
             const errorResponse: SocketIOResponse<{ messageId: string }> = {
               success: false,
@@ -266,7 +270,7 @@ export class MeeshySocketIOManager {
 
             if (callback) callback(errorResponse);
             socket.emit('error', { message: validation.error || 'Message invalide' });
-            console.warn(`⚠️ [WEBSOCKET] Message rejeté pour ${userId}: ${validation.error}`);
+            logger.warn(`⚠️ [WEBSOCKET] Message rejeté pour ${userId}: ${validation.error}`);
             return;
           }
 
@@ -286,7 +290,7 @@ export class MeeshySocketIOManager {
               // Utiliser le sessionToken stocké dans l'objet utilisateur
               const userSessionToken = user?.sessionToken;
               if (!userSessionToken) {
-                console.error('SessionToken manquant pour utilisateur anonyme:', userId);
+                logger.error('SessionToken manquant pour utilisateur anonyme', userId);
                 anonymousDisplayName = 'Anonymous User';
               } else {
                 const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
@@ -303,7 +307,7 @@ export class MeeshySocketIOManager {
                 }
               }
             } catch (error) {
-              console.error('Erreur lors de la récupération du nom anonyme:', error);
+              logger.error('Erreur lors de la récupération du nom anonyme', error);
               anonymousDisplayName = 'Anonymous User';
             }
           }
@@ -446,7 +450,7 @@ export class MeeshySocketIOManager {
           this.stats.messages_processed++;
           
         } catch (error: any) {
-          console.error('[WEBSOCKET] Erreur envoi message:', error);
+          logger.error('[WEBSOCKET] Erreur envoi message', error);
           this.stats.errors++;
 
           if (callback) {
@@ -496,7 +500,7 @@ export class MeeshySocketIOManager {
 
               if (callback) callback(errorResponse);
               socket.emit('error', { message: validation.error || 'Message invalide' });
-              console.warn(`⚠️ [WEBSOCKET] Message avec attachments rejeté pour ${userId}: ${validation.error}`);
+              logger.warn(`⚠️ [WEBSOCKET] Message avec attachments rejeté pour ${userId}: ${validation.error}`);
               return;
             }
           }
@@ -534,7 +538,7 @@ export class MeeshySocketIOManager {
             try {
               const userSessionToken = user?.sessionToken;
               if (!userSessionToken) {
-                console.error('SessionToken manquant pour utilisateur anonyme:', userId);
+                logger.error('SessionToken manquant pour utilisateur anonyme', userId);
                 anonymousDisplayName = 'Anonymous User';
               } else {
                 const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
@@ -550,7 +554,7 @@ export class MeeshySocketIOManager {
                 }
               }
             } catch (error) {
-              console.error('Erreur lors de la récupération du nom anonyme:', error);
+              logger.error('Erreur lors de la récupération du nom anonyme', error);
               anonymousDisplayName = 'Anonymous User';
             }
           }
@@ -613,7 +617,7 @@ export class MeeshySocketIOManager {
 
               // Pour chaque audio, envoyer au Translator
               for (const audioAtt of audioAttachments) {
-                console.log(`🎤 [WEBSOCKET] Envoi audio au Translator: ${audioAtt.id}`);
+                logger.info(`🎤 [WEBSOCKET] Envoi audio au Translator: ${audioAtt.id}`);
 
                 // Extraire la transcription mobile si présente dans les metadata
                 let mobileTranscription: any = undefined;
@@ -621,7 +625,7 @@ export class MeeshySocketIOManager {
                   const metadata = audioAtt.metadata as any;
                   if (metadata.transcription) {
                     mobileTranscription = metadata.transcription;
-                    console.log(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
+                    logger.info(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
                   }
                 }
 
@@ -647,10 +651,10 @@ export class MeeshySocketIOManager {
               }
 
               if (audioAttachments.length > 0) {
-                console.log(`✅ [WEBSOCKET] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
+                logger.info(`✅ [WEBSOCKET] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
               }
             } catch (audioError) {
-              console.error('⚠️ [WEBSOCKET] Erreur envoi audio au Translator:', audioError);
+              logger.error('⚠️ [WEBSOCKET] Erreur envoi audio au Translator', audioError);
               // Ne pas bloquer l'envoi du message si le traitement audio échoue
             }
           }
@@ -761,7 +765,7 @@ export class MeeshySocketIOManager {
             }
           }
         } catch (error: any) {
-          console.error('❌ [WEBSOCKET] Erreur envoi message avec attachments:', error);
+          logger.error('❌ [WEBSOCKET] Erreur envoi message avec attachments', error);
           
           if (callback) {
             const errorResponse: SocketIOResponse<{ messageId: string }> = {
@@ -1166,7 +1170,7 @@ export class MeeshySocketIOManager {
       }
       
     } catch (error) {
-      console.error(`❌ Erreur authentification: ${error}`);
+      logger.error(`❌ Erreur authentification: ${error}`);
       socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication error' });
     }
   }
@@ -1197,7 +1201,7 @@ export class MeeshySocketIOManager {
 
 
     } catch (error) {
-      console.error(`❌ [JOIN_CONVERSATIONS] Erreur jointure conversations pour ${userId}:`, error);
+      logger.error(`❌ [JOIN_CONVERSATIONS] Erreur jointure conversations pour ${userId}:`, error);
     }
   }
 
@@ -1373,7 +1377,7 @@ export class MeeshySocketIOManager {
       
       return { messageId: result.messageId };
     } catch (error) {
-      console.error(`❌ Erreur traitement message: ${error}`);
+      logger.error(`❌ Erreur traitement message: ${error}`);
       this.stats.errors++;
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to send message' });
       throw error;
@@ -1412,7 +1416,7 @@ export class MeeshySocketIOManager {
       }
       
     } catch (error) {
-      console.error(`❌ Erreur demande traduction: ${error}`);
+      logger.error(`❌ Erreur demande traduction: ${error}`);
       this.stats.errors++;
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to get translation' });
     }
@@ -1436,7 +1440,7 @@ export class MeeshySocketIOManager {
         });
         conversationIdForBroadcast = msg?.conversationId || null;
       } catch (error) {
-        console.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
+        logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
       }
       
       // Préparer les données de traduction au format correct pour le frontend
@@ -1476,7 +1480,7 @@ export class MeeshySocketIOManager {
         this.stats.translations_sent += clientCount;
         
       } else {
-        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${result.messageId}`);
+        logger.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${result.messageId}`);
         
         // Fallback UNIQUEMENT si pas de room: Envoi direct aux utilisateurs connectés pour cette langue
         const targetUsers = this._findUsersForLanguage(targetLanguage);
@@ -1510,13 +1514,13 @@ export class MeeshySocketIOManager {
             
             // Note: Les notifications de traduction sont gérées directement dans routes/notifications.ts
           } catch (error) {
-            console.error(`❌ Erreur envoi notification traduction ${result.messageId}:`, error);
+            logger.error(`❌ Erreur envoi notification traduction ${result.messageId}:`, error);
           }
         });
       }
       
     } catch (error) {
-      console.error(`❌ Erreur envoi traduction: ${error}`);
+      logger.error(`❌ Erreur envoi traduction: ${error}`);
       this.stats.errors++;
     }
   }
@@ -1542,13 +1546,13 @@ export class MeeshySocketIOManager {
     processingTimeMs?: number;
   }) {
     try {
-      console.log(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
-      console.log(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      console.log(`   📝 Transcription ID: ${data.transcription.id}`);
-      console.log(`   📝 Texte: "${data.transcription.text?.substring(0, 100)}..."`);
-      console.log(`   📝 Langue: ${data.transcription.language}`);
-      console.log(`   📝 Confiance: ${data.transcription.confidence}`);
-      console.log(`   📝 Segments: ${data.transcription.segments?.length || 0} segments`);
+      logger.info(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
+      logger.info(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      logger.info(`   📝 Transcription ID: ${data.transcription.id}`);
+      logger.info(`   📝 Texte: "${data.transcription.text?.substring(0, 100)}..."`);
+      logger.info(`   📝 Langue: ${data.transcription.language}`);
+      logger.info(`   📝 Confiance: ${data.transcription.confidence}`);
+      logger.info(`   📝 Segments: ${data.transcription.segments?.length || 0} segments`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1559,11 +1563,11 @@ export class MeeshySocketIOManager {
         });
         conversationId = msg?.conversationId || null;
       } catch (error) {
-        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour transcription:`, error);
+        logger.error(`❌ [SocketIOManager] Erreur récupération conversation pour transcription:`, error);
       }
 
       if (!conversationId) {
-        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
+        logger.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
         return;
       }
 
@@ -1573,7 +1577,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      console.log(`📢 [SocketIOManager] Diffusion transcription vers room ${roomName} (${clientCount} clients)`);
+      logger.info(`📢 [SocketIOManager] Diffusion transcription vers room ${roomName} (${clientCount} clients)`);
 
       // Préparer les données au format TranscriptionReadyEventData
       const transcriptionData = {
@@ -1585,14 +1589,14 @@ export class MeeshySocketIOManager {
       };
 
       // Diffuser dans la room de conversation
-      console.log(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
+      logger.info(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
 
-      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
-      console.log(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
+      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
+      logger.info(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
-      console.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
+      logger.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
       this.stats.errors++;
     }
   }
@@ -1610,7 +1614,7 @@ export class MeeshySocketIOManager {
     translatedAudio: any;
     phase?: string;
   }) {
-    console.log(`🌍 [DEPRECATED] _handleTranslationReady appelé - délégation au nouveau système`);
+    logger.info(`🌍 [DEPRECATED] _handleTranslationReady appelé - délégation au nouveau système`);
     // Déléguer au handler audioTranslationsProgressive par défaut pour rétrocompatibilité
     await this._handleAudioTranslationsProgressive(data);
   }
@@ -1635,10 +1639,10 @@ export class MeeshySocketIOManager {
     logPrefix: string
   ) {
     try {
-      console.log(`${logPrefix} [SocketIOManager] ======== DIFFUSION TRADUCTION VERS CLIENTS ========`);
-      console.log(`${logPrefix} [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      console.log(`   🔊 Langue: ${data.language}`);
-      console.log(`   📝 Segments: ${data.translatedAudio.segments?.length || 0}`);
+      logger.info(`${logPrefix} [SocketIOManager] ======== DIFFUSION TRADUCTION VERS CLIENTS ========`);
+      logger.info(`${logPrefix} [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
+      logger.info(`   🔊 Langue: ${data.language}`);
+      logger.info(`   📝 Segments: ${data.translatedAudio.segments?.length || 0}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1649,11 +1653,11 @@ export class MeeshySocketIOManager {
         });
         conversationId = msg?.conversationId || null;
       } catch (error) {
-        console.error(`❌ [SocketIOManager] Erreur récupération conversation pour traduction:`, error);
+        logger.error(`❌ [SocketIOManager] Erreur récupération conversation pour traduction:`, error);
       }
 
       if (!conversationId) {
-        console.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
+        logger.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${data.messageId}`);
         return;
       }
 
@@ -1663,7 +1667,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      console.log(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
+      logger.info(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
 
       // Préparer les données au format structure officielle de shared
       // Note: AudioTranslationReadyEventData, AudioTranslationsProgressiveEventData, AudioTranslationsCompletedEventData
@@ -1692,22 +1696,22 @@ export class MeeshySocketIOManager {
 
       // Vérification et log des segments
       if (translationData.translatedAudio.segments && translationData.translatedAudio.segments.length > 0) {
-        console.log(`   ✅ Segments inclus: ${translationData.translatedAudio.segments.length}`);
+        logger.info(`   ✅ Segments inclus: ${translationData.translatedAudio.segments.length}`);
         const firstSeg = translationData.translatedAudio.segments[0];
-        console.log(`   📝 Premier segment: "${firstSeg.text}" (${firstSeg.startMs}ms-${firstSeg.endMs}ms, speaker=${firstSeg.speakerId}, score=${firstSeg.voiceSimilarityScore})`);
+        logger.info(`   📝 Premier segment: "${firstSeg.text}" (${firstSeg.startMs}ms-${firstSeg.endMs}ms, speaker=${firstSeg.speakerId}, score=${firstSeg.voiceSimilarityScore})`);
       } else {
-        console.warn(`   ⚠️ Aucun segment dans translatedAudio!`);
+        logger.warn(`   ⚠️ Aucun segment dans translatedAudio!`);
       }
 
       // Diffuser dans la room de conversation
-      console.log(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
+      logger.info(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(eventConstant, translationData);
 
-      console.log(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
-      console.log(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
+      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
+      logger.info(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
-      console.error(`❌ [SocketIOManager] Erreur envoi traduction:`, error);
+      logger.error(`❌ [SocketIOManager] Erreur envoi traduction:`, error);
       this.stats.errors++;
     }
   }
@@ -1839,12 +1843,12 @@ export class MeeshySocketIOManager {
                   userId
                 });
               } catch (error) {
-                console.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);
+                logger.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);
               }
             }
           }
         } catch (error) {
-          console.error(`❌ Error checking/leaving active calls for user ${userId}:`, error);
+          logger.error(`❌ Error checking/leaving active calls for user ${userId}:`, error);
         }
 
         this._removeUserSocket(userId, socket.id);
@@ -1946,14 +1950,14 @@ export class MeeshySocketIOManager {
         }
       }
     } catch (error) {
-      console.error('❌ [STATUS] Erreur lors du broadcast du statut:', error);
+      logger.error('❌ [STATUS] Erreur lors du broadcast du statut', error);
     }
   }
 
   private async _handleTypingStart(socket: any, data: { conversationId: string }) {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
+      logger.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
       return;
     }
 
@@ -1964,7 +1968,7 @@ export class MeeshySocketIOManager {
       // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
       const result = this._getConnectedUser(userIdOrToken);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn(`⚠️ Utilisateur non connecté userId=${userIdOrToken}`);
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -2001,7 +2005,7 @@ export class MeeshySocketIOManager {
         });
 
         if (!dbAnonymousUser) {
-          console.warn('⚠️ [TYPING] Utilisateur anonyme non trouvé:', userId);
+          logger.warn(`⚠️ Utilisateur anonyme non trouvé userId=${userId}`);
           return;
         }
 
@@ -2022,7 +2026,7 @@ export class MeeshySocketIOManager {
         });
 
         if (!dbUser) {
-          console.warn('⚠️ [TYPING] Utilisateur non trouvé:', userId);
+          logger.warn(`⚠️ Utilisateur non trouvé userId=${userId}`);
           return;
         }
 
@@ -2046,14 +2050,14 @@ export class MeeshySocketIOManager {
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
 
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStart:', error);
+      logger.error('❌ [TYPING] Erreur handleTypingStart', error);
     }
   }
 
   private async _handleTypingStop(socket: any, data: { conversationId: string }) {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
+      logger.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
       return;
     }
 
@@ -2064,7 +2068,7 @@ export class MeeshySocketIOManager {
       // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
       const result = this._getConnectedUser(userIdOrToken);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn(`⚠️ Utilisateur non connecté userId=${userIdOrToken}`);
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -2096,7 +2100,7 @@ export class MeeshySocketIOManager {
         });
 
         if (!dbAnonymousUser) {
-          console.warn('⚠️ [TYPING] Utilisateur anonyme non trouvé:', userId);
+          logger.warn(`⚠️ Utilisateur anonyme non trouvé userId=${userId}`);
           return;
         }
 
@@ -2117,7 +2121,7 @@ export class MeeshySocketIOManager {
         });
 
         if (!dbUser) {
-          console.warn('⚠️ [TYPING] Utilisateur non trouvé:', userId);
+          logger.warn(`⚠️ Utilisateur non trouvé userId=${userId}`);
           return;
         }
 
@@ -2141,7 +2145,7 @@ export class MeeshySocketIOManager {
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
 
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStop:', error);
+      logger.error('❌ [TYPING] Erreur handleTypingStop', error);
     }
   }
 
@@ -2213,7 +2217,7 @@ export class MeeshySocketIOManager {
             });
             return (messageWithTranslations as any)?.translations || [];
           } catch (error) {
-            console.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
+            logger.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
             return [];
           }
         })(),
@@ -2225,7 +2229,7 @@ export class MeeshySocketIOManager {
           message.originalLanguage || 'fr',
           () => this.getConnectedUsers()
         ).catch(error => {
-          console.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
+          logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
           return null; // Continuer même si les stats échouent
         })
       ]);
@@ -2238,7 +2242,7 @@ export class MeeshySocketIOManager {
       if (statsResult.status === 'fulfilled') {
         updatedStats = statsResult.value;
       } else {
-        console.warn(`⚠️ [PERF] Stats non disponibles, broadcast sans stats`);
+        logger.warn(`⚠️ [PERF] Stats non disponibles, broadcast sans stats`);
       }
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
@@ -2314,7 +2318,7 @@ export class MeeshySocketIOManager {
 
       // DEBUG: Log pour vérifier les attachments et metadata
       if ((message as any).attachments && (message as any).attachments.length > 0) {
-        console.log('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
+        logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
           messageId: message.id,
           attachmentCount: (message as any).attachments.length,
           firstAttachment: {
@@ -2391,7 +2395,7 @@ export class MeeshySocketIOManager {
           }
         }
       } catch (unreadError) {
-        console.warn('⚠️ [UNREAD_COUNT] Erreur calcul unreadCount (non-bloquant):', unreadError);
+        logger.warn('⚠️ [UNREAD_COUNT] Erreur calcul unreadCount (non-bloquant):', unreadError);
       }
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation
@@ -2401,7 +2405,7 @@ export class MeeshySocketIOManager {
       }
       
     } catch (error) {
-      console.error('[PHASE 3.1] Erreur broadcast message:', error);
+      logger.error('[PHASE 3.1] Erreur broadcast message', error);
     }
   }
 
@@ -2469,7 +2473,7 @@ export class MeeshySocketIOManager {
       const userIdOrToken = this.socketToUser.get(socket.id);
 
       if (!userIdOrToken) {
-        console.error('❌ [_handleReactionAdd] No userId found for socket:', socket.id);
+        logger.error('❌ [_handleReactionAdd] No userId found for socket', socket.id);
 
         const errorResponse: SocketIOResponse<any> = {
           success: false,
@@ -2565,15 +2569,15 @@ export class MeeshySocketIOManager {
             messageId: data.messageId,
             reactionId: reaction.id
           }).catch((notifError) => {
-            console.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification:', notifError);
+            logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
           });
         }
 
       } else {
-        console.error(`❌ [REACTION_ADDED] Message ${data.messageId} non trouvé, impossible de broadcaster`);
+        logger.error(`❌ [REACTION_ADDED] Message ${data.messageId} non trouvé, impossible de broadcaster`);
       }
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'ajout de réaction:', error);
+      logger.error('❌ Erreur lors de l\'ajout de réaction:', error);
       const errorResponse: SocketIOResponse<any> = {
         success: false,
         error: error.message || 'Failed to add reaction'
@@ -2657,7 +2661,7 @@ export class MeeshySocketIOManager {
       }
 
     } catch (error: any) {
-      console.error('❌ Erreur lors de la suppression de réaction:', error);
+      logger.error('❌ Erreur lors de la suppression de réaction', error);
       const errorResponse: SocketIOResponse<any> = {
         success: false,
         error: error.message || 'Failed to remove reaction'
@@ -2678,7 +2682,7 @@ export class MeeshySocketIOManager {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        console.error(`❌ [REACTION_SYNC] Utilisateur non authentifié pour socket ${socket.id}`);
+        logger.error(`❌ [REACTION_SYNC] Utilisateur non authentifié pour socket ${socket.id}`);
         const errorResponse: SocketIOResponse<any> = {
           success: false,
           error: 'User not authenticated'
@@ -2715,7 +2719,7 @@ export class MeeshySocketIOManager {
       if (callback) callback(successResponse);
 
     } catch (error: any) {
-      console.error('❌ Erreur lors de la synchronisation des réactions:', error);
+      logger.error('❌ Erreur lors de la synchronisation des réactions', error);
       const errorResponse: SocketIOResponse<any> = {
         success: false,
         error: error.message || 'Failed to sync reactions'
@@ -2813,15 +2817,15 @@ export class MeeshySocketIOManager {
             fileSize: att.fileSize
           }));
           if (attachments.length > 0) {
-            console.log(`📢 [NOTIFICATIONS] Message avec ${attachments.length} attachment(s)`);
+            logger.info(`📢 [NOTIFICATIONS] Message avec ${attachments.length} attachment(s)`);
           }
         } catch (err) {
-          console.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des attachments:', err);
+          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des attachments', err);
         }
       }
 
       if (!conversation) {
-        console.error('❌ [NOTIFICATIONS] Conversation non trouvée:', message.conversationId);
+        logger.error('❌ [NOTIFICATIONS] Conversation non trouvée', message.conversationId);
         return;
       }
 
@@ -2835,7 +2839,7 @@ export class MeeshySocketIOManager {
           });
           originalMessageAuthorId = originalMessage?.senderId || null;
         } catch (err) {
-          console.error('❌ [NOTIFICATIONS] Erreur lors de la récupération du message original:', err);
+          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération du message original', err);
         }
       }
 
@@ -2849,9 +2853,9 @@ export class MeeshySocketIOManager {
             select: { mentionedUserId: true }
           });
           mentions.forEach(m => mentionedUserIds.add(m.mentionedUserId));
-          console.log(`📢 [NOTIFICATIONS] ${mentionedUserIds.size} utilisateur(s) mentionné(s) - ils ne recevront QUE la notification de mention`);
+          logger.info(`📢 [NOTIFICATIONS] ${mentionedUserIds.size} utilisateur(s) mentionné(s) - ils ne recevront QUE la notification de mention`);
         } catch (err) {
-          console.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des mentions:', err);
+          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des mentions', err);
         }
       }
 
@@ -2913,9 +2917,9 @@ export class MeeshySocketIOManager {
             replyMessageId: message.id,
             attachments: messageAttachments.length > 0 ? messageAttachments : undefined
           });
-          console.log(`📢 [NOTIFICATIONS] Notification de réponse créée pour ${originalMessageAuthorId}`);
+          logger.info(`📢 [NOTIFICATIONS] Notification de réponse créée pour ${originalMessageAuthorId}`);
         } else {
-          console.log(`📢 [NOTIFICATIONS] Skip notification de réponse pour ${originalMessageAuthorId} (mentionné - priorité mention)`);
+          logger.info(`📢 [NOTIFICATIONS] Skip notification de réponse pour ${originalMessageAuthorId} (mentionné - priorité mention)`);
         }
       }
 
@@ -2924,14 +2928,14 @@ export class MeeshySocketIOManager {
         // Ne pas envoyer de notification de message générique aux utilisateurs mentionnés
         // Ils recevront une notification de mention plus spécifique
         if (mentionedUserIds.has(member.userId)) {
-          console.log(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (mentionné)`);
+          logger.info(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (mentionné)`);
           continue;
         }
 
         // Ne pas envoyer de notification de message générique à l'auteur du message original
         // Il recevra une notification de réponse spécifique
         if (originalMessageAuthorId && member.userId === originalMessageAuthorId) {
-          console.log(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (auteur du message original)`);
+          logger.info(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (auteur du message original)`);
           continue;
         }
 
@@ -2953,7 +2957,7 @@ export class MeeshySocketIOManager {
       }
 
     } catch (error) {
-      console.error('❌ [NOTIFICATIONS] Erreur création notifications message:', error);
+      logger.error('❌ [NOTIFICATIONS] Erreur création notifications message', error);
     }
   }
 
@@ -2987,7 +2991,7 @@ export class MeeshySocketIOManager {
       const translationHealth = await this.translationService.healthCheck();
       return translationHealth;
     } catch (error) {
-      console.error(`❌ Health check échoué: ${error}`);
+      logger.error(`❌ Health check échoué: ${error}`);
       return false;
     }
   }
@@ -3000,7 +3004,7 @@ export class MeeshySocketIOManager {
       await this.translationService.close();
       this.io.close();
     } catch (error) {
-      console.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
+      logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
     }
   }
 }

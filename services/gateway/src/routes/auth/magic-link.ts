@@ -14,6 +14,11 @@ import {
 import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+// Logger dédié pour magic-link
+const logger = enhancedLogger.child({ module: 'magic-link' });
+
 
 /**
  * Register magic link, email/phone verification, session management, and /me routes
@@ -111,7 +116,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error in /auth/me:', error);
+      logger.error('[GATEWAY] Error in /auth/me', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération du profil'
@@ -180,7 +185,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error in /auth/refresh:', error);
+      logger.error('[GATEWAY] Error in /auth/refresh', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du rafraîchissement du token'
@@ -214,19 +219,19 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
       const { token, email } = validatedData;
 
-      console.log('[AUTH] Tentative de vérification email pour:', email);
+      logger.info('[AUTH] Tentative de vérification email pour:', email);
 
       const result = await authService.verifyEmail(token, email);
 
       if (!result.success) {
-        console.warn('[AUTH] ❌ Échec de vérification email:', result.error);
+        logger.warn('[AUTH] ❌ Échec de vérification email:', result.error);
         return reply.status(400).send({
           success: false,
           error: result.error
         });
       }
 
-      console.log('[AUTH] ✅ Email vérifié avec succès pour:', email);
+      logger.info('[AUTH] ✅ Email vérifié avec succès pour:', email);
 
       return reply.send({
         success: true,
@@ -234,7 +239,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur lors de la vérification email:', error);
+      logger.error('[AUTH] ❌ Erreur lors de la vérification email', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'
@@ -268,7 +273,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.resendVerification, request.body, 'resend-verification');
       const { email } = validatedData;
 
-      console.log('[AUTH] Demande de renvoi de vérification pour:', email);
+      logger.info('[AUTH] Demande de renvoi de vérification pour:', email);
 
       const result = await authService.resendVerificationEmail(email);
 
@@ -281,7 +286,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         }
       }
 
-      console.log('[AUTH] ✅ Email de vérification envoyé (si compte existe)');
+      logger.info('[AUTH] ✅ Email de vérification envoyé (si compte existe)');
 
       return reply.send({
         success: true,
@@ -289,7 +294,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur lors du renvoi de vérification:', error);
+      logger.error('[AUTH] ❌ Erreur lors du renvoi de vérification', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'envoi de l\'email'
@@ -323,19 +328,19 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.sendPhoneCode, request.body, 'send-phone-code');
       const { phoneNumber } = validatedData;
 
-      console.log('[AUTH] Envoi code SMS pour:', phoneNumber);
+      logger.info('[AUTH] Envoi code SMS pour:', phoneNumber);
 
       const result = await authService.sendPhoneVerificationCode(phoneNumber);
 
       if (!result.success) {
-        console.warn('[AUTH] ❌ Échec envoi code SMS:', result.error);
+        logger.warn('[AUTH] ❌ Échec envoi code SMS:', result.error);
         return reply.status(400).send({
           success: false,
           error: result.error
         });
       }
 
-      console.log('[AUTH] ✅ Code SMS envoyé');
+      logger.info('[AUTH] ✅ Code SMS envoyé');
 
       return reply.send({
         success: true,
@@ -343,7 +348,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur envoi code SMS:', error);
+      logger.error('[AUTH] ❌ Erreur envoi code SMS', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'envoi du code'
@@ -377,19 +382,19 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.verifyPhone, request.body, 'verify-phone');
       const { phoneNumber, code } = validatedData;
 
-      console.log('[AUTH] Vérification téléphone:', phoneNumber);
+      logger.info('[AUTH] Vérification téléphone:', phoneNumber);
 
       const result = await authService.verifyPhone(phoneNumber, code);
 
       if (!result.success) {
-        console.warn('[AUTH] ❌ Échec vérification téléphone:', result.error);
+        logger.warn('[AUTH] ❌ Échec vérification téléphone:', result.error);
         return reply.status(400).send({
           success: false,
           error: result.error
         });
       }
 
-      console.log('[AUTH] ✅ Téléphone vérifié');
+      logger.info('[AUTH] ✅ Téléphone vérifié');
 
       return reply.send({
         success: true,
@@ -397,7 +402,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur vérification téléphone:', error);
+      logger.error('[AUTH] ❌ Erreur vérification téléphone', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'
@@ -428,7 +433,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = (request as any).user.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
-      console.log('[AUTH] Récupération des sessions pour:', userId);
+      logger.info('[AUTH] Récupération des sessions pour:', userId);
 
       const sessions = await authService.getUserActiveSessions(userId, currentToken);
 
@@ -459,7 +464,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur récupération sessions:', error);
+      logger.error('[AUTH] ❌ Erreur récupération sessions', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des sessions'
@@ -510,7 +515,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = (request as any).user.userId;
       const { sessionId } = request.params as { sessionId: string };
 
-      console.log('[AUTH] Révocation session:', sessionId, 'pour user:', userId);
+      logger.info('[AUTH] Révocation session:', sessionId, 'pour user:', userId);
 
       const sessions = await authService.getUserActiveSessions(userId);
       const sessionBelongsToUser = sessions.some(s => s.id === sessionId);
@@ -531,7 +536,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         });
       }
 
-      console.log('[AUTH] ✅ Session révoquée:', sessionId);
+      logger.info('[AUTH] ✅ Session révoquée:', sessionId);
 
       return reply.send({
         success: true,
@@ -539,7 +544,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur révocation session:', error);
+      logger.error('[AUTH] ❌ Erreur révocation session', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la révocation de la session'
@@ -582,11 +587,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = (request as any).user.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
-      console.log('[AUTH] Révocation de toutes les sessions pour:', userId, '(sauf courante)');
+      logger.info('[AUTH] Révocation de toutes les sessions pour:', userId, '(sauf courante)');
 
       const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
 
-      console.log('[AUTH] ✅', revokedCount, 'session(s) révoquée(s)');
+      logger.info('[AUTH] ✅', revokedCount, 'session(s) révoquée(s)');
 
       return reply.send({
         success: true,
@@ -597,7 +602,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur révocation sessions:', error);
+      logger.error('[AUTH] ❌ Erreur révocation sessions', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la révocation des sessions'
@@ -668,7 +673,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur validation session:', error);
+      logger.error('[AUTH] ❌ Erreur validation session', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la validation de la session'

@@ -7,6 +7,11 @@
 
 import { PrismaClient, User, ConversationMember } from '@meeshy/shared/prisma/client';
 import { RedisWrapper } from './RedisWrapper';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour MentionService
+const logger = enhancedLogger.child({ module: 'MentionService' });
+
 
 export interface MentionSuggestion {
   id: string;
@@ -54,7 +59,7 @@ export class MentionService {
     this.redis = new RedisWrapper(url);
 
     const stats = this.redis.getCacheStats();
-    console.log(`[MentionService] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);
+    logger.info(`[MentionService] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);
   }
 
   /**
@@ -79,14 +84,14 @@ export class MentionService {
 
       if (cached) {
         const suggestions: MentionSuggestion[] = JSON.parse(cached);
-        console.log(`[MentionService] Cache HIT for ${cacheKey} (${suggestions.length} suggestions)`);
+        logger.info(`[MentionService] Cache HIT for ${cacheKey} (${suggestions.length} suggestions)`);
         return suggestions;
       }
 
-      console.log(`[MentionService] Cache MISS for ${cacheKey}`);
+      logger.info(`[MentionService] Cache MISS for ${cacheKey}`);
       return null;
     } catch (error) {
-      console.error('[MentionService] Error reading cache:', error);
+      logger.error('[MentionService] Error reading cache', error);
       return null;
     }
   }
@@ -103,9 +108,9 @@ export class MentionService {
     try {
       const cacheKey = this.generateCacheKey(conversationId, currentUserId, query);
       await this.redis.setex(cacheKey, this.CACHE_TTL, JSON.stringify(suggestions));
-      console.log(`[MentionService] Cached ${suggestions.length} suggestions for ${cacheKey} (TTL: ${this.CACHE_TTL}s)`);
+      logger.info(`[MentionService] Cached ${suggestions.length} suggestions for ${cacheKey} (TTL: ${this.CACHE_TTL}s)`);
     } catch (error) {
-      console.error('[MentionService] Error writing cache:', error);
+      logger.error('[MentionService] Error writing cache', error);
     }
   }
 
@@ -123,10 +128,10 @@ export class MentionService {
         for (const key of keys) {
           await this.redis.del(key);
         }
-        console.log(`[MentionService] Invalidated ${keys.length} cache entries for conversation ${conversationId}`);
+        logger.info(`[MentionService] Invalidated ${keys.length} cache entries for conversation ${conversationId}`);
       }
     } catch (error) {
-      console.error('[MentionService] Error invalidating cache:', error);
+      logger.error('[MentionService] Error invalidating cache', error);
     }
   }
 
@@ -149,7 +154,7 @@ export class MentionService {
   extractMentions(content: string): string[] {
     // Protection: contenu vide ou trop long
     if (!content || content.length > this.MAX_CONTENT_LENGTH) {
-      console.warn(`[MentionService] Content too long or empty: ${content?.length || 0} bytes`);
+      logger.warn(`[MentionService] Content too long or empty: ${content?.length || 0} bytes`);
       return [];
     }
 
@@ -162,7 +167,7 @@ export class MentionService {
 
         // SÉCURITÉ: Valider le format du username
         if (!this.isValidUsername(username)) {
-          console.warn(`[MentionService] Invalid username format ignored: @${username}`);
+          logger.warn(`[MentionService] Invalid username format ignored: @${username}`);
           continue; // Ignorer silencieusement les mentions invalides
         }
 
@@ -170,14 +175,14 @@ export class MentionService {
 
         // SÉCURITÉ: Limiter le nombre de mentions
         if (mentions.size >= this.MAX_MENTIONS_PER_MESSAGE) {
-          console.warn(`[MentionService] Max mentions limit reached (${this.MAX_MENTIONS_PER_MESSAGE}), truncating`);
+          logger.warn(`[MentionService] Max mentions limit reached (${this.MAX_MENTIONS_PER_MESSAGE}), truncating`);
           break;
         }
       }
     }
 
     if (mentions.size > 0) {
-      console.log(`[MentionService] Extracted ${mentions.size} valid mention(s)`);
+      logger.info(`[MentionService] Extracted ${mentions.size} valid mention(s)`);
     }
 
     return Array.from(mentions);
@@ -216,7 +221,7 @@ export class MentionService {
       }
     });
 
-    console.log('[MentionService] resolveUsernames:', {
+    logger.info('[MentionService] resolveUsernames:', {
       requestedUsernames: usernames,
       foundCount: users.length,
       foundUsernames: users.map(u => u.username)
@@ -246,7 +251,7 @@ export class MentionService {
     currentUserId: string,
     query: string = ''
   ): Promise<MentionSuggestion[]> {
-    console.log('[MentionService] getUserSuggestionsForConversation called', {
+    logger.info('[MentionService] getUserSuggestionsForConversation called', {
       conversationId,
       currentUserId,
       query
@@ -261,7 +266,7 @@ export class MentionService {
     const normalizedQuery = query.toLowerCase().trim();
 
     // 1. Récupérer les membres de la conversation
-    console.log('[MentionService] Fetching conversation members...');
+    logger.info('[MentionService] Fetching conversation members...');
     let conversationMembers;
     try {
       conversationMembers = await this.prisma.conversationMember.findMany({
@@ -286,9 +291,9 @@ export class MentionService {
         // Note: MongoDB/Prisma ne supporte pas orderBy sur les relations
         // Le tri sera fait après en mémoire
       });
-      console.log(`[MentionService] Found ${conversationMembers.length} conversation members`);
+      logger.info(`[MentionService] Found ${conversationMembers.length} conversation members`);
     } catch (err) {
-      console.error('[MentionService] Error fetching conversation members:', err);
+      logger.error('[MentionService] Error fetching conversation members', err);
       throw err;
     }
 
@@ -300,7 +305,7 @@ export class MentionService {
     });
 
     // 2. Récupérer les amis de l'utilisateur (via les demandes acceptées)
-    console.log('[MentionService] Fetching friendships...');
+    logger.info('[MentionService] Fetching friendships...');
     let friendships;
     try {
       friendships = await this.prisma.friendRequest.findMany({
@@ -333,9 +338,9 @@ export class MentionService {
           }
         }
       });
-      console.log(`[MentionService] Found ${friendships.length} friendships`);
+      logger.info(`[MentionService] Found ${friendships.length} friendships`);
     } catch (err) {
-      console.error('[MentionService] Error fetching friendships:', err);
+      logger.error('[MentionService] Error fetching friendships', err);
       throw err;
     }
 
@@ -614,7 +619,7 @@ export class MentionService {
         }).catch((error: any) => {
           // Ignorer les erreurs de doublons (code P2002)
           if (error.code !== 'P2002') {
-            console.error(`Error creating mention for user ${userId}:`, error);
+            logger.error(`Error creating mention for user ${userId}:`, error);
           }
         })
       )

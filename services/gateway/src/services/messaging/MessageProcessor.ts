@@ -10,6 +10,11 @@ import { TrackingLinkService } from '../TrackingLinkService';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+// Logger dédié pour MessageProcessor
+const logger = enhancedLogger.child({ module: 'MessageProcessor' });
+
 
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
 
@@ -79,7 +84,7 @@ export class MessageProcessor {
 
           if (urlTokenMap.has(url)) {
             token = urlTokenMap.get(url)!;
-            console.log(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
+            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
           } else {
             let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
               url,
@@ -102,7 +107,7 @@ export class MessageProcessor {
           const meeshyShortLink = `m+${token}`;
           processedContent = processedContent.replace(fullMatch, meeshyShortLink);
         } catch (linkError) {
-          console.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
+          logger.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
           processedContent = processedContent.replace(fullMatch, url);
         }
       }
@@ -120,7 +125,7 @@ export class MessageProcessor {
 
           if (urlTokenMap.has(url)) {
             token = urlTokenMap.get(url)!;
-            console.log(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
+            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
           } else {
             let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
               url,
@@ -143,7 +148,7 @@ export class MessageProcessor {
           const meeshyShortLink = `m+${token}`;
           processedContent = processedContent.replace(fullMatch, meeshyShortLink);
         } catch (linkError) {
-          console.error(`[MessageProcessor] Error processing <url>:`, linkError);
+          logger.error(`[MessageProcessor] Error processing <url>:`, linkError);
           processedContent = processedContent.replace(fullMatch, url);
         }
       }
@@ -155,7 +160,7 @@ export class MessageProcessor {
 
       return processedContent;
     } catch (error) {
-      console.error('[MessageProcessor] Error processing links:', error);
+      logger.error('[MessageProcessor] Error processing links', error);
       return content;
     }
   }
@@ -203,7 +208,7 @@ export class MessageProcessor {
 
     // E2EE mode: encryption happens client-side
     if (mode === 'e2ee') {
-      console.warn('[MessageProcessor] E2EE message received as plaintext - client should encrypt');
+      logger.warn('[MessageProcessor] E2EE message received as plaintext - client should encrypt');
       return {
         isEncrypted: false,
         mode: 'e2ee',
@@ -253,7 +258,7 @@ export class MessageProcessor {
       }
 
       // Unknown mode - fallback to plaintext
-      console.warn(`[MessageProcessor] Unknown encryption mode: ${mode}`);
+      logger.warn(`[MessageProcessor] Unknown encryption mode: ${mode}`);
       return {
         isEncrypted: false,
         mode: null,
@@ -261,7 +266,7 @@ export class MessageProcessor {
         encryptionMetadata: null
       };
     } catch (error) {
-      console.error('[MessageProcessor] Encryption failed:', error);
+      logger.error('[MessageProcessor] Encryption failed', error);
       return {
         isEncrypted: false,
         mode: null,
@@ -439,11 +444,11 @@ export class MessageProcessor {
             data: { messageId }
           });
         } catch (updateError) {
-          console.error(`[MessageProcessor] Error updating messageId for token ${token}:`, updateError);
+          logger.error(`[MessageProcessor] Error updating messageId for token ${token}:`, updateError);
         }
       }
     } catch (error) {
-      console.error('[MessageProcessor] Error updating messageIds:', error);
+      logger.error('[MessageProcessor] Error updating messageIds', error);
     }
   }
 
@@ -456,19 +461,19 @@ export class MessageProcessor {
     processedContent: string
   ): Promise<void> {
     try {
-      console.log('[MessageProcessor] Processing mentions');
+      logger.info('[MessageProcessor] Processing mentions');
 
       let mentionedUserIds: string[] = [];
       let validatedUsernames: string[] = [];
 
       // Utiliser les mentions envoyées par le frontend si disponibles
       if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-        console.log('[MessageProcessor] Using mentions from frontend:', data.mentionedUserIds);
+        logger.info('[MessageProcessor] Using mentions from frontend:', data.mentionedUserIds);
         mentionedUserIds = Array.from(data.mentionedUserIds);
       } else {
         // Parser le contenu pour extraire les mentions (compatibilité)
         const mentionedUsernames = this.mentionService.extractMentions(processedContent);
-        console.log('[MessageProcessor] Extracted mentions (legacy):', mentionedUsernames);
+        logger.info('[MessageProcessor] Extracted mentions (legacy):', mentionedUsernames);
 
         if (mentionedUsernames.length > 0 && data.senderId) {
           const userMap = await this.mentionService.resolveUsernames(mentionedUsernames);
@@ -507,7 +512,7 @@ export class MessageProcessor {
 
           message.validatedMentions = finalValidatedUsernames;
 
-          console.log(`[MessageProcessor] ${validationResult.validUserIds.length} mention(s) created`);
+          logger.info(`[MessageProcessor] ${validationResult.validUserIds.length} mention(s) created`);
 
           if (this.notificationService) {
             await this.sendMentionNotifications(
@@ -521,11 +526,11 @@ export class MessageProcessor {
         }
 
         if (!validationResult.isValid) {
-          console.warn(`[MessageProcessor] Some mentions invalid:`, validationResult.errors);
+          logger.warn(`[MessageProcessor] Some mentions invalid:`, validationResult.errors);
         }
       }
     } catch (mentionError) {
-      console.error('[MessageProcessor] Error processing mentions:', mentionError);
+      logger.error('[MessageProcessor] Error processing mentions', mentionError);
     }
   }
 
@@ -548,7 +553,7 @@ export class MessageProcessor {
       });
 
       if (!sender) {
-        console.error('[MessageProcessor] Sender not found for mention notifications');
+        logger.error('[MessageProcessor] Sender not found for mention notifications');
         return;
       }
 
@@ -565,7 +570,7 @@ export class MessageProcessor {
       });
 
       if (!conversation) {
-        console.error('[MessageProcessor] Conversation not found for mention notifications');
+        logger.error('[MessageProcessor] Conversation not found for mention notifications');
         return;
       }
 
@@ -587,7 +592,7 @@ export class MessageProcessor {
           fileSize: att.fileSize
         }));
       } catch (err) {
-        console.error('[MessageProcessor] Error fetching attachments for mention:', err);
+        logger.error('[MessageProcessor] Error fetching attachments for mention', err);
       }
 
       const memberIds = conversation.members.map(m => m.userId);
@@ -607,9 +612,9 @@ export class MessageProcessor {
         memberIds
       );
 
-      console.log(`[MessageProcessor] ${count} mention notifications created`);
+      logger.info(`[MessageProcessor] ${count} mention notifications created`);
     } catch (error) {
-      console.error('[MessageProcessor] Error sending mention notifications:', error);
+      logger.error('[MessageProcessor] Error sending mention notifications', error);
     }
   }
 

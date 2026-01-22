@@ -22,6 +22,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RedisWrapper } from './RedisWrapper';
 import { SmsService } from './SmsService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour PhoneTransferService
+const logger = enhancedLogger.child({ module: 'PhoneTransferService' });
+
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
@@ -152,10 +157,10 @@ export class PhoneTransferService {
   async initiateTransfer(request: PhoneTransferInitRequest): Promise<PhoneTransferInitResult> {
     const { phoneNumber, phoneCountryCode, newUserId, ipAddress, userAgent } = request;
 
-    console.log('[PhoneTransfer] 📱 ======== INITIATE TRANSFER ========');
-    console.log('[PhoneTransfer] 📱 Phone:', phoneNumber);
-    console.log('[PhoneTransfer] 📱 New User ID:', newUserId);
-    console.log('[PhoneTransfer] 📱 IP:', ipAddress);
+    logger.info('[PhoneTransfer] 📱 ======== INITIATE TRANSFER ========');
+    logger.info('[PhoneTransfer] 📱 Phone:', phoneNumber);
+    logger.info('[PhoneTransfer] 📱 New User ID:', newUserId);
+    logger.info('[PhoneTransfer] 📱 IP:', ipAddress);
 
     try {
       // 1. Find current owner
@@ -174,7 +179,7 @@ export class PhoneTransferService {
       });
 
       if (!currentOwner) {
-        console.log('[PhoneTransfer] ❌ No verified owner found for this phone');
+        logger.info('[PhoneTransfer] ❌ No verified owner found for this phone');
         return { success: false, error: 'phone_not_found' };
       }
 
@@ -210,7 +215,7 @@ export class PhoneTransferService {
       const smsResult = await this.smsService.sendPasswordResetCode(phoneNumber, code);
 
       if (!smsResult.success) {
-        console.error('[PhoneTransfer] ❌ SMS send failed:', smsResult.error);
+        logger.error('[PhoneTransfer] ❌ SMS send failed', smsResult.error);
         await this.redis.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'sms_send_failed' };
       }
@@ -221,7 +226,7 @@ export class PhoneTransferService {
         ipAddress,
       });
 
-      console.log('[PhoneTransfer] ✅ Transfer initiated, SMS sent');
+      logger.info('[PhoneTransfer] ✅ Transfer initiated, SMS sent');
       return {
         success: true,
         transferId,
@@ -232,7 +237,7 @@ export class PhoneTransferService {
         },
       };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in initiateTransfer:', error);
+      logger.error('[PhoneTransfer] Error in initiateTransfer', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -243,9 +248,9 @@ export class PhoneTransferService {
   async verifyAndTransfer(request: PhoneTransferVerifyRequest): Promise<PhoneTransferVerifyResult> {
     const { transferId, code, ipAddress } = request;
 
-    console.log('[PhoneTransfer] ✉️ ======== VERIFY TRANSFER ========');
-    console.log('[PhoneTransfer] ✉️ Transfer ID:', transferId);
-    console.log('[PhoneTransfer] ✉️ IP:', ipAddress);
+    logger.info('[PhoneTransfer] ✉️ ======== VERIFY TRANSFER ========');
+    logger.info('[PhoneTransfer] ✉️ Transfer ID:', transferId);
+    logger.info('[PhoneTransfer] ✉️ IP:', ipAddress);
 
     try {
       // 1. Get transfer data from Redis
@@ -350,10 +355,10 @@ export class PhoneTransferService {
       // 5. Clean up Redis
       await this.redis.del(`phone-transfer:${transferId}`);
 
-      console.log('[PhoneTransfer] ✅ Phone transferred successfully');
+      logger.info('[PhoneTransfer] ✅ Phone transferred successfully');
       return { success: true, transferred: true };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in verifyAndTransfer:', error);
+      logger.error('[PhoneTransfer] Error in verifyAndTransfer', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -416,7 +421,7 @@ export class PhoneTransferService {
 
       return { success: true };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in resendCode:', error);
+      logger.error('[PhoneTransfer] Error in resendCode', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -434,10 +439,10 @@ export class PhoneTransferService {
   ): Promise<PhoneTransferForRegistrationInitResult> {
     const { phoneNumber, phoneCountryCode, pendingUsername, pendingEmail, ipAddress, userAgent } = request;
 
-    console.log('[PhoneTransfer] 📱 ======== INITIATE REGISTRATION TRANSFER ========');
-    console.log('[PhoneTransfer] 📱 Phone:', phoneNumber);
-    console.log('[PhoneTransfer] 📱 Pending Username:', pendingUsername);
-    console.log('[PhoneTransfer] 📱 IP:', ipAddress);
+    logger.info('[PhoneTransfer] 📱 ======== INITIATE REGISTRATION TRANSFER ========');
+    logger.info('[PhoneTransfer] 📱 Phone:', phoneNumber);
+    logger.info('[PhoneTransfer] 📱 Pending Username:', pendingUsername);
+    logger.info('[PhoneTransfer] 📱 IP:', ipAddress);
 
     try {
       // 1. Find current owner
@@ -456,7 +461,7 @@ export class PhoneTransferService {
       });
 
       if (!currentOwner) {
-        console.log('[PhoneTransfer] ❌ No verified owner found for this phone');
+        logger.info('[PhoneTransfer] ❌ No verified owner found for this phone');
         return { success: false, error: 'phone_not_found' };
       }
 
@@ -493,7 +498,7 @@ export class PhoneTransferService {
       const smsResult = await this.smsService.sendPasswordResetCode(phoneNumber, code);
 
       if (!smsResult.success) {
-        console.error('[PhoneTransfer] ❌ SMS send failed:', smsResult.error);
+        logger.error('[PhoneTransfer] ❌ SMS send failed', smsResult.error);
         await this.redis.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'sms_send_failed' };
       }
@@ -504,13 +509,13 @@ export class PhoneTransferService {
         ipAddress,
       });
 
-      console.log('[PhoneTransfer] ✅ Registration transfer initiated, SMS sent');
+      logger.info('[PhoneTransfer] ✅ Registration transfer initiated, SMS sent');
       return {
         success: true,
         transferId,
       };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in initiateTransferForRegistration:', error);
+      logger.error('[PhoneTransfer] Error in initiateTransferForRegistration', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -525,9 +530,9 @@ export class PhoneTransferService {
   ): Promise<PhoneTransferVerifyForRegistrationResult> {
     const { transferId, code, ipAddress } = request;
 
-    console.log('[PhoneTransfer] ✉️ ======== VERIFY REGISTRATION TRANSFER ========');
-    console.log('[PhoneTransfer] ✉️ Transfer ID:', transferId);
-    console.log('[PhoneTransfer] ✉️ IP:', ipAddress);
+    logger.info('[PhoneTransfer] ✉️ ======== VERIFY REGISTRATION TRANSFER ========');
+    logger.info(`✉️ Transfer ID transferId=${transferId}`);
+    logger.info(`✉️ IP ipAddress=${ipAddress}`);
 
     try {
       // 1. Get transfer data from Redis
@@ -592,14 +597,14 @@ export class PhoneTransferService {
         transferId
       );
 
-      console.log('[PhoneTransfer] ✅ Registration transfer verified');
+      logger.info('[PhoneTransfer] ✅ Registration transfer verified');
       return {
         success: true,
         verified: true,
         transferToken, // Return raw token to frontend
       };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in verifyForRegistration:', error);
+      logger.error('[PhoneTransfer] Error in verifyForRegistration', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -699,10 +704,10 @@ export class PhoneTransferService {
       await this.redis.del(`phone-transfer:${transferId}`);
       await this.redis.del(`phone-transfer-token:${tokenHash}`);
 
-      console.log('[PhoneTransfer] ✅ Registration transfer executed successfully');
+      logger.info('[PhoneTransfer] ✅ Registration transfer executed successfully');
       return { success: true };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in executeRegistrationTransfer:', error);
+      logger.error('[PhoneTransfer] Error in executeRegistrationTransfer', error);
       return { success: false, error: 'internal_error' };
     }
   }
@@ -744,7 +749,7 @@ export class PhoneTransferService {
         fromUserId: transferData.fromUserId,
       };
     } catch (error) {
-      console.error('[PhoneTransfer] Error in getTransferDataByToken:', error);
+      logger.error('[PhoneTransfer] Error in getTransferDataByToken', error);
       return { valid: false };
     }
   }
@@ -780,7 +785,7 @@ export class PhoneTransferService {
         },
       });
     } catch (error) {
-      console.error('[PhoneTransfer] Failed to log security event:', error);
+      logger.error('[PhoneTransfer] Failed to log security event', error);
     }
   }
 }

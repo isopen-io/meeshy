@@ -23,6 +23,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RedisWrapper } from './RedisWrapper';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+// Logger dédié pour PasswordResetService
+const logger = enhancedLogger.child({ module: 'PasswordResetService' });
+
 
 const BCRYPT_COST = 12;
 const TOKEN_EXPIRY_MINUTES = 15;
@@ -65,30 +70,30 @@ export class PasswordResetService {
   ): Promise<{ success: boolean; message: string }> {
     const { email, captchaToken, deviceFingerprint, ipAddress, userAgent } = request;
 
-    console.log('[PasswordResetService] 📧 ======== PASSWORD RESET REQUEST ========');
-    console.log('[PasswordResetService] 📧 Email:', email);
-    console.log('[PasswordResetService] 📧 IP:', ipAddress);
-    console.log('[PasswordResetService] 📧 BYPASS_CAPTCHA:', process.env.BYPASS_CAPTCHA);
+    logger.info('[PasswordResetService] 📧 ======== PASSWORD RESET REQUEST ========');
+    logger.info('[PasswordResetService] 📧 Email:', email);
+    logger.info('[PasswordResetService] 📧 IP:', ipAddress);
+    logger.info('[PasswordResetService] 📧 BYPASS_CAPTCHA:', process.env.BYPASS_CAPTCHA);
 
     try {
       // 1. Verify CAPTCHA (optional - rate limiting middleware handles most protection)
       if (captchaToken) {
         const isCaptchaValid = await this.verifyCaptcha(captchaToken, ipAddress);
-        console.log('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
+        logger.info('[PasswordResetService] 📧 CAPTCHA valid:', isCaptchaValid);
         if (!isCaptchaValid) {
-          console.log('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
+          logger.info('[PasswordResetService] ❌ CAPTCHA invalid - returning generic response');
           // Return generic response (don't reveal CAPTCHA failure)
           return this.genericSuccessResponse();
         }
       } else {
-        console.log('[PasswordResetService] 📧 No CAPTCHA token - relying on rate limiting');
+        logger.info('[PasswordResetService] 📧 No CAPTCHA token - relying on rate limiting');
       }
 
       // 2. Rate limiting
       const isRateLimited = await this.checkRateLimit(email, ipAddress);
-      console.log('[PasswordResetService] 📧 Rate limited:', isRateLimited);
+      logger.info('[PasswordResetService] 📧 Rate limited:', isRateLimited);
       if (isRateLimited) {
-        console.log('[PasswordResetService] ❌ Rate limited - returning generic response');
+        logger.info('[PasswordResetService] ❌ Rate limited - returning generic response');
         await this.logSecurityEvent(null, 'RATE_LIMIT_EXCEEDED', 'MEDIUM', {
           email,
           ipAddress,
@@ -98,7 +103,7 @@ export class PasswordResetService {
       }
 
       // 3. Find user by email (case-insensitive)
-      console.log('[PasswordResetService] 📧 Looking for user with email:', email.toLowerCase().trim());
+      logger.info('[PasswordResetService] 📧 Looking for user with email:', email.toLowerCase().trim());
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: email.toLowerCase().trim(), mode: 'insensitive' },
@@ -118,20 +123,20 @@ export class PasswordResetService {
 
       // 4. User not found - return generic response
       if (!user) {
-        console.log('[PasswordResetService] ❌ User not found - returning generic response');
+        logger.info('[PasswordResetService] ❌ User not found - returning generic response');
         return this.genericSuccessResponse();
       }
-      console.log('[PasswordResetService] ✅ User found:', user.id, user.email);
+      logger.info('[PasswordResetService] ✅ User found:', user.id, user.email);
 
       // 5. Email not verified - return generic response
       if (!user.emailVerifiedAt) {
-        console.log('[PasswordResetService] ❌ Email not verified - returning generic response');
+        logger.info('[PasswordResetService] ❌ Email not verified - returning generic response');
         await this.logSecurityEvent(user.id, 'PASSWORD_RESET_UNVERIFIED_EMAIL', 'LOW', {
           email: user.email
         });
         return this.genericSuccessResponse();
       }
-      console.log('[PasswordResetService] ✅ Email verified at:', user.emailVerifiedAt);
+      logger.info('[PasswordResetService] ✅ Email verified at:', user.emailVerifiedAt);
 
       // 6. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
@@ -219,7 +224,7 @@ export class PasswordResetService {
       return this.genericSuccessResponse();
 
     } catch (error) {
-      console.error('[PasswordResetService] Error in requestPasswordReset:', error);
+      logger.error('[PasswordResetService] Error in requestPasswordReset', error);
       // Return generic response even on error
       return this.genericSuccessResponse();
     }
@@ -438,7 +443,7 @@ export class PasswordResetService {
       };
 
     } catch (error) {
-      console.error('[PasswordResetService] Error in completePasswordReset:', error);
+      logger.error('[PasswordResetService] Error in completePasswordReset', error);
       return {
         success: false,
         error: 'An error occurred while resetting your password. Please try again.'
@@ -460,7 +465,7 @@ export class PasswordResetService {
   private async verifyCaptcha(token: string, ipAddress: string): Promise<boolean> {
     // Check if CAPTCHA bypass is enabled (development only)
     if (process.env.BYPASS_CAPTCHA === 'true') {
-      console.log('[PasswordResetService] ✅ CAPTCHA bypassed (development mode)');
+      logger.info('[PasswordResetService] ✅ CAPTCHA bypassed (development mode)');
       return true;
     }
 
@@ -479,7 +484,7 @@ export class PasswordResetService {
 
       return response.data.success === true;
     } catch (error) {
-      console.error('[PasswordResetService] CAPTCHA verification failed:', error);
+      logger.error('[PasswordResetService] CAPTCHA verification failed', error);
       return false;
     }
   }
@@ -588,7 +593,7 @@ export class PasswordResetService {
       }
       return false;
     } catch (error) {
-      console.error('[PasswordResetService] Failed to acquire lock:', error);
+      logger.error('[PasswordResetService] Failed to acquire lock', error);
       return false;
     }
   }
@@ -759,7 +764,7 @@ export class PasswordResetService {
         }
       });
     } catch (error) {
-      console.error('[PasswordResetService] Failed to log security event:', error);
+      logger.error('[PasswordResetService] Failed to log security event', error);
     }
   }
 }

@@ -10,6 +10,11 @@ import { parseFile } from 'music-metadata';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+// Logger dédié pour MetadataManager
+const logger = enhancedLogger.child({ module: 'MetadataManager' });
+
 
 export interface AudioMetadata {
   duration: number;      // En millisecondes
@@ -72,7 +77,7 @@ export class MetadataManager {
 
       return thumbnailPath;
     } catch (error) {
-      console.error('[MetadataManager] Erreur génération miniature:', error);
+      logger.error('[MetadataManager] Erreur génération miniature', error);
       return null;
     }
   }
@@ -90,7 +95,7 @@ export class MetadataManager {
         .jpeg({ quality: 80 })
         .toBuffer();
     } catch (error) {
-      console.warn('[MetadataManager] Could not generate thumbnail from buffer:', error);
+      logger.warn('[MetadataManager] Could not generate thumbnail from buffer:', error);
       return undefined;
     }
   }
@@ -107,7 +112,7 @@ export class MetadataManager {
         height: metadata.height || 0,
       };
     } catch (error) {
-      console.error('[MetadataManager] Erreur extraction métadonnées image:', error);
+      logger.error('[MetadataManager] Erreur extraction métadonnées image', error);
       return { width: 0, height: 0 };
     }
   }
@@ -123,7 +128,7 @@ export class MetadataManager {
         height: metadata.height || 0,
       };
     } catch (error) {
-      console.error('[MetadataManager] Erreur extraction métadonnées image depuis buffer:', error);
+      logger.error('[MetadataManager] Erreur extraction métadonnées image depuis buffer', error);
       return { width: 0, height: 0 };
     }
   }
@@ -135,7 +140,7 @@ export class MetadataManager {
   private async extractAudioWithFfprobe(fullPath: string): Promise<AudioMetadata | null> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        console.warn('[MetadataManager] Timeout ffprobe après 10 secondes');
+        logger.warn('[MetadataManager] Timeout ffprobe après 10 secondes');
         resolve(null);
       }, 10000);
 
@@ -143,7 +148,7 @@ export class MetadataManager {
         clearTimeout(timeout);
 
         if (err) {
-          console.warn('[MetadataManager] ffprobe error:', err);
+          logger.warn('[MetadataManager] ffprobe error:', err);
           resolve(null);
           return;
         }
@@ -151,7 +156,7 @@ export class MetadataManager {
         const audioStream = metadata.streams?.find((s) => s.codec_type === 'audio');
 
         if (!audioStream) {
-          console.warn('[MetadataManager] No audio stream found in file');
+          logger.warn('[MetadataManager] No audio stream found in file');
           resolve(null);
           return;
         }
@@ -162,7 +167,7 @@ export class MetadataManager {
         const codec = audioStream.codec_name || 'unknown';
         const channels = audioStream.channels || 1;
 
-        console.log('📊 [MetadataManager] ffprobe extraction:', {
+        logger.info('📊 [MetadataManager] ffprobe extraction:', {
           duration,
           durationSeconds: duration / 1000,
           bitrate,
@@ -215,7 +220,7 @@ export class MetadataManager {
       const durationSeconds = byteRate > 0 ? dataSize / byteRate : 0;
       const duration = Math.round(durationSeconds * 1000); // Convertir en millisecondes
 
-      console.log('📊 [MetadataManager] WAV header analysis:', {
+      logger.info('📊 [MetadataManager] WAV header analysis:', {
         audioFormat,
         channels,
         sampleRate,
@@ -235,7 +240,7 @@ export class MetadataManager {
         channels,
       };
     } catch (error) {
-      console.error('[MetadataManager] Erreur lecture header WAV:', error);
+      logger.error('[MetadataManager] Erreur lecture header WAV', error);
       return null;
     }
   }
@@ -285,7 +290,7 @@ export class MetadataManager {
       // Bitrate trop faible: durée probablement trop longue
       const estimatedDurationSeconds = (fileSize * 8) / expected.min;
       const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
-      console.warn('⚠️ [MetadataManager] Bitrate trop faible détecté:', {
+      logger.warn('⚠️ [MetadataManager] Bitrate trop faible détecté:', {
         durationMs: duration,
         durationSeconds: durationSeconds,
         fileSize,
@@ -305,7 +310,7 @@ export class MetadataManager {
       // Bitrate trop élevé: durée probablement trop courte ou fichier corrompu
       const estimatedDurationSeconds = (fileSize * 8) / expected.max;
       const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
-      console.warn('⚠️ [MetadataManager] Bitrate trop élevé détecté:', {
+      logger.warn('⚠️ [MetadataManager] Bitrate trop élevé détecté:', {
         durationMs: duration,
         durationSeconds: durationSeconds,
         actualBitrate: Math.round(actualBitrate),
@@ -357,7 +362,7 @@ export class MetadataManager {
           channels: format.numberOfChannels || 1,
         };
 
-        console.log('📊 [MetadataManager] music-metadata extraction:', {
+        logger.info('📊 [MetadataManager] music-metadata extraction:', {
           filePath: audioPath,
           duration: metadata.duration,
           durationSeconds: metadata.duration / 1000,
@@ -365,7 +370,7 @@ export class MetadataManager {
           codec: metadata.codec
         });
       } catch (parseError) {
-        console.warn('[MetadataManager] music-metadata failed, trying fallback methods:', parseError);
+        logger.warn('[MetadataManager] music-metadata failed, trying fallback methods:', parseError);
       }
 
       // Fallback 1: Si échec ou format WAV, essayer de lire le header WAV
@@ -374,7 +379,7 @@ export class MetadataManager {
         const wavMetadata = await this.calculateWavDuration(fullPath, fileSize);
         if (wavMetadata) {
           metadata = wavMetadata;
-          console.log('✅ [MetadataManager] WAV duration calculated from header');
+          logger.info('✅ [MetadataManager] WAV duration calculated from header');
         }
       }
 
@@ -383,20 +388,20 @@ export class MetadataManager {
           mimeType && (mimeType.includes('m4a') || mimeType.includes('aac') ||
                        mimeType.includes('mp4') || mimeType.includes('x-m4a'))) {
         try {
-          console.log('🔍 [MetadataManager] Trying ffprobe for M4A/AAC format...');
+          logger.info('🔍 [MetadataManager] Trying ffprobe for M4A/AAC format...');
           const ffprobeMetadata = await this.extractAudioWithFfprobe(fullPath);
           if (ffprobeMetadata) {
             metadata = ffprobeMetadata;
-            console.log('✅ [MetadataManager] M4A/AAC metadata extracted with ffprobe');
+            logger.info('✅ [MetadataManager] M4A/AAC metadata extracted with ffprobe');
           }
         } catch (ffprobeError) {
-          console.warn('[MetadataManager] ffprobe fallback failed:', ffprobeError);
+          logger.warn('[MetadataManager] ffprobe fallback failed:', ffprobeError);
         }
       }
 
       // Si toujours pas de métadonnées valides
       if (!metadata || metadata.duration === 0) {
-        console.warn('[MetadataManager] No valid metadata extracted');
+        logger.warn('[MetadataManager] No valid metadata extracted');
         return {
           duration: 0,
           bitrate: 0,
@@ -416,7 +421,7 @@ export class MetadataManager {
         );
 
         if (!validation.isValid && validation.estimatedDuration) {
-          console.warn('⚠️ [MetadataManager] Using estimated duration instead:', {
+          logger.warn('⚠️ [MetadataManager] Using estimated duration instead:', {
             originalDuration: metadata.duration,
             estimatedDuration: validation.estimatedDuration,
             reason: validation.reason
@@ -427,7 +432,7 @@ export class MetadataManager {
 
       return metadata;
     } catch (error) {
-      console.error('[MetadataManager] Erreur extraction métadonnées audio:', {
+      logger.error('[MetadataManager] Erreur extraction métadonnées audio', {
         filePath: audioPath,
         error: error instanceof Error ? error.message : error,
       });
@@ -457,7 +462,7 @@ export class MetadataManager {
         pageCount: result.total || 0,
       };
     } catch (error) {
-      console.error('[MetadataManager] Erreur extraction métadonnées PDF:', {
+      logger.error('[MetadataManager] Erreur extraction métadonnées PDF', {
         filePath: pdfPath,
         error: error instanceof Error ? error.message : error,
       });
@@ -476,7 +481,7 @@ export class MetadataManager {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.warn('[MetadataManager] Timeout ffprobe pour:', videoPath);
+        logger.warn('[MetadataManager] Timeout ffprobe pour:', videoPath);
         reject(new Error('ffprobe timeout after 30 seconds'));
       }, 30000);
 
@@ -533,7 +538,7 @@ export class MetadataManager {
         lineCount: lines,
       };
     } catch (error) {
-      console.error('[MetadataManager] Erreur extraction métadonnées texte:', {
+      logger.error('[MetadataManager] Erreur extraction métadonnées texte', {
         filePath: textPath,
         error: error instanceof Error ? error.message : error,
       });
@@ -564,7 +569,7 @@ export class MetadataManager {
         const stats = await fs.stat(fullPath);
         fileSize = stats.size;
       } catch (error) {
-        console.warn('[MetadataManager] Could not get file size:', error);
+        logger.warn('[MetadataManager] Could not get file size:', error);
       }
     }
 
@@ -583,7 +588,7 @@ export class MetadataManager {
         const frontendDuration = Math.round(providedMetadata.duration); // En millisecondes
         const backendDuration = extractedMeta.duration; // En millisecondes
 
-        console.log('🔍 [MetadataManager] Comparing frontend vs backend metadata:', {
+        logger.info('🔍 [MetadataManager] Comparing frontend vs backend metadata:', {
           frontendDurationMs: frontendDuration,
           backendDurationMs: backendDuration,
           frontendDurationSec: frontendDuration / 1000,
@@ -599,7 +604,7 @@ export class MetadataManager {
 
           // Si la différence est supérieure à 10%, c'est suspect
           if (percentDifference > 10) {
-            console.warn('⚠️ [MetadataManager] Durée incohérente entre frontend et backend:', {
+            logger.warn('⚠️ [MetadataManager] Durée incohérente entre frontend et backend:', {
               frontendDurationMs: frontendDuration,
               backendDurationMs: backendDuration,
               frontendDurationSec: frontendDuration / 1000,
@@ -626,32 +631,32 @@ export class MetadataManager {
 
               // Utiliser la valeur la plus cohérente avec la taille du fichier
               if (frontendValidation.isValid && !backendValidation.isValid) {
-                console.log('✅ [MetadataManager] Using frontend duration (more coherent with file size)');
+                logger.info('✅ [MetadataManager] Using frontend duration (more coherent with file size)');
                 metadata.duration = frontendDuration;
               } else if (!frontendValidation.isValid && backendValidation.isValid) {
-                console.log('✅ [MetadataManager] Using backend duration (more coherent with file size)');
+                logger.info('✅ [MetadataManager] Using backend duration (more coherent with file size)');
                 metadata.duration = backendDuration;
               } else if (backendValidation.estimatedDuration) {
-                console.log('⚠️ [MetadataManager] Using estimated duration from validation');
+                logger.info('⚠️ [MetadataManager] Using estimated duration from validation');
                 metadata.duration = backendValidation.estimatedDuration;
               } else {
                 // Par défaut, privilégier le backend si pas de consensus
-                console.log('⚠️ [MetadataManager] Using backend duration by default');
+                logger.info('⚠️ [MetadataManager] Using backend duration by default');
                 metadata.duration = backendDuration;
               }
             } else {
               // Sans taille de fichier, privilégier le backend
-              console.log('⚠️ [MetadataManager] Using backend duration (no file size for validation)');
+              logger.info('⚠️ [MetadataManager] Using backend duration (no file size for validation)');
               metadata.duration = backendDuration;
             }
           } else {
             // Les durées sont cohérentes, utiliser le backend (plus fiable)
-            console.log('✅ [MetadataManager] Durations are coherent, using backend');
+            logger.info('✅ [MetadataManager] Durations are coherent, using backend');
             metadata.duration = backendDuration;
           }
         } else if (frontendDuration > 0 && backendDuration === 0) {
           // Le backend n'a pas réussi à extraire, utiliser le frontend comme fallback
-          console.log('⚠️ [MetadataManager] Backend extraction failed, using frontend as fallback');
+          logger.info('⚠️ [MetadataManager] Backend extraction failed, using frontend as fallback');
           metadata.duration = frontendDuration;
         } else if (backendDuration > 0) {
           // Utiliser le backend
@@ -690,7 +695,7 @@ export class MetadataManager {
         metadata.videoCodec = videoMeta.videoCodec;
         metadata.bitrate = videoMeta.bitrate;
       } catch (error) {
-        console.warn('[MetadataManager] Impossible d\'extraire métadonnées vidéo:', error);
+        logger.warn('[MetadataManager] Impossible d\'extraire métadonnées vidéo:', error);
         metadata.duration = 0;
         metadata.width = 0;
         metadata.height = 0;
