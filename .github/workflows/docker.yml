@@ -133,9 +133,9 @@ jobs:
             echo "translator=true" >> $GITHUB_OUTPUT
           else
             CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-            echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"infrastructure/docker/images/web/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"infrastructure/docker/images/gateway/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"infrastructure/docker/images/translator/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
           fi
 
       - name: Determine platforms
@@ -161,7 +161,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web","context":".","dockerfile":"./infrastructure/docker/images/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
+            SERVICES+='{"service":"web","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -169,7 +169,7 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(cat services/gateway/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"gateway","context":".","dockerfile":"./infrastructure/docker/images/gateway/Dockerfile","image":"meeshy-gateway","version":"'$VERSION'"}'
+            SERVICES+='{"service":"gateway","context":".","dockerfile":"./services/gateway/Dockerfile","image":"meeshy-gateway","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -179,13 +179,13 @@ jobs:
 
             if [[ "$TORCH_INPUT" == "cpu" ]] || [[ "$TORCH_INPUT" == "all" ]]; then
               [[ "$FIRST" == "false" ]] && SERVICES+=','
-              SERVICES+='{"service":"translator","context":".","dockerfile":"./infrastructure/docker/images/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'","torch_backend":"cpu"}'
+              SERVICES+='{"service":"translator","context":".","dockerfile":"./services/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'","torch_backend":"cpu"}'
               FIRST=false
             fi
 
             if [[ "$TORCH_INPUT" == "gpu" ]] || [[ "$TORCH_INPUT" == "all" ]]; then
               [[ "$FIRST" == "false" ]] && SERVICES+=','
-              SERVICES+='{"service":"translator-gpu","context":".","dockerfile":"./infrastructure/docker/images/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'","torch_backend":"gpu"}'
+              SERVICES+='{"service":"translator-gpu","context":".","dockerfile":"./services/translator/Dockerfile","image":"meeshy-translator","version":"'$VERSION'","torch_backend":"gpu"}'
               FIRST=false
             fi
           fi
