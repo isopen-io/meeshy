@@ -11,6 +11,7 @@ import asyncio
 import pytest
 import tempfile
 import shutil
+import contextlib
 from pathlib import Path
 from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -60,6 +61,7 @@ else:
 # MOCK HELPERS
 # ═══════════════════════════════════════════════════════════════
 
+@contextlib.contextmanager
 def conditional_cache_patches(cache_mocks):
     """
     Context manager that applies cache service patches ONLY in CI.
@@ -71,18 +73,16 @@ def conditional_cache_patches(cache_mocks):
             # - CI: Uses mocked cache services
             # - Local: Uses real cache services (if available)
     """
-    from contextlib import ExitStack, nullcontext
-
     if cache_mocks is None:
         # Local environment - no mocking
-        return nullcontext()
+        yield
+        return
 
     # CI environment - apply all cache service patches
-    stack = ExitStack()
-    stack.enter_context(patch('services.audio_message_pipeline.get_audio_cache_service', return_value=cache_mocks['audio_cache']))
-    stack.enter_context(patch('services.audio_message_pipeline.get_translation_cache_service', return_value=cache_mocks['translation_cache']))
-    stack.enter_context(patch('services.audio_message_pipeline.get_redis_service', return_value=cache_mocks['redis']))
-    return stack
+    with patch('services.audio_message_pipeline.get_audio_cache_service', return_value=cache_mocks['audio_cache']):
+        with patch('services.audio_message_pipeline.get_translation_cache_service', return_value=cache_mocks['translation_cache']):
+            with patch('services.audio_message_pipeline.get_redis_service', return_value=cache_mocks['redis']):
+                yield
 
 
 def create_mock_transcription_result(text="Test transcribed text", language="en"):
@@ -715,7 +715,8 @@ async def test_pipeline_get_stats(
     mock_transcription_service,
     mock_voice_clone_service,
     mock_tts_service,
-    mock_translation_service
+    mock_translation_service,
+    mock_cache_services_if_ci
 ):
     """Test get_stats method"""
     logger.info("Test 09.9: Get stats")
@@ -725,13 +726,14 @@ async def test_pipeline_get_stats(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                pipeline.is_initialized = True
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
+                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                    pipeline.is_initialized = True
 
-                stats = await pipeline.get_stats()
+                    stats = await pipeline.get_stats()
 
     assert "service" in stats
     assert stats["service"] == "AudioMessagePipeline"
