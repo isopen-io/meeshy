@@ -31,15 +31,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock sonner toast
-const mockToastSuccess = jest.fn();
-const mockToastError = jest.fn();
 jest.mock('sonner', () => ({
   toast: {
-    success: mockToastSuccess,
-    error: mockToastError,
+    success: jest.fn(),
+    error: jest.fn(),
     info: jest.fn(),
   },
 }));
+const mockToastSuccess = jest.fn();
+const mockToastError = jest.fn();
 
 // Mock useI18n hook
 jest.mock('@/hooks/useI18n', () => ({

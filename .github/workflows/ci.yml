@@ -204,7 +204,14 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
-        run: bun run test:coverage --filter=${{ matrix.package.filter }}
+        run: |
+          # Web tests must use Jest (configured with Next.js)
+          if [ "${{ matrix.package.name }}" = "web" ]; then
+            cd ${{ matrix.package.path }}
+            npm run test:coverage
+          else
+            bun run test:coverage --filter=${{ matrix.package.filter }}
+          fi
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'

@@ -83,19 +83,19 @@ jest.mock('@/stores/password-reset-store', () => ({
 }));
 
 // Mock password reset service
-const mockVerifyToken = jest.fn();
-const mockResetPassword = jest.fn();
-const mockValidatePasswordStrength = jest.fn();
 jest.mock('@/services/password-reset.service', () => ({
   passwordResetService: {
-    verifyToken: mockVerifyToken,
-    resetPassword: mockResetPassword,
-    validatePasswordStrength: mockValidatePasswordStrength,
+    verifyToken: jest.fn(),
+    resetPassword: jest.fn(),
+    validatePasswordStrength: jest.fn(),
     calculatePasswordStrength: jest.fn().mockReturnValue(3),
     getPasswordStrengthLabel: jest.fn().mockReturnValue('Strong'),
     getPasswordStrengthColor: jest.fn().mockReturnValue('bg-blue-600'),
   },
 }));
+const mockVerifyToken = jest.fn();
+const mockResetPassword = jest.fn();
+const mockValidatePasswordStrength = jest.fn();
 
 // Mock sonner toast
 jest.mock('sonner', () => ({

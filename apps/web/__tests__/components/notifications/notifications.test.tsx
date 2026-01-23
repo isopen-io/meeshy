@@ -16,15 +16,18 @@ import {
 } from '@/components/notifications/notifications';
 
 // Mock sonner toast
+jest.mock('sonner', () => {
+  const mockToastFn = jest.fn();
+  return {
+    toast: Object.assign(mockToastFn, {
+      success: jest.fn(),
+      error: jest.fn(),
+      warning: jest.fn(),
+      info: jest.fn(),
+    }),
+  };
+});
 const mockToast = jest.fn();
-jest.mock('sonner', () => ({
-  toast: Object.assign(mockToast, {
-    success: jest.fn(),
-    error: jest.fn(),
-    warning: jest.fn(),
-    info: jest.fn(),
-  }),
-}));
 
 // Store original navigator.onLine
 const originalOnLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine');

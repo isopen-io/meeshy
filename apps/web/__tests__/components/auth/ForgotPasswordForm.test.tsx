@@ -73,12 +73,12 @@ jest.mock('@/stores/auth-form-store', () => ({
 }));
 
 // Mock password reset service
-const mockRequestReset = jest.fn();
 jest.mock('@/services/password-reset.service', () => ({
   passwordResetService: {
-    requestReset: mockRequestReset,
+    requestReset: jest.fn(),
   },
 }));
+const mockRequestReset = jest.fn();
 
 // Mock useBotProtection hook
 const mockValidateSubmission = jest.fn().mockReturnValue({ isHuman: true, botError: null });
