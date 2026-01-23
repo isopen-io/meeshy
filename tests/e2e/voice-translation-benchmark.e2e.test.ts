@@ -4,6 +4,16 @@
  * Comprehensive voice cloning + translation pipeline tests matching
  * the Python xtts_voice_translation_test.py script functionality.
  *
+ * ⚠️  IMPORTANT: These tests require running services
+ * ============================================
+ * These E2E tests are automatically SKIPPED in CI environments because they
+ * require the Gateway and Translator services to be running on localhost:3000.
+ *
+ * To run these tests locally:
+ * 1. Start services: make docker-local (or start Gateway + Translator manually)
+ * 2. Verify Gateway is running: curl http://localhost:3000/health
+ * 3. Run tests: npx playwright test tests/e2e/voice-translation-benchmark.e2e.test.ts
+ *
  * Features tested:
  * - Full translation pipeline (transcribe → translate → clone → verify)
  * - Multi-language support (16 languages)
@@ -252,6 +262,9 @@ function getVerdict(similarity: number): 'same_speaker' | 'different_speaker' | 
 }
 
 test.describe('Voice Translation Benchmark Tests', () => {
+  // Skip E2E tests in CI environment (requires Gateway + Translator services running)
+  test.skip(process.env.CI === 'true', 'E2E tests require local services (Gateway + Translator) to be running. Run locally with services started.');
+
   const testUserId = `benchmark-user-${Date.now()}`;
   let voiceTypes: ReturnType<typeof generateVoiceTypes>;
   const benchmarkResults: BenchmarkResult[] = [];
@@ -781,6 +794,9 @@ test.describe('Voice Translation Benchmark Tests', () => {
 });
 
 test.describe('Voice Translation Error Scenarios', () => {
+  // Skip E2E tests in CI environment (requires Gateway + Translator services running)
+  test.skip(process.env.CI === 'true', 'E2E tests require local services (Gateway + Translator) to be running. Run locally with services started.');
+
   const testUserId = `error-test-${Date.now()}`;
 
   test('should handle unsupported language gracefully', async () => {
