@@ -1,0 +1,305 @@
+# =============================================================================
+# DEPENDABOT CONFIGURATION - Mises à jour automatiques des dépendances
+# =============================================================================
+# Documentation: https://docs.github.com/en/code-security/dependabot
+#
+# Dependabot crée automatiquement des PRs pour :
+# - Mises à jour de sécurité (vulnérabilités)
+# - Mises à jour de versions (selon schedule)
+#
+# Configuration adaptée au monorepo Meeshy avec pnpm
+# =============================================================================
+
+version: 2
+
+updates:
+  # ===========================================================================
+  # NPM/PNPM - Applications et Services
+  # ===========================================================================
+
+  # Application Web (Next.js)
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "web"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-web)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    assignees:
+      - "isopen-io/meeshy-maintainers"
+    # Grouper les mises à jour mineures/patch ensemble
+    groups:
+      next-ecosystem:
+        patterns:
+          - "next*"
+          - "@next/*"
+          - "react*"
+          - "react-dom"
+      testing:
+        patterns:
+          - "jest*"
+          - "@testing-library/*"
+          - "@types/jest"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Priorité aux mises à jour de sécurité
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    versioning-strategy: increase
+
+  # Service Gateway (Node.js/gRPC)
+  - package-ecosystem: "npm"
+    directory: "/services/gateway"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "gateway"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-gateway)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      grpc-ecosystem:
+        patterns:
+          - "*grpc*"
+          - "@grpc/*"
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    versioning-strategy: increase
+
+  # Service Translator (Python/AI)
+  - package-ecosystem: "pip"
+    directory: "/services/translator"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "translator"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-translator)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      torch-ecosystem:
+        patterns:
+          - "torch*"
+          - "torchaudio"
+      transformers:
+        patterns:
+          - "transformers"
+          - "accelerate"
+          - "safetensors"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+
+  # Package Shared (Prisma/Types)
+  - package-ecosystem: "npm"
+    directory: "/packages/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "shared"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-shared)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      types:
+        patterns:
+          - "@types/*"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    versioning-strategy: increase
+
+  # Racine du monorepo (turbo, outils globaux)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "monorepo"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-root)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      build-tools:
+        patterns:
+          - "turbo*"
+          - "typescript"
+          - "eslint*"
+          - "prettier"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    versioning-strategy: increase
+
+  # ===========================================================================
+  # GITHUB ACTIONS - Workflows CI/CD
+  # ===========================================================================
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci-cd"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-ci)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      docker-actions:
+        patterns:
+          - "docker/*"
+      testing-actions:
+        patterns:
+          - "*test*"
+          - "*coverage*"
+
+  # ===========================================================================
+  # DOCKER - Images de base
+  # ===========================================================================
+
+  - package-ecosystem: "docker"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-docker-web)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+
+  - package-ecosystem: "docker"
+    directory: "/services/gateway"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-docker-gateway)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+
+  - package-ecosystem: "docker"
+    directory: "/services/translator"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+    commit-message:
+      prefix: "chore(deps-docker-translator)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+
+# =============================================================================
+# CONFIGURATION NOTES
+# =============================================================================
+#
+# - Mises à jour de sécurité : automatiques et immédiates
+# - Mises à jour de versions : hebdomadaires (lundi 09:00 CET)
+# - Groupement : dépendances liées regroupées dans une seule PR
+# - Limite de PRs ouvertes : 3-5 par écosystème pour éviter le spam
+# - Labels automatiques : facilite le triage et l'automatisation
+# - Reviewers : assignés automatiquement à l'équipe maintainers
+#
+# Pour désactiver temporairement :
+# - Ajouter un label "dependencies-ignore" à une PR
+# - Ou modifier schedule.interval à "monthly" pour ralentir
+#
+# Pour les mises à jour manuelles urgentes :
+# - Utiliser `pnpm update <package>@latest`
+# - Ou attendre la PR Dependabot hebdomadaire
+# =============================================================================

@@ -1,0 +1,67 @@
+# =============================================================================
+# CODEOWNERS - Propriétaires et reviewers automatiques
+# =============================================================================
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Chaque ligne définit un pattern de fichiers et leurs propriétaires.
+# Les propriétaires sont automatiquement demandés en review sur les PRs.
+# =============================================================================
+
+# Propriétaire par défaut pour tout le repo
+* @isopen-io/meeshy-maintainers
+
+# =============================================================================
+# CONFIGURATION & INFRASTRUCTURE
+# =============================================================================
+
+# Workflows CI/CD
+/.github/workflows/ @isopen-io/meeshy-maintainers
+/.github/dependabot.yml @isopen-io/meeshy-maintainers
+
+# Configuration Docker
+/infrastructure/docker/ @isopen-io/meeshy-maintainers
+Dockerfile @isopen-io/meeshy-maintainers
+docker-compose*.yml @isopen-io/meeshy-maintainers
+
+# Configuration monorepo
+/turbo.json @isopen-io/meeshy-maintainers
+/pnpm-workspace.yaml @isopen-io/meeshy-maintainers
+/package.json @isopen-io/meeshy-maintainers
+/pnpm-lock.yaml @isopen-io/meeshy-maintainers
+
+# =============================================================================
+# APPLICATIONS & SERVICES
+# =============================================================================
+
+# Application Web (Next.js)
+/apps/web/ @isopen-io/meeshy-maintainers
+
+# Service Gateway
+/services/gateway/ @isopen-io/meeshy-maintainers
+
+# Service Translator (IA/ML)
+/services/translator/ @isopen-io/meeshy-maintainers
+
+# Packages partagés
+/packages/shared/ @isopen-io/meeshy-maintainers
+
+# =============================================================================
+# DÉPENDANCES & SÉCURITÉ
+# =============================================================================
+
+# Mises à jour de dépendances (Dependabot PRs)
+/package.json @isopen-io/meeshy-maintainers
+/pnpm-lock.yaml @isopen-io/meeshy-maintainers
+**/package.json @isopen-io/meeshy-maintainers
+
+# Fichiers de sécurité
+/SECURITY.md @isopen-io/meeshy-maintainers
+/.github/dependabot.yml @isopen-io/meeshy-maintainers
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+/docs/ @isopen-io/meeshy-maintainers
+/README.md @isopen-io/meeshy-maintainers
+*.md @isopen-io/meeshy-maintainers
