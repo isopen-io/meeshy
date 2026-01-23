@@ -79,6 +79,16 @@ jest.mock('fs', () => ({
 jest.mock('pdf-parse', () => ({
   PDFParse: MockPDFParse,
 }));
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: jest.fn(() => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn()
+    }))
+  }
+}));
 
 // Import after mocks
 import { MetadataManager } from '../../../services/attachments/MetadataManager';
