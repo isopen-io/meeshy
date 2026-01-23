@@ -298,11 +298,11 @@ class MeeshyServer {
         },
         ajv: {
           customOptions: {
-            strict: 'log', // Allow unknown keywords like 'example' (for OpenAPI documentation)
+            strict: 'log' as const, // Allow unknown keywords like 'example' (for OpenAPI documentation)
             keywords: ['example'] // Explicitly allow 'example' keyword
           }
         }
-      });
+      }) as FastifyInstance;
 
       logger.info('🔒 Gateway starting in HTTPS mode');
     } else {
@@ -313,11 +313,11 @@ class MeeshyServer {
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
         ajv: {
           customOptions: {
-            strict: 'log', // Allow unknown keywords like 'example' (for OpenAPI documentation)
+            strict: 'log' as const, // Allow unknown keywords like 'example' (for OpenAPI documentation)
             keywords: ['example'] // Explicitly allow 'example' keyword
           }
         }
-      });
+      }) as FastifyInstance;
 
       logger.info('🌐 Gateway starting in HTTP mode');
     }

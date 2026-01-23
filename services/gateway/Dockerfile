@@ -98,7 +98,7 @@ COPY services/gateway/docker-entrypoint.sh ./
 
 # Build gateway
 RUN echo "=== Generating Prisma client ===" && \
-    npx prisma generate --schema=./packages/shared/prisma/schema.prisma && \
+    npx prisma generate --generator client --schema=./packages/shared/prisma/schema.prisma && \
     echo "=== Building TypeScript ===" && \
     if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       bun run tsc; \
