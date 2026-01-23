@@ -215,6 +215,7 @@ source = ["src"]
 branch = true
 omit = [
     "tests/*",
+    "src/tests/*",
     "*/__pycache__/*",
     "*/migrations/*",
     # Generated protobuf files (auto-generated, no need to test)
@@ -269,3 +270,10 @@ warn_unused_ignores = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 exclude = ["tests/", "migrations/"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+    "pytest-cov>=6.0.0",
+]
