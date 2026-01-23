@@ -36,6 +36,19 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════
+# CI/LOCAL ENVIRONMENT DETECTION
+# ═══════════════════════════════════════════════════════════════
+# In CI: Skip tests that require Whisper model loading (slow, requires downloads)
+# In local: Run all tests including model loading
+IS_CI = os.getenv('CI', 'false').lower() == 'true'
+
+if IS_CI:
+    logger.info("🔧 CI Environment detected - Whisper model tests will be skipped")
+else:
+    logger.info("💻 Local Environment detected - All tests will run")
+
+
+# ═══════════════════════════════════════════════════════════════
 # UNIT TESTS - TranscriptionService
 # ═══════════════════════════════════════════════════════════════
 
@@ -57,6 +70,7 @@ async def test_transcription_service_singleton():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(IS_CI, reason="Requires Whisper model loading (slow, downloads required)")
 async def test_transcription_service_initialization():
     """Test service initialization"""
     logger.info("Test 06.2: Service initialization")
@@ -145,6 +159,7 @@ async def test_transcription_mobile_with_segments(mock_audio_file):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(IS_CI, reason="Requires Whisper model (mocked but may still attempt model access)")
 async def test_transcription_whisper_fallback(mock_audio_file):
     """Test Whisper fallback when no mobile transcription"""
     logger.info("Test 06.5: Whisper fallback")
@@ -285,6 +300,7 @@ async def test_transcription_close():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(IS_CI, reason="Requires Whisper model as fallback for empty mobile text")
 async def test_transcription_empty_mobile_text(mock_audio_file):
     """Test behavior with empty mobile transcription text"""
     logger.info("Test 06.10: Empty mobile transcription")
@@ -327,6 +343,7 @@ async def test_transcription_empty_mobile_text(mock_audio_file):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(IS_CI, reason="Requires Whisper model for language detection")
 async def test_transcription_language_detection():
     """Test language detection consistency"""
     logger.info("Test 06.11: Language detection")
