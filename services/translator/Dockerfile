@@ -254,15 +254,12 @@ WORKDIR /workspace
 # Copy translator source code
 COPY --chown=translator:translator services/translator/ ./
 
-# Copy shared Prisma schema and sync script
+# Copy shared Prisma schema
 COPY --chown=translator:translator packages/shared/prisma ./shared/prisma/
-COPY --chown=translator:translator scripts/sync-prisma-schema-for-python.sh ./scripts/
 
-# Generate Python Prisma schema from shared schema and generate client
-RUN chmod +x ./scripts/sync-prisma-schema-for-python.sh && \
-    ./scripts/sync-prisma-schema-for-python.sh /workspace/schema.prisma && \
-    echo "Generating Prisma Python client..." && \
-    prisma generate --schema=/workspace/schema.prisma
+# Generate Python Prisma client from shared schema
+RUN echo "Generating Prisma Python client from shared schema..." && \
+    prisma generate --schema=./shared/prisma/schema.prisma
 
 # Verify critical components installation
 RUN echo "=== Verifying critical components ===" && \
