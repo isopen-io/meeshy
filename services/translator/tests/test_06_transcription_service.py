@@ -160,6 +160,7 @@ async def test_transcription_whisper_fallback(mock_audio_file):
     mock_segment.start = 0.0
     mock_segment.end = 2.0
     mock_segment.avg_logprob = 0.9
+    mock_segment.words = None  # Pas de timestamps au niveau des mots
 
     mock_info = MagicMock()
     mock_info.language = "en"
@@ -197,16 +198,17 @@ async def test_transcription_error_no_whisper_no_mobile(mock_audio_file):
     service.model = None
     service.is_initialized = True
 
-    # Patch WHISPER_AVAILABLE to False
+    # Patch WHISPER_AVAILABLE to False AND get_stt_model to return None
     with patch('services.transcription_service.WHISPER_AVAILABLE', False):
-        with pytest.raises(RuntimeError) as excinfo:
-            await service.transcribe(
-                audio_path=str(mock_audio_file),
-                mobile_transcription=None
-            )
+        with patch('services.transcription_service.get_stt_model', return_value=None):
+            with pytest.raises(RuntimeError) as excinfo:
+                await service.transcribe(
+                    audio_path=str(mock_audio_file),
+                    mobile_transcription=None
+                )
 
-        assert "Whisper non disponible" in str(excinfo.value) or "no mobile" in str(excinfo.value).lower()
-        logger.info("Error handling works correctly")
+            assert "Whisper non disponible" in str(excinfo.value) or "no mobile" in str(excinfo.value).lower()
+            logger.info("Error handling works correctly")
 
 
 @pytest.mark.asyncio
@@ -298,6 +300,7 @@ async def test_transcription_empty_mobile_text(mock_audio_file):
     mock_segment.start = 0.0
     mock_segment.end = 1.0
     mock_segment.avg_logprob = 0.85
+    mock_segment.words = None  # Pas de timestamps au niveau des mots
 
     mock_info = MagicMock()
     mock_info.language = "en"

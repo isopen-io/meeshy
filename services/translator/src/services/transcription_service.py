@@ -369,15 +369,19 @@ class TranscriptionService:
                 # ✅ Fusion intelligente des mots courts (Option D)
                 # Règles: pause < 90ms ET somme < 8 caractères
                 original_count = len(segments)
-                segments = merge_short_segments(
-                    segments,
-                    word_max_pause_ms=90,
-                    word_max_chars=8
-                )
-                logger.info(
-                    f"[TRANSCRIPTION] Fusion intelligente: {original_count} → {len(segments)} segments "
-                    f"(réduction {(original_count - len(segments)) / original_count * 100:.1f}%)"
-                )
+                if original_count > 0:
+                    segments = merge_short_segments(
+                        segments,
+                        word_max_pause_ms=90,
+                        word_max_chars=8
+                    )
+                    reduction_pct = (original_count - len(segments)) / original_count * 100
+                    logger.info(
+                        f"[TRANSCRIPTION] Fusion intelligente: {original_count} → {len(segments)} segments "
+                        f"(réduction {reduction_pct:.1f}%)"
+                    )
+                else:
+                    logger.warning("[TRANSCRIPTION] ⚠️ Aucun segment à fusionner")
 
             processing_time = int((time.time() - start_time) * 1000)
 
