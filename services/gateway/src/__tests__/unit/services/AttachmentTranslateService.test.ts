@@ -28,18 +28,11 @@ jest.mock('../../../services/AudioTranslateService', () => ({
 jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
     messageAttachment: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      update: jest.fn()
     },
     conversationMember: {
       findFirst: jest.fn()
-    },
-    messageTranslatedAudio: {
-      findMany: jest.fn(),
-      upsert: jest.fn()
-    },
-    messageAudioTranscription: {
-      findUnique: jest.fn(),
-      upsert: jest.fn()
     },
     userVoiceModel: {
       findUnique: jest.fn()
@@ -66,6 +59,8 @@ const createMockAttachment = (overrides: Record<string, any> = {}) => ({
   isForwarded: false,
   forwardedFromAttachmentId: null,
   duration: 3000,
+  transcription: null,
+  translations: null,
   message: {
     id: 'msg-123',
     conversationId: 'conv-123',
@@ -74,20 +69,38 @@ const createMockAttachment = (overrides: Record<string, any> = {}) => ({
   ...overrides
 });
 
-const createMockTranscription = (overrides: Record<string, any> = {}) => ({
-  attachmentId: 'att-original',
-  messageId: 'msg-original',
-  transcribedText: 'Hello world',
+// Helper to create a JSON transcription object (stored in attachment.transcription)
+const createMockTranscriptionJSON = (overrides: Record<string, any> = {}) => ({
+  text: 'Hello world',
   language: 'en',
   confidence: 0.95,
   source: 'whisper',
   segments: [],
-  audioDurationMs: 3000,
+  durationMs: 3000,
   speakerCount: 1,
   primarySpeakerId: null,
   speakerAnalysis: null,
   ...overrides
 });
+
+// Helper to create JSON translations object (stored in attachment.translations)
+const createMockTranslationsJSON = (languages: string[] = ['fr']) => {
+  const translations: Record<string, any> = {};
+  languages.forEach(lang => {
+    translations[lang] = {
+      type: 'audio',
+      transcription: lang === 'fr' ? 'Bonjour le monde' : 'Hola mundo',
+      path: `/audio/translated-${lang}.webm`,
+      url: `https://cdn.example.com/audio/translated-${lang}.webm`,
+      durationMs: 3100,
+      cloned: true,
+      quality: 0.92,
+      voiceModelId: 'vfp_user123',
+      createdAt: new Date().toISOString()
+    };
+  });
+  return translations;
+};
 
 const createMockVoiceModel = (overrides: Record<string, any> = {}) => ({
   profileId: 'vfp_user123',
@@ -99,20 +112,6 @@ const createMockVoiceModel = (overrides: Record<string, any> = {}) => ({
   version: 1,
   audioCount: 5,
   totalDurationMs: 15000,
-  ...overrides
-});
-
-const createMockTranslatedAudio = (overrides: Record<string, any> = {}) => ({
-  attachmentId: 'att-123',
-  messageId: 'msg-123',
-  targetLanguage: 'fr',
-  translatedText: 'Bonjour le monde',
-  audioPath: '/audio/translated-fr.webm',
-  audioUrl: 'https://cdn.example.com/audio/translated-fr.webm',
-  durationMs: 3100,
-  voiceCloned: true,
-  voiceQuality: 0.92,
-  voiceModelId: 'vfp_user123',
   ...overrides
 });
 
@@ -231,8 +230,11 @@ describe('AttachmentTranslateService', () => {
     describe('Supported Types Routing', () => {
       it('should route audio/* to translateAudio', async () => {
         const attachment = createMockAttachment({ mimeType: 'audio/webm' });
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+          .mockResolvedValueOnce({ transcription: null })
+          .mockResolvedValueOnce({ translations: null });
         prisma.userVoiceModel.findUnique.mockResolvedValue(null);
         mockAudioTranslateService.translateSync.mockResolvedValue({
           translationId: 'trans-123',
@@ -336,14 +338,21 @@ describe('AttachmentTranslateService', () => {
 
     describe('Cache Hit (all languages already translated)', () => {
       it('should return cached translations without calling AudioTranslateService', async () => {
-        const attachment = createMockAttachment();
-        const cachedTranslations = [
-          createMockTranslatedAudio({ targetLanguage: 'fr' }),
-          createMockTranslatedAudio({ targetLanguage: 'es', translatedText: 'Hola mundo' })
-        ];
+        const cachedTranslationsJSON = createMockTranslationsJSON(['fr', 'es']);
+        const attachment = createMockAttachment({
+          translations: cachedTranslationsJSON
+        });
 
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue(cachedTranslations);
+        // Call sequence:
+        // 1. Get attachment for translate()
+        // 2. Get attachment for _findOriginalAttachmentAndSender (not forwarded, returns immediately)
+        // 3. Get attachment with transcription for existingTranscription check
+        // 4. Get attachment with translations for cache check
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)                                    // 1. Initial attachment
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } }) // 2. _findOriginalAttachmentAndSender
+          .mockResolvedValueOnce({ transcription: null })                       // 3. Transcription check
+          .mockResolvedValueOnce({ translations: cachedTranslationsJSON });     // 4. Cache check
 
         const result = await service.translate('user-123', 'att-123', {
           targetLanguages: ['fr', 'es']
@@ -360,47 +369,66 @@ describe('AttachmentTranslateService', () => {
       });
 
       it('should copy translations for forwarded attachments on cache hit', async () => {
+        const transcriptionJSON = createMockTranscriptionJSON();
+        const cachedTranslationsJSON = createMockTranslationsJSON(['fr']);
+        const originalAttachment = createMockAttachment({
+          id: 'att-original',
+          translations: cachedTranslationsJSON,
+          transcription: transcriptionJSON
+        });
+
         const forwardedAttachment = createMockAttachment({
           id: 'att-forwarded',
           isForwarded: true,
           forwardedFromAttachmentId: 'att-original',
+          translations: null, // No translations yet
           message: { id: 'msg-forwarded', conversationId: 'conv-456', senderId: 'user-forwarder' }
         });
 
-        const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'fr' })];
-
-        // First call: get forwarded attachment (for translate())
-        // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
-        // Third call: get original attachment in chain
+        // Call sequence:
+        // 1. Get forwarded attachment for translate()
+        // 2. Get forwarded attachment for _findOriginalAttachmentAndSender (has parent)
+        // 3. Get original attachment in _findOriginalAttachmentAndSender chain (no parent)
+        // 4. Get original attachment with transcription
+        // 5. Get original attachment with translations (for cache check) - CACHE HIT
+        // 6. Get original attachment for _copyTranslationsForForward
         prisma.messageAttachment.findUnique
-          .mockResolvedValueOnce(forwardedAttachment)
-          .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
-          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+          .mockResolvedValueOnce(forwardedAttachment)                           // 1
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } }) // 2
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } })  // 3
+          .mockResolvedValueOnce({ transcription: transcriptionJSON })          // 4
+          .mockResolvedValueOnce({ translations: cachedTranslationsJSON })      // 5 - CACHE HIT
+          .mockResolvedValueOnce({ transcription: transcriptionJSON, translations: cachedTranslationsJSON }); // 6
 
-        prisma.messageTranslatedAudio.findMany
-          .mockResolvedValueOnce(cachedTranslations) // For cache check
-          .mockResolvedValueOnce(cachedTranslations); // For _copyTranslationsForForward
-        prisma.messageAudioTranscription.findUnique.mockResolvedValue(null);
-        prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+        prisma.messageAttachment.update.mockResolvedValue({});
 
         const result = await service.translate('user-forwarder', 'att-forwarded', {
           targetLanguages: ['fr']
         });
 
         expect(result.success).toBe(true);
-        expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalled();
+        expect(prisma.messageAttachment.update).toHaveBeenCalled();
       });
     });
 
     describe('Partial Cache (some languages in cache)', () => {
       it('should only translate missing languages', async () => {
-        const attachment = createMockAttachment();
-        const cachedTranslations = [
-          createMockTranslatedAudio({ targetLanguage: 'fr' })
-        ];
+        const cachedTranslationsJSON = createMockTranslationsJSON(['fr']);
+        const attachment = createMockAttachment({
+          translations: cachedTranslationsJSON
+        });
 
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue(cachedTranslations);
+        // Call sequence:
+        // 1. Get attachment for translate()
+        // 2. Get attachment for _findOriginalAttachmentAndSender (not forwarded)
+        // 3. Get attachment with transcription
+        // 4. Get attachment with translations for cache check (has 'fr')
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)                                    // 1
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } }) // 2
+          .mockResolvedValueOnce({ transcription: null })                       // 3
+          .mockResolvedValueOnce({ translations: cachedTranslationsJSON });     // 4
+
         mockAudioTranslateService.translateSync.mockResolvedValue({
           translationId: 'trans-new',
           originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
@@ -428,8 +456,11 @@ describe('AttachmentTranslateService', () => {
     describe('Sync vs Async Mode', () => {
       it('should call translateSync when async is false', async () => {
         const attachment = createMockAttachment();
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+          .mockResolvedValueOnce({ transcription: null })
+          .mockResolvedValueOnce({ translations: null });
         mockAudioTranslateService.translateSync.mockResolvedValue({
           translationId: 'trans-sync',
           originalAudio: { transcription: 'Hello', language: 'en', durationMs: 3000, confidence: 0.95 },
@@ -448,8 +479,11 @@ describe('AttachmentTranslateService', () => {
 
       it('should call translateAsync when async is true', async () => {
         const attachment = createMockAttachment();
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+          .mockResolvedValueOnce({ transcription: null })
+          .mockResolvedValueOnce({ translations: null });
         mockAudioTranslateService.translateAsync.mockResolvedValue({
           jobId: 'job-123',
           status: 'queued'
@@ -484,14 +518,20 @@ describe('AttachmentTranslateService', () => {
 
         const voiceModel = createMockVoiceModel({ userId: 'user-original' });
 
+        // Call sequence:
+        // 1. Get forwarded attachment for translate()
+        // 2. Get forwarded attachment for _findOriginalAttachmentAndSender (has parent)
+        // 3. Get original attachment in chain (no parent) - gets senderId 'user-original'
+        // 4. Get original attachment with transcription
+        // 5. Get original attachment with translations for cache check (no translations)
         prisma.messageAttachment.findUnique
-          .mockResolvedValueOnce(forwardedAttachment)
-          .mockResolvedValueOnce({
-            forwardedFromAttachmentId: null,
-            message: { senderId: 'user-original' }
-          });
+          .mockResolvedValueOnce(forwardedAttachment)                           // 1
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } }) // 2
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } }) // 3
+          .mockResolvedValueOnce({ transcription: null })                       // 4
+          .mockResolvedValueOnce({ translations: null });                       // 5
 
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        // Voice profile lookup is for 'user-original' (because useOriginalVoice=true and originalSenderId='user-original')
         prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
         mockAudioTranslateService.translateSync.mockResolvedValue({
           translationId: 'trans-123',
@@ -518,8 +558,11 @@ describe('AttachmentTranslateService', () => {
     describe('Translation Error Handling', () => {
       it('should return TRANSLATION_ERROR when AudioTranslateService throws', async () => {
         const attachment = createMockAttachment();
-        prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+        prisma.messageAttachment.findUnique
+          .mockResolvedValueOnce(attachment)
+          .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+          .mockResolvedValueOnce({ transcription: null })
+          .mockResolvedValueOnce({ translations: null });
         mockAudioTranslateService.translateSync.mockRejectedValue(new Error('Translation service unavailable'));
 
         const result = await service.translate('user-123', 'att-123', {
@@ -545,8 +588,11 @@ describe('AttachmentTranslateService', () => {
         message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'user-sender' }
       });
 
-      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-sender' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: null });
 
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -575,16 +621,19 @@ describe('AttachmentTranslateService', () => {
         message: { id: 'msg-B', conversationId: 'conv-123', senderId: 'user-B' }
       });
 
-      const attachmentA = {
-        forwardedFromAttachmentId: null,
-        message: { senderId: 'user-A' }
-      };
-
+      // Call sequence:
+      // 1. Get attachmentB for translate()
+      // 2. Get attachmentB for _findOriginalAttachmentAndSender (has parent att-A)
+      // 3. Get attachmentA in chain (no parent) - returns senderId 'user-A'
+      // 4. Get attachmentA (original) with transcription
+      // 5. Get attachmentA (original) with translations for cache check
       prisma.messageAttachment.findUnique
-        .mockResolvedValueOnce(attachmentB)
-        .mockResolvedValueOnce(attachmentA);
+        .mockResolvedValueOnce(attachmentB)                                       // 1
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-A', message: { senderId: 'user-B' } }) // 2
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-A' } })    // 3
+        .mockResolvedValueOnce({ transcription: null })                           // 4
+        .mockResolvedValueOnce({ translations: null });                           // 5
 
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
       prisma.userVoiceModel.findUnique.mockResolvedValue(null);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -612,13 +661,20 @@ describe('AttachmentTranslateService', () => {
         message: { id: 'msg-D', conversationId: 'conv-123', senderId: 'user-D' }
       });
 
+      // Call sequence:
+      // 1. Get attachmentD for translate()
+      // 2-5. Traverse chain: D -> C -> B -> A (finding originalSenderId)
+      // 6. Get attachmentA (original) with transcription
+      // 7. Get attachmentA (original) with translations for cache check
       prisma.messageAttachment.findUnique
-        .mockResolvedValueOnce(attachmentD)
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-B', message: { senderId: 'user-C' } })
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-A', message: { senderId: 'user-B' } })
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-A' } });
+        .mockResolvedValueOnce(attachmentD)                                       // 1
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-C', message: { senderId: 'user-D' } }) // 2
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-B', message: { senderId: 'user-C' } }) // 3
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-A', message: { senderId: 'user-B' } }) // 4
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-A' } })    // 5
+        .mockResolvedValueOnce({ transcription: null })                           // 6
+        .mockResolvedValueOnce({ translations: null });                           // 7
 
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
       prisma.userVoiceModel.findUnique.mockResolvedValue(null);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -647,23 +703,38 @@ describe('AttachmentTranslateService', () => {
       });
 
       // Create a chain of 15 forwards (exceeds MAX_CHAIN_DEPTH of 10)
+      // Sequence: initial attachment, then traverse chain (max 10 levels), then transcription, then translations
       let callCount = 0;
       prisma.messageAttachment.findUnique.mockImplementation(() => {
         callCount++;
         if (callCount === 1) {
+          // Initial attachment retrieval
           return Promise.resolve(attachmentStart);
         }
-        if (callCount > 12) {
-          // Return an attachment without forward after MAX_CHAIN_DEPTH
-          return Promise.resolve({ forwardedFromAttachmentId: null, message: { senderId: 'user-end' } });
+        if (callCount <= 11) {
+          // Chain traversal (up to MAX_CHAIN_DEPTH=10)
+          return Promise.resolve({
+            forwardedFromAttachmentId: `att-${callCount}`,
+            message: { senderId: `user-${callCount}` }
+          });
         }
-        return Promise.resolve({
-          forwardedFromAttachmentId: `att-${callCount}`,
-          message: { senderId: `user-${callCount}` }
-        });
+        if (callCount === 12) {
+          // After MAX_CHAIN_DEPTH reached, check last attachment
+          return Promise.resolve({
+            message: { senderId: 'user-end' }
+          });
+        }
+        if (callCount === 13) {
+          // Transcription check on the final attachment
+          return Promise.resolve({ transcription: null });
+        }
+        if (callCount === 14) {
+          // Translations check on the final attachment
+          return Promise.resolve({ translations: null });
+        }
+        return Promise.resolve({ forwardedFromAttachmentId: null, message: { senderId: 'user-end' } });
       });
 
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
       prisma.userVoiceModel.findUnique.mockResolvedValue(null);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -701,8 +772,11 @@ describe('AttachmentTranslateService', () => {
       });
 
       const attachment = createMockAttachment();
-      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: null });
       prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -729,8 +803,11 @@ describe('AttachmentTranslateService', () => {
 
     it('should return null when voice profile does not exist', async () => {
       const attachment = createMockAttachment();
-      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: null });
       prisma.userVoiceModel.findUnique.mockResolvedValue(null);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -757,8 +834,11 @@ describe('AttachmentTranslateService', () => {
       });
 
       const attachment = createMockAttachment();
-      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: null });
       prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModel);
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -781,8 +861,11 @@ describe('AttachmentTranslateService', () => {
 
     it('should return null on DB error', async () => {
       const attachment = createMockAttachment();
-      prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-      prisma.messageTranslatedAudio.findMany.mockResolvedValue([]);
+      prisma.messageAttachment.findUnique
+        .mockResolvedValueOnce(attachment)
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-123' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: null });
       prisma.userVoiceModel.findUnique.mockRejectedValue(new Error('DB connection failed'));
       mockAudioTranslateService.translateSync.mockResolvedValue({
         translationId: 'trans-123',
@@ -811,100 +894,127 @@ describe('AttachmentTranslateService', () => {
   // =========================================================================
 
   describe('_copyTranslationsForForward()', () => {
-    it('should copy transcription with transcribedText and audioDurationMs', async () => {
+    it('should copy transcription and translations using JSON fields', async () => {
+      const transcriptionJSON = createMockTranscriptionJSON({
+        text: 'Hello world',
+        durationMs: 3000
+      });
+      const cachedTranslationsJSON = createMockTranslationsJSON(['fr']);
+
+      const originalAttachment = createMockAttachment({
+        id: 'att-original',
+        transcription: transcriptionJSON,
+        translations: cachedTranslationsJSON
+      });
+
       const forwardedAttachment = createMockAttachment({
         id: 'att-forwarded',
         isForwarded: true,
         forwardedFromAttachmentId: 'att-original',
+        transcription: null,
+        translations: null,
         message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
       });
 
-      const transcription = createMockTranscription({
-        attachmentId: 'att-original',
-        transcribedText: 'Hello world',
-        audioDurationMs: 3000
-      });
-
-      const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original' })];
-
-      // First call: get forwarded attachment (for translate())
-      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
-      // Third call: get original attachment in chain
+      // Call sequence:
+      // 1. Get forwarded attachment (for translate())
+      // 2. Get forwarded attachment (for _findOriginalAttachmentAndSender)
+      // 3. Get original attachment in chain (no parent)
+      // 4. Get original attachment with transcription
+      // 5. Get original attachment with translations for cache check - CACHE HIT
+      // 6. Get original attachment (for _copyTranslationsForForward)
       prisma.messageAttachment.findUnique
-        .mockResolvedValueOnce(forwardedAttachment)
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+        .mockResolvedValueOnce(forwardedAttachment)                           // 1
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } }) // 2
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } })  // 3
+        .mockResolvedValueOnce({ transcription: transcriptionJSON })          // 4
+        .mockResolvedValueOnce({ translations: cachedTranslationsJSON })      // 5 - CACHE HIT
+        .mockResolvedValueOnce(originalAttachment);                           // 6
 
-      prisma.messageTranslatedAudio.findMany
-        .mockResolvedValueOnce(cachedTranslations) // For cache check
-        .mockResolvedValueOnce(cachedTranslations); // For copying
-
-      prisma.messageAudioTranscription.findUnique.mockResolvedValue(transcription);
-      prisma.messageAudioTranscription.upsert.mockResolvedValue({});
-      prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+      prisma.messageAttachment.update.mockResolvedValue({});
 
       await service.translate('user-forwarder', 'att-forwarded', {
         targetLanguages: ['fr']
       });
 
-      expect(prisma.messageAudioTranscription.upsert).toHaveBeenCalledWith(
+      // Should have updated the forwarded attachment with transcription
+      expect(prisma.messageAttachment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { attachmentId: 'att-forwarded' },
-          create: expect.objectContaining({
-            transcribedText: 'Hello world',
-            audioDurationMs: 3000,
-            source: 'forwarded:whisper'
+          where: { id: 'att-forwarded' },
+          data: expect.objectContaining({
+            transcription: expect.objectContaining({
+              text: 'Hello world',
+              durationMs: 3000
+            })
+          })
+        })
+      );
+
+      // Should have updated the forwarded attachment with translations
+      expect(prisma.messageAttachment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'att-forwarded' },
+          data: expect.objectContaining({
+            translations: cachedTranslationsJSON
           })
         })
       );
     });
 
-    it('should copy audio translations', async () => {
+    it('should copy multiple translations', async () => {
+      const cachedTranslationsJSON = createMockTranslationsJSON(['fr', 'es']);
+
+      const originalAttachment = createMockAttachment({
+        id: 'att-original',
+        translations: cachedTranslationsJSON
+      });
+
       const forwardedAttachment = createMockAttachment({
         id: 'att-forwarded',
         isForwarded: true,
         forwardedFromAttachmentId: 'att-original',
+        translations: null,
         message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
       });
 
-      const cachedTranslations = [
-        createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'fr' }),
-        createMockTranslatedAudio({ attachmentId: 'att-original', targetLanguage: 'es' })
-      ];
-
-      // First call: get forwarded attachment (for translate())
-      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
-      // Third call: get original attachment in chain
+      // Call sequence:
+      // 1. Get forwarded attachment
+      // 2. Get forwarded attachment for _findOriginalAttachmentAndSender
+      // 3. Get original attachment in chain
+      // 4. Get original attachment with transcription
+      // 5. Get original attachment with translations for cache check - CACHE HIT
+      // 6. Get original attachment for _copyTranslationsForForward
       prisma.messageAttachment.findUnique
         .mockResolvedValueOnce(forwardedAttachment)
         .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } })
+        .mockResolvedValueOnce({ transcription: null })
+        .mockResolvedValueOnce({ translations: cachedTranslationsJSON })
+        .mockResolvedValueOnce({ transcription: null, translations: cachedTranslationsJSON });
 
-      prisma.messageTranslatedAudio.findMany
-        .mockResolvedValueOnce(cachedTranslations) // For cache check
-        .mockResolvedValueOnce(cachedTranslations); // For copying
-
-      prisma.messageAudioTranscription.findUnique.mockResolvedValue(null);
-      prisma.messageTranslatedAudio.upsert.mockResolvedValue({});
+      prisma.messageAttachment.update.mockResolvedValue({});
 
       await service.translate('user-forwarder', 'att-forwarded', {
         targetLanguages: ['fr', 'es']
       });
 
-      expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalledTimes(2);
-      expect(prisma.messageTranslatedAudio.upsert).toHaveBeenCalledWith(
+      // Should copy both translations in one update
+      expect(prisma.messageAttachment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {
-            attachmentId_targetLanguage: {
-              attachmentId: 'att-forwarded',
-              targetLanguage: 'fr'
-            }
-          }
+          where: { id: 'att-forwarded' },
+          data: expect.objectContaining({
+            translations: expect.objectContaining({
+              fr: expect.any(Object),
+              es: expect.any(Object)
+            })
+          })
         })
       );
     });
 
     it('should handle errors gracefully during copy', async () => {
+      const cachedTranslationsJSON = createMockTranslationsJSON(['fr']);
+
       const forwardedAttachment = createMockAttachment({
         id: 'att-forwarded',
         isForwarded: true,
@@ -912,19 +1022,12 @@ describe('AttachmentTranslateService', () => {
         message: { id: 'msg-forwarded', conversationId: 'conv-123', senderId: 'user-forwarder' }
       });
 
-      const cachedTranslations = [createMockTranslatedAudio({ attachmentId: 'att-original' })];
-
-      // First call: get forwarded attachment (for translate())
-      // Second call: get forwarded attachment again (for _findOriginalAttachmentAndSender)
-      // Third call: get original attachment in chain
       prisma.messageAttachment.findUnique
         .mockResolvedValueOnce(forwardedAttachment)
+        .mockResolvedValueOnce({ translations: cachedTranslationsJSON })
         .mockResolvedValueOnce({ forwardedFromAttachmentId: 'att-original', message: { senderId: 'user-forwarder' } })
-        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } });
-
-      prisma.messageTranslatedAudio.findMany
-        .mockResolvedValueOnce(cachedTranslations) // For cache check
-        .mockRejectedValueOnce(new Error('DB error during copy')); // For copying - error
+        .mockResolvedValueOnce({ forwardedFromAttachmentId: null, message: { senderId: 'user-original' } })
+        .mockRejectedValueOnce(new Error('DB error during copy')); // Error on _copyTranslationsForForward
 
       // Should not throw, should complete gracefully
       const result = await service.translate('user-forwarder', 'att-forwarded', {
