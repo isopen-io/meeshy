@@ -29,7 +29,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock useI18n hook
-jest.mock('@/hooks/useI18n', () => ({
+jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
