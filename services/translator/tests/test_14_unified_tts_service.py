@@ -423,6 +423,7 @@ async def test_unified_tts_synthesize_pending_mode(reset_singleton, output_dir):
         await asyncio.sleep(0.5)
         service.model_manager.active_backend = mock_backend
         service.model_manager.active_model = TTSModel.CHATTERBOX
+        service.model_manager._model_ready_event.set()  # Signal that model is ready
 
     # Start making the service ready in background
     ready_task = asyncio.create_task(make_ready())
