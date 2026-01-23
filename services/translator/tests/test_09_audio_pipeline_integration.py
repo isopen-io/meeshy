@@ -44,8 +44,46 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════
+# CI/LOCAL ENVIRONMENT DETECTION
+# ═══════════════════════════════════════════════════════════════
+# In CI: Mock cache services to avoid Redis connection timeouts
+# In local: Allow real services for integration testing (if Redis available)
+IS_CI = os.getenv('CI', 'false').lower() == 'true'
+
+if IS_CI:
+    logger.info("🔧 CI Environment detected - Using mocked cache services")
+else:
+    logger.info("💻 Local Environment detected - Real services will be used (if available)")
+
+
+# ═══════════════════════════════════════════════════════════════
 # MOCK HELPERS
 # ═══════════════════════════════════════════════════════════════
+
+def conditional_cache_patches(cache_mocks):
+    """
+    Context manager that applies cache service patches ONLY in CI.
+    In local environment, returns a no-op context manager.
+
+    Usage:
+        with conditional_cache_patches(mock_cache_services_if_ci):
+            # Test code here
+            # - CI: Uses mocked cache services
+            # - Local: Uses real cache services (if available)
+    """
+    from contextlib import ExitStack, nullcontext
+
+    if cache_mocks is None:
+        # Local environment - no mocking
+        return nullcontext()
+
+    # CI environment - apply all cache service patches
+    stack = ExitStack()
+    stack.enter_context(patch('services.audio_message_pipeline.get_audio_cache_service', return_value=cache_mocks['audio_cache']))
+    stack.enter_context(patch('services.audio_message_pipeline.get_translation_cache_service', return_value=cache_mocks['translation_cache']))
+    stack.enter_context(patch('services.audio_message_pipeline.get_redis_service', return_value=cache_mocks['redis']))
+    return stack
+
 
 def create_mock_transcription_result(text="Test transcribed text", language="en"):
     """Create a mock TranscriptionResult"""
@@ -227,6 +265,47 @@ def mock_database_service():
     return mock
 
 
+@pytest.fixture
+def mock_cache_services_if_ci():
+    """
+    Create mock cache services ONLY in CI environment.
+    Returns None in local environment to allow real services.
+
+    Pattern: Use this fixture to avoid Redis connection timeouts in CI
+    while allowing integration tests with real Redis in local dev.
+    """
+    if not IS_CI:
+        return None
+
+    # Mock audio cache service
+    mock_audio_cache = MagicMock()
+    mock_audio_cache.get_or_compute_audio_hash = AsyncMock(return_value="test_hash")
+    mock_audio_cache.get_transcription_by_hash = AsyncMock(return_value=None)
+    mock_audio_cache.set_transcription_by_hash = AsyncMock(return_value=True)
+    mock_audio_cache.get_all_translated_audio_by_hash = AsyncMock(return_value={})
+    mock_audio_cache.set_translated_audio_by_hash = AsyncMock(return_value=True)
+    mock_audio_cache.get_stats = MagicMock(return_value={})
+
+    # Mock translation cache service
+    mock_translation_cache = MagicMock()
+    mock_translation_cache.get_translation = AsyncMock(return_value=None)
+    mock_translation_cache.set_translation = AsyncMock(return_value=True)
+    mock_translation_cache.get_stats = MagicMock(return_value={})
+
+    # Mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
+
+    return {
+        'audio_cache': mock_audio_cache,
+        'translation_cache': mock_translation_cache,
+        'redis': mock_redis
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 # INTEGRATION TESTS
 # ═══════════════════════════════════════════════════════════════
@@ -283,7 +362,8 @@ async def test_pipeline_full_flow_with_mobile_transcription(
     mock_voice_clone_service,
     mock_tts_service,
     mock_translation_service,
-    mock_database_service
+    mock_database_service,
+    mock_cache_services_if_ci
 ):
     """Test complete pipeline with mobile transcription"""
     logger.info("Test 09.3: Full flow with mobile transcription")
@@ -293,35 +373,36 @@ async def test_pipeline_full_flow_with_mobile_transcription(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline(
-                    translation_service=mock_translation_service,
-                    database_service=mock_database_service
-                )
-                pipeline.is_initialized = True
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
+                    pipeline = AudioMessagePipeline(
+                        translation_service=mock_translation_service,
+                        database_service=mock_database_service
+                    )
+                    pipeline.is_initialized = True
 
-                # Process with mobile metadata
-                metadata = AudioMessageMetadata(
-                    transcription="Hello, this is a test message from mobile.",
-                    language="en",
-                    confidence=0.92,
-                    source="ios_speech"
-                )
+                    # Process with mobile metadata
+                    metadata = AudioMessageMetadata(
+                        transcription="Hello, this is a test message from mobile.",
+                        language="en",
+                        confidence=0.92,
+                        source="ios_speech"
+                    )
 
-                result = await pipeline.process_audio_message(
-                    audio_path=str(mock_audio_file),
-                    audio_url="/uploads/test.m4a",
-                    sender_id="sender_123",
-                    conversation_id="conv_456",
-                    message_id="msg_789",
-                    attachment_id="att_012",
-                    audio_duration_ms=3000,
-                    metadata=metadata,
-                    target_languages=["fr", "es"],
-                    generate_voice_clone=True
-                )
+                    result = await pipeline.process_audio_message(
+                        audio_path=str(mock_audio_file),
+                        audio_url="/uploads/test.m4a",
+                        sender_id="sender_123",
+                        conversation_id="conv_456",
+                        message_id="msg_789",
+                        attachment_id="att_012",
+                        audio_duration_ms=3000,
+                        metadata=metadata,
+                        target_languages=["fr", "es"],
+                        generate_voice_clone=True
+                    )
 
     assert result is not None
     assert result.message_id == "msg_789"
@@ -471,7 +552,8 @@ async def test_pipeline_multiple_languages(
     mock_transcription_service,
     mock_voice_clone_service,
     mock_tts_service,
-    mock_translation_service
+    mock_translation_service,
+    mock_cache_services_if_ci
 ):
     """Test pipeline with multiple target languages"""
     logger.info("Test 09.6: Multiple target languages")
@@ -481,23 +563,24 @@ async def test_pipeline_multiple_languages(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                pipeline.is_initialized = True
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
+                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                    pipeline.is_initialized = True
 
-                target_langs = ["fr", "es", "de"]
+                    target_langs = ["fr", "es", "de"]
 
-                result = await pipeline.process_audio_message(
-                    audio_path=str(mock_audio_file),
-                    audio_url="/uploads/test.m4a",
-                    sender_id="sender_multi",
-                    conversation_id="conv_multi",
-                    message_id="msg_multi",
-                    attachment_id="att_multi",
-                    target_languages=target_langs
-                )
+                    result = await pipeline.process_audio_message(
+                        audio_path=str(mock_audio_file),
+                        audio_url="/uploads/test.m4a",
+                        sender_id="sender_multi",
+                        conversation_id="conv_multi",
+                        message_id="msg_multi",
+                        attachment_id="att_multi",
+                        target_languages=target_langs
+                    )
 
     assert result is not None
     assert len(result.translations) == 3
@@ -587,7 +670,8 @@ async def test_pipeline_result_to_dict(
     mock_transcription_service,
     mock_voice_clone_service,
     mock_tts_service,
-    mock_translation_service
+    mock_translation_service,
+    mock_cache_services_if_ci
 ):
     """Test result serialization to dict"""
     logger.info("Test 09.8: Result to_dict serialization")
@@ -597,23 +681,24 @@ async def test_pipeline_result_to_dict(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                pipeline.is_initialized = True
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
+                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                    pipeline.is_initialized = True
 
-                result = await pipeline.process_audio_message(
-                    audio_path=str(mock_audio_file),
-                    audio_url="/uploads/test.m4a",
-                    sender_id="sender_dict",
-                    conversation_id="conv_dict",
-                    message_id="msg_dict",
-                    attachment_id="att_dict",
-                    target_languages=["fr"]
-                )
+                    result = await pipeline.process_audio_message(
+                        audio_path=str(mock_audio_file),
+                        audio_url="/uploads/test.m4a",
+                        sender_id="sender_dict",
+                        conversation_id="conv_dict",
+                        message_id="msg_dict",
+                        attachment_id="att_dict",
+                        target_languages=["fr"]
+                    )
 
-                result_dict = result.to_dict()
+                    result_dict = result.to_dict()
 
     assert isinstance(result_dict, dict)
     assert "message_id" in result_dict
@@ -696,7 +781,8 @@ async def test_pipeline_auto_language_detection(
     mock_voice_clone_service,
     mock_tts_service,
     mock_translation_service,
-    mock_database_service
+    mock_database_service,
+    mock_cache_services_if_ci
 ):
     """Test automatic target language detection from conversation members"""
     logger.info("Test 09.11: Auto language detection")
@@ -706,25 +792,26 @@ async def test_pipeline_auto_language_detection(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline(
-                    translation_service=mock_translation_service,
-                    database_service=mock_database_service
-                )
-                pipeline.is_initialized = True
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
+                    pipeline = AudioMessagePipeline(
+                        translation_service=mock_translation_service,
+                        database_service=mock_database_service
+                    )
+                    pipeline.is_initialized = True
 
-                # Don't provide target_languages - should auto-detect
-                result = await pipeline.process_audio_message(
-                    audio_path=str(mock_audio_file),
-                    audio_url="/uploads/test.m4a",
-                    sender_id="sender_auto",
-                    conversation_id="conv_auto",
-                    message_id="msg_auto",
-                    attachment_id="att_auto",
-                    target_languages=None  # Auto-detect
-                )
+                    # Don't provide target_languages - should auto-detect
+                    result = await pipeline.process_audio_message(
+                        audio_path=str(mock_audio_file),
+                        audio_url="/uploads/test.m4a",
+                        sender_id="sender_auto",
+                        conversation_id="conv_auto",
+                        message_id="msg_auto",
+                        attachment_id="att_auto",
+                        target_languages=None  # Auto-detect
+                    )
 
     assert result is not None
     assert len(result.translations) > 0
