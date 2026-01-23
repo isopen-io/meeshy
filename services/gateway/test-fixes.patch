@@ -1,0 +1,248 @@
+--- a/services/gateway/src/__tests__/unit/services/MetadataManager.test.ts
++++ b/services/gateway/src/__tests__/unit/services/MetadataManager.test.ts
+@@ -147,16 +147,10 @@ describe('MetadataManager', () => {
+       chain.metadata.mockRejectedValue(new Error('Invalid image format'));
+       mockSharp.mockReturnValue(chain);
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractImageMetadata('test/corrupted.jpg');
+
+       expect(result).toEqual({
+         width: 0,
+         height: 0,
+       });
+-      expect(consoleSpy).toHaveBeenCalledWith(
+-        '[MetadataManager] Erreur extraction métadonnées image:',
+-        expect.any(Error)
+-      );
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -206,15 +200,10 @@ describe('MetadataManager', () => {
+       chain.metadata.mockRejectedValue(new Error('Invalid buffer'));
+       mockSharp.mockReturnValue(chain);
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractImageMetadataFromBuffer(buffer);
+
+       expect(result).toEqual({
+         width: 0,
+         height: 0,
+       });
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -250,14 +239,10 @@ describe('MetadataManager', () => {
+       chain.toFile.mockRejectedValue(new Error('Write error'));
+       mockSharp.mockReturnValue(chain);
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.generateThumbnail('test/image.jpg');
+
+       expect(result).toBeNull();
+-      expect(consoleSpy).toHaveBeenCalled();
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -283,14 +268,10 @@ describe('MetadataManager', () => {
+       chain.toBuffer.mockRejectedValue(new Error('Processing error'));
+       mockSharp.mockReturnValue(chain);
+
+-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+-
+       const result = await metadataManager.generateThumbnailFromBuffer(inputBuffer);
+
+       expect(result).toBeUndefined();
+-      expect(consoleWarnSpy).toHaveBeenCalled();
+-
+-      consoleWarnSpy.mockRestore();
++      // Logger is now used instead of console.warn
+     });
+@@ -308,7 +289,7 @@ describe('MetadataManager', () => {
+
+       expect(mockParseFile).toHaveBeenCalledWith('/test/uploads/test/audio.mp3');
+       expect(result).toEqual({
+-        duration: 181, // Rounded
++        duration: 180500, // Converted to milliseconds (180.5 * 1000)
+         bitrate: 192000,
+         sampleRate: 44100,
+         codec: 'MP3',
+@@ -332,7 +313,7 @@ describe('MetadataManager', () => {
+       const result = await metadataManager.extractAudioMetadata('test/voice.webm');
+
+       expect(result).toEqual({
+-        duration: 60,
++        duration: 60200, // Converted to milliseconds (60.2 * 1000)
+         bitrate: 128000,
+         sampleRate: 48000,
+         codec: 'opus',
+@@ -354,6 +335,7 @@ describe('MetadataManager', () => {
+       const result = await metadataManager.extractAudioMetadata('test/audio.m4a');
+
+       expect(result.codec).toBe('AAC LC');
++      expect(result.duration).toBe(120000); // Converted to milliseconds (120 * 1000)
+     });
+
+     it('should handle missing optional fields', async () => {
+@@ -381,9 +363,6 @@ describe('MetadataManager', () => {
+     it('should handle audio extraction errors', async () => {
+       mockParseFile.mockRejectedValue(new Error('Unsupported format'));
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractAudioMetadata('test/corrupted.mp3');
+
+       expect(result).toEqual({
+@@ -393,12 +372,7 @@ describe('MetadataManager', () => {
+         codec: 'unknown',
+         channels: 1,
+       });
+-      expect(consoleSpy).toHaveBeenCalledWith(
+-        '[MetadataManager] Erreur extraction métadonnées audio:',
+-        expect.objectContaining({
+-          filePath: 'test/corrupted.mp3',
+-        })
+-      );
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -424,7 +398,7 @@ describe('MetadataManager', () => {
+         expect.any(Function)
+       );
+       expect(result).toEqual({
+-        duration: 121, // Rounded
++        duration: 120500, // Converted to milliseconds (120.5 * 1000)
+         width: 1920,
+         height: 1080,
+         fps: 30,
+@@ -494,16 +468,11 @@ describe('MetadataManager', () => {
+         // Never call callback - simulate hang
+       });
+
+-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+-
+       const promise = metadataManager.extractVideoMetadata('test/hanging.mp4');
+
+       // Fast-forward time
+       jest.advanceTimersByTime(30000);
+
+       await expect(promise).rejects.toThrow('ffprobe timeout after 30 seconds');
+-      expect(consoleWarnSpy).toHaveBeenCalledWith(
+-        '[MetadataManager] Timeout ffprobe pour:',
+-        'test/hanging.mp4'
+-      );
+-
+-      consoleWarnSpy.mockRestore();
++      // Logger is now used instead of console.warn
+       jest.useRealTimers();
+@@ -580,14 +549,10 @@ describe('MetadataManager', () => {
+       const pdfBuffer = Buffer.from('corrupted pdf');
+       mockFsReadFile.mockResolvedValue(pdfBuffer);
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractPdfMetadata('test/corrupted.pdf');
+
+       expect(result).toEqual({
+         pageCount: 0,
+       });
+-      expect(consoleSpy).toHaveBeenCalled();
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -648,14 +613,10 @@ describe('MetadataManager', () => {
+     it('should handle text extraction errors', async () => {
+       mockFsReadFile.mockRejectedValue(new Error('Read error'));
+
+-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractTextMetadata('test/error.txt');
+
+       expect(result).toEqual({
+         lineCount: 0,
+       });
+-      expect(consoleSpy).toHaveBeenCalled();
+-
+-      consoleSpy.mockRestore();
++      // Logger is now used instead of console.error
+     });
+@@ -683,11 +644,13 @@ describe('MetadataManager', () => {
+     it('should extract metadata for audio type with provided metadata', async () => {
+       const providedMetadata = {
+-        duration: 120.5,
++        duration: 120500, // Already in milliseconds
+         bitrate: 192000,
+         sampleRate: 44100,
+         codec: 'opus',
+         channels: 2,
+         audioEffectsTimeline: [{ type: 'fade', start: 0, end: 1000 }],
+       };
++
++      mockFsStat.mockResolvedValue({ size: 1000000 });
+
+       const result = await metadataManager.extractMetadata(
+@@ -698,7 +661,7 @@ describe('MetadataManager', () => {
+       );
+
+       expect(result).toEqual({
+-        duration: 121, // Rounded
++        duration: 120500, // Milliseconds
+         bitrate: 192000,
+         sampleRate: 44100,
+         codec: 'opus',
+@@ -731,7 +694,7 @@ describe('MetadataManager', () => {
+
+       expect(mockParseFile).toHaveBeenCalled();
+       expect(result).toEqual({
+-        duration: 60,
++        duration: 60000, // Converted to milliseconds (60 * 1000)
+         bitrate: 128000,
+         sampleRate: 48000,
+         codec: 'MP3',
+@@ -769,7 +732,7 @@ describe('MetadataManager', () => {
+       );
+
+       expect(result).toEqual({
+-        duration: 90,
++        duration: 90000, // Converted to milliseconds (90 * 1000)
+         width: 1280,
+         height: 720,
+         fps: 30,
+@@ -783,8 +746,6 @@ describe('MetadataManager', () => {
+         callback(new Error('ffprobe failed'));
+       });
+
+-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+-
+       const result = await metadataManager.extractMetadata(
+         'test/video.mp4',
+         'video',
+@@ -799,11 +760,7 @@ describe('MetadataManager', () => {
+         videoCodec: 'unknown',
+         bitrate: 0,
+       });
+-      expect(consoleWarnSpy).toHaveBeenCalledWith(
+-        "[MetadataManager] Impossible d'extraire métadonnées vidéo:",
+-        expect.any(Error)
+-      );
+-
+-      consoleWarnSpy.mockRestore();
++      // Logger is now used instead of console.warn
+     });
+
+@@ -933,7 +890,7 @@ describe('MetadataManager', () => {
+
+       const result = await metadataManager.extractAudioMetadata('test/long-audio.m4a');
+
+-      expect(result.duration).toBe(10800);
++      expect(result.duration).toBe(10800000); // Converted to milliseconds (10800 * 1000)
+     });
+

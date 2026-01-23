@@ -3,15 +3,17 @@
  * Tests the dispatcher that routes translation requests based on attachment type
  */
 
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+
 // Mock fs.promises FIRST before imports
 jest.mock('fs', () => ({
   promises: {
-    readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio-data'))
+    readFile: (jest.fn() as any).mockResolvedValue(Buffer.from('mock-audio-data'))
   }
 }));
 
 // Mock AudioTranslateService
-const mockAudioTranslateService = {
+const mockAudioTranslateService: any = {
   translateSync: jest.fn(),
   translateAsync: jest.fn(),
   getJobStatus: jest.fn(),
