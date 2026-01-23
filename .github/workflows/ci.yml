@@ -208,7 +208,8 @@ jobs:
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ]; then
             cd ${{ matrix.package.path }}
-            npm run test:coverage
+            echo "Running web tests with Jest via bun..."
+            bun run test:coverage
           else
             bun run test:coverage --filter=${{ matrix.package.filter }}
           fi
