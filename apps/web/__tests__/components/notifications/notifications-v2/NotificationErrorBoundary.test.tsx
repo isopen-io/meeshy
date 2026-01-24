@@ -22,10 +22,8 @@ global.fetch = jest.fn(() =>
 
 // Mock window.location.reload
 const mockReload = jest.fn();
-Object.defineProperty(window, 'location', {
-  value: { reload: mockReload, href: 'http://localhost/' },
-  writable: true,
-});
+delete (window as any).location;
+(window as any).location = { reload: mockReload, href: 'http://localhost/' };
 
 // Test component that throws error
 const ThrowingComponent = ({ shouldThrow = true }: { shouldThrow?: boolean }) => {

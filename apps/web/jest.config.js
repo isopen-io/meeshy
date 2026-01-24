@@ -35,10 +35,25 @@ const customJestConfig = {
     '^next/font/google$': '<rootDir>/__mocks__/next/font/google.js',
     // Mock tone to avoid ESM issues
     '^tone$': '<rootDir>/__mocks__/tone.js',
+    // Mock dompurify for tests
+    '^dompurify$': '<rootDir>/__mocks__/dompurify.js',
+    // Mock pitchy to avoid ESM issues
+    '^pitchy$': '<rootDir>/__mocks__/pitchy.js',
+    // Mock @ffmpeg/ffmpeg to avoid ESM issues
+    '^@ffmpeg/ffmpeg$': '<rootDir>/__mocks__/@ffmpeg/ffmpeg.js',
+    // Mock mermaid to avoid ESM issues
+    '^mermaid$': '<rootDir>/__mocks__/mermaid.js',
+    // Mock MermaidDiagramImpl to avoid loading mermaid in tests
+    '^@/components/markdown/MermaidDiagramImpl$': '<rootDir>/__mocks__/components/markdown/MermaidDiagramImpl.tsx',
+    // Mock MarkdownMessage to avoid react-markdown ESM issues
+    '^@/components/messages/MarkdownMessage$': '<rootDir>/__mocks__/components/messages/MarkdownMessage.tsx',
+    // Mock react-syntax-highlighter to avoid ESM issues
+    '^react-syntax-highlighter$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
+    '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter/dist/esm/$1.js',
   },
   // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(\\.pnpm|lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates|tone)/)',
+    'node_modules/(?!(\\.pnpm|lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates|tone|pitchy|fft\\.js|mermaid|react-markdown|remark-.*|rehype-.*|micromark.*|mdast-.*|unist-.*|vfile.*|bail|trough|unified|is-plain-obj|property-information|hast-.*|space-separated-tokens|comma-separated-tokens|ccount|escape-string-regexp|markdown-table|trim-lines|zwitch|longest-streak|decode-named-character-reference|character-entities)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
