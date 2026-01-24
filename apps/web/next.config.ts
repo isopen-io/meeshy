@@ -120,6 +120,13 @@ const nextConfig: NextConfig = {
         tls: false,
       };
     }
+
+    // Exclure dompurify du bundle serveur (client-only)
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push('dompurify');
+    }
+
     return config;
   },
 };

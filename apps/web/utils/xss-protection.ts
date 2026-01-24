@@ -3,7 +3,8 @@
  * Sanitizes user-generated content to prevent XSS attacks
  *
  * Security Features:
- * - HTML sanitization with DOMPurify
+ * - HTML sanitization with DOMPurify (client-side)
+ * - Server-side regex-based sanitization fallback
  * - URL validation for external links
  * - Attribute escaping for HTML attributes
  * - Script tag removal
@@ -13,7 +14,17 @@
  * @version 1.0.0
  */
 
-import DOMPurify from 'isomorphic-dompurify';
+// Server-side fallback: DOMPurify requires a window object
+// On the server, we'll use a simple regex-based sanitization
+const isBrowser = typeof window !== 'undefined';
+
+// Lazy load DOMPurify only on client-side
+let DOMPurify: any = null;
+if (isBrowser) {
+  import('dompurify').then((module) => {
+    DOMPurify = module.default;
+  });
+}
 
 /**
  * Sanitization configuration
@@ -43,14 +54,21 @@ const SANITIZE_CONFIG = {
 export function sanitizeText(input: string | null | undefined): string {
   if (!input) return '';
 
-  // Strip ALL HTML tags and attributes
-  const sanitized = DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
-    RETURN_DOM: false,
-    RETURN_DOM_FRAGMENT: false
-  });
+  let sanitized: string;
+
+  if (DOMPurify && isBrowser) {
+    // Client-side: use DOMPurify
+    sanitized = DOMPurify.sanitize(input, {
+      ALLOWED_TAGS: [],
+      ALLOWED_ATTR: [],
+      KEEP_CONTENT: true,
+      RETURN_DOM: false,
+      RETURN_DOM_FRAGMENT: false
+    });
+  } else {
+    // Server-side or DOMPurify not loaded yet: simple HTML stripping
+    sanitized = input.replace(/<[^>]*>/g, '');
+  }
 
   // Remove control characters and zero-width chars
   const cleaned = sanitized
@@ -76,17 +94,28 @@ export function sanitizeText(input: string | null | undefined): string {
 export function sanitizeHtml(input: string | null | undefined): string {
   if (!input) return '';
 
-  return DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: SANITIZE_CONFIG.ALLOWED_TAGS,
-    ALLOWED_ATTR: SANITIZE_CONFIG.ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP: SANITIZE_CONFIG.ALLOWED_URI_REGEXP,
-    KEEP_CONTENT: true,
-    RETURN_DOM: false,
-    RETURN_DOM_FRAGMENT: false,
-    // Security hooks
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
-  });
+  if (DOMPurify && isBrowser) {
+    // Client-side: use DOMPurify
+    return DOMPurify.sanitize(input, {
+      ALLOWED_TAGS: SANITIZE_CONFIG.ALLOWED_TAGS,
+      ALLOWED_ATTR: SANITIZE_CONFIG.ALLOWED_ATTR,
+      ALLOWED_URI_REGEXP: SANITIZE_CONFIG.ALLOWED_URI_REGEXP,
+      KEEP_CONTENT: true,
+      RETURN_DOM: false,
+      RETURN_DOM_FRAGMENT: false,
+      // Security hooks
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
+    });
+  } else {
+    // Server-side or DOMPurify not loaded: basic sanitization (strip dangerous tags)
+    return input
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/javascript:/gi, '');
+  }
 }
 
 /**
