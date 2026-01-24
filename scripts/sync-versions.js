@@ -22,10 +22,12 @@ const VERSION_FILES = [
     type: 'package.json'
   },
   {
-    packagePath: 'services/translator/pyproject.toml',
+    packagePath: 'services/translator/package.json',
     versionPath: 'services/translator/VERSION',
+    pyprojectPath: 'services/translator/pyproject.toml',
     name: 'translator',
-    type: 'pyproject.toml'
+    type: 'package.json',
+    syncPyproject: true  // Synchroniser aussi vers pyproject.toml
   }
 ];
 
@@ -52,6 +54,18 @@ function readVersionFromPackageJson(filePath) {
   return packageJson.version;
 }
 
+/**
+ * Mettre à jour la version dans pyproject.toml
+ */
+function updatePyprojectTomlVersion(filePath, newVersion) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const updatedContent = content.replace(
+    /^version\s*=\s*["']([^"']+)["']/m,
+    `version = "${newVersion}"`
+  );
+  fs.writeFileSync(filePath, updatedContent, 'utf8');
+}
+
 function syncVersions() {
   console.log('🔄 Synchronisation des versions package.json/pyproject.toml → VERSION files...\n');
 
@@ -75,6 +89,19 @@ function syncVersions() {
         newVersion = readVersionFromPyprojectToml(sourceFilePath);
       } else {
         newVersion = readVersionFromPackageJson(sourceFilePath);
+      }
+
+      // Synchroniser vers pyproject.toml si nécessaire (pour services Python)
+      if (config.syncPyproject && config.pyprojectPath) {
+        const pyprojectFullPath = path.join(process.cwd(), config.pyprojectPath);
+        if (fs.existsSync(pyprojectFullPath)) {
+          const currentPyprojectVersion = readVersionFromPyprojectToml(pyprojectFullPath);
+          if (currentPyprojectVersion !== newVersion) {
+            updatePyprojectTomlVersion(pyprojectFullPath, newVersion);
+            console.log(`  📝 pyproject.toml: ${currentPyprojectVersion} → ${newVersion}`);
+            hasChanges = true;
+          }
+        }
       }
 
       // Lire la version actuelle du fichier VERSION (si existe)

@@ -1,0 +1,19 @@
+{
+  "name": "@meeshy/translator",
+  "version": "1.0.0",
+  "description": "Meeshy Translator Service - ASR, Translation, TTS",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync-version": "node ../../scripts/sync-python-version.js"
+  },
+  "keywords": [
+    "meeshy",
+    "translator",
+    "asr",
+    "tts",
+    "translation"
+  ],
+  "author": "Meeshy Team",
+  "license": "UNLICENSED"
+}
