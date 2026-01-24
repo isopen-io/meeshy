@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Synchronise les versions depuis package.json vers les fichiers VERSION
+ * Synchronise les versions depuis package.json/pyproject.toml vers les fichiers VERSION
  * Utilisé après `changeset version` pour garantir que Docker utilise les bonnes versions
  */
 
@@ -12,44 +12,69 @@ const VERSION_FILES = [
   {
     packagePath: 'apps/web/package.json',
     versionPath: 'apps/web/VERSION',
-    name: 'web'
+    name: 'web',
+    type: 'package.json'
   },
   {
     packagePath: 'services/gateway/package.json',
     versionPath: 'services/gateway/VERSION',
-    name: 'gateway'
+    name: 'gateway',
+    type: 'package.json'
   },
   {
-    packagePath: 'services/translator/package.json',
+    packagePath: 'services/translator/pyproject.toml',
     versionPath: 'services/translator/VERSION',
-    name: 'translator'
+    name: 'translator',
+    type: 'pyproject.toml'
   }
 ];
 
+/**
+ * Lire la version depuis un fichier pyproject.toml
+ */
+function readVersionFromPyprojectToml(filePath) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const versionMatch = content.match(/^version\s*=\s*["']([^"']+)["']/m);
+  if (!versionMatch) {
+    throw new Error('Version non trouvée dans pyproject.toml');
+  }
+  return versionMatch[1];
+}
+
+/**
+ * Lire la version depuis un fichier package.json
+ */
+function readVersionFromPackageJson(filePath) {
+  const packageJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (!packageJson.version) {
+    throw new Error('Version non trouvée dans package.json');
+  }
+  return packageJson.version;
+}
+
 function syncVersions() {
-  console.log('🔄 Synchronisation des versions package.json → VERSION files...\n');
+  console.log('🔄 Synchronisation des versions package.json/pyproject.toml → VERSION files...\n');
 
   let hasChanges = false;
   const results = [];
 
   for (const config of VERSION_FILES) {
-    const packageJsonPath = path.join(process.cwd(), config.packagePath);
+    const sourceFilePath = path.join(process.cwd(), config.packagePath);
     const versionFilePath = path.join(process.cwd(), config.versionPath);
 
     try {
-      // Vérifier si le package.json existe
-      if (!fs.existsSync(packageJsonPath)) {
-        console.warn(`⚠️  ${config.name}: package.json non trouvé à ${config.packagePath}`);
+      // Vérifier si le fichier source existe
+      if (!fs.existsSync(sourceFilePath)) {
+        console.warn(`⚠️  ${config.name}: ${config.type} non trouvé à ${config.packagePath}`);
         continue;
       }
 
-      // Lire la version depuis package.json
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      const newVersion = packageJson.version;
-
-      if (!newVersion) {
-        console.warn(`⚠️  ${config.name}: pas de version dans package.json`);
-        continue;
+      // Lire la version selon le type de fichier
+      let newVersion;
+      if (config.type === 'pyproject.toml') {
+        newVersion = readVersionFromPyprojectToml(sourceFilePath);
+      } else {
+        newVersion = readVersionFromPackageJson(sourceFilePath);
       }
 
       // Lire la version actuelle du fichier VERSION (si existe)

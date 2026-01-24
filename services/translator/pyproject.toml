@@ -19,7 +19,7 @@
 
 [project]
 name = "meeshy-translator"
-version = "0.1.0"
+version = "1.0.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
