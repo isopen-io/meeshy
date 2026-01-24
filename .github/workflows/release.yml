@@ -1,46 +1,89 @@
 # =============================================================================
-# MEESHY - Release Pipeline
+# MEESHY - Release Pipeline with Changesets
 # =============================================================================
-# Automated release with semantic versioning
-# Creates GitHub releases and triggers Docker builds
+# Automated release workflow using Changesets for versioning
+# Synchronizes package.json versions to VERSION files for Docker builds
+# Creates GitHub releases and triggers Docker builds with correct versions
 # =============================================================================
 
 name: Release
 
 on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - '.changeset/**'
+      - 'apps/*/package.json'
+      - 'services/*/package.json'
+      - 'packages/*/package.json'
+
   workflow_dispatch:
     inputs:
-      version_type:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-      prerelease:
-        description: 'Pre-release tag (leave empty for stable)'
+      force_release:
+        description: 'Force release even if no changesets'
         required: false
-        default: ''
+        type: boolean
+        default: false
+      skip_docker:
+        description: 'Skip Docker builds (version bump only)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
+  pull-requests: write
 
 env:
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64,linux/arm64
+  NODE_VERSION: '22'
+  PNPM_VERSION: '9'
 
 jobs:
   # ===========================================================================
-  # VERSION BUMP
+  # CHECK: Vérifier s'il y a des changesets à publier
   # ===========================================================================
-  version:
-    name: Bump Version
+  check:
+    name: Check Changesets
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.bump.outputs.version }}
-      tag: ${{ steps.bump.outputs.tag }}
+      has_changesets: ${{ steps.check.outputs.has_changesets }}
+      published: ${{ steps.check.outputs.published }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changesets
+        id: check
+        run: |
+          CHANGESET_COUNT=$(find .changeset -name "*.md" ! -name "README.md" | wc -l)
+          echo "has_changesets=$([[ $CHANGESET_COUNT -gt 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "published=false" >> $GITHUB_OUTPUT
+
+          if [[ $CHANGESET_COUNT -gt 0 ]]; then
+            echo "✅ Found $CHANGESET_COUNT changeset(s) to publish"
+          else
+            echo "ℹ️  No changesets found"
+          fi
+
+  # ===========================================================================
+  # VERSION: Appliquer les changesets et synchroniser les versions
+  # ===========================================================================
+  version:
+    name: Version Packages
+    runs-on: ubuntu-latest
+    needs: check
+    if: needs.check.outputs.has_changesets == 'true' || github.event.inputs.force_release == 'true'
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      tag: ${{ steps.get-version.outputs.tag }}
+      has_changes: ${{ steps.version.outputs.published }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,90 +91,114 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version
-        id: bump
+      - name: Apply changesets
+        id: version
         run: |
-          bump_version() {
-            local current=$1
-            local type=$2
-            local prerelease=$3
+          echo "📦 Applying changesets..."
+          pnpm changeset version
 
-            local base=$(echo "$current" | sed 's/-.*$//')
-            IFS='.' read -r major minor patch <<< "$base"
+          # Vérifier s'il y a eu des changements
+          if git diff --quiet; then
+            echo "published=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No version changes"
+          else
+            echo "published=true" >> $GITHUB_OUTPUT
+            echo "✅ Versions updated"
+          fi
 
-            case $type in
-              major) major=$((major + 1)); minor=0; patch=0 ;;
-              minor) minor=$((minor + 1)); patch=0 ;;
-              patch) patch=$((patch + 1)) ;;
-            esac
+      - name: Sync VERSION files
+        if: steps.version.outputs.published == 'true'
+        run: |
+          echo "🔄 Synchronizing package.json → VERSION files..."
+          node scripts/sync-versions.js
 
-            if [[ -n "$prerelease" ]]; then
-              echo "${major}.${minor}.${patch}-${prerelease}"
-            else
-              echo "${major}.${minor}.${patch}"
-            fi
-          }
+      - name: Get new version
+        id: get-version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 New version: $VERSION"
 
-          # Get current version from root package.json
-          CURRENT=$(jq -r '.version' package.json)
-          NEW=$(bump_version "$CURRENT" "${{ github.event.inputs.version_type }}" "${{ github.event.inputs.prerelease }}")
-
-          # Update all package versions
-          for pkg in package.json apps/*/package.json services/*/package.json packages/*/package.json; do
-            if [[ -f "$pkg" ]]; then
-              jq --arg v "$NEW" '.version = $v' "$pkg" > tmp.json && mv tmp.json "$pkg"
-            fi
-          done
-
-          # Update VERSION files
-          for dir in apps/web services/gateway services/translator; do
-            if [[ -d "$dir" ]]; then
-              echo "$NEW" > "$dir/VERSION"
-            fi
-          done
-
-          echo "version=$NEW" >> $GITHUB_OUTPUT
-          echo "tag=v$NEW" >> $GITHUB_OUTPUT
-
-      - name: Commit changes
+      - name: Commit version changes
+        if: steps.version.outputs.published == 'true'
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           git add -A
-          git commit -m "chore(release): v${{ steps.bump.outputs.version }} [skip ci]" || echo "No changes"
-          git push origin ${{ github.ref_name }}
+          git commit -m "chore(release): version packages [skip ci]" || echo "No changes to commit"
+          git push origin "$BRANCH_NAME"
 
-      - name: Create tag
+      - name: Create Git tag
+        if: steps.version.outputs.published == 'true'
+        env:
+          TAG_NAME: ${{ steps.get-version.outputs.tag }}
         run: |
-          git tag -a "${{ steps.bump.outputs.tag }}" -m "Release ${{ steps.bump.outputs.tag }}"
-          git push origin "${{ steps.bump.outputs.tag }}"
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+          git push origin "$TAG_NAME"
 
   # ===========================================================================
-  # BUILD ALL SERVICES
+  # BUILD: Construire les images Docker avec les bonnes versions
   # ===========================================================================
   build:
     name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: version
+    if: |
+      needs.version.outputs.has_changes == 'true' &&
+      github.event.inputs.skip_docker != 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
           - service: web
             context: .
-            dockerfile: ./infrastructure/docker/images/web/Dockerfile
+            dockerfile: ./apps/web/Dockerfile
             image: meeshy-web
           - service: gateway
             context: .
-            dockerfile: ./infrastructure/docker/images/gateway/Dockerfile
+            dockerfile: ./services/gateway/Dockerfile
             image: meeshy-gateway
           - service: translator
             context: .
-            dockerfile: ./infrastructure/docker/images/translator/Dockerfile
+            dockerfile: ./services/translator/Dockerfile
             image: meeshy-translator
+
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
@@ -139,8 +206,32 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.tag }}
 
-      # Note: Shared package is copied directly by Dockerfiles from packages/shared/
-      # since context is now the monorepo root
+      - name: Read service version
+        id: service-version
+        env:
+          SERVICE_NAME: ${{ matrix.service }}
+          FALLBACK_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # Lire la version depuis le fichier VERSION créé par sync-versions.js
+          if [[ "$SERVICE_NAME" == "web" ]]; then
+            VERSION_FILE="apps/web/VERSION"
+          elif [[ "$SERVICE_NAME" == "gateway" ]]; then
+            VERSION_FILE="services/gateway/VERSION"
+          elif [[ "$SERVICE_NAME" == "translator" ]]; then
+            VERSION_FILE="services/translator/VERSION"
+          fi
+
+          VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "$FALLBACK_VERSION")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 $SERVICE_NAME version: $VERSION"
+
+      - name: Generate build timestamp
+        id: timestamp
+        run: |
+          # Format: YYYYMMDDHHmmss (ex: 20260124.143022)
+          TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
+          echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "🕐 Build timestamp: $TIMESTAMP"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -154,6 +245,19 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ steps.service-version.outputs.version }}
+            type=raw,value=${{ steps.service-version.outputs.version }}-${{ steps.timestamp.outputs.value }}
+            type=raw,value=${{ steps.timestamp.outputs.value }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.ref != 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=short
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -161,47 +265,127 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: |
-            ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:${{ needs.version.outputs.tag }}
-            ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           provenance: true
           sbom: true
+          build-args: |
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.service-version.outputs.version }}
+
+      - name: Build summary
+        env:
+          SERVICE_NAME: ${{ matrix.service }}
+          SERVICE_IMAGE: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
+          SERVICE_VERSION: ${{ steps.service-version.outputs.version }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          echo "### $SERVICE_NAME Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`$SERVICE_IMAGE\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`v$SERVICE_VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | \`$RELEASE_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | \`${{ env.PLATFORMS }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
-  # CREATE GITHUB RELEASE
+  # RELEASE: Créer la GitHub Release
   # ===========================================================================
   release:
-    name: Create Release
+    name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [version, build]
+    if: |
+      always() &&
+      needs.version.result == 'success' &&
+      needs.version.outputs.has_changes == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
 
-      - name: Create Release
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Extraire les changesets appliqués depuis CHANGELOG.md ou générer depuis git
+          if [[ -f CHANGELOG.md ]]; then
+            # Extraire la dernière entrée du changelog
+            CHANGELOG=$(awk '/^## / {if (p) exit; p=1} p' CHANGELOG.md | head -n 50)
+          else
+            # Générer depuis les commits récents
+            CHANGELOG="See commit history for details"
+          fi
+
+          # Sauvegarder dans un fichier pour éviter les problèmes de quotes
+          echo "$CHANGELOG" > /tmp/changelog.txt
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         with:
-          tag_name: ${{ needs.version.outputs.tag }}
-          name: Release ${{ needs.version.outputs.tag }}
-          body: |
-            ## Release ${{ needs.version.outputs.tag }}
-
-            ### Docker Images
-
-            ```bash
-            docker pull isopen/meeshy-web:${{ needs.version.outputs.tag }}
-            docker pull isopen/meeshy-gateway:${{ needs.version.outputs.tag }}
-            docker pull isopen/meeshy-translator:${{ needs.version.outputs.tag }}
-            ```
-
-            ### Platforms
-            - `linux/amd64`
-            - `linux/arm64`
-
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Release ${{ env.RELEASE_TAG }}
+          body_path: /tmp/changelog.txt
           draft: false
           prerelease: ${{ contains(needs.version.outputs.version, '-') }}
           generate_release_notes: true
+
+  # ===========================================================================
+  # SUMMARY
+  # ===========================================================================
+  summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [check, version, build, release]
+    if: always()
+    steps:
+      - name: Generate Summary
+        env:
+          HAS_CHANGESETS: ${{ needs.check.outputs.has_changesets }}
+          HAS_CHANGES: ${{ needs.version.outputs.has_changes }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          VERSION_RESULT: ${{ needs.version.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+        run: |
+          echo "## 🚀 Release Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$HAS_CHANGESETS" == "true" ]]; then
+            echo "✅ **Changesets detected**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️  **No changesets found**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "$HAS_CHANGES" == "true" ]]; then
+            echo "✅ **Version bumped:** \`$RELEASE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️  **No version changes**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | $CHECK_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | $VERSION_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | $BUILD_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | $RELEASE_RESULT |" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$HAS_CHANGES" == "true" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📦 Docker Images" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "docker pull isopen/meeshy-web:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull isopen/meeshy-gateway:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull isopen/meeshy-translator:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

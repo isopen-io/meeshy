@@ -36,9 +36,16 @@
     "docker:logs": "docker-compose -f docker-compose.yml logs -f",
     "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
     "prepare": "turbo run prepare",
-    "postinstall": "turbo run generate --filter=@meeshy/shared"
+    "postinstall": "turbo run generate --filter=@meeshy/shared",
+    "changeset": "changeset",
+    "changeset:add": "changeset add",
+    "version": "changeset version && node scripts/sync-versions.js",
+    "version:check": "changeset status",
+    "sync-versions": "node scripts/sync-versions.js",
+    "release:local": "pnpm version && git add -A && git commit -m 'chore: version packages' || true"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@playwright/test": "^1.58.0",
     "concurrently": "^9.2.1",
     "turbo": "^2.7.5",

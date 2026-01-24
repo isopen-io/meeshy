@@ -239,14 +239,21 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Generate build timestamp
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
+          echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "Build timestamp: $TIMESTAMP"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
           tags: |
-            type=raw,value=v${{ matrix.version }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
-            type=raw,value=latest${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }},enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
+            type=raw,value=${{ steps.timestamp.outputs.value }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
+            type=raw,value=latest${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }},enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ matrix.torch_backend || 'cpu' }},enable=${{ matrix.service == 'translator' || matrix.service == 'translator-gpu' }}
             type=ref,event=branch,suffix=${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
             type=sha,prefix=sha-,format=short,suffix=${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
