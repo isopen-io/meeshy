@@ -1,6 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderHook, act } from '@testing-library/react-hooks';
+import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useRankingData } from '@/hooks/use-ranking-data';
 import { useRankingFilters } from '@/hooks/use-ranking-filters';

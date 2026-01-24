@@ -215,7 +215,7 @@ describe('NotificationErrorBoundary', () => {
       // The component will still show error because ThrowingComponent always throws
     });
 
-    it('should disable Try Again after too many errors', () => {
+    it('should disable Try Again after too many errors', async () => {
       // Need to trigger multiple errors to test this
       const { rerender } = render(
         <NotificationErrorBoundary>
