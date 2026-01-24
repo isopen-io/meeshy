@@ -55,6 +55,7 @@
     "firebase": "^10.14.1",
     "framer-motion": "^12.29.0",
     "highlight.js": "^11.11.1",
+    "isomorphic-dompurify": "^2.19.0",
     "lucide-react": "^0.525.0",
     "markdown-it": "^14.1.0",
     "markdown-it-emoji": "^3.0.0",
