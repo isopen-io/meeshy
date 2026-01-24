@@ -47,10 +47,12 @@ git push
 
 | Document | Description |
 |----------|-------------|
-| [`.changeset/USAGE.md`](.changeset/USAGE.md) | Guide d'utilisation détaillé de Changesets |
-| [`.changeset/RELEASE.md`](.changeset/RELEASE.md) | Workflow de release complet étape par étape |
-| [`.changeset/MIGRATION.md`](.changeset/MIGRATION.md) | Guide de migration depuis l'ancien système |
+| [`docs/VERSIONING-AUTOMATION.md`](docs/VERSIONING-AUTOMATION.md) | **🤖 Automatisation complète** - Process TypeScript + Python |
+| [`docs/CHANGESETS-USAGE.md`](docs/CHANGESETS-USAGE.md) | Guide d'utilisation détaillé de Changesets |
+| [`docs/RELEASE-WORKFLOW.md`](docs/RELEASE-WORKFLOW.md) | Workflow de release complet étape par étape |
+| [`docs/DOCKER-TAGGING.md`](docs/DOCKER-TAGGING.md) | Stratégie de tagging Docker (SemVer + date/heure) |
 | [`docs/VERSIONING.md`](docs/VERSIONING.md) | Architecture technique du système |
+| [`docs/MIGRATION-GUIDE.md`](docs/MIGRATION-GUIDE.md) | Guide de migration depuis l'ancien système |
 
 ---
 
@@ -139,8 +141,9 @@ v2_meeshy/
 │   └── VERSION (1.0.41)            ← Utilisé par Docker
 │
 ├── services/translator/
-│   ├── package.json (v1.0.3)       ← Version du service
-│   └── VERSION (1.0.3)             ← Utilisé par Docker
+│   ├── package.json (v1.0.0)       ← Source de vérité (Changesets)
+│   ├── pyproject.toml (v1.0.0)     ← Synchronisé automatiquement
+│   └── VERSION (1.0.0)             ← Utilisé par Docker
 │
 └── packages/shared/
     └── package.json (v1.0.0)       ← Version du package partagé
@@ -148,8 +151,15 @@ v2_meeshy/
 
 **Synchronisation automatique :**
 ```
-package.json → VERSION (via scripts/sync-versions.js)
+Services TypeScript (web, gateway) :
+  package.json → VERSION
+
+Service Python (translator) :
+  package.json → pyproject.toml → VERSION
+  (via scripts/sync-versions.js)
 ```
+
+📖 **Détails complets :** [`docs/VERSIONING-AUTOMATION.md`](docs/VERSIONING-AUTOMATION.md)
 
 ---
 
