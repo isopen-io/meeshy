@@ -276,6 +276,8 @@ RUN chown -R translator:translator /workspace \
                /workspace/models/openvoice \
                /workspace/models/voice_cache \
                /workspace/generated/audios \
+               /workspace/cache \
+               /workspace/logs \
     && chmod -R 755 /workspace/models /workspace/cache /workspace/logs
 
 # Health check
