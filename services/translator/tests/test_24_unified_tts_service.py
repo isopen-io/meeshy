@@ -63,6 +63,14 @@ except ImportError as e:
     logger.warning(f"TTSService not available: {e}")
     SERVICE_AVAILABLE = False
 
+# Check if TTS package is available for XTTS tests
+try:
+    import TTS
+    TTS_PACKAGE_AVAILABLE = True
+except ImportError:
+    logger.warning("TTS package not available - XTTS tests will be skipped")
+    TTS_PACKAGE_AVAILABLE = False
+
 
 # ============================================================================
 # FIXTURES
@@ -406,8 +414,8 @@ class TestChatterboxBackend:
 
             assert backend.device == "cpu"
             assert backend.turbo is False
-            assert backend.model is None
-            assert backend.model_multilingual is None
+            # NOTE: .model et .model_multilingual ont été supprimés
+            # Les modèles sont maintenant gérés par ModelManager centralisé
             # is_available depends on whether chatterbox is installed
             logger.info(f"ChatterboxBackend available: {backend.is_available}")
 
@@ -451,15 +459,13 @@ class TestChatterboxBackend:
 
         with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
-            backend.model = MagicMock()
-            backend.model_multilingual = MagicMock()
+            # NOTE: .model et .model_multilingual ont été supprimés (gérés par ModelManager)
             backend._initialized = True
             backend._initialized_multilingual = True
 
             await backend.close()
 
-            assert backend.model is None
-            assert backend.model_multilingual is None
+            # Vérifier que close() réinitialise les états
             assert backend._initialized is False
             assert backend._initialized_multilingual is False
 
@@ -495,6 +501,7 @@ class TestChatterboxBackend:
         with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
+            backend._available_multilingual = False
 
             assert backend.is_model_downloaded() is False
 
@@ -509,6 +516,7 @@ class TestChatterboxBackend:
         with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
+            backend._available_multilingual = False
 
             result = await backend.download_model()
             assert result is False
@@ -539,6 +547,7 @@ class TestChatterboxBackend:
         with patch('services.tts_service.get_settings', return_value=mock_settings):
             backend = ChatterboxBackend(device="cpu")
             backend._available = False
+            backend._available_multilingual = False
             backend._initialized = False
 
             result = await backend.initialize()
@@ -871,6 +880,7 @@ class TestUnifiedTTSService:
         logger.info("Service init with invalid model OK")
 
     @pytest.mark.skipif(not SERVICE_AVAILABLE, reason="Service not available")
+    @pytest.mark.skipif(not TTS_PACKAGE_AVAILABLE, reason="TTS package not available")
     @pytest.mark.asyncio
     async def test_create_backend(self, reset_singleton, output_dir):
         """Test _create_backend creates correct backend types"""
@@ -1331,10 +1341,13 @@ class TestUnifiedTTSService:
             mock_get_settings.return_value = mock_settings
 
             service = UnifiedTTSService(output_dir=str(output_dir))
+            service.is_initialized = True  # Mark service as initialized
 
             mock_backend = MagicMock()
             mock_backend.is_initialized = True
             service.model_manager.backends = {TTSModel.CHATTERBOX: mock_backend}
+            service.model_manager.active_backend = mock_backend  # Set as active backend
+            service.model_manager.active_model = TTSModel.CHATTERBOX  # Set active model
 
             result = await service.initialize(TTSModel.CHATTERBOX)
 
@@ -1451,17 +1464,22 @@ class TestUnifiedTTSService:
 
             service = UnifiedTTSService(output_dir=str(output_dir))
             service.is_initialized = True
-            service.active_backend = None
+            service.model_manager.active_backend = None
 
-            with pytest.raises(RuntimeError) as exc_info:
-                await service.synthesize_with_voice(
-                    text="Test",
-                    speaker_audio_path=None,
-                    target_language="en",
-                    max_wait_seconds=1  # Short timeout
-                )
+            # Mock wait_for_model_ready pour qu'il retourne sans erreur
+            # mais le backend reste None, ce qui déclenchera l'erreur finale
+            with patch.object(service.model_manager, 'wait_for_model_ready', new_callable=AsyncMock) as mock_wait:
+                mock_wait.return_value = None  # Pas d'erreur mais backend reste None
 
-            assert "Aucun backend TTS disponible" in str(exc_info.value)
+                with pytest.raises(RuntimeError) as exc_info:
+                    await service.synthesize_with_voice(
+                        text="Test",
+                        speaker_audio_path=None,
+                        target_language="en",
+                        max_wait_seconds=1  # Short timeout
+                    )
+
+                assert "Backend TTS non disponible" in str(exc_info.value)
 
         logger.info("Synthesize with voice no backend OK")
 
@@ -1486,6 +1504,7 @@ class TestUnifiedTTSService:
             mock_backend.is_initialized = True
             mock_backend.synthesize = AsyncMock(return_value=str(output_dir / "translated" / "test.wav"))
             service.model_manager.active_backend = mock_backend
+            service.model_manager.active_model = TTSModel.CHATTERBOX  # Set active model
 
             with patch.object(service.synthesizer, '_convert_format', new_callable=AsyncMock) as mock_convert:
                 mock_convert.return_value = str(output_dir / "translated" / "test.mp3")
@@ -1533,7 +1552,7 @@ class TestUnifiedTTSService:
             mock_pydub_module.AudioSegment = mock_audio_segment_class
 
             with patch.dict('sys.modules', {'pydub': mock_pydub_module}):
-                result = await service._convert_format(str(test_wav), "mp3")
+                result = await service.synthesizer._convert_format(str(test_wav), "mp3")
                 # The function changes extension to target format
                 assert result.endswith(".mp3")
 
@@ -1555,9 +1574,9 @@ class TestUnifiedTTSService:
 
             service = UnifiedTTSService(output_dir=str(output_dir))
 
-            # Create a mock pydub module that raises when AudioSegment.from_wav is called
+            # Create a mock pydub module that raises when AudioSegment.from_file is called
             mock_audio_segment_class = MagicMock()
-            mock_audio_segment_class.from_wav.side_effect = Exception("Conversion failed")
+            mock_audio_segment_class.from_file.side_effect = Exception("Conversion failed")
             mock_pydub_module = MagicMock()
             mock_pydub_module.AudioSegment = mock_audio_segment_class
 
