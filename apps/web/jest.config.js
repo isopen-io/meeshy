@@ -10,6 +10,18 @@ const customJestConfig = {
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
+
+  // Reduce verbosity
+  verbose: false,
+  silent: true,
+
+  // Use summary reporter for cleaner output
+  reporters: [
+    ['default', {
+      summaryThreshold: 0,  // Always show summary
+      verbose: false
+    }]
+  ],
   moduleNameMapper: {
     // Handle module aliases (this will be automatically configured for you soon)
     '^@/(.*)$': '<rootDir>/$1',
@@ -24,7 +36,7 @@ const customJestConfig = {
   },
   // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(\\.pnpm|lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates)/)',
+    'node_modules/(?!(\\.pnpm|lucide-react|@radix-ui|sonner|cmdk|@tanstack|recharts|d3-.*|internmap|delaunator|robust-predicates|tone)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
@@ -47,6 +59,7 @@ const customJestConfig = {
     '/node_modules/',
     '/.next/',
     '/__tests__/integration/',
+    '\\.md$',
   ],
 }
 

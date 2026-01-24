@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { CompleteUserSettings } from '@/components/settings/complete-user-settings';
+import { CompleteUserSettings } from '@/components/settings/_archived/complete-user-settings';
 import { User } from '@/types';
 
 // Mock des hooks i18n

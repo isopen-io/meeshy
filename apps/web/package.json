@@ -10,9 +10,9 @@
     "start": "next start -p 3100 -H 0.0.0.0",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest --maxWorkers=50%",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --maxWorkers=50%",
     "clean": "rm -rf .next node_modules dist"
   },
   "dependencies": {

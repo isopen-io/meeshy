@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { SettingsLayout } from '@/components/settings/settings-layout';
+import { SettingsLayout } from '@/components/settings/_archived/settings-layout';
 import { User as UserType, SUPPORTED_LANGUAGES } from '@/types';
 
 // Mock des hooks i18n

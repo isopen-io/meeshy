@@ -125,7 +125,7 @@ jest.mock('@/components/layout/Footer', () => ({
 
 // Mock CompleteUserSettings component
 let capturedOnUserUpdate: ((data: any) => void) | null = null;
-jest.mock('@/components/settings/complete-user-settings', () => ({
+jest.mock('@/components/settings/_archived/complete-user-settings', () => ({
   CompleteUserSettings: ({ user, onUserUpdate }: { user: any; onUserUpdate: (data: any) => void }) => {
     // Capture the callback so tests can trigger it
     capturedOnUserUpdate = onUserUpdate;

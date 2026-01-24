@@ -98,22 +98,41 @@ jest.mock('styled-jsx/style', () => ({
   },
 }))
 
-// Suppress console errors during tests (optional)
+// Suppress console errors and warnings during tests to reduce verbosity
 const originalError = console.error
+const originalWarn = console.warn
+const originalLog = console.log
+
 beforeAll(() => {
+  // Filter out noise from console.error
   console.error = (...args) => {
+    const message = typeof args[0] === 'string' ? args[0] : ''
+
+    // Suppress common test warnings and expected errors
     if (
-      typeof args[0] === 'string' &&
-      (args[0].includes('Warning: ReactDOM.render') ||
-        args[0].includes('Not implemented: HTMLFormElement.prototype.submit') ||
-        args[0].includes('An update to') && args[0].includes('inside a test was not wrapped in act'))
+      message.includes('Warning: ReactDOM.render') ||
+      message.includes('Not implemented: HTMLFormElement.prototype.submit') ||
+      message.includes('inside a test was not wrapped in act') ||
+      message.includes('Test notification error') ||
+      message.includes('SW not ready') ||
+      message.includes('Test error') ||
+      message.includes('multiple elements with the text') ||
+      message.includes('Unable to find an element')
     ) {
       return
     }
     originalError.call(console, ...args)
   }
+
+  // Suppress console.warn entirely in tests
+  console.warn = () => {}
+
+  // Suppress console.log entirely in tests
+  console.log = () => {}
 })
 
 afterAll(() => {
   console.error = originalError
+  console.warn = originalWarn
+  console.log = originalLog
 })
