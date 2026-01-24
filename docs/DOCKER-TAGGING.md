@@ -18,27 +18,24 @@ Ce document explique la stratégie de tagging Docker avec SemVer + date/heure.
 
 **Déclenchement :**
 - Push sur `main` ou `dev` avec changesets
-- Workflow dispatch manuel
+- Workflow dispatch manuel avec changeset
 
 **Tags Docker générés :**
 ```bash
-# Exemple pour gateway v1.0.41 buildé le 24 janvier 2026 à 14:30:22 UTC
+# Exemple pour gateway v1.0.41 (release officielle)
 
-✅ 1.0.41                        # SemVer (version stable)
-✅ 1.0.41-20260124.143022        # SemVer + timestamp
-✅ 20260124.143022               # Timestamp seul
+✅ 1.0.41                        # SemVer UNIQUEMENT (version stable)
 ✅ latest                        # Si branch main
 ✅ dev                           # Si branch dev
 ✅ sha-abc1234                   # Commit SHA
+
+❌ PAS de timestamp pour les releases officielles
 ```
 
 **Utilisation :**
 ```bash
-# Production : utiliser la version stable
+# Production : utiliser la version SemVer stable
 docker pull isopen/meeshy-gateway:1.0.41
-
-# Debug : identifier le build exact
-docker pull isopen/meeshy-gateway:1.0.41-20260124.143022
 
 # Toujours la dernière version
 docker pull isopen/meeshy-gateway:latest
@@ -57,7 +54,8 @@ docker pull isopen/meeshy-gateway:latest
 ```bash
 # Exemple buildé le 24 janvier 2026 à 14:30:22 UTC
 
-✅ 20260124.143022               # Timestamp seul (PAS de SemVer)
+✅ 1.0.40-20260124.143022        # SemVer + timestamp (version actuelle + date)
+✅ 20260124.143022               # Timestamp seul
 ✅ latest                        # Si branch main
 ✅ dev                           # Si branch dev
 ✅ sha-abc1234                   # Commit SHA
@@ -65,7 +63,10 @@ docker pull isopen/meeshy-gateway:latest
 
 **Utilisation :**
 ```bash
-# Utiliser le build par date
+# Utiliser le build avec SemVer + date
+docker pull isopen/meeshy-gateway:1.0.40-20260124.143022
+
+# Ou utiliser le build par date seule
 docker pull isopen/meeshy-gateway:20260124.143022
 
 # Ou utiliser latest/dev
@@ -79,7 +80,7 @@ docker pull isopen/meeshy-gateway:dev
 ### Workflow Release (`.github/workflows/release.yml`)
 
 **Quand :** Changesets détectés
-**Tags :** SemVer + Date + latest/dev
+**Tags :** SemVer UNIQUEMENT + latest/dev
 
 ```yaml
 Déclenchement:
@@ -90,15 +91,14 @@ Processus:
   1. ✓ Détecte changesets
   2. ✓ Applique changeset version (bumpe SemVer)
   3. ✓ Sync VERSION files
-  4. ✓ Génère timestamp (20260124.143022)
-  5. ✓ Commit + Tag Git (v1.0.41)
-  6. ✓ Build Docker avec TOUS les tags
+  4. ✓ Commit + Tag Git (v1.0.41)
+  5. ✓ Build Docker avec SemVer UNIQUEMENT
 
 Tags Docker:
-  - 1.0.41                        # SemVer
-  - 1.0.41-20260124.143022        # SemVer+date
-  - 20260124.143022               # Date
+  - 1.0.41                        # SemVer UNIQUEMENT
   - latest (si main)
+  - dev (si dev)
+  - sha-abc1234                   # Commit SHA
 ```
 
 ---
@@ -106,7 +106,7 @@ Tags Docker:
 ### Workflow Docker (`.github/workflows/docker.yml`)
 
 **Quand :** Push sans changeset ou manuel
-**Tags :** Date UNIQUEMENT + latest/dev
+**Tags :** SemVer+Date + Date + latest/dev
 
 ```yaml
 Déclenchement:
@@ -115,13 +115,16 @@ Déclenchement:
 
 Processus:
   1. ✓ Détecte changements de fichiers
-  2. ✓ Génère timestamp (20260124.143022)
-  3. ✓ Build Docker avec tags date
+  2. ✓ Lit VERSION files (version actuelle)
+  3. ✓ Génère timestamp (20260124.143022)
+  4. ✓ Build Docker avec SemVer+date + date
 
 Tags Docker:
-  - 20260124.143022               # Date uniquement
+  - 1.0.40-20260124.143022        # SemVer + date
+  - 20260124.143022               # Date seule
   - latest (si main)
   - dev (si dev)
+  - sha-abc1234                   # Commit SHA
 ```
 
 ---
@@ -241,8 +244,9 @@ docker inspect isopen/meeshy-gateway:1.0.41 | jq '.[0].Config.Labels'
 | Aspect | Release officielle | Build automatique |
 |--------|-------------------|-------------------|
 | **Déclenchement** | Changeset mergé | Push direct |
-| **SemVer** | ✅ Oui (1.0.41) | ❌ Non |
-| **Date** | ✅ Oui (20260124.143022) | ✅ Oui (20260124.143022) |
+| **SemVer seul** | ✅ Oui (1.0.41) | ❌ Non |
+| **SemVer+Date** | ❌ Non | ✅ Oui (1.0.40-20260124.143022) |
+| **Date seule** | ❌ Non | ✅ Oui (20260124.143022) |
 | **Tag latest** | ✅ Si main | ✅ Si main |
 | **CHANGELOG** | ✅ Généré | ❌ Non |
 | **Git tag** | ✅ v1.0.41 | ❌ Non |
@@ -304,11 +308,11 @@ pnpm changeset
 # → CI déclenche release.yml
 
 # Tags Docker créés :
-isopen/meeshy-gateway:1.1.0
-isopen/meeshy-gateway:1.1.0-20260124.143022
-isopen/meeshy-gateway:20260124.143022
+isopen/meeshy-gateway:1.1.0                    # SemVer UNIQUEMENT
 isopen/meeshy-gateway:latest
 isopen/meeshy-gateway:sha-abc1234
+
+# PAS de timestamp pour les releases officielles
 ```
 
 ### Build automatique (hotfix urgent)
@@ -322,11 +326,10 @@ git push origin dev
 # CI déclenche docker.yml (pas de changeset)
 
 # Tags Docker créés :
-isopen/meeshy-gateway:20260124.153045
+isopen/meeshy-gateway:1.0.40-20260124.153045   # SemVer + date
+isopen/meeshy-gateway:20260124.153045          # Date seule
 isopen/meeshy-gateway:dev
 isopen/meeshy-gateway:sha-def5678
-
-# PAS de tag SemVer (pas de release officielle)
 ```
 
 ---

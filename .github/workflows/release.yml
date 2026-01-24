@@ -225,14 +225,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 $SERVICE_NAME version: $VERSION"
 
-      - name: Generate build timestamp
-        id: timestamp
-        run: |
-          # Format: YYYYMMDDHHmmss (ex: 20260124.143022)
-          TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
-          echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
-          echo "🕐 Build timestamp: $TIMESTAMP"
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -252,8 +244,6 @@ jobs:
           images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
           tags: |
             type=raw,value=${{ steps.service-version.outputs.version }}
-            type=raw,value=${{ steps.service-version.outputs.version }}-${{ steps.timestamp.outputs.value }}
-            type=raw,value=${{ steps.timestamp.outputs.value }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ github.ref_name }},enable=${{ github.ref != 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
