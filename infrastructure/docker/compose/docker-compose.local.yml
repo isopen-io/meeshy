@@ -246,12 +246,13 @@ services:
         condition: service_healthy
     networks:
       - meeshy-local-network
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+    # Healthcheck désactivé - le chargement des modèles ML prend trop de temps
+    # healthcheck:
+    #   test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 60s
     labels:
       - "traefik.enable=true"
       # Domain-based access
