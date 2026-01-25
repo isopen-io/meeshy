@@ -12,7 +12,6 @@ import { useI18n } from '@/hooks/useI18n';
 import { Eye, EyeOff, User as UserIcon, Lock, Shield } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 
@@ -24,7 +23,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const router = useRouter();
   const { login } = useAuth();
   const { t } = useI18n('auth');
-  const { isPasswordResetConfigured } = useFeatureFlags();
   const { identifier, setIdentifier } = useAuthFormStore();
   const [formData, setFormData] = useState({
     username: '',
@@ -218,14 +216,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       {/* Nom d'utilisateur avec icône intégrée */}
       <div className="space-y-1">
         <Label htmlFor="login-form-username" className="sr-only">
-          {t('login.usernameLabel') || 'Pseudonyme ou numéro de téléphone'}
+          {t('login.usernameLabel')}
         </Label>
         <div className="relative">
           <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
           <Input
             id="login-form-username"
             type="text"
-            placeholder="Pseudonyme ou numéro de téléphone"
+            placeholder={t('login.usernamePlaceholder')}
             value={formData.username}
             onChange={(e) => handleUsernameChange(e.target.value)}
             disabled={isLoading}
@@ -236,17 +234,17 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </div>
       </div>
 
-      {/* Mot de passe avec icône intégrée et toggle */}
+      {/* Password with icon and toggle */}
       <div className="space-y-1">
         <Label htmlFor="login-form-password" className="sr-only">
-          {t('login.passwordLabel') || 'Mot de passe'}
+          {t('login.passwordLabel')}
         </Label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
           <Input
             id="login-form-password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="Mot de passe (min. 8 caractères)"
+            placeholder={t('login.passwordPlaceholder')}
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             disabled={isLoading}
@@ -258,22 +256,20 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            aria-label={showPassword ? 'Masquer' : 'Afficher'}
+            aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
           >
             {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
           </button>
         </div>
-        {/* Forgot password lien compact */}
-        {isPasswordResetConfigured() && (
-          <div className="text-right mt-1">
-            <a
-              href="/forgot-password"
-              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline"
-            >
-              {t('login.forgotPassword') || 'Mot de passe oublié?'}
-            </a>
-          </div>
-        )}
+        {/* Forgot password link - always visible */}
+        <div className="text-right mt-1.5">
+          <a
+            href="/forgot-password"
+            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline transition-colors"
+          >
+            {t('login.forgotPassword')}
+          </a>
+        </div>
       </div>
 
       {/* Remember device checkbox */}

@@ -33,7 +33,10 @@ export const MessagePreferenceSchema = z.object({
 
   // Traduction automatique
   autoTranslateIncoming: z.boolean().default(false),
-  autoTranslateLanguages: z.array(z.string()).default([])
+  autoTranslateLanguages: z.array(z.string()).default([]),
+
+  // Limites
+  maxCharacterLimit: z.number().min(100).max(10000).default(5000)
 });
 
 export type MessagePreference = z.infer<typeof MessagePreferenceSchema>;
@@ -53,5 +56,6 @@ export const MESSAGE_PREFERENCE_DEFAULTS: MessagePreference = {
   defaultFontSize: 'medium',
   defaultTextAlign: 'left',
   autoTranslateIncoming: false,
-  autoTranslateLanguages: []
+  autoTranslateLanguages: [],
+  maxCharacterLimit: 5000
 };

@@ -229,7 +229,7 @@ export const updateUserProfileSchema = z.object({
   bio: z.string().max(500).optional(),
   systemLanguage: z.string().min(2).max(5).optional(),
   regionalLanguage: z.string().min(2).max(5).optional(),
-  customDestinationLanguage: z.union([z.string().min(2).max(5), z.literal(''), z.null()]).optional(),
+  customDestinationLanguage: z.union([z.literal(''), z.null(), z.string().min(2).max(5)]).optional(),
   autoTranslateEnabled: z.boolean().optional(),
   translateToSystemLanguage: z.boolean().optional(),
   translateToRegionalLanguage: z.boolean().optional(),

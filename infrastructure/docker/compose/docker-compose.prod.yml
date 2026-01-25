@@ -357,6 +357,7 @@ services:
       - NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=true
       - NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=true
       - NEXT_PUBLIC_DEBUG_LOGS=false
+      - NEXT_PUBLIC_ENABLE_PASSWORD_RESET=true
       - NODE_ENV=production
     volumes:
       - frontend_uploads:/app/public/u

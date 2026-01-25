@@ -3,10 +3,10 @@
  * Export tous les schemas et types de préférences
  */
 
-export * from './privacy';
-export * from './audio';
-export * from './message';
-export * from './notification';
-export * from './video';
-export * from './document';
-export * from './application';
+export * from './privacy.js';
+export * from './audio.js';
+export * from './message.js';
+export * from './notification.js';
+export * from './video.js';
+export * from './document.js';
+export * from './application.js';

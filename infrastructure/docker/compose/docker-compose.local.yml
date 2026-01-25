@@ -238,7 +238,7 @@ services:
       - "5555:5555"
       - "5558:5558"
     volumes:
-      - local_models_data:/workspace/models
+      - ../../services/translator/models:/workspace/models
     depends_on:
       mongo-init:
         condition: service_completed_successfully
@@ -407,6 +407,7 @@ services:
       NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION: "true"
       NEXT_PUBLIC_USE_API_TRANSLATION_ONLY: "true"
       NEXT_PUBLIC_DEBUG_LOGS: "true"
+      NEXT_PUBLIC_ENABLE_PASSWORD_RESET: "true"
       NODE_ENV: development
     ports:
       - "3100:3100"
@@ -458,7 +459,6 @@ volumes:
     name: meeshy-local-redis-data
   local_redis_ui_data:
     name: meeshy-local-redis-ui-data
-  local_models_data:
-    name: meeshy-local-models-data
+  # local_models_data: Utilise maintenant un bind mount vers services/translator/models
   local_frontend_uploads:
     name: meeshy-local-frontend-uploads

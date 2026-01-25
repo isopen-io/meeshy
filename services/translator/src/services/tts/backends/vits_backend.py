@@ -31,11 +31,9 @@ try:
     logger.info("✅ [VITS] OpenVoice disponible pour clonage vocal (pipeline hybride)")
 except ImportError as e:
     OPENVOICE_IMPORT_ERROR = str(e)
-    logger.warning(
-        "⚠️ [VITS] OpenVoice NON DISPONIBLE - clonage vocal désactivé pour Lingala!\n"
-        f"         Erreur: {e}\n"
-        "         Installation: pip install openvoice-cli\n"
-        "         Sans OpenVoice, seule la voix synthétique sera générée."
+    logger.info(
+        "ℹ️ [VITS] OpenVoice backend optionnel non installé (clonage vocal pour Lingala désactivé)\n"
+        f"         Installation: pip install openvoice-cli"
     )
 
 
@@ -75,15 +73,15 @@ class VITSBackend(BaseTTSBackend):
             from espnet2.bin.tts_inference import Text2Speech
             import soundfile
             self._espnet_available = True
-            logger.info("✅ [TTS] VITS (ESPnet2) disponible")
+            logger.info("✅ [TTS] VITS (ESPnet2) backend disponible")
         except ImportError as e:
-            logger.warning(f"⚠️ [TTS] VITS (ESPnet2) non disponible - pip install espnet soundfile: {e}")
+            logger.warning(f"⚠️ [TTS] VITS (ESPnet2) backend non disponible (utilisé pour Lingala): {e}")
 
         try:
             from huggingface_hub import hf_hub_download
             self._hf_hub_available = True
-        except ImportError:
-            logger.warning("⚠️ [TTS] huggingface_hub non disponible")
+        except ImportError as e:
+            logger.error(f"❌ [TTS] huggingface_hub requis pour VITS backend non disponible: {e}")
 
         self._available = self._espnet_available and self._hf_hub_available
 

@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Phone, Mail, LogIn, UserPlus, ArrowRight, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { phoneTransferService } from '@/services/phone-transfer.service';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PhoneOwnerInfo {
   maskedDisplayName: string;
@@ -67,6 +68,7 @@ export function PhoneExistsModal({
   onPhoneTransferred,
 }: PhoneExistsModalProps) {
   const router = useRouter();
+  const { t } = useI18n('auth');
   const [step, setStep] = useState<ModalStep>('choice');
   const [transferId, setTransferId] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -108,12 +110,12 @@ export function PhoneExistsModal({
         setTransferId(result.transferId);
         setStep('verify_code');
         startResendCooldown();
-        toast.success('Code SMS envoyé !');
+        toast.success(t('phoneReset.codeSent'));
       } else {
-        toast.error(result.error || 'Erreur lors de l\'envoi du code');
+        toast.error(result.error || t('phoneReset.errors.smsSendFailed'));
       }
     } catch (error) {
-      toast.error('Une erreur est survenue');
+      toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
     }
@@ -132,17 +134,17 @@ export function PhoneExistsModal({
 
       if (result.success && result.verified && result.transferToken) {
         setStep('success');
-        toast.success('Vérification réussie !');
+        toast.success(t('phoneReset.success'));
         setTimeout(() => {
           // Parent will create the account WITH phone transfer token
           onPhoneTransferred(pendingRegistration, result.transferToken!);
           onClose();
         }, 1500);
       } else {
-        toast.error(result.error || 'Code invalide');
+        toast.error(result.error || t('phoneReset.errors.invalidCode'));
       }
     } catch (error) {
-      toast.error('Une erreur est survenue');
+      toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
     }
@@ -156,13 +158,13 @@ export function PhoneExistsModal({
     try {
       const result = await phoneTransferService.resendCode({ transferId });
       if (result.success) {
-        toast.success('Nouveau code envoyé !');
+        toast.success(t('phoneReset.codeResent'));
         startResendCooldown();
       } else {
-        toast.error(result.error || 'Impossible de renvoyer le code');
+        toast.error(result.error || t('phoneReset.errors.resendFailed'));
       }
     } catch (error) {
-      toast.error('Une erreur est survenue');
+      toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
     }
@@ -208,10 +210,10 @@ export function PhoneExistsModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Phone className="h-5 w-5 text-amber-500" />
-                Numéro déjà associé
+                {t('register.wizard.phoneExists')}
               </DialogTitle>
               <DialogDescription>
-                Ce numéro de téléphone est déjà associé à un compte existant.
+                {t('register.wizard.phoneExistsDesc', { phone: phoneOwnerInfo.phoneNumber })}
               </DialogDescription>
             </DialogHeader>
 

@@ -2,16 +2,15 @@
 
 /**
  * Document Settings Component
- * Configuration des préférences de documents et fichiers
- * Synchronisé avec l'API backend /me/preferences/document
+ * Configuration des préférences de documents et fichiers avec auto-save
+ * Utilise le hook usePreferences pour les mises à jour automatiques
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -25,129 +24,60 @@ import {
   Trash2,
   FileImage
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { usePreferences } from '@/hooks/use-preferences';
 import type { DocumentPreference } from '@meeshy/shared/types/preferences';
-
-const DEFAULT_PREFERENCES: DocumentPreference = {
-  autoDownloadEnabled: false,
-  autoDownloadOnWifi: true,
-  autoDownloadMaxSize: 10,
-  inlinePreviewEnabled: true,
-  previewPdfEnabled: true,
-  previewImagesEnabled: true,
-  previewVideosEnabled: true,
-  storageQuota: 5000,
-  autoDeleteOldFiles: false,
-  fileRetentionDays: 90,
-  compressImagesOnUpload: false,
-  imageCompressionQuality: 85,
-  allowedFileTypes: [
-    'image/*',
-    'video/*',
-    'audio/*',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.*'
-  ],
-  scanFilesForMalware: true,
-  allowExternalLinks: true
-};
 
 export function DocumentSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
 
-  const [preferences, setPreferences] = useState<DocumentPreference>(DEFAULT_PREFERENCES);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Hook usePreferences avec auto-save
+  const {
+    preferences,
+    isLoading,
+    isSaving,
+    error,
+    updateField,
+  } = usePreferences<DocumentPreference>('document');
 
-  // Load preferences from API
-  const loadPreferences = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Memoize loading state
+  const LoadingState = useMemo(() => (
+    <div
+      className="flex items-center justify-center py-12"
+      role="status"
+      aria-label={t('documents.loading', 'Chargement des préférences de documents')}
+    >
+      <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-muted-foreground`} />
+      <span className="sr-only">{t('documents.loading', 'Chargement...')}</span>
+    </div>
+  ), [t, reducedMotion]);
 
-      const response = await apiService.get<{ success: boolean; data: DocumentPreference }>(
-        '/me/preferences/document'
-      );
+  // Memoize error state
+  const ErrorState = useMemo(() => (
+    <Alert variant="destructive">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ), [error]);
 
-      if (response.success && response.data) {
-        const { data } = response;
-        const prefs = 'data' in data ? data.data : data;
-        setPreferences(prev => ({ ...prev, ...prefs }));
-      }
-    } catch (err: any) {
-      console.error('[DocumentSettings] Error loading preferences:', err);
-      setError(err.message || t('documents.loadError', 'Erreur lors du chargement des préférences'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    loadPreferences();
-  }, [loadPreferences]);
-
-  // Save preferences with optimistic updates
-  const savePreferences = async () => {
-    setSaving(true);
-    const previousPrefs = { ...preferences };
-
-    try {
-      const response = await apiService.put<{ success: boolean; data: DocumentPreference }>(
-        '/me/preferences/document',
-        preferences
-      );
-
-      if (response.success) {
-        toast.success(t('documents.saveSuccess', 'Préférences de documents enregistrées'));
-        setHasChanges(false);
-      } else {
-        setPreferences(previousPrefs);
-        throw new Error(response.message || 'Erreur lors de l\'enregistrement');
-      }
-    } catch (err: any) {
-      console.error('[DocumentSettings] Error saving preferences:', err);
-      setPreferences(previousPrefs);
-      toast.error(err.message || t('documents.saveError', 'Erreur lors de l\'enregistrement'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePreferenceChange = <K extends keyof DocumentPreference>(
-    key: K,
-    value: DocumentPreference[K]
-  ) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-  };
-
-  // Loading skeleton
-  if (loading) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-[400px]"
-        role="status"
-        aria-label={t('documents.loading', 'Chargement des préférences de documents')}
-      >
-        <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
-        <span className="sr-only">{t('documents.loading', 'Chargement...')}</span>
-      </div>
-    );
+  if (isLoading) {
+    return LoadingState;
   }
 
   if (error) {
+    return ErrorState;
+  }
+
+  if (!preferences) {
     return (
-      <Alert variant="destructive">
+      <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>
+          {t('documents.noData', 'Impossible de charger les préférences de documents')}
+        </AlertDescription>
       </Alert>
     );
   }
@@ -181,8 +111,8 @@ export function DocumentSettings() {
             <Switch
               id="autoDownload"
               checked={preferences.autoDownloadEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('autoDownloadEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('autoDownloadEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('documents.autoDownload', 'Téléchargement automatique')}
             />
           </div>
@@ -204,8 +134,8 @@ export function DocumentSettings() {
                 <Switch
                   id="wifiOnly"
                   checked={preferences.autoDownloadOnWifi}
-                  onCheckedChange={(checked) => handlePreferenceChange('autoDownloadOnWifi', checked)}
-                  disabled={saving}
+                  onCheckedChange={(checked) => updateField('autoDownloadOnWifi', checked)}
+                  disabled={isSaving}
                   aria-label={t('documents.wifiOnly', 'Wi-Fi uniquement')}
                 />
               </div>
@@ -220,8 +150,8 @@ export function DocumentSettings() {
                   max={100}
                   step={1}
                   value={[preferences.autoDownloadMaxSize]}
-                  onValueChange={([value]) => handlePreferenceChange('autoDownloadMaxSize', value)}
-                  disabled={saving}
+                  onValueChange={([value]) => updateField('autoDownloadMaxSize', value)}
+                  disabled={isSaving}
                   className="w-full"
                   aria-label={t('documents.maxDownloadSize', 'Taille maximale de téléchargement')}
                 />
@@ -261,8 +191,8 @@ export function DocumentSettings() {
             <Switch
               id="inlinePreview"
               checked={preferences.inlinePreviewEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('inlinePreviewEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('inlinePreviewEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('documents.inlinePreview', 'Aperçu intégré')}
             />
           </div>
@@ -279,8 +209,8 @@ export function DocumentSettings() {
                 <Switch
                   id="pdfPreview"
                   checked={preferences.previewPdfEnabled}
-                  onCheckedChange={(checked) => handlePreferenceChange('previewPdfEnabled', checked)}
-                  disabled={saving}
+                  onCheckedChange={(checked) => updateField('previewPdfEnabled', checked)}
+                  disabled={isSaving}
                   aria-label={t('documents.pdfPreview', 'Prévisualisation PDF')}
                 />
               </div>
@@ -295,8 +225,8 @@ export function DocumentSettings() {
                 <Switch
                   id="imagePreview"
                   checked={preferences.previewImagesEnabled}
-                  onCheckedChange={(checked) => handlePreferenceChange('previewImagesEnabled', checked)}
-                  disabled={saving}
+                  onCheckedChange={(checked) => updateField('previewImagesEnabled', checked)}
+                  disabled={isSaving}
                   aria-label={t('documents.imagePreview', 'Prévisualisation images')}
                 />
               </div>
@@ -311,8 +241,8 @@ export function DocumentSettings() {
                 <Switch
                   id="videoPreview"
                   checked={preferences.previewVideosEnabled}
-                  onCheckedChange={(checked) => handlePreferenceChange('previewVideosEnabled', checked)}
-                  disabled={saving}
+                  onCheckedChange={(checked) => updateField('previewVideosEnabled', checked)}
+                  disabled={isSaving}
                   aria-label={t('documents.videoPreview', 'Prévisualisation vidéos')}
                 />
               </div>
@@ -343,8 +273,8 @@ export function DocumentSettings() {
               max={100000}
               step={100}
               value={[preferences.storageQuota]}
-              onValueChange={([value]) => handlePreferenceChange('storageQuota', value)}
-              disabled={saving}
+              onValueChange={([value]) => updateField('storageQuota', value)}
+              disabled={isSaving}
               className="w-full"
               aria-label={t('documents.storageQuota', 'Quota de stockage')}
             />
@@ -368,8 +298,8 @@ export function DocumentSettings() {
             <Switch
               id="autoDelete"
               checked={preferences.autoDeleteOldFiles}
-              onCheckedChange={(checked) => handlePreferenceChange('autoDeleteOldFiles', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('autoDeleteOldFiles', checked)}
+              disabled={isSaving}
               aria-label={t('documents.autoDelete', 'Suppression automatique')}
             />
           </div>
@@ -386,9 +316,9 @@ export function DocumentSettings() {
                   min={7}
                   max={365}
                   value={preferences.fileRetentionDays}
-                  onChange={(e) => handlePreferenceChange('fileRetentionDays', parseInt(e.target.value) || 90)}
+                  onChange={(e) => updateField('fileRetentionDays', parseInt(e.target.value) || 90)}
                   className="w-24"
-                  disabled={saving}
+                  disabled={isSaving}
                   aria-label={t('documents.retentionDays', 'Nombre de jours')}
                 />
                 <span className="text-sm text-muted-foreground">
@@ -430,8 +360,8 @@ export function DocumentSettings() {
             <Switch
               id="compressImages"
               checked={preferences.compressImagesOnUpload}
-              onCheckedChange={(checked) => handlePreferenceChange('compressImagesOnUpload', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('compressImagesOnUpload', checked)}
+              disabled={isSaving}
               aria-label={t('documents.compressImages', 'Compresser les images')}
             />
           </div>
@@ -447,8 +377,8 @@ export function DocumentSettings() {
                 max={100}
                 step={5}
                 value={[preferences.imageCompressionQuality]}
-                onValueChange={([value]) => handlePreferenceChange('imageCompressionQuality', value)}
-                disabled={saving}
+                onValueChange={([value]) => updateField('imageCompressionQuality', value)}
+                disabled={isSaving}
                 className="w-full"
                 aria-label={t('documents.imageQuality', 'Qualité de compression')}
               />
@@ -488,8 +418,8 @@ export function DocumentSettings() {
             <Switch
               id="scanMalware"
               checked={preferences.scanFilesForMalware}
-              onCheckedChange={(checked) => handlePreferenceChange('scanFilesForMalware', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('scanFilesForMalware', checked)}
+              disabled={isSaving}
               aria-label={t('documents.scanMalware', 'Analyser les fichiers')}
             />
           </div>
@@ -509,8 +439,8 @@ export function DocumentSettings() {
             <Switch
               id="externalLinks"
               checked={preferences.allowExternalLinks}
-              onCheckedChange={(checked) => handlePreferenceChange('allowExternalLinks', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('allowExternalLinks', checked)}
+              disabled={isSaving}
               aria-label={t('documents.externalLinks', 'Liens externes')}
             />
           </div>
@@ -526,27 +456,6 @@ export function DocumentSettings() {
           </Alert>
         </CardContent>
       </Card>
-
-      {/* Save Button */}
-      {hasChanges && (
-        <div className="sticky bottom-4 flex justify-end">
-          <Button
-            onClick={savePreferences}
-            disabled={saving}
-            className="shadow-lg"
-            aria-label={t('documents.save', 'Enregistrer les modifications')}
-          >
-            {saving ? (
-              <>
-                <Loader2 className={`mr-2 h-4 w-4 ${reducedMotion ? '' : 'animate-spin'}`} />
-                {t('documents.saving', 'Enregistrement...')}
-              </>
-            ) : (
-              t('documents.save', 'Enregistrer les modifications')
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

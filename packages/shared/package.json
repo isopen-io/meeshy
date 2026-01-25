@@ -18,6 +18,18 @@
       "require": "./dist/types/index.js",
       "default": "./dist/types/index.js"
     },
+    "./types/preferences": {
+      "types": "./dist/types/preferences/index.d.ts",
+      "import": "./dist/types/preferences/index.js",
+      "require": "./dist/types/preferences/index.js",
+      "default": "./dist/types/preferences/index.js"
+    },
+    "./types/preferences/*": {
+      "types": "./dist/types/preferences/*.d.ts",
+      "import": "./dist/types/preferences/*.js",
+      "require": "./dist/types/preferences/*.js",
+      "default": "./dist/types/preferences/*.js"
+    },
     "./types/*": {
       "types": "./dist/types/*.d.ts",
       "import": "./dist/types/*.js",

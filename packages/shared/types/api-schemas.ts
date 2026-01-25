@@ -2819,7 +2819,7 @@ export const updateUserRequestSchema = {
     phoneNumber: { type: 'string', description: 'Phone number' },
     systemLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'System language code' },
     regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
-    customDestinationLanguage: { type: 'string', minLength: 2, maxLength: 5, nullable: true, description: 'Custom destination language' },
+    customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
     translateToSystemLanguage: { type: 'boolean', description: 'Translate to system language' },
     translateToRegionalLanguage: { type: 'boolean', description: 'Translate to regional language' },

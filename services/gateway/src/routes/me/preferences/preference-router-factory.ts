@@ -34,6 +34,11 @@ export function createPreferenceRouter<T>(
   return async function (fastify: FastifyInstance) {
     // Instancier le service de validation de consentement
     const consentService = new ConsentValidationService(fastify.prisma);
+
+    // Helper pour détecter les objets vides ou null
+    const isEmpty = (obj: any): boolean => {
+      return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
+    };
     // GET /me/preferences/{category}
     fastify.get(
       '/',
@@ -48,7 +53,7 @@ export function createPreferenceRouter<T>(
               type: 'object',
               properties: {
                 success: { type: 'boolean', example: true },
-                data: { type: 'object' }
+                data: { type: 'object', additionalProperties: true }
               }
             },
             401: errorResponseSchema,
@@ -73,8 +78,8 @@ export function createPreferenceRouter<T>(
             select: { [category]: true }
           });
 
-          // Si aucune préférence ou champ null, retourner les defaults
-          const data = (prefs?.[category] as T) || defaults;
+          // Si aucune préférence ou champ null/vide, retourner les defaults
+          const data = isEmpty(prefs?.[category]) ? defaults : (prefs[category] as T);
 
           return reply.send({
             success: true,
@@ -106,7 +111,7 @@ export function createPreferenceRouter<T>(
               type: 'object',
               properties: {
                 success: { type: 'boolean', example: true },
-                data: { type: 'object' }
+                data: { type: 'object', additionalProperties: true }
               }
             },
             400: errorResponseSchema,
@@ -208,7 +213,7 @@ export function createPreferenceRouter<T>(
               type: 'object',
               properties: {
                 success: { type: 'boolean', example: true },
-                data: { type: 'object' }
+                data: { type: 'object', additionalProperties: true }
               }
             },
             400: errorResponseSchema,
@@ -249,7 +254,7 @@ export function createPreferenceRouter<T>(
           });
 
           // Merger avec les defaults puis avec les nouvelles valeurs
-          const current = (existing?.[category] as T) || defaults;
+          const current = isEmpty(existing?.[category]) ? defaults : (existing[category] as T);
           const merged = { ...current, ...validated };
 
           // Validation des consentements GDPR sur les données mergées

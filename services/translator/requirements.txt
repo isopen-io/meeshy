@@ -17,17 +17,24 @@ pyzmq==26.2.0
 # Machine Learning et NLP
 # Versions gérées par chatterbox-tts pour compatibilité
 # torch, torchaudio, transformers, librosa installés via chatterbox-tts
+# CRITICAL: numpy<1.24 pour compatibilité ESPnet 202412
+# ESPnet 202412 nécessite numpy<1.24, chatterbox-tts <1.26 → contrainte commune <1.24
+numpy>=1.21.0,<1.24.0
 accelerate>=1.0.0
 datasets>=3.0.0
-sentencepiece>=0.2.0
+# sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
 huggingface_hub>=0.20.0
 safetensors>=0.4.0
+peft>=0.7.0
+transformers>=4.30.0
+# librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données
 redis==5.2.1
 prisma==0.15.0
 asyncpg==0.30.0
 aiosqlite==0.20.0
+dnspython==2.7.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
@@ -72,12 +79,32 @@ faster-whisper==1.2.1
 # ✓ Commercial use allowed
 # ✓ Requires Python 3.11 (configured via .python-version)
 # Set TTS_MODEL=chatterbox or TTS_MODEL=chatterbox-turbo
-chatterbox-tts==0.1.6
+# NOTE: Installé séparément avec --no-deps dans Dockerfile (conflit numpy)
+# Dépendances manuelles de chatterbox-tts (pour installation --no-deps):
+resampy==0.4.3
+s3tokenizer
+diffusers==0.29.0
+resemble-perth==1.0.1
+omegaconf==2.3.0
+conformer==0.3.2
+spacy>=3.4.0
+einops
+soxr  # Requis par transformers/audio_utils pour chatterbox-tts
+# chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
 
 # HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
 # ✓ Uses transformers (already included above)
 # ⚠️ Commercial use limited to <100k users/year
 # Set TTS_MODEL=higgs-audio-v2
+
+# VITS (ESPnet2) - Language-specific TTS
+# ✓ Apache 2.0 License - Commercial use allowed
+# ✓ Python 3.11-3.13 compatible
+# ✓ Used for languages not supported by Chatterbox (e.g., Lingala)
+# Set TTS_MODEL=vits
+# Note: 202412 est la dernière version compatible numpy<2.0 (avant 202509 qui nécessite numpy>=2.2)
+espnet==202412
+espnet-model-zoo==0.1.7
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # LEGACY TTS OPTIONS (NOT INSTALLED BY DEFAULT)
@@ -93,35 +120,24 @@ chatterbox-tts==0.1.6
 # TTS==0.22.0  # Commented out - use chatterbox-tts instead (Apache 2.0 license)
 
 # OpenVoice V2 (LEGACY) - Voice Cloning
-# To install: pip install git+https://github.com/myshell-ai/OpenVoice.git
+# ❌ INCOMPATIBLE with Python 3.11+ (requires Python 3.9-3.10)
+# Not installed by default - see requirements-optional.txt for details
+# Manual installation: pip install git+https://github.com/myshell-ai/OpenVoice.git
 
 # Audio Processing utilities
 pydub==0.25.1
-# librosa version managed by chatterbox-tts (0.11.0)
+# librosa: gérée par ESPnet et chatterbox-tts (conflit résolu en laissant ESPnet gérer la version)
 soundfile>=0.12.1
 scipy>=1.10.0
 ffmpeg-python==0.2.0
 
 # ─────────────────────────────────────────────────────────────────────────────────
-# SPEAKER DIARIZATION - Identification des locuteurs (MANDATORY)
+# SPEAKER DIARIZATION - Identification des locuteurs (DÉSACTIVÉ TEMPORAIREMENT)
 # ─────────────────────────────────────────────────────────────────────────────────
-# pyannote.audio provides state-of-the-art speaker diarization with neural embeddings
-# Automatically detects who is speaking and when with ≥95% accuracy
-# Supports short utterances (e.g., "Oui") and prevents false positives on mono-speaker audio
-#
-# Fonctionnalités:
-#   ✅ Détection automatique de plusieurs locuteurs
-#   ✅ Identification du locuteur principal
-#   ✅ Détection de courtes interjections (1 mot)
-#   ✅ Prévention des faux positifs sur audio mono-speaker
-#   ✅ Support pyannote.audio (précis) avec fallback pitch clustering
-#
-# Configuration:
-#   ENABLE_DIARIZATION=true dans .env (activé par défaut)
-#   HF_TOKEN=your_token (optionnel mais recommandé pour pyannote.audio)
-# ─────────────────────────────────────────────────────────────────────────────────
-pyannote.audio>=3.1.0
-scikit-learn>=1.3.0
+# pyannote.audio désactivé car incompatible avec torch 2.10.0 (nécessite torch<2.5 ou pyannote 4.0+ avec torchcodec)
+# La diarisation sera réactivée une fois les dépendances principales stabilisées
+# pyannote.audio>=3.1.0  # DÉSACTIVÉ - incompatible torch 2.10.0
+scikit-learn>=1.3.0  # Gardé pour clustering de secours
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 
 # Logging et monitoring

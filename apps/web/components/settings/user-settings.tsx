@@ -103,6 +103,77 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     }));
   };
 
+  /**
+   * Auto-save language preferences immediately on change
+   */
+  const handleLanguageChange = async (field: 'systemLanguage' | 'regionalLanguage' | 'customDestinationLanguage', value: string) => {
+    if (!user) return;
+
+    // Ne pas envoyer de requête si la valeur est invalide (<  2 caractères)
+    // car le backend valide strictement les codes de langue
+    // SAUF pour customDestinationLanguage vide (pour le vider)
+    if (value && value.length < 2) {
+      toast.error(t('profile.validation.invalidLanguageCode', 'Code de langue invalide (minimum 2 caractères)'));
+      return;
+    }
+
+    // Optimistic update
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    try {
+      // Construire le payload
+      const payload: Record<string, string | null> = {};
+
+      if (value) {
+        // Valeur non vide : envoyer la valeur
+        payload[field] = value;
+      } else if (field === 'customDestinationLanguage') {
+        // customDestinationLanguage vide : envoyer null explicitement pour vider
+        payload[field] = null;
+      } else {
+        // Autres champs vides : ne rien envoyer (garde la valeur existante)
+        return;
+      }
+
+      const response = await fetch(buildApiUrl('/users/me'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authManager.getAuthToken()}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || t('profile.actions.updateError'));
+      }
+
+      const responseData = await response.json();
+
+      // Update user with API response
+      const updatedUser: UserType = {
+        ...user,
+        ...responseData.data
+      };
+
+      onUserUpdate(updatedUser);
+      toast.success(t('profile.actions.languageUpdated', 'Langue mise à jour'));
+    } catch (error) {
+      console.error('Error updating language:', error);
+      toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
+
+      // Rollback optimistic update
+      setFormData(prev => ({
+        ...prev,
+        [field]: user[field] || ''
+      }));
+    }
+  };
+
   const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -208,14 +279,17 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsLoading(true);
     try {
+      // Exclude language fields (already auto-saved)
+      const { systemLanguage, regionalLanguage, customDestinationLanguage, ...profileData } = formData;
+
       // Appel API pour sauvegarder les modifications
       const response = await fetch(buildApiUrl('/users/me'), {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authManager.getAuthToken()}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(profileData)
       });
 
       if (!response.ok) {
@@ -554,7 +628,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             </div>
             <Select
               value={formData.systemLanguage || 'en'}
-              onValueChange={(value) => handleInputChange('systemLanguage', value)}
+              onValueChange={(value) => handleLanguageChange('systemLanguage', value)}
             >
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue />
@@ -587,7 +661,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             </div>
             <Select
               value={formData.regionalLanguage || 'none'}
-              onValueChange={(value) => handleInputChange('regionalLanguage', value === 'none' ? '' : value)}
+              onValueChange={(value) => handleLanguageChange('regionalLanguage', value === 'none' ? '' : value)}
             >
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue />
@@ -622,7 +696,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             <Select
               value={formData.customDestinationLanguage || 'none'}
               onValueChange={(value) =>
-                handleInputChange('customDestinationLanguage', value === 'none' ? '' : value)
+                handleLanguageChange('customDestinationLanguage', value === 'none' ? '' : value)
               }
             >
               <SelectTrigger className="w-full sm:w-[200px]">

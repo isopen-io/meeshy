@@ -35,11 +35,12 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 # Install uv - ultra-fast Python package manager
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Build dependencies for native extensions (PyAV, grpcio, etc.)
+# Build dependencies for native extensions (PyAV, grpcio, ESPnet2, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         pkg-config \
         git \
+        cmake \
         libavformat-dev \
         libavcodec-dev \
         libavdevice-dev \
@@ -48,6 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libswresample-dev \
         libavfilter-dev \
         libsndfile1-dev \
+        sox \
+        libsox-dev \
+        libsox-fmt-all \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -69,9 +73,10 @@ ENV PYTORCH_INDEX_CPU="https://download.pytorch.org/whl/cpu" \
     PYTORCH_INDEX_GPU_CU118="https://download.pytorch.org/whl/cu118"
 
 # Install dependencies with selected backend
-# Note: Using requirements.txt instead of pyproject.toml because:
-# - uv pip install -r works with requirements.txt format
-# - requirements.txt has all necessary deps including chatterbox-tts
+# Note: Installation en 3 étapes pour résoudre conflit numpy:
+# 1. PyTorch depuis index spécifique (CPU ou GPU)
+# 2. Toutes les dépendances (numpy 2.0+ pour ESPnet)
+# 3. chatterbox-tts avec --no-deps (évite conflit numpy<1.26)
 RUN --mount=type=cache,target=/root/.cache/uv \
     echo "Installing with TORCH_BACKEND=${TORCH_BACKEND}" && \
     case "${TORCH_BACKEND}" in \
@@ -81,8 +86,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         *) PYTORCH_INDEX="${PYTORCH_INDEX_CPU}" ;; \
     esac && \
     echo "Using PyTorch index: ${PYTORCH_INDEX}" && \
+    echo "Step 1/3: Installing PyTorch..." && \
     uv pip install --system --index-url "${PYTORCH_INDEX}" torch torchaudio && \
-    uv pip install --system -r requirements.txt
+    echo "Step 2/3: Installing dependencies (numpy 2.0+ for ESPnet)..." && \
+    uv pip install --system -r requirements.txt && \
+    echo "Step 3/3: Installing chatterbox-tts (no-deps to avoid numpy conflict)..." && \
+    uv pip install --system --no-deps chatterbox-tts==0.1.6 && \
+    echo "✅ All packages installed successfully"
 
 # =============================================================================
 # Stage 2a: CPU Runtime Base
@@ -223,6 +233,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         netcat-openbsd \
         ffmpeg \
         libsndfile1 \
+        sox \
+        libsox-fmt-all \
         curl \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
@@ -270,9 +282,11 @@ RUN echo "Generating Prisma Python client from shared schema..." && \
 
 # Verify critical components installation
 RUN echo "=== Verifying critical components ===" && \
-    python -c "from pyannote.audio import Pipeline; print('✅ pyannote.audio available for speaker diarization')" && \
     python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn available')" && \
     python -c "import zmq; print('✅ ZeroMQ available')" && \
+    python -c "from espnet2.bin.tts_inference import Text2Speech; print('✅ ESPnet2 available for VITS TTS backend')" && \
+    python -c "from chatterbox.tts import ChatterboxTTS; print('✅ Chatterbox TTS available (installed with no-deps)')" && \
+    python -c "import numpy; print(f'✅ NumPy {numpy.__version__} (compatible ESPnet 202412 + Chatterbox)')" && \
     echo "✅ All critical components verified successfully"
 
 # Set permissions

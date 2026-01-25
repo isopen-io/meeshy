@@ -125,7 +125,11 @@ function interpolate(str: string, params?: Record<string, string | number>): str
  */
 export async function getTranslations(namespace: string) {
   const locale = await getLocale();
-  const translations = await loadTranslations(locale, namespace);
+  const loadedTranslations = await loadTranslations(locale, namespace);
+
+  // Extract namespace key if it exists (e.g., { "about": { ... } } -> { ... })
+  // This allows both flat and nested JSON structures
+  const translations = (loadedTranslations[namespace] as Record<string, unknown>) || loadedTranslations;
 
   const t: TFunction = (key: string, params?: Record<string, string | number>) => {
     const value = getNestedValue(translations, key);

@@ -167,9 +167,20 @@ function LoginPageContent() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-8 text-center text-sm text-muted-foreground"
+          className="mt-8 text-center space-y-3"
         >
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+          {/* Forgot password link - more visible */}
+          <div>
+            <a
+              href="/forgot-password"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+            >
+              {t('login.forgotPassword')}
+            </a>
+          </div>
+
+          {/* Other links */}
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             <a href="/terms" className="hover:text-foreground transition-colors">
               {t('register.termsOfService')}
             </a>

@@ -2,16 +2,15 @@
 
 /**
  * Video Settings Component
- * Configuration des préférences vidéo
- * Synchronisé avec l'API backend /me/preferences/video
+ * Configuration des préférences vidéo avec auto-save
+ * Utilise le hook usePreferences pour les mises à jour automatiques
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -24,121 +23,60 @@ import {
   AlertCircle,
   Monitor
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { usePreferences } from '@/hooks/use-preferences';
 import type { VideoPreference } from '@meeshy/shared/types/preferences';
-
-const DEFAULT_PREFERENCES: VideoPreference = {
-  videoQuality: 'auto',
-  videoFrameRate: '30',
-  videoResolution: 'auto',
-  videoCodec: 'VP8',
-  mirrorLocalVideo: true,
-  videoLayout: 'speaker',
-  showSelfView: true,
-  selfViewPosition: 'bottom-right',
-  backgroundBlurEnabled: false,
-  virtualBackgroundEnabled: false,
-  hardwareAccelerationEnabled: true,
-  adaptiveBitrateEnabled: true,
-  autoStartVideo: true,
-  autoMuteOnJoin: false
-};
 
 export function VideoSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
 
-  const [preferences, setPreferences] = useState<VideoPreference>(DEFAULT_PREFERENCES);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Hook usePreferences avec auto-save
+  const {
+    preferences,
+    isLoading,
+    isSaving,
+    error,
+    updateField,
+  } = usePreferences<VideoPreference>('video');
 
-  // Load preferences from API
-  const loadPreferences = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Memoize loading state
+  const LoadingState = useMemo(() => (
+    <div
+      className="flex items-center justify-center py-12"
+      role="status"
+      aria-label={t('video.loading', 'Chargement des préférences vidéo')}
+    >
+      <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-muted-foreground`} />
+      <span className="sr-only">{t('video.loading', 'Chargement...')}</span>
+    </div>
+  ), [t, reducedMotion]);
 
-      const response = await apiService.get<{ success: boolean; data: VideoPreference }>(
-        '/me/preferences/video'
-      );
+  // Memoize error state
+  const ErrorState = useMemo(() => (
+    <Alert variant="destructive">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ), [error]);
 
-      if (response.success && response.data) {
-        const { data } = response;
-        const prefs = 'data' in data ? data.data : data;
-        setPreferences(prev => ({ ...prev, ...prefs }));
-      }
-    } catch (err: any) {
-      console.error('[VideoSettings] Error loading preferences:', err);
-      setError(err.message || t('video.loadError', 'Erreur lors du chargement des préférences'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    loadPreferences();
-  }, [loadPreferences]);
-
-  // Save preferences with optimistic updates
-  const savePreferences = async () => {
-    setSaving(true);
-    const previousPrefs = { ...preferences };
-
-    try {
-      const response = await apiService.put<{ success: boolean; data: VideoPreference }>(
-        '/me/preferences/video',
-        preferences
-      );
-
-      if (response.success) {
-        toast.success(t('video.saveSuccess', 'Préférences vidéo enregistrées'));
-        setHasChanges(false);
-      } else {
-        setPreferences(previousPrefs);
-        throw new Error(response.message || 'Erreur lors de l\'enregistrement');
-      }
-    } catch (err: any) {
-      console.error('[VideoSettings] Error saving preferences:', err);
-      setPreferences(previousPrefs);
-      toast.error(err.message || t('video.saveError', 'Erreur lors de l\'enregistrement'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePreferenceChange = <K extends keyof VideoPreference>(
-    key: K,
-    value: VideoPreference[K]
-  ) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-  };
-
-  // Loading skeleton
-  if (loading) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-[400px]"
-        role="status"
-        aria-label={t('video.loading', 'Chargement des préférences vidéo')}
-      >
-        <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
-        <span className="sr-only">{t('video.loading', 'Chargement...')}</span>
-      </div>
-    );
+  if (isLoading) {
+    return LoadingState;
   }
 
   if (error) {
+    return ErrorState;
+  }
+
+  if (!preferences) {
     return (
-      <Alert variant="destructive">
+      <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>
+          {t('video.noData', 'Impossible de charger les préférences vidéo')}
+        </AlertDescription>
       </Alert>
     );
   }
@@ -164,9 +102,9 @@ export function VideoSettings() {
             <Select
               value={preferences.videoQuality}
               onValueChange={(value: 'low' | 'medium' | 'high' | 'auto') =>
-                handlePreferenceChange('videoQuality', value)
+                updateField('videoQuality', value)
               }
-              disabled={saving}
+              disabled={isSaving}
             >
               <SelectTrigger id="videoQuality" aria-label={t('video.quality.preset', 'Qualité générale')}>
                 <SelectValue />
@@ -187,9 +125,9 @@ export function VideoSettings() {
             <Select
               value={preferences.videoResolution}
               onValueChange={(value: '480p' | '720p' | '1080p' | 'auto') =>
-                handlePreferenceChange('videoResolution', value)
+                updateField('videoResolution', value)
               }
-              disabled={saving}
+              disabled={isSaving}
             >
               <SelectTrigger id="videoResolution" aria-label={t('video.resolution', 'Résolution')}>
                 <SelectValue />
@@ -210,9 +148,9 @@ export function VideoSettings() {
             <Select
               value={preferences.videoFrameRate}
               onValueChange={(value: '15' | '24' | '30' | '60') =>
-                handlePreferenceChange('videoFrameRate', value)
+                updateField('videoFrameRate', value)
               }
-              disabled={saving}
+              disabled={isSaving}
             >
               <SelectTrigger id="frameRate" aria-label={t('video.frameRate', 'Fréquence d\'images')}>
                 <SelectValue />
@@ -237,8 +175,8 @@ export function VideoSettings() {
                 max={5000}
                 step={100}
                 value={[preferences.videoBitrate]}
-                onValueChange={([value]) => handlePreferenceChange('videoBitrate', value)}
-                disabled={saving}
+                onValueChange={([value]) => updateField('videoBitrate', value)}
+                disabled={isSaving}
                 className="w-full"
                 aria-label={t('video.bitrate', 'Débit vidéo')}
               />
@@ -255,9 +193,9 @@ export function VideoSettings() {
             <Select
               value={preferences.videoCodec}
               onValueChange={(value: 'VP8' | 'VP9' | 'H264' | 'H265' | 'AV1') =>
-                handlePreferenceChange('videoCodec', value)
+                updateField('videoCodec', value)
               }
-              disabled={saving}
+              disabled={isSaving}
             >
               <SelectTrigger id="codec" aria-label={t('video.codec', 'Codec vidéo')}>
                 <SelectValue />
@@ -301,8 +239,8 @@ export function VideoSettings() {
             <Switch
               id="mirrorVideo"
               checked={preferences.mirrorLocalVideo}
-              onCheckedChange={(checked) => handlePreferenceChange('mirrorLocalVideo', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('mirrorLocalVideo', checked)}
+              disabled={isSaving}
               aria-label={t('video.mirrorVideo', 'Effet miroir')}
             />
           </div>
@@ -328,9 +266,9 @@ export function VideoSettings() {
             <Select
               value={preferences.videoLayout}
               onValueChange={(value: 'grid' | 'speaker' | 'sidebar') =>
-                handlePreferenceChange('videoLayout', value)
+                updateField('videoLayout', value)
               }
-              disabled={saving}
+              disabled={isSaving}
             >
               <SelectTrigger id="videoLayout" aria-label={t('video.layout.mode', 'Mode d\'affichage')}>
                 <SelectValue />
@@ -358,8 +296,8 @@ export function VideoSettings() {
             <Switch
               id="showSelfView"
               checked={preferences.showSelfView}
-              onCheckedChange={(checked) => handlePreferenceChange('showSelfView', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('showSelfView', checked)}
+              disabled={isSaving}
               aria-label={t('video.showSelfView', 'Afficher ma vidéo')}
             />
           </div>
@@ -372,9 +310,9 @@ export function VideoSettings() {
               <Select
                 value={preferences.selfViewPosition}
                 onValueChange={(value: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right') =>
-                  handlePreferenceChange('selfViewPosition', value)
+                  updateField('selfViewPosition', value)
                 }
-                disabled={saving}
+                disabled={isSaving}
               >
                 <SelectTrigger id="selfViewPosition" aria-label={t('video.selfViewPosition', 'Position de ma vidéo')}>
                   <SelectValue />
@@ -418,8 +356,8 @@ export function VideoSettings() {
             <Switch
               id="backgroundBlur"
               checked={preferences.backgroundBlurEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('backgroundBlurEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('backgroundBlurEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('video.backgroundBlur', 'Flou d\'arrière-plan')}
             />
           </div>
@@ -439,8 +377,8 @@ export function VideoSettings() {
             <Switch
               id="virtualBackground"
               checked={preferences.virtualBackgroundEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('virtualBackgroundEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('virtualBackgroundEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('video.virtualBackground', 'Arrière-plan virtuel')}
             />
           </div>
@@ -455,8 +393,8 @@ export function VideoSettings() {
                 type="url"
                 placeholder="https://example.com/background.jpg"
                 value={preferences.virtualBackgroundUrl || ''}
-                onChange={(e) => handlePreferenceChange('virtualBackgroundUrl', e.target.value)}
-                disabled={saving}
+                onChange={(e) => updateField('virtualBackgroundUrl', e.target.value)}
+                disabled={isSaving}
                 aria-label={t('video.backgroundUrl', 'URL de l\'image d\'arrière-plan')}
               />
             </div>
@@ -491,8 +429,8 @@ export function VideoSettings() {
             <Switch
               id="hwAcceleration"
               checked={preferences.hardwareAccelerationEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('hardwareAccelerationEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('hardwareAccelerationEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('video.hwAcceleration', 'Accélération matérielle')}
             />
           </div>
@@ -512,8 +450,8 @@ export function VideoSettings() {
             <Switch
               id="adaptiveBitrate"
               checked={preferences.adaptiveBitrateEnabled}
-              onCheckedChange={(checked) => handlePreferenceChange('adaptiveBitrateEnabled', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('adaptiveBitrateEnabled', checked)}
+              disabled={isSaving}
               aria-label={t('video.adaptiveBitrate', 'Débit adaptatif')}
             />
           </div>
@@ -547,8 +485,8 @@ export function VideoSettings() {
             <Switch
               id="autoStartVideo"
               checked={preferences.autoStartVideo}
-              onCheckedChange={(checked) => handlePreferenceChange('autoStartVideo', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('autoStartVideo', checked)}
+              disabled={isSaving}
               aria-label={t('video.autoStartVideo', 'Démarrer la vidéo automatiquement')}
             />
           </div>
@@ -568,34 +506,13 @@ export function VideoSettings() {
             <Switch
               id="autoMuteVideo"
               checked={preferences.autoMuteOnJoin}
-              onCheckedChange={(checked) => handlePreferenceChange('autoMuteOnJoin', checked)}
-              disabled={saving}
+              onCheckedChange={(checked) => updateField('autoMuteOnJoin', checked)}
+              disabled={isSaving}
               aria-label={t('video.autoMuteVideo', 'Couper le micro en rejoignant')}
             />
           </div>
         </CardContent>
       </Card>
-
-      {/* Save Button */}
-      {hasChanges && (
-        <div className="sticky bottom-4 flex justify-end">
-          <Button
-            onClick={savePreferences}
-            disabled={saving}
-            className="shadow-lg"
-            aria-label={t('video.save', 'Enregistrer les modifications')}
-          >
-            {saving ? (
-              <>
-                <Loader2 className={`mr-2 h-4 w-4 ${reducedMotion ? '' : 'animate-spin'}`} />
-                {t('video.saving', 'Enregistrement...')}
-              </>
-            ) : (
-              t('video.save', 'Enregistrer les modifications')
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
