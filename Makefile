@@ -2,7 +2,7 @@
 # Supporte: Bun (défaut), pnpm, Docker Compose
 
 .PHONY: help setup setup-prerequisites setup-python setup-certs setup-certs-force setup-certs-network setup-env setup-secrets setup-network setup-hosts \
-        _generate-certs _copy-certs-to-docker _ensure-docker-running _wait-docker-stable _docker-down-if-running _ensure-ports-free \
+        _generate-certs _copy-certs-to-docker _ensure-docker-running _wait-docker-stable _docker-down-if-running _ensure-ports-free _pull-missing-images \
         install generate build dev dev-web dev-gateway dev-translator \
         start stop restart start-network share-cert share-cert-stop network-info \
         _generate-env-local _dev-tmux-domain _dev-bg-domain _show-domain-urls \
@@ -10,7 +10,7 @@
         logs status clean reset health urls docker-infra docker-infra-simple \
         docker-start docker-start-local docker-start-network docker-stop docker-logs docker-build docker-pull docker-login docker-images \
         docker-test docker-test-dev docker-test-local docker-test-prod \
-        build-gateway build-translator build-web build-all-docker \
+        build-web build-translator build-docker-gateway build-docker-web build-all-docker \
         push-gateway push-translator push-web push-all release \
         dev-tmux dev-bg dev-fg check verify _preflight-check \
         test test-js test-python test-python-fast test-ios test-ios-ui \
@@ -135,7 +135,7 @@ help: ## Afficher cette aide
 	@grep -E '^(docker-test|docker-test-dev|docker-test-local|docker-test-prod):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-22s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)📦 BUILD & PUSH IMAGES:$(NC)"
-	@grep -E '^(build-gateway|build-translator|build-web|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(build-docker-gateway|build-translator|build-docker-web|build-all-docker):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@grep -E '^(push-gateway|push-translator|push-web|push-all|release):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo "  $(DIM)Options: TAG=v1.0.0 DOCKER_REGISTRY=myrepo$(NC)"
 	@echo ""
@@ -1943,6 +1943,32 @@ docker-start-local: _ensure-docker-running docker-build ## 🔨 Builder les imag
 	@echo "$(GREEN)✅ Services démarrés avec images locales$(NC)"
 	@$(MAKE) urls
 
+# Helper: Pull only missing Docker images (skip images that exist locally)
+_pull-missing-images:
+	@echo "$(BLUE)📥 Vérification et téléchargement des images manquantes...$(NC)"
+	@MISSING_IMAGES=""; \
+	for img in "isopen/meeshy-gateway:latest" "isopen/meeshy-web:latest" "isopen/meeshy-translator:latest"; do \
+		if ! docker image inspect $$img >/dev/null 2>&1; then \
+			echo "  $(YELLOW)⬇️  $$img manquante, téléchargement nécessaire$(NC)"; \
+			MISSING_IMAGES="$$MISSING_IMAGES $$img"; \
+		else \
+			echo "  $(GREEN)✓ $$img déjà présente localement$(NC)"; \
+		fi; \
+	done; \
+	if [ -n "$$MISSING_IMAGES" ]; then \
+		echo "$(BLUE)📥 Téléchargement des images manquantes depuis Docker Hub...$(NC)"; \
+		for img in $$MISSING_IMAGES; do \
+			docker pull $$img 2>&1 | grep -v "manifest" || { \
+				echo "  $(YELLOW)⚠️  Impossible de télécharger $$img (architecture non supportée)$(NC)"; \
+				echo "  $(YELLOW)💡 Utilisez 'make build-all-docker' pour construire les images localement$(NC)"; \
+			}; \
+		done; \
+	else \
+		echo "  $(GREEN)✅ Toutes les images Meeshy sont disponibles localement$(NC)"; \
+	fi; \
+	echo "$(BLUE)📥 Téléchargement des images infrastructure...$(NC)"; \
+	docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network pull traefik database redis nosqlclient p3x-redis-ui 2>/dev/null || true
+
 docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services Docker avec accès réseau
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(CYAN)║   MEESHY - Docker 100% avec Accès Réseau (Mobile/Devices)   ║$(NC)"
@@ -1984,9 +2010,8 @@ docker-start-network: _ensure-docker-running ## 🌐 Démarrer tous les services
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(COMPOSE_DIR)/.env.network
 	@echo "  $(GREEN)✓ .env.network généré$(NC)"
 	@echo ""
-	@# Télécharger les dernières images depuis Docker Hub
-	@echo "$(BLUE)📥 Téléchargement des images depuis Docker Hub...$(NC)"
-	@docker compose -f $(COMPOSE_LOCAL) -p $(PROJECT_LOCAL) --env-file $(COMPOSE_DIR)/.env.network --profile full pull
+	@# Télécharger uniquement les images manquantes
+	@$(MAKE) _pull-missing-images
 	@echo ""
 	@# Démarrer avec le profil full (tous les services)
 	@echo "$(BLUE)🐳 Démarrage de tous les services Docker...$(NC)"
@@ -2078,7 +2103,7 @@ _prepare-docker-build: _ensure-docker-running
 		echo "  $(GREEN)✓ Prisma client présent$(NC)"; \
 	fi
 
-build-gateway: _prepare-docker-build ## Builder l'image Gateway
+build-docker-gateway: _prepare-docker-build ## Builder l'image Gateway
 	@echo "$(BLUE)🔨 Build de l'image Gateway ($(DOCKER_REGISTRY)/meeshy-gateway:v$(GATEWAY_VERSION))...$(NC)"
 	@docker build \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
@@ -2129,7 +2154,7 @@ build-translator-gpu-cu121: _prepare-docker-build ## Builder l'image Translator 
 		-f services/translator/Dockerfile .
 	@echo "$(GREEN)✅ Image Translator GPU CUDA 12.1 buildée: v$(TRANSLATOR_VERSION)$(NC)"
 
-build-web: _prepare-docker-build ## Builder l'image Web
+build-docker-web: _prepare-docker-build ## Builder l'image Web
 	@echo "$(BLUE)🔨 Build de l'image Web ($(DOCKER_REGISTRY)/meeshy-web:v$(WEB_VERSION))...$(NC)"
 	@docker build \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
@@ -2141,7 +2166,7 @@ build-web: _prepare-docker-build ## Builder l'image Web
 		-f apps/web/Dockerfile .
 	@echo "$(GREEN)✅ Image Web buildée: v$(WEB_VERSION)$(NC)"
 
-build-all-docker: build-gateway build-translator build-web ## Builder toutes les images Docker
+build-all-docker: build-docker-gateway build-translator build-docker-web ## Builder toutes les images Docker
 	@echo "$(GREEN)✅ Toutes les images buildées$(NC)"
 	@echo ""
 	@echo "$(BLUE)📦 Images créées:$(NC)"
