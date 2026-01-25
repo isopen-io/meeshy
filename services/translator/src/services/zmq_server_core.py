@@ -72,9 +72,11 @@ class ZMQTranslationServer:
         
         # Remplacer la méthode de publication du pool manager
         self.pool_manager._publish_translation_result = self._publish_translation_result
-        
-        # Service de base de données
-        self.database_service = DatabaseService(database_url)
+
+        # Service de base de données (optionnel - désactivé si database_url est None)
+        self.database_service = DatabaseService(database_url) if database_url else None
+        if not self.database_service:
+            logger.info("[TRANSLATOR-DB] ⚠️ MongoDB désactivé - Translator utilise uniquement Redis")
 
         # Handlers spécialisés (seront initialisés après la création des sockets)
         self.translation_handler = None
@@ -95,6 +97,11 @@ class ZMQTranslationServer:
 
     async def _connect_database_background(self):
         """Connecte à la base de données en arrière-plan sans bloquer le démarrage"""
+        # Skip si MongoDB est désactivé
+        if not self.database_service:
+            logger.info("[TRANSLATOR-DB] MongoDB désactivé - pas de connexion nécessaire")
+            return
+
         try:
             logger.info("[TRANSLATOR-DB] 🔗 Tentative de connexion à MongoDB...")
             db_connected = await self.database_service.connect()

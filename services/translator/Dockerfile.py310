@@ -1,22 +1,26 @@
 # =============================================================================
-# MEESHY TRANSLATOR - FastAPI ML Service (Multi-Stage Optimized)
+# MEESHY TRANSLATOR - FastAPI ML Service (Multi-Stage Optimized) - PYTHON 3.10
 # =============================================================================
 # Build context: monorepo root (../../)
 # Package manager: uv (10-100x faster than pip)
 #
+# ⚠️ VERSION PYTHON 3.10 AVEC OPENVOICE
+# Cette version utilise Python 3.10 pour supporter OpenVoice V2 (clonage vocal avancé)
+# Pour Python 3.11 sans OpenVoice, utilisez Dockerfile (plus récent, recommandé)
+#
 # BUILD VARIANTS:
 # ---------------
 # CPU (default, smaller image ~2GB):
-#   docker build --build-arg TORCH_BACKEND=cpu -t meeshy-translator:cpu .
+#   docker build -f services/translator/Dockerfile.py310 --build-arg TORCH_BACKEND=cpu -t meeshy-translator:py310-cpu .
 #
 # GPU with CUDA 12.4 (larger image ~8GB, requires nvidia-docker):
-#   docker build --build-arg TORCH_BACKEND=gpu -t meeshy-translator:gpu .
+#   docker build -f services/translator/Dockerfile.py310 --build-arg TORCH_BACKEND=gpu -t meeshy-translator:py310-gpu .
 #
 # GPU with CUDA 12.1:
-#   docker build --build-arg TORCH_BACKEND=gpu-cu121 -t meeshy-translator:gpu-cu121 .
+#   docker build -f services/translator/Dockerfile.py310 --build-arg TORCH_BACKEND=gpu-cu121 -t meeshy-translator:py310-gpu-cu121 .
 #
 # RUN GPU CONTAINER:
-#   docker run --gpus all meeshy-translator:gpu
+#   docker run --gpus all meeshy-translator:py310-gpu
 #
 # =============================================================================
 
@@ -24,7 +28,7 @@
 # Build Arguments
 # -----------------------------------------------------------------------------
 ARG TORCH_BACKEND=cpu
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.10
 ARG NODE_VERSION=22
 
 # =============================================================================
@@ -73,12 +77,13 @@ ENV PYTORCH_INDEX_CPU="https://download.pytorch.org/whl/cpu" \
     PYTORCH_INDEX_GPU_CU118="https://download.pytorch.org/whl/cu118"
 
 # Install dependencies with selected backend
-# Note: Installation en 3 étapes pour résoudre conflit numpy:
+# Note: Installation en 4 étapes pour Python 3.10 + OpenVoice:
 # 1. PyTorch depuis index spécifique (CPU ou GPU)
-# 2. Toutes les dépendances (numpy 2.0+ pour ESPnet)
+# 2. Toutes les dépendances (numpy compatible Python 3.10)
 # 3. chatterbox-tts avec --no-deps (évite conflit numpy<1.26)
+# 4. OpenVoice depuis GitHub (nécessite Python 3.9-3.10)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    echo "Installing with TORCH_BACKEND=${TORCH_BACKEND}" && \
+    echo "Installing with TORCH_BACKEND=${TORCH_BACKEND} and Python 3.10 for OpenVoice support" && \
     case "${TORCH_BACKEND}" in \
         gpu) PYTORCH_INDEX="${PYTORCH_INDEX_GPU}" ;; \
         gpu-cu121) PYTORCH_INDEX="${PYTORCH_INDEX_GPU_CU121}" ;; \
@@ -86,13 +91,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         *) PYTORCH_INDEX="${PYTORCH_INDEX_CPU}" ;; \
     esac && \
     echo "Using PyTorch index: ${PYTORCH_INDEX}" && \
-    echo "Step 1/3: Installing PyTorch..." && \
+    echo "Step 1/4: Installing PyTorch..." && \
     uv pip install --system --index-url "${PYTORCH_INDEX}" torch torchaudio && \
-    echo "Step 2/3: Installing dependencies (numpy 2.0+ for ESPnet)..." && \
+    echo "Step 2/4: Installing dependencies (numpy compatible Python 3.10)..." && \
     uv pip install --system -r requirements.txt && \
-    echo "Step 3/3: Installing chatterbox-tts (no-deps to avoid numpy conflict)..." && \
+    echo "Step 3/4: Installing chatterbox-tts (no-deps to avoid numpy conflict)..." && \
     uv pip install --system --no-deps chatterbox-tts==0.1.6 && \
-    echo "✅ All packages installed successfully"
+    echo "Step 4/4: Installing OpenVoice V2 for advanced voice cloning..." && \
+    uv pip install --system git+https://github.com/myshell-ai/OpenVoice.git && \
+    echo "✅ All packages installed successfully (including OpenVoice)"
 
 # =============================================================================
 # Stage 2a: CPU Runtime Base
@@ -163,16 +170,17 @@ ARG VCS_REF
 ARG VERSION=1.0.0
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
-      description="Meeshy Translator - FastAPI ML Service with Diarization" \
+      description="Meeshy Translator - FastAPI ML Service with OpenVoice (Python 3.10)" \
       version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
       org.opencontainers.image.documentation="https://docs.meeshy.me/translator" \
       org.opencontainers.image.vendor="Meeshy" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="Meeshy Translator" \
-      org.opencontainers.image.description="FastAPI ML service for translation, transcription and voice cloning" \
+      org.opencontainers.image.title="Meeshy Translator (Python 3.10 + OpenVoice)" \
+      org.opencontainers.image.description="FastAPI ML service for translation, transcription and advanced voice cloning with OpenVoice V2" \
       torch.backend="${TORCH_BACKEND}" \
-      python.version="3.11" \
+      python.version="3.10" \
+      openvoice.enabled="true" \
       diarization.enabled="true" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
@@ -281,13 +289,14 @@ RUN echo "Generating Prisma Python client from shared schema..." && \
     fi
 
 # Verify critical components installation
-RUN echo "=== Verifying critical components ===" && \
+RUN echo "=== Verifying critical components (Python 3.10 + OpenVoice) ===" && \
     python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn available')" && \
     python -c "import zmq; print('✅ ZeroMQ available')" && \
     python -c "from espnet2.bin.tts_inference import Text2Speech; print('✅ ESPnet2 available for VITS TTS backend')" && \
     python -c "from chatterbox.tts import ChatterboxTTS; print('✅ Chatterbox TTS available (installed with no-deps)')" && \
-    python -c "import numpy; print(f'✅ NumPy {numpy.__version__} (compatible ESPnet 202412 + Chatterbox)')" && \
-    echo "✅ All critical components verified successfully"
+    python -c "import numpy; print(f'✅ NumPy {numpy.__version__} (compatible ESPnet 202412 + Chatterbox + Python 3.10)')" && \
+    python -c "from openvoice import se_extractor; print('✅ OpenVoice V2 available for advanced voice cloning')" && \
+    echo "✅ All critical components verified successfully (including OpenVoice)"
 
 # Set permissions
 RUN chown -R translator:translator /workspace \

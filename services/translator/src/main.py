@@ -183,9 +183,10 @@ class MeeshyTranslationServer:
             else:
                 any_workers = any_workers_default
             
-            # Récupérer l'URL de la base de données (MongoDB)
-            database_url = os.getenv('DATABASE_URL', 'mongodb://localhost:27017/meeshy?directConnection=true')
-            
+            # TRANSLATOR N'A PAS BESOIN DE MongoDB - utilise uniquement Redis pour le cache
+            # Les profils vocaux sont gérés par le Gateway, pas par le Translator
+            database_url = None  # Désactivé : Translator n'accède pas à MongoDB
+
             self.zmq_server = ZMQTranslationServer(
                 gateway_push_port=zmq_push_port,
                 gateway_sub_port=zmq_pub_port,
