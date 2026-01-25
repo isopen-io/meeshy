@@ -259,7 +259,14 @@ COPY --chown=translator:translator packages/shared/prisma ./shared/prisma/
 
 # Generate Python Prisma client from shared schema
 RUN echo "Generating Prisma Python client from shared schema..." && \
-    prisma generate --schema=./shared/prisma/schema.prisma
+    prisma generate --schema=./shared/prisma/schema.prisma && \
+    echo "Fixing Prisma binary paths for ARM64..." && \
+    PRISMA_CACHE_DIR=$(find /workspace/.cache/prisma-python/binaries -type d -name "node_modules" | head -1) && \
+    if [ -n "$PRISMA_CACHE_DIR" ] && [ -d "$PRISMA_CACHE_DIR/@prisma/engines" ]; then \
+        cp -v "$PRISMA_CACHE_DIR/@prisma/engines/query-engine-"* "$PRISMA_CACHE_DIR/prisma/" 2>/dev/null || true; \
+        cp -v "$PRISMA_CACHE_DIR/@prisma/engines/schema-engine-"* "$PRISMA_CACHE_DIR/prisma/" 2>/dev/null || true; \
+        echo "✅ Prisma binaries copied from @prisma/engines to prisma/"; \
+    fi
 
 # Verify critical components installation
 RUN echo "=== Verifying critical components ===" && \
