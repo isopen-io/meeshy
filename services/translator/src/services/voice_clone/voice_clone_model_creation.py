@@ -25,9 +25,8 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-from .voice_metadata import VoiceModel
+from .voice_metadata import VoiceModel, VoiceCharacteristics
 from .voice_analyzer import get_voice_analyzer
-from models.voice_models import VoiceCharacteristics
 from .voice_fingerprint import VoiceFingerprint
 from utils.audio_format_converter import convert_to_wav_if_needed
 

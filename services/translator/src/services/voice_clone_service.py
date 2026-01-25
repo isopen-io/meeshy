@@ -60,9 +60,6 @@ except ImportError:
 import base64
 from services.redis_service import get_audio_cache_service, AudioCacheService
 
-# Import unified voice models
-from models.voice_models import VoiceCharacteristics
-
 # Import voice clone modules (refactored from this file)
 from services.voice_clone.voice_fingerprint import VoiceFingerprint
 from services.voice_clone.voice_metadata import (
@@ -71,7 +68,8 @@ from services.voice_clone.voice_metadata import (
     AudioQualityMetadata,
     VoiceModel,
     TemporaryVoiceProfile,
-    MultiSpeakerTranslationContext
+    MultiSpeakerTranslationContext,
+    VoiceCharacteristics
 )
 from services.voice_clone.voice_analyzer import VoiceAnalyzer, get_voice_analyzer
 from services.voice_clone.voice_quality_analyzer import (

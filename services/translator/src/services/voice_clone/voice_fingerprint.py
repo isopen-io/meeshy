@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from models.voice_models import VoiceCharacteristics
+    from .voice_metadata import VoiceCharacteristics
 
 
 @dataclass

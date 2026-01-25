@@ -12,9 +12,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from services.redis_service import AudioCacheService
-from .voice_metadata import VoiceModel
+from .voice_metadata import VoiceModel, VoiceCharacteristics
 from .voice_fingerprint import VoiceFingerprint
-from models.voice_models import VoiceCharacteristics
 
 logger = logging.getLogger(__name__)
 

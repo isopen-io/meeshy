@@ -40,7 +40,7 @@ except ImportError:
     SKLEARN_AVAILABLE = False
 
 # Import unified voice characteristics model
-from models.voice_models import VoiceCharacteristics
+from services.voice_clone.voice_metadata import VoiceCharacteristics
 
 logger = logging.getLogger(__name__)
 

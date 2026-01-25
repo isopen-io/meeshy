@@ -35,7 +35,7 @@ except ImportError as e:
     import numpy as np  # numpy minimal
 
 # Import de la classe unifiée
-from models.voice_models import VoiceCharacteristics
+from services.voice_clone.voice_metadata import VoiceCharacteristics
 
 # Re-export pour compatibilité
 __all__ = ['VoiceCharacteristics', 'VoiceSimilarityResult', 'VoiceAnalyzerService']

@@ -10,9 +10,8 @@ import numpy as np
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 
-from .voice_metadata import RecordingMetadata, SpeakerInfo
+from .voice_metadata import RecordingMetadata, SpeakerInfo, VoiceCharacteristics
 from .voice_fingerprint import VoiceFingerprint
-from models.voice_models import VoiceCharacteristics
 
 logger = logging.getLogger(__name__)
 
