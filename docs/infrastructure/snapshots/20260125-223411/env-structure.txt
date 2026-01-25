@@ -1,0 +1,442 @@
+# =***MASKED***
+# Environment variables for DigitalOcean deployment with MongoDB
+# Copy this file to .env for production deployment
+
+# =***MASKED***
+NODE_ENV=***MASKED***
+DEBUG=***MASKED***
+LOG_LEVEL=***MASKED***
+DEPLOYMENT_REGION=***MASKED***
+
+# Firebase Configuration pour les notifications push PWA
+NEXT_PUBLIC_FIREBASE_API_KEY=***MASKED***
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=***MASKED***
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=***MASKED***
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=***MASKED***
+NEXT_PUBLIC_FIREBASE_APP_ID=***MASKED***
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=***MASKED***
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=***MASKED***
+
+# =***MASKED***
+# IMPORTANT: Mettez à jour avec votre vrai domaine !
+CERTBOT_EMAIL=***MASKED***
+
+# =***MASKED***
+# Database type (MONGODB or POSTGRESQL)
+DATABASE_TYPE=***MASKED***
+
+# MongoDB connection (use MongoDB Atlas or self-hosted)
+# Example for MongoDB Atlas:
+# DATABASE_URL=***MASKED***
+# Example for self-hosted MongoDB with replica set:
+DATABASE_URL=***MASKED***
+
+# MongoDB specific settings
+MONGODB_DATABASE=***MASKED***
+MONGODB_USER=***MASKED***
+MONGODB_PORT=***MASKED***
+
+# =***MASKED***
+# CONFIGURATION INITIALISATION BASE DE DONNÉES
+# =***MASKED***
+# Forcer la réinitialisation complète de la base de données au démarrage
+# ATTENTION: Ceci supprimera TOUTES les données existantes !
+# DOIT RESTER "false" EN PRODUCTION - Ne jamais changer cette valeur !
+
+# =***MASKED***
+# CONFIGURATION UTILISATEURS PAR DÉFAUT
+# =***MASKED***
+# Mot de passe pour l'utilisateur admin (utilisé aussi pour atabeth)
+
+# Mot de passe pour l'utilisateur Meeshy (Bigboss)
+MEESHY_BIGBOSS_PASSWORD=***MASKED***
+
+# =***MASKED***
+# Redis connection (no authentication in current setup)
+REDIS_URL=***MASKED***
+REDIS_PORT=***MASKED***
+
+# Cache configuration
+TRANSLATION_CACHE_TTL=***MASKED***
+CACHE_MAX_ENTRIES=***MASKED***
+
+# =***MASKED***
+# IMPORTANT: Change these in production!
+
+# =***MASKED***
+# IMPORTANT: Change these passwords in production!
+MEESHY_BIGBOSS_PASSWORD=***MASKED***
+
+# =***MASKED***
+# Gateway service
+GATEWAY_PORT=***MASKED***
+PORT=***MASKED***
+
+# Translator service
+TRANSLATOR_HTTP_PORT=***MASKED***
+TRANSLATOR_GRPC_PORT=***MASKED***
+FASTAPI_PORT=***MASKED***
+GRPC_PORT=***MASKED***
+
+# Frontend service
+FRONTEND_PORT=***MASKED***
+
+# HTTP/HTTPS ports for Nginx
+HTTP_PORT=***MASKED***
+HTTPS_PORT=***MASKED***
+
+# =***MASKED***
+# ZeroMQ ports for translation communication
+ZMQ_PORT=***MASKED***
+ZMQ_TRANSLATOR_HOST=***MASKED***
+ZMQ_TRANSLATOR_PUSH_PORT=***MASKED***
+ZMQ_TRANSLATOR_SUB_PORT=***MASKED***
+ZMQ_TRANSLATOR_PULL_PORT=***MASKED***
+ZMQ_TRANSLATOR_PUB_PORT=***MASKED***
+ZMQ_TIMEOUT=***MASKED***
+
+# =***MASKED***
+# Supported languages (comma-separated)
+SUPPORTED_LANGUAGES=***MASKED***
+DEFAULT_LANGUAGE=***MASKED***
+
+# Translation settings
+AUTO_DETECT_LANGUAGE=***MASKED***
+TRANSLATION_TIMEOUT=***MASKED***
+MAX_TEXT_LENGTH=***MASKED***
+CONCURRENT_TRANSLATIONS=***MASKED***
+TRANSLATION_WORKERS=***MASKED***
+
+# ML model configuration for cloud deployment
+BASIC_MODEL=***MASKED***
+MEDIUM_MODEL=***MASKED***
+PREMIUM_MODEL=***MASKED***
+DEVICE=***MASKED***
+ML_BATCH_SIZE=***MASKED***
+GPU_MEMORY_FRACTION=***MASKED***
+QUANTIZATION_LEVEL=***MASKED***
+
+# Model management
+MODELS_PATH=***MASKED***
+TORCH_HOME=***MASKED***
+HF_HOME=***MASKED***
+MODEL_CACHE_DIR=***MASKED***
+AUTO_CLEANUP_CORRUPTED_MODELS=***MASKED***
+FORCE_MODEL_REDOWNLOAD=***MASKED***
+
+# Model download configuration
+MODEL_DOWNLOAD_MAX_RETRIES=***MASKED***
+MODEL_DOWNLOAD_TIMEOUT=***MASKED***
+MODEL_DOWNLOAD_CONSECUTIVE_TIMEOUTS=***MASKED***
+
+# =***MASKED***
+# WebSocket settings for cloud deployment
+WS_MAX_CONNECTIONS=***MASKED***
+WS_PING_INTERVAL=***MASKED***
+WS_PING_TIMEOUT=***MASKED***
+
+# =***MASKED***
+# IMPORTANT: Update these URLs with your actual domain!
+FRONTEND_URL=***MASKED***
+NEXT_PUBLIC_STATIC_URL=***MASKED***
+CORS_ORIGINS=***MASKED***
+CORS_ORIGIN=***MASKED***
+ALLOWED_ORIGINS=***MASKED***
+
+# =***MASKED***
+# Rate limiting configuration for production
+RATE_LIMIT_MAX=***MASKED***
+RATE_LIMIT_WINDOW=***MASKED***
+
+# =***MASKED***
+# Next.js public environment variables (accessible from browser)
+# IMPORTANT: Update these URLs with your actual domain!
+NEXT_PUBLIC_API_URL=***MASKED***
+NEXT_PUBLIC_WS_URL=***MASKED***
+NEXT_PUBLIC_BACKEND_URL=***MASKED***
+NEXT_PUBLIC_TRANSLATION_URL=***MASKED***
+TRANSLATOR_URL=***MASKED***
+NEXT_PUBLIC_FRONTEND_URL=***MASKED***
+PUBLIC_URL=***MASKED***
+
+# Next.js configuration
+NEXT_TELEMETRY_DISABLED=***MASKED***
+NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=***MASKED***
+NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=***MASKED***
+NEXT_PUBLIC_DEBUG_LOGS=***MASKED***
+
+# Authentifications (générez vos propres hash avec htpasswd -nB username)
+
+
+# Internal URLs for SSR (container-to-container communication within Docker network)
+# For development: Use internal container names
+# For production: Use public domain URLs
+INTERNAL_BACKEND_URL=***MASKED***
+INTERNAL_WS_URL=***MASKED***
+
+# =***MASKED***
+# Docker build arguments
+DOCKER_BUILDKIT=***MASKED***
+DOCKER_DEFAULT_PLATFORM=***MASKED***
+
+# Docker images (can be overridden for custom builds)
+TRANSLATOR_IMAGE=***MASKED***
+GATEWAY_IMAGE=***MASKED***
+FRONTEND_IMAGE=***MASKED***
+
+# =***MASKED***
+# PyTorch optimization for cloud deployment
+PYTORCH_CUDA_ALLOC_CONF=***MASKED***
+OMP_NUM_THREADS=***MASKED***
+MKL_NUM_THREADS=***MASKED***
+NUMEXPR_NUM_THREADS=***MASKED***
+
+# Python optimization
+PYTHONUNBUFFERED=***MASKED***
+
+# =***MASKED***
+# Worker pool settings optimized for cloud
+WORKERS=***MASKED***
+NORMAL_WORKERS=***MASKED***
+ANY_WORKERS=***MASKED***
+
+# Dynamic scaling configuration
+NORMAL_WORKERS_DEFAULT=***MASKED***
+ANY_WORKERS_DEFAULT=***MASKED***
+NORMAL_WORKERS_MIN=***MASKED***
+ANY_WORKERS_MIN=***MASKED***
+NORMAL_WORKERS_MAX=***MASKED***
+ANY_WORKERS_MAX=***MASKED***
+NORMAL_WORKERS_SCALING_MAX=***MASKED***
+ANY_WORKERS_SCALING_MAX=***MASKED***
+
+# =***MASKED***
+# Health check settings
+HEALTH_CHECK_INTERVAL=***MASKED***
+HEALTH_CHECK_TIMEOUT=***MASKED***
+HEALTH_CHECK_RETRIES=***MASKED***
+
+# =***MASKED***
+# Security headers
+HELMET_ENABLED=***MASKED***
+CONTENT_SECURITY_POLICY=***MASKED***
+
+# Advanced security
+SECURITY_HEADERS_ENABLED=***MASKED***
+CONTENT_SECURITY_POLICY_STRICT=***MASKED***
+HSTS_ENABLED=***MASKED***
+XSS_PROTECTION_ENABLED=***MASKED***
+
+# =***MASKED***
+# Logging configuration for production
+LOG_FORMAT=***MASKED***
+LOG_FILE=***MASKED***
+LOG_MAX_SIZE=***MASKED***
+LOG_MAX_FILES=***MASKED***
+
+# Advanced logging
+LOG_LEVEL_DEBUG=***MASKED***
+LOG_LEVEL_INFO=***MASKED***
+LOG_LEVEL_WARN=***MASKED***
+LOG_LEVEL_ERROR=***MASKED***
+
+# =***MASKED***
+# Backup settings
+BACKUP_ENABLED=***MASKED***
+BACKUP_SCHEDULE=***MASKED***
+BACKUP_RETENTION_DAYS=***MASKED***
+BACKUP_COMPRESSION=***MASKED***
+BACKUP_ENCRYPTION=***MASKED***
+
+# =***MASKED***
+# Network configuration for cloud deployment
+ENABLE_HTTPS=***MASKED***
+PROXY_ENABLED=***MASKED***
+
+# =***MASKED***
+# Performance optimization for production
+ENABLE_COMPRESSION=***MASKED***
+ENABLE_MINIFICATION=***MASKED***
+ENABLE_CDN_CACHE=***MASKED***
+CACHE_INVALIDATION_ENABLED=***MASKED***
+
+# =***MASKED***
+# Auto-scaling configuration
+AUTO_SCALE_ENABLED=***MASKED***
+AUTO_SCALE_MIN_INSTANCES=***MASKED***
+AUTO_SCALE_MAX_INSTANCES=***MASKED***
+AUTO_SCALE_CPU_THRESHOLD=***MASKED***
+
+# =***MASKED***
+# DigitalOcean specific settings
+CLOUD_PROVIDER=***MASKED***
+DIGITALOCEAN_REGION=***MASKED***
+DIGITALOCEAN_SIZE=***MASKED***
+
+# =***MASKED***
+# Monitoring configuration
+MONITORING_ENABLED=***MASKED***
+METRICS_ENABLED=***MASKED***
+METRICS_PORT=***MASKED***
+PROMETHEUS_ENABLED=***MASKED***
+
+# Alert configuration
+ALERTS_ENABLED=***MASKED***
+ALERT_THRESHOLD_CPU=***MASKED***
+ALERT_THRESHOLD_MEMORY=***MASKED***
+ALERT_THRESHOLD_DISK=***MASKED***
+
+# =***MASKED***
+# SSL certificate paths (for custom certificates)
+SSL_CERT_PATH=***MASKED***
+SSL_KEY_PATH=***MASKED***
+
+# =***MASKED***
+# Feature flags for production
+FEATURE_NEW_UI=***MASKED***
+FEATURE_ADVANCED_TRANSLATION=***MASKED***
+FEATURE_VIDEO_CHAT=***MASKED***
+FEATURE_VOICE_MESSAGES=***MASKED***
+
+# =***MASKED***
+# Compliance settings
+GDPR_COMPLIANCE=***MASKED***
+DATA_RETENTION_DAYS=***MASKED***
+ENABLE_AUDIT_LOGS=***MASKED***
+ENABLE_DATA_ENCRYPTION=***MASKED***
+
+# =***MASKED***
+# API configuration
+ENABLE_API_RATE_LIMITING=***MASKED***
+API_RATE_LIMIT=***MASKED***
+
+# =***MASKED***
+# Performance monitoring
+PERFORMANCE_MONITORING_ENABLED=***MASKED***
+PERFORMANCE_THRESHOLD_RESPONSE_TIME=***MASKED***
+PERFORMANCE_THRESHOLD_MEMORY_USAGE=***MASKED***
+PERFORMANCE_THRESHOLD_CPU_USAGE=***MASKED***
+
+# =***MASKED***
+# Reliability settings
+CIRCUIT_BREAKER_ENABLED=***MASKED***
+RETRY_MECHANISM_ENABLED=***MASKED***
+FALLBACK_MECHANISM_ENABLED=***MASKED***
+
+# =***MASKED***
+# Prisma schema path (should be empty for production as schema is built-in)
+PRISMA_SCHEMA_PATH=***MASKED***
+
+# Prisma pool configuration for production
+PRISMA_POOL_SIZE=***MASKED***
+PRISMA_QUERY_ENGINE_LIBRARY=***MASKED***
+PRISMA_CLIENT_ENGINE_TYPE=***MASKED***
+PRISMA_DISABLE_WARNINGS=***MASKED***
+
+# =***MASKED***
+# Development settings (disabled in production)
+ENABLE_DEBUG_MODE=***MASKED***
+ENABLE_PROFILING=***MASKED***
+ENABLE_DEBUG_TOOLS=***MASKED***
+
+# =***MASKED***
+# Deployment version
+
+# =***MASKED***
+# Support configuration
+
+# =***MASKED***
+# Custom branding
+BRAND_NAME=***MASKED***
+BRAND_COLOR=***MASKED***
+
+# =***MASKED***
+# This configuration is optimized for DigitalOcean deployment
+# Make sure to:
+# 1. Update all domain references (meeshy.me) with your actual domain
+# 2. Change all default passwords and secrets
+# 3. Configure SSL certificates
+# 4. Set up monitoring and alerts
+# 5. Configure backup strategies
+# 6. Test thoroughly before production deployment
+
+# =***MASKED***
+# Générés automatiquement le Mon Sep  8 21:03:56 CEST 2025
+# =***MASKED***
+# Fichier généré automatiquement - NE PAS COMMITER
+# Date de génération: Sun Sep  7 22:06:25 CEST 2025
+# 
+# ⚠️  ATTENTION: Ce fichier contient des informations sensibles
+# ⚠️  Ne jamais le commiter dans Git ou le partager
+# ⚠️  Conserver ce fichier dans un endroit sécurisé
+
+# =***MASKED***
+
+# =***MASKED***
+# Mots de passe pour les utilisateurs par défaut
+
+# =***MASKED***
+# Mots de passe pour les services
+
+# =***MASKED***
+
+# =***MASKED***
+
+# =***MASKED***
+# Hashes bcrypt pour les authentifications (générés avec htpasswd)
+
+# =***MASKED***
+# Configuration utilisateur Meeshy (BIGBOSS)
+
+# Configuration utilisateur Admin
+
+# Configuration utilisateur André Tabeth (entièrement configurable)
+
+# =***MASKED***
+# Informations pour le déploiement
+JWT_SECRET=***MASKED***
+JWT_EXPIRES_IN=***MASKED***
+ADMIN_PASSWORD=***MASKED***
+MEESHY_PASSWORD=***MASKED***
+ATABETH_PASSWORD=***MASKED***
+MONGODB_PASSWORD=***MASKED***
+REDIS_PASSWORD=***MASKED***
+ADMIN_EMAIL=***MASKED***
+MEESHY_EMAIL=***MASKED***
+ATABETH_EMAIL=***MASKED***
+SUPPORT_EMAIL=***MASKED***
+FEEDBACK_EMAIL=***MASKED***
+DOMAIN=***MASKED***
+TRAEFIK_USERS=***MASKED***
+API_USERS=***MASKED***
+MONGO_USERS=***MASKED***
+REDIS_USERS=***MASKED***
+MEESHY_USERNAME=***MASKED***
+MEESHY_FIRST_NAME=***MASKED***
+MEESHY_LAST_NAME=***MASKED***
+MEESHY_ROLE=***MASKED***
+MEESHY_SYSTEM_LANGUAGE=***MASKED***
+MEESHY_REGIONAL_LANGUAGE=***MASKED***
+MEESHY_CUSTOM_DESTINATION_LANGUAGE=***MASKED***
+ADMIN_USERNAME=***MASKED***
+ADMIN_FIRST_NAME=***MASKED***
+ADMIN_LAST_NAME=***MASKED***
+ADMIN_ROLE=***MASKED***
+ADMIN_SYSTEM_LANGUAGE=***MASKED***
+ADMIN_REGIONAL_LANGUAGE=***MASKED***
+ADMIN_CUSTOM_DESTINATION_LANGUAGE=***MASKED***
+ATABETH_USERNAME=***MASKED***
+ATABETH_FIRST_NAME=***MASKED***
+ATABETH_LAST_NAME=***MASKED***
+ATABETH_ROLE=***MASKED***
+ATABETH_SYSTEM_LANGUAGE=***MASKED***
+ATABETH_REGIONAL_LANGUAGE=***MASKED***
+ATABETH_CUSTOM_DESTINATION_LANGUAGE=***MASKED***
+FORCE_DB_RESET=***MASKED***
+DEPLOYMENT_DATE=***MASKED***
+DEPLOYMENT_VERSION=***MASKED***
+DEPLOYMENT_ENV=***MASKED***
+
+# Firebase Admin SDK (Push Notifications)
+FIREBASE_ADMIN_CREDENTIALS_PATH=***MASKED***
+

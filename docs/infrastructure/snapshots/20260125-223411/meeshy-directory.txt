@@ -1,0 +1,151 @@
+/opt/meeshy:
+total 120
+drwxr-xr-x 10 root root  4096 Dec  8 11:02 .
+drwxr-xr-x  5 root root  4096 Sep  2 15:46 ..
+-rw-r--r--  1 root root 13403 Dec  8 11:02 .env
+-rw-r--r--  1 root root 12762 Oct 19 14:07 .env.backup-20251019_140706
+drwxr-xr-x  4 root root  4096 Dec  3 00:19 backups
+drwxr-xr-x  3 root root  4096 Oct 19 13:57 docker
+-rw-r--r--  1 root root 13101 Dec  2 15:59 docker-compose.traefik.yml
+-rw-r--r--  1 root root 13590 Dec  8 11:01 docker-compose.yml
+-rw-r--r--  1 root root 13526 Dec  2 19:34 docker-compose.yml.save
+drwxr-xr-x  2 root root  4096 Oct 19 13:58 docs
+drwxr-xr-x  3 root root  4096 Oct 19 15:58 i
+drwxr-xr-x  2 root root  4096 Nov 19 18:49 logs
+drwxr-xr-x  2 root root  4096 Dec  3 00:20 s2
+drwxr-xr-x  3 root root  4096 Dec  4 22:44 scripts
+drwxr-xr-x  2 root root  4096 Jan 16 00:36 secrets
+
+/opt/meeshy/backups:
+total 10004
+drwxr-xr-x  4 root root     4096 Dec  3 00:19 .
+drwxr-xr-x 10 root root     4096 Dec  8 11:02 ..
+-rw-r--r--  1 root root       45 Sep  7 17:33 meeshy-backup-20250907-173313.tar.gz
+-rw-r--r--  1 root root       45 Sep  7 17:50 meeshy-backup-20250907-175013.tar.gz
+-rw-r--r--  1 root root       45 Sep  7 17:50 meeshy-backup-20250907-175033.tar.gz
+-rw-r--r--  1 root root       45 Sep  8 19:03 meeshy-backup-20250908-190348.tar.gz
+drwxr-xr-x  2 root root     4096 Dec  3 00:19 pre-cleanup-20251019_135719
+-rw-r--r--  1 root root 10208420 Oct 19 13:57 pre-cleanup-20251019_135743.tar.gz
+drwxr-xr-x  3 root root     4096 Oct 17 00:38 pre-volume-fix-20251017_003821
+
+/opt/meeshy/backups/pre-cleanup-20251019_135719:
+total 20112
+drwxr-xr-x 2 root root     4096 Dec  3 00:19 .
+drwxr-xr-x 4 root root     4096 Dec  3 00:19 ..
+-rw-r--r-- 1 root root    12664 Oct 19 10:59 .env
+-rw-r--r-- 1 root root    12852 Oct 15 00:55 .env.backup-20251015-005500
+-rw-r--r-- 1 root root    12924 Oct 15 01:07 .env.backup-20251015-010703
+-rw-r--r-- 1 root root    13204 Oct 17 21:21 .env.backup-20251017-212158
+-rw-r--r-- 1 root root    12668 Oct 18 22:39 .env.backup-before-public-url-fix-20251019-003906
+-rw-r--r-- 1 root root    12924 Oct 15 01:16 .env.backup.20251015_011649
+-rw-r--r-- 1 root root    12675 Oct 17 21:25 .env.bak
+-rw-r--r-- 1 root root 20469946 Oct 19 13:57 meeshy-full-backup.tar.gz
+
+/opt/meeshy/backups/pre-volume-fix-20251017_003821:
+total 24
+drwxr-xr-x 3 root root  4096 Oct 17 00:38 .
+drwxr-xr-x 4 root root  4096 Dec  3 00:19 ..
+drwxr-xr-x 2 root root  4096 Oct 17 00:38 deployment
+-rw-r--r-- 1 root root 11294 Oct 17 00:38 docker-compose.yml
+
+/opt/meeshy/backups/pre-volume-fix-20251017_003821/deployment:
+total 32
+drwxr-xr-x 2 root root  4096 Oct 17 00:38 .
+drwxr-xr-x 3 root root  4096 Oct 17 00:38 ..
+-rwxr-xr-x 1 root root 10417 Oct 17 00:38 deploy-config.sh
+-rwxr-xr-x 1 root root 10180 Oct 17 00:38 deploy-configure-models-permissions.sh
+
+/opt/meeshy/docker:
+total 12
+drwxr-xr-x  3 root root 4096 Oct 19 13:57 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+drwxr-xr-x  2 root root 4096 Oct 19 13:58 nginx
+
+/opt/meeshy/docker/nginx:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 19 13:58 .
+drwxr-xr-x 3 root root 4096 Oct 19 13:57 ..
+-rw-r--r-- 1 root root 1201 Oct 19 17:55 static-files.conf
+
+/opt/meeshy/docs:
+total 8
+drwxr-xr-x  2 root root 4096 Oct 19 13:58 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+
+/opt/meeshy/i:
+total 12
+drwxr-xr-x  3 root root 4096 Oct 19 15:58 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+drwxr-xr-x  4 root root 4096 Oct 19 15:58 2025
+
+/opt/meeshy/i/2025:
+total 24
+drwxr-xr-x 4 root root 4096 Oct 19 15:58 .
+drwxr-xr-x 3 root root 4096 Oct 19 15:58 ..
+-rwxr-xr-x 1 root root 6148 Oct 19 15:58 .DS_Store
+drwxr-xr-x 2 root root 4096 Oct 19 15:58 09
+drwxr-xr-x 2 root root 4096 Oct 19 16:00 10
+
+/opt/meeshy/i/2025/09:
+total 2160
+drwxr-xr-x 2 root root    4096 Oct 19 15:58 .
+drwxr-xr-x 4 root root    4096 Oct 19 15:58 ..
+-rwxr-xr-x 1 root root 2200495 Oct 19 15:58 avatar_1757848385364_qsr3u7.PNG
+
+/opt/meeshy/i/2025/10:
+total 1780
+drwxr-xr-x 2 root root   4096 Oct 19 16:00 .
+drwxr-xr-x 4 root root   4096 Oct 19 15:58 ..
+-rwxr-xr-x 1 root root 367090 Oct 19 15:58 avatar_1760868681775_v8v9nd.jpg
+-rwxr-xr-x 1 root root 106179 Oct 19 15:58 avatar_1760868816645_6kuili.jpg
+-rwxr-xr-x 1 root root  11989 Oct 19 15:58 avatar_1760868829853_iaopqt.jpg
+-rwxr-xr-x 1 root root 423440 Oct 19 15:58 avatar_1760885420829_ljmwuf.jpg
+-rwxr-xr-x 1 root root 423440 Oct 19 15:58 avatar_1760885501498_m4tl7l.jpg
+-rw-r--r-- 1 root root 116705 Oct 19 16:00 avatar_1760888750545_xcei1m.jpg
+-rw-r--r-- 1 root root 112039 Oct 19 16:00 avatar_1760888957178_k9c1v3.jpg
+-rw-r--r-- 1 root root 241198 Oct 19 16:00 avatar_1760889115392_6pwrky.jpg
+-rwxr-xr-x 1 root root      0 Oct 19 15:58 test-write.txt
+
+/opt/meeshy/logs:
+total 8
+drwxr-xr-x  2 root root 4096 Nov 19 18:49 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+
+/opt/meeshy/s2:
+total 16
+drwxr-xr-x  2 root root 4096 Dec  3 00:20 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+-rw-r--r--  1 root root 2367 Dec  3 00:20 firebase-admin-sdk.json
+-rw-------  1 root root 2896 Dec  3 00:20 production-secrets.env
+
+/opt/meeshy/scripts:
+total 104
+drwxr-xr-x  3 root root 4096 Dec  4 22:44 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+-rw-r--r--  1 root root 9972 Nov 19 18:49 CLEANUP-GUIDE.md
+-rw-r--r--  1 root root 4972 Nov 19 18:49 CLEANUP-README.md
+-rw-r--r--  1 root root 6168 Nov 19 18:49 cleanup-orphan-attachments.js
+-rwxr-xr-x  1 root root 8783 Nov 19 18:49 cleanup-orphan-files.sh
+-rw-r--r--  1 root root  811 Oct 18 22:55 cleanup-user-spaces.js
+-rw-r--r--  1 root root 7719 Nov 19 18:49 export-attachment-paths.js
+-rw-------  1 root root 8506 Dec  4 22:44 migrate-attachment-urls-strip-prefix.js
+-rwxr-xr-x  1 root root 1029 Nov 19 18:49 monthly-cleanup.sh
+-rw-r--r--  1 root root 4441 Oct 18 22:55 normalize-user-data.js
+drwxr-xr-x  2 root root 4096 Oct 17 00:38 production
+-rw-r--r--  1 root root 3846 Oct 15 01:49 restore-missing-users.js
+-rwxr-xr-x  1 root root 8697 Nov 19 18:49 test-cleanup-system.sh
+
+/opt/meeshy/scripts/production:
+total 44
+drwxr-xr-x 2 root root  4096 Oct 17 00:38 .
+drwxr-xr-x 3 root root  4096 Dec  4 22:44 ..
+-rwxr-xr-x 1 root root  7819 Oct 17 00:42 meeshy-auto-backup.sh
+-rwxr-xr-x 1 root root 14581 Oct 17 00:42 meeshy-maintenance.sh
+-rwxr-xr-x 1 root root  8357 Oct 17 00:42 meeshy-restore-backup.sh
+
+/opt/meeshy/secrets:
+total 16
+drwxr-xr-x  2 root root 4096 Jan 16 00:36 .
+drwxr-xr-x 10 root root 4096 Dec  8 11:02 ..
+-rw-r--r--  1 root root 2363 Jan 16 00:36 firebase-admin-sdk.json
+-rw-------  1 root root 2896 Sep  9 22:55 production-secrets.env

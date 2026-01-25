@@ -1,0 +1,9 @@
+meeshy-frontend	isopen/meeshy-frontend:dev	Up 6 weeks (healthy)
+meeshy-static-files	nginx:alpine	Up 6 weeks (healthy)
+meeshy-gateway	isopen/meeshy-gateway:latest	Up 7 weeks (healthy)
+meeshy-translator	isopen/meeshy-translator:latest	Up 2 weeks (healthy)
+meeshy-p3x-redis-ui	patrikx3/p3x-redis-ui:latest	Up 3 months (unhealthy)
+meeshy-nosqlclient	mongoclient/mongoclient:latest	Up 3 months (healthy)
+meeshy-redis	redis:8-alpine	Up 3 months (healthy)
+meeshy-database	mongo:8.0	Up 3 months (healthy)
+meeshy-traefik	traefik:v3.3	Up 3 months

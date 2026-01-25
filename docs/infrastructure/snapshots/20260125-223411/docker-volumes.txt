@@ -1,0 +1,12 @@
+DRIVER    VOLUME NAME
+local     meeshy_database_config
+local     meeshy_database_data
+local     meeshy_frontend_uploads
+local     meeshy_gateway_uploads
+local     meeshy_models_data
+local     meeshy_redis-ui-data
+local     meeshy_redis_data
+local     meeshy_traefik_certs
+local     meeshy_translator_cache
+local     meeshy_translator_generated
+local     meeshy_translator_models
