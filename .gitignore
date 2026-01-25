@@ -258,3 +258,5 @@ google-services.json
 apps/ios/scripts/voice_cloning_output/*.wav
 apps/ios/scripts/voice_cloning_output/history/**/*.wav
 *.backup
+infrastructure/docker/compose/.env.staging
+secrets/
