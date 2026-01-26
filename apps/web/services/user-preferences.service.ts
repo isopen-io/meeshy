@@ -322,7 +322,7 @@ export class UserPreferencesService {
       }
 
       const response = await apiService.get<UserCategoriesResponse>(
-        '/api/user-preferences/categories'
+        '/me/preferences/categories'
       );
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
@@ -351,7 +351,7 @@ export class UserPreferencesService {
       const response = await apiService.get<{
         success: boolean;
         data: unknown;
-      }>(`/api/user-preferences/categories/${categoryId}`);
+      }>(`/me/preferences/categories/${categoryId}`);
 
       if (!response.data?.success || !response.data?.data) {
         return null;
@@ -377,7 +377,7 @@ export class UserPreferencesService {
       const response = await apiService.post<{
         success: boolean;
         data: unknown;
-      }>('/api/user-preferences/categories', data);
+      }>('/me/preferences/categories', data);
 
       if (!response.data?.success || !response.data?.data) {
         throw new Error('Échec de la création de la catégorie');
@@ -406,7 +406,7 @@ export class UserPreferencesService {
       const response = await apiService.patch<{
         success: boolean;
         data: unknown;
-      }>(`/api/user-preferences/categories/${categoryId}`, data);
+      }>(`/me/preferences/categories/${categoryId}`, data);
 
       if (!response.data?.success || !response.data?.data) {
         throw new Error('Échec de la mise à jour de la catégorie');
@@ -429,7 +429,7 @@ export class UserPreferencesService {
    */
   async deleteCategory(categoryId: string): Promise<void> {
     try {
-      await apiService.delete(`/api/user-preferences/categories/${categoryId}`);
+      await apiService.delete(`/me/preferences/categories/${categoryId}`);
 
       // Invalider le cache
       this.categoriesCache = null;
@@ -460,7 +460,7 @@ export class UserPreferencesService {
     }>
   ): Promise<void> {
     try {
-      await apiService.post('/api/user-preferences/categories/reorder', { updates });
+      await apiService.post('/me/preferences/categories/reorder', { updates });
 
       // Invalider le cache
       this.categoriesCache = null;
