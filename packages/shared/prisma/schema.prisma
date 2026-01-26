@@ -287,6 +287,8 @@ model Conversation {
 
   // Shares of this conversation to communities
   shares ConversationShare[] @relation("SharedConversation")
+
+  @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
 }
 
 /// Share/forward a conversation to a community or another context
@@ -348,6 +350,7 @@ model ConversationMember {
   @@unique([conversationId, userId], name: "unique_conversation_member")
   @@index([conversationId])
   @@index([userId])
+  @@index([userId, isActive]) // Optimisation getUserStats: filtrer conversations actives d'un utilisateur
 }
 
 /// Lien de partage pour accès anonyme à une conversation
