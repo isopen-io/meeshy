@@ -23,6 +23,7 @@ import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
 import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
+import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -453,14 +454,26 @@ export class MessageTranslationService extends EventEmitter {
       // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
       // Cela permet de remplacer les traductions existantes par les nouvelles
       if (filteredTargetLanguages.length > 0) {
-        const deleteResult = await this.prisma.messageTranslation.deleteMany({
-          where: {
-            messageId: messageId,
-            targetLanguage: {
-              in: filteredTargetLanguages
-            }
-          }
+        // Lire le message
+        const message = await this.prisma.message.findUnique({
+          where: { id: messageId },
+          select: { translations: true }
         });
+
+        if (message?.translations) {
+          const translations = message.translations as Record<string, MessageTranslationJSON>;
+
+          // Supprimer les langues cibles du JSON
+          filteredTargetLanguages.forEach(lang => {
+            delete translations[lang];
+          });
+
+          // Sauvegarder
+          await this.prisma.message.update({
+            where: { id: messageId },
+            data: { translations }
+          });
+        }
       }
       
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
@@ -2396,74 +2409,45 @@ export class MessageTranslationService extends EventEmitter {
         });
       }
 
-      // OPTIMISATION: Nettoyer les doublons existants d'abord (si présents)
-      // Ceci évite les conflits de contrainte unique
-      const duplicates = await this.prisma.messageTranslation.findMany({
-        where: {
-          messageId: result.messageId,
-          targetLanguage: result.targetLanguage
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true }
+      // NOUVELLE ARCHITECTURE: Utiliser Message.translations (JSON)
+      // Plus de doublons possibles, plus de contraintes uniques nécessaires
+
+      // 1. Lire le message actuel
+      const message = await this.prisma.message.findUnique({
+        where: { id: result.messageId },
+        select: { translations: true }
       });
 
-      // S'il y a plusieurs traductions, supprimer toutes sauf la plus récente
-      if (duplicates.length > 1) {
-        const idsToDelete = duplicates.slice(1).map(d => d.id);
-        await this.prisma.messageTranslation.deleteMany({
-          where: {
-            id: { in: idsToDelete }
-          }
-        });
-      }
+      // 2. Parser et mettre à jour les translations
+      const translations = (message?.translations as Record<string, MessageTranslationJSON>) || {};
 
-      // OPTIMISATION: Utiliser upsert avec une clé unique composée
-      // Note: Ceci requiert une contrainte unique sur (messageId, targetLanguage) dans le schema
-      const translation = await this.prisma.messageTranslation.upsert({
-        where: {
-          // Utiliser la contrainte unique composée si disponible
-          messageId_targetLanguage: {
-            messageId: result.messageId,
-            targetLanguage: result.targetLanguage
-          }
-        },
-        update: {
-          translatedContent: contentToStore,
-          translationModel: modelInfo,
-          confidenceScore: confidenceScore,
-          // Encryption fields
-          isEncrypted: encryptionData.isEncrypted,
-          encryptionKeyId: encryptionData.encryptionKeyId,
-          encryptionIv: encryptionData.encryptionIv,
-          encryptionAuthTag: encryptionData.encryptionAuthTag
-        },
-        create: {
-          messageId: result.messageId,
-          targetLanguage: result.targetLanguage,
-          translatedContent: contentToStore,
-          translationModel: modelInfo,
-          confidenceScore: confidenceScore,
-          // Encryption fields
-          isEncrypted: encryptionData.isEncrypted,
-          encryptionKeyId: encryptionData.encryptionKeyId,
-          encryptionIv: encryptionData.encryptionIv,
-          encryptionAuthTag: encryptionData.encryptionAuthTag
-        }
+      // Préserver createdAt existant si présent (pour updatedAt correct)
+      const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
+
+      translations[result.targetLanguage] = createTranslationJSON({
+        text: contentToStore,
+        translationModel: modelInfo as 'basic' | 'medium' | 'premium',
+        confidenceScore: confidenceScore,
+        isEncrypted: encryptionData.isEncrypted,
+        encryptionKeyId: encryptionData.encryptionKeyId,
+        encryptionIv: encryptionData.encryptionIv,
+        encryptionAuthTag: encryptionData.encryptionAuthTag,
+        preserveCreatedAt: existingCreatedAt
+      });
+
+      // 3. Sauvegarder dans MongoDB
+      await this.prisma.message.update({
+        where: { id: result.messageId },
+        data: { translations }
       });
 
       const queryTime = Date.now() - startTime;
 
-      return translation.id;
+      // Retourner ID synthétique pour compatibilité logging
+      return `${result.messageId}-${result.targetLanguage}`;
 
     } catch (error: any) {
       logger.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error.message}`);
-
-      // Fallback: Si l'erreur est due à une contrainte manquante, utiliser l'ancienne méthode
-      if (error.code === 'P2025' || error.message?.includes('messageId_targetLanguage')) {
-        logger.warn(`⚠️ [TranslationService] Contrainte unique manquante, fallback vers méthode legacy`);
-        return await this._saveTranslationToDatabase_Legacy(result, metadata);
-      }
-
       throw error; // Remonter l'erreur pour la gestion dans _handleTranslationCompleted
     }
   }
@@ -2499,48 +2483,36 @@ export class MessageTranslationService extends EventEmitter {
         };
       }
 
-      // Chercher une traduction existante
-      const existing = await this.prisma.messageTranslation.findFirst({
-        where: {
-          messageId: result.messageId,
-          targetLanguage: result.targetLanguage
-        }
+      // NOUVELLE ARCHITECTURE: Utiliser Message.translations (JSON)
+      // 1. Lire le message actuel
+      const message = await this.prisma.message.findUnique({
+        where: { id: result.messageId },
+        select: { translations: true }
       });
 
-      if (existing) {
-        // Mettre à jour
-        const updated = await this.prisma.messageTranslation.update({
-          where: { id: existing.id },
-          data: {
-            translatedContent: contentToStore,
-            translationModel: modelInfo,
-            confidenceScore: confidenceScore,
-            // Encryption fields
-            isEncrypted: encryptionData.isEncrypted,
-            encryptionKeyId: encryptionData.encryptionKeyId,
-            encryptionIv: encryptionData.encryptionIv,
-            encryptionAuthTag: encryptionData.encryptionAuthTag
-          }
-        });
-        return updated.id;
-      } else {
-        // Créer
-        const created = await this.prisma.messageTranslation.create({
-          data: {
-            messageId: result.messageId,
-            targetLanguage: result.targetLanguage,
-            translatedContent: contentToStore,
-            translationModel: modelInfo,
-            confidenceScore: confidenceScore,
-            // Encryption fields
-            isEncrypted: encryptionData.isEncrypted,
-            encryptionKeyId: encryptionData.encryptionKeyId,
-            encryptionIv: encryptionData.encryptionIv,
-            encryptionAuthTag: encryptionData.encryptionAuthTag
-          }
-        });
-        return created.id;
-      }
+      // 2. Mettre à jour translations
+      const translations = (message?.translations as Record<string, MessageTranslationJSON>) || {};
+      const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
+
+      translations[result.targetLanguage] = createTranslationJSON({
+        text: contentToStore,
+        translationModel: modelInfo as 'basic' | 'medium' | 'premium',
+        confidenceScore: confidenceScore,
+        isEncrypted: encryptionData.isEncrypted,
+        encryptionKeyId: encryptionData.encryptionKeyId,
+        encryptionIv: encryptionData.encryptionIv,
+        encryptionAuthTag: encryptionData.encryptionAuthTag,
+        preserveCreatedAt: existingCreatedAt
+      });
+
+      // 3. Sauvegarder
+      await this.prisma.message.update({
+        where: { id: result.messageId },
+        data: { translations }
+      });
+
+      // Retourner ID synthétique pour compatibilité
+      return `${result.messageId}-${result.targetLanguage}`;
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur legacy: ${error}`);
       throw error;
@@ -2562,67 +2534,66 @@ export class MessageTranslationService extends EventEmitter {
         return cachedResult;
       }
 
-      // Si pas en cache, chercher dans la base de données
-      // Include message relation to get sourceLanguage
-      const dbTranslation = await this.prisma.messageTranslation.findFirst({
-        where: {
-          messageId: messageId,
-          targetLanguage: targetLanguage
-        },
-        include: {
-          message: {
-            select: { originalLanguage: true }
-          }
+      // Si pas en cache, chercher dans Message.translations (JSON)
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: {
+          originalLanguage: true,
+          translations: true
         }
       });
 
-      if (dbTranslation) {
-        // SECURITY: Decrypt translation if encrypted
-        let translatedText = dbTranslation.translatedContent;
+      if (message?.translations) {
+        const translations = message.translations as Record<string, MessageTranslationJSON>;
+        const translation = translations[targetLanguage];
 
-        if (dbTranslation.isEncrypted &&
-            dbTranslation.encryptionKeyId &&
-            dbTranslation.encryptionIv &&
-            dbTranslation.encryptionAuthTag) {
-          try {
-            translatedText = await this._decryptTranslation(
-              dbTranslation.translatedContent,
-              dbTranslation.encryptionKeyId,
-              dbTranslation.encryptionIv,
-              dbTranslation.encryptionAuthTag
-            );
-            logger.debug('Translation decrypted successfully', {
-              messageId,
-              targetLanguage
-            });
-          } catch (decryptError) {
-            logger.error('Failed to decrypt translation, returning encrypted content', {
-              messageId,
-              targetLanguage,
-              error: decryptError
-            });
-            // Return null if decryption fails for security
-            return null;
+        if (translation) {
+          // SECURITY: Decrypt translation if encrypted
+          let translatedText = translation.text;
+
+          if (translation.isEncrypted &&
+              translation.encryptionKeyId &&
+              translation.encryptionIv &&
+              translation.encryptionAuthTag) {
+            try {
+              translatedText = await this._decryptTranslation(
+                translation.text,
+                translation.encryptionKeyId,
+                translation.encryptionIv,
+                translation.encryptionAuthTag
+              );
+              logger.debug('Translation decrypted successfully', {
+                messageId,
+                targetLanguage
+              });
+            } catch (decryptError) {
+              logger.error('Failed to decrypt translation, returning encrypted content', {
+                messageId,
+                targetLanguage,
+                error: decryptError
+              });
+              // Return null if decryption fails for security
+              return null;
+            }
           }
+
+          // Convertir la traduction JSON en format TranslationResult
+          const result: TranslationResult = {
+            messageId: messageId,
+            sourceLanguage: message.originalLanguage,
+            targetLanguage: targetLanguage,
+            translatedText: translatedText,
+            translatorModel: translation.translationModel,
+            confidenceScore: translation.confidenceScore || 0.9,
+            processingTime: 0, // Pas disponible depuis la base
+            modelType: translation.translationModel || 'basic'
+          };
+
+          // Mettre en cache pour les prochaines requêtes
+          this._addToCache(cacheKey, result);
+
+          return result;
         }
-
-        // Convertir la traduction de la base en format TranslationResult
-        // sourceLanguage is derived from message.originalLanguage
-        const result: TranslationResult = {
-          messageId: dbTranslation.messageId,
-          sourceLanguage: dbTranslation.message.originalLanguage,
-          targetLanguage: dbTranslation.targetLanguage,
-          translatedText: translatedText,
-          translatorModel: dbTranslation.translationModel,
-          confidenceScore: dbTranslation.confidenceScore || 0.9,
-          processingTime: 0, // Pas disponible depuis la base
-          modelType: dbTranslation.translationModel || 'basic'
-        };
-
-        // Mettre en cache pour les prochaines requêtes
-        this._addToCache(cacheKey, result);
-
-        return result;
       }
 
       return null;
