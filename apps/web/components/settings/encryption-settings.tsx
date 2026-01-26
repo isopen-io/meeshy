@@ -17,11 +17,15 @@ import {
   useEncryptionPreferences,
   type EncryptionPreference,
 } from '@/stores';
+import { useAuthStore } from '@/stores/auth-store';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 
 export function EncryptionSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
+
+  // Get current user for Signal keys info
+  const user = useAuthStore(state => state.user);
 
   // Use centralized store
   const {
@@ -33,6 +37,11 @@ export function EncryptionSettings() {
 
   const isLoading = useUserPreferencesStore(state => state.isLoading);
   const isInitialized = useUserPreferencesStore(state => state.isInitialized);
+
+  // Extract Signal keys info from user
+  const hasSignalKeys = !!(user?.signalRegistrationId);
+  const signalRegistrationId = user?.signalRegistrationId || null;
+  const lastKeyRotation = user?.lastKeyRotation || null;
 
   const [saving, setSaving] = useState(false);
   const [generatingKeys, setGeneratingKeys] = useState(false);
@@ -113,8 +122,18 @@ export function EncryptionSettings() {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          // Sync the store to get the updated key data
-          await syncEncryption();
+          // Refresh user data to get updated Signal keys
+          const userResponse = await fetch(`${API_CONFIG.getApiUrl()}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            if (userData.success && userData.data?.user) {
+              useAuthStore.getState().setUser(userData.data.user);
+            }
+          }
+
           toast.success(t('encryption.status.keysGenerated'));
         }
       } else {
@@ -154,30 +173,30 @@ export function EncryptionSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <div className="flex items-center gap-3">
-              {encryptionData.hasSignalKeys ? (
+              {hasSignalKeys ? (
                 <CheckCircle className="h-6 w-6 text-green-500" />
               ) : (
                 <AlertTriangle className="h-6 w-6 text-yellow-500" />
               )}
               <div>
                 <p className="font-medium">
-                  {encryptionData.hasSignalKeys ? t('encryption.status.keysActive') : t('encryption.status.keysNotGenerated')}
+                  {hasSignalKeys ? t('encryption.status.keysActive') : t('encryption.status.keysNotGenerated')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {encryptionData.hasSignalKeys
-                    ? `${t('encryption.status.registrationId')}: ${encryptionData.signalRegistrationId}`
+                  {hasSignalKeys
+                    ? `${t('encryption.status.registrationId')}: ${signalRegistrationId}`
                     : t('encryption.status.generateKeys')}
                 </p>
               </div>
             </div>
-            <Badge variant={encryptionData.hasSignalKeys ? 'default' : 'secondary'}>
-              {encryptionData.hasSignalKeys ? t('encryption.status.active') : t('encryption.status.inactive')}
+            <Badge variant={hasSignalKeys ? 'default' : 'secondary'}>
+              {hasSignalKeys ? t('encryption.status.active') : t('encryption.status.inactive')}
             </Badge>
           </div>
 
-          {encryptionData.hasSignalKeys && encryptionData.lastKeyRotation && (
+          {hasSignalKeys && lastKeyRotation && (
             <div className="text-sm text-muted-foreground">
-              {t('encryption.status.lastRotation')}: {new Date(encryptionData.lastKeyRotation).toLocaleDateString(undefined, {
+              {t('encryption.status.lastRotation')}: {new Date(lastKeyRotation).toLocaleDateString(undefined, {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -187,7 +206,7 @@ export function EncryptionSettings() {
             </div>
           )}
 
-          {!encryptionData.hasSignalKeys && (
+          {!hasSignalKeys && (
             <Button
               onClick={() => {
                 SoundFeedback.playClick();
@@ -232,7 +251,7 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={encryptionData.localSettings.autoEncryptNewConversations}
+              checked={encryptionData.autoEncryptNewConversations}
               onCheckedChange={(checked) => updateLocalSettings({ autoEncryptNewConversations: checked })}
             />
           </div>
@@ -245,7 +264,7 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={encryptionData.localSettings.showEncryptionStatus}
+              checked={encryptionData.showEncryptionStatus}
               onCheckedChange={(checked) => updateLocalSettings({ showEncryptionStatus: checked })}
             />
           </div>
@@ -258,7 +277,7 @@ export function EncryptionSettings() {
               </p>
             </div>
             <Switch
-              checked={encryptionData.localSettings.warnOnUnencrypted}
+              checked={encryptionData.warnOnUnencrypted}
               onCheckedChange={(checked) => updateLocalSettings({ warnOnUnencrypted: checked })}
             />
           </div>
