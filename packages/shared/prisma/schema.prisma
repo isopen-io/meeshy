@@ -1616,6 +1616,7 @@ model UserConversationPreferences {
   @@index([userId])
   @@index([conversationId])
   @@index([categoryId])
+  @@map("user_conversation_preferences")
 }
 
 /// User-defined categories for organizing conversations
@@ -1646,6 +1647,7 @@ model UserConversationCategory {
 
   @@index([userId])
   @@index([userId, order])
+  @@map("user_conversation_categories")
 }
 
 /// User-specific preferences for communities
