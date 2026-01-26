@@ -47,7 +47,7 @@ except ImportError:
 
 VOICE_PROFILE_HANDLER_AVAILABLE = False
 try:
-    from .zmq_voice_handler import VoiceProfileHandler
+    from .voice_profile_handler import get_voice_profile_handler
     VOICE_PROFILE_HANDLER_AVAILABLE = True
 except ImportError:
     pass
@@ -94,10 +94,7 @@ class TranslationHandler:
         # Voice Profile Handler si disponible
         if VOICE_PROFILE_HANDLER_AVAILABLE:
             try:
-                self.voice_profile_handler = VoiceProfileHandler(
-                    pub_socket=pub_socket,
-                    database_service=database_service
-                )
+                self.voice_profile_handler = get_voice_profile_handler()
                 logger.info("✅ VoiceProfileHandler initialisé")
             except Exception as e:
                 logger.warning(f"⚠️ Impossible d'initialiser VoiceProfileHandler: {e}")

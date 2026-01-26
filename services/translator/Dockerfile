@@ -299,7 +299,8 @@ RUN chown -R translator:translator /workspace \
                /workspace/generated/audios \
                /workspace/cache \
                /workspace/logs \
-    && chmod -R 755 /workspace/models /workspace/cache /workspace/logs
+    && chown -R translator:translator /workspace/generated \
+    && chmod -R 755 /workspace/models /workspace/cache /workspace/logs /workspace/generated
 
 # Health check désactivé temporairement - le chargement des modèles ML prend trop de temps
 # Le service est considéré healthy une fois que FastAPI répond
