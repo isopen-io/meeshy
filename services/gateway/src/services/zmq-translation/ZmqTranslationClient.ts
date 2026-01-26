@@ -249,7 +249,7 @@ export class ZmqTranslationClient extends EventEmitter {
 
       try {
         // Log périodique pour vérifier que la boucle fonctionne
-        if (heartbeatCount % 50 === 0) { // Toutes les 5 secondes
+        if (heartbeatCount % 1000 === 0) { // Toutes les 100 secondes (~1.5 minutes)
           logger.info(`[GATEWAY] 💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
         }
         heartbeatCount++;
