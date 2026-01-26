@@ -83,7 +83,44 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           id: messageId,
           isDeleted: false
         },
-        include: {
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          anonymousSenderId: true,
+          content: true,
+          originalLanguage: true,
+          messageType: true,
+          messageSource: true,
+          isEdited: true,
+          editedAt: true,
+          isDeleted: true,
+          deletedAt: true,
+          replyToId: true,
+          forwardedFromId: true,
+          forwardedFromConversationId: true,
+          expiresAt: true,
+          isViewOnce: true,
+          maxViewOnceCount: true,
+          viewOnceCount: true,
+          isBlurred: true,
+          pinnedAt: true,
+          pinnedBy: true,
+          validatedMentions: true,
+          createdAt: true,
+          updatedAt: true,
+          deliveredToAllAt: true,
+          receivedByAllAt: true,
+          readByAllAt: true,
+          deliveredCount: true,
+          readCount: true,
+          reactionSummary: true,
+          reactionCount: true,
+          encryptedContent: true,
+          encryptionMetadata: true,
+          isEncrypted: true,
+          encryptionMode: true,
+          translations: true,
           sender: {
             select: {
               id: true,
@@ -101,7 +138,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             }
           },
           conversation: {
-            include: {
+            select: {
               members: {
                 where: { userId: userId },
                 select: { userId: true, role: true }
@@ -131,8 +168,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               transcription: true,
               translations: true
             }
-          },
-          translations: true
+          }
         }
       });
 
@@ -668,16 +704,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           id: messageId,
           isDeleted: false
         },
-        include: {
+        select: {
+          id: true,
+          content: true,
+          originalLanguage: true,
+          translations: true,
           conversation: {
-            include: {
+            select: {
               members: {
                 where: { userId: userId },
                 select: { userId: true }
               }
             }
-          },
-          translations: true
+          }
         }
       });
 

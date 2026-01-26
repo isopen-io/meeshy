@@ -529,7 +529,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           total: totalCount,
           limit: limitNum,
           offset: offsetNum,
-          hasMore: offsetNum + translations.length < totalCount
+          hasMore: offsetNum + paginatedTranslations.length < totalCount
         }
       });
 

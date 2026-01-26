@@ -214,7 +214,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           messagesByType: typeDistribution,
           messagesByPeriod,
           averageLength,
-          translatedMessages,
+          translatedMessages: messagesWithTranslations,
           translatedPercentage,
           topSenders: topSendersData,
           messagesWithAttachments,

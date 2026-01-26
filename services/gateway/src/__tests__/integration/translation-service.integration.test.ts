@@ -94,11 +94,7 @@ describe('MessageTranslationService Integration Tests', () => {
 
   afterAll(async () => {
     // Clean up all created test data
-    if (createdTranslationIds.length > 0) {
-      await prisma.messageTranslation.deleteMany({
-        where: { id: { in: createdTranslationIds } }
-      }).catch(() => {});
-    }
+    // Note: Translations are now embedded in messages as JSON, no separate cleanup needed
 
     if (createdMessageIds.length > 0) {
       await prisma.message.deleteMany({
@@ -237,19 +233,19 @@ describe('MessageTranslationService Integration Tests', () => {
       // Wait for mock translation to complete and be saved
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Check translation was saved
-      const translations = await prisma.messageTranslation.findMany({
-        where: { messageId: result.messageId }
+      // Check translation was saved (now in JSON field)
+      const message = await prisma.message.findUnique({
+        where: { id: result.messageId },
+        select: { translations: true }
       });
 
-      expect(translations.length).toBeGreaterThanOrEqual(1);
+      const translationsJson = message?.translations as unknown as Record<string, any>;
+      expect(translationsJson).toBeDefined();
+      expect(Object.keys(translationsJson || {}).length).toBeGreaterThanOrEqual(1);
 
-      // Track for cleanup
-      translations.forEach(t => createdTranslationIds.push(t.id));
-
-      const frTranslation = translations.find(t => t.targetLanguage === 'fr');
+      const frTranslation = translationsJson?.['fr'];
       expect(frTranslation).toBeDefined();
-      expect(frTranslation?.translatedContent).toContain('[FR]');
+      expect(frTranslation?.text).toContain('[FR]');
     });
 
     it('should handle retranslation by deleting old and creating new translation', async () => {
@@ -268,12 +264,13 @@ describe('MessageTranslationService Integration Tests', () => {
       // Wait for first translation
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Verify first translation exists
-      const firstTranslations = await prisma.messageTranslation.findMany({
-        where: { messageId: result.messageId, targetLanguage: 'es' }
+      // Verify first translation exists (in JSON)
+      const firstMessage = await prisma.message.findUnique({
+        where: { id: result.messageId },
+        select: { translations: true }
       });
-      expect(firstTranslations.length).toBe(1);
-      firstTranslations.forEach(t => createdTranslationIds.push(t.id));
+      const firstTranslations = firstMessage?.translations as unknown as Record<string, any>;
+      expect(firstTranslations?.['es']).toBeDefined();
 
       // Now trigger retranslation
       const retransData: MessageData = {
@@ -290,43 +287,37 @@ describe('MessageTranslationService Integration Tests', () => {
       // Wait for retranslation
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Should still have exactly one translation (old deleted, new created)
-      const afterRetrans = await prisma.messageTranslation.findMany({
-        where: { messageId: result.messageId, targetLanguage: 'es' }
+      // Should still have exactly one translation (old replaced with new in JSON)
+      const afterRetransMessage = await prisma.message.findUnique({
+        where: { id: result.messageId },
+        select: { translations: true }
       });
-      expect(afterRetrans.length).toBe(1);
-      afterRetrans.forEach(t => {
-        if (!createdTranslationIds.includes(t.id)) {
-          createdTranslationIds.push(t.id);
-        }
-      });
+      const afterRetrans = afterRetransMessage?.translations as unknown as Record<string, any>;
+      expect(afterRetrans?.['es']).toBeDefined();
     });
   });
 
   describe('getTranslation - Database Retrieval', () => {
     it('should retrieve translation from database', async () => {
-      // Create message and translation manually for retrieval test
+      // Create message with embedded translation for retrieval test
       const testMessage = await prisma.message.create({
         data: {
           conversationId: testConversation.id,
           senderId: testUser.id,
           content: 'Test retrieval message',
           originalLanguage: 'en',
-          messageType: 'text'
+          messageType: 'text',
+          translations: {
+            de: {
+              text: 'Test Abruf Nachricht',
+              translationModel: 'test-model',
+              confidenceScore: 0.98,
+              createdAt: new Date()
+            }
+          } as any
         }
       });
       createdMessageIds.push(testMessage.id);
-
-      const testTranslation = await prisma.messageTranslation.create({
-        data: {
-          messageId: testMessage.id,
-          targetLanguage: 'de',
-          translatedContent: 'Test Abruf Nachricht',
-          translationModel: 'test-model',
-          confidenceScore: 0.98
-        }
-      });
-      createdTranslationIds.push(testTranslation.id);
 
       // Retrieve using service
       const result = await translationService.getTranslation(testMessage.id, 'de');
@@ -349,32 +340,28 @@ describe('MessageTranslationService Integration Tests', () => {
           senderId: testUser.id,
           content: 'Cache test message',
           originalLanguage: 'en',
-          messageType: 'text'
+          messageType: 'text',
+          translations: {
+            it: {
+              text: 'Messaggio di test della cache',
+              translationModel: 'test',
+              confidenceScore: 0.96,
+              createdAt: new Date()
+            }
+          } as any
         }
       });
       createdMessageIds.push(testMessage.id);
-
-      const testTranslation = await prisma.messageTranslation.create({
-        data: {
-          messageId: testMessage.id,
-          targetLanguage: 'it',
-          translatedContent: 'Messaggio di test della cache',
-          translationModel: 'test',
-          confidenceScore: 0.96
-        }
-      });
-      createdTranslationIds.push(testTranslation.id);
 
       // First retrieval
       const result1 = await translationService.getTranslation(testMessage.id, 'it');
       expect(result1?.translatedText).toBe('Messaggio di test della cache');
 
-      // Delete from database to verify cache works
-      await prisma.messageTranslation.delete({
-        where: { id: testTranslation.id }
+      // Delete translation from message JSON to verify cache works
+      await prisma.message.update({
+        where: { id: testMessage.id },
+        data: { translations: null }
       });
-      // Remove from cleanup list since we deleted it
-      createdTranslationIds = createdTranslationIds.filter(id => id !== testTranslation.id);
 
       // Second retrieval should still work (from cache)
       const result2 = await translationService.getTranslation(testMessage.id, 'it');
@@ -437,17 +424,17 @@ describe('MessageTranslationService Integration Tests', () => {
         expect(data.result.translatedText).toContain(messageContent);
         expect(data.targetLanguage).toBe('pt');
 
-        // Verify translation was saved to database
-        const savedTranslation = await prisma.messageTranslation.findFirst({
-          where: {
-            messageId: data.result.messageId,
-            targetLanguage: 'pt'
-          }
+        // Verify translation was saved to database (in JSON field)
+        const message = await prisma.message.findUnique({
+          where: { id: data.result.messageId },
+          select: { translations: true }
         });
 
-        if (savedTranslation) {
-          createdTranslationIds.push(savedTranslation.id);
-          expect(savedTranslation.translatedContent).toContain('[PT]');
+        const translationsJson = message?.translations as unknown as Record<string, any>;
+        const ptTranslation = translationsJson?.['pt'];
+
+        if (ptTranslation) {
+          expect(ptTranslation.text).toContain('[PT]');
         }
 
         done();
@@ -504,12 +491,15 @@ describe('MessageTranslationService Integration Tests', () => {
       // Wait for translations
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Verify translations were saved
+      // Verify translations were saved (in JSON field)
       for (const result of results) {
-        const translations = await prisma.messageTranslation.findMany({
-          where: { messageId: result.messageId }
+        const message = await prisma.message.findUnique({
+          where: { id: result.messageId },
+          select: { translations: true }
         });
-        translations.forEach(t => createdTranslationIds.push(t.id));
+        const translationsJson = message?.translations as unknown as Record<string, any>;
+        // Should have at least one translation (ja)
+        expect(translationsJson?.['ja']).toBeDefined();
       }
     });
   });
@@ -528,11 +518,8 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
   });
 
   afterAll(async () => {
-    // Clean up
+    // Clean up (translations are now embedded in messages, no separate cleanup needed)
     if (createdMessageIds.length > 0) {
-      await prisma.messageTranslation.deleteMany({
-        where: { messageId: { in: createdMessageIds } }
-      }).catch(() => {});
       await prisma.message.deleteMany({
         where: { id: { in: createdMessageIds } }
       }).catch(() => {});
