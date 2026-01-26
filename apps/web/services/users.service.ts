@@ -150,11 +150,15 @@ export const usersService = {
   },
 
   /**
-   * Récupère le profil d'un utilisateur
+   * Récupère le profil d'un utilisateur par ID ou username
+   * Si l'input est un ID MongoDB (24 caractères hex), utilise /users/:id
+   * Sinon, considère que c'est un username et utilise /users/:username
    */
-  async getUserProfile(userId: string): Promise<ApiResponse<User>> {
+  async getUserProfile(userIdOrUsername: string): Promise<ApiResponse<User>> {
     try {
-      const response = await apiService.get<{ success: boolean; data: User }>(`/users/${userId}`);
+      // Utiliser toujours /users/:userIdOrUsername
+      // Le backend détermine automatiquement si c'est un ID ou username
+      const response = await apiService.get<{ success: boolean; data: User }>(`/users/${userIdOrUsername}`);
       if (!response.data?.success || !response.data?.data) {
         throw new Error('User not found');
       }
