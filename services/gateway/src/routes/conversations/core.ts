@@ -166,7 +166,6 @@ export function registerCoreRoutes(
       const perfStart = performance.now();
       const perfTimings: Record<string, number> = {};
 
-      // Note: validUserIds moved after conversations query to only load needed users
       let t0 = performance.now();
 
       // Build the where clause with optional filters
@@ -220,7 +219,7 @@ export function registerCoreRoutes(
           avatar: true,
           communityId: true,
           members: {
-            take: 10, // Fetch more to account for filtering orphans
+            take: 5, // Optimized: reduced from 10 to 5 for better performance
             where: {
               isActive: true
             },
@@ -264,29 +263,13 @@ export function registerCoreRoutes(
                 }
               },
               attachments: {
+                take: 1, // Optimized: only first attachment for preview
                 select: {
                   id: true,
-                  fileName: true,
-                  originalName: true,
                   mimeType: true,
-                  fileSize: true,
-                  fileUrl: true,
                   thumbnailUrl: true,
-                  width: true,
-                  height: true,
-                  duration: true,
-                  bitrate: true,
-                  sampleRate: true,
-                  codec: true,
-                  channels: true,
-                  fps: true,
-                  videoCodec: true,
-                  pageCount: true,
-                  lineCount: true,
-                  metadata: true, // Contient audioEffectsTimeline
-                  uploadedBy: true,
-                  isAnonymous: true,
-                  createdAt: true
+                  originalName: true,
+                  fileSize: true
                 }
               }
             }
@@ -307,49 +290,46 @@ export function registerCoreRoutes(
         }
       }
 
-      // Fetch user data only for members in these conversations (optimized)
+      // === OPTIMIZED: Parallelize independent queries ===
       t0 = performance.now();
-      const memberUsers = allMemberUserIds.size > 0
-        ? await prisma.user.findMany({
-            where: { id: { in: Array.from(allMemberUserIds) } },
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
-          })
-        : [];
-      perfTimings.memberUsersQuery = performance.now() - t0;
-      const userMap = new Map(memberUsers.map(u => [u.id, u]));
 
-      // Utiliser MessageReadStatusService pour calculer les unreadCounts
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
-      t0 = performance.now();
-      const unreadCountMap = await readStatusService.getUnreadCountsForConversations(userId, conversationIds);
-      perfTimings.unreadCounts = performance.now() - t0;
 
-      // Compter le nombre total de conversations (optionnel pour performance)
-      let totalCount = 0;
-      let hasMore = true;
+      const [memberUsers, unreadCountMap, totalCount] = await Promise.all([
+        // Fetch user data only for members in these conversations
+        allMemberUserIds.size > 0
+          ? prisma.user.findMany({
+              where: { id: { in: Array.from(allMemberUserIds) } },
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                isOnline: true,
+                lastActiveAt: true
+              }
+            })
+          : Promise.resolve([]),
 
-      if (includeCount || offset === 0) {
-        // OPTIMIZED: Use same whereClause for count to match filtered results
-        t0 = performance.now();
-        totalCount = await prisma.conversation.count({
-          where: whereClause
-        });
-        perfTimings.countQuery = performance.now() - t0;
-        hasMore = offset + conversations.length < totalCount;
-      } else {
-        // Si on ne compte pas, on estime hasMore en vérifiant si on a reçu le nombre limit
-        hasMore = conversations.length === limit;
-      }
+        // Unread counts
+        readStatusService.getUnreadCountsForConversations(userId, conversationIds),
+
+        // Count (if requested)
+        (includeCount || offset === 0)
+          ? prisma.conversation.count({ where: whereClause })
+          : Promise.resolve(0)
+      ]);
+
+      perfTimings.parallelQueries = performance.now() - t0;
+      const userMap = new Map(memberUsers.map(u => [u.id, u]));
+
+      // Calculate hasMore
+      const hasMore = (includeCount || offset === 0)
+        ? offset + conversations.length < totalCount
+        : conversations.length === limit;
 
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
@@ -387,17 +367,12 @@ export function registerCoreRoutes(
         };
       });
 
-      // === PERFORMANCE LOGGING ===
+      // === PERFORMANCE LOGGING (OPTIMIZED) ===
       const totalTime = performance.now() - perfStart;
       console.log('===============================================');
-      console.log('[CONVERSATIONS_PERF] Query performance breakdown');
-      console.log(`  - validUserIds: ${perfTimings.validUserIds?.toFixed(2)}ms`);
+      console.log('[CONVERSATIONS_PERF] Query performance breakdown (OPTIMIZED v2)');
       console.log(`  - conversationsQuery: ${perfTimings.conversationsQuery?.toFixed(2)}ms`);
-      console.log(`  - memberUsersQuery: ${perfTimings.memberUsersQuery?.toFixed(2)}ms`);
-      console.log(`  - unreadCounts: ${perfTimings.unreadCounts?.toFixed(2)}ms`);
-      if (perfTimings.countQuery !== undefined) {
-        console.log(`  - countQuery: ${perfTimings.countQuery?.toFixed(2)}ms`);
-      }
+      console.log(`  - parallelQueries (users+unread+count): ${perfTimings.parallelQueries?.toFixed(2)}ms`);
       console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
       console.log('===============================================');
 
