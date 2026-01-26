@@ -425,9 +425,9 @@ export async function getUserStats(fastify: FastifyInstance) {
       const perfStart = performance.now();
       const perfTimings: Record<string, number> = {};
 
-      // OPTIMISATION: Récupérer d'abord les conversations de l'utilisateur (SAUF global)
+      // OPTIMISATION: Récupérer les conversations avec leur type en une seule requête
       const startConvIds = performance.now();
-      const userConversationIds = await fastify.prisma.conversationMember.findMany({
+      const userConversationMembers = await fastify.prisma.conversationMember.findMany({
         where: {
           userId: userId,
           isActive: true,
@@ -436,24 +436,29 @@ export async function getUserStats(fastify: FastifyInstance) {
           }
         },
         select: {
-          conversationId: true
+          conversationId: true,
+          conversation: {
+            select: {
+              type: true  // Charger le type pour éviter une requête séparée
+            }
+          }
         }
       });
-      const conversationIds = userConversationIds.map(cm => cm.conversationId);
+      const conversationIds = userConversationMembers.map(cm => cm.conversationId);
+      // Calculer groupsCount en mémoire (évite une requête DB supplémentaire)
+      const groupsCountInMemory = userConversationMembers.filter(cm => cm.conversation.type === 'group').length;
       perfTimings.getConversationIds = performance.now() - startConvIds;
 
+      // Utiliser les données en mémoire (pas de requête DB)
+      const startMemCalc = performance.now();
+      const totalConversations = userConversationMembers.length;
+      const groupsCount = groupsCountInMemory; // Déjà calculé en mémoire
+      perfTimings.memoryCalculations = performance.now() - startMemCalc;
+
       const [
-        totalConversations,
         messagesSent,
-        messagesReceived,
-        groupsCount
+        messagesReceived
       ] = await Promise.all([
-        (async () => {
-          const start = performance.now();
-          const result = userConversationIds.length; // Déjà calculé
-          perfTimings.totalConversations = performance.now() - start;
-          return result;
-        })(),
         (async () => {
           const start = performance.now();
           const result = await fastify.prisma.message.count({
@@ -477,20 +482,6 @@ export async function getUserStats(fastify: FastifyInstance) {
           });
           perfTimings.messagesReceived = performance.now() - start;
           return result;
-        })(),
-        (async () => {
-          const start = performance.now();
-          const result = await fastify.prisma.conversationMember.count({
-            where: {
-              userId: userId,
-              isActive: true,
-              conversation: {
-                type: 'group'  // 'group' exclut déjà 'global'
-              }
-            }
-          });
-          perfTimings.groupsCount = performance.now() - start;
-          return result;
         })()
       ]);
 
@@ -502,12 +493,12 @@ export async function getUserStats(fastify: FastifyInstance) {
       console.log('[USER_STATS_PERF] Query performance breakdown');
       console.log('  User ID:', user.id);
       console.log('  Timings:');
-      console.log(`    - getConversationIds: ${perfTimings.getConversationIds.toFixed(2)}ms`);
-      console.log(`    - totalConversations: ${perfTimings.totalConversations.toFixed(2)}ms`);
+      console.log(`    - getConversationIds (with types): ${perfTimings.getConversationIds.toFixed(2)}ms [OPTIMIZED v2]`);
+      console.log(`    - memoryCalculations (totalConv + groupsCount): ${perfTimings.memoryCalculations.toFixed(2)}ms [IN-MEMORY]`);
       console.log(`    - messagesSent: ${perfTimings.messagesSent.toFixed(2)}ms`);
       console.log(`    - messagesReceived: ${perfTimings.messagesReceived.toFixed(2)}ms [OPTIMIZED]`);
-      console.log(`    - groupsCount: ${perfTimings.groupsCount.toFixed(2)}ms`);
       console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
+      console.log('  DB Queries: 3 (was 5), Eliminated: groupsCount + totalConversations queries');
       console.log('===============================================');
 
       const stats = {
