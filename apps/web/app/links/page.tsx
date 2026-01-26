@@ -285,8 +285,8 @@ export default function LinksPage() {
   // Filtrer les liens de partage
   const filteredLinks = useMemo(() => {
     return links.filter(link => {
-      const matchesSearch = link.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           link.conversation.title?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = (link.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                           (link.conversation.title?.toLowerCase() || '').includes(searchQuery.toLowerCase());
 
       let matchesStatus = true;
       if (statusFilter === 'active') {
@@ -305,8 +305,8 @@ export default function LinksPage() {
   // Filtrer les liens de tracking
   const filteredTrackingLinks = useMemo(() => {
     return trackingLinks.filter(link => {
-      const matchesSearch = link.originalUrl.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           link.shortUrl.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = (link.originalUrl?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                           (link.shortUrl?.toLowerCase() || '').includes(searchQuery.toLowerCase());
 
       let matchesStatus = true;
       if (statusFilter === 'active') {
