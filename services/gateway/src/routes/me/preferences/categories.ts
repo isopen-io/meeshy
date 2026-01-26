@@ -14,6 +14,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 
 interface CategoryBody {
   name: string;
@@ -124,6 +125,14 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     console.error('[Categories] Missing required service: prisma');
     return;
   }
+
+  // Auth middleware pour toutes les routes de catégories
+  const authMiddleware = createUnifiedAuthMiddleware(prisma, {
+    requireAuth: true,
+    allowAnonymous: false
+  });
+
+  fastify.addHook('preHandler', authMiddleware);
 
   /**
    * GET /me/preferences/categories
