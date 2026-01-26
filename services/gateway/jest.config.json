@@ -6,7 +6,8 @@
     "node_modules/(?!@meeshy/shared)"
   ],
   "moduleNameMapper": {
-    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1"
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   "testMatch": [
     "<rootDir>/src/**/__tests__/**/*.test.ts",

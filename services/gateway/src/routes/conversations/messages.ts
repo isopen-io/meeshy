@@ -369,16 +369,8 @@ export function registerMessagesRoutes(
       };
 
       // ===== RELATIONS OPTIONNELLES (selon paramètres include_*) =====
-      if (includeTranslations) {
-        messageSelect.translations = {
-          select: {
-            id: true,
-            targetLanguage: true,
-            translatedContent: true,
-            translationModel: true
-          }
-        };
-      }
+      // Note: translations est un champ Json dans Message, pas une relation
+      // Il est déjà inclus dans le select de base (ligne 360)
 
       if (includeReactions) {
         messageSelect.reactions = {
