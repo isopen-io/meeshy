@@ -421,48 +421,88 @@ export async function getUserStats(fastify: FastifyInstance) {
 
       const userId = user.id;
 
+      // Performance instrumentation
+      const perfStart = performance.now();
+      const perfTimings: Record<string, number> = {};
+
       const [
         totalConversations,
         messagesSent,
         messagesReceived,
         groupsCount
       ] = await Promise.all([
-        fastify.prisma.conversationMember.count({
-          where: {
-            userId: userId,
-            isActive: true
-          }
-        }),
-        fastify.prisma.message.count({
-          where: {
-            senderId: userId,
-            isDeleted: false
-          }
-        }),
-        fastify.prisma.message.count({
-          where: {
-            senderId: { not: userId },
-            isDeleted: false,
-            conversation: {
-              members: {
-                some: {
-                  userId: userId,
-                  isActive: true
+        (async () => {
+          const start = performance.now();
+          const result = await fastify.prisma.conversationMember.count({
+            where: {
+              userId: userId,
+              isActive: true
+            }
+          });
+          perfTimings.totalConversations = performance.now() - start;
+          return result;
+        })(),
+        (async () => {
+          const start = performance.now();
+          const result = await fastify.prisma.message.count({
+            where: {
+              senderId: userId,
+              isDeleted: false
+            }
+          });
+          perfTimings.messagesSent = performance.now() - start;
+          return result;
+        })(),
+        (async () => {
+          const start = performance.now();
+          const result = await fastify.prisma.message.count({
+            where: {
+              senderId: { not: userId },
+              isDeleted: false,
+              conversation: {
+                members: {
+                  some: {
+                    userId: userId,
+                    isActive: true
+                  }
                 }
               }
             }
-          }
-        }),
-        fastify.prisma.conversationMember.count({
-          where: {
-            userId: userId,
-            isActive: true,
-            conversation: {
-              type: 'group'
+          });
+          perfTimings.messagesReceived = performance.now() - start;
+          return result;
+        })(),
+        (async () => {
+          const start = performance.now();
+          const result = await fastify.prisma.conversationMember.count({
+            where: {
+              userId: userId,
+              isActive: true,
+              conversation: {
+                type: 'group'
+              }
             }
-          }
-        })
+          });
+          perfTimings.groupsCount = performance.now() - start;
+          return result;
+        })()
       ]);
+
+      const perfEnd = performance.now();
+      const totalTime = perfEnd - perfStart;
+
+      // Log performance metrics
+      fastify.log.info({
+        msg: '[USER_STATS_PERF] Query performance breakdown',
+        userId: user.id,
+        timings: {
+          totalConversations: `${perfTimings.totalConversations.toFixed(2)}ms`,
+          messagesSent: `${perfTimings.messagesSent.toFixed(2)}ms`,
+          messagesReceived: `${perfTimings.messagesReceived.toFixed(2)}ms`,
+          groupsCount: `${perfTimings.groupsCount.toFixed(2)}ms`,
+          total: `${totalTime.toFixed(2)}ms`
+        }
+      });
 
       const stats = {
         messagesSent,
