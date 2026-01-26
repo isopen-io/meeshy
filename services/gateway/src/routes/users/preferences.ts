@@ -425,6 +425,20 @@ export async function getUserStats(fastify: FastifyInstance) {
       const perfStart = performance.now();
       const perfTimings: Record<string, number> = {};
 
+      // OPTIMISATION: Récupérer d'abord les conversations de l'utilisateur
+      const startConvIds = performance.now();
+      const userConversationIds = await fastify.prisma.conversationMember.findMany({
+        where: {
+          userId: userId,
+          isActive: true
+        },
+        select: {
+          conversationId: true
+        }
+      });
+      const conversationIds = userConversationIds.map(cm => cm.conversationId);
+      perfTimings.getConversationIds = performance.now() - startConvIds;
+
       const [
         totalConversations,
         messagesSent,
@@ -433,12 +447,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       ] = await Promise.all([
         (async () => {
           const start = performance.now();
-          const result = await fastify.prisma.conversationMember.count({
-            where: {
-              userId: userId,
-              isActive: true
-            }
-          });
+          const result = userConversationIds.length; // Déjà calculé
           perfTimings.totalConversations = performance.now() - start;
           return result;
         })(),
@@ -455,18 +464,12 @@ export async function getUserStats(fastify: FastifyInstance) {
         })(),
         (async () => {
           const start = performance.now();
+          // OPTIMISATION: Compter seulement dans les conversations de l'utilisateur
           const result = await fastify.prisma.message.count({
             where: {
+              conversationId: { in: conversationIds },
               senderId: { not: userId },
-              isDeleted: false,
-              conversation: {
-                members: {
-                  some: {
-                    userId: userId,
-                    isActive: true
-                  }
-                }
-              }
+              isDeleted: false
             }
           });
           perfTimings.messagesReceived = performance.now() - start;
@@ -496,9 +499,10 @@ export async function getUserStats(fastify: FastifyInstance) {
       console.log('[USER_STATS_PERF] Query performance breakdown');
       console.log('  User ID:', user.id);
       console.log('  Timings:');
+      console.log(`    - getConversationIds: ${perfTimings.getConversationIds.toFixed(2)}ms`);
       console.log(`    - totalConversations: ${perfTimings.totalConversations.toFixed(2)}ms`);
       console.log(`    - messagesSent: ${perfTimings.messagesSent.toFixed(2)}ms`);
-      console.log(`    - messagesReceived: ${perfTimings.messagesReceived.toFixed(2)}ms`);
+      console.log(`    - messagesReceived: ${perfTimings.messagesReceived.toFixed(2)}ms [OPTIMIZED]`);
       console.log(`    - groupsCount: ${perfTimings.groupsCount.toFixed(2)}ms`);
       console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
       console.log('===============================================');
