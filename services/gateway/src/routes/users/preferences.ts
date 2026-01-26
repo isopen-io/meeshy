@@ -425,12 +425,15 @@ export async function getUserStats(fastify: FastifyInstance) {
       const perfStart = performance.now();
       const perfTimings: Record<string, number> = {};
 
-      // OPTIMISATION: Récupérer d'abord les conversations de l'utilisateur
+      // OPTIMISATION: Récupérer d'abord les conversations de l'utilisateur (SAUF global)
       const startConvIds = performance.now();
       const userConversationIds = await fastify.prisma.conversationMember.findMany({
         where: {
           userId: userId,
-          isActive: true
+          isActive: true,
+          conversation: {
+            type: { not: 'global' }  // Exclure les conversations globales
+          }
         },
         select: {
           conversationId: true
@@ -482,7 +485,7 @@ export async function getUserStats(fastify: FastifyInstance) {
               userId: userId,
               isActive: true,
               conversation: {
-                type: 'group'
+                type: 'group'  // 'group' exclut déjà 'global'
               }
             }
           });
