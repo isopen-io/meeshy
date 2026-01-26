@@ -1,3 +1,5 @@
+import { transformTranslationsToArray } from '../../../utils/translation-transformer';
+
 /**
  * Formate un message avec sender unifié pour l'affichage
  */
@@ -25,7 +27,10 @@ export function formatMessageWithUnifiedSender(message: any) {
       avatar: undefined,
       isMeeshyer: false
     },
-    translations: message.translations || []
+    translations: transformTranslationsToArray(
+      message.id,
+      message.translations as Record<string, any>
+    )
   };
 }
 
@@ -65,7 +70,10 @@ export function formatMessageWithSeparateSenders(message: any) {
     attachments: message.attachments || [],
     replyTo: message.replyTo ? formatReplyToMessage(message.replyTo) : null,
     reactions: message.reactions || [],
-    translations: message.translations || []
+    translations: transformTranslationsToArray(
+      message.id,
+      message.translations as Record<string, any>
+    )
   };
 }
 

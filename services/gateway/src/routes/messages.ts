@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
+import { transformTranslationsToArray } from '../utils/translation-transformer';
 
 interface MessageParams {
   messageId: string;
@@ -712,7 +713,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           messageId: message.id,
           originalContent: message.content,
           originalLanguage: message.originalLanguage,
-          translations: message.translations
+          translations: transformTranslationsToArray(
+            message.id,
+            message.translations as Record<string, any>
+          )
         }
       });
 

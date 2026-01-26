@@ -21,6 +21,7 @@ import type {
   MessagesQuery
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { transformTranslationsToArray } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
@@ -687,7 +688,11 @@ export function registerMessagesRoutes(
 
         // Relations optionnelles (selon paramètres include_*)
         if (includeTranslations && message.translations) {
-          mappedMessage.translations = message.translations;
+          // Transformer JSON vers array pour rétrocompatibilité frontend
+          mappedMessage.translations = transformTranslationsToArray(
+            message.id,
+            message.translations as Record<string, any>
+          );
         }
         if (includeReactions && message.reactions) {
           mappedMessage.reactions = message.reactions;
