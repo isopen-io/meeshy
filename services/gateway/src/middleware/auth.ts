@@ -89,38 +89,84 @@ export class AuthMiddleware {
 
   /**
    * Crée le contexte d'authentification unifié
+   * Supporte JWT + sessionToken pour "Se souvenir de l'appareil"
    */
   async createAuthContext(
     authorizationHeader?: string,
     sessionToken?: string
   ): Promise<UnifiedAuthContext> {
-    
+
     // 1. Extraire le JWT token
-    const jwtToken = authorizationHeader?.startsWith('Bearer ') 
-      ? authorizationHeader.slice(7) 
+    const jwtToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.slice(7)
       : null;
 
-    // 2. JWT Token = Utilisateur enregistré
+    // 2. JWT Token = Utilisateur enregistré (peut aussi avoir un sessionToken pour session trusted)
     if (jwtToken) {
-      return await this.createRegisteredUserContext(jwtToken);
+      return await this.createRegisteredUserContext(jwtToken, sessionToken);
     }
-    
-    // 3. Session Token = Utilisateur anonyme
+
+    // 3. Session Token seul = Utilisateur anonyme
     if (sessionToken) {
       return await this.createAnonymousUserContext(sessionToken);
     }
-    
+
     // 4. Aucun token = Non authentifié
     return this.createUnauthenticatedContext();
   }
 
   /**
    * Contexte pour utilisateur enregistré (JWT)
+   * Supporte aussi les sessions "trusted" (Se souvenir de l'appareil)
    */
-  private async createRegisteredUserContext(jwtToken: string): Promise<UnifiedAuthContext> {
+  private async createRegisteredUserContext(jwtToken: string, sessionToken?: string): Promise<UnifiedAuthContext> {
     try {
       // Vérifier le JWT
-      const jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as any;
+      let jwtPayload: any;
+      let jwtExpired = false;
+
+      try {
+        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as any;
+      } catch (error) {
+        // Si le JWT est expiré MAIS qu'on a un sessionToken, on peut vérifier la session trusted
+        if (error instanceof jwt.TokenExpiredError && sessionToken) {
+          jwtPayload = jwt.decode(jwtToken) as any;
+          jwtExpired = true;
+        } else {
+          throw error;
+        }
+      }
+
+      // Si JWT expiré, vérifier si on a une session trusted valide
+      if (jwtExpired && sessionToken) {
+        const hashedSessionToken = require('crypto').createHash('sha256').update(sessionToken).digest('hex');
+        const trustedSession = await this.prisma.userSession.findFirst({
+          where: {
+            sessionToken: hashedSessionToken,
+            userId: jwtPayload.userId,
+            isValid: true,
+            isTrusted: true,
+            expiresAt: {
+              gt: new Date()
+            }
+          }
+        });
+
+        if (!trustedSession) {
+          // Session trusted non trouvée ou expirée, rejeter
+          throw new Error('JWT expired and no valid trusted session found');
+        }
+
+        // Mettre à jour lastActivityAt de la session trusted (en arrière-plan)
+        this.prisma.userSession.update({
+          where: { id: trustedSession.id },
+          data: { lastActivityAt: new Date() }
+        }).catch(err => {
+          console.warn('[UnifiedAuth] Échec mise à jour lastActivityAt session trusted:', err);
+        });
+
+        console.log('[UnifiedAuth] ✅ JWT expiré mais session trusted valide - utilisateur:', jwtPayload.userId, '- session prolongée');
+      }
       
       // Récupérer l'utilisateur complet
       const user = await this.prisma.user.findUnique({
@@ -155,6 +201,22 @@ export class AuthMiddleware {
         this.statusService.updateUserLastSeen(user.id);
       }
 
+      // Si on a un sessionToken (session trusted), mettre à jour son lastActivityAt
+      if (sessionToken && !jwtExpired) {
+        const hashedSessionToken = require('crypto').createHash('sha256').update(sessionToken).digest('hex');
+        this.prisma.userSession.update({
+          where: {
+            sessionToken: hashedSessionToken
+          },
+          data: {
+            lastActivityAt: new Date()
+          }
+        }).catch(err => {
+          // Non-bloquant, on log juste l'erreur
+          console.warn('[UnifiedAuth] Échec mise à jour lastActivityAt session trusted:', err);
+        });
+      }
+
       // Déterminer la langue principale (priorité: custom > regional > system)
       const userLanguage = user.customDestinationLanguage
         || user.regionalLanguage
@@ -165,15 +227,16 @@ export class AuthMiddleware {
         type: 'jwt',
         isAuthenticated: true,
         isAnonymous: false,
-        
+
         registeredUser: user as RegisteredUser,
         jwtToken,
         jwtPayload,
-        
+        sessionToken: sessionToken || undefined, // Inclure le sessionToken si présent (trusted session)
+
         userLanguage,
         displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username,
         userId: user.id,
-        
+
         canSendMessages: true,
         hasFullAccess: true
       };
