@@ -532,7 +532,23 @@ model Message {
   attachmentStatuses  AttachmentStatusEntry[] @relation("MessageAttachmentStatuses")
   attachmentReactions AttachmentReaction[]    @relation("MessageAttachmentReactions")
 
-  translations    MessageTranslation[]
+  /// Traductions du message - map: langue -> données
+  /// Structure: {
+  ///   "en": {
+  ///     text: string,
+  ///     translationModel: "basic" | "medium" | "premium",
+  ///     confidenceScore?: number,
+  ///     isEncrypted?: boolean,
+  ///     encryptionKeyId?: string,
+  ///     encryptionIv?: string,
+  ///     encryptionAuthTag?: string,
+  ///     createdAt: Date,
+  ///     updatedAt?: Date
+  ///   },
+  ///   "es": { ... }
+  /// }
+  translations Json?
+
   attachments     MessageAttachment[]
   reactions       Reaction[]            @relation("MessageReactions")
   mentions        Mention[]             @relation("MessageMentions")
@@ -554,33 +570,6 @@ model Message {
 }
 
 /// Traduction d'un message
-model MessageTranslation {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  messageId         String   @db.ObjectId
-  targetLanguage    String
-  translatedContent String
-  translationModel  String // "basic", "medium", "premium"
-  confidenceScore   Float?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // Encryption fields for secure conversations (server/hybrid modes)
-  // Translations inherit encryption from parent message
-  isEncrypted       Boolean @default(false)
-  encryptionKeyId   String? // References server_encryption_keys.id
-  encryptionIv      String? // Base64 encoded IV (12 bytes for AES-GCM)
-  encryptionAuthTag String? // Base64 encoded auth tag (16 bytes)
-
-  // Source language is derived from message.originalLanguage
-  message Message @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  // Contrainte d'unicité: une seule traduction par message et langue cible
-  @@unique([messageId, targetLanguage], name: "messageId_targetLanguage")
-  @@index([messageId])
-  @@index([targetLanguage])
-  @@index([translationModel])
-}
-
 /// Attachement de fichier pour un message
 model MessageAttachment {
   id           String  @id @default(auto()) @map("_id") @db.ObjectId
