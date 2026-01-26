@@ -8,6 +8,7 @@ import { Server as HTTPServer } from 'http';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
+import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -2197,25 +2198,21 @@ export class MeeshySocketIOManager {
       
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
-        // Récupérer les traductions existantes du message
+        // Récupérer les traductions existantes du message (format JSON)
         (async () => {
           if (!message.id) return [];
           try {
             const messageWithTranslations = await this.prisma.message.findUnique({
               where: { id: message.id },
-              include: {
-                translations: {
-                  select: {
-                    id: true,
-                    targetLanguage: true,
-                    translatedContent: true,
-                    translationModel: true,
-                    confidenceScore: true
-                  }
-                }
+              select: {
+                translations: true
               }
             });
-            return (messageWithTranslations as any)?.translations || [];
+            // Transformer JSON vers array pour frontend
+            return transformTranslationsToArray(
+              message.id,
+              messageWithTranslations?.translations as Record<string, any>
+            );
           } catch (error) {
             logger.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
             return [];
