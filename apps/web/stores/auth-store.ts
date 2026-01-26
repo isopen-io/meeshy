@@ -18,13 +18,14 @@ interface AuthState {
   isAuthChecking: boolean;
   authToken: string | null;
   refreshToken: string | null;
+  sessionToken: string | null; // Token de session pour "Se souvenir de l'appareil"
   sessionExpiry: Date | null;
 }
 
 interface AuthActions {
   setUser: (user: User | null) => void;
   setAuthChecking: (checking: boolean) => void;
-  setTokens: (authToken: string, refreshToken?: string, expiresIn?: number) => void;
+  setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => void;
   clearAuth: () => void;
   logout: () => void;
   initializeAuth: () => Promise<void>;
@@ -39,6 +40,7 @@ const initialState: AuthState = {
   isAuthChecking: true,
   authToken: null,
   refreshToken: null,
+  sessionToken: null,
   sessionExpiry: null,
 };
 
@@ -60,14 +62,15 @@ export const useAuthStore = create<AuthStore>()(
           set({ isAuthChecking: checking });
         },
 
-        setTokens: (authToken: string, refreshToken?: string, expiresIn?: number) => {
-          const sessionExpiry = expiresIn 
+        setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => {
+          const sessionExpiry = expiresIn
             ? new Date(Date.now() + expiresIn * 1000)
             : null;
 
           set({
             authToken,
             refreshToken: refreshToken || get().refreshToken,
+            sessionToken: sessionToken || get().sessionToken,
             sessionExpiry,
           });
         },
@@ -79,6 +82,7 @@ export const useAuthStore = create<AuthStore>()(
             isAuthenticated: false,
             authToken: null,
             refreshToken: null,
+            sessionToken: null,
             sessionExpiry: null,
             isAuthChecking: false,
           });
@@ -192,6 +196,7 @@ export const useAuthStore = create<AuthStore>()(
           user: state.user,
           authToken: state.authToken,
           refreshToken: state.refreshToken,
+          sessionToken: state.sessionToken,
           sessionExpiry: state.sessionExpiry,
         }),
       }

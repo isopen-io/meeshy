@@ -108,6 +108,13 @@ class AuthManager {
   }
 
   /**
+   * Récupère le session token (pour "Se souvenir de l'appareil")
+   */
+  getSessionToken(): string | null {
+    return useAuthStore.getState().sessionToken;
+  }
+
+  /**
    * Récupère l'utilisateur connecté actuel
    * SOURCE UNIQUE: Store Zustand
    */
@@ -145,15 +152,18 @@ class AuthManager {
    * @param user - Utilisateur à connecter
    * @param authToken - Token d'authentification
    * @param refreshToken - Token de rafraîchissement (optionnel)
+   * @param sessionToken - Token de session pour "Se souvenir de l'appareil" (optionnel)
    * @param expiresIn - Durée de validité en secondes (optionnel)
    */
   setCredentials(
     user: User,
     authToken: string,
     refreshToken?: string,
+    sessionToken?: string,
     expiresIn?: number
   ): void {
     if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] setCredentials called with sessionToken:', !!sessionToken, 'expiresIn:', expiresIn);
     }
 
     // 1. CRITIQUE: Nettoyer TOUTES les sessions précédentes
@@ -161,12 +171,13 @@ class AuthManager {
 
     // 2. Définir dans le store Zustand (source unique)
     useAuthStore.getState().setUser(user);
-    useAuthStore.getState().setTokens(authToken, refreshToken, expiresIn);
+    useAuthStore.getState().setTokens(authToken, refreshToken, sessionToken, expiresIn);
 
     // 3. Créer le cookie de session pour le middleware (Conditional Loading)
     this.setSessionCookie(user);
 
     if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] Credentials set successfully');
     }
   }
 
@@ -208,10 +219,11 @@ class AuthManager {
   /**
    * Met à jour uniquement les tokens (refresh)
    */
-  updateTokens(authToken: string, refreshToken?: string, expiresIn?: number): void {
-    useAuthStore.getState().setTokens(authToken, refreshToken, expiresIn);
+  updateTokens(authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number): void {
+    useAuthStore.getState().setTokens(authToken, refreshToken, sessionToken, expiresIn);
 
     if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH_MANAGER] Tokens updated');
     }
   }
 

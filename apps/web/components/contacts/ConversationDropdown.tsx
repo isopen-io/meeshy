@@ -231,3 +231,6 @@ export function ConversationDropdown({
     </DropdownMenu>
   );
 }
+
+// Export par défaut pour le lazy loading
+export default ConversationDropdown;

@@ -299,16 +299,16 @@ export function useAuth() {
   }, [authState.isAuthenticated, authState.isChecking, pathname, isAuthChecking]);
 
   // Se connecter
-  const login = useCallback((user: User, token: string) => {
-    devLog('[USE_AUTH] Connexion utilisateur:', user.username);
+  const login = useCallback((user: User, token: string, sessionToken?: string, expiresIn?: number) => {
+    devLog('[USE_AUTH] Connexion utilisateur:', user.username, '| sessionToken:', !!sessionToken, '| expiresIn:', expiresIn);
 
     // NOUVEAU: Utiliser AuthManager (source unique)
     // Nettoie automatiquement les sessions précédentes
-    authManager.setCredentials(user, token);
+    authManager.setCredentials(user, token, undefined, sessionToken, expiresIn);
 
     // CRITIQUE: Mettre à jour le store Zustand persisté
     setUserRef.current(user);
-    setTokensRef.current(token);
+    setTokensRef.current(token, undefined, sessionToken, expiresIn);
 
     // Mettre à jour l'état immédiatement de manière synchrone
     const newAuthState = {

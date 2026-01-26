@@ -82,28 +82,48 @@ export function getTokenType(token: string): 'auth' | 'anonymous' | null {
 
 /**
  * Crée les headers d'authentification appropriés pour un token
+ * IMPORTANT: Envoie à la fois Authorization ET X-Session-Token pour les utilisateurs authentifiés
+ * avec "Se souvenir de l'appareil"
  */
 export function createAuthHeaders(token?: string): HeadersInit {
   if (!token) {
     const tokenInfo = getAuthToken();
     if (!tokenInfo) return {};
-    
-    return {
+
+    const headers: HeadersInit = {
       [tokenInfo.header.name]: tokenInfo.header.value
     };
+
+    // Pour les utilisateurs authentifiés, ajouter aussi le session token si présent
+    if (tokenInfo.type === 'auth') {
+      const sessionToken = authManager.getSessionToken();
+      if (sessionToken) {
+        headers['X-Session-Token'] = sessionToken;
+      }
+    }
+
+    return headers;
   }
 
   const tokenType = getTokenType(token);
-  
+
   if (tokenType === 'anonymous') {
     return {
       'X-Session-Token': token
     };
   }
 
-  return {
+  // Pour les tokens d'authentification, ajouter aussi le session token si présent
+  const headers: HeadersInit = {
     'Authorization': `Bearer ${token}`
   };
+
+  const sessionToken = authManager.getSessionToken();
+  if (sessionToken) {
+    headers['X-Session-Token'] = sessionToken;
+  }
+
+  return headers;
 }
 
 /**

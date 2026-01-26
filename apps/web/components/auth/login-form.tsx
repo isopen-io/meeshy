@@ -128,12 +128,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       });
 
       // Gérer les différents formats de réponse
-      let userData, token;
+      let userData, token, sessionToken, expiresIn;
 
       if (result.success && result.data?.user && result.data?.token) {
-        // Format standardisé: { success: true, data: { user: {...}, token: "..." } }
+        // Format standardisé: { success: true, data: { user: {...}, token: "...", sessionToken: "...", expiresIn: 86400 } }
         userData = result.data.user;
         token = result.data.token;
+        sessionToken = result.data.sessionToken;
+        expiresIn = result.data.expiresIn;
       } else if (result.user && result.access_token) {
         // Format alternatif: { user: {...}, access_token: "..." }
         userData = result.user;
@@ -154,10 +156,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       if (userData && token) {
         console.log('[LOGIN_FORM] ✅ Connexion réussie pour utilisateur:', userData.username);
+        console.log('[LOGIN_FORM] Session token présent:', !!sessionToken, '| Expires in:', expiresIn, 'secondes');
         toast.success(t('login.success.loginSuccess'));
 
-        // Mettre à jour le store d'authentification
-        login(userData, token);
+        // Mettre à jour le store d'authentification avec le sessionToken
+        login(userData, token, sessionToken, expiresIn);
 
         // Appeler le callback de succès si fourni
         if (onSuccess) {
