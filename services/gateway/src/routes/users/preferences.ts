@@ -491,18 +491,17 @@ export async function getUserStats(fastify: FastifyInstance) {
       const perfEnd = performance.now();
       const totalTime = perfEnd - perfStart;
 
-      // Log performance metrics
-      fastify.log.info({
-        msg: '[USER_STATS_PERF] Query performance breakdown',
-        userId: user.id,
-        timings: {
-          totalConversations: `${perfTimings.totalConversations.toFixed(2)}ms`,
-          messagesSent: `${perfTimings.messagesSent.toFixed(2)}ms`,
-          messagesReceived: `${perfTimings.messagesReceived.toFixed(2)}ms`,
-          groupsCount: `${perfTimings.groupsCount.toFixed(2)}ms`,
-          total: `${totalTime.toFixed(2)}ms`
-        }
-      });
+      // Log performance metrics avec console.log pour garantir la visibilité
+      console.log('===============================================');
+      console.log('[USER_STATS_PERF] Query performance breakdown');
+      console.log('  User ID:', user.id);
+      console.log('  Timings:');
+      console.log(`    - totalConversations: ${perfTimings.totalConversations.toFixed(2)}ms`);
+      console.log(`    - messagesSent: ${perfTimings.messagesSent.toFixed(2)}ms`);
+      console.log(`    - messagesReceived: ${perfTimings.messagesReceived.toFixed(2)}ms`);
+      console.log(`    - groupsCount: ${perfTimings.groupsCount.toFixed(2)}ms`);
+      console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
+      console.log('===============================================');
 
       const stats = {
         messagesSent,
