@@ -428,18 +428,34 @@ class MeeshyServer {
     await this.server.register(cors, {
       origin: config.isDev ? true : (origin, cb) => {
         // Add your production domains here
-        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || 
-                               process.env.ALLOWED_ORIGINS?.split(',') || 
-                               ['http://localhost:3100', 'http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80', 'https://meeshy.me', 'https://www.meeshy.me', 'https://gate.meeshy.me', 'https://ml.meeshy.me'];
-        
+        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') ||
+                               process.env.ALLOWED_ORIGINS?.split(',') ||
+                               [
+                                 // Local development
+                                 'http://localhost:3100',
+                                 'http://localhost',
+                                 'http://localhost:80',
+                                 'http://127.0.0.1',
+                                 'http://127.0.0.1:80',
+                                 // Production
+                                 'https://meeshy.me',
+                                 'https://www.meeshy.me',
+                                 'https://gate.meeshy.me',
+                                 'https://ml.meeshy.me',
+                                 // Staging
+                                 'https://staging.meeshy.me:8443',
+                                 'https://gate.staging.meeshy.me:8443',
+                                 'https://ml.staging.meeshy.me:8443'
+                               ];
+
         logger.info(`CORS check: origin="${origin}", allowed="${allowedOrigins.join(',')}"`);
-        
+
         // Allow requests without origin (e.g., mobile apps, Postman, curl)
         // Allow requests from allowed origins
         if (!origin || allowedOrigins.includes(origin)) {
           return cb(null, true);
         }
-        
+
         // Log the rejection for debugging
         logger.warn(`CORS rejected origin: "${origin}"`);
         return cb(new Error('Not allowed by CORS'), false);
