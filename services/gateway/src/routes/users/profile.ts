@@ -649,9 +649,9 @@ export async function getUserById(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest<{ Params: UserIdParams }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
-      const { userId: id } = request.params;
+      const { id } = request.params;
 
       const isMongoId = /^[a-f\d]{24}$/i.test(id);
 
