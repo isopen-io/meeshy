@@ -162,10 +162,16 @@ export function registerCoreRoutes(
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
 
+      // === PERFORMANCE INSTRUMENTATION ===
+      const perfStart = performance.now();
+      const perfTimings: Record<string, number> = {};
+
       // First, get all valid user IDs to filter orphaned members
+      let t0 = performance.now();
       const validUserIds = await prisma.user.findMany({
         select: { id: true }
       }).then(users => new Set(users.map(u => u.id)));
+      perfTimings.validUserIds = performance.now() - t0;
 
       // Build the where clause with optional filters
       const whereClause: any = {
@@ -201,6 +207,7 @@ export function registerCoreRoutes(
         delete whereClause.members;
       }
 
+      t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
         where: whereClause,
         skip: offset,
@@ -311,6 +318,7 @@ export function registerCoreRoutes(
         },
         orderBy: { lastMessageAt: 'desc' }
       });
+      perfTimings.conversationsQuery = performance.now() - t0;
 
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
@@ -326,6 +334,7 @@ export function registerCoreRoutes(
       }
 
       // Fetch user data for all valid member userIds
+      t0 = performance.now();
       const memberUsers = allMemberUserIds.size > 0
         ? await prisma.user.findMany({
             where: { id: { in: Array.from(allMemberUserIds) } },
@@ -341,12 +350,15 @@ export function registerCoreRoutes(
             }
           })
         : [];
+      perfTimings.memberUsersQuery = performance.now() - t0;
       const userMap = new Map(memberUsers.map(u => [u.id, u]));
 
       // Utiliser MessageReadStatusService pour calculer les unreadCounts
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
+      t0 = performance.now();
       const unreadCountMap = await readStatusService.getUnreadCountsForConversations(userId, conversationIds);
+      perfTimings.unreadCounts = performance.now() - t0;
 
       // Compter le nombre total de conversations (optionnel pour performance)
       let totalCount = 0;
@@ -354,9 +366,11 @@ export function registerCoreRoutes(
 
       if (includeCount || offset === 0) {
         // OPTIMIZED: Use same whereClause for count to match filtered results
+        t0 = performance.now();
         totalCount = await prisma.conversation.count({
           where: whereClause
         });
+        perfTimings.countQuery = performance.now() - t0;
         hasMore = offset + conversations.length < totalCount;
       } else {
         // Si on ne compte pas, on estime hasMore en vérifiant si on a reçu le nombre limit
@@ -398,6 +412,20 @@ export function registerCoreRoutes(
           unreadCount
         };
       });
+
+      // === PERFORMANCE LOGGING ===
+      const totalTime = performance.now() - perfStart;
+      console.log('===============================================');
+      console.log('[CONVERSATIONS_PERF] Query performance breakdown');
+      console.log(`  - validUserIds: ${perfTimings.validUserIds?.toFixed(2)}ms`);
+      console.log(`  - conversationsQuery: ${perfTimings.conversationsQuery?.toFixed(2)}ms`);
+      console.log(`  - memberUsersQuery: ${perfTimings.memberUsersQuery?.toFixed(2)}ms`);
+      console.log(`  - unreadCounts: ${perfTimings.unreadCounts?.toFixed(2)}ms`);
+      if (perfTimings.countQuery !== undefined) {
+        console.log(`  - countQuery: ${perfTimings.countQuery?.toFixed(2)}ms`);
+      }
+      console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
+      console.log('===============================================');
 
       reply.send({
         success: true,
