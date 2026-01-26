@@ -141,15 +141,18 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           )
         : 0;
 
-      // Messages traduits
-      const translatedMessages = await fastify.prisma.messageTranslation.count({
+      // Messages traduits (ont au moins une traduction dans le JSON)
+      const messagesWithTranslations = await fastify.prisma.message.count({
         where: {
-          createdAt: { gte: startDate }
+          createdAt: { gte: startDate },
+          translations: {
+            not: null
+          }
         }
       });
 
       const translatedPercentage = totalMessages > 0
-        ? Math.round((translatedMessages / totalMessages) * 100)
+        ? Math.round((messagesWithTranslations / totalMessages) * 100)
         : 0;
 
       // Top utilisateurs les plus actifs (envoi de messages)

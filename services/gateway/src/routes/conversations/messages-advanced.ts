@@ -422,11 +422,10 @@ export function registerMessagesAdvancedRoutes(
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService: MessageTranslationService = (fastify as any).translationService;
 
-        // Invalider les traductions existantes en base de données
-        const deletedCount = await prisma.messageTranslation.deleteMany({
-          where: {
-            messageId: messageId
-          }
+        // Invalider les traductions existantes (vider le JSON translations)
+        await prisma.message.update({
+          where: { id: messageId },
+          data: { translations: null }
         });
 
         // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
@@ -611,11 +610,10 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
-      // Supprimer les traductions du message
-      const deletedTranslations = await prisma.messageTranslation.deleteMany({
-        where: {
-          messageId: messageId
-        }
+      // Supprimer les traductions du message (vider le JSON)
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { translations: null }
       });
 
       // Soft delete du message

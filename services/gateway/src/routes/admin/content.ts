@@ -179,7 +179,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             },
             _count: {
               select: {
-                translations: true,
                 replies: true
               }
             }
@@ -425,44 +424,93 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         where.createdAt = { gte: startDate };
       }
 
-      const [translations, totalCount] = await Promise.all([
-        fastify.prisma.messageTranslation.findMany({
-          where,
-          include: {
-            message: {
-              select: {
-                id: true,
-                content: true,
-                originalLanguage: true,
-                sender: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true
-                  }
-                },
-                conversation: {
-                  select: {
-                    id: true,
-                    identifier: true,
-                    title: true
-                  }
-                }
-              }
+      // Récupérer messages avec translations (JSON)
+      const messages = await fastify.prisma.message.findMany({
+        where: {
+          ...where,
+          translations: {
+            not: null
+          }
+        },
+        select: {
+          id: true,
+          content: true,
+          originalLanguage: true,
+          translations: true,
+          createdAt: true,
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true
             }
           },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.messageTranslation.count({ where })
-      ]);
+          conversation: {
+            select: {
+              id: true,
+              identifier: true,
+              title: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // "Dé-normaliser" le JSON translations vers array plat
+      interface FlatTranslation {
+        id: string;
+        messageId: string;
+        sourceLanguage: string;
+        targetLanguage: string;
+        translatedContent: string;
+        translationModel: string;
+        confidenceScore: number | null;
+        createdAt: Date;
+        message: {
+          id: string;
+          content: string;
+          originalLanguage: string;
+          sender: any;
+          conversation: any;
+        };
+      }
+
+      const allTranslations: FlatTranslation[] = [];
+
+      messages.forEach(msg => {
+        const translations = msg.translations as unknown as Record<string, any>;
+        if (translations) {
+          Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {
+            allTranslations.push({
+              id: `${msg.id}-${targetLang}`,
+              messageId: msg.id,
+              sourceLanguage: msg.originalLanguage || 'unknown',
+              targetLanguage: targetLang,
+              translatedContent: transData.text,
+              translationModel: transData.translationModel,
+              confidenceScore: transData.confidenceScore || null,
+              createdAt: transData.createdAt || msg.createdAt,
+              message: {
+                id: msg.id,
+                content: msg.content,
+                originalLanguage: msg.originalLanguage,
+                sender: msg.sender,
+                conversation: msg.conversation
+              }
+            });
+          });
+        }
+      });
+
+      // Appliquer pagination sur le array plat
+      const totalCount = allTranslations.length;
+      const paginatedTranslations = allTranslations.slice(offsetNum, offsetNum + limitNum);
 
       return reply.send({
         success: true,
-        data: translations.map(translation => ({
+        data: paginatedTranslations.map(translation => ({
           id: translation.id,
-          sourceLanguage: translation.message?.originalLanguage || null,
+          sourceLanguage: translation.sourceLanguage,
           targetLanguage: translation.targetLanguage,
           translatedContent: translation.translatedContent,
           translationModel: translation.translationModel,

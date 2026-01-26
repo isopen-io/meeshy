@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
-import { transformTranslationsToArray } from '../utils/translation-transformer';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 
 interface MessageParams {
   messageId: string;
@@ -132,13 +132,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               translations: true
             }
           },
-          translations: {
-            select: {
-              id: true,
-              targetLanguage: true,
-              translatedContent: true
-            }
-          }
+          translations: true
         }
       });
 
@@ -278,11 +272,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Déclencher la retraduction automatique du message modifié
       try {
-        // Invalider les traductions existantes en base de données
-        const deletedCount = await prisma.messageTranslation.deleteMany({
-          where: {
-            messageId: messageId
-          }
+        // Invalider les traductions existantes (vider le JSON translations)
+        await prisma.message.update({
+          where: { id: messageId },
+          data: { translations: null }
         });
 
         // Créer un objet message pour la retraduction
@@ -417,14 +410,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Supprimer les traductions du message
-      const deletedTranslations = await prisma.messageTranslation.deleteMany({
-        where: {
-          messageId: messageId
-        }
+      // Supprimer les traductions du message (vider le JSON)
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { translations: null }
       });
-      if (deletedTranslations.count > 0) {
-      }
 
       // Marquer le message comme supprimé (soft delete)
       const deletedMessage = await prisma.message.update({
@@ -687,16 +677,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          translations: {
-            select: {
-              id: true,
-              targetLanguage: true,
-              translatedContent: true,
-              translationModel: true,
-              confidenceScore: true,
-              createdAt: true
-            }
-          }
+          translations: true
         }
       });
 

@@ -107,36 +107,40 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       );
 
       // Paires de langues les plus traduites (source -> target)
-      // Since sourceLanguage is derived from message.originalLanguage, we need to aggregate manually
-      const translations = await fastify.prisma.messageTranslation.findMany({
+      // Récupérer messages avec translations (JSON)
+      const messagesWithTranslations = await fastify.prisma.message.findMany({
         where: {
-          createdAt: { gte: startDate }
+          createdAt: { gte: startDate },
+          translations: {
+            not: null
+          }
         },
         select: {
-          targetLanguage: true,
-          confidenceScore: true,
-          message: {
-            select: {
-              originalLanguage: true
-            }
-          }
+          originalLanguage: true,
+          translations: true
         }
       });
 
-      // Aggregate language pairs manually
+      // Aggregate language pairs manually depuis JSON
       const pairCounts: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
 
-      translations.forEach(t => {
-        const sourceLanguage = t.message?.originalLanguage || 'unknown';
-        const key = `${sourceLanguage}|${t.targetLanguage}`;
+      messagesWithTranslations.forEach(msg => {
+        const sourceLanguage = msg.originalLanguage || 'unknown';
+        const translations = msg.translations as unknown as Record<string, any>;
 
-        if (!pairCounts[key]) {
-          pairCounts[key] = { count: 0, totalScore: 0, scoreCount: 0 };
-        }
-        pairCounts[key].count++;
-        if (t.confidenceScore != null) {
-          pairCounts[key].totalScore += t.confidenceScore;
-          pairCounts[key].scoreCount++;
+        if (translations) {
+          Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {
+            const key = `${sourceLanguage}|${targetLang}`;
+
+            if (!pairCounts[key]) {
+              pairCounts[key] = { count: 0, totalScore: 0, scoreCount: 0 };
+            }
+            pairCounts[key].count++;
+            if (transData.confidenceScore != null) {
+              pairCounts[key].totalScore += transData.confidenceScore;
+              pairCounts[key].scoreCount++;
+            }
+          });
         }
       });
 
@@ -336,33 +340,39 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const query = request.query as any;
       const limit = parseInt(query.limit) || 10;
 
-      // Fetch translations with their message's original language
-      const translations = await fastify.prisma.messageTranslation.findMany({
-        select: {
-          targetLanguage: true,
-          confidenceScore: true,
-          message: {
-            select: {
-              originalLanguage: true
-            }
+      // Fetch messages avec translations (JSON)
+      const messagesWithTranslations = await fastify.prisma.message.findMany({
+        where: {
+          translations: {
+            not: null
           }
+        },
+        select: {
+          originalLanguage: true,
+          translations: true
         }
       });
 
-      // Aggregate by language pair manually
+      // Aggregate by language pair manually depuis JSON
       const pairStats: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
 
-      translations.forEach(t => {
-        const sourceLanguage = t.message?.originalLanguage || 'unknown';
-        const key = `${sourceLanguage}|${t.targetLanguage}`;
+      messagesWithTranslations.forEach(msg => {
+        const sourceLanguage = msg.originalLanguage || 'unknown';
+        const translations = msg.translations as unknown as Record<string, any>;
 
-        if (!pairStats[key]) {
-          pairStats[key] = { count: 0, totalScore: 0, scoreCount: 0 };
-        }
-        pairStats[key].count++;
-        if (t.confidenceScore != null) {
-          pairStats[key].totalScore += t.confidenceScore;
-          pairStats[key].scoreCount++;
+        if (translations) {
+          Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {
+            const key = `${sourceLanguage}|${targetLang}`;
+
+            if (!pairStats[key]) {
+              pairStats[key] = { count: 0, totalScore: 0, scoreCount: 0 };
+            }
+            pairStats[key].count++;
+            if (transData.confidenceScore != null) {
+              pairStats[key].totalScore += transData.confidenceScore;
+              pairStats[key].scoreCount++;
+            }
+          });
         }
       });
 
