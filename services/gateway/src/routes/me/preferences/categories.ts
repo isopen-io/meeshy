@@ -178,13 +178,13 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const { limit = 50, offset = 0 } = request.query;
 
         const [categories, total] = await Promise.all([
-          prisma.conversationCategory.findMany({
+          prisma.userConversationCategory.findMany({
             where: { userId },
             orderBy: { order: 'asc' },
             take: limit,
             skip: offset
           }),
-          prisma.conversationCategory.count({
+          prisma.userConversationCategory.count({
             where: { userId }
           })
         ]);
@@ -255,7 +255,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
 
         const { categoryId } = request.params;
 
-        const category = await prisma.conversationCategory.findFirst({
+        const category = await prisma.userConversationCategory.findFirst({
           where: {
             id: categoryId,
             userId
@@ -336,7 +336,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         // Si order n'est pas spécifié, prendre le max + 1
         let finalOrder = order;
         if (finalOrder === undefined || finalOrder === null) {
-          const maxOrder = await prisma.conversationCategory.findFirst({
+          const maxOrder = await prisma.userConversationCategory.findFirst({
             where: { userId },
             orderBy: { order: 'desc' },
             select: { order: true }
@@ -344,7 +344,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           finalOrder = maxOrder ? maxOrder.order + 1 : 0;
         }
 
-        const category = await prisma.conversationCategory.create({
+        const category = await prisma.userConversationCategory.create({
           data: {
             userId,
             name: name.trim(),
@@ -418,7 +418,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const { categoryId } = request.params;
 
         // Vérifier que la catégorie existe et appartient à l'utilisateur
-        const existing = await prisma.conversationCategory.findFirst({
+        const existing = await prisma.userConversationCategory.findFirst({
           where: {
             id: categoryId,
             userId
@@ -440,7 +440,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         if (request.body.order !== undefined) updateData.order = request.body.order;
         if (request.body.isExpanded !== undefined) updateData.isExpanded = request.body.isExpanded;
 
-        const updated = await prisma.conversationCategory.update({
+        const updated = await prisma.userConversationCategory.update({
           where: { id: categoryId },
           data: updateData
         });
@@ -501,7 +501,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const { categoryId } = request.params;
 
         // Vérifier que la catégorie existe et appartient à l'utilisateur
-        const existing = await prisma.conversationCategory.findFirst({
+        const existing = await prisma.userConversationCategory.findFirst({
           where: {
             id: categoryId,
             userId
@@ -529,7 +529,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
             }
           }),
           // Supprimer la catégorie
-          prisma.conversationCategory.delete({
+          prisma.userConversationCategory.delete({
             where: { id: categoryId }
           })
         ]);
@@ -585,7 +585,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         // Batch update avec vérification de propriété
         await Promise.all(
           updates.map(update =>
-            prisma.conversationCategory.updateMany({
+            prisma.userConversationCategory.updateMany({
               where: {
                 id: update.categoryId,
                 userId // Vérification de propriété
