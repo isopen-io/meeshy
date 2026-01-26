@@ -27,8 +27,7 @@ services:
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.email=${CERTBOT_EMAIL:-admin@meeshy.me}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       # Redirection HTTPS désactivée temporairement (rate limit Let's Encrypt)
@@ -51,7 +50,6 @@ services:
       - meeshy-staging-network
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       - "traefik.env=staging"
       - "traefik.http.routers.traefik-staging.rule=Host(`traefik.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.traefik-staging.entrypoints=websecure"
@@ -133,7 +131,6 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       - "traefik.http.routers.nosqlclient-staging.rule=Host(`mongo.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.nosqlclient-staging.entrypoints=websecure"
       - "traefik.http.routers.nosqlclient-staging.tls.certresolver=letsencrypt"
@@ -187,7 +184,6 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       - "traefik.http.routers.p3x-redis-staging.rule=Host(`redis.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.p3x-redis-staging.entrypoints=websecure"
       - "traefik.http.routers.p3x-redis-staging.tls.certresolver=letsencrypt"
@@ -235,7 +231,6 @@ services:
       start_period: 60s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       # Router HTTP temporaire
       - "traefik.http.routers.translator-staging-http.rule=Host(`ml.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.translator-staging-http.entrypoints=web"
@@ -265,13 +260,13 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=staging
       - DOMAIN=staging.${DOMAIN:-meeshy.me}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - FRONTEND_URL=${FRONTEND_URL}
+      - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
+      - ALLOWED_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
+      - FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
-      - PUBLIC_URL=${PUBLIC_URL}
+      - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
@@ -315,7 +310,6 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       # Router HTTP temporaire
       - "traefik.http.routers.gateway-staging-http.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.gateway-staging-http.entrypoints=web"
@@ -347,7 +341,6 @@ services:
       start_period: 10s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       - "traefik.http.routers.static-staging.rule=Host(`static.staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.static-staging.entrypoints=websecure"
       - "traefik.http.routers.static-staging.tls.certresolver=letsencrypt"
@@ -361,12 +354,12 @@ services:
     container_name: meeshy-frontend-staging
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=https://gate.staging.${DOMAIN:-meeshy.me}:8443
-      - NEXT_PUBLIC_WS_URL=wss://gate.staging.${DOMAIN:-meeshy.me}:8443
-      - NEXT_PUBLIC_TRANSLATION_URL=https://ml.staging.${DOMAIN:-meeshy.me}:8443/translate
-      - NEXT_PUBLIC_BACKEND_URL=https://gate.staging.${DOMAIN:-meeshy.me}:8443
-      - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}:8443
-      - NEXT_PUBLIC_STATIC_URL=https://static.staging.${DOMAIN:-meeshy.me}:8443
+      - NEXT_PUBLIC_API_URL=https://gate.staging.${DOMAIN:-meeshy.me}
+      - NEXT_PUBLIC_WS_URL=wss://gate.staging.${DOMAIN:-meeshy.me}
+      - NEXT_PUBLIC_TRANSLATION_URL=https://ml.staging.${DOMAIN:-meeshy.me}/translate
+      - NEXT_PUBLIC_BACKEND_URL=https://gate.staging.${DOMAIN:-meeshy.me}
+      - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
+      - NEXT_PUBLIC_STATIC_URL=https://static.staging.${DOMAIN:-meeshy.me}
       - NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION:-true}
       - NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY:-true}
       - NEXT_PUBLIC_DEBUG_LOGS=${NEXT_PUBLIC_DEBUG_LOGS:-false}
@@ -394,7 +387,6 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.env=staging"
       # Router HTTP temporaire (en attendant les certificats SSL)
       - "traefik.http.routers.frontend-staging-http.rule=Host(`staging.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.frontend-staging-http.entrypoints=web"

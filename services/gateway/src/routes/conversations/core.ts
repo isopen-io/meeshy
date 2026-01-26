@@ -166,12 +166,8 @@ export function registerCoreRoutes(
       const perfStart = performance.now();
       const perfTimings: Record<string, number> = {};
 
-      // First, get all valid user IDs to filter orphaned members
+      // Note: validUserIds moved after conversations query to only load needed users
       let t0 = performance.now();
-      const validUserIds = await prisma.user.findMany({
-        select: { id: true }
-      }).then(users => new Set(users.map(u => u.id)));
-      perfTimings.validUserIds = performance.now() - t0;
 
       // Build the where clause with optional filters
       const whereClause: any = {
@@ -233,13 +229,6 @@ export function registerCoreRoutes(
               userId: true,
               role: true,
               nickname: true,
-              canSendMessage: true,
-              canSendFiles: true,
-              canSendImages: true,
-              canSendVideos: true,
-              canSendAudios: true,
-              canSendLocations: true,
-              canSendLinks: true,
               joinedAt: true,
               isActive: true
             }
@@ -253,19 +242,6 @@ export function registerCoreRoutes(
               isMuted: true,
               isArchived: true,
               isDeletedForUser: true
-            }
-          },
-          anonymousParticipants: {
-            take: 3, // Réduit à 3 participants anonymes
-            where: {
-              isActive: true
-            },
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              isOnline: true
             }
           },
           messages: {
@@ -323,17 +299,15 @@ export function registerCoreRoutes(
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
 
-      // Collect all unique member userIds and fetch user data separately (avoids orphan crash)
+      // Collect all unique member userIds (optimized: only from returned conversations)
       const allMemberUserIds = new Set<string>();
       for (const conv of conversations) {
         for (const member of conv.members) {
-          if (validUserIds.has(member.userId)) {
-            allMemberUserIds.add(member.userId);
-          }
+          allMemberUserIds.add(member.userId);
         }
       }
 
-      // Fetch user data for all valid member userIds
+      // Fetch user data only for members in these conversations (optimized)
       t0 = performance.now();
       const memberUsers = allMemberUserIds.size > 0
         ? await prisma.user.findMany({
@@ -381,9 +355,9 @@ export function registerCoreRoutes(
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
-        // Filter out orphaned members and merge user data
+        // Filter out orphaned members and merge user data (optimized: use userMap)
         const membersWithUser = conversation.members
-          .filter((m: any) => validUserIds.has(m.userId))
+          .filter((m: any) => userMap.has(m.userId))
           .slice(0, 5) // Limit to 5 members as originally intended
           .map((m: any) => ({
             ...m,
