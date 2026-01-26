@@ -22,6 +22,7 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
@@ -1211,6 +1212,9 @@ export function registerMessagesRoutes(
         originalLanguage,
         () => []
       );
+
+      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
+      invalidateConversationCacheAsync(conversationId, prisma);
 
       reply.status(201).send({
         success: true,

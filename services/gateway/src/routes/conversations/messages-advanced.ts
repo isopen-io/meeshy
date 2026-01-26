@@ -19,6 +19,7 @@ import type {
   EditMessageBody
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
@@ -632,6 +633,9 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
+      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
+      invalidateConversationCacheAsync(conversationId, prisma);
+
       // Diffuser la suppression via Socket.IO
       try {
         logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
@@ -790,6 +794,9 @@ export function registerMessagesAdvancedRoutes(
 
       // Note: Les traductions existantes restent inchangées
       // Le service de traduction sera notifié si nécessaire via WebSocket
+
+      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
+      invalidateConversationCacheAsync(message.conversationId, prisma);
 
       reply.send({
         success: true,

@@ -26,6 +26,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
+import { conversationListCache } from '../../services/ConversationListCache';
 
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant (peut être un ObjectID ou un identifier)
@@ -161,6 +162,29 @@ export function registerCoreRoutes(
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
+
+      // === CACHE: Vérifier si on peut utiliser le cache ===
+      // Cache uniquement pour les requêtes par défaut (offset=0, pas de filtres)
+      const canUseCache = offset === 0 && !typeFilter && !withUserId;
+      const cacheKey = userId;
+
+      if (canUseCache) {
+        const cached = await conversationListCache.get(cacheKey);
+        if (cached) {
+          console.log(`[CACHE-HIT] 🚀 Conversations servies depuis cache pour user ${userId} (${Date.now() - cached.cachedAt}ms old)`);
+          return reply.send({
+            success: true,
+            data: cached.conversations,
+            pagination: {
+              limit,
+              offset,
+              total: cached.total,
+              hasMore: cached.hasMore
+            }
+          });
+        }
+        console.log(`[CACHE-MISS] 💾 Cache miss pour user ${userId}, query DB...`);
+      }
 
       // === PERFORMANCE INSTRUMENTATION ===
       const perfStart = performance.now();
@@ -375,6 +399,16 @@ export function registerCoreRoutes(
       console.log(`  - parallelQueries (users+unread+count): ${perfTimings.parallelQueries?.toFixed(2)}ms`);
       console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
       console.log('===============================================');
+
+      // === CACHE: Sauvegarder en cache si applicable (fire-and-forget) ===
+      if (canUseCache) {
+        conversationListCache.set(cacheKey, {
+          conversations: conversationsWithUnreadCount,
+          hasMore,
+          total: totalCount,
+          cachedAt: Date.now()
+        }).catch(err => console.error('[CACHE-SAVE] Erreur sauvegarde cache:', err));
+      }
 
       reply.send({
         success: true,
