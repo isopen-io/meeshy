@@ -709,21 +709,30 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           content: true,
           originalLanguage: true,
           translations: true,
-          conversation: {
-            select: {
-              members: {
-                where: { userId: userId },
-                select: { userId: true }
-              }
-            }
-          }
+          conversationId: true
         }
       });
 
-      if (!message || !message.conversation.members.length) {
+      if (!message) {
         return reply.status(404).send({
           success: false,
-          error: 'Message non trouvé ou accès non autorisé'
+          error: 'Message non trouvé'
+        });
+      }
+
+      // Vérifier que l'utilisateur est membre de la conversation
+      const membership = await prisma.conversationMember.findFirst({
+        where: {
+          conversationId: message.conversationId,
+          userId: userId,
+          isActive: true
+        }
+      });
+
+      if (!membership) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
         });
       }
 
