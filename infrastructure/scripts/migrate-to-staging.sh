@@ -73,10 +73,10 @@ NOTIF_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh mees
   --quiet --eval 'db.Notification.countDocuments()'")
 
 USER_CONV_CAT_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh meeshy \
-  --quiet --eval 'db.user_conversation_categories.countDocuments()'")
+  --quiet --eval 'db.UserConversationCategory.countDocuments()'")
 
 USER_CONV_PREF_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh meeshy \
-  --quiet --eval 'db.user_conversation_preferences.countDocuments()'")
+  --quiet --eval 'db.UserConversationPreferences.countDocuments()'")
 
 echo "   Users: $USER_COUNT"
 echo "   Messages: $MESSAGE_COUNT"
