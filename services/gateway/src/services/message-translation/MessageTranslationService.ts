@@ -461,7 +461,7 @@ export class MessageTranslationService extends EventEmitter {
         });
 
         if (message?.translations) {
-          const translations = message.translations as Record<string, MessageTranslationJSON>;
+          const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
 
           // Supprimer les langues cibles du JSON
           filteredTargetLanguages.forEach(lang => {
@@ -471,7 +471,7 @@ export class MessageTranslationService extends EventEmitter {
           // Sauvegarder
           await this.prisma.message.update({
             where: { id: messageId },
-            data: { translations }
+            data: { translations: translations as any }
           });
         }
       }
@@ -2419,7 +2419,7 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       // 2. Parser et mettre à jour les translations
-      const translations = (message?.translations as Record<string, MessageTranslationJSON>) || {};
+      const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
 
       // Préserver createdAt existant si présent (pour updatedAt correct)
       const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
@@ -2438,7 +2438,7 @@ export class MessageTranslationService extends EventEmitter {
       // 3. Sauvegarder dans MongoDB
       await this.prisma.message.update({
         where: { id: result.messageId },
-        data: { translations }
+        data: { translations: translations as any }
       });
 
       const queryTime = Date.now() - startTime;
@@ -2491,7 +2491,7 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       // 2. Mettre à jour translations
-      const translations = (message?.translations as Record<string, MessageTranslationJSON>) || {};
+      const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
       const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
 
       translations[result.targetLanguage] = createTranslationJSON({
@@ -2508,7 +2508,7 @@ export class MessageTranslationService extends EventEmitter {
       // 3. Sauvegarder
       await this.prisma.message.update({
         where: { id: result.messageId },
-        data: { translations }
+        data: { translations: translations as any }
       });
 
       // Retourner ID synthétique pour compatibilité
@@ -2544,7 +2544,7 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       if (message?.translations) {
-        const translations = message.translations as Record<string, MessageTranslationJSON>;
+        const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
         const translation = translations[targetLanguage];
 
         if (translation) {
