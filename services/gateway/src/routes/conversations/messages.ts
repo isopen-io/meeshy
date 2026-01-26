@@ -311,6 +311,9 @@ export function registerMessagesRoutes(
         // ===== MENTIONS =====
         validatedMentions: true,
 
+        // ===== TRADUCTIONS (champ Json) =====
+        translations: true,
+
         // ===== RELATIONS OBLIGATOIRES =====
         sender: {
           select: {
