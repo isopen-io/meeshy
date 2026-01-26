@@ -11,6 +11,25 @@ import {
   APPLICATION_PREFERENCE_DEFAULTS
 } from '@meeshy/shared/types/preferences';
 
+// Mock auth middleware
+jest.mock('../../middleware/auth', () => ({
+  createUnifiedAuthMiddleware: jest.fn(() => async (request: any, reply: any) => {
+    request.auth = {
+      isAuthenticated: true,
+      registeredUser: true,
+      userId: 'test-user-123',
+      isAnonymous: false
+    };
+  })
+}));
+
+// Mock ConsentValidationService
+jest.mock('../../services/ConsentValidationService', () => ({
+  ConsentValidationService: jest.fn().mockImplementation(() => ({
+    validatePreferences: jest.fn().mockResolvedValue([])
+  }))
+}));
+
 describe('E2E: Preferences Encryption & Security', () => {
   let app: FastifyInstance;
   const userId = 'test-user-123';
@@ -28,26 +47,11 @@ describe('E2E: Preferences Encryption & Security', () => {
     $transaction: jest.fn()
   };
 
-  // Mock ConsentValidationService
-  jest.mock('../../services/ConsentValidationService', () => ({
-    ConsentValidationService: jest.fn().mockImplementation(() => ({
-      validatePreferences: jest.fn().mockResolvedValue([])
-    }))
-  }));
-
   beforeAll(async () => {
     app = Fastify({ logger: false });
 
     // Attach mock prisma
     (app as any).prisma = mockPrisma;
-
-    // Mock authentication
-    app.addHook('preHandler', async (request: any, reply) => {
-      request.auth = {
-        isAuthenticated: true,
-        userId: userId
-      };
-    });
 
     // Register routes
     await app.register(userPreferencesRoutes, { prefix: '/me/preferences' });
@@ -136,11 +140,11 @@ describe('E2E: Preferences Encryption & Security', () => {
   });
 
   describe('Audio Encryption Features', () => {
-    it('should handle voice profile encryption settings', async () => {
+    it('should handle voice profile quality settings', async () => {
       const preferences = {
         ...AUDIO_PREFERENCE_DEFAULTS,
         voiceProfileEnabled: true,
-        voiceProfileStorageType: 'encrypted' as const
+        voiceCloneQuality: 'quality' as const
       };
 
       mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
@@ -159,13 +163,13 @@ describe('E2E: Preferences Encryption & Security', () => {
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
       expect(body.data.voiceProfileEnabled).toBe(true);
-      expect(body.data.voiceProfileStorageType).toBe('encrypted');
+      expect(body.data.voiceCloneQuality).toBe('quality');
     });
 
-    it('should validate voice profile storage types', async () => {
+    it('should validate voice profile quality enum', async () => {
       const invalidPreferences = {
         ...AUDIO_PREFERENCE_DEFAULTS,
-        voiceProfileStorageType: 'invalid' as any
+        voiceCloneQuality: 'invalid' as any
       };
 
       const response = await app.inject({
