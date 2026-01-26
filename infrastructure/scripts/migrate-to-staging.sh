@@ -72,9 +72,17 @@ MESSAGE_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh me
 NOTIF_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh meeshy \
   --quiet --eval 'db.Notification.countDocuments()'")
 
+USER_CONV_CAT_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh meeshy \
+  --quiet --eval 'db.user_conversation_categories.countDocuments()'")
+
+USER_CONV_PREF_COUNT=$(ssh $REMOTE_HOST "docker exec meeshy-database-staging mongosh meeshy \
+  --quiet --eval 'db.user_conversation_preferences.countDocuments()'")
+
 echo "   Users: $USER_COUNT"
 echo "   Messages: $MESSAGE_COUNT"
 echo "   Notifications: $NOTIF_COUNT (seront droppées)"
+echo "   User Conversation Categories: $USER_CONV_CAT_COUNT"
+echo "   User Conversation Preferences: $USER_CONV_PREF_COUNT"
 echo ""
 
 # =============================================================================
@@ -189,6 +197,8 @@ echo "📊 Résumé:"
 echo "   - Backup: $BACKUP_DIR/backup-pre-staging-$TIMESTAMP"
 echo "   - Users migrés: $NEW_USER_COUNT"
 echo "   - Messages migrés: $NEW_MESSAGE_COUNT"
+echo "   - Catégories de conversations: $USER_CONV_CAT_COUNT"
+echo "   - Préférences de conversations: $USER_CONV_PREF_COUNT"
 echo ""
 echo "🌐 Tester staging:"
 echo "   - Frontend: https://staging.meeshy.me"

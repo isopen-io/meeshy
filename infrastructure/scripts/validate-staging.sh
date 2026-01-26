@@ -127,12 +127,24 @@ CONVERSATION_COUNT=$(ssh $REMOTE_HOST "cd $STAGING_DIR && docker compose exec -T
   const prisma = new PrismaClient(); \
   prisma.conversation.count().then(c => console.log(c)).finally(() => prisma.\\\$disconnect())\" 2>/dev/null" || echo "0")
 
+USER_CONV_CAT_COUNT=$(ssh $REMOTE_HOST "cd $STAGING_DIR && docker compose exec -T gateway \
+  node -e \"const { PrismaClient } = require('@prisma/client'); \
+  const prisma = new PrismaClient(); \
+  prisma.userConversationCategory.count().then(c => console.log(c)).finally(() => prisma.\\\$disconnect())\" 2>/dev/null" || echo "0")
+
+USER_CONV_PREF_COUNT=$(ssh $REMOTE_HOST "cd $STAGING_DIR && docker compose exec -T gateway \
+  node -e \"const { PrismaClient } = require('@prisma/client'); \
+  const prisma = new PrismaClient(); \
+  prisma.userConversationPreferences.count().then(c => console.log(c)).finally(() => prisma.\\\$disconnect())\" 2>/dev/null" || echo "0")
+
 echo ""
 echo "   📊 Documents dans Prisma:"
 echo "      - Users: $USER_COUNT"
 echo "      - Messages: $MESSAGE_COUNT"
 echo "      - Communities: $COMMUNITY_COUNT"
 echo "      - Conversations: $CONVERSATION_COUNT"
+echo "      - User Conversation Categories: $USER_CONV_CAT_COUNT"
+echo "      - User Conversation Preferences: $USER_CONV_PREF_COUNT"
 echo ""
 
 # Valider les counts
@@ -158,6 +170,18 @@ if [ "$CONVERSATION_COUNT" -gt 0 ]; then
   test_pass "Conversations > 0"
 else
   test_warn "Aucune conversation trouvée (peut être normal)"
+fi
+
+if [ "$USER_CONV_CAT_COUNT" -gt 0 ]; then
+  test_pass "User Conversation Categories > 0"
+else
+  test_warn "Aucune catégorie de conversation trouvée (peut être normal)"
+fi
+
+if [ "$USER_CONV_PREF_COUNT" -gt 0 ]; then
+  test_pass "User Conversation Preferences > 0"
+else
+  test_warn "Aucune préférence de conversation trouvée (peut être normal)"
 fi
 
 echo ""
