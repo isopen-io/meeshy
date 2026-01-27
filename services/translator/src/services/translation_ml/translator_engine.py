@@ -213,9 +213,11 @@ class TranslatorEngine:
                     return None, False
 
                 # Créer le pipeline UNE SEULE FOIS pour ce thread
+                # Note: Pour NLLB, HuggingFace exige le format "translation_XX_to_YY"
+                # On utilise une paire par défaut (fra→eng) mais on override avec src_lang/tgt_lang à l'appel
                 device = self.model_loader.device
                 new_pipeline = create_pipeline(
-                    "translation",
+                    "translation_fra_Latn_to_eng_Latn",  # Paire par défaut (sera overridée)
                     model=model,
                     tokenizer=tokenizer,
                     device=0 if device == 'cuda' and torch.cuda.is_available() else -1,
