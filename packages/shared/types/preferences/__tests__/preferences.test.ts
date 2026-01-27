@@ -129,7 +129,8 @@ describe('MessagePreferenceSchema', () => {
       defaultFontSize: 'large' as const,
       defaultTextAlign: 'left' as const,
       autoTranslateIncoming: false,
-      autoTranslateLanguages: ['fr', 'es']
+      autoTranslateLanguages: ['fr', 'es'],
+      maxCharacterLimit: 5000
     };
 
     const result = MessagePreferenceSchema.parse(valid);
