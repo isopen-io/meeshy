@@ -171,6 +171,7 @@ export class ZmqRequestSender {
       audioDurationMs: request.audioDurationMs,
       mobileTranscription: request.mobileTranscription,
       targetLanguages: request.targetLanguages,
+      userLanguage: request.userLanguage,  // Langue de l'utilisateur pour la transcription
       generateVoiceClone: request.generateVoiceClone,
       modelType: request.modelType,
       // Champs voice profile (métadonnées seulement, embedding dans frame binaire)
