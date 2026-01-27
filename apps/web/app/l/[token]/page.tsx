@@ -1,7 +1,7 @@
 /**
  * Page de redirection pour les liens de tracking Meeshy
  * Route: /l/[token]
- * 
+ *
  * Cette page:
  * 1. Récupère le token du lien de tracking
  * 2. Enregistre le clic avec les informations du visiteur (IP, user-agent, etc.)
@@ -10,6 +10,7 @@
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { buildApiUrl } from '@/lib/config';
 
 interface TrackingLinkPageProps {
   params: Promise<{ token: string }>;
@@ -73,13 +74,12 @@ function detectDevice(userAgent: string): string {
  */
 async function recordClickAndGetUrl(token: string, clickData: any): Promise<string | null> {
   try {
-    // Utiliser API_URL (serveur) au lieu de NEXT_PUBLIC_API_URL (client)
-    // Car ce code s'exécute côté serveur (Server Component)
-    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const url = `${apiUrl}/api/tracking-links/${token}/click`;
+    // CORRECTION CRITIQUE: buildApiUrl ajoute automatiquement /api/v1
+    // Pas besoin de mettre /api devant, juste le chemin de la route
+    const url = buildApiUrl(`/tracking-links/${token}/click`);
 
     console.log('[TRACKING_LINK] Enregistrement du clic pour token:', token);
-    console.log('[TRACKING_LINK] URL API:', url);
+    console.log('[TRACKING_LINK] URL API (via buildApiUrl):', url);
     console.log('[TRACKING_LINK] Click data:', clickData);
 
     const response = await fetch(url, {

@@ -67,10 +67,10 @@ export function ExpandableTrackingLinkCard({
           </div>
 
           <div className="flex-1 min-w-0">
-            {/* Header: Short URL + Badge + Menu */}
+            {/* Header: Token (Code) + Badge + Menu */}
             <div className="flex items-start justify-between gap-2 mb-1">
               <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white break-words flex-1">
-                {link.shortUrl}
+                {link.token}
               </h3>
 
               <div className="flex flex-row items-center gap-2 flex-shrink-0">
@@ -125,6 +125,11 @@ export function ExpandableTrackingLinkCard({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+            </div>
+
+            {/* Short URL - Lien copié */}
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 font-mono">
+              {link.shortUrl}
             </div>
 
             {/* Original URL link */}
