@@ -7,7 +7,8 @@ import { buildPaginationMeta } from '../../utils/pagination';
 import {
   updateUserProfileSchema,
   updateAvatarSchema,
-  updatePasswordSchema
+  updatePasswordSchema,
+  updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
 import {
   userSchema,
@@ -487,6 +488,197 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update password error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+}
+
+/**
+ * Change username with history tracking
+ */
+export async function updateUsername(fastify: FastifyInstance) {
+  fastify.patch('/users/me/username', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Change the authenticated user username. Requires password confirmation. Username changes are limited to once every 30 days and history is tracked (max 10 entries).',
+      tags: ['users'],
+      summary: 'Change username',
+      body: {
+        type: 'object',
+        required: ['newUsername', 'currentPassword'],
+        properties: {
+          newUsername: { type: 'string', minLength: 2, maxLength: 16, description: 'New username (2-16 chars, alphanumeric, - and _ only)' },
+          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                username: { type: 'string', description: 'New username' },
+                message: { type: 'string', example: 'Username updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Validation error, username taken, or rate limit' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Username change limited to once every 30 days' },
+            nextChangeAllowedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const userId = authContext.userId;
+      const body = updateUsernameSchema.parse(request.body);
+
+      // Get user with current username and password
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          username: true,
+          password: true,
+          usernameHistory: true
+        }
+      });
+
+      if (!user) {
+        return reply.status(404).send({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
+      if (!isPasswordValid) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Current password is incorrect'
+        });
+      }
+
+      // Check if new username is the same as current
+      if (body.newUsername.toLowerCase() === user.username.toLowerCase()) {
+        return reply.status(400).send({
+          success: false,
+          error: 'New username must be different from current username'
+        });
+      }
+
+      // Check if username is already taken
+      const existingUser = await fastify.prisma.user.findFirst({
+        where: {
+          username: {
+            equals: body.newUsername,
+            mode: 'insensitive'
+          },
+          id: { not: userId }
+        }
+      });
+
+      if (existingUser) {
+        return reply.status(400).send({
+          success: false,
+          error: 'This username is already taken'
+        });
+      }
+
+      // Check rate limit (30 days between changes)
+      const history = (user.usernameHistory as any[]) || [];
+      if (history.length > 0) {
+        const lastChange = new Date(history[0].changedAt);
+        const daysSinceLastChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60 * 24);
+        const RATE_LIMIT_DAYS = 30;
+
+        if (daysSinceLastChange < RATE_LIMIT_DAYS) {
+          const nextChangeAllowedAt = new Date(lastChange.getTime() + RATE_LIMIT_DAYS * 24 * 60 * 60 * 1000);
+          return reply.status(429).send({
+            success: false,
+            error: `Username change limited to once every ${RATE_LIMIT_DAYS} days`,
+            nextChangeAllowedAt: nextChangeAllowedAt.toISOString()
+          });
+        }
+      }
+
+      // Get request context for history
+      const ipAddress = request.ip || request.headers['x-forwarded-for'] as string || request.headers['x-real-ip'] as string || 'unknown';
+      const userAgent = request.headers['user-agent'] || 'unknown';
+
+      // Add new entry to history (limit to 10 most recent)
+      const newHistoryEntry = {
+        newUsername: body.newUsername,
+        changedAt: new Date().toISOString(),
+        ipAddress,
+        userAgent
+      };
+
+      const updatedHistory = [newHistoryEntry, ...history].slice(0, 10);
+
+      // Update username and history
+      const updatedUser = await fastify.prisma.user.update({
+        where: { id: userId },
+        data: {
+          username: body.newUsername,
+          usernameHistory: updatedHistory
+        },
+        select: {
+          id: true,
+          username: true
+        }
+      });
+
+      fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
+
+      return reply.send({
+        success: true,
+        data: {
+          username: updatedUser.username,
+          message: 'Username updated successfully'
+        }
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: error.errors[0]?.message || 'Invalid data',
+          details: error.errors
+        });
+      }
+
+      logError(fastify.log, 'Update username error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'

@@ -85,6 +85,8 @@ function VerifyEmailContent() {
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [alreadyVerified, setAlreadyVerified] = useState(false);
+  const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
 
   // Helper function to get translation with proper fallback
   const getText = useCallback((key: string, fallback: string): string => {
@@ -92,6 +94,22 @@ function VerifyEmailContent() {
     // If translation returns the key itself, use fallback
     return translated === key ? fallback : translated;
   }, [t]);
+
+  // Helper function to format date
+  const formatDate = useCallback((dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch {
+      return dateString;
+    }
+  }, []);
 
   // Vérifier l'email au montage (attendre que les traductions soient chargées)
   useEffect(() => {
@@ -122,7 +140,17 @@ function VerifyEmailContent() {
         if (response.ok && data.success) {
           console.log('[VERIFY_EMAIL] ✅ Email vérifié avec succès');
           setIsVerified(true);
-          toast.success(getText('verifyEmail.success', 'Email vérifié avec succès !'));
+
+          // Gérer le cas où l'email était déjà vérifié
+          if (data.data?.alreadyVerified) {
+            console.log('[VERIFY_EMAIL] ℹ️ Email déjà vérifié le:', data.data.verifiedAt);
+            setAlreadyVerified(true);
+            setVerifiedAt(data.data.verifiedAt);
+            toast.info(getText('verifyEmail.alreadyVerified', 'Votre email est déjà vérifié !'));
+          } else {
+            setVerifiedAt(data.data?.verifiedAt || null);
+            toast.success(getText('verifyEmail.success', 'Email vérifié avec succès !'));
+          }
         } else {
           console.error('[VERIFY_EMAIL] ❌ Échec:', data.error);
           setError(data.error || getText('verifyEmail.errors.verificationFailed', 'La vérification a échoué.'));
@@ -223,16 +251,22 @@ function VerifyEmailContent() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-green-700 dark:text-green-400">
-                  {getText('verifyEmail.successTitle', 'Email vérifié !')}
+                  {alreadyVerified
+                    ? getText('verifyEmail.alreadyVerifiedTitle', 'Email déjà vérifié')
+                    : getText('verifyEmail.successTitle', 'Email vérifié !')}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {getText('verifyEmail.successDescription', 'Votre adresse email a été vérifiée avec succès.')}
+                  {alreadyVerified && verifiedAt
+                    ? `Votre email a été vérifié le ${formatDate(verifiedAt)}.`
+                    : getText('verifyEmail.successDescription', 'Votre adresse email a été vérifiée avec succès.')}
                 </p>
               </div>
 
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  {getText('verifyEmail.welcomeMessage', 'Bienvenue dans la communauté Meeshy ! Vous pouvez maintenant discuter avec le monde entier.')}
+                  {alreadyVerified
+                    ? getText('verifyEmail.accountReady', 'Votre compte est déjà actif. Vous pouvez vous connecter dès maintenant.')
+                    : getText('verifyEmail.welcomeMessage', 'Bienvenue dans la communauté Meeshy ! Vous pouvez maintenant discuter avec le monde entier.')}
                 </p>
               </div>
 

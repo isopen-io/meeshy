@@ -262,6 +262,17 @@ export const updatePasswordSchema = z.object({
   path: ['confirmPassword']
 });
 
+/**
+ * Schéma de validation pour le changement de username
+ */
+export const updateUsernameSchema = z.object({
+  newUsername: z.string()
+    .min(2, 'Username trop court (min 2 caractères)')
+    .max(16, 'Username trop long (max 16 caractères)')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
+  currentPassword: z.string().min(1, 'Mot de passe requis pour confirmer le changement')
+}).strict();
+
 // =============================================================================
 // AUTH SCHEMAS
 // =============================================================================
@@ -2372,6 +2383,7 @@ export type VConversationLinkType = z.infer<typeof conversationLinkTypeEnum>;
 export type VUpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 export type VUpdateAvatar = z.infer<typeof updateAvatarSchema>;
 export type VUpdatePassword = z.infer<typeof updatePasswordSchema>;
+export type VUpdateUsername = z.infer<typeof updateUsernameSchema>;
 
 // Attachment types
 export type VScanStatus = z.infer<typeof scanStatusEnum>;

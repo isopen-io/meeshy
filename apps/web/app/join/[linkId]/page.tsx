@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/components/layout/Header';
@@ -60,14 +60,23 @@ export default function JoinConversationPage() {
     }
   }, [currentUser, setShowAnonymousForm]);
 
-  const handleAuthSuccess = (user: User, token: string) => {
+  const handleJoinConversation = useCallback(async () => {
+    const anonymousSession = typeof window !== 'undefined'
+      ? JSON.parse(localStorage.getItem('anonymous_session') || 'null')
+      : null;
+    const sessionToken = anonymousSession?.token;
+
+    await joinAsAuthenticated(isAnonymous, sessionToken);
+  }, [isAnonymous, joinAsAuthenticated]);
+
+  const handleAuthSuccess = useCallback((user: User, token: string) => {
     setAuthMode('welcome');
     setTimeout(() => {
       handleJoinConversation();
     }, 500);
-  };
+  }, [setAuthMode, handleJoinConversation]);
 
-  const handleJoinAnonymously = async () => {
+  const handleJoinAnonymously = useCallback(async () => {
     await joinAnonymously(
       anonymousForm,
       joinAnonymouslyAuth,
@@ -76,16 +85,23 @@ export default function JoinConversationPage() {
       conversationLink?.requireEmail,
       conversationLink?.requireBirthday
     );
-  };
+  }, [
+    anonymousForm,
+    joinAnonymously,
+    joinAnonymouslyAuth,
+    generateUsername,
+    conversationLink?.requireNickname,
+    conversationLink?.requireEmail,
+    conversationLink?.requireBirthday
+  ]);
 
-  const handleJoinConversation = async () => {
-    const anonymousSession = typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('anonymous_session') || 'null')
-      : null;
-    const sessionToken = anonymousSession?.token;
+  const handleShowAnonymousForm = useCallback(() => {
+    setShowAnonymousForm(true);
+  }, [setShowAnonymousForm]);
 
-    await joinAsAuthenticated(isAnonymous, sessionToken);
-  };
+  const handleHideAnonymousForm = useCallback(() => {
+    setShowAnonymousForm(false);
+  }, [setShowAnonymousForm]);
 
   if (isLoading || isChecking) {
     return <JoinLoading />;
@@ -134,7 +150,7 @@ export default function JoinConversationPage() {
                   requireAccount={conversationLink.requireAccount}
                   onAuthModeChange={setAuthMode}
                   onJoinConversation={handleJoinConversation}
-                  onShowAnonymousForm={() => setShowAnonymousForm(true)}
+                  onShowAnonymousForm={handleShowAnonymousForm}
                   onAuthSuccess={handleAuthSuccess}
                 />
               ) : (
@@ -147,7 +163,7 @@ export default function JoinConversationPage() {
                   isJoining={isJoining}
                   onUpdateForm={updateAnonymousForm}
                   onSubmit={handleJoinAnonymously}
-                  onBack={() => setShowAnonymousForm(false)}
+                  onBack={handleHideAnonymousForm}
                 />
               )}
             </CardContent>

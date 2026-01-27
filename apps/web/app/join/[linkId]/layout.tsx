@@ -7,17 +7,22 @@ interface JoinLayoutProps {
 }
 
 export async function generateMetadata({ params }: JoinLayoutProps): Promise<Metadata> {
-  const { linkId } = await params; // Next.js 15: params est une Promise
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
   try {
+    const { linkId } = await params;
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+
     // Récupérer les informations du lien d'invitation
     const response = await fetch(`${backendUrl}/anonymous/link/${linkId}`, {
-      next: { revalidate: 300 } // Cache 5 minutes
+      next: { revalidate: 300 }, // Cache 5 minutes
+      cache: 'no-store' // Éviter les problèmes de cache pendant le développement
+    }).catch(err => {
+      console.error('[generateMetadata] Fetch error:', err);
+      return null;
     });
 
-    if (response.ok) {
+    if (response && response.ok) {
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -89,38 +94,66 @@ export async function generateMetadata({ params }: JoinLayoutProps): Promise<Met
         };
       }
     }
-  } catch (error) {
-    console.error('Erreur génération métadonnées invitation:', error);
-  }
 
-  // Fallback metadata si l'appel API échoue
-  return {
-    title: 'Rejoindre une conversation - Meeshy',
-    description: 'Vous avez été invité à rejoindre une conversation sur Meeshy, la plateforme de messagerie multilingue en temps réel.',
-    openGraph: {
+    // Fallback metadata si l'appel API échoue
+    return {
       title: 'Rejoindre une conversation - Meeshy',
-      description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-      url: `${frontendUrl}/join/${linkId}`,
-      siteName: 'Meeshy',
-      images: [
-        {
-          url: `${frontendUrl}/og-image-meeshy.png`,
-          width: 1200,
-          height: 630,
-          alt: 'Meeshy - Messagerie multilingue',
-        },
-      ],
-      locale: 'fr_FR',
-      type: 'website',
-    },
-    twitter: {
-      card: 'summary_large_image',
+      description: 'Vous avez été invité à rejoindre une conversation sur Meeshy, la plateforme de messagerie multilingue en temps réel.',
+      openGraph: {
+        title: 'Rejoindre une conversation - Meeshy',
+        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
+        url: `${frontendUrl}/join`,
+        siteName: 'Meeshy',
+        images: [
+          {
+            url: `${frontendUrl}/og-image-meeshy.png`,
+            width: 1200,
+            height: 630,
+            alt: 'Meeshy - Messagerie multilingue',
+          },
+        ],
+        locale: 'fr_FR',
+        type: 'website',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: 'Rejoindre une conversation - Meeshy',
+        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
+        images: [`${frontendUrl}/og-image-meeshy.png`],
+        creator: '@meeshy_app',
+      },
+    };
+  } catch (error) {
+    console.error('[generateMetadata] Erreur critique:', error);
+    // Fallback metadata en cas d'erreur critique (même si params échoue)
+    return {
       title: 'Rejoindre une conversation - Meeshy',
-      description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-      images: [`${frontendUrl}/og-image-meeshy.png`],
-      creator: '@meeshy_app',
-    },
-  };
+      description: 'Vous avez été invité à rejoindre une conversation sur Meeshy, la plateforme de messagerie multilingue en temps réel.',
+      openGraph: {
+        title: 'Rejoindre une conversation - Meeshy',
+        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
+        url: `${frontendUrl}/join`,
+        siteName: 'Meeshy',
+        images: [
+          {
+            url: `${frontendUrl}/og-image-meeshy.png`,
+            width: 1200,
+            height: 630,
+            alt: 'Meeshy - Messagerie multilingue',
+          },
+        ],
+        locale: 'fr_FR',
+        type: 'website',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: 'Rejoindre une conversation - Meeshy',
+        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
+        images: [`${frontendUrl}/og-image-meeshy.png`],
+        creator: '@meeshy_app',
+      },
+    };
+  }
 }
 
 export default function JoinLayout({ children }: JoinLayoutProps) {

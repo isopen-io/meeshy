@@ -1,0 +1,46 @@
+# Caddyfile pour servir les fichiers statiques Meeshy
+# Remplace nginx pour plus de simplicité
+
+:80 {
+	# Désactiver les logs d'accès pour les performances
+	log {
+		output discard
+	}
+
+	# Root directory pour les fichiers statiques
+	root * /srv
+
+	# Healthcheck endpoint
+	respond /health "OK" 200
+
+	# Headers de sécurité et cache
+	header {
+		# Cache long terme pour les fichiers statiques (1 an)
+		Cache-Control "public, max-age=31536000, immutable"
+
+		# CORS
+		Access-Control-Allow-Origin "https://staging.meeshy.me:8443"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+
+		# Métadata
+		X-Served-By "Caddy-Static-Staging"
+
+		# Sécurité
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	# Servir les fichiers statiques
+	file_server {
+		# Pas de listing des répertoires
+		browse off
+
+		# Page 404 personnalisée (optionnelle)
+		# index off
+	}
+
+	# Gestion des erreurs
+	handle_errors {
+		respond "{err.status_code} {err.status_text}"
+	}
+}

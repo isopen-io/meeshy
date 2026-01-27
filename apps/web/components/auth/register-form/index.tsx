@@ -1,19 +1,18 @@
 'use client';
 
-import { lazy, Suspense } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { useRegisterForm } from '@/hooks/use-register-form';
 import type { User } from '@/types';
 import type { JoinConversationResponse } from '@/types/frontend';
 
-// Lazy load form steps for better code splitting
-const PersonalInfoStep = lazy(() => import('./PersonalInfoStep').then(m => ({ default: m.PersonalInfoStep })));
-const UsernameField = lazy(() => import('./UsernameField').then(m => ({ default: m.UsernameField })));
-const EmailField = lazy(() => import('./EmailField').then(m => ({ default: m.EmailField })));
-const PhoneField = lazy(() => import('./PhoneField').then(m => ({ default: m.PhoneField })));
-const PasswordField = lazy(() => import('./PasswordField').then(m => ({ default: m.PasswordField })));
-const LanguageSelectorField = lazy(() => import('./LanguageSelector').then(m => ({ default: m.LanguageSelectorField })));
-const FormFooter = lazy(() => import('./FormFooter').then(m => ({ default: m.FormFooter })));
+// Import directs au lieu de lazy loading pour éviter la boucle infinie
+import { PersonalInfoStep } from './PersonalInfoStep';
+import { UsernameField } from './UsernameField';
+import { EmailField } from './EmailField';
+import { PhoneField } from './PhoneField';
+import { PasswordField } from './PasswordField';
+import { LanguageSelectorField } from './LanguageSelector';
+import { FormFooter } from './FormFooter';
 
 interface RegisterFormProps {
   onSuccess?: (user: User, token: string) => void;
@@ -23,10 +22,6 @@ interface RegisterFormProps {
   formPrefix?: string;
 }
 
-function LoadingFallback() {
-  return <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded" />;
-}
-
 export function RegisterForm({
   onSuccess,
   disabled = false,
@@ -34,6 +29,7 @@ export function RegisterForm({
   onJoinSuccess,
   formPrefix = 'register'
 }: RegisterFormProps) {
+  console.log('[RegisterForm] Component render', { linkId, formPrefix });
   const { t } = useI18n('auth');
   const {
     formData,
@@ -48,80 +44,66 @@ export function RegisterForm({
       <input {...honeypotProps} />
 
       <div className="space-y-4 py-4">
-        <Suspense fallback={<LoadingFallback />}>
-          <PersonalInfoStep
-            formData={formData}
-            onUpdate={updateFormData}
-            disabled={isLoading || disabled}
-            formPrefix={formPrefix}
-            t={t}
-          />
-        </Suspense>
+        <PersonalInfoStep
+          formData={formData}
+          onUpdate={updateFormData}
+          disabled={isLoading || disabled}
+          formPrefix={formPrefix}
+          t={t}
+        />
 
         {!linkId && (
-          <Suspense fallback={<LoadingFallback />}>
-            <UsernameField
-              value={formData.username}
-              onChange={(value) => updateFormData({ username: value })}
-              disabled={isLoading || disabled}
-              formPrefix={formPrefix}
-              t={t}
-            />
-          </Suspense>
+          <UsernameField
+            value={formData.username}
+            onChange={(value) => updateFormData({ username: value })}
+            disabled={isLoading || disabled}
+            formPrefix={formPrefix}
+            t={t}
+          />
         )}
 
-        <Suspense fallback={<LoadingFallback />}>
-          <EmailField
-            value={formData.email}
-            onChange={(value) => updateFormData({ email: value })}
-            disabled={isLoading || disabled}
-            formPrefix={formPrefix}
-            t={t}
-          />
-        </Suspense>
+        <EmailField
+          value={formData.email}
+          onChange={(value) => updateFormData({ email: value })}
+          disabled={isLoading || disabled}
+          formPrefix={formPrefix}
+          t={t}
+        />
 
-        <Suspense fallback={<LoadingFallback />}>
-          <PhoneField
-            value={formData.phoneNumber}
-            onChange={(value) => updateFormData({ phoneNumber: value })}
-            disabled={isLoading || disabled}
-            formPrefix={formPrefix}
-            t={t}
-          />
-        </Suspense>
+        <PhoneField
+          value={formData.phoneNumber}
+          onChange={(value) => updateFormData({ phoneNumber: value })}
+          disabled={isLoading || disabled}
+          formPrefix={formPrefix}
+          t={t}
+        />
 
-        <Suspense fallback={<LoadingFallback />}>
-          <PasswordField
-            id={`${formPrefix}-password`}
-            label={t('register.passwordLabel')}
-            value={formData.password}
-            onChange={(value) => updateFormData({ password: value })}
-            placeholder={t('register.passwordPlaceholder')}
-            disabled={isLoading || disabled}
-            required
-            showPasswordLabel={t('register.showPassword')}
-            hidePasswordLabel={t('register.hidePassword')}
-          />
-        </Suspense>
+        <PasswordField
+          id={`${formPrefix}-password`}
+          label={t('register.passwordLabel')}
+          value={formData.password}
+          onChange={(value) => updateFormData({ password: value })}
+          placeholder={t('register.passwordPlaceholder')}
+          disabled={isLoading || disabled}
+          required
+          showPasswordLabel={t('register.showPassword')}
+          hidePasswordLabel={t('register.hidePassword')}
+        />
 
-        <Suspense fallback={<LoadingFallback />}>
-          <LanguageSelectorField
-            systemLanguage={formData.systemLanguage}
-            regionalLanguage={formData.regionalLanguage}
-            onSystemLanguageChange={(value) => updateFormData({ systemLanguage: value })}
-            onRegionalLanguageChange={(value) => updateFormData({ regionalLanguage: value })}
-            disabled={disabled}
-            t={t}
-          />
-        </Suspense>
+        <LanguageSelectorField
+          systemLanguage={formData.systemLanguage}
+          regionalLanguage={formData.regionalLanguage}
+          onSystemLanguageChange={(value) => updateFormData({ systemLanguage: value })}
+          onRegionalLanguageChange={(value) => updateFormData({ regionalLanguage: value })}
+          disabled={disabled}
+          t={t}
+        />
 
-        <Suspense fallback={<LoadingFallback />}>
-          <FormFooter
-            isLoading={isLoading}
-            disabled={disabled}
-            t={t}
-          />
-        </Suspense>
+        <FormFooter
+          isLoading={isLoading}
+          disabled={disabled}
+          t={t}
+        />
       </div>
     </form>
   );

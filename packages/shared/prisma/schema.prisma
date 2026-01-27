@@ -4,10 +4,10 @@ generator client {
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
-// Python client generator
-generator client_py {
-  provider = "prisma-client-py"
-}
+// Python client generator (temporarily disabled for build)
+// generator client_py {
+//   provider = "prisma-client-py"
+// }
 
 datasource db {
   provider = "mongodb"
@@ -28,6 +28,9 @@ enum UserRole {
 model User {
   id                        String   @id @default(auto()) @map("_id") @db.ObjectId
   username                  String   @unique
+  /// Historique des changements de username (limité aux 10 derniers)
+  /// Format: [{ newUsername: string, changedAt: ISOString, ipAddress?: string, userAgent?: string }]
+  usernameHistory           Json?    @default("[]")
   firstName                 String
   lastName                  String
   bio                       String   @default("")
@@ -70,6 +73,14 @@ model User {
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
+
+  // Pending email/phone change (requires verification before becoming active)
+  pendingEmail                String? // Nouvel email en attente de vérification
+  pendingEmailVerificationToken  String? // Token pour vérifier le nouvel email
+  pendingEmailVerificationExpiry DateTime? // Expiration du token
+  pendingPhoneNumber          String? // Nouveau téléphone en attente de vérification
+  pendingPhoneVerificationCode   String? // Code SMS pour le nouveau téléphone
+  pendingPhoneVerificationExpiry DateTime? // Expiration du code
 
   /// Phone Transfer Tracking (audit trail)
   phoneTransferredFromUserId String?   @db.ObjectId // ID de l'ancien compte d'où le numéro a été transféré

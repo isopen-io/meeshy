@@ -58,7 +58,30 @@ echo "✅ Données restaurées dans staging"
 echo ""
 
 # =============================================================================
-# ÉTAPE 3: VÉRIFIER LES DONNÉES STAGING
+# ÉTAPE 3.5: RENOMMER COLLECTIONS SNAKE_CASE → PASCALCASE
+# =============================================================================
+
+echo "🔄 Renommage des collections vers PascalCase..."
+echo "   (Nécessaire car Prisma sans @@map attend du PascalCase)"
+echo ""
+
+# Créer le répertoire pour les scripts si nécessaire
+ssh $REMOTE_HOST "mkdir -p $STAGING_DIR/scripts"
+
+# Copier le script de renommage vers le serveur
+scp infrastructure/scripts/mongodb-rename-collections-to-pascalcase.js \
+  $REMOTE_HOST:$STAGING_DIR/scripts/
+
+# Exécuter le script de renommage
+ssh $REMOTE_HOST "docker exec -i meeshy-database-staging \
+  mongosh meeshy < $STAGING_DIR/scripts/mongodb-rename-collections-to-pascalcase.js"
+
+echo ""
+echo "✅ Collections renommées en PascalCase"
+echo ""
+
+# =============================================================================
+# ÉTAPE 3.6: VÉRIFIER LES DONNÉES STAGING
 # =============================================================================
 
 echo "🔍 Vérification des données staging..."
@@ -86,7 +109,7 @@ echo "   User Conversation Preferences: $USER_CONV_PREF_COUNT"
 echo ""
 
 # =============================================================================
-# ÉTAPE 4: COPIER LE SCRIPT DE MIGRATION
+# ÉTAPE 4: COPIER LE SCRIPT DE MIGRATION PRISMA
 # =============================================================================
 
 echo "📋 Copie du script de migration vers le serveur..."

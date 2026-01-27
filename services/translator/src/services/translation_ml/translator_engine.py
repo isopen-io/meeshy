@@ -213,11 +213,10 @@ class TranslatorEngine:
                     return None, False
 
                 # Créer le pipeline UNE SEULE FOIS pour ce thread
-                # Note: Pour NLLB avec transformers 5.x, utiliser simplement "translation"
-                # Les langues source/cible sont spécifiées via src_lang/tgt_lang à l'appel
+                # Note: Pour NLLB, task générique "translation" avec src_lang/tgt_lang à l'appel
                 device = self.model_loader.device
                 new_pipeline = create_pipeline(
-                    "translation",  # Format correct pour NLLB avec transformers 5.x
+                    "translation",  # Task générique, langues NLLB via src_lang/tgt_lang
                     model=model,
                     tokenizer=tokenizer,
                     device=0 if device == 'cuda' and torch.cuda.is_available() else -1,

@@ -12,9 +12,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  LogIn, 
-  UserPlus, 
+import {
+  LogIn,
+  UserPlus,
   MessageSquare,
   Menu,
   X,
@@ -32,7 +32,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useI18n } from '@/hooks/useI18n';
 import { LanguageFlagSelector } from '@/components/translation/language-flag-selector';
 import { LanguageSelector } from '@/components/translation/language-selector';
-import { useLanguageStore } from '@/stores';
+import { useLanguageStore, useUser } from '@/stores';
 import { INTERFACE_LANGUAGES } from '@/types/frontend';
 
 interface HeaderProps {
@@ -44,8 +44,8 @@ interface HeaderProps {
   shareLink?: string;
 }
 
-export function Header({ 
-  mode = 'default', 
+export function Header({
+  mode = 'default',
   authMode = 'welcome',
   onAuthModeChange,
   anonymousChatLink,
@@ -54,7 +54,12 @@ export function Header({
 }: HeaderProps) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, isAnonymous, logout, leaveAnonymousSession } = useAuth();
+  // CORRECTION CRITIQUE: Utiliser directement le store Zustand comme source unique de vérité
+  // au lieu de useAuth() qui maintient un état local qui peut être obsolète
+  const storeUser = useUser();
+  const { isAnonymous, logout, leaveAnonymousSession } = useAuth();
+  // Utiliser storeUser comme user définitif (source unique de vérité)
+  const user = storeUser;
   const { theme, setTheme } = useAppStore();
   const { t } = useI18n('header');
   
