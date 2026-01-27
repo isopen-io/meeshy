@@ -194,8 +194,8 @@ ENV HOME=/workspace \
     MODELS_PATH=/workspace/models \
     # ML framework paths
     TORCH_HOME=/workspace/models \
-    HF_HOME=/workspace/models \
-    TRANSFORMERS_CACHE=/workspace/models \
+    HF_HOME=/workspace/models/huggingface \
+    TRANSFORMERS_CACHE=/workspace/models/huggingface \
     # Performance optimizations
     OMP_NUM_THREADS=4 \
     MKL_NUM_THREADS=4 \
