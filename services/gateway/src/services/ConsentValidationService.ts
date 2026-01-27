@@ -56,6 +56,15 @@ export class ConsentValidationService {
       throw new Error('User not found');
     }
 
+    // Charger les préférences utilisateur pour récupérer les features audio/application
+    const userPreferences = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: {
+        audio: true,
+        application: true
+      }
+    });
+
     // En développement, activer automatiquement tous les consentements
     const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -74,25 +83,52 @@ export class ConsentValidationService {
       };
     }
 
-    // Production: vérifier les consentements réels
-    const hasDataProcessingConsent = !!user.dataProcessingConsentAt;
-    const hasVoiceDataConsent = !!user.voiceDataConsentAt && hasDataProcessingConsent;
-    const hasVoiceProfileConsent = !!user.voiceProfileConsentAt && hasVoiceDataConsent;
-    // TODO: Load voiceCloningConsentAt from UserPreferences.application when implemented
-    const hasVoiceCloningConsent = false;
+    // Parser les préférences audio (JSON)
+    const audioPrefs = userPreferences?.audio as any || {};
+    const applicationPrefs = userPreferences?.application as any || {};
+
+    // Consentements de base (User OU UserPreferences.application)
+    // Priorité : UserPreferences.application > User (migration progressive)
+    const dataProcessingConsentAt = applicationPrefs.dataProcessingConsentAt || user.dataProcessingConsentAt;
+    const voiceDataConsentAt = applicationPrefs.voiceDataConsentAt || user.voiceDataConsentAt;
+    const voiceProfileConsentAt = applicationPrefs.voiceProfileConsentAt || user.voiceProfileConsentAt;
+    const voiceCloningEnabledAt = applicationPrefs.voiceCloningEnabledAt || user.voiceCloningEnabledAt;
+
+    const hasDataProcessingConsent = !!dataProcessingConsentAt;
+    const hasVoiceDataConsent = !!voiceDataConsentAt && hasDataProcessingConsent;
+    const hasVoiceProfileConsent = !!voiceProfileConsentAt && hasVoiceDataConsent;
+
+    // Features activées dans UserPreferences.audio
+    const audioTranscriptionEnabledAt = audioPrefs.audioTranscriptionEnabledAt;
+    const textTranslationEnabledAt = audioPrefs.textTranslationEnabledAt;
+    const audioTranslationEnabledAt = audioPrefs.audioTranslationEnabledAt;
+    const translatedAudioGenerationEnabledAt = audioPrefs.translatedAudioGenerationEnabledAt;
+
+    // Consentements avancés dans UserPreferences.application
+    const voiceCloningConsentAt = applicationPrefs.voiceCloningConsentAt;
+    const thirdPartyServicesConsentAt = applicationPrefs.thirdPartyServicesConsentAt;
+
+    const hasVoiceCloningConsent = !!voiceCloningConsentAt && hasVoiceProfileConsent;
+    const hasThirdPartyServicesConsent = !!thirdPartyServicesConsentAt && hasDataProcessingConsent;
+
+    // Calculer les capacités selon la hiérarchie de consentements
+    const canTranscribeAudio = !!audioTranscriptionEnabledAt && hasVoiceDataConsent;
+    const canTranslateText = !!textTranslationEnabledAt && hasDataProcessingConsent;
+    const canTranslateAudio = !!audioTranslationEnabledAt && canTranscribeAudio && canTranslateText;
+    const canGenerateTranslatedAudio = !!translatedAudioGenerationEnabledAt && canTranslateAudio;
+    const canUseVoiceCloning = !!voiceCloningEnabledAt && hasVoiceCloningConsent;
 
     return {
       hasDataProcessingConsent,
       hasVoiceDataConsent,
       hasVoiceProfileConsent,
       hasVoiceCloningConsent,
-      // TODO: Load from UserPreferences.application when implemented
-      hasThirdPartyServicesConsent: false,
-      canTranscribeAudio: false,
-      canTranslateText: false,
-      canTranslateAudio: false,
-      canGenerateTranslatedAudio: false,
-      canUseVoiceCloning: !!user.voiceCloningEnabledAt && hasVoiceCloningConsent
+      hasThirdPartyServicesConsent,
+      canTranscribeAudio,
+      canTranslateText,
+      canTranslateAudio,
+      canGenerateTranslatedAudio,
+      canUseVoiceCloning
     };
   }
 
