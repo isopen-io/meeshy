@@ -110,6 +110,7 @@ from utils.performance import (
     PerformanceConfig,
     create_inference_context
 )
+from utils.pipeline_cache import LRUPipelineCache
 
 
 class TranslatorEngine:
@@ -118,20 +119,22 @@ class TranslatorEngine:
     Gère la traduction ML batch et individuelle avec optimisations
     """
 
-    def __init__(self, model_loader, executor: ThreadPoolExecutor):
+    def __init__(self, model_loader, executor: ThreadPoolExecutor, cache_size: int = 50):
         """
         Initialise le moteur de traduction
 
         Args:
             model_loader: Instance de ModelLoader avec modèles chargés
             executor: ThreadPoolExecutor pour traductions asynchrones
+            cache_size: Taille maximale du cache LRU (défaut: 50 paires)
         """
         self.model_loader = model_loader
         self.executor = executor
         self.perf_config = PerformanceConfig()
 
-        # Pool de pipelines thread-local pour éviter recréation
-        self._thread_local_pipelines = {}
+        # Cache LRU pour gérer intelligemment les paires de langues fréquentes
+        # Permet de réutiliser les pipelines optimisés et prépare l'architecture multi-modèles
+        self._pipeline_cache = LRUPipelineCache(max_size=cache_size)
         self._pipeline_lock = threading.Lock()
 
         # Mapping des codes de langues NLLB
@@ -172,34 +175,46 @@ class TranslatorEngine:
         else:
             return 'en'  # Défaut
 
-    def _get_thread_local_pipeline(self, model_type: str) -> Tuple[Optional[any], bool]:
+    def _get_or_create_pipeline(
+        self,
+        model_type: str,
+        source_lang: str,
+        target_lang: str
+    ) -> Tuple[Optional[any], bool]:
         """
-        OPTIMISATION: Obtient ou crée un pipeline de traduction pour le thread actuel
+        OPTIMISATION: Obtient ou crée un pipeline avec cache LRU intelligent
 
-        Au lieu de créer un pipeline à chaque traduction (100-500ms overhead),
-        on réutilise le pipeline du thread. Gains: 3-5x plus rapide.
+        Stratégie:
+        1. Vérifier cache LRU (paires fréquentes gardées en mémoire)
+        2. Si MISS: créer nouveau pipeline
+        3. Mettre en cache avec politique d'éviction LRU
+
+        Note: Avec NLLB, un seul pipeline gère toutes les paires de langues.
+        Le cache LRU prépare l'architecture pour multi-modèles futurs où
+        différentes paires utiliseront des modèles spécialisés.
 
         Args:
-            model_type: Type de modèle
+            model_type: Type de modèle ('basic', 'premium')
+            source_lang: Langue source (code NLLB, ex: 'fra_Latn')
+            target_lang: Langue cible (code NLLB, ex: 'eng_Latn')
 
         Returns:
-            tuple: (pipeline, nllb_codes_supported) ou (None, False) si erreur
+            tuple: (pipeline, is_available) où is_available=True si succès
         """
         if not ML_AVAILABLE:
             return None, False
 
-        thread_id = threading.current_thread().ident
-        cache_key = f"{model_type}_{thread_id}"
+        # Tentative 1: Récupérer du cache LRU
+        cached_pipeline = self._pipeline_cache.get(model_type, source_lang, target_lang)
+        if cached_pipeline is not None:
+            return cached_pipeline, True
 
-        # Vérifier le cache
-        if cache_key in self._thread_local_pipelines:
-            return self._thread_local_pipelines[cache_key], True
-
-        # Créer nouveau pipeline
+        # Cache MISS: créer nouveau pipeline
         with self._pipeline_lock:
-            # Double-check
-            if cache_key in self._thread_local_pipelines:
-                return self._thread_local_pipelines[cache_key], True
+            # Double-check après acquisition du lock
+            cached_pipeline = self._pipeline_cache.get(model_type, source_lang, target_lang)
+            if cached_pipeline is not None:
+                return cached_pipeline, True
 
             try:
                 model = self.model_loader.get_model(model_type)
@@ -212,12 +227,12 @@ class TranslatorEngine:
                     logger.error(f"❌ Tokenizer non disponible pour {model_type}")
                     return None, False
 
-                # Créer le pipeline UNE SEULE FOIS pour ce thread
-                # Note: Pour NLLB avec transformers 5.x, utiliser simplement "translation"
-                # Les langues source/cible sont spécifiées via src_lang/tgt_lang à l'appel
+                # Créer le pipeline pour cette paire
+                # Note: Pour NLLB, le même pipeline peut gérer toutes les paires
+                # mais le cache LRU permet de tracker les paires fréquentes
                 device = self.model_loader.device
                 new_pipeline = create_pipeline(
-                    "translation",  # Format correct pour NLLB avec transformers 5.x
+                    "translation",
                     model=model,
                     tokenizer=tokenizer,
                     device=0 if device == 'cuda' and torch.cuda.is_available() else -1,
@@ -225,12 +240,19 @@ class TranslatorEngine:
                     batch_size=8
                 )
 
-                self._thread_local_pipelines[cache_key] = new_pipeline
-                logger.info(f"✅ Pipeline thread-local créé: {cache_key} (sera réutilisé)")
+                # Mettre en cache avec LRU
+                self._pipeline_cache.put(model_type, source_lang, target_lang, new_pipeline)
+
+                logger.info(
+                    f"✅ Pipeline créé et caché: {model_type} "
+                    f"{source_lang}→{target_lang} "
+                    f"(cache: {len(self._pipeline_cache)}/{self._pipeline_cache.max_size})"
+                )
+
                 return new_pipeline, True
 
             except Exception as e:
-                logger.error(f"❌ Erreur création pipeline thread-local: {e}")
+                logger.error(f"❌ Erreur création pipeline: {e}")
                 import traceback
                 traceback.print_exc()
                 return None, False
@@ -321,15 +343,17 @@ class TranslatorEngine:
         def translate_sync():
             """Traduction synchrone dans un thread"""
             try:
-                # Réutiliser le pipeline thread-local
-                reusable_pipeline, is_available = self._get_thread_local_pipeline(model_type)
-
-                if not is_available or reusable_pipeline is None:
-                    raise Exception(f"Pipeline non disponible pour {model_type}")
-
                 # Codes NLLB
                 nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
                 nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+
+                # Obtenir pipeline du cache LRU (ou créer si nécessaire)
+                reusable_pipeline, is_available = self._get_or_create_pipeline(
+                    model_type, nllb_source, nllb_target
+                )
+
+                if not is_available or reusable_pipeline is None:
+                    raise Exception(f"Pipeline non disponible pour {model_type}")
 
                 # OPTIMISATION AVANCÉE: Greedy decoding (4x plus rapide)
                 with create_inference_context():
@@ -404,14 +428,17 @@ class TranslatorEngine:
             try:
                 logger.info(f"[BATCH-SYNC] 🚀 FAST translate_batch_sync: {len(texts)} textes, {source_lang}→{target_lang}")
 
-                # Réutiliser le pipeline thread-local
-                reusable_pipeline, is_available = self._get_thread_local_pipeline(model_type)
+                # Codes NLLB
+                nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
+                nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+
+                # Obtenir pipeline du cache LRU (ou créer si nécessaire)
+                reusable_pipeline, is_available = self._get_or_create_pipeline(
+                    model_type, nllb_source, nllb_target
+                )
 
                 if not is_available or reusable_pipeline is None:
                     raise Exception(f"Pipeline non disponible pour {model_type}")
-
-                nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
-                nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
 
                 all_results = []
 
@@ -476,5 +503,32 @@ class TranslatorEngine:
     def cleanup(self):
         """Libère les ressources du moteur"""
         logger.info("🧹 Nettoyage TranslatorEngine...")
-        self._thread_local_pipelines.clear()
+
+        # Log statistiques finales du cache avant nettoyage
+        self._pipeline_cache.log_stats()
+
+        # Vider le cache
+        self._pipeline_cache.clear()
+
         logger.info("✅ TranslatorEngine nettoyé")
+
+    def get_cache_stats(self):
+        """
+        Retourne les statistiques du cache LRU
+
+        Returns:
+            CacheStats avec métriques (hits, misses, evictions, hit_rate)
+        """
+        return self._pipeline_cache.get_stats()
+
+    def get_top_language_pairs(self, n: int = 10):
+        """
+        Retourne les N paires de langues les plus utilisées
+
+        Args:
+            n: Nombre de paires à retourner
+
+        Returns:
+            Liste de tuples (clé, position) des paires les plus fréquentes
+        """
+        return self._pipeline_cache.get_top_pairs(n)
