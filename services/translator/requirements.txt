@@ -26,9 +26,9 @@ datasets>=3.0.0
 huggingface_hub>=0.20.0
 safetensors>=0.4.0
 peft>=0.7.0
-# Pin transformers <5.0.0 - v5 a des breaking changes pour NLLB pipeline
-# v5 exige src_lang/tgt_lang à la création du pipeline, incompatible avec notre architecture réutilisable
-transformers>=4.30.0,<5.0.0
+# EXPÉRIMENTAL: Tester transformers 5.0.0 avec quantization 4-bit
+# Notre architecture (API directe model.generate) devrait être compatible
+transformers>=5.0.0
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données
