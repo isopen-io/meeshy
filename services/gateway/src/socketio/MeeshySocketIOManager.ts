@@ -190,8 +190,8 @@ export class MeeshySocketIOManager {
       this.translationService.on('audioTranslationsProgressive', this._handleAudioTranslationsProgressive.bind(this));  // Progressive (multi)
       this.translationService.on('audioTranslationsCompleted', this._handleAudioTranslationsCompleted.bind(this));  // Dernière (multi)
 
-      // DEPRECATED: Conservé pour rétrocompatibilité
-      this.translationService.on('translationReady', this._handleTranslationReady.bind(this));
+      // Écouter les événements de traduction TEXTE
+      this.translationService.on('translationReady', this._handleTextTranslationReady.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -1607,18 +1607,6 @@ export class MeeshySocketIOManager {
    * @deprecated Utilisez _handleAudioTranslationReady, _handleAudioTranslationsProgressive ou _handleAudioTranslationsCompleted
    * Délègue au helper générique avec un événement générique
    */
-  private async _handleTranslationReady(data: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    language: string;
-    translatedAudio: any;
-    phase?: string;
-  }) {
-    logger.info(`🌍 [DEPRECATED] _handleTranslationReady appelé - délégation au nouveau système`);
-    // Déléguer au handler audioTranslationsProgressive par défaut pour rétrocompatibilité
-    await this._handleAudioTranslationsProgressive(data);
-  }
 
   /**
    * Helper générique pour broadcaster les événements de traduction audio.
