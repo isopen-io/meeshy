@@ -210,9 +210,9 @@ services:
       - PYTHONPATH=/workspace:/workspace/generated
       - PYTHONUNBUFFERED=1
       - NODE_ENV=staging
-      - HF_HOME=/workspace/models
-      - TRANSFORMERS_CACHE=/workspace/models
-      - HUGGINGFACE_HUB_CACHE=/workspace/models
+      - HF_HOME=/workspace/models/huggingface
+      - TRANSFORMERS_CACHE=/workspace/models/huggingface
+      - HUGGINGFACE_HUB_CACHE=/workspace/models/huggingface
       - MAX_MESSAGE_LENGTH=10000
       - MAX_TEXT_LENGTH=100000
       - MAX_TRANSLATION_LENGTH=100000

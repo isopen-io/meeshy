@@ -204,9 +204,9 @@ services:
       - PYTHONPATH=/workspace:/workspace/generated
       - PYTHONUNBUFFERED=1
       - NODE_ENV=production
-      - HF_HOME=/workspace/models
-      - TRANSFORMERS_CACHE=/workspace/models
-      - HUGGINGFACE_HUB_CACHE=/workspace/models
+      - HF_HOME=/workspace/models/huggingface
+      - TRANSFORMERS_CACHE=/workspace/models/huggingface
+      - HUGGINGFACE_HUB_CACHE=/workspace/models/huggingface
       # Diarisation (activée par défaut)
       - ENABLE_DIARIZATION=${ENABLE_DIARIZATION:-true}
       # TTS Configuration
