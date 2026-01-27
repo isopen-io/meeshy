@@ -193,17 +193,28 @@ export const ConversationList = memo(function ConversationList({
           );
         })}
 
-        {/* Indicateur de chargement de plus de conversations */}
-        {isLoadingMore && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">
-              {t('loadingMore') || 'Chargement...'}
-            </span>
+        {/* Bouton "Charger plus" visible */}
+        {hasMore && onLoadMore && (
+          <div className="flex flex-col items-center gap-2 py-4 px-4">
+            <Button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              variant="outline"
+              className="w-full max-w-xs"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  {t('loadingMore')}
+                </>
+              ) : (
+                t('loadMore')
+              )}
+            </Button>
           </div>
         )}
 
-        {/* Trigger pour le chargement infini - invisible mais détecté */}
+        {/* Trigger pour le chargement automatique infini (optionnel) */}
         {hasMore && !isLoadingMore && (
           <div
             ref={loadMoreTriggerRef}

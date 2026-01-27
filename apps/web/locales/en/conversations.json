@@ -19,6 +19,8 @@
     "loading": "Loading conversations...",
     "loadingConversations": "Loading...",
     "loadingConversationsDescription": "Retrieving your conversations...",
+    "loadMore": "Load more conversations",
+    "loadingMore": "Loading...",
     "noConversations": "No conversations",
     "noConversationsDescription": "Start a new conversation to chat with your friends!",
     "chooseConversation": "Choose a conversation!",
