@@ -6,9 +6,18 @@ import {
   updateUserProfile,
   updateUserAvatar,
   updateUserPassword,
+  updateUsername,
   getUserByUsername,
   getUserById
 } from './profile';
+
+// Contact change routes (email/phone with verification)
+import {
+  initiateEmailChange,
+  verifyEmailChange,
+  initiatePhoneChange,
+  verifyPhoneChange
+} from './contact-change';
 
 // Preferences routes
 import {
@@ -41,8 +50,15 @@ export async function userRoutes(fastify: FastifyInstance) {
   await updateUserProfile(fastify);
   await updateUserAvatar(fastify);
   await updateUserPassword(fastify);
+  await updateUsername(fastify);
   await getUserByUsername(fastify);
   await getUserById(fastify);
+
+  // Contact change routes (email/phone with verification)
+  await initiateEmailChange(fastify);
+  await verifyEmailChange(fastify);
+  await initiatePhoneChange(fastify);
+  await verifyPhoneChange(fastify);
 
   // Preferences & stats routes
   await getDashboardStats(fastify);

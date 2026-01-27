@@ -762,10 +762,34 @@ export class AuthService {
   /**
    * Verify email with token
    */
-  async verifyEmail(token: string, email: string): Promise<{ success: boolean; error?: string }> {
+  async verifyEmail(token: string, email: string): Promise<{ success: boolean; error?: string; alreadyVerified?: boolean; verifiedAt?: Date }> {
     try {
       const hashedToken = this.hashToken(token);
       const normalizedEmail = email.trim().toLowerCase();
+
+      // First, check if user exists with this email
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          email: { equals: normalizedEmail, mode: 'insensitive' }
+        },
+        select: {
+          id: true,
+          email: true,
+          emailVerifiedAt: true,
+          emailVerificationToken: true,
+          emailVerificationExpiry: true
+        }
+      });
+
+      // If user exists and email is already verified, return success with verification date
+      if (existingUser && existingUser.emailVerifiedAt) {
+        logger.info(`[AUTH_SERVICE] ℹ️ Email déjà vérifié pour existingUser.email=${existingUser.email} le existingUser.emailVerifiedAt.toISOString()=${existingUser.emailVerifiedAt.toISOString()}`);
+        return {
+          success: true,
+          alreadyVerified: true,
+          verifiedAt: existingUser.emailVerifiedAt
+        };
+      }
 
       // Find user with matching token and email
       const user = await this.prisma.user.findFirst({
@@ -791,23 +815,19 @@ export class AuthService {
         return { success: false, error: 'Lien de vérification invalide.' };
       }
 
-      // Already verified?
-      if (user.emailVerifiedAt) {
-        return { success: true }; // Already verified, return success
-      }
-
       // Update user as verified
+      const now = new Date();
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          emailVerifiedAt: new Date(),
+          emailVerifiedAt: now,
           emailVerificationToken: null,
           emailVerificationExpiry: null
         }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Email vérifié pour user.email=${user.email}`);
-      return { success: true };
+      return { success: true, verifiedAt: now };
 
     } catch (error) {
       logger.error('[AUTH_SERVICE] ❌ Erreur lors de la vérification email', error);
@@ -872,6 +892,9 @@ export class AuthService {
         expiryHours: tokenExpiryHours,
         language: user.systemLanguage || 'fr'
       });
+
+      logger.info(`[AUTH_SERVICE] ✅ Email de vérification renvoyé à user.email=${normalizedEmail}`);
+      return { success: true };
 
     } catch (error) {
       logger.error('[AUTH_SERVICE] ❌ Erreur lors du renvoi de l\'email:', error);

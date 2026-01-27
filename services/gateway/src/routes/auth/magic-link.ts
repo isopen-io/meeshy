@@ -206,7 +206,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object', properties: { message: { type: 'string' } } }
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' },
+                alreadyVerified: { type: 'boolean' },
+                verifiedAt: { type: 'string', format: 'date-time' }
+              }
+            }
           }
         },
         400: errorResponseSchema,
@@ -231,11 +238,27 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         });
       }
 
+      if (result.alreadyVerified && result.verifiedAt) {
+        logger.info(`[AUTH] ℹ️ Email déjà vérifié pour email=${email} le result.verifiedAt.toISOString()=${result.verifiedAt.toISOString()}`);
+        return reply.send({
+          success: true,
+          data: {
+            message: 'Votre adresse email est déjà vérifiée.',
+            alreadyVerified: true,
+            verifiedAt: result.verifiedAt.toISOString()
+          }
+        });
+      }
+
       logger.info(`[AUTH] ✅ Email vérifié avec succès pour email=${email}`);
 
       return reply.send({
         success: true,
-        data: { message: 'Votre adresse email a été vérifiée avec succès !' }
+        data: {
+          message: 'Votre adresse email a été vérifiée avec succès !',
+          alreadyVerified: false,
+          verifiedAt: result.verifiedAt?.toISOString()
+        }
       });
 
     } catch (error) {
