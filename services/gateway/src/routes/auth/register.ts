@@ -273,7 +273,6 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Check phone number (E.164 format)
       if (phoneNumber) {
-        const { getRequestContext } = await import('../../utils/request-context');
         const requestContext = await getRequestContext(request);
 
         // Priorité: 1) Pays de la géoloc, 2) Défaut FR
