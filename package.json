@@ -39,6 +39,8 @@
     "postinstall": "turbo run generate --filter=@meeshy/shared",
     "changeset": "changeset",
     "changeset:add": "changeset add",
+    "changeset:auto": "node scripts/auto-changeset.js",
+    "changeset:auto:dry": "node scripts/auto-changeset.js --dry-run",
     "version": "changeset version && node scripts/sync-versions.js",
     "version:check": "changeset status",
     "sync-versions": "node scripts/sync-versions.js",

@@ -289,9 +289,14 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`v${{ matrix.version }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ matrix.version }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Platforms | \`${{ github.event.inputs.platforms || env.PLATFORMS }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags created:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # SECURITY: Scan images
@@ -309,10 +314,21 @@ jobs:
       security-events: write
 
     steps:
+      - name: Determine scan tag
+        id: scan-tag
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "tag=latest${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            echo "tag=staging${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Security scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:v${{ matrix.version }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
+          image-ref: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:${{ steps.scan-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-${{ matrix.service }}.sarif'
           severity: 'CRITICAL,HIGH'

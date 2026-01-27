@@ -199,7 +199,7 @@ services:
   # TRANSLATOR STAGING - ML Service
   # ===========================================================================
   translator-staging:
-    image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
+    image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:staging}
     container_name: meeshy-translator-staging
     restart: unless-stopped
     environment:
@@ -250,7 +250,7 @@ services:
   # GATEWAY STAGING - API Service
   # ===========================================================================
   gateway-staging:
-    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
+    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:staging}
     container_name: meeshy-gateway-staging
     restart: unless-stopped
     environment:
@@ -357,7 +357,7 @@ services:
   # FRONTEND STAGING - Next.js
   # ===========================================================================
   frontend-staging:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-frontend:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:staging}
     container_name: meeshy-frontend-staging
     restart: unless-stopped
     environment:
