@@ -1075,10 +1075,14 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                       const country = COUNTRY_CODES.find((c) => c.code === e.target.value);
                       if (country) setSelectedPhoneCountry(country);
                     }}
-                    className="w-[90px] px-2 py-2 rounded-md text-sm border-2 border-gray-200 dark:border-gray-700 focus:border-purple-500 focus:outline-none focus:ring-0"
+                    className="w-[90px] px-2 py-2 rounded-md text-sm border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-purple-500 focus:outline-none focus:ring-0"
                   >
                     {COUNTRY_CODES.map((country) => (
-                      <option key={country.code} value={country.code}>
+                      <option
+                        key={country.code}
+                        value={country.code}
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      >
                         {country.flag} {country.dial}
                       </option>
                     ))}

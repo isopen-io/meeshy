@@ -104,12 +104,17 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
               disabled={disabled}
               className={cn(
                 "w-[90px] px-2 py-2 rounded-md text-sm border-2 bg-white/70 dark:bg-gray-800/70 sm:bg-white/50 sm:dark:bg-gray-800/50 sm:backdrop-blur-sm",
+                "text-gray-900 dark:text-gray-100",
                 "focus:outline-none focus:ring-0 focus:ring-offset-0",
                 "border-gray-200 dark:border-gray-700 focus:border-cyan-500"
               )}
             >
               {COUNTRY_CODES.map((country) => (
-                <option key={country.code} value={country.code}>
+                <option
+                  key={country.code}
+                  value={country.code}
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                >
                   {country.flag} {country.dial}
                 </option>
               ))}
