@@ -178,7 +178,7 @@ export function useRegistrationValidation({
     checkEmailAvailability(formData.email);
   }, [formData.email, checkEmailAvailability]);
 
-  // Phone validation effect
+  // Phone validation effect - Will be replaced by usePhoneValidation hook in parent
   useEffect(() => {
     if (!formData.phoneNumber) {
       setPhoneValidationStatus('idle');
@@ -187,6 +187,7 @@ export function useRegistrationValidation({
       return;
     }
 
+    // Basic validation - robust validation is done in parent with usePhoneValidation
     const cleanNumber = formData.phoneNumber.replace(/\s/g, '');
     if (cleanNumber.length < 6) {
       setPhoneValidationStatus('invalid');
@@ -197,7 +198,6 @@ export function useRegistrationValidation({
 
     setPhoneErrorMessage('');
     setPhoneValidationStatus('idle');
-    // Note: Phone validation with country code should be done in the parent component
   }, [formData.phoneNumber]);
 
   const hasExistingAccount = emailValidationStatus === 'exists' || phoneValidationStatus === 'exists';

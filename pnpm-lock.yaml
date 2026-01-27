@@ -146,6 +146,9 @@ importers:
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
+      libphonenumber-js:
+        specifier: ^1.12.35
+        version: 1.12.35
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.3)
@@ -546,6 +549,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  services/translator: {}
 
 packages:
 

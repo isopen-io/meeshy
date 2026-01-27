@@ -19,6 +19,8 @@ import type { JoinConversationResponse } from '@/types/frontend';
 import { useRegistrationWizard, WIZARD_STEPS } from '@/hooks/use-registration-wizard';
 import { useRegistrationValidation } from '@/hooks/use-registration-validation';
 import { useRegistrationSubmit } from '@/hooks/use-registration-submit';
+import { usePhoneValidation } from '@/hooks/use-phone-validation';
+import type { CountryCode } from 'libphonenumber-js';
 
 // Step Components (dynamically imported)
 import {
@@ -135,15 +137,32 @@ export function RegisterFormWizard({
     usernameSuggestions,
     emailValidationStatus,
     emailErrorMessage,
-    phoneValidationStatus,
-    phoneErrorMessage,
     existingAccount,
     hasExistingAccount,
     checkPhoneAvailability,
-    setPhoneErrorMessage,
-    setPhoneValidationStatus,
     setUsernameSuggestions,
   } = validation;
+
+  // Robust phone validation with libphonenumber-js
+  const phoneValidation = usePhoneValidation({
+    countryCode: selectedCountry.code as CountryCode,
+    phoneNumber: formData.phoneNumber,
+    disabled: disabled || currentStepData?.id !== 'contact',
+    checkAvailability: true,
+    onValidationChange: (isValid, formatted) => {
+      if (isValid && formatted) {
+        // Check if phone already exists
+        checkPhoneAvailability(formatted);
+      }
+    }
+  });
+
+  const {
+    status: phoneValidationStatus,
+    errorMessage: phoneErrorMessage,
+    formattedE164,
+    formatAsYouType,
+  } = phoneValidation;
 
   const submission = useRegistrationSubmit({
     onSuccess,
@@ -217,44 +236,17 @@ export function RegisterFormWizard({
     return () => clearTimeout(timer);
   }, [currentStep]);
 
-  // Phone validation
-  const validatePhoneField = useCallback(async (phone: string) => {
-    if (!phone.trim()) {
-      setPhoneValidationStatus('invalid');
-      setPhoneErrorMessage(t('register.validation.phoneRequired'));
-      return false;
-    }
-    const { getPhoneValidationError, translatePhoneError } = await import('@/utils/phone-validator');
-    const errorKey = getPhoneValidationError(phone);
-    if (errorKey) {
-      setPhoneValidationStatus('invalid');
-      setPhoneErrorMessage(translatePhoneError(errorKey, t));
-      return false;
-    }
-    return true;
-  }, [t, setPhoneValidationStatus, setPhoneErrorMessage]);
-
-  // Phone formatting
+  // Phone formatting with as-you-type using libphonenumber-js
   const handlePhoneChange = useCallback((value: string) => {
-    const cleaned = value.replace(/^0+/, '').replace(/[^\d\s]/g, '');
-    updateFormData({ phoneNumber: cleaned });
-  }, [updateFormData]);
+    // Format as user types
+    const formatted = formatAsYouType(value);
+    updateFormData({ phoneNumber: formatted });
+  }, [updateFormData, formatAsYouType]);
 
-  // Build full phone number
+  // Get validated E.164 phone number for submission
   const getFullPhoneNumber = useCallback(() => {
-    if (!formData.phoneNumber.trim()) return '';
-    const cleanNumber = formData.phoneNumber.replace(/\s/g, '').replace(/^0+/, '');
-    return `${selectedCountry.dial}${cleanNumber}`;
-  }, [formData.phoneNumber, selectedCountry.dial]);
-
-  // Phone validation with country code
-  useEffect(() => {
-    if (!formData.phoneNumber) return;
-    const fullPhone = getFullPhoneNumber();
-    if (fullPhone && fullPhone.length >= 8) {
-      checkPhoneAvailability(fullPhone);
-    }
-  }, [formData.phoneNumber, selectedCountry.dial, getFullPhoneNumber, checkPhoneAvailability]);
+    return formattedE164 || '';
+  }, [formattedE164]);
 
   // Email change handler
   const handleEmailChange = useCallback((value: string) => {
@@ -271,7 +263,9 @@ export function RegisterFormWizard({
     switch (step.id) {
       case 'contact':
         const emailOk = emailValidationStatus === 'valid';
-        const phoneOk = !formData.phoneNumber.trim() || phoneValidationStatus === 'valid';
+        // Phone is optional but if provided must be valid
+        const phoneOk = !formData.phoneNumber.trim() ||
+                       (phoneValidationStatus === 'valid' && formattedE164 !== null);
         return emailOk && phoneOk;
       case 'identity':
         return formData.firstName.trim().length >= 2 && formData.lastName.trim().length >= 2;
@@ -308,8 +302,15 @@ export function RegisterFormWizard({
 
     const fullPhoneNumber = getFullPhoneNumber();
 
+    // Phone validation is already done by usePhoneValidation hook
+    // If phone is provided, it must be valid (E.164 format)
+    if (formData.phoneNumber.trim() && !fullPhoneNumber) {
+      toast.error(t('register.validation.phoneInvalid'));
+      return;
+    }
+
     await submitRegistration(formData, fullPhoneNumber, {
-      validatePhoneField,
+      validatePhoneField: async () => true, // Already validated by usePhoneValidation
       validateSubmission,
       confirmPassword,
       acceptTerms,

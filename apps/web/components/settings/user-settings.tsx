@@ -222,7 +222,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       // Update user with API response
       const updatedUser: UserType = {
         ...user,
-        ...responseData.data
+        ...responseData.data.user
       };
 
       onUserUpdate(updatedUser);
@@ -694,15 +694,15 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       }
 
       const responseData = await response.json();
-      
+
       // Mettre à jour l'utilisateur avec les données retournées par l'API
       const updatedUser: UserType = {
         ...user,
-        ...responseData.data
+        ...responseData.data.user
       };
-      
+
       onUserUpdate(updatedUser);
-      toast.success(responseData.message || t('profile.actions.profileUpdated'));
+      toast.success(responseData.data.message || t('profile.actions.profileUpdated'));
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
       toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
