@@ -593,8 +593,8 @@ export function registerSharingRoutes(
             data: {
               type: 'object',
               properties: {
-                conversation: conversationSchema,
-                membership: conversationParticipantSchema
+                message: { type: 'string' },
+                conversationId: { type: 'string' }
               }
             }
           }

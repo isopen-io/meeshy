@@ -115,6 +115,13 @@ export function useConversationJoin(linkId: string) {
 
         if (response.ok) {
           const result = await response.json();
+
+          if (!result.data?.conversationId) {
+            console.error('[JOIN] conversationId manquant dans la réponse:', result);
+            toast.error('Erreur: ID de conversation manquant');
+            return;
+          }
+
           toast.success('Redirection...');
           router.push(`/conversations/${result.data.conversationId}`);
         } else {
