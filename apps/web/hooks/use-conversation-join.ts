@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
-import { LinkConversationService } from '@/services/link-conversation.service';
 import type { AnonymousFormData } from './use-join-flow';
 
 export function useConversationJoin(linkId: string) {
@@ -107,34 +106,6 @@ export function useConversationJoin(linkId: string) {
       }
 
       if (authToken) {
-        let conversationShareLinkId: string;
-        try {
-          const linkInfo = await LinkConversationService.getLinkInfo(linkId);
-          if (!linkInfo.success) {
-            throw new Error('Impossible de récupérer les informations du lien');
-          }
-          conversationShareLinkId = linkInfo.data.id;
-        } catch (error) {
-          console.error('[JOIN_CONVERSATION] Erreur récupération linkInfo:', error);
-          toast.error('Erreur lors du chargement du lien');
-          return;
-        }
-
-        const chatResponse = await fetch(`${buildApiUrl('/api/links')}/${conversationShareLinkId}`, {
-          method: 'GET',
-          headers
-        });
-
-        if (chatResponse.ok) {
-          const chatResult = await chatResponse.json();
-
-          if (chatResult.success && chatResult.data.userType === 'member') {
-            toast.success('Redirection...');
-            router.push(`/conversations/${chatResult.data.conversation.id}`);
-            return;
-          }
-        }
-
         const response = await fetch(`${buildApiUrl('/conversations/join')}/${linkId}`, {
           method: 'POST',
           headers: {
