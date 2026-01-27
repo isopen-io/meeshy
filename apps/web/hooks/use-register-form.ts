@@ -3,10 +3,10 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/useI18n';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
+import { useAuthActions } from '@/stores';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { User } from '@/types';
@@ -30,33 +30,36 @@ interface UseRegisterFormProps {
 }
 
 export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegisterFormProps = {}) {
+  console.log('[useRegisterForm] Hook called');
   const router = useRouter();
-  const { login } = useAuth();
+  const { setUser, setTokens } = useAuthActions();
   const { t } = useI18n('auth');
-  const { identifier: sharedIdentifier } = useAuthFormStore();
+  const sharedIdentifier = useAuthFormStore(state => state.identifier);
 
-  // Initialize form data with shared identifier
-  const getInitialEmail = () => {
-    if (sharedIdentifier && sharedIdentifier.includes('@')) return sharedIdentifier;
-    return '';
-  };
+  // Create a stable login function
+  const login = useCallback((user: User, token: string, sessionToken?: string, expiresIn?: number) => {
+    setUser(user);
+    setTokens(token, undefined, sessionToken, expiresIn);
+  }, [setUser, setTokens]);
 
-  const getInitialPhone = () => {
-    if (sharedIdentifier && !sharedIdentifier.includes('@') && /^\+?\d/.test(sharedIdentifier)) {
-      return sharedIdentifier;
-    }
-    return '';
-  };
+  // Initialiser le state avec une fonction d'initialisation paresseuse (lazy initialization)
+  // Cette fonction ne s'exécute qu'une seule fois lors de la création du state
+  const [formData, setFormData] = useState<RegisterFormData>(() => {
+    const email = (sharedIdentifier && sharedIdentifier.includes('@')) ? sharedIdentifier : '';
+    const phone = (sharedIdentifier && !sharedIdentifier.includes('@') && /^\+?\d/.test(sharedIdentifier))
+      ? sharedIdentifier
+      : '';
 
-  const [formData, setFormData] = useState<RegisterFormData>({
-    username: '',
-    password: '',
-    firstName: '',
-    lastName: '',
-    email: getInitialEmail(),
-    phoneNumber: getInitialPhone(),
-    systemLanguage: 'fr',
-    regionalLanguage: 'en',
+    return {
+      username: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+      email,
+      phoneNumber: phone,
+      systemLanguage: 'fr',
+      regionalLanguage: 'en',
+    };
   });
 
   const [isLoading, setIsLoading] = useState(false);

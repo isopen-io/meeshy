@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 interface BotProtectionConfig {
   /** Minimum time in ms before form can be submitted (default: 2000ms) */
@@ -89,7 +89,6 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
 
   // Track when the form was loaded
   const loadTimeRef = useRef<number>(Date.now());
-  const [timeElapsed, setTimeElapsed] = useState(0);
 
   // Honeypot field state
   const [honeypotValue, setHoneypotValue] = useState('');
@@ -99,15 +98,6 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
 
   // Track mouse/keyboard activity (humans interact, bots often don't)
   const hasInteractionRef = useRef(false);
-
-  // Update time elapsed periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeElapsed(Date.now() - loadTimeRef.current);
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
 
   // Mark JS as verified after component mounts (proves browser executed JS)
   useEffect(() => {
@@ -180,16 +170,20 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
   // Reset protection state
   const reset = useCallback(() => {
     loadTimeRef.current = Date.now();
-    setTimeElapsed(0);
     setHoneypotValue('');
     hasInteractionRef.current = false;
   }, []);
 
-  // Honeypot input props - spread these on a hidden input
-  const honeypotProps = {
+  // Honeypot onChange handler - memoized to prevent recreation
+  const handleHoneypotChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setHoneypotValue(e.target.value);
+  }, []);
+
+  // Honeypot input props - memoized to prevent recreation
+  const honeypotProps = useMemo(() => ({
     name: honeypotFieldName,
     value: honeypotValue,
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setHoneypotValue(e.target.value),
+    onChange: handleHoneypotChange,
     style: {
       position: 'absolute' as const,
       left: '-9999px',
@@ -203,17 +197,15 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
     tabIndex: -1,
     autoComplete: 'off',
     'aria-hidden': true as const,
-  };
+  }), [honeypotFieldName, honeypotValue, handleHoneypotChange]);
+
+  // Compute timeElapsed only when needed (not as state)
+  // Don't return it to avoid unnecessary re-renders
 
   return {
-    honeypotValue,
-    setHoneypotValue,
-    honeypotFieldName,
+    honeypotProps,
     validateSubmission,
     reset,
-    timeElapsed,
-    jsVerified,
-    honeypotProps,
   };
 }
 

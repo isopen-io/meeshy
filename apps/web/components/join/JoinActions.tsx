@@ -4,7 +4,6 @@ import { CheckCircle, ExternalLink, LogIn, UserPlus, UserMinus } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LoginForm } from '@/components/auth/login-form';
-import { RegisterForm } from '@/components/auth/register-form';
 import { useI18n } from '@/hooks/useI18n';
 import { User } from '@meeshy/shared/types';
 import { AuthMode } from '@/types';
@@ -125,27 +124,12 @@ export function JoinActions({
             </DialogContent>
           </Dialog>
 
-          <Dialog open={authMode === 'register'} onOpenChange={(open) => onAuthModeChange(open ? 'register' : 'welcome')}>
-            <DialogTrigger asChild>
-              <Button size="lg">
-                <UserPlus className="h-4 w-4 mr-2" />
-                {t('signUp')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b shrink-0">
-                <DialogHeader>
-                  <DialogTitle>{t('createAccount')}</DialogTitle>
-                  <DialogDescription>
-                    {t('createAccountToJoin')}
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-              <div className="flex-1 overflow-y-auto px-6 min-h-0">
-                <RegisterForm onSuccess={onAuthSuccess} formPrefix="register-join-large" />
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button size="lg" asChild>
+            <a href="/signup">
+              <UserPlus className="h-4 w-4 mr-2" />
+              {t('signUp')}
+            </a>
+          </Button>
         </div>
       </div>
     </div>
