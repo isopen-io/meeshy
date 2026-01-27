@@ -12,6 +12,13 @@
       "loadSettings": "Erreur lors du chargement des paramètres",
       "updateSettings": "Erreur lors de la mise à jour"
     },
+    "register": {
+      "errors": {
+        "usernameExists": "Ce nom d'utilisateur est déjà pris",
+        "emailExists": "Cet email est déjà utilisé",
+        "phoneExists": "Ce numéro de téléphone est déjà utilisé"
+      }
+    },
     "success": {
       "settingsUpdated": "Paramètres mis à jour avec succès"
     },
