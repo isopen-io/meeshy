@@ -273,13 +273,26 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Check phone number (E.164 format)
       if (phoneNumber) {
-        const normalizedPhone = normalizePhoneNumber(phoneNumber);
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            phoneNumber: normalizedPhone
-          }
-        });
-        result.phoneNumberAvailable = !existingUser;
+        const { getRequestContext } = await import('../../utils/request-context');
+        const requestContext = await getRequestContext(request);
+
+        // Priorité: 1) Pays de la géoloc, 2) Défaut FR
+        const defaultCountry = requestContext?.geoData?.country || 'FR';
+
+        const { normalizePhoneWithCountry } = await import('../../utils/normalize');
+        const phoneResult = normalizePhoneWithCountry(phoneNumber, defaultCountry);
+
+        if (phoneResult && phoneResult.isValid) {
+          const existingUser = await prisma.user.findFirst({
+            where: {
+              phoneNumber: phoneResult.phoneNumber
+            }
+          });
+          result.phoneNumberAvailable = !existingUser;
+        } else {
+          // Numéro invalide → considérer comme non disponible
+          result.phoneNumberAvailable = false;
+        }
       }
 
       return reply.send({
