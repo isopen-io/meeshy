@@ -78,6 +78,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showAvatarDialog, setShowAvatarDialog] = useState(false);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,10 +330,13 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         ...user,
         avatar: responseData.data.avatar
       };
-      
+
+      // Force re-render de l'avatar image
+      setAvatarTimestamp(Date.now());
+
       onUserUpdate(updatedUser);
       toast.success('Photo de profil mise à jour avec succès');
-      
+
       // Fermer le dialogue et nettoyer
       setShowAvatarDialog(false);
       setAvatarPreview(null);
@@ -820,7 +824,11 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
             <Avatar className="h-24 w-24 sm:h-20 sm:w-20">
-              <AvatarImage src={user.avatar} alt={user.username} />
+              <AvatarImage
+                src={user.avatar ? `${user.avatar}?t=${avatarTimestamp}` : user.avatar}
+                alt={user.username}
+                key={`${user.avatar}-${avatarTimestamp}`}
+              />
               <AvatarFallback className="text-lg">
                 {getUserInitials(user)}
               </AvatarFallback>
