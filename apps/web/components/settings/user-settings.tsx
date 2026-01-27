@@ -36,6 +36,9 @@ import { authManager } from '@/services/auth-manager.service';
 import { Separator } from '@/components/ui/separator';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { useFieldValidation } from '@/hooks/use-field-validation';
+import { usePhoneValidation } from '@/hooks/use-phone-validation';
+import { COUNTRY_CODES } from '@/constants/countries';
+import type { CountryCode } from 'libphonenumber-js';
 
 interface UserSettingsProps {
   user: UserType | null;
@@ -119,6 +122,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [isChangingPhone, setIsChangingPhone] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [newPhone, setNewPhone] = useState('');
+  const [selectedPhoneCountry, setSelectedPhoneCountry] = useState(COUNTRY_CODES[0]);
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [pendingPhoneCode, setPendingPhoneCode] = useState('');
   const [showPendingPhoneVerification, setShowPendingPhoneVerification] = useState(false);
@@ -138,11 +142,12 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     type: 'email'
   });
 
-  const phoneValidation = useFieldValidation({
-    value: newPhone,
-    disabled: !isChangingPhone || newPhone === formData.phoneNumber,
-    t,
-    type: 'phone'
+  // Validation robuste du téléphone avec libphonenumber-js
+  const phoneValidation = usePhoneValidation({
+    countryCode: selectedPhoneCountry.code as CountryCode,
+    phoneNumber: newPhone,
+    disabled: !isChangingPhone,
+    checkAvailability: true,
   });
 
   useEffect(() => {
@@ -442,20 +447,21 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
    * Initier le changement de téléphone
    */
   const handleInitiatePhoneChange = async () => {
-    if (!newPhone || phoneValidation.status !== 'valid') {
+    if (!newPhone || phoneValidation.status !== 'valid' || !phoneValidation.formattedE164) {
       toast.error(t('profile.phone.invalidOrTaken', 'Téléphone invalide ou déjà utilisé'));
       return;
     }
 
     setIsSavingPhone(true);
     try {
+      // Envoyer le numéro au format E.164
       const response = await fetch(buildApiUrl('/users/me/change-phone'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authManager.getAuthToken()}`
         },
-        body: JSON.stringify({ newPhoneNumber: newPhone })
+        body: JSON.stringify({ newPhoneNumber: phoneValidation.formattedE164 })
       });
 
       const data = await response.json();
@@ -1052,72 +1058,100 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
             {isChangingPhone ? (
               <div className="space-y-2">
-                <div className="relative">
-                  <Input
-                    id="settings-phoneNumber"
-                    type="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="+33612345678"
-                    className={`w-full pl-10 pr-24 ${
-                      phoneValidation.status === 'valid' ? 'border-green-500' :
-                      phoneValidation.status === 'taken' ? 'border-red-500' : ''
-                    }`}
-                  />
+                {/* Sélecteur de pays + Input téléphone */}
+                <div className="flex gap-2">
+                  {/* Country code selector */}
+                  <select
+                    value={selectedPhoneCountry.code}
+                    onChange={(e) => {
+                      const country = COUNTRY_CODES.find((c) => c.code === e.target.value);
+                      if (country) setSelectedPhoneCountry(country);
+                    }}
+                    className="w-[90px] px-2 py-2 rounded-md text-sm border-2 border-gray-200 dark:border-gray-700 focus:border-purple-500 focus:outline-none focus:ring-0"
+                  >
+                    {COUNTRY_CODES.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.flag} {country.dial}
+                      </option>
+                    ))}
+                  </select>
 
-                  {/* Indicateur de statut à gauche */}
-                  {(phoneValidation.status === 'checking' || phoneValidation.status === 'valid' || phoneValidation.status === 'taken') && (
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
-                      {phoneValidation.status === 'checking' && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
-                      {phoneValidation.status === 'valid' && (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      )}
-                      {phoneValidation.status === 'taken' && (
-                        <AlertCircle className="h-4 w-4 text-red-600" />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Boutons Enregistrer et Annuler à droite */}
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
-                    <Button
-                      size="sm"
-                      onClick={handleInitiatePhoneChange}
-                      disabled={isSavingPhone || phoneValidation.status !== 'valid' || !newPhone}
-                      className="h-8 px-2 sm:px-3 bg-purple-600 hover:bg-purple-700 text-white"
-                      title={t('profile.actions.save', 'Enregistrer')}
-                    >
-                      {isSavingPhone ? (
-                        <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-                      ) : (
-                        <Check className="h-3 w-3 sm:mr-1" />
-                      )}
-                      <span className="hidden sm:inline text-xs">{t('profile.actions.save', 'Enregistrer')}</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setIsChangingPhone(false);
-                        setNewPhone('');
+                  {/* Phone number input with validation */}
+                  <div className="relative flex-1">
+                    <Input
+                      id="settings-phoneNumber"
+                      type="tel"
+                      inputMode="tel"
+                      value={newPhone}
+                      onChange={(e) => {
+                        // Format as you type
+                        const formatted = phoneValidation.formatAsYouType(e.target.value);
+                        setNewPhone(formatted);
                       }}
-                      className="h-8 px-2 sm:px-3"
-                      title={t('profile.actions.cancel', 'Annuler')}
-                    >
-                      <X className="h-3 w-3 sm:mr-1" />
-                      <span className="hidden sm:inline text-xs">{t('profile.actions.cancel', 'Annuler')}</span>
-                    </Button>
+                      placeholder="6 12 34 56 78"
+                      className={`w-full pl-10 pr-24 ${
+                        phoneValidation.status === 'valid' ? 'border-green-500' :
+                        phoneValidation.status === 'exists' ? 'border-red-500' :
+                        phoneValidation.status === 'invalid' && newPhone ? 'border-red-500' : ''
+                      }`}
+                    />
+
+                    {/* Indicateur de statut à gauche */}
+                    {(phoneValidation.status === 'checking' || phoneValidation.status === 'valid' || phoneValidation.status === 'exists' || phoneValidation.status === 'invalid') && newPhone && (
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+                        {phoneValidation.status === 'checking' && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {phoneValidation.status === 'valid' && (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        )}
+                        {(phoneValidation.status === 'exists' || phoneValidation.status === 'invalid') && (
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Boutons Enregistrer et Annuler à droite */}
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
+                      <Button
+                        size="sm"
+                        onClick={handleInitiatePhoneChange}
+                        disabled={isSavingPhone || phoneValidation.status !== 'valid' || !newPhone || !phoneValidation.formattedE164}
+                        className="h-8 px-2 sm:px-3 bg-purple-600 hover:bg-purple-700 text-white"
+                        title={t('profile.actions.save', 'Enregistrer')}
+                      >
+                        {isSavingPhone ? (
+                          <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3 sm:mr-1" />
+                        )}
+                        <span className="hidden sm:inline text-xs">{t('profile.actions.save', 'Enregistrer')}</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsChangingPhone(false);
+                          setNewPhone('');
+                        }}
+                        className="h-8 px-2 sm:px-3"
+                        title={t('profile.actions.cancel', 'Annuler')}
+                      >
+                        <X className="h-3 w-3 sm:mr-1" />
+                        <span className="hidden sm:inline text-xs">{t('profile.actions.cancel', 'Annuler')}</span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                {phoneValidation.errorMessage && (
+                {phoneValidation.errorMessage && newPhone && (
                   <p className="text-xs text-red-600">{phoneValidation.errorMessage}</p>
                 )}
 
-                {phoneValidation.status === 'valid' && (
-                  <p className="text-xs text-green-600">{t('profile.phone.available', 'Numéro disponible')}</p>
+                {phoneValidation.status === 'valid' && newPhone && (
+                  <p className="text-xs text-green-600">
+                    {t('profile.phone.available', 'Numéro disponible')} ({phoneValidation.formattedE164})
+                  </p>
                 )}
               </div>
             ) : (
