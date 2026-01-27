@@ -315,60 +315,11 @@ export default function SettingsPage() {
     }
   }, [prefetchedTabs]);
 
-  // Handle user update
-  const handleUserUpdate = async (updatedUser: Partial<User>) => {
-    try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      // Filter only allowed fields
-      const filteredData: Record<string, any> = {};
-
-      if ('firstName' in updatedUser) filteredData.firstName = updatedUser.firstName;
-      if ('lastName' in updatedUser) filteredData.lastName = updatedUser.lastName;
-      if ('displayName' in updatedUser) filteredData.displayName = updatedUser.displayName;
-      if ('email' in updatedUser) filteredData.email = updatedUser.email;
-      if ('phoneNumber' in updatedUser) filteredData.phoneNumber = updatedUser.phoneNumber;
-      if ('bio' in updatedUser) filteredData.bio = updatedUser.bio;
-
-      // Message translation languages (managed in Profile tab)
-      if ('systemLanguage' in updatedUser) filteredData.systemLanguage = updatedUser.systemLanguage;
-      if ('regionalLanguage' in updatedUser) {
-        filteredData.regionalLanguage = updatedUser.regionalLanguage === '' ? null : updatedUser.regionalLanguage;
-      }
-      if ('customDestinationLanguage' in updatedUser) {
-        filteredData.customDestinationLanguage = updatedUser.customDestinationLanguage === '' ? null : updatedUser.customDestinationLanguage;
-      }
-
-      const response = await fetch(buildApiUrl('/users/me'), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(filteredData)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          setCurrentUser({ ...currentUser, ...result.data });
-          toast.success(t('success.settingsUpdated'));
-        } else {
-          throw new Error(result.error || t('errors.updateSettings'));
-        }
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || t('errors.updateSettings'));
-      }
-    } catch (error) {
-      console.error('Error updating settings:', error);
-      toast.error(error instanceof Error ? error.message : t('errors.updateSettings'));
-    }
-  };
+  // Handle user update - just update local state (API already called by child component)
+  const handleUserUpdate = useCallback((updatedUser: User) => {
+    // Update local state with the user data returned from the API
+    setCurrentUser(updatedUser);
+  }, []);
 
   // Memoized tab items for ResponsiveTabs
   const tabItems = useMemo(() => tabs.map(tab => ({

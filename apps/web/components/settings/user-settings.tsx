@@ -708,7 +708,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       };
 
       onUserUpdate(updatedUser);
-      toast.success(responseData.data.message || t('profile.actions.profileUpdated'));
+      toast.success(t('profile.actions.profileUpdated'));
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
       toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
