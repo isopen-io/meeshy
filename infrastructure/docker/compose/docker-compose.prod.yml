@@ -193,7 +193,7 @@ services:
   # TRANSLATOR - ML Service (ml.meeshy.me)
   # ===========================================================================
   translator:
-    image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
+    image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:1.0.0}
     container_name: meeshy-translator
     restart: unless-stopped
     environment:
@@ -239,7 +239,7 @@ services:
   # GATEWAY - API Service (gate.meeshy.me)
   # ===========================================================================
   gateway:
-    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
+    image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:1.1.0}
     container_name: meeshy-gateway
     restart: unless-stopped
     environment:
@@ -343,7 +343,7 @@ services:
   # FRONTEND - Next.js (meeshy.me)
   # ===========================================================================
   frontend:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:latest}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:1.1.0}
     container_name: meeshy-web
     restart: unless-stopped
     environment:
