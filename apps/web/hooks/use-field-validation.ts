@@ -62,7 +62,7 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
 
   const checkAvailability = useCallback(async (val: string) => {
     try {
-      const param = type === 'username' ? 'username' : type === 'email' ? 'email' : 'phone';
+      const param = type === 'username' ? 'username' : type === 'email' ? 'email' : 'phoneNumber';
       const response = await fetch(
         buildApiUrl(`/auth/check-availability?${param}=${encodeURIComponent(val.trim())}`)
       );
@@ -71,7 +71,7 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
         const result = await response.json();
         if (result.success) {
           const availableKey = type === 'username' ? 'usernameAvailable' :
-                               type === 'email' ? 'emailAvailable' : 'phoneAvailable';
+                               type === 'email' ? 'emailAvailable' : 'phoneNumberAvailable';
 
           if (result.data?.[availableKey]) {
             setStatus(type === 'username' ? 'available' : 'valid');
