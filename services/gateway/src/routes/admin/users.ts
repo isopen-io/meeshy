@@ -46,11 +46,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   const userAuditService = new UserAuditService(fastify.prisma);
 
   /**
-   * GET /admin/user-management - Liste tous les utilisateurs (avec sanitization)
+   * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
    */
   fastify.get<{
     Querystring: UserFilters & { offset?: string; limit?: string };
-  }>('/admin/user-management', {
+  }>('/admin/users', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
@@ -124,7 +124,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.get<{
     Params: { userId: string };
-  }>('/admin/user-management/:userId', {
+  }>('/admin/users/:userId', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
@@ -173,7 +173,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.post<{
     Body: CreateUserDTO;
-  }>('/admin/user-management', {
+  }>('/admin/users', {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
@@ -245,7 +245,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.patch<{
     Params: { userId: string };
     Body: UpdateUserProfileDTO;
-  }>('/admin/user-management/:userId', {
+  }>('/admin/users/:userId', {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
@@ -341,7 +341,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.patch<{
     Params: { userId: string };
     Body: UpdateRoleDTO;
-  }>('/admin/user-management/:userId/role', {
+  }>('/admin/users/:userId/role', {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
@@ -432,7 +432,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.patch<{
     Params: { userId: string };
     Body: UpdateStatusDTO;
-  }>('/admin/user-management/:userId/status', {
+  }>('/admin/users/:userId/status', {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
@@ -519,7 +519,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Params: { userId: string };
     Body: ResetPasswordDTO;
-  }>('/admin/user-management/:userId/reset-password', {
+  }>('/admin/users/:userId/reset-password', {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
@@ -596,7 +596,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.delete<{
     Params: { userId: string };
-  }>('/admin/user-management/:userId', {
+  }>('/admin/users/:userId', {
     preHandler: [fastify.authenticate, requireUserDeleteAccess]
   }, async (request, reply) => {
     try {

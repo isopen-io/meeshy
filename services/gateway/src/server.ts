@@ -37,6 +37,7 @@ import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
+import { dashboardRoutes } from './routes/admin/dashboard';
 import { userAdminRoutes } from './routes/admin/users';
 import { reportRoutes } from './routes/admin/reports';
 import { invitationRoutes } from './routes/admin/invitations';
@@ -827,7 +828,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register admin routes - Each admin route is registered individually below with specific prefixes
     // (Removed global adminRoutes registration to avoid duplicate route declarations)
 
-    // Register enhanced admin user management routes (at /api/admin/user-management)
+    // Register admin dashboard routes (at /api/admin/dashboard)
+    await this.server.register(dashboardRoutes, { prefix: `${API_PREFIX}/admin` });
+
+    // Register enhanced admin user management routes (at /api/v1/admin/users)
     await this.server.register(userAdminRoutes, { prefix: API_PREFIX });
 
     // Register admin report routes (at /api/admin/reports)
@@ -871,10 +875,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
 
     // Register conversation encryption routes with /api prefix
-    await this.server.register(conversationEncryptionRoutes, { prefix: '' });
+    // TEMPORAIREMENT COMMENTÉ - timeout au démarrage
+    // TODO: Investiguer et corriger le timeout dans conversation-encryption.ts
+    // await this.server.register(conversationEncryptionRoutes, { prefix: '' });
 
     // Register encryption key exchange routes with /api prefix
-    await this.server.register(encryptionKeysRoutes, { prefix: '' });
+    // TEMPORAIREMENT COMMENTÉ - timeout au démarrage (getEncryptionService prend trop de temps)
+    // TODO: Investiguer et corriger le timeout dans encryption-keys.ts
+    // await this.server.register(encryptionKeysRoutes, { prefix: '' });
 
     // Register affiliate routes
     await this.server.register(affiliateRoutes, { prefix: API_PREFIX });

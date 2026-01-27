@@ -7,6 +7,7 @@ import { languagesRoutes } from './languages';
 import { messagesRoutes } from './messages';
 import { registerRoleRoutes } from './roles';
 import { registerContentRoutes } from './content';
+import { dashboardRoutes } from './dashboard';
 
 /**
  * Point d'entrée principal pour toutes les routes d'administration
@@ -14,6 +15,7 @@ import { registerContentRoutes } from './content';
  */
 export async function adminRoutes(fastify: FastifyInstance) {
   // Enregistrer toutes les sous-routes d'administration
+  await fastify.register(dashboardRoutes);
   await fastify.register(userAdminRoutes);
   await fastify.register(reportRoutes);
   await fastify.register(invitationRoutes);
@@ -25,6 +27,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 }
 
 // Re-export des sous-routes pour imports directs
+export { dashboardRoutes } from './dashboard';
 export { userAdminRoutes } from './users';
 export { reportRoutes } from './reports';
 export { invitationRoutes } from './invitations';
