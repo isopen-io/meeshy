@@ -60,7 +60,7 @@ export const useUploadRetry = ({ maxRetries = 3 }: UseUploadRetryProps = {}) => 
         return rest;
       });
 
-      throw lastError;
+      throw lastError || new Error('Upload failed after all retries');
     },
     [maxRetries]
   );

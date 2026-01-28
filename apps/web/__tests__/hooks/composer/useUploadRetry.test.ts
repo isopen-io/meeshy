@@ -127,4 +127,18 @@ describe('useUploadRetry', () => {
     expect(uploadFn).toHaveBeenCalledTimes(2);
     expect(result.current.retryStatus['test-file']).toBeUndefined();
   });
+
+  it('should succeed immediately without retries', async () => {
+    const uploadFn = jest.fn().mockResolvedValue({ success: true, attachmentId: 'file-immediate' });
+
+    const { result } = renderHook(() => useUploadRetry());
+
+    const uploadResult = await act(async () => {
+      return await result.current.uploadWithRetry('test-file', uploadFn);
+    });
+
+    expect(uploadFn).toHaveBeenCalledTimes(1);
+    expect(uploadResult).toEqual({ success: true, attachmentId: 'file-immediate' });
+    expect(result.current.retryStatus['test-file']).toBeUndefined();
+  });
 });
