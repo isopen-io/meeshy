@@ -292,8 +292,10 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
+          # Create virtual environment first
+          uv venv --python ${{ env.PYTHON_VERSION }}
           # Install numpy first (required for pkuseg build)
-          uv pip install --python ${{ env.PYTHON_VERSION }} numpy
+          uv pip install numpy
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -387,8 +389,10 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
+          # Create virtual environment first
+          uv venv --python ${{ env.PYTHON_VERSION }}
           # Install numpy first (required for pkuseg build)
-          uv pip install --python ${{ env.PYTHON_VERSION }} numpy
+          uv pip install numpy
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -496,8 +500,10 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
+          # Create virtual environment first
+          uv venv --python ${{ env.PYTHON_VERSION }}
           # Install numpy first (required for pkuseg build)
-          uv pip install --python ${{ env.PYTHON_VERSION }} numpy
+          uv pip install numpy
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -622,8 +628,10 @@ jobs:
       - name: Install Python dependencies (CPU backend for CI)
         run: |
           cd services/translator
+          # Create virtual environment first
+          uv venv --python ${{ env.PYTHON_VERSION }}
           # Install numpy first (required for pkuseg build)
-          uv pip install --python ${{ env.PYTHON_VERSION }} numpy
+          uv pip install numpy
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
