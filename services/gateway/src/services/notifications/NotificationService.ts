@@ -58,6 +58,9 @@ export class NotificationService {
           priority: params.priority,
           content: params.content,
 
+          // Relation optionnelle avec Message
+          messageId: params.context.messageId || null,
+
           // Groupes V2 (cast en any car Prisma doit être régénéré)
           actor: (params.actor || null) as any,
           context: params.context as any,
@@ -104,9 +107,71 @@ export class NotificationService {
   // ==============================================
 
   /**
+   * Sanitize une date pour éviter "Invalid time value"
+   * Retourne la date valide ou la valeur par défaut
+   */
+  private sanitizeDate(value: any, defaultValue: Date | null = null): Date | null {
+    // Cas 1: valeur null/undefined/false/empty
+    if (!value) return defaultValue;
+
+    try {
+      // Cas 2: déjà un objet Date (vérifier qu'il est valide)
+      if (value instanceof Date) {
+        if (isNaN(value.getTime())) {
+          notificationLogger.warn('Invalid Date object detected, using default', {
+            value: value.toString(),
+            defaultValue
+          });
+          return defaultValue;
+        }
+        return value;
+      }
+
+      // Cas 3: convertir en Date et vérifier
+      const date = new Date(value);
+      if (isNaN(date.getTime())) {
+        notificationLogger.warn('Invalid date value detected, using default', {
+          value,
+          valueType: typeof value,
+          defaultValue
+        });
+        return defaultValue;
+      }
+
+      return date;
+    } catch (error) {
+      notificationLogger.error('Error sanitizing date, using default', {
+        error,
+        value,
+        defaultValue
+      });
+      return defaultValue;
+    }
+  }
+
+  /**
+   * Convertit une date en ISO string de manière sûre
+   * Retourne null si la date est null/invalide
+   */
+  private toISOStringOrNull(date: Date | null): string | null {
+    if (!date) return null;
+    try {
+      return date.toISOString();
+    } catch (error) {
+      notificationLogger.error('Failed to convert date to ISO string', { error, date });
+      return null;
+    }
+  }
+
+  /**
    * Formate une notification DB → API
    */
   private formatNotification(raw: any): Notification {
+    // Sanitize les dates d'abord
+    const readAtDate = this.sanitizeDate(raw.readAt, null);
+    const createdAtDate = this.sanitizeDate(raw.createdAt, new Date())!;
+    const expiresAtDate = this.sanitizeDate(raw.expiresAt, null);
+
     return {
       id: raw.id,
       userId: raw.userId,
@@ -120,9 +185,11 @@ export class NotificationService {
 
       state: {
         isRead: raw.isRead,
-        readAt: raw.readAt ? new Date(raw.readAt) : null,
-        createdAt: new Date(raw.createdAt),
-        expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : undefined,
+        // Garder les objets Date pour le type TypeScript
+        // Fastify les convertira automatiquement en ISO string via le schéma
+        readAt: readAtDate,
+        createdAt: createdAtDate,
+        expiresAt: expiresAtDate || undefined,
       },
 
       delivery: (raw.delivery || { emailSent: false, pushSent: false }) as any,

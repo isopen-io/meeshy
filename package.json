@@ -44,12 +44,16 @@
     "version": "changeset version && node scripts/sync-versions.js",
     "version:check": "changeset status",
     "sync-versions": "node scripts/sync-versions.js",
-    "release:local": "pnpm version && git add -A && git commit -m 'chore: version packages' || true"
+    "release:local": "pnpm version && git add -A && git commit -m 'chore: version packages' || true",
+    "fix:notification-dates": "tsx scripts/migrations/fix-notification-dates.ts",
+    "test:notification-serialization": "tsx scripts/test-notification-serialization.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@playwright/test": "^1.58.0",
     "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
     "turbo": "^2.7.5",
     "typescript": "^5.9.3"
   },

@@ -1100,6 +1100,10 @@ model Notification {
   delivery Json
 
   // ===== RELATIONS =====
+  /// Optional messageId pour faciliter les queries (duplique context.messageId)
+  messageId String?  @db.ObjectId
+  message   Message? @relation("NotificationMessage", fields: [messageId], references: [id])
+
   user User @relation(fields: [userId], references: [id])
 
   // ===== INDEXES =====

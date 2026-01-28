@@ -137,9 +137,19 @@ export enum NotificationTypeEnum {
 export type NotificationType = `${NotificationTypeEnum}` | string;
 
 /**
- * Priorité de notification
+ * Enum des priorités de notification
  */
-export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+export enum NotificationPriorityEnum {
+  LOW = 'low',
+  NORMAL = 'normal',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
+
+/**
+ * Type union pour la priorité de notification
+ */
+export type NotificationPriority = `${NotificationPriorityEnum}` | string;
 
 // =====================================================
 // STRUCTURE GROUPÉE LOGIQUEMENT

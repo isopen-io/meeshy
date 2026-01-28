@@ -928,6 +928,10 @@ export class MeeshySocketIOManager {
             this.socketToUser.set(socket.id, user.id);
             this._addUserSocket(user.id, socket.id);
 
+            // IMPORTANT: Rejoindre la room personnelle pour les notifications
+            socket.join(user.id);
+            logger.info(`[Socket.IO] User ${user.id} joined personal room for notifications`);
+
             // Mettre à jour l'état en ligne dans la base de données et broadcaster
             await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
 
@@ -1001,6 +1005,10 @@ export class MeeshySocketIOManager {
             this.connectedUsers.set(user.id, user);
             this.socketToUser.set(socket.id, participant.sessionToken); // Utiliser sessionToken au lieu de user.id
             this._addUserSocket(user.id, socket.id);
+
+            // IMPORTANT: Rejoindre la room personnelle pour les notifications
+            socket.join(user.id);
+            logger.info(`[Socket.IO] Anonymous user ${user.id} joined personal room for notifications`);
 
             // CORRECTION: Mettre à jour l'état en ligne dans la base de données pour les anonymes et broadcaster
             await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);

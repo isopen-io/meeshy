@@ -9,6 +9,49 @@ import type { Notification } from '@meeshy/shared/types/notification';
 
 export class NotificationFormatter {
   /**
+   * Sanitize une date pour éviter "Invalid time value"
+   * Retourne la date valide ou la valeur par défaut
+   */
+  private static sanitizeDate(value: any, defaultValue: Date | null = null): Date | null {
+    // Cas 1: valeur null/undefined/false/empty
+    if (!value) return defaultValue;
+
+    try {
+      // Cas 2: déjà un objet Date (vérifier qu'il est valide)
+      if (value instanceof Date) {
+        if (isNaN(value.getTime())) {
+          console.warn('[NotificationFormatter] Invalid Date object detected', {
+            value: value.toString(),
+            defaultValue
+          });
+          return defaultValue;
+        }
+        return value;
+      }
+
+      // Cas 3: convertir en Date et vérifier
+      const date = new Date(value);
+      if (isNaN(date.getTime())) {
+        console.warn('[NotificationFormatter] Invalid date value detected', {
+          value,
+          valueType: typeof value,
+          defaultValue
+        });
+        return defaultValue;
+      }
+
+      return date;
+    } catch (error) {
+      console.error('[NotificationFormatter] Error sanitizing date', {
+        error,
+        value,
+        defaultValue
+      });
+      return defaultValue;
+    }
+  }
+
+  /**
    * Formate une notification brute de la DB vers l'interface Notification
    *
    * IMPORTANT: Pas de génération de title - fait côté frontend
@@ -33,12 +76,12 @@ export class NotificationFormatter {
       // METADATA (cast car Prisma Json type)
       metadata: (raw.metadata || {}) as any,
 
-      // STATE
+      // STATE - avec sanitization des dates
       state: {
         isRead: raw.isRead ?? false,
-        readAt: raw.readAt ? new Date(raw.readAt) : null,
-        createdAt: new Date(raw.createdAt),
-        expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : undefined,
+        readAt: this.sanitizeDate(raw.readAt, null),
+        createdAt: this.sanitizeDate(raw.createdAt, new Date())!,
+        expiresAt: this.sanitizeDate(raw.expiresAt, null) || undefined,
       },
 
       // DELIVERY (cast car Prisma Json type)
