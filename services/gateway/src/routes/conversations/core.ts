@@ -545,17 +545,29 @@ export function registerCoreRoutes(
 
       // Marquer automatiquement toutes les notifications de cette conversation comme lues
       try {
-        const notificationsMarked = await prisma.notification.updateMany({
+        // Marquer les notifications comme lues (filtrage client-side car conversationId est dans context JSON)
+        const notifications = await prisma.notification.findMany({
           where: {
             userId,
-            conversationId,
             isRead: false
-          },
-          data: { isRead: true }
+          }
         });
 
-        if (notificationsMarked.count > 0) {
-          fastify.log.info(`✅ Auto-marqué ${notificationsMarked.count} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
+        const relevantNotifications = notifications.filter((n: any) =>
+          n.context?.conversationId === conversationId
+        );
+
+        let notificationsMarkedCount = 0;
+        for (const notif of relevantNotifications) {
+          await prisma.notification.update({
+            where: { id: notif.id },
+            data: { isRead: true, readAt: new Date() }
+          });
+          notificationsMarkedCount++;
+        }
+
+        if (notificationsMarkedCount > 0) {
+          fastify.log.info(`✅ Auto-marqué ${notificationsMarkedCount} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
         }
       } catch (notifError) {
         // Ne pas bloquer la réponse si le marquage des notifications échoue

@@ -130,17 +130,32 @@ const logger = winston.createLogger({
           })
         )
       : winston.format.combine(
-          winston.format.printf(({ timestamp, level, message, stack }) => {
+          winston.format.printf((info) => {
+            const { timestamp, level, message, stack, module, func, ...meta } = info;
+
+            // Format structuré : [LEVEL][SERVICE][MODULE][FUNCTION] {data}
+            const logParts = [
+              `[${level.toUpperCase()}]`,
+              '[GWY]',
+              module ? `[${module}]` : '',
+              func ? `[${func}]` : ''
+            ].filter(Boolean);
+
             const logObj: any = {
-              timestamp,
-              service: 'GWY',
-              level,
-              message
+              msg: message
             };
+
+            // Ajouter le stack si présent
             if (stack) {
               logObj.stack = stack;
             }
-            return JSON.stringify(logObj);
+
+            // Ajouter toutes les métadonnées supplémentaires
+            if (Object.keys(meta).length > 0) {
+              Object.assign(logObj, meta);
+            }
+
+            return `${timestamp} ${logParts.join('')} ${JSON.stringify(logObj)}`;
           })
         )
   ),
@@ -570,7 +585,17 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Global error handler
     this.server.setErrorHandler(async (error, request, reply) => {
-      logger.error('Global error handler:', error);
+      logger.error('Uncaught error in request handler', {
+        module: 'ErrorHandler',
+        func: 'setErrorHandler',
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : error,
+        path: request.url,
+        method: request.method
+      });
       // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
       // Cast to `any` once to safely access error properties below.
       const err: any = error as any;
