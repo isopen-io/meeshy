@@ -798,9 +798,7 @@ export function ConversationSettingsModal({
                     {/* Container visuel avec bannière + avatar */}
                     <div className="relative rounded-xl overflow-hidden backdrop-blur-xl bg-gradient-to-br from-slate-100/80 to-gray-100/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-white/30 dark:border-gray-700/40 shadow-lg">
                       {/* Bannière cliquable */}
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ duration: 0.2 }}
+                      <div
                         className="relative h-32 cursor-pointer group"
                         onClick={() => conversation.type !== 'direct' && setIsBannerUploadDialogOpen(true)}
                       >
@@ -836,51 +834,54 @@ export function ConversationSettingsModal({
                             </Badge>
                           </div>
                         )}
-                      </motion.div>
+                      </div>
 
                       {/* Avatar par-dessus la bannière - cliquable */}
                       <div className="relative px-6 pb-4">
-                        <motion.div
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="absolute -top-16 cursor-pointer group"
-                          onClick={() => setIsImageUploadDialogOpen(true)}
-                        >
-                          <div className="relative">
-                            <Avatar className="h-32 w-32 border-4 border-white dark:border-gray-900 shadow-2xl">
-                              <AvatarImage
-                                src={conversation.image || conversation.avatar}
-                                className="object-cover"
-                              />
-                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-4xl font-bold">
-                                {(conversation.title || 'C')[0].toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
+                        <div className="flex items-end gap-4 pt-2">
+                          {/* Avatar */}
+                          <motion.div
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="relative -mt-18 flex-shrink-0 cursor-pointer group"
+                            onClick={() => setIsImageUploadDialogOpen(true)}
+                          >
+                            <div className="relative">
+                              <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-white dark:border-gray-900 shadow-2xl">
+                                <AvatarImage
+                                  src={conversation.image || conversation.avatar}
+                                  className="object-cover"
+                                />
+                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-3xl sm:text-4xl font-bold">
+                                  {(conversation.title || 'C')[0].toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
 
-                            {/* Overlay au hover sur avatar */}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full flex items-center justify-center">
-                              <div className="flex flex-col items-center gap-1 text-white">
-                                <ImagePlus className="h-6 w-6" />
-                                <p className="text-xs font-medium">Modifier</p>
+                              {/* Overlay au hover sur avatar */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full flex items-center justify-center">
+                                <div className="flex flex-col items-center gap-1 text-white">
+                                  <ImagePlus className="h-5 w-5 sm:h-6 sm:w-6" />
+                                  <p className="text-xs font-medium">Modifier</p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
+                          </motion.div>
 
-                        {/* Infos conversation à côté de l'avatar */}
-                        <div className="pt-20 pl-36">
-                          <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                            {conversation.title || 'Sans titre'}
-                          </h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                              {conversation.type === 'direct' ? 'Direct' : 'Groupe'}
-                            </Badge>
-                            {conversation.participants && (
-                              <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                                {conversation.participants.length} {conversation.participants.length > 1 ? 'membres' : 'membre'}
+                          {/* Infos conversation à côté de l'avatar */}
+                          <div className="flex-1 min-w-0 pb-2">
+                            <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                              {conversation.title || 'Sans titre'}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs">
+                                {conversation.type === 'direct' ? 'Direct' : 'Groupe'}
                               </Badge>
-                            )}
+                              {conversation.participants && (
+                                <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs">
+                                  {conversation.participants.length} {conversation.participants.length > 1 ? 'membres' : 'membre'}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
