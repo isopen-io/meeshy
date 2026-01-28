@@ -89,24 +89,20 @@ def _setup_module_mocks():
             mock_httpx.TimeoutException = Exception
             sys.modules['httpx'] = mock_httpx
 
-    # Mock prisma module - only if not installed
-    try:
-        from prisma import Prisma
-        # Prisma is installed, don't mock it
-    except ImportError:
-        if 'prisma' not in sys.modules:
-            # Créer un mock Prisma avec des méthodes async correctes
-            mock_prisma = MagicMock()
+    # Mock prisma module - not used in translator service (no DB access)
+    if 'prisma' not in sys.modules:
+        # Créer un mock Prisma avec des méthodes async correctes
+        mock_prisma = MagicMock()
 
-            # Mock du client Prisma avec des méthodes async
-            mock_client = MagicMock()
-            mock_client.connect = AsyncMock(return_value=None)
-            mock_client.disconnect = AsyncMock(return_value=None)
+        # Mock du client Prisma avec des méthodes async
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock(return_value=None)
+        mock_client.disconnect = AsyncMock(return_value=None)
 
-            mock_prisma.Prisma = MagicMock(return_value=mock_client)
-            mock_prisma.Client = MagicMock(return_value=mock_client)
-            sys.modules['prisma'] = mock_prisma
-            sys.modules['prisma.models'] = MagicMock()
+        mock_prisma.Prisma = MagicMock(return_value=mock_client)
+        mock_prisma.Client = MagicMock(return_value=mock_client)
+        sys.modules['prisma'] = mock_prisma
+        sys.modules['prisma.models'] = MagicMock()
 
     # Mock grpc modules
     if 'grpc' not in sys.modules:
