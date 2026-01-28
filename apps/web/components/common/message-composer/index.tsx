@@ -179,7 +179,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         onDrop={composerState.handleDrop}
       >
         {/* Reply preview */}
-        {composerState.replyingTo && (
+        {composerState.replyingTo ? (
           <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-lg backdrop-blur-sm">
             <div className="flex items-start justify-between space-x-2">
               <div className="flex items-start space-x-2 flex-1 min-w-0">
@@ -196,20 +196,20 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                   <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 italic">
                     {composerState.replyingTo.content}
                   </p>
-                  {composerState.replyingTo.attachments && composerState.replyingTo.attachments.length > 0 && (
+                  {composerState.replyingTo.attachments && composerState.replyingTo.attachments.length > 0 ? (
                     <AttachmentPreviewReply
                       attachments={composerState.replyingTo.attachments}
                       isOwnMessage={false}
                     />
-                  )}
-                  {composerState.replyingTo.translations && composerState.replyingTo.translations.length > 0 && (
+                  ) : null}
+                  {composerState.replyingTo.translations && composerState.replyingTo.translations.length > 0 ? (
                     <div className="mt-1 flex items-center space-x-1">
                       <Languages className="h-3 w-3 text-blue-500/60 dark:text-blue-400/60" aria-hidden="true" />
                       <span className="text-xs text-blue-600/60 dark:text-blue-400/60">
                         {composerState.replyingTo.translations.length} traductions
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
               <Button
@@ -223,10 +223,10 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Compression indicator */}
-        {composerState.isCompressing && Object.keys(composerState.compressionProgress).length > 0 && (
+        {composerState.isCompressing && Object.keys(composerState.compressionProgress).length > 0 ? (
           <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-hidden="true" />
@@ -249,12 +249,12 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Attachment carousel */}
-        {((composerState.selectedFiles.length > 0 || composerState.showAudioRecorder) || composerState.showAttachmentLimitModal) && (
+        {((composerState.selectedFiles.length > 0 || composerState.showAudioRecorder) || composerState.showAttachmentLimitModal) ? (
           <div className="relative min-h-[120px] mb-2">
-            {(composerState.selectedFiles.length > 0 || composerState.showAudioRecorder) && (
+            {(composerState.selectedFiles.length > 0 || composerState.showAudioRecorder) ? (
               <AttachmentCarousel
                 files={composerState.selectedFiles}
                 onRemove={composerState.handleRemoveFile}
@@ -274,10 +274,10 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                   ) : undefined
                 }
               />
-            )}
+            ) : null}
 
             {/* Attachment limit modal */}
-            {composerState.showAttachmentLimitModal && (
+            {composerState.showAttachmentLimitModal ? (
               <AttachmentLimitModal
                 isOpen={composerState.showAttachmentLimitModal}
                 onClose={composerState.closeAttachmentLimitModal}
@@ -285,9 +285,9 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 maxCount={50}
                 remainingSlots={Math.max(0, 50 - (composerState.selectedFiles.length + composerState.uploadedAttachments.length))}
               />
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
         {/* Textarea */}
         <Textarea
@@ -303,7 +303,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         />
 
         {/* Mention autocomplete */}
-        {composerState.showMentionAutocomplete && props.conversationId && (
+        {composerState.showMentionAutocomplete && props.conversationId ? (
           <MentionAutocomplete
             conversationId={props.conversationId}
             query={composerState.mentionQuery}
@@ -311,7 +311,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             onClose={composerState.closeMentionAutocomplete}
             position={composerState.mentionPosition}
           />
-        )}
+        ) : null}
 
         {/* Left side: Language selector, Audio, Attachment, Location */}
         <div className="absolute bottom-2 sm:bottom-3 left-3 flex items-center space-x-1 text-xs sm:text-sm text-gray-600 pointer-events-auto">
@@ -354,37 +354,37 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             ) : (
               <Paperclip className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-gray-600" aria-hidden="true" />
             )}
-            {composerState.selectedFiles.length > 0 && (
+            {composerState.selectedFiles.length > 0 ? (
               <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] rounded-full h-3.5 w-3.5 flex items-center justify-center" aria-label={`${composerState.selectedFiles.length} fichiers sélectionnés`}>
                 {composerState.selectedFiles.length}
               </span>
-            )}
+            ) : null}
           </Button>
 
           {/* Location */}
-          {props.location && (
+          {props.location ? (
             <div className="flex items-center space-x-1">
               <MapPin className="h-[22px] w-[22px] sm:h-[22px] sm:w-[22px]" aria-hidden="true" />
               <span className="hidden sm:inline">{props.location}</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Right side: Character counter and send button */}
         <div className="absolute bottom-2 sm:bottom-3 right-3 sm:right-4 flex items-center space-x-2 pointer-events-auto">
           {/* Character counter */}
-          {props.value.length > composerState.maxMessageLength * 0.9 && (
+          {props.value.length > composerState.maxMessageLength * 0.9 ? (
             <span className={`hidden sm:inline text-xs ${props.value.length > composerState.maxMessageLength ? 'text-red-500' : 'text-orange-500'}`}>
               {props.value.length}/{composerState.maxMessageLength}
             </span>
-          )}
+          ) : null}
 
           {/* Attachment counter */}
-          {(composerState.selectedFiles.length + composerState.uploadedAttachments.length) > 40 && (
+          {(composerState.selectedFiles.length + composerState.uploadedAttachments.length) > 40 ? (
             <span className={`hidden sm:inline text-xs ${(composerState.selectedFiles.length + composerState.uploadedAttachments.length) > 50 ? 'text-red-500' : 'text-orange-500'}`}>
               {composerState.selectedFiles.length + composerState.uploadedAttachments.length}/50
             </span>
-          )}
+          ) : null}
 
           {/* Send button (Phase 3 component) */}
           <SendButton
