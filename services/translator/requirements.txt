@@ -26,9 +26,8 @@ datasets>=3.0.0
 huggingface_hub>=0.20.0
 safetensors>=0.4.0
 peft>=0.7.0
-# EXPÉRIMENTAL: Tester transformers 5.0.0 avec quantization 4-bit
-# Notre architecture (API directe model.generate) devrait être compatible
-transformers>=5.0.0
+# Compatible avec chatterbox-tts (requiert 4.46.3)
+transformers>=4.46.3
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données

@@ -23,7 +23,7 @@ version = "1.0.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.10,<3.11"
 authors = [
     { name = "Meeshy Development Team", email = "dev@meeshy.me" }
 ]
@@ -58,7 +58,7 @@ dependencies = [
     "sentencepiece>=0.2.0",
     "huggingface_hub>=0.20.0",
     "safetensors>=0.4.0",
-    "transformers>=5.0.0",  # EXPÉRIMENTAL: Tester v5 avec quantization 4-bit
+    "transformers>=4.46.0",  # Compatible avec chatterbox-tts (requiert 4.46.3)
 
     # Cache et base de données
     "redis>=5.0.0",
@@ -82,8 +82,8 @@ dependencies = [
     # STT (Speech-to-Text) - faster-whisper (CTranslate2 based)
     "faster-whisper>=1.0.0",
 
-    # TTS (Text-to-Speech) - NOTE: Chatterbox est optionnel (voir [project.optional-dependencies])
-    # chatterbox-tts>=0.1.0 - DÉSACTIVÉ: incompatible avec transformers 5.0 (requiert 4.46.3)
+    # TTS (Text-to-Speech) - Chatterbox (Apache 2.0)
+    "chatterbox-tts>=0.1.0",
 
     # Audio Processing
     "pydub>=0.25.0",
