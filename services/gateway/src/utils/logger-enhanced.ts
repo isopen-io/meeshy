@@ -77,10 +77,10 @@ const colors = {
 
 /**
  * Custom formatter for Gateway logs
- * Format: [YYYY-MM-DD HH:MM:SS UTC] [LEVEL] [GWY] [Module] {msg="...", data={...}}
+ * Format: 2026-01-28T17:36:02.667Z [LEVEL] [GWY] [Module] [Function] {"msg":"...", "data": {...}}
  */
 function customGatewayFormatter(logObject: any): string {
-  const timestamp = new Date(logObject.time).toISOString().replace('T', ' ').replace('Z', ' UTC');
+  const timestamp = new Date(logObject.time).toISOString();
 
   // Déterminer le niveau et sa couleur
   let level = 'INFO';
@@ -107,6 +107,7 @@ function customGatewayFormatter(logObject: any): string {
   }
 
   const module = logObject.module || 'Gateway';
+  const func = logObject.func || logObject.function;
   const message = logObject.msg || '';
 
   // Extract context (exclude standard fields)
@@ -117,20 +118,96 @@ function customGatewayFormatter(logObject: any): string {
   delete contextFields.pid;
   delete contextFields.hostname;
   delete contextFields.module;
+  delete contextFields.func;
+  delete contextFields.function;
   delete contextFields.env;
   delete contextFields.service;
 
-  // Format: {msg="...", data={...}}
-  let output = `{msg="${message}"`;
+  // Construire l'objet JSON final
+  const logData: any = { msg: message };
 
   if (Object.keys(contextFields).length > 0) {
-    output += `, data=${JSON.stringify(contextFields)}`;
+    logData.data = contextFields;
   }
 
-  output += '}';
+  // Format: TIMESTAMP [LEVEL] [SERVICE] [MODULE] [FUNCTION] {json}
+  const parts = [
+    `${levelColor}[${level}]${colors.reset}`,
+    '[GWY]',
+    `[${module}]`,
+    func ? `[${func}]` : ''
+  ].filter(Boolean).join(' ');
 
-  // Format complet avec timestamp entre crochets et niveau coloré
-  return `[${timestamp}] ${levelColor}[${level}]${colors.reset} [GWY] [${module}] ${output}`;
+  return `${timestamp} ${parts} ${JSON.stringify(logData)}`;
+}
+
+/**
+ * Custom formatter for production (sans couleurs ANSI)
+ */
+function productionFormatter(logObject: any): string {
+  const timestamp = new Date(logObject.time).toISOString();
+
+  let level = 'INFO';
+  if (logObject.level === 10) level = 'TRACE';
+  else if (logObject.level === 20) level = 'DEBUG';
+  else if (logObject.level === 30) level = 'INFO';
+  else if (logObject.level === 40) level = 'WARN';
+  else if (logObject.level === 50) level = 'ERROR';
+  else if (logObject.level === 60) level = 'FATAL';
+
+  const module = logObject.module || 'Gateway';
+  const func = logObject.func || logObject.function;
+  const message = logObject.msg || '';
+
+  // Extract context
+  const contextFields = { ...logObject };
+  delete contextFields.time;
+  delete contextFields.level;
+  delete contextFields.msg;
+  delete contextFields.pid;
+  delete contextFields.hostname;
+  delete contextFields.module;
+  delete contextFields.func;
+  delete contextFields.function;
+  delete contextFields.env;
+  delete contextFields.service;
+
+  // Construire JSON
+  const logData: any = { msg: message };
+  if (Object.keys(contextFields).length > 0) {
+    logData.data = contextFields;
+  }
+
+  // Format: TIMESTAMP [LEVEL] [SERVICE] [MODULE] [FUNCTION] {json}
+  const parts = [
+    `[${level}]`,
+    '[GWY]',
+    `[${module}]`,
+    func ? `[${func}]` : ''
+  ].filter(Boolean).join(' ');
+
+  return `${timestamp} ${parts} ${JSON.stringify(logData)}`;
+}
+
+/**
+ * Custom stream pour formatter les logs avant écriture
+ */
+class FormattedStream {
+  write(chunk: string) {
+    try {
+      const logObj = JSON.parse(chunk);
+      if (logObj.time && logObj.level) {
+        const formatted = isProduction
+          ? productionFormatter(logObj)
+          : customGatewayFormatter(logObj);
+        process.stdout.write(formatted + '\n');
+        return;
+      }
+    } catch (e) {
+      // Si parsing échoue, écrire tel quel
+    }
+    process.stdout.write(chunk);
+  }
 }
 
 /**
@@ -138,16 +215,6 @@ function customGatewayFormatter(logObject: any): string {
  */
 const logger = pino({
   level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
-
-  // Custom formatter in development, JSON in production
-  transport: isDevelopment
-    ? {
-        target: 'pino/file',
-        options: {
-          destination: 1, // stdout
-        }
-      }
-    : undefined,
 
   // Base configuration
   base: {
@@ -175,40 +242,11 @@ const logger = pino({
     err: pino.stdSerializers.err
   },
 
-  // Custom formatters
-  formatters: {
-    log(object: any) {
-      if (isDevelopment) {
-        // In development, print custom format to console
-        const formatted = customGatewayFormatter({ ...object, time: Date.now() });
-        return object; // Return object for pino, but we'll handle printing
-      }
-      return object;
-    }
-  },
+  // Timestamp format ISO
+  timestamp: pino.stdTimeFunctions.isoTime
+}, new FormattedStream() as any);
 
-  // Timestamp format
-  timestamp: () => `,"time":${Date.now()}`
-});
-
-// Override console methods in development to use custom format
-if (isDevelopment) {
-  const originalWrite = process.stdout.write.bind(process.stdout);
-  (process.stdout as any).write = (chunk: any, encoding?: any, callback?: any) => {
-    try {
-      if (typeof chunk === 'string' && chunk.startsWith('{')) {
-        const logObj = JSON.parse(chunk);
-        if (logObj.time && logObj.level) {
-          const formatted = customGatewayFormatter(logObj);
-          return originalWrite(formatted + '\n', encoding, callback);
-        }
-      }
-    } catch (e) {
-      // If parsing fails, use original
-    }
-    return originalWrite(chunk, encoding, callback);
-  };
-}
+// Le formatting est géré par le custom stream, pas besoin d'override stdout
 
 /**
  * Sampling helper for production (log only X% of debug messages)
