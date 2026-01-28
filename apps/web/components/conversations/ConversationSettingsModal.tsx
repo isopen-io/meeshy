@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -53,14 +53,49 @@ import {
   Sparkles,
   Shield,
   Users,
+  Languages,
+  Link2,
+  Info,
+  Upload,
+  ImagePlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
-import type { Conversation, ConversationParticipant } from '@meeshy/shared/types';
+import type { Conversation, ConversationParticipant, Message } from '@meeshy/shared/types';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import { AttachmentService } from '@/services/attachmentService';
+import {
+  FoldableSection,
+  LanguageIndicators,
+  SidebarLanguageHeader,
+} from '@/lib/bubble-stream-modules';
+
+// Hooks
+import { useConversationStats } from '@/hooks/use-conversation-stats';
+import { useParticipantManagement } from '@/hooks/use-participant-management';
+
+// Composants lazy-loaded du details-sidebar
+const TagsManager = lazy(() =>
+  import('./details-sidebar/TagsManager').then(m => ({ default: m.TagsManager }))
+);
+const CategorySelector = lazy(() =>
+  import('./details-sidebar/CategorySelector').then(m => ({ default: m.CategorySelector }))
+);
+const CustomizationManager = lazy(() =>
+  import('./details-sidebar/CustomizationManager').then(m => ({ default: m.CustomizationManager }))
+);
+const ActiveUsersSection = lazy(() =>
+  import('./details-sidebar/ActiveUsersSection').then(m => ({ default: m.ActiveUsersSection }))
+);
+const ShareLinksSection = lazy(() =>
+  import('./details-sidebar/ShareLinksSection').then(m => ({ default: m.ShareLinksSection }))
+);
+
+// Dialog upload image
+import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
 
 // Rôles qui peuvent accéder à la configuration admin
 const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'BIGBOSS', 'CREATOR', 'AUDIT', 'ANALYST', 'admin', 'moderator'];
@@ -69,8 +104,11 @@ interface ConversationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
+  currentUser: any; // User from shared/types
+  messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
   onConversationUpdate?: (conversation: Conversation) => void;
+  onOpenParticipantsDrawer?: () => void; // Callback pour ouvrir le drawer participants
 }
 
 /**
@@ -82,12 +120,23 @@ export function ConversationSettingsModal({
   open,
   onOpenChange,
   conversation,
+  currentUser,
+  messages = [],
   currentUserRole = 'MEMBER',
   onConversationUpdate,
+  onOpenParticipantsDrawer,
 }: ConversationSettingsModalProps) {
   const { t } = useI18n('conversations');
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Hooks pour les stats et la gestion des participants
+  const { isAdmin, canModifyImage } = useParticipantManagement(conversation, currentUser);
+  const { messageLanguageStats, activeLanguageStats, activeUsers } = useConversationStats(
+    conversation,
+    messages,
+    currentUser
+  );
 
   // Déterminer si l'utilisateur peut accéder aux paramètres admin
   const canAccessAdminSettings = useMemo(() => {
@@ -140,6 +189,12 @@ export function ConversationSettingsModal({
   const [editedDescription, setEditedDescription] = useState(conversation.description || '');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+
+  // États pour l'upload d'image et bannière
+  const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
+  const [isBannerUploadDialogOpen, setIsBannerUploadDialogOpen] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
   // Charger les préférences utilisateur
   useEffect(() => {
@@ -262,6 +317,56 @@ export function ConversationSettingsModal({
   const cancelDescriptionEdit = () => {
     setEditedDescription(convDescription);
     setIsEditingDescription(false);
+  };
+
+  // Gérer l'upload d'image de conversation
+  const handleImageUpload = async (file: File) => {
+    setIsUploadingImage(true);
+    try {
+      const uploadResult = await AttachmentService.uploadFiles([file]);
+
+      if (uploadResult.success && uploadResult.attachments.length > 0) {
+        const imageUrl = uploadResult.attachments[0].fileUrl;
+        const updatedData = { image: imageUrl, avatar: imageUrl };
+        await conversationsService.updateConversation(conversation.id, updatedData);
+
+        onConversationUpdate?.(updatedData as any);
+        toast.success('Image mise à jour');
+        setIsImageUploadDialogOpen(false);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Erreur lors de l\'upload de l\'image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Gérer l'upload de bannière de groupe
+  const handleBannerUpload = async (file: File) => {
+    setIsUploadingBanner(true);
+    try {
+      const uploadResult = await AttachmentService.uploadFiles([file]);
+
+      if (uploadResult.success && uploadResult.attachments.length > 0) {
+        const bannerUrl = uploadResult.attachments[0].fileUrl;
+        const updatedData = { banner: bannerUrl };
+        await conversationsService.updateConversation(conversation.id, updatedData);
+
+        onConversationUpdate?.(updatedData as any);
+        toast.success('Bannière mise à jour');
+        setIsBannerUploadDialogOpen(false);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading banner:', error);
+      toast.error('Erreur lors de l\'upload de la bannière');
+    } finally {
+      setIsUploadingBanner(false);
+    }
   };
 
   // Ajouter un tag
