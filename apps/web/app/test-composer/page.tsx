@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MessageComposer, MessageComposerRef } from '@/components/common/message-composer';
 import { SendButton } from '@/components/common/message-composer/SendButton';
 import { usePerformanceProfile } from '@/hooks/usePerformanceProfile';
@@ -9,7 +9,7 @@ import { useClipboardPaste } from '@/hooks/composer/useClipboardPaste';
 import { useDraftAutosave } from '@/hooks/composer/useDraftAutosave';
 import { useUploadRetry } from '@/hooks/composer/useUploadRetry';
 import { Button } from '@/components/ui/button';
-import { Loader2, Upload, Mic, FileText, Trash2, Reply, Image, Focus } from 'lucide-react';
+import { Loader2, Upload, Mic, FileText, Trash2, Reply, Image, ChevronDown, ChevronUp, Cpu, Zap } from 'lucide-react';
 import { useReplyStore } from '@/stores/reply-store';
 
 export default function TestComposerPage() {
@@ -21,6 +21,78 @@ export default function TestComposerPage() {
   const [sentMessages, setSentMessages] = useState<Array<{ content: string; timestamp: Date; attachments: number }>>([]);
   const composerRef = useRef<MessageComposerRef>(null);
   const { setReplyingTo, clearReply, replyingTo } = useReplyStore();
+
+  // État pour les tests individuels des composants
+  const [pastedImages, setPastedImages] = useState<File[]>([]);
+  const [pastedText, setPastedText] = useState('');
+  const [testContent, setTestContent] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadAttempts, setUploadAttempts] = useState(0);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // État pour les sections collapsibles
+  const [showIndividualTests, setShowIndividualTests] = useState(false);
+  const [showPerformanceSection, setShowPerformanceSection] = useState(true);
+  const [showSendButtonSection, setShowSendButtonSection] = useState(true);
+  const [showDraftSection, setShowDraftSection] = useState(true);
+  const [showClipboardSection, setShowClipboardSection] = useState(true);
+  const [showUploadRetrySection, setShowUploadRetrySection] = useState(true);
+
+  // Hooks à tester
+  const performanceProfile = usePerformanceProfile();
+  const animConfig = getAnimationConfig(performanceProfile);
+
+  const { handlePaste } = useClipboardPaste({
+    onImagesPasted: (files) => {
+      console.log('[TEST] Images collées:', files);
+      setPastedImages(files);
+    },
+    onTextPasted: (text) => {
+      console.log('[TEST] Texte collé:', text);
+      setPastedText(text);
+    },
+  });
+
+  const { saveDraft, clearDraft, draft } = useDraftAutosave({
+    conversationId: 'test-conversation',
+    enabled: true,
+  });
+
+  const { uploadWithRetry, retryStatus } = useUploadRetry({ maxRetries: 3 });
+
+  // Auto-save draft quand testContent change
+  useEffect(() => {
+    saveDraft(testContent);
+  }, [testContent, saveDraft]);
+
+  // Test upload avec retry
+  const testUploadRetry = async (shouldFail: boolean) => {
+    setUploadAttempts(0);
+    setUploadSuccess(false);
+    setIsUploading(true);
+
+    try {
+      await uploadWithRetry('test-file', async () => {
+        setUploadAttempts((prev) => prev + 1);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        if (shouldFail) {
+          throw new Error('Simulated upload failure');
+        }
+
+        return { success: true, attachmentId: 'test-123' };
+      });
+
+      setUploadSuccess(true);
+      console.log('[TEST] Upload réussi!');
+    } catch (error) {
+      console.error('[TEST] Upload échoué après retries:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Simulated test messages pour la fonctionnalité reply
   const testMessages = [
@@ -79,79 +151,16 @@ export default function TestComposerPage() {
     setMimeTypes(types);
   };
 
-  // State pour les tests supplémentaires
-  const [pastedImages, setPastedImages] = useState<File[]>([]);
-  const [pastedText, setPastedText] = useState('');
-  const [isCompressing, setIsCompressing] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadAttempts, setUploadAttempts] = useState(0);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-
-  // Hooks à tester
-  const performanceProfile = usePerformanceProfile();
-  const animConfig = getAnimationConfig(performanceProfile);
-
-  const { handlePaste } = useClipboardPaste({
-    onImagesPasted: (files) => {
-      console.log('[TEST] Images collées:', files);
-      setPastedImages(files);
-    },
-    onTextPasted: (text) => {
-      console.log('[TEST] Texte collé:', text);
-      setPastedText(text);
-    },
-  });
-
-  const { saveDraft, clearDraft, draft } = useDraftAutosave({
-    conversationId: 'test-conversation',
-    enabled: true,
-  });
-
-  const { uploadWithRetry, retryStatus } = useUploadRetry({ maxRetries: 3 });
-
-  // Auto-save draft quand content change
-  useEffect(() => {
-    saveDraft(content);
-  }, [content, saveDraft]);
-
-  // Test upload avec retry
-  const testUploadRetry = async (shouldFail: boolean) => {
-    setUploadAttempts(0);
-    setUploadSuccess(false);
-    setIsUploading(true);
-
-    try {
-      await uploadWithRetry('test-file', async () => {
-        setUploadAttempts((prev) => prev + 1);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        if (shouldFail) {
-          throw new Error('Simulated upload failure');
-        }
-
-        return { success: true, attachmentId: 'test-123' };
-      });
-
-      setUploadSuccess(true);
-      console.log('[TEST] Upload réussi!');
-    } catch (error) {
-      console.error('[TEST] Upload échoué après retries:', error);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:to-slate-800 p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            🧪 MessageComposer - Test Intégré Complet
+            🧪 MessageComposer - Test Lab Complet
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
-            Phase 4: Testez le composer refactorisé avec toutes ses fonctionnalités intégrées
+            Phase 4: Testez le composer refactorisé avec toutes les fonctionnalités et animations
           </p>
         </div>
 
@@ -159,7 +168,7 @@ export default function TestComposerPage() {
         <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
-            MessageComposer Intégré
+            MessageComposer Intégré (Phase 4)
           </h2>
 
           {/* Instructions */}
@@ -230,7 +239,7 @@ export default function TestComposerPage() {
                 size="sm"
                 onClick={() => composerRef.current?.focus()}
               >
-                <Focus className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-2" />
                 Focus
               </Button>
 
@@ -248,7 +257,7 @@ export default function TestComposerPage() {
                 size="sm"
                 onClick={() => composerRef.current?.resetTextareaSize?.()}
               >
-                <FileText className="h-4 w-4 mr-2" />
+                <Mic className="h-4 w-4 mr-2" />
                 Reset Size
               </Button>
             </div>
@@ -340,282 +349,346 @@ export default function TestComposerPage() {
           )}
         </div>
 
-        {/* Debug Info */}
-        <div className="bg-slate-900 text-slate-100 rounded-2xl shadow-2xl p-6">
-          <h2 className="text-xl font-semibold mb-4">🔍 Debug Info - État Composer</h2>
-
-          <div className="space-y-3 text-sm font-mono">
-            <div className="bg-slate-800 p-4 rounded-lg overflow-auto">
-              <div className="text-slate-400 mb-2 font-sans">État du Composer:</div>
-              <pre className="text-xs">
-{JSON.stringify({
-  content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-  contentLength: content.length,
-  language: selectedLanguage,
-  attachments: attachmentIds.length,
-  hasReply: !!replyingTo,
-  replyToId: replyingTo?.id,
-  replyToContent: replyingTo?.content?.substring(0, 30),
-  messagesSent: sentMessages.length,
-}, null, 2)}
-              </pre>
-            </div>
-
-            <div className="text-xs space-y-1 text-slate-400 font-sans">
-              <div>• Ouvrez la console DevTools (F12) pour voir tous les logs</div>
-              <div>• localStorage key: draft-test-conversation-id</div>
-              <div>• Les attachments sont simulés (pas de vraie API upload pour le test)</div>
-              <div>• Performance profile adaptatif selon votre device</div>
-            </div>
-          </div>
+        {/* Toggle pour afficher les tests individuels */}
+        <div className="text-center">
+          <Button
+            variant="outline"
+            onClick={() => setShowIndividualTests(!showIndividualTests)}
+            className="mx-auto"
+          >
+            {showIndividualTests ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
+            {showIndividualTests ? 'Masquer' : 'Afficher'} les Tests Individuels des Composants
+          </Button>
         </div>
 
-        {/* Séparateur */}
-        <div className="flex items-center gap-4 py-4">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-700 to-transparent"></div>
-          <div className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-            Tests Individuels des Composants (Phases 1-3)
-          </div>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-700 to-transparent"></div>
-        </div>
-
-        {/* Performance Profile */}
-        <section className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg rounded-xl shadow-lg p-6 border border-white/10">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            Performance Profile (Phase 1.1)
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Profil détecté</div>
-              <div className="text-2xl font-bold capitalize">{performanceProfile}</div>
+        {/* Tests Individuels des Composants (Phases 1-3) */}
+        {showIndividualTests && (
+          <div className="space-y-6">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                <strong>ℹ️ Note:</strong> Ces sections testent les composants individuels (Phases 1-3) de manière isolée avant leur intégration.
+              </p>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Configuration</div>
-              <div className="text-xs space-y-1">
-                <div>Rotation: {animConfig.enableRotation ? '✅' : '❌'}</div>
-                <div>Gradient: {animConfig.enableGradient ? '✅' : '❌'}</div>
-                <div>Duration: {animConfig.sendButtonDuration}ms</div>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* SendButton Test */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">SendButton (Phase 3.1)</h2>
-
-          <div className="space-y-4">
-            {/* Contrôles d'état */}
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                size="sm"
-                variant={isCompressing ? 'default' : 'outline'}
-                onClick={() => setIsCompressing(!isCompressing)}
+            {/* Performance Profile */}
+            <section className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowPerformanceSection(!showPerformanceSection)}
               >
-                <FileText className="h-4 w-4 mr-2" />
-                {isCompressing ? 'Compressing...' : 'Compress'}
-              </Button>
-              <Button
-                size="sm"
-                variant={isRecording ? 'default' : 'outline'}
-                onClick={() => setIsRecording(!isRecording)}
-              >
-                <Mic className="h-4 w-4 mr-2" />
-                {isRecording ? 'Recording...' : 'Record'}
-              </Button>
-              <Button
-                size="sm"
-                variant={isUploading ? 'default' : 'outline'}
-                onClick={() => setIsUploading(!isUploading)}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isUploading ? 'Uploading...' : 'Upload'}
-              </Button>
-            </div>
-
-            {/* Zone de test SendButton */}
-            <div className="bg-slate-50 dark:bg-slate-700 p-6 rounded-lg">
-              <div className="flex items-center gap-4">
-                <input
-                  type="text"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Tapez pour activer le SendButton..."
-                  className="flex-1 border border-slate-300 dark:border-slate-600 px-4 py-2 rounded-lg bg-white dark:bg-slate-800"
-                />
-                <SendButton
-                  isVisible={true}
-                  canSend={content.length > 0 && !isUploading && !isCompressing && !isRecording}
-                  onClick={() => {
-                    alert('Message envoyé: ' + content);
-                    setContent('');
-                    clearDraft();
-                  }}
-                  isCompressing={isCompressing}
-                  isRecording={isRecording}
-                  isUploading={isUploading}
-                  performanceProfile={performanceProfile}
-                  animConfig={animConfig}
-                />
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Cpu className="h-5 w-5 text-blue-500" />
+                  Performance Profile (Phase 1.1)
+                </h2>
+                {showPerformanceSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </div>
-              <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                {content.length > 0 ? (
-                  <span className="text-green-600 dark:text-green-400">✓ Bouton visible</span>
-                ) : (
-                  <span className="text-slate-400">Tapez du texte pour voir le bouton apparaître</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Draft Autosave Test */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Draft Autosave (Phase 1.2)</h2>
-
-          <div className="space-y-4">
-            <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <div className="text-sm text-slate-600 dark:text-slate-400">Draft sauvegardé dans localStorage</div>
-                <Button size="sm" variant="outline" onClick={clearDraft}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Effacer
-                </Button>
-              </div>
-              {draft ? (
-                <div className="text-sm bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-600">
-                  <strong>Contenu:</strong> {draft}
-                </div>
-              ) : (
-                <div className="text-sm text-slate-400">Aucun draft sauvegardé</div>
-              )}
-            </div>
-            <div className="text-xs text-slate-500">
-              💡 Le draft est automatiquement sauvegardé 2s après chaque changement et expire après 24h
-            </div>
-          </div>
-        </section>
-
-        {/* Clipboard Paste Test */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Clipboard Paste (Phase 3.2)</h2>
-
-          <div className="space-y-4">
-            <textarea
-              onPaste={handlePaste}
-              placeholder="📋 Collez une image ou du texte ici..."
-              className="w-full border border-slate-300 dark:border-slate-600 p-4 rounded-lg h-32 bg-white dark:bg-slate-900 resize-none"
-            />
-
-            {pastedImages.length > 0 && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
-                <div className="font-semibold text-green-800 dark:text-green-400 mb-2">
-                  🖼️ Images détectées: {pastedImages.length}
-                </div>
-                <div className="space-y-1">
-                  {pastedImages.map((file, i) => (
-                    <div key={i} className="text-sm text-green-700 dark:text-green-300">
-                      • {file.name} ({file.type}, {(file.size / 1024).toFixed(2)} KB)
+              {showPerformanceSection && (
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/30 dark:to-emerald-800/30 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <div className="text-sm text-green-600 dark:text-green-400 font-medium">Profil détecté</div>
+                      </div>
+                      <div className="text-3xl font-bold capitalize text-green-900 dark:text-green-100">
+                        {performanceProfile}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => setPastedImages([])}
-                >
-                  Effacer
-                </Button>
-              </div>
-            )}
 
-            {pastedText && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-                <div className="font-semibold text-blue-800 dark:text-blue-400 mb-2">
-                  📝 Texte détecté
-                </div>
-                <div className="text-sm text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-800 p-2 rounded">
-                  {pastedText}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => setPastedText('')}
-                >
-                  Effacer
-                </Button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Upload Retry Test */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Upload Retry (Phase 1.3)</h2>
-
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Button
-                onClick={() => testUploadRetry(false)}
-                disabled={isUploading}
-              >
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Test Upload Réussi
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => testUploadRetry(true)}
-                disabled={isUploading}
-              >
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Test Upload Échoué
-              </Button>
-            </div>
-
-            {uploadAttempts > 0 && (
-              <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg space-y-2">
-                <div className="text-sm">
-                  <strong>Tentatives:</strong> {uploadAttempts}
-                </div>
-                {Object.keys(retryStatus).length > 0 && (
-                  <div className="text-sm">
-                    <strong>Status:</strong>
-                    <pre className="text-xs mt-1 bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-auto">
-                      {JSON.stringify(retryStatus, null, 2)}
-                    </pre>
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-800/30 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                      <div className="text-sm text-blue-600 dark:text-blue-400 font-medium mb-2">Configuration</div>
+                      <div className="text-xs space-y-1 text-blue-900 dark:text-blue-100">
+                        <div>Rotation: {animConfig.enableRotation ? '✅ Activée' : '❌ Désactivée'}</div>
+                        <div>Gradient: {animConfig.enableGradient ? '✅ Activé' : '❌ Désactivé'}</div>
+                        <div>Shimmer: {animConfig.enableShimmer ? '✅ Activé' : '❌ Désactivé'}</div>
+                        <div>Duration: {animConfig.sendButtonDuration}ms</div>
+                        <div>Blur: {animConfig.blur}</div>
+                        <div>Stagger Delay: {animConfig.staggerDelay}ms</div>
+                        <div>Dropdown: {animConfig.dropdownAnimation}</div>
+                      </div>
+                    </div>
                   </div>
-                )}
-                {uploadSuccess && (
-                  <div className="text-green-600 dark:text-green-400 font-semibold">
-                    ✅ Upload réussi!
+
+                  <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-lg">
+                    <div className="text-xs text-slate-600 dark:text-slate-400">
+                      💡 Le profil de performance est détecté automatiquement selon les capacités de votre appareil (CPU, RAM, connexion).
+                      Les animations s'adaptent pour garantir une expérience fluide.
+                    </div>
                   </div>
-                )}
+                </div>
+              )}
+            </section>
+
+            {/* SendButton Test */}
+            <section className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowSendButtonSection(!showSendButtonSection)}
+              >
+                <h2 className="text-xl font-semibold">SendButton avec Animations (Phase 3.1)</h2>
+                {showSendButtonSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </div>
-            )}
 
-            <div className="text-xs text-slate-500">
-              💡 Le retry utilise un exponential backoff: 1s, 2s, 4s (max 3 retries)
-            </div>
-          </div>
-        </section>
+              {showSendButtonSection && (
+                <div className="mt-4 space-y-4">
+                  {/* Contrôles d'état */}
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant={isCompressing ? 'default' : 'outline'}
+                      onClick={() => setIsCompressing(!isCompressing)}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      {isCompressing ? 'Compressing...' : 'Compress'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={isRecording ? 'default' : 'outline'}
+                      onClick={() => setIsRecording(!isRecording)}
+                    >
+                      <Mic className="h-4 w-4 mr-2" />
+                      {isRecording ? 'Recording...' : 'Record'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={isUploading ? 'default' : 'outline'}
+                      onClick={() => setIsUploading(!isUploading)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {isUploading ? 'Uploading...' : 'Upload'}
+                    </Button>
+                  </div>
 
-        {/* Console Logs Info */}
-        <section className="bg-slate-900 text-slate-100 rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">🔍 Console Logs</h2>
-          <div className="text-sm space-y-2">
-            <div>• Ouvrez la console DevTools (F12) pour voir les logs détaillés</div>
-            <div>• Préfixe [TEST] pour les événements de cette page</div>
-            <div>• Vérifiez localStorage pour voir le draft (clé: draft-test-conversation)</div>
+                  {/* Zone de test SendButton */}
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 p-6 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600">
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="text"
+                        value={testContent}
+                        onChange={(e) => setTestContent(e.target.value)}
+                        placeholder="Tapez pour activer le SendButton..."
+                        className="flex-1 border border-slate-300 dark:border-slate-600 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      />
+                      <SendButton
+                        isVisible={true}
+                        canSend={testContent.length > 0 && !isUploading && !isCompressing && !isRecording}
+                        onClick={() => {
+                          alert('Message envoyé: ' + testContent);
+                          setTestContent('');
+                        }}
+                        isCompressing={isCompressing}
+                        isRecording={isRecording}
+                        isUploading={isUploading}
+                        performanceProfile={performanceProfile}
+                        animConfig={animConfig}
+                      />
+                    </div>
+                    <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                      {testContent.length > 0 ? (
+                        <span className="text-green-600 dark:text-green-400">✓ Bouton visible avec animation {animConfig.enableRotation ? 'rotate + scale' : 'scale'}</span>
+                      ) : (
+                        <span className="text-slate-400">Tapez du texte pour voir l'animation du bouton apparaître</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Draft Autosave Test */}
+            <section className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowDraftSection(!showDraftSection)}
+              >
+                <h2 className="text-xl font-semibold">Draft Autosave (Phase 1.2)</h2>
+                {showDraftSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </div>
+
+              {showDraftSection && (
+                <div className="mt-4 space-y-4">
+                  <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="text-sm text-slate-600 dark:text-slate-400">Draft sauvegardé dans localStorage</div>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        clearDraft();
+                        setTestContent('');
+                      }}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Effacer
+                      </Button>
+                    </div>
+                    {draft ? (
+                      <div className="text-sm bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-slate-100">
+                        <strong>Contenu:</strong> {draft}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-400">Aucun draft sauvegardé</div>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-700 p-3 rounded-lg">
+                    💡 Le draft est automatiquement sauvegardé 2s après chaque changement dans le champ de test du SendButton ci-dessus. Il expire après 24h.
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Clipboard Paste Test */}
+            <section className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowClipboardSection(!showClipboardSection)}
+              >
+                <h2 className="text-xl font-semibold">Clipboard Paste (Phase 3.2)</h2>
+                {showClipboardSection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </div>
+
+              {showClipboardSection && (
+                <div className="mt-4 space-y-4">
+                  <textarea
+                    onPaste={handlePaste}
+                    placeholder="📋 Collez une image ou du texte ici (Ctrl+V / Cmd+V)..."
+                    className="w-full border-2 border-dashed border-blue-300 dark:border-blue-600 p-4 rounded-lg h-32 bg-blue-50/30 dark:bg-blue-900/20 resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-400/30 text-slate-900 dark:text-slate-100"
+                  />
+
+                  {pastedImages.length > 0 && (
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+                      <div className="font-semibold text-green-800 dark:text-green-400 mb-2">
+                        🖼️ Images détectées: {pastedImages.length}
+                      </div>
+                      <div className="space-y-1">
+                        {pastedImages.map((file, i) => (
+                          <div key={i} className="text-sm text-green-700 dark:text-green-300">
+                            • {file.name} ({file.type}, {(file.size / 1024).toFixed(2)} KB)
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => setPastedImages([])}
+                      >
+                        Effacer
+                      </Button>
+                    </div>
+                  )}
+
+                  {pastedText && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                      <div className="font-semibold text-blue-800 dark:text-blue-400 mb-2">
+                        📝 Texte détecté
+                      </div>
+                      <div className="text-sm text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-800 p-2 rounded">
+                        {pastedText}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => setPastedText('')}
+                      >
+                        Effacer
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* Upload Retry Test */}
+            <section className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white/20">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowUploadRetrySection(!showUploadRetrySection)}
+              >
+                <h2 className="text-xl font-semibold">Upload Retry avec Exponential Backoff (Phase 1.3)</h2>
+                {showUploadRetrySection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </div>
+
+              {showUploadRetrySection && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => testUploadRetry(false)}
+                      disabled={isUploading}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Test Upload Réussi
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => testUploadRetry(true)}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Test Upload Échoué
+                    </Button>
+                  </div>
+
+                  {uploadAttempts > 0 && (
+                    <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg space-y-2">
+                      <div className="text-sm">
+                        <strong>Tentatives:</strong> {uploadAttempts} / 3
+                      </div>
+                      {Object.keys(retryStatus).length > 0 && (
+                        <div className="text-sm">
+                          <strong>Status:</strong>
+                          <pre className="text-xs mt-1 bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-auto text-slate-900 dark:text-slate-100">
+                            {JSON.stringify(retryStatus, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {uploadSuccess && (
+                        <div className="text-green-600 dark:text-green-400 font-semibold">
+                          ✅ Upload réussi après {uploadAttempts} tentative(s)!
+                        </div>
+                      )}
+                      {!uploadSuccess && !isUploading && uploadAttempts >= 3 && (
+                        <div className="text-red-600 dark:text-red-400 font-semibold">
+                          ❌ Upload échoué après 3 tentatives
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-700 p-3 rounded-lg">
+                    💡 Le retry utilise un exponential backoff: 1s, 2s, 4s (max 3 retries). Cliquez sur "Test Upload Échoué" pour voir les tentatives successives.
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Console Logs Info */}
+            <section className="bg-slate-900 text-slate-100 rounded-2xl shadow-2xl p-6">
+              <h2 className="text-xl font-semibold mb-4">🔍 Console Logs & Debug</h2>
+              <div className="text-sm space-y-2">
+                <div>• Ouvrez la console DevTools (F12) pour voir les logs détaillés</div>
+                <div>• Préfixe [TEST] pour les événements de cette page</div>
+                <div>• Vérifiez localStorage pour voir le draft (clé: <code className="bg-slate-700 px-2 py-1 rounded">draft-test-conversation</code>)</div>
+                <div>• Les erreurs d'upload sont loggées dans la console</div>
+              </div>
+            </section>
           </div>
-        </section>
+        )}
 
         {/* Footer */}
         <div className="text-center text-sm text-slate-600 dark:text-slate-400 pb-8">
-          <p>✨ Tous les composants Phases 1-3 sont prêts pour l'intégration</p>
-          <p className="mt-1">Prochaine étape: Phase 4 - Integration dans MessageComposer</p>
+          <p className="font-semibold text-lg">✨ Phase 4 - Integration & Testing Complet</p>
+          <p className="mt-2">Tous les composants Phases 1-3 sont intégrés et prêts pour production</p>
+          <p className="mt-3 text-xs flex flex-wrap items-center justify-center gap-2">
+            <span className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">usePerformanceProfile</span>
+            <span className="bg-indigo-100 dark:bg-indigo-900/30 px-2 py-1 rounded">useComposerState</span>
+            <span className="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded">useClipboardPaste</span>
+            <span className="bg-pink-100 dark:bg-pink-900/30 px-2 py-1 rounded">useDraftAutosave</span>
+            <span className="bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">useUploadRetry</span>
+            <span className="bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded">SendButton</span>
+          </p>
+          <p className="mt-4 text-xs">
+            Prochaine étape: Phase 5 - Rate Limiting & Batch Upload
+          </p>
         </div>
       </div>
     </div>
