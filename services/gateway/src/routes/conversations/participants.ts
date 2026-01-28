@@ -216,9 +216,21 @@ export function registerParticipantsRoutes(
         take: pageLimit + 1 // +1 pour détecter s'il y a plus de résultats
       });
 
+      // Déduplication : supprimer les doublons basés sur userId
+      // Un même userId pourrait avoir plusieurs entrées ConversationMember actives (bug de données)
+      const seenUserIds = new Set<string>();
+      const uniqueParticipants = participants.filter(p => {
+        if (seenUserIds.has(p.userId)) {
+          console.warn(`[Participants] Doublon détecté pour userId: ${p.userId} dans conversation ${conversationId}`);
+          return false;
+        }
+        seenUserIds.add(p.userId);
+        return true;
+      });
+
       // Déterminer s'il y a plus de résultats
-      const hasMore = participants.length > pageLimit;
-      const paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
+      const hasMore = uniqueParticipants.length > pageLimit;
+      const paginatedParticipants = hasMore ? uniqueParticipants.slice(0, pageLimit) : uniqueParticipants;
       const nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
 
       // Transformer les données pour correspondre au format attendu

@@ -499,7 +499,11 @@ export function ConversationParticipantsDrawer({
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: index * 0.05 }}
                               layout
-                              className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-xl p-3 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 group"
+                              className={`backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 group ${
+                                participant.role === 'CREATOR'
+                                  ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
+                                  : 'border border-white/30 dark:border-gray-700/40'
+                              }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div className="relative">
@@ -648,7 +652,11 @@ export function ConversationParticipantsDrawer({
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: index * 0.05 }}
                               layout
-                              className="backdrop-blur-xl bg-white/40 dark:bg-gray-900/40 rounded-xl p-3 border border-white/20 dark:border-gray-700/30 shadow-sm hover:shadow-md transition-all duration-200 opacity-75 hover:opacity-100 group"
+                              className={`backdrop-blur-xl bg-white/40 dark:bg-gray-900/40 rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 opacity-75 hover:opacity-100 group ${
+                                participant.role === 'CREATOR'
+                                  ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
+                                  : 'border border-white/20 dark:border-gray-700/30'
+                              }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div className="relative">
