@@ -275,7 +275,15 @@
       "directConversation": "Direct",
       "configSaved": "Configuration enregistrée",
       "configError": "Erreur lors de la sauvegarde de la configuration",
-      "saveConfig": "Enregistrer la configuration"
+      "saveConfig": "Enregistrer la configuration",
+      "mediaAndAppearance": "Médias & Apparence",
+      "changeBanner": "Modifier la bannière",
+      "uploadBanner": "Ajouter une bannière",
+      "conversationType": "Type",
+      "totalParticipants": "Participants",
+      "directConversationWarning": "Une conversation directe ne devrait normalement avoir que 2 participants.",
+      "activity": "Activité",
+      "viewAllParticipants": "Voir tous les participants"
     },
     "conversationImage": {
       "title": "Changer l'image de la conversation",

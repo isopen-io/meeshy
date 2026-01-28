@@ -411,6 +411,7 @@ export function ConversationSettingsModal({
       <SheetContent
         side="left"
         className="w-[400px] sm:w-[500px] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30 flex flex-col h-full overflow-hidden"
+        style={{ maxWidth: '100vw' }}
       >
         {/* Header avec effet glassmorphism */}
         <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
@@ -425,12 +426,12 @@ export function ConversationSettingsModal({
                 {(conversation.title || 'C')[0].toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-hidden">
               <SheetTitle className="truncate text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
                 {t('conversationDetails.title') || 'Paramètres'}
               </SheetTitle>
               <SheetDescription className="truncate text-sm">
-                {conversation.title || t('conversationDetails.conversation')}
+                {conversation.title || t('conversationDetails.conversation') || 'Conversation'}
               </SheetDescription>
             </div>
           </motion.div>
@@ -465,7 +466,7 @@ export function ConversationSettingsModal({
 
           {/* Contenu scrollable */}
           <ScrollArea className="flex-1 overflow-auto">
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 min-w-0">
             {/* Onglet Préférences Utilisateur */}
             <TabsContent value="preferences" className="mt-4 space-y-4 focus-visible:outline-none">
               {isLoadingPrefs ? (
@@ -481,20 +482,20 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.1 }}
                     className="space-y-4"
                   >
-                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                      <FolderOpen className="h-4 w-4" />
-                      {t('conversationDetails.organization') || 'Organisation'}
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                      <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{t('conversationDetails.organization') || 'Organisation'}</span>
                     </h3>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 min-w-0">
                       {/* Épingler */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
-                            "p-2.5 rounded-full transition-colors",
+                            "p-2.5 rounded-full transition-colors flex-shrink-0",
                             isPinned
                               ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30"
                               : "bg-gray-100 dark:bg-gray-800"
@@ -504,9 +505,9 @@ export function ConversationSettingsModal({
                               isPinned ? "text-white rotate-45" : "text-gray-600 dark:text-gray-400"
                             )} />
                           </div>
-                          <div>
-                            <p className="font-semibold text-sm">{t('conversationHeader.pin') || 'Épingler'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.pin') || 'Épingler'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {t('conversationDetails.pinDescription') || 'Garder en haut de la liste'}
                             </p>
                           </div>
@@ -515,18 +516,18 @@ export function ConversationSettingsModal({
                           checked={isPinned}
                           onCheckedChange={setIsPinned}
                           aria-label={t('conversationHeader.pin')}
-                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-amber-500 data-[state=checked]:to-orange-600"
+                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-amber-500 data-[state=checked]:to-orange-600 flex-shrink-0"
                         />
                       </motion.div>
 
                       {/* Notifications */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
-                            "p-2.5 rounded-full transition-colors",
+                            "p-2.5 rounded-full transition-colors flex-shrink-0",
                             isMuted
                               ? "bg-gradient-to-br from-red-400 to-rose-500 shadow-lg shadow-red-500/30"
                               : "bg-gray-100 dark:bg-gray-800"
@@ -536,9 +537,9 @@ export function ConversationSettingsModal({
                               isMuted ? "text-white" : "text-gray-600 dark:text-gray-400"
                             )} />
                           </div>
-                          <div>
-                            <p className="font-semibold text-sm">{t('conversationHeader.mute') || 'Silencieux'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.mute') || 'Silencieux'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {t('conversationDetails.muteDescription') || 'Désactiver les notifications'}
                             </p>
                           </div>
@@ -547,18 +548,18 @@ export function ConversationSettingsModal({
                           checked={isMuted}
                           onCheckedChange={setIsMuted}
                           aria-label={t('conversationHeader.mute')}
-                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-red-500 data-[state=checked]:to-rose-600"
+                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-red-500 data-[state=checked]:to-rose-600 flex-shrink-0"
                         />
                       </motion.div>
 
                       {/* Archiver */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
-                            "p-2.5 rounded-full transition-colors",
+                            "p-2.5 rounded-full transition-colors flex-shrink-0",
                             isArchived
                               ? "bg-gradient-to-br from-gray-400 to-gray-600 shadow-lg shadow-gray-500/30"
                               : "bg-gray-100 dark:bg-gray-800"
@@ -568,9 +569,9 @@ export function ConversationSettingsModal({
                               isArchived ? "text-white" : "text-gray-600 dark:text-gray-400"
                             )} />
                           </div>
-                          <div>
-                            <p className="font-semibold text-sm">{t('conversationHeader.archive') || 'Archiver'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.archive') || 'Archiver'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {t('conversationDetails.archiveDescription') || 'Masquer de la liste principale'}
                             </p>
                           </div>
@@ -579,22 +580,22 @@ export function ConversationSettingsModal({
                           checked={isArchived}
                           onCheckedChange={setIsArchived}
                           aria-label={t('conversationHeader.archive')}
-                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-gray-500 data-[state=checked]:to-gray-700"
+                          className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-gray-500 data-[state=checked]:to-gray-700 flex-shrink-0"
                         />
                       </motion.div>
 
                       {/* Catégorie */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm space-y-3"
+                        className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm space-y-3 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 shadow-lg shadow-purple-500/30">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2.5 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 shadow-lg shadow-purple-500/30 flex-shrink-0">
                             <FolderOpen className="h-4 w-4 text-white" />
                           </div>
-                          <div className="flex-1">
-                            <p className="font-semibold text-sm">{t('conversationDetails.category') || 'Catégorie'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">{t('conversationDetails.category') || 'Catégorie'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {t('conversationDetails.categoryDescription') || 'Organiser par catégorie'}
                             </p>
                           </div>
@@ -603,7 +604,7 @@ export function ConversationSettingsModal({
                           value={selectedCategoryId || 'none'}
                           onValueChange={(v) => setSelectedCategoryId(v === 'none' ? null : v)}
                         >
-                          <SelectTrigger className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40">
+                          <SelectTrigger className="w-full min-w-0 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40">
                             <SelectValue placeholder={t('conversationDetails.selectCategory') || 'Sélectionner...'} />
                           </SelectTrigger>
                           <SelectContent>
@@ -631,27 +632,27 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.2 }}
                     className="space-y-4"
                   >
-                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      {t('conversationDetails.customization') || 'Personnalisation'}
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                      <Sparkles className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{t('conversationDetails.customization') || 'Personnalisation'}</span>
                     </h3>
 
                     <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
-                      <div className="space-y-4">
+                      <div className="space-y-4 min-w-0">
                         {/* Tags personnels */}
-                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Tag className="h-4 w-4 text-green-700 dark:text-green-300" />
-                            <label className="text-sm font-medium text-green-900 dark:text-green-100">
+                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 min-w-0">
+                            <Tag className="h-4 w-4 text-green-700 dark:text-green-300 flex-shrink-0" />
+                            <label className="text-sm font-medium text-green-900 dark:text-green-100 truncate">
                               {t('conversationDetails.personalTags')}
                             </label>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Info className="h-3.5 w-3.5 text-green-700/60 dark:text-green-300/60 cursor-help" />
+                                  <Info className="h-3.5 w-3.5 text-green-700/60 dark:text-green-300/60 cursor-help flex-shrink-0" />
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="max-w-xs">
-                                  <p className="text-xs">{t('conversationDetails.tagsTooltip')}</p>
+                                  <p className="text-xs break-words">{t('conversationDetails.tagsTooltip')}</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -660,19 +661,19 @@ export function ConversationSettingsModal({
                         </div>
 
                         {/* Catégorie personnelle */}
-                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-violet-50/80 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200/50 dark:border-purple-800/30">
-                          <div className="flex items-center gap-2 mb-2">
-                            <FolderOpen className="h-4 w-4 text-purple-700 dark:text-purple-300" />
-                            <label className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-violet-50/80 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200/50 dark:border-purple-800/30 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 min-w-0">
+                            <FolderOpen className="h-4 w-4 text-purple-700 dark:text-purple-300 flex-shrink-0" />
+                            <label className="text-sm font-medium text-purple-900 dark:text-purple-100 truncate">
                               {t('conversationDetails.category')}
                             </label>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Info className="h-3.5 w-3.5 text-purple-700/60 dark:text-purple-300/60 cursor-help" />
+                                  <Info className="h-3.5 w-3.5 text-purple-700/60 dark:text-purple-300/60 cursor-help flex-shrink-0" />
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="max-w-xs">
-                                  <p className="text-xs">{t('conversationDetails.categoryTooltip')}</p>
+                                  <p className="text-xs break-words">{t('conversationDetails.categoryTooltip')}</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -681,7 +682,7 @@ export function ConversationSettingsModal({
                         </div>
 
                         {/* Personnalisation avancée */}
-                        <div className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/30">
+                        <div className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/30 min-w-0">
                           <CustomizationManager conversationId={conversation.id} currentUser={safeCurrentUser} />
                         </div>
                       </div>
@@ -695,16 +696,16 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.3 }}
                     className="space-y-4"
                   >
-                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                      <Languages className="h-4 w-4" />
-                      {t('conversationDetails.activity') || 'Activité'}
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                      <Languages className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{t('conversationDetails.activity') || 'Activité'}</span>
                     </h3>
 
                     <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
-                      <div className="space-y-4">
+                      <div className="space-y-4 min-w-0">
                         {/* Stats langues */}
                         {messages.length > 0 && (
-                          <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                          <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 min-w-0">
                             <SidebarLanguageHeader
                               languageStats={messageLanguageStats}
                               userLanguage={safeCurrentUser.systemLanguage}
@@ -715,10 +716,10 @@ export function ConversationSettingsModal({
                         {/* Langues actives */}
                         <FoldableSection
                           title={t('conversationDetails.activeLanguages')}
-                          icon={<Languages className="h-4 w-4 mr-2" />}
+                          icon={<Languages className="h-4 w-4 mr-2 flex-shrink-0" />}
                           defaultExpanded={true}
                         >
-                          <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                          <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 min-w-0">
                             <LanguageIndicators languageStats={activeLanguageStats} />
                           </div>
                         </FoldableSection>
@@ -726,11 +727,11 @@ export function ConversationSettingsModal({
                         {/* Utilisateurs actifs avec bouton pour ouvrir drawer participants */}
                         <FoldableSection
                           title={`${t('conversationDetails.activeUsers')} (${activeUsers.length})`}
-                          icon={<Users className="h-4 w-4 mr-2" />}
+                          icon={<Users className="h-4 w-4 mr-2 flex-shrink-0" />}
                           defaultExpanded={true}
                         >
-                          <div className="space-y-3">
-                            <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                          <div className="space-y-3 min-w-0">
+                            <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 min-w-0">
                               <ActiveUsersSection activeUsers={activeUsers} />
                             </div>
                             {onOpenParticipantsDrawer && (
@@ -740,10 +741,10 @@ export function ConversationSettingsModal({
                                   onOpenChange(false); // Fermer ce drawer
                                   onOpenParticipantsDrawer(); // Ouvrir le drawer participants
                                 }}
-                                className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 hover:bg-blue-500/10 border-white/30 dark:border-gray-700/40"
+                                className="w-full min-w-0 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 hover:bg-blue-500/10 border-white/30 dark:border-gray-700/40"
                               >
-                                <Users className="h-4 w-4 mr-2" />
-                                {t('conversationDetails.viewAllParticipants') || 'Voir tous les participants'}
+                                <Users className="h-4 w-4 mr-2 flex-shrink-0" />
+                                <span className="truncate">{t('conversationDetails.viewAllParticipants') || 'Voir tous les participants'}</span>
                               </Button>
                             )}
                           </div>
@@ -790,13 +791,13 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.05 }}
                     className="space-y-3"
                   >
-                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                      <ImageIcon className="h-4 w-4" />
-                      {t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                      <ImageIcon className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}</span>
                     </h3>
 
                     {/* Container visuel avec bannière + avatar */}
-                    <div className="relative rounded-xl overflow-hidden backdrop-blur-xl bg-gradient-to-br from-slate-100/80 to-gray-100/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-white/30 dark:border-gray-700/40 shadow-lg">
+                    <div className="relative rounded-xl overflow-hidden backdrop-blur-xl bg-gradient-to-br from-slate-100/80 to-gray-100/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-white/30 dark:border-gray-700/40 shadow-lg min-w-0">
                       {/* Bannière cliquable */}
                       <div
                         className="relative h-32 cursor-pointer group"
@@ -837,8 +838,8 @@ export function ConversationSettingsModal({
                       </div>
 
                       {/* Avatar par-dessus la bannière - cliquable */}
-                      <div className="relative px-6 pb-4">
-                        <div className="flex items-end gap-4 pt-2">
+                      <div className="relative px-6 pb-4 min-w-0">
+                        <div className="flex items-end gap-4 pt-2 min-w-0">
                           {/* Avatar */}
                           <motion.div
                             whileHover={{ scale: 1.05 }}
@@ -871,8 +872,8 @@ export function ConversationSettingsModal({
                           <div className="flex-1 min-w-0 pb-2">
                             {/* Titre éditable */}
                             {!isEditingTitle ? (
-                              <div className="flex items-center gap-2 group/title">
-                                <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                              <div className="flex items-center gap-2 group/title min-w-0">
+                                <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate min-w-0">
                                   {convTitle || 'Sans titre'}
                                 </h4>
                                 <Button
@@ -890,7 +891,7 @@ export function ConversationSettingsModal({
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 min-w-0">
                                 <Input
                                   value={editedTitle}
                                   onChange={(e) => setEditedTitle(e.target.value)}
@@ -904,7 +905,7 @@ export function ConversationSettingsModal({
                                   }}
                                   disabled={isSavingTitle}
                                   autoFocus
-                                  className="h-8 text-base font-bold backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40"
+                                  className="h-8 text-base font-bold backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 min-w-0 flex-1"
                                 />
                                 <Button
                                   type="button"
@@ -912,7 +913,7 @@ export function ConversationSettingsModal({
                                   size="icon"
                                   onClick={cancelTitleEdit}
                                   disabled={isSavingTitle}
-                                  className="h-7 w-7 text-red-600 hover:text-red-700"
+                                  className="h-7 w-7 text-red-600 hover:text-red-700 flex-shrink-0"
                                   aria-label="Annuler"
                                 >
                                   <X className="h-3.5 w-3.5" />
@@ -923,7 +924,7 @@ export function ConversationSettingsModal({
                                   size="icon"
                                   onClick={saveTitleInline}
                                   disabled={isSavingTitle}
-                                  className="h-7 w-7 text-green-600 hover:text-green-700"
+                                  className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0"
                                   aria-label="Valider"
                                 >
                                   {isSavingTitle ? (
@@ -936,12 +937,12 @@ export function ConversationSettingsModal({
                             )}
 
                             {/* Badges */}
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs">
+                            <div className="flex items-center gap-2 mt-1 flex-wrap min-w-0">
+                              <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs flex-shrink-0">
                                 {conversation.type === 'direct' ? 'Direct' : 'Groupe'}
                               </Badge>
                               {conversation.participants && (
-                                <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs">
+                                <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs flex-shrink-0">
                                   {conversation.participants.length} {conversation.participants.length > 1 ? 'membres' : 'membre'}
                                 </Badge>
                               )}
@@ -951,18 +952,18 @@ export function ConversationSettingsModal({
                       </div>
 
                       {/* Description éditable */}
-                      <div className="px-6 pb-4">
+                      <div className="px-6 pb-4 min-w-0">
                         {!isEditingDescription ? (
-                          <div className="group/desc cursor-pointer" onClick={() => {
+                          <div className="group/desc cursor-pointer min-w-0" onClick={() => {
                             setEditedDescription(convDescription);
                             setIsEditingDescription(true);
                           }}>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 group-hover/desc:text-gray-800 dark:group-hover/desc:text-gray-300 transition-colors line-clamp-2">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 group-hover/desc:text-gray-800 dark:group-hover/desc:text-gray-300 transition-colors line-clamp-2 break-words">
                               {convDescription || 'Cliquez pour ajouter une description...'}
                             </p>
                           </div>
                         ) : (
-                          <div className="space-y-2">
+                          <div className="space-y-2 min-w-0">
                             <Textarea
                               value={editedDescription}
                               onChange={(e) => setEditedDescription(e.target.value)}
@@ -977,7 +978,7 @@ export function ConversationSettingsModal({
                               disabled={isSavingDescription}
                               autoFocus
                               placeholder="Description de la conversation..."
-                              className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 text-xs min-h-[60px] resize-none"
+                              className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 text-xs min-h-[60px] resize-none w-full"
                             />
                             <div className="flex justify-end gap-1">
                               <Button
@@ -1022,116 +1023,95 @@ export function ConversationSettingsModal({
                   transition={{ delay: 0.2 }}
                   className="space-y-4"
                 >
-                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <Shield className="h-4 w-4" />
-                    {t('conversationDetails.security') || 'Sécurité'}
+                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                    <Shield className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{t('conversationDetails.security') || 'Sécurité'}</span>
                   </h3>
 
                   {/* Mode d'encryption */}
-                  <div className="space-y-2 p-3 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-800/30">
-                    <Label className="flex items-center gap-2 font-semibold text-purple-900 dark:text-purple-100">
-                      <Lock className="h-4 w-4" />
-                      {t('conversationDetails.encryptionMode') || 'Mode de chiffrement'}
+                  <div className="space-y-2 p-3 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-800/30 min-w-0">
+                    <Label className="flex items-center gap-2 font-semibold text-purple-900 dark:text-purple-100 min-w-0">
+                      <Lock className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{t('conversationDetails.encryptionMode') || 'Mode de chiffrement'}</span>
                     </Label>
                     <Select
                       value={encryptionMode || 'none'}
                       onValueChange={(v) => setEncryptionMode(v === 'none' ? '' : v as any)}
                     >
-                      <SelectTrigger className="w-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-purple-200/50 dark:border-purple-800/30">
+                      <SelectTrigger className="w-full min-w-0 backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-purple-200/50 dark:border-purple-800/30">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">
                           <span className="flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-gray-400" />
-                            {t('conversationDetails.noEncryption') || 'Aucun chiffrement'}
+                            <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{t('conversationDetails.noEncryption') || 'Aucun chiffrement'}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="e2ee">
                           <span className="flex items-center gap-2">
-                            <Lock className="h-4 w-4 text-green-600" />
-                            {t('conversationDetails.e2ee') || 'Bout en bout (E2EE)'}
+                            <Lock className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            <span className="truncate">{t('conversationDetails.e2ee') || 'Bout en bout (E2EE)'}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="hybrid">
                           <span className="flex items-center gap-2">
-                            <LockOpen className="h-4 w-4 text-yellow-600" />
-                            {t('conversationDetails.hybrid') || 'Hybride'}
+                            <LockOpen className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+                            <span className="truncate">{t('conversationDetails.hybrid') || 'Hybride'}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="server">
                           <span className="flex items-center gap-2">
-                            <Key className="h-4 w-4 text-blue-600" />
-                            {t('conversationDetails.serverEncryption') || 'Serveur'}
+                            <Key className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <span className="truncate">{t('conversationDetails.serverEncryption') || 'Serveur'}</span>
                           </span>
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-purple-700 dark:text-purple-300">
+                    <p className="text-xs text-purple-700 dark:text-purple-300 break-words">
                       {encryptionMode === 'e2ee' && (t('conversationDetails.e2eeDescription') || 'Les messages sont chiffrés de bout en bout.')}
                       {encryptionMode === 'hybrid' && (t('conversationDetails.hybridDescription') || 'Chiffrement côté serveur avec clés partagées.')}
                       {encryptionMode === 'server' && (t('conversationDetails.serverDescription') || 'Les messages sont chiffrés sur le serveur.')}
                       {!encryptionMode && (t('conversationDetails.noEncryptionDescription') || 'Les messages ne sont pas chiffrés.')}
                     </p>
-                  </div>
-                </motion.div>
 
-                {/* Informations Conversation */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="space-y-4"
-                >
-                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    {t('conversationDetails.information') || 'Informations'}
-                  </h3>
-
-                  <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 space-y-3">
-                    {/* Type de conversation */}
-                    <div className="flex items-center justify-between py-2 border-b border-gray-200/50 dark:border-gray-700/50">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('conversationDetails.conversationType') || 'Type'}
-                      </span>
-                      <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                        {conversation.type === 'direct'
-                          ? (t('conversationDetails.directConversation') || 'Direct')
-                          : (t('conversationDetails.groupConversation') || 'Groupe')}
-                      </Badge>
-                    </div>
-
-                    {/* Nombre de participants */}
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('conversationDetails.totalParticipants') || 'Participants'}
-                      </span>
-                      <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                        {conversation.participants?.length || 0}
-                      </Badge>
-                    </div>
-
-                    {/* Avertissement si conversation direct avec plus de 2 participants */}
-                    {conversation.type === 'direct' && (conversation.participants?.length || 0) > 2 && (
-                      <div className="p-3 rounded-lg bg-yellow-50/80 dark:bg-yellow-900/20 border border-yellow-200/50 dark:border-yellow-800/30">
-                        <p className="text-xs text-yellow-800 dark:text-yellow-200 flex items-start gap-2">
-                          <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                          <span>
-                            {t('conversationDetails.directConversationWarning') ||
-                            'Une conversation directe ne devrait normalement avoir que 2 participants.'}
-                          </span>
-                        </p>
+                    {/* Badge du mode de chiffrement actuel */}
+                    {(conversation as any).encryptionMode && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-purple-200/30 dark:border-purple-800/20 min-w-0">
+                        <span className="text-xs text-purple-700 dark:text-purple-300 flex-shrink-0">Mode actif:</span>
+                        <Badge variant="outline" className="gap-1 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 flex-shrink-0">
+                          {getEncryptionIcon((conversation as any).encryptionMode)}
+                          <span className="truncate">{(conversation as any).encryptionMode.toUpperCase()}</span>
+                        </Badge>
                       </div>
                     )}
                   </div>
                 </motion.div>
+
+                {/* Avertissement si conversation direct avec plus de 2 participants */}
+                {conversation.type === 'direct' && (conversation.participants?.length || 0) > 2 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="p-3 rounded-lg bg-yellow-50/80 dark:bg-yellow-900/20 border border-yellow-200/50 dark:border-yellow-800/30 min-w-0"
+                  >
+                    <p className="text-xs text-yellow-800 dark:text-yellow-200 flex items-start gap-2 min-w-0">
+                      <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <span className="break-words min-w-0">
+                        {t('conversationDetails.directConversationWarning') ||
+                        'Une conversation directe ne devrait normalement avoir que 2 participants.'}
+                      </span>
+                    </p>
+                  </motion.div>
+                )}
 
                 {/* Liens partagés - Groupes uniquement */}
                 {conversation.type !== 'direct' && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
+                    transition={{ delay: 0.4 }}
                     className="space-y-4"
                   >
                     <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
@@ -1147,39 +1127,6 @@ export function ConversationSettingsModal({
                     </Suspense>
                   </motion.div>
                 )}
-
-                {/* Statut actuel */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
-                  className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-gray-50/80 to-slate-50/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-gray-200/50 dark:border-gray-700/30 space-y-3"
-                >
-                  <h4 className="text-sm font-semibold flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    {t('conversationDetails.currentStatus') || 'Statut actuel'}
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="gap-1 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                      {conversation.isGroup ? (
-                        <>{t('conversationDetails.groupConversation') || 'Groupe'}</>
-                      ) : (
-                        <>{t('conversationDetails.directConversation') || 'Direct'}</>
-                      )}
-                    </Badge>
-                    {conversation.participants && (
-                      <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                        {conversation.participants.length} {t('conversationUI.members') || 'membres'}
-                      </Badge>
-                    )}
-                    {(conversation as any).encryptionMode && (
-                      <Badge variant="outline" className="gap-1 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
-                        {getEncryptionIcon((conversation as any).encryptionMode)}
-                        {(conversation as any).encryptionMode.toUpperCase()}
-                      </Badge>
-                    )}
-                  </div>
-                </motion.div>
               </TabsContent>
             )}
             </div>
