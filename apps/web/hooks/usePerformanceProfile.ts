@@ -73,11 +73,11 @@ export const usePerformanceProfile = (): PerformanceProfile => {
 
       // Hardware score: 0 = low, 1 = medium, 2 = high
       let hardwareScore =
-        cores > PERFORMANCE_THRESHOLDS.HIGH_END_CORES &&
-        memory > PERFORMANCE_THRESHOLDS.HIGH_END_MEMORY
+        cores >= PERFORMANCE_THRESHOLDS.HIGH_END_CORES &&
+        memory >= PERFORMANCE_THRESHOLDS.HIGH_END_MEMORY
           ? 2
-          : cores > PERFORMANCE_THRESHOLDS.MID_RANGE_CORES &&
-            memory > PERFORMANCE_THRESHOLDS.MID_RANGE_MEMORY
+          : cores >= PERFORMANCE_THRESHOLDS.MID_RANGE_CORES &&
+            memory >= PERFORMANCE_THRESHOLDS.MID_RANGE_MEMORY
             ? 1
             : 0;
 

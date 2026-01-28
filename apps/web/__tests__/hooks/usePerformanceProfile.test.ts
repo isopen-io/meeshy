@@ -76,8 +76,8 @@ describe('usePerformanceProfile', () => {
       .mockReturnValueOnce(0)  // startTime
       .mockReturnValueOnce(10); // endTime (fast frame: 10ms)
 
-    Object.defineProperty(navigator, 'hardwareConcurrency', { value: 2, configurable: true });
-    Object.defineProperty(navigator, 'deviceMemory', { value: 2, configurable: true });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { value: 1, configurable: true });
+    Object.defineProperty(navigator, 'deviceMemory', { value: 1, configurable: true });
 
     const { result } = renderHook(() => usePerformanceProfile());
 
@@ -157,7 +157,7 @@ describe('usePerformanceProfile', () => {
 
     const { result } = renderHook(() => usePerformanceProfile());
 
-    await Promise.resolve();
+    act(() => rafCallback!(0));
 
     // Should default to 4GB and detect as medium (cores > 4, memory = 4)
     expect(['medium', 'high']).toContain(result.current);
@@ -174,7 +174,7 @@ describe('usePerformanceProfile', () => {
 
     const { result } = renderHook(() => usePerformanceProfile());
 
-    await Promise.resolve();
+    act(() => rafCallback!(0));
 
     // Should default to 4 cores and detect as medium (cores = 4, memory > 4)
     expect(['medium', 'high']).toContain(result.current);
