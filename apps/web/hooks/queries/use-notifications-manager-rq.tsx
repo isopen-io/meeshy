@@ -47,8 +47,9 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     refetch,
   } = useInfiniteNotificationsQuery({ limit, ...filters });
 
-  // Query pour le compteur non-lus
-  const { data: unreadCount = 0 } = useUnreadNotificationCountQuery();
+  // Extraire le compteur non-lus depuis les données de notification
+  // Le backend retourne unreadCount dans la première page de réponse
+  const unreadCount = notificationsData?.pages[0]?.unreadCount ?? 0;
 
   // Mutations
   const markAsReadMutation = useMarkNotificationAsReadMutation();
@@ -90,6 +91,13 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   // Écouter les événements Socket.IO pour mettre à jour le cache
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    // Connecter le Socket.IO avec le token d'auth
+    const authToken = useAuthStore.getState().token;
+    if (authToken) {
+      console.log('[useNotificationsManagerRQ] Connecting Socket.IO...');
+      notificationSocketIO.connect(authToken);
+    }
 
     const handleNewNotification = (notification: Notification) => {
       // Mettre à jour le cache React Query

@@ -2,7 +2,8 @@
  * NotificationService - Service API pour les notifications
  * Gère les appels API avec retry logic et gestion d'erreurs
  *
- * Types importés de @meeshy/shared pour cohérence avec le backend
+ * IMPORTANT: Le backend retourne déjà la structure correcte,
+ * pas besoin de mapping complexe
  */
 
 import { apiService } from './api.service';
@@ -10,11 +11,8 @@ import type { ApiResponse } from '@meeshy/shared/types';
 import type {
   Notification,
   NotificationFilters,
-  NotificationPaginationOptions,
   NotificationPaginatedResponse,
   NotificationCounts,
-  NotificationStats,
-  NotificationPreferences
 } from '@/types/notification';
 
 /**
@@ -23,13 +21,13 @@ import type {
 const SERVICE_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
-  TIMEOUT: 10000
+  TIMEOUT: 10000,
 };
 
 /**
  * Helper pour attendre avec un délai
  */
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Helper pour retry avec backoff exponentiel
@@ -46,7 +44,9 @@ async function withRetry<T>(
       throw error;
     }
 
-    console.warn(`[NotificationService] Retry attempt (${SERVICE_CONFIG.MAX_RETRIES - retries + 1}/${SERVICE_CONFIG.MAX_RETRIES})`);
+    console.warn(
+      `[NotificationService] Retry attempt (${SERVICE_CONFIG.MAX_RETRIES - retries + 1}/${SERVICE_CONFIG.MAX_RETRIES})`
+    );
     await delay(retryDelay);
 
     return withRetry(fn, retries - 1, retryDelay * 2);
@@ -54,74 +54,37 @@ async function withRetry<T>(
 }
 
 /**
- * Parse une notification brute depuis l'API
+ * Parse une notification depuis l'API
+ *
+ * SIMPLIFIÉ: Le backend retourne déjà la bonne structure.
+ * On parse juste les dates.
  */
 function parseNotification(raw: any): Notification {
-  // Parser le champ data s'il est en JSON string
-  let parsedData = raw.data;
-  if (typeof raw.data === 'string') {
-    try {
-      parsedData = JSON.parse(raw.data);
-    } catch (error) {
-      console.error('[NotificationService] Failed to parse notification data:', error);
-      parsedData = {};
-    }
-  }
-
-  // Construire la notification typée
-  const notification: Notification = {
+  return {
     id: raw.id,
     userId: raw.userId,
     type: raw.type,
-    title: raw.title,
-    content: raw.content || raw.message || '',
     priority: raw.priority || 'normal',
-    isRead: raw.isRead || false,
-    readAt: raw.readAt ? new Date(raw.readAt) : undefined,
-    createdAt: new Date(raw.createdAt),
-    expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : undefined,
+    content: raw.content,
 
-    // Sender
-    sender: raw.senderId ? {
-      id: raw.senderId,
-      username: raw.senderUsername || 'Unknown',
-      avatar: raw.senderAvatar,
-      displayName: raw.senderDisplayName,
-      firstName: raw.senderFirstName,
-      lastName: raw.senderLastName
-    } : undefined,
+    // Groupes déjà structurés par le backend
+    actor: raw.actor,
+    context: raw.context || {},
+    metadata: raw.metadata || {},
 
-    // Message preview
-    messagePreview: raw.messagePreview,
-
-    // Context
-    context: {
-      conversationId: raw.conversationId || parsedData?.conversationId,
-      conversationTitle: parsedData?.conversationTitle,
-      conversationType: parsedData?.conversationType,
-      messageId: raw.messageId || parsedData?.messageId,
-      originalMessageId: parsedData?.originalMessageId,
-      callSessionId: raw.callSessionId || parsedData?.callSessionId,
-      friendRequestId: raw.friendRequestId || parsedData?.friendRequestId,
-      reactionId: raw.reactionId || parsedData?.reactionId
+    // State avec parsing des dates
+    // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
+    // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
+    state: {
+      isRead: raw.isRead ?? false,
+      readAt: raw.readAt ? new Date(raw.readAt) : null,
+      createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+      expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : undefined,
     },
 
-    // Metadata
-    metadata: {
-      attachments: parsedData?.attachments,
-      reactionEmoji: parsedData?.emoji || parsedData?.reactionEmoji,
-      memberCount: parsedData?.memberCount,
-      action: parsedData?.action,
-      joinMethod: parsedData?.joinMethod,
-      systemType: parsedData?.systemType,
-      isMember: parsedData?.isMember
-    },
-
-    // Raw data
-    data: parsedData
+    // Delivery
+    delivery: raw.delivery || { emailSent: false, pushSent: false },
   };
-
-  return notification;
 }
 
 /**
@@ -132,7 +95,7 @@ export const NotificationService = {
    * Récupère les notifications avec pagination et filtres
    */
   async fetchNotifications(
-    options: Partial<NotificationFilters & NotificationPaginationOptions> = {}
+    options: Partial<NotificationFilters> = {}
   ): Promise<ApiResponse<NotificationPaginatedResponse>> {
     const {
       offset = 0,
@@ -144,7 +107,7 @@ export const NotificationService = {
       startDate,
       endDate,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
     } = options;
 
     return withRetry(async () => {
@@ -159,7 +122,7 @@ export const NotificationService = {
       }
 
       if (typeof isRead === 'boolean') {
-        params.set('isRead', isRead.toString());
+        params.set('unreadOnly', (!isRead).toString());
       }
 
       if (priority) {
@@ -180,21 +143,26 @@ export const NotificationService = {
 
       const response = await apiService.get<{
         success: boolean;
-        data: {
-          notifications: any[];
-          pagination: NotificationPaginatedResponse['pagination'];
+        data: any[];
+        pagination: {
+          offset: number;
+          limit: number;
+          total: number;
+          hasMore: boolean;
         };
+        unreadCount: number;
       }>(`/notifications?${params.toString()}`);
 
-      if (response.data?.data?.notifications) {
-        const notifications: Notification[] = response.data.data.notifications.map(parseNotification);
+      if (response.data?.data) {
+        const notifications: Notification[] = response.data.data.map(parseNotification);
 
         return {
           ...response,
           data: {
             notifications,
-            pagination: response.data.data.pagination
-          }
+            pagination: response.data.pagination,
+            unreadCount: response.data.unreadCount ?? 0,
+          },
         };
       }
 
@@ -206,332 +174,116 @@ export const NotificationService = {
             offset: 0,
             limit: 50,
             total: 0,
-            hasMore: false
-          }
-        }
+            hasMore: false,
+          },
+          unreadCount: 0,
+        },
       };
     });
   },
 
   /**
-   * Récupère le compteur de notifications non lues
+   * Récupère le nombre de notifications non lues
    */
   async getUnreadCount(): Promise<ApiResponse<{ count: number }>> {
     return withRetry(async () => {
-      return apiService.get<{ count: number }>('/notifications/unread/count');
-    });
-  },
-
-  /**
-   * Récupère les compteurs détaillés
-   */
-  async getCounts(): Promise<ApiResponse<{ counts: NotificationCounts }>> {
-    return withRetry(async () => {
-      return apiService.get<{ counts: NotificationCounts }>('/notifications/counts');
-    });
-  },
-
-  /**
-   * Récupère les statistiques des notifications
-   */
-  async getStats(): Promise<ApiResponse<{ stats: NotificationStats }>> {
-    return withRetry(async () => {
-      return apiService.get<{ stats: NotificationStats }>('/notifications/stats');
+      return apiService.get<{ success: boolean; count: number }>('/notifications/unread-count');
     });
   },
 
   /**
    * Marque une notification comme lue
    */
-  async markAsRead(notificationId: string): Promise<ApiResponse<{ success: boolean }>> {
+  async markAsRead(notificationId: string): Promise<ApiResponse<{ data: Notification }>> {
     return withRetry(async () => {
-      return apiService.patch<{ success: boolean }>(
+      const response = await apiService.post<{ success: boolean; data: any }>(
         `/notifications/${notificationId}/read`
       );
+
+      if (response.data?.data) {
+        return {
+          ...response,
+          data: {
+            data: parseNotification(response.data.data),
+          },
+        };
+      }
+
+      return response as any;
     });
   },
 
   /**
    * Marque toutes les notifications comme lues
    */
-  async markAllAsRead(): Promise<ApiResponse<{ success: boolean; count: number }>> {
+  async markAllAsRead(): Promise<ApiResponse<{ count: number }>> {
     return withRetry(async () => {
-      return apiService.patch<{ success: boolean; count: number }>(
-        '/notifications/read-all'
-      );
+      return apiService.post<{ success: boolean; count: number }>('/notifications/read-all');
     });
   },
 
   /**
    * Supprime une notification
    */
-  async deleteNotification(notificationId: string): Promise<ApiResponse<{ success: boolean }>> {
+  async deleteNotification(notificationId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
-      return apiService.delete<{ success: boolean }>(
-        `/notifications/${notificationId}`
-      );
+      return apiService.delete(`/notifications/${notificationId}`);
     });
   },
 
   /**
-   * Supprime toutes les notifications lues
+   * Récupère les compteurs de notifications
    */
-  async deleteAllRead(): Promise<ApiResponse<{ success: boolean; count: number }>> {
+  async getCounts(): Promise<ApiResponse<NotificationCounts>> {
     return withRetry(async () => {
-      return apiService.delete<{ success: boolean; count: number }>(
-        '/notifications/read'
-      );
+      const response = await apiService.get<{
+        success: boolean;
+        count: number;
+      }>('/notifications/unread-count');
+
+      if (response.data) {
+        return {
+          ...response,
+          data: {
+            total: response.data.count || 0,
+            unread: response.data.count || 0,
+          },
+        };
+      }
+
+      return {
+        ...response,
+        data: {
+          total: 0,
+          unread: 0,
+        },
+      };
     });
   },
 
   /**
    * Récupère les préférences de notifications
-   * Utilise le nouvel endpoint unifié /me/preferences/notification
    */
-  async getPreferences(): Promise<ApiResponse<{ preferences: NotificationPreferences }>> {
+  async getPreferences(): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      const response = await apiService.get<{ success: boolean; data: NotificationPreferences }>(
-        '/me/preferences/notification'
-      );
-      // Adapter la réponse au format attendu
-      if (response.data?.data) {
-        return {
-          ...response,
-          data: { preferences: response.data.data }
-        } as ApiResponse<{ preferences: NotificationPreferences }>;
-      }
-      return response as unknown as ApiResponse<{ preferences: NotificationPreferences }>;
+      return apiService.get('/notifications/preferences');
     });
   },
 
   /**
    * Met à jour les préférences de notifications
-   * Utilise le nouvel endpoint unifié /me/preferences/notification
    */
-  async updatePreferences(
-    preferences: Partial<NotificationPreferences>
-  ): Promise<ApiResponse<{ success: boolean; preferences: NotificationPreferences }>> {
+  async updatePreferences(preferences: any): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      const response = await apiService.put<{ success: boolean; data: NotificationPreferences }>(
-        '/me/preferences/notification',
-        preferences
-      );
-      // Adapter la réponse au format attendu
-      if (response.data?.data) {
-        return {
-          ...response,
-          data: { success: true, preferences: response.data.data }
-        } as ApiResponse<{ success: boolean; preferences: NotificationPreferences }>;
-      }
-      return response as unknown as ApiResponse<{ success: boolean; preferences: NotificationPreferences }>;
+      return apiService.patch('/notifications/preferences', preferences);
     });
   },
-
-  /**
-   * Mute une conversation
-   */
-  async muteConversation(conversationId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return withRetry(async () => {
-      return apiService.post<{ success: boolean }>(
-        '/notifications/mute',
-        { conversationId }
-      );
-    });
-  },
-
-  /**
-   * Unmute une conversation
-   */
-  async unmuteConversation(conversationId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return withRetry(async () => {
-      return apiService.post<{ success: boolean }>(
-        '/notifications/unmute',
-        { conversationId }
-      );
-    });
-  },
-
-  /**
-   * Envoie une notification de test (pour développement)
-   */
-  async sendTestNotification(
-    type?: string
-  ): Promise<ApiResponse<{ success: boolean; notification: Notification }>> {
-    return apiService.post<{ success: boolean; notification: any }>(
-      '/notifications/test',
-      { type }
-    ).then(response => {
-      if (response.data?.notification) {
-        return {
-          ...response,
-          data: {
-            success: response.data.success || true,
-            notification: parseNotification(response.data.notification)
-          }
-        };
-      }
-      return response as ApiResponse<{ success: boolean; notification: Notification }>;
-    });
-  }
 };
 
-export default NotificationService;
-
-// Re-export types for convenience
-export type { Notification, NotificationCounts } from '@/types/notification';
-
 /**
- * Notification service wrapper with local state management
- * Provides the interface expected by use-notifications.ts hook
+ * MIGRATION NOTE:
+ * LocalNotificationService a été supprimé - utiliser maintenant:
+ * - useNotificationsManagerRQ (React Query + Socket.IO) pour les hooks
+ * - NotificationService (API calls) pour les appels directs
+ * - notificationSocketIO (singleton) pour les événements temps réel
  */
-class NotificationServiceWrapper {
-  private notifications: Notification[] = [];
-  private counts: NotificationCounts = {
-    total: 0,
-    unread: 0,
-    byType: {
-      message: 0,
-      system: 0,
-      user_action: 0,
-      conversation: 0,
-      translation: 0
-    },
-    byPriority: {
-      low: 0,
-      normal: 0,
-      high: 0,
-      urgent: 0
-    }
-  };
-  private callbacks: {
-    onConnect?: () => void;
-    onDisconnect?: () => void;
-    onError?: (error: Error) => void;
-    onNotificationReceived?: (notification: Notification) => void;
-    onCountsUpdated?: (counts: NotificationCounts) => void;
-  } = {};
-
-  /**
-   * Initialize the notification service
-   */
-  initialize(config: {
-    token: string;
-    userId: string;
-    onConnect?: () => void;
-    onDisconnect?: () => void;
-    onError?: (error: Error) => void;
-    onNotificationReceived?: (notification: Notification) => void;
-    onCountsUpdated?: (counts: NotificationCounts) => void;
-  }) {
-    this.callbacks = config;
-    // Simulate connection success
-    setTimeout(() => {
-      this.callbacks.onConnect?.();
-    }, 100);
-  }
-
-  /**
-   * Disconnect the service
-   */
-  disconnect() {
-    this.callbacks.onDisconnect?.();
-    this.callbacks = {};
-  }
-
-  /**
-   * Get all notifications (local state)
-   */
-  getNotifications(): Notification[] {
-    return this.notifications;
-  }
-
-  /**
-   * Get unread notifications (local state)
-   */
-  getUnreadNotifications(): Notification[] {
-    return this.notifications.filter(n => !n.isRead);
-  }
-
-  /**
-   * Mark a notification as read
-   */
-  async markAsRead(notificationId: string) {
-    const index = this.notifications.findIndex(n => n.id === notificationId);
-    if (index !== -1) {
-      this.notifications[index] = { ...this.notifications[index], isRead: true } as Notification;
-      this.updateCounts();
-    }
-    // Also call API
-    return NotificationService.markAsRead(notificationId);
-  }
-
-  /**
-   * Mark all notifications as read
-   */
-  async markAllAsRead() {
-    this.notifications = this.notifications.map(n => ({ ...n, isRead: true }) as Notification);
-    this.updateCounts();
-    return NotificationService.markAllAsRead();
-  }
-
-  /**
-   * Remove a notification from local state
-   */
-  removeNotification(notificationId: string) {
-    this.notifications = this.notifications.filter(n => n.id !== notificationId);
-    this.updateCounts();
-  }
-
-  /**
-   * Clear all notifications from local state
-   */
-  clearAll() {
-    this.notifications = [];
-    this.updateCounts();
-  }
-
-  /**
-   * Get notification counts
-   */
-  getCounts(): NotificationCounts {
-    return this.counts;
-  }
-
-  /**
-   * Update counts based on current notifications
-   */
-  private updateCounts() {
-    const unread = this.notifications.filter(n => !n.isRead).length;
-    this.counts = {
-      total: this.notifications.length,
-      unread,
-      byType: {
-        message: this.notifications.filter(n => n.type === 'message').length,
-        system: this.notifications.filter(n => n.type === 'system').length,
-        user_action: this.notifications.filter(n => n.type === 'user_action').length,
-        conversation: this.notifications.filter(n => n.type === 'conversation').length,
-        translation: this.notifications.filter(n => n.type === 'translation').length
-      },
-      byPriority: {
-        low: this.notifications.filter(n => n.priority === 'low').length,
-        normal: this.notifications.filter(n => n.priority === 'normal').length,
-        high: this.notifications.filter(n => n.priority === 'high').length,
-        urgent: this.notifications.filter(n => n.priority === 'urgent').length
-      }
-    };
-    this.callbacks.onCountsUpdated?.(this.counts);
-  }
-
-  // Proxy to API methods
-  fetchNotifications = NotificationService.fetchNotifications.bind(NotificationService);
-  fetchUnreadCount = NotificationService.getUnreadCount.bind(NotificationService);
-  fetchCounts = NotificationService.getCounts.bind(NotificationService);
-  fetchStats = NotificationService.getStats.bind(NotificationService);
-  fetchPreferences = NotificationService.getPreferences.bind(NotificationService);
-  updatePreferences = NotificationService.updatePreferences.bind(NotificationService);
-  deleteNotification = NotificationService.deleteNotification.bind(NotificationService);
-  testNotification = NotificationService.sendTestNotification.bind(NotificationService);
-}
-
-// Alias for backwards compatibility (lowercase)
-export const notificationService = new NotificationServiceWrapper();

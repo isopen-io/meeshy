@@ -105,51 +105,47 @@ class NotificationSocketIOSingleton {
       }
     });
 
-    // Nouvelle notification
-    this.socket.on('notification', (data: any) => {
+    // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
+    const handleNotification = (data: any) => {
       console.log('[NotificationSocketIO] Received notification:', data);
 
-      // Parser la notification
+      // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {
         id: data.id,
         userId: data.userId,
         type: data.type,
-        title: data.title,
-        content: data.content || data.message,
         priority: data.priority || 'normal',
-        isRead: data.isRead || false,
-        readAt: data.readAt ? new Date(data.readAt) : undefined,
-        createdAt: new Date(data.createdAt || Date.now()),
-        sender: data.senderId ? {
-          id: data.senderId,
-          username: data.senderUsername || 'Unknown',
-          avatar: data.senderAvatar,
-          displayName: data.senderDisplayName,
-          firstName: data.senderFirstName,
-          lastName: data.senderLastName
-        } : undefined,
-        messagePreview: data.messagePreview,
-        context: {
-          conversationId: data.conversationId,
-          conversationTitle: data.data?.conversationTitle,
-          conversationType: data.data?.conversationType,
-          messageId: data.messageId,
-          originalMessageId: data.data?.originalMessageId,
-          callSessionId: data.callSessionId,
-          friendRequestId: data.friendRequestId,
-          reactionId: data.reactionId
+        content: data.content,
+
+        // Actor (qui a déclenché)
+        actor: data.actor,
+
+        // Context (où c'est arrivé)
+        context: data.context || {},
+
+        // Metadata (données type-spécifiques)
+        metadata: data.metadata || {},
+
+        // State (statut lecture + dates)
+        // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
+        // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
+        state: {
+          isRead: data.isRead ?? false,
+          readAt: data.readAt ? new Date(data.readAt) : null,
+          createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+          expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined
         },
-        metadata: {
-          attachments: data.data?.attachments,
-          reactionEmoji: data.data?.emoji || data.data?.reactionEmoji,
-          action: data.data?.action
-        },
-        data: data.data
+
+        // Delivery (suivi multi-canal)
+        delivery: data.delivery || { emailSent: false, pushSent: false }
       };
 
       // Notifier tous les callbacks
       this.notificationCallbacks.forEach(cb => cb(notification));
-    });
+    };
+
+    this.socket.on('notification:new', handleNotification);
+    this.socket.on('notification', handleNotification); // Legacy support
 
     // Notification marquée comme lue
     this.socket.on('notification:read', (data: { notificationId: string }) => {

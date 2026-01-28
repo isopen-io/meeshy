@@ -13,10 +13,11 @@ export { useConversationMessages } from './use-conversation-messages';
 // Langues unifiées
 export { useLanguage } from './use-language'; // Nouveau hook fusionné
 
-// Interface utilisateur et notifications
-export { useNotifications } from './use-notifications';
+// Interface utilisateur
 export { useFontPreference } from './use-font-preference';
 export { useFixRadixZIndex } from './use-fix-z-index';
+
+// Notifications - Utiliser useNotificationsManagerRQ depuis @/hooks/queries/use-notifications-manager-rq
 
 // Authentification
 export { useAuth } from './use-auth';
