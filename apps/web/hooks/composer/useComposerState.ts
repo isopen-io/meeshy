@@ -78,6 +78,15 @@ export const useComposerState = (props: MessageComposerProps) => {
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const glowColor = useMemo(() => {
     const percentage = (props.value.length / maxMessageLength) * 100;
     if (percentage < 50) return 'rgba(59, 130, 246, 0.4)';
@@ -129,7 +138,7 @@ export const useComposerState = (props: MessageComposerProps) => {
     // Mention detection
     const cursorPosition = e.target.selectionStart;
     mentionState.handleTextChange(newValue, cursorPosition, textareaRef.current);
-  }, [props.onChange, handleAutosize, saveDraft, mentionState.handleTextChange]);
+  }, [props.onChange, handleAutosize, saveDraft, mentionState.handleTextChange, textareaRef]);
 
   const handleSendMessage = useCallback(() => {
     props.onSend();
