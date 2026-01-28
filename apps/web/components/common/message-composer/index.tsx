@@ -25,6 +25,7 @@ import { getAnimationConfig } from '@/constants/animations';
 import { useComposerState } from '@/hooks/composer/useComposerState';
 import { useClipboardPaste } from '@/hooks/composer/useClipboardPaste';
 import { useUploadRetry } from '@/hooks/composer/useUploadRetry';
+import { useI18n } from '@/hooks/useI18n';
 
 // Components testés (Phase 3)
 import { SendButton } from './SendButton';
@@ -59,7 +60,7 @@ interface MessageComposerProps {
 /**
  * Fonction pour formater la date en fonction du jour
  */
-function formatReplyDate(date: Date | string): string {
+function formatReplyDate(date: Date | string, locale: string = 'fr-FR'): string {
   const messageDate = new Date(date);
   const now = new Date();
 
@@ -70,19 +71,19 @@ function formatReplyDate(date: Date | string): string {
   const isSameYear = messageDate.getFullYear() === now.getFullYear();
 
   if (isSameDay) {
-    return messageDate.toLocaleString('fr-FR', {
+    return messageDate.toLocaleString(locale, {
       hour: '2-digit',
       minute: '2-digit'
     });
   } else if (isSameYear) {
-    return messageDate.toLocaleString('fr-FR', {
+    return messageDate.toLocaleString(locale, {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit'
     });
   } else {
-    return messageDate.toLocaleString('fr-FR', {
+    return messageDate.toLocaleString(locale, {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -97,6 +98,9 @@ function formatReplyDate(date: Date | string): string {
  */
 export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerProps>(
   (props, ref) => {
+    // Récupérer la locale de l'utilisateur
+    const { locale } = useI18n('conversations');
+
     // Performance profile (Phase 1)
     const performanceProfile = usePerformanceProfile();
     const animConfig = getAnimationConfig(performanceProfile);
@@ -152,7 +156,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                       Réponse à {composerState.replyingTo.sender?.displayName || composerState.replyingTo.sender?.username || 'Utilisateur inconnu'}
                     </span>
                     <span className="text-xs text-blue-600/60 dark:text-blue-400/60">
-                      {formatReplyDate(composerState.replyingTo.createdAt)}
+                      {formatReplyDate(composerState.replyingTo.createdAt, locale)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 italic">
