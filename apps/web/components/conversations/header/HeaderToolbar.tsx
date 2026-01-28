@@ -66,6 +66,14 @@ export const HeaderToolbar = memo(function HeaderToolbar({
     conversation.type !== 'direct' &&
     !(conversation.type === 'global' && currentUser.role !== 'BIGBOSS' && currentUser.role !== 'ADMIN');
 
+  const showParticipantsDrawer =
+    conversation.type !== 'direct' &&
+    !(conversation.type === 'global' &&
+      currentUser.role !== 'BIGBOSS' &&
+      currentUser.role !== 'ADMIN' &&
+      currentUserRole !== 'ADMIN' &&
+      currentUserRole !== 'CREATOR');
+
   return (
     <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-center">
       {conversation.type === 'direct' && onStartCall && canUseVideoCalls && (
@@ -89,7 +97,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
         </TooltipProvider>
       )}
 
-      {conversation.type !== 'direct' && (
+      {showParticipantsDrawer && (
         <ConversationParticipantsDrawer
           conversationId={conversation.id}
           participants={conversationParticipants}
