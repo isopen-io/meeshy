@@ -1031,7 +1031,12 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                 </div>
 
                 {/* Messages informatifs */}
-                {!user.emailVerifiedAt && (
+                {user.emailVerifiedAt ? (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {t('profile.verification.email.verified', 'Email vérifié')}
+                  </p>
+                ) : (
                   <p className="text-xs text-amber-600">
                     {t('profile.verification.email.notVerified', 'Email non vérifié')} •{' '}
                     <button
@@ -1201,7 +1206,12 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                 </div>
 
                 {/* Messages informatifs */}
-                {!user.phoneVerifiedAt && user.phoneNumber && (
+                {user.phoneVerifiedAt ? (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {t('profile.verification.phone.verified', 'Téléphone vérifié')}
+                  </p>
+                ) : user.phoneNumber ? (
                   <div className="space-y-2">
                     <p className="text-xs text-amber-600">
                       {t('profile.verification.phone.notVerified', 'Téléphone non vérifié')}
@@ -1268,7 +1278,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
 
                 {/* Changement de téléphone en attente */}
                 {pendingPhone && (

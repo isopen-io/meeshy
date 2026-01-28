@@ -88,7 +88,47 @@
         "profileUpdated": "Profil mis à jour avec succès",
         "updateError": "Erreur lors de la mise à jour du profil",
         "confirm": "Confirmer",
-        "uploading": "Téléchargement..."
+        "uploading": "Téléchargement...",
+        "edit": "Modifier",
+        "languageUpdated": "Langue mise à jour"
+      },
+      "verification": {
+        "email": {
+          "verified": "Email vérifié",
+          "notVerified": "Email non vérifié"
+        },
+        "phone": {
+          "verified": "Téléphone vérifié",
+          "notVerified": "Téléphone non vérifié",
+          "start": "Vérifier par SMS",
+          "sendCode": "Envoyer le code",
+          "enterCode": "Code reçu par SMS"
+        },
+        "resend": "Renvoyer",
+        "sending": "Envoi..."
+      },
+      "email": {
+        "available": "Email disponible",
+        "alreadyUsed": "Cet email est déjà utilisé",
+        "invalidOrTaken": "Email invalide ou déjà utilisé",
+        "verificationSent": "Email de vérification envoyé à la nouvelle adresse",
+        "error": "Erreur lors du changement",
+        "pending": "Changement d'email en attente",
+        "pendingMessage": "Code envoyé à {email}"
+      },
+      "phone": {
+        "available": "Numéro disponible",
+        "alreadyUsed": "Ce numéro est déjà utilisé",
+        "invalidOrTaken": "Numéro invalide ou déjà utilisé",
+        "verificationSent": "Code de vérification envoyé par SMS",
+        "error": "Erreur lors du changement",
+        "pending": "Changement en attente",
+        "pendingMessage": "Code envoyé à {phone}"
+      },
+      "username": {
+        "available": "Nom d'utilisateur disponible",
+        "alreadyUsed": "Ce nom d'utilisateur est déjà pris",
+        "error": "Erreur lors du changement"
       },
       "account": {
         "email": {
