@@ -88,4 +88,53 @@ describe('useDraftAutosave', () => {
     expect(result.current.draft).toBe('');
     expect(localStorage.getItem(`draft-${conversationId}`)).toBeNull();
   });
+
+  it('should handle JSON parse errors gracefully', () => {
+    const conversationId = 'conv-corrupted';
+    localStorage.setItem(`draft-${conversationId}`, 'invalid JSON {');
+
+    const { result } = renderHook(() =>
+      useDraftAutosave({ conversationId, enabled: true })
+    );
+
+    expect(result.current.draft).toBe('');
+    expect(localStorage.getItem(`draft-${conversationId}`)).toBeNull();
+  });
+
+  it('should not save when enabled is false', () => {
+    const conversationId = 'conv-disabled';
+    const { result } = renderHook(() =>
+      useDraftAutosave({ conversationId, enabled: false })
+    );
+
+    act(() => {
+      result.current.saveDraft('Should not save');
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(localStorage.getItem(`draft-${conversationId}`)).toBeNull();
+  });
+
+  it('should not save when conversationId is undefined', () => {
+    const { result } = renderHook(() =>
+      useDraftAutosave({ enabled: true })
+    );
+
+    act(() => {
+      result.current.saveDraft('No conversation');
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    // Should not attempt to save
+    expect(result.current.draft).toBe('No conversation');
+    // No localStorage call - verify no key was set
+    const allKeys = Object.keys(localStorage);
+    expect(allKeys.length).toBe(0);
+  });
 });

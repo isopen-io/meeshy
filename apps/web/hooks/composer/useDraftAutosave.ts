@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 interface UseDraftAutosaveProps {
@@ -12,13 +12,17 @@ interface DraftData {
 }
 
 const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DEBOUNCE_DELAY_MS = 2000; // 2 seconds
 
 export const useDraftAutosave = ({
   conversationId,
   enabled = true
 }: UseDraftAutosaveProps) => {
   const [draft, setDraft] = useState<string>('');
-  const storageKey = conversationId ? `draft-${conversationId}` : null;
+  const storageKey = useMemo(
+    () => conversationId ? `draft-${conversationId}` : null,
+    [conversationId]
+  );
 
   // Restore draft on mount
   useEffect(() => {
@@ -64,7 +68,7 @@ export const useDraftAutosave = ({
     } catch (error) {
       console.error('Failed to save draft:', error);
     }
-  }, 2000); // 2 seconds debounce
+  }, DEBOUNCE_DELAY_MS);
 
   const saveDraft = useCallback((content: string) => {
     setDraft(content);
