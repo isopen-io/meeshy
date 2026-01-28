@@ -7,7 +7,7 @@
 
 'use client';
 
-import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent } from 'react';
+import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback } from 'react';
 import { Send, MapPin, X, MessageCircle, Languages, Paperclip, Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -136,9 +136,43 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       resetTextareaSize: composerState.resetTextareaSize,
     }));
 
+    // Memoize className computation
+    const containerClassName = useMemo(() =>
+      `relative ${props.className || ''} ${composerState.isDragOver ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`,
+      [props.className, composerState.isDragOver]
+    );
+
+    // Memoize textarea className
+    const textareaClassName = useMemo(() => {
+      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border-blue-200/60 bg-white/90 backdrop-blur-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:bg-white/95 placeholder:text-gray-600 scroll-hidden transition-all duration-200';
+      const roundingClasses = composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder
+        ? 'rounded-b-2xl rounded-t-none border-t-0'
+        : 'rounded-2xl';
+      const sizeClasses = composerState.isMobile ? 'text-base' : 'text-sm sm:text-base';
+      return `${baseClasses} ${roundingClasses} ${sizeClasses}`;
+    }, [composerState.replyingTo, composerState.selectedFiles.length, composerState.showAudioRecorder, composerState.isMobile]);
+
+    // Memoize textarea style
+    const textareaStyle = useMemo(() => ({
+      borderRadius: composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder ? '0 0 16px 16px' : '16px',
+      boxShadow: '0 4px 20px rgba(59, 130, 246, 0.15)',
+      fontSize: composerState.isMobile ? '16px' : undefined
+    }), [composerState.replyingTo, composerState.selectedFiles.length, composerState.showAudioRecorder, composerState.isMobile]);
+
+    // useCallback pour onSelect handler
+    const handleMentionSelect = useCallback((username: string, userId: string) => {
+      composerState.handleMentionSelect(
+        username,
+        userId,
+        composerState.textareaRef.current,
+        props.value,
+        props.onChange
+      );
+    }, [composerState, props.value, props.onChange]);
+
     return (
       <div
-        className={`relative ${props.className || ''} ${composerState.isDragOver ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
+        className={containerClassName}
         onDragEnter={composerState.handleDragEnter}
         onDragOver={composerState.handleDragOver}
         onDragLeave={composerState.handleDragLeave}
@@ -262,18 +296,10 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           onChange={composerState.handleTextareaChangeComplete}
           onKeyPress={props.onKeyPress}
           placeholder={composerState.finalPlaceholder}
-          className={`expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border-blue-200/60 bg-white/90 backdrop-blur-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:bg-white/95 placeholder:text-gray-600 scroll-hidden transition-all duration-200 ${
-            composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder
-              ? 'rounded-b-2xl rounded-t-none border-t-0'
-              : 'rounded-2xl'
-          } ${composerState.isMobile ? 'text-base' : 'text-sm sm:text-base'}`}
+          className={textareaClassName}
           maxLength={composerState.maxMessageLength}
           disabled={!props.isComposingEnabled}
-          style={{
-            borderRadius: composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder ? '0 0 16px 16px' : '16px',
-            boxShadow: '0 4px 20px rgba(59, 130, 246, 0.15)',
-            fontSize: composerState.isMobile ? '16px' : undefined
-          }}
+          style={textareaStyle}
         />
 
         {/* Mention autocomplete */}
@@ -281,15 +307,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           <MentionAutocomplete
             conversationId={props.conversationId}
             query={composerState.mentionQuery}
-            onSelect={(username: string, userId: string) => {
-              composerState.handleMentionSelect(
-                username,
-                userId,
-                composerState.textareaRef.current,
-                props.value,
-                props.onChange
-              );
-            }}
+            onSelect={handleMentionSelect}
             onClose={composerState.closeMentionAutocomplete}
             position={composerState.mentionPosition}
           />
