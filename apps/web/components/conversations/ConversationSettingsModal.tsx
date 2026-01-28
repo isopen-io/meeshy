@@ -467,7 +467,7 @@ export function ConversationSettingsModal({
           <ScrollArea className="flex-1 overflow-auto">
             <div className="px-6 pb-6">
             {/* Onglet Préférences Utilisateur */}
-            <TabsContent value="preferences" className="mt-6 space-y-6 focus-visible:outline-none">
+            <TabsContent value="preferences" className="mt-4 space-y-4 focus-visible:outline-none">
               {isLoadingPrefs ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
@@ -781,7 +781,7 @@ export function ConversationSettingsModal({
 
             {/* Onglet Configuration Admin */}
             {canAccessAdminSettings && (
-              <TabsContent value="config" className="mt-6 space-y-6 focus-visible:outline-none">
+              <TabsContent value="config" className="mt-4 space-y-4 focus-visible:outline-none">
                 {/* Section Médias & Apparence - Header visuel moderne */}
                 {canModifyImage && (
                   <motion.div
@@ -867,11 +867,75 @@ export function ConversationSettingsModal({
                             </div>
                           </motion.div>
 
-                          {/* Infos conversation à côté de l'avatar */}
+                          {/* Titre éditable + Badges */}
                           <div className="flex-1 min-w-0 pb-2">
-                            <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
-                              {conversation.title || 'Sans titre'}
-                            </h4>
+                            {/* Titre éditable */}
+                            {!isEditingTitle ? (
+                              <div className="flex items-center gap-2 group/title">
+                                <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                                  {convTitle || 'Sans titre'}
+                                </h4>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditedTitle(convTitle);
+                                    setIsEditingTitle(true);
+                                  }}
+                                  className="h-7 w-7 opacity-0 group-hover/title:opacity-100 transition-opacity"
+                                  aria-label="Modifier le titre"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={editedTitle}
+                                  onChange={(e) => setEditedTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      saveTitleInline();
+                                    } else if (e.key === 'Escape') {
+                                      cancelTitleEdit();
+                                    }
+                                  }}
+                                  disabled={isSavingTitle}
+                                  autoFocus
+                                  className="h-8 text-base font-bold backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={cancelTitleEdit}
+                                  disabled={isSavingTitle}
+                                  className="h-7 w-7 text-red-600 hover:text-red-700"
+                                  aria-label="Annuler"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={saveTitleInline}
+                                  disabled={isSavingTitle}
+                                  className="h-7 w-7 text-green-600 hover:text-green-700"
+                                  aria-label="Valider"
+                                >
+                                  {isSavingTitle ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Badges */}
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-xs">
                                 {conversation.type === 'direct' ? 'Direct' : 'Groupe'}
@@ -886,183 +950,70 @@ export function ConversationSettingsModal({
                         </div>
                       </div>
 
-                      {/* Instructions */}
+                      {/* Description éditable */}
                       <div className="px-6 pb-4">
-                        <p className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                          <Info className="h-3 w-3" />
-                          Cliquez sur l'avatar ou la bannière pour modifier les images
-                        </p>
+                        {!isEditingDescription ? (
+                          <div className="group/desc cursor-pointer" onClick={() => {
+                            setEditedDescription(convDescription);
+                            setIsEditingDescription(true);
+                          }}>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 group-hover/desc:text-gray-800 dark:group-hover/desc:text-gray-300 transition-colors line-clamp-2">
+                              {convDescription || 'Cliquez pour ajouter une description...'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={editedDescription}
+                              onChange={(e) => setEditedDescription(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.ctrlKey) {
+                                  e.preventDefault();
+                                  saveDescriptionInline();
+                                } else if (e.key === 'Escape') {
+                                  cancelDescriptionEdit();
+                                }
+                              }}
+                              disabled={isSavingDescription}
+                              autoFocus
+                              placeholder="Description de la conversation..."
+                              className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 text-xs min-h-[60px] resize-none"
+                            />
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={cancelDescriptionEdit}
+                                disabled={isSavingDescription}
+                                className="h-7 text-xs text-red-600 hover:text-red-700"
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Annuler
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={saveDescriptionInline}
+                                disabled={isSavingDescription}
+                                className="h-7 text-xs text-green-600 hover:text-green-700"
+                              >
+                                {isSavingDescription ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3 mr-1" />
+                                )}
+                                Valider
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Informations de base */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="space-y-4"
-                >
-                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    {t('conversationDetails.basicInfo') || 'Informations'}
-                  </h3>
-
-                  {/* Titre avec édition inline */}
-                  <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
-                    <Label className="font-semibold flex items-center gap-2">
-                      <Pencil className="h-4 w-4" />
-                      {t('conversationDetails.conversationName') || 'Nom'}
-                    </Label>
-                    {!isEditingTitle ? (
-                      <div className="flex items-center gap-2">
-                        <p className="flex-1 text-sm py-2">{convTitle || 'Sans titre'}</p>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditedTitle(convTitle);
-                              setIsEditingTitle(true);
-                            }}
-                            className="h-8 w-8"
-                            aria-label="Modifier le titre"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editedTitle}
-                          onChange={(e) => setEditedTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              saveTitleInline();
-                            } else if (e.key === 'Escape') {
-                              cancelTitleEdit();
-                            }
-                          }}
-                          disabled={isSavingTitle}
-                          autoFocus
-                          className="flex-1 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40"
-                        />
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={cancelTitleEdit}
-                            disabled={isSavingTitle}
-                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            aria-label="Annuler"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={saveTitleInline}
-                            disabled={isSavingTitle}
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                            aria-label="Valider"
-                          >
-                            {isSavingTitle ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </motion.div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Description avec édition inline */}
-                  <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
-                    <Label className="font-semibold flex items-center gap-2">
-                      <Pencil className="h-4 w-4" />
-                      {t('conversationDetails.description') || 'Description'}
-                    </Label>
-                    {!isEditingDescription ? (
-                      <div className="flex items-start gap-2">
-                        <p className="flex-1 text-sm py-2 whitespace-pre-wrap">{convDescription || 'Aucune description'}</p>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditedDescription(convDescription);
-                              setIsEditingDescription(true);
-                            }}
-                            className="h-8 w-8"
-                            aria-label="Modifier la description"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editedDescription}
-                          onChange={(e) => setEditedDescription(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && e.ctrlKey) {
-                              e.preventDefault();
-                              saveDescriptionInline();
-                            } else if (e.key === 'Escape') {
-                              cancelDescriptionEdit();
-                            }
-                          }}
-                          disabled={isSavingDescription}
-                          autoFocus
-                          className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 min-h-[100px] resize-none"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={cancelDescriptionEdit}
-                              disabled={isSavingDescription}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Annuler
-                            </Button>
-                          </motion.div>
-                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={saveDescriptionInline}
-                              disabled={isSavingDescription}
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                            >
-                              {isSavingDescription ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <Check className="h-4 w-4 mr-1" />
-                              )}
-                              Valider
-                            </Button>
-                          </motion.div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
 
                 {/* Sécurité */}
                 <motion.div
@@ -1077,7 +1028,7 @@ export function ConversationSettingsModal({
                   </h3>
 
                   {/* Mode d'encryption */}
-                  <div className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-800/30">
+                  <div className="space-y-2 p-3 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-800/30">
                     <Label className="flex items-center gap-2 font-semibold text-purple-900 dark:text-purple-100">
                       <Lock className="h-4 w-4" />
                       {t('conversationDetails.encryptionMode') || 'Mode de chiffrement'}
