@@ -37,8 +37,8 @@ env:
   NODE_VERSION: '22'
   BUN_VERSION: '1.1.38'
   PNPM_VERSION: '9'
-  # Python 3.11 required: chatterbox-tts needs numpy<1.26.0 (no wheels for 3.12)
-  PYTHON_VERSION: '3.11'
+  # Python 3.10 required: pkuseg (chatterbox-tts dependency) fails to compile on 3.11+
+  PYTHON_VERSION: '3.10'
   UV_VERSION: '0.5.x'
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -292,13 +292,6 @@ jobs:
           cd services/translator
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
-      - name: Generate Prisma client (Python)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
-
       - name: Run tests with coverage (80% minimum)
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
@@ -390,13 +383,6 @@ jobs:
         run: |
           cd services/translator
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
-
-      - name: Generate Prisma client (Python)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       - name: Create audio output directory
         run: |
