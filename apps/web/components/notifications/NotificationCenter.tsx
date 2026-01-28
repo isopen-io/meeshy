@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Bell, 
-  Check, 
-  CheckCheck, 
+import {
+  Bell,
+  Check,
+  CheckCheck,
   Trash2,
   MessageSquare,
   Users,
@@ -17,27 +17,26 @@ import {
   Settings,
   X
 } from 'lucide-react';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { buildNotificationTitle, buildNotificationContent } from '@/utils/notification-helpers';
 
 interface NotificationCenterProps {
   className?: string;
 }
 
 export function NotificationCenter({ className = '' }: NotificationCenterProps) {
-  const { 
-    notifications, 
-    unreadNotifications, 
-    unreadCount, 
-    totalCount,
-    markAsRead, 
-    markAllAsRead, 
-    removeNotification, 
-    clearAll,
-    isConnected 
-  } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    counts,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+  } = useNotificationsManagerRQ();
 
+  const totalCount = counts?.total || 0;
   const [isOpen, setIsOpen] = useState(false);
 
   const getNotificationIcon = (type: string) => {
@@ -71,23 +70,23 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
   };
 
   const handleNotificationClick = (notification: any) => {
-    if (!notification.isRead) {
+    if (!notification.state.isRead) {
       markAsRead(notification.id);
     }
 
-    if (notification.conversationId) {
-      window.location.href = `/conversations/${notification.conversationId}`;
+    if (notification.context?.conversationId) {
+      window.location.href = `/conversations/${notification.context.conversationId}`;
     }
   };
 
   if (!isOpen) {
     return (
-      <Button 
-        variant="ghost" 
-        size="sm" 
+      <Button
+        variant="ghost"
+        size="sm"
         className={`relative ${className}`}
         onClick={() => setIsOpen(true)}
-        title={isConnected ? 'Notifications' : 'Notifications (hors ligne)'}
+        title="Notifications"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -127,7 +126,12 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clearAll}
+                onClick={async () => {
+                  // Supprimer toutes les notifications une par une
+                  for (const notification of notifications) {
+                    await deleteNotification(notification.id);
+                  }
+                }}
                 title="Supprimer toutes les notifications"
               >
                 <Trash2 className="h-4 w-4" />
@@ -158,7 +162,7 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
                   <div
                     key={notification.id}
                     className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors hover:bg-accent ${
-                      notification.isRead ? 'opacity-60' : 'bg-accent/50'
+                      notification.state.isRead ? 'opacity-60' : 'bg-accent/50'
                     } ${getNotificationColor(notification.type)}`}
                     onClick={() => handleNotificationClick(notification)}
                   >
@@ -169,10 +173,10 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium truncate">
-                            {notification.title}
+                            {buildNotificationTitle(notification)}
                           </p>
                           <div className="flex items-center space-x-1">
-                            {!notification.isRead && (
+                            {!notification.state.isRead && (
                               <div className="w-2 h-2 bg-primary rounded-full" />
                             )}
                             <Button
@@ -181,7 +185,7 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                removeNotification(notification.id);
+                                deleteNotification(notification.id);
                               }}
                             >
                               <X className="h-3 w-3" />
@@ -189,12 +193,12 @@ export function NotificationCenter({ className = '' }: NotificationCenterProps) 
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {notification.message}
+                          {notification.content || buildNotificationContent(notification)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatDistanceToNow(notification.timestamp, { 
-                            addSuffix: true, 
-                            locale: fr 
+                          {formatDistanceToNow(notification.state.createdAt, {
+                            addSuffix: true,
+                            locale: fr
                           })}
                         </p>
                       </div>

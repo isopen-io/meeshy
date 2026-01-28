@@ -28,7 +28,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useNotificationActions } from '@/stores/notification-store';
 import { useVirtualKeyboard } from '@/hooks/use-virtual-keyboard';
 import { conversationsService } from '@/services/conversations.service';
@@ -94,7 +94,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Notification system
   const { setActiveConversationId } = useNotificationActions();
-  useNotifications();
+  useNotificationsManagerRQ(); // Initialise Socket.IO pour les notifications en temps réel
 
   // Instance ID pour debugging
   const instanceId = useMemo(
@@ -356,6 +356,21 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     clearMessages,
     instanceId,
   ]);
+
+  // Synchroniser l'ID de conversation active pour filtrer les notifications
+  // Cela permet d'éviter d'afficher des notifications pour la conversation déjà ouverte
+  useEffect(() => {
+    if (effectiveSelectedId) {
+      setActiveConversationId(effectiveSelectedId);
+      console.debug(`[ConversationLayout] Active conversation set: ${effectiveSelectedId}`);
+    }
+
+    // Cleanup: réinitialiser quand le composant se démonte ou change de conversation
+    return () => {
+      setActiveConversationId(null);
+      console.debug('[ConversationLayout] Active conversation cleared');
+    };
+  }, [effectiveSelectedId, setActiveConversationId]);
 
   // Marquer comme lu quand scroll vers le bas
   useEffect(() => {

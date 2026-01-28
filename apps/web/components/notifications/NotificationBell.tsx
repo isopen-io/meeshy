@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 
 interface NotificationBellProps {
   className?: string;
@@ -18,11 +18,9 @@ export function NotificationBell({
   showBadge = true,
   onClick
 }: NotificationBellProps) {
-  const { unreadCount, isConnected } = useNotifications();
+  const { unreadCount } = useNotificationsManagerRQ();
 
-  const ariaLabel = isConnected
-    ? `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`
-    : 'Notifications (hors ligne)';
+  const ariaLabel = `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`;
 
   const bellContent = (
     <>
