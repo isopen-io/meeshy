@@ -86,7 +86,9 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
       }
     } catch (error) {
       console.error(`Erreur vérification ${type}:`, error);
-      setStatus('valid');
+      // Ne pas définir le statut comme 'valid' en cas d'erreur réseau
+      // pour éviter une boucle infinie de re-validation
+      setStatus('idle');
       setErrorMessage('');
     }
   }, [type, t]);
