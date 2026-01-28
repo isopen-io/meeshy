@@ -83,13 +83,20 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
             setErrorMessage(t(`register.errors.${errorKey}`));
           }
         }
+      } else {
+        // Erreur HTTP - définir comme invalide et afficher un message d'erreur
+        setStatus('invalid');
+        if (response.status === 429) {
+          setErrorMessage(t('register.errors.rateLimited'));
+        } else {
+          setErrorMessage(t('register.errors.networkError'));
+        }
       }
     } catch (error) {
       console.error(`Erreur vérification ${type}:`, error);
-      // Ne pas définir le statut comme 'valid' en cas d'erreur réseau
-      // pour éviter une boucle infinie de re-validation
-      setStatus('idle');
-      setErrorMessage('');
+      // Erreur réseau (pas de réponse) - définir comme invalide
+      setStatus('invalid');
+      setErrorMessage(t('register.errors.networkError'));
     }
   }, [type, t]);
 
