@@ -137,7 +137,7 @@ export function formatNotificationContext(notification: Notification): string {
   }
 
   // Timestamp
-  parts.push(formatNotificationTimestamp(notification.createdAt));
+  parts.push(formatNotificationTimestamp(notification.state.createdAt));
 
   return parts.join(' • ');
 }
@@ -181,76 +181,83 @@ export function requiresUserAction(notification: Notification): boolean {
  * Obtient le nom d'affichage d'un utilisateur pour les notifications
  * Utilise la fonction centralisée getUserDisplayName
  */
-export function getSenderDisplayName(sender?: Notification['sender']): string {
-  return getUserDisplayName(sender, 'Un utilisateur');
+export function getActorDisplayName(actor?: Notification['actor']): string {
+  return getUserDisplayName(actor, 'Un utilisateur');
+}
+
+/**
+ * @deprecated Use getActorDisplayName instead - kept for backward compatibility
+ */
+export function getSenderDisplayName(sender?: Notification['actor']): string {
+  return getActorDisplayName(sender);
 }
 
 /**
  * Construit le titre de la notification à partir des données brutes
  * Cette fonction remplace les titres pré-formatés du backend
- * Utilise getSenderDisplayName pour afficher le bon nom (displayName > firstName+lastName > username)
+ * Utilise getActorDisplayName pour afficher le bon nom (displayName > firstName+lastName > username)
  * Supporte les traductions i18n avec la fonction t fournie
  */
 export function buildNotificationTitle(
   notification: Notification,
   t?: TranslateFunction
 ): string {
-  const senderName = getSenderDisplayName(notification.sender);
+  const actorName = getActorDisplayName(notification.actor);
   const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
 
   // Si pas de fonction de traduction, utiliser les textes en dur (fallback)
   if (!t) {
     switch (notification.type) {
       case NotificationTypeEnum.NEW_MESSAGE:
-        return `Message de ${senderName}`;
+        return `Message de ${actorName}`;
       case NotificationTypeEnum.MESSAGE_REPLY:
-        return `Réponse de ${senderName}`;
+        return `Réponse de ${actorName}`;
       case NotificationTypeEnum.USER_MENTIONED:
-        return `${senderName} vous a cité`;
+        return `${actorName} vous a cité`;
       case NotificationTypeEnum.MESSAGE_REACTION:
-        return `${senderName} a réagi à votre message`;
+        return `${actorName} a réagi à votre message`;
       case NotificationTypeEnum.CONTACT_REQUEST:
-        return `${senderName} veut se connecter`;
+        return `${actorName} veut se connecter`;
       case NotificationTypeEnum.CONTACT_ACCEPTED:
-        return `${senderName} a accepté votre invitation`;
+        return `${actorName} a accepté votre invitation`;
       case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
-        return `Conversation de ${senderName}`;
+        return `Conversation de ${actorName}`;
       case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
-        return `Invitation de ${senderName}`;
+        return `Invitation de ${actorName}`;
       case NotificationTypeEnum.MEMBER_JOINED:
         return `Nouveau membre dans ${conversationTitle}`;
       case NotificationTypeEnum.MISSED_CALL:
-        return `Appel manqué de ${senderName}`;
+        return `Appel manqué de ${actorName}`;
       case NotificationTypeEnum.SYSTEM:
-        return notification.title || 'Notification système';
+        return 'Notification système';
       default:
-        return notification.title || 'Nouvelle notification';
+        return 'Nouvelle notification';
     }
   }
 
   // Avec traductions i18n
   switch (notification.type) {
     case NotificationTypeEnum.NEW_MESSAGE:
-      return t('titles.newMessage', { sender: senderName });
+      return t('titles.newMessage', { sender: actorName });
 
     case NotificationTypeEnum.MESSAGE_REPLY:
-      return t('titles.reply', { sender: senderName });
+      return t('titles.reply', { sender: actorName });
 
     case NotificationTypeEnum.USER_MENTIONED:
-      return t('titles.mentioned', { sender: senderName });
+      return t('titles.mentioned', { sender: actorName });
 
     case NotificationTypeEnum.MESSAGE_REACTION:
       const emoji = notification.metadata?.reactionEmoji || '❤️';
-      return t('titles.reaction', { sender: senderName, emoji });
+      return t('titles.reaction', { sender: actorName, emoji });
 
     case NotificationTypeEnum.CONTACT_REQUEST:
-      return t('titles.contactRequest', { sender: senderName });
+      return t('titles.contactRequest', { sender: actorName });
 
     case NotificationTypeEnum.CONTACT_ACCEPTED:
-      return t('titles.contactAccepted', { sender: senderName });
+      return t('titles.contactAccepted', { sender: actorName });
 
     case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
-      return t('titles.newConversationDirect', { sender: senderName });
+      return t('titles.newConversationDirect', { sender: actorName });
 
     case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
       return t('titles.newConversationGroup', { title: conversationTitle });
@@ -263,49 +270,44 @@ export function buildNotificationTitle(
       return t('titles.missedCall', { type: callType });
 
     case NotificationTypeEnum.SYSTEM:
-      return notification.title || t('titles.system');
+      return t('titles.system');
 
     default:
-      return notification.title || t('titles.default');
+      return t('titles.default');
   }
 }
 
 /**
  * Construit le contenu de la notification à partir des données brutes
- * Utilise getSenderDisplayName pour afficher le bon nom
+ * Utilise getActorDisplayName pour afficher le bon nom
  * Supporte les traductions i18n avec la fonction t fournie
  */
 export function buildNotificationContent(
   notification: Notification,
   t?: TranslateFunction
 ): string {
-  // Si on a un messagePreview, l'utiliser
-  if (notification.messagePreview) {
-    return formatMessagePreview(notification.messagePreview, notification.metadata?.attachments);
-  }
-
-  // Sinon, utiliser le content du backend ou construire un message par défaut
+  // Le content est stocké dans le champ content (aperçu du message)
   if (notification.content) {
-    return notification.content;
+    return formatMessagePreview(notification.content, notification.metadata?.attachments);
   }
 
-  // Messages par défaut basés sur le type
-  const senderName = getSenderDisplayName(notification.sender);
+  // Messages par défaut basés sur le type (si pas de content)
+  const actorName = getActorDisplayName(notification.actor);
   const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
 
   // Si pas de fonction de traduction, utiliser les textes en dur (fallback)
   if (!t) {
     switch (notification.type) {
       case NotificationTypeEnum.CONTACT_ACCEPTED:
-        return `${senderName} a accepté votre invitation. Vous pouvez maintenant discuter ensemble.`;
+        return `${actorName} a accepté votre invitation. Vous pouvez maintenant discuter ensemble.`;
       case NotificationTypeEnum.CONTACT_REQUEST:
-        return `${senderName} vous a envoyé une invitation`;
+        return `${actorName} vous a envoyé une invitation`;
       case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
-        return `${senderName} a commencé une conversation avec vous`;
+        return `${actorName} a commencé une conversation avec vous`;
       case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
-        return `${senderName} vous a invité à rejoindre ${conversationTitle}`;
+        return `${actorName} vous a invité à rejoindre ${conversationTitle}`;
       case NotificationTypeEnum.MEMBER_JOINED:
-        return `${senderName} a rejoint le groupe`;
+        return `${actorName} a rejoint le groupe`;
       default:
         return '';
     }
@@ -314,10 +316,10 @@ export function buildNotificationContent(
   // Avec traductions i18n
   switch (notification.type) {
     case NotificationTypeEnum.CONTACT_ACCEPTED:
-      return t('content.contactAcceptedMessage', { sender: senderName });
+      return t('content.contactAcceptedMessage', { sender: actorName });
 
     case NotificationTypeEnum.CONTACT_REQUEST:
-      return t('content.contactRequestMessage', { sender: senderName });
+      return t('content.contactRequestMessage', { sender: actorName });
 
     case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
       const isMember = notification.metadata?.isMember;
@@ -327,7 +329,7 @@ export function buildNotificationContent(
       return '';
 
     case NotificationTypeEnum.MEMBER_JOINED:
-      return t('content.memberJoinedMessage', { sender: senderName });
+      return t('content.memberJoinedMessage', { sender: actorName });
 
     default:
       return '';

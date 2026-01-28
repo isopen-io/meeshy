@@ -1067,47 +1067,47 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
-/// Notification pour un utilisateur
+/// Notification pour un utilisateur - Structure groupée
+/// IMPORTANT: Le titre est construit dynamiquement côté frontend via i18n
 model Notification {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String    @db.ObjectId
-  /// new_conversation, new_message, message_edited, friend_request, missed_call, etc.
-  type      String
-  title     String
-  content   String
-  data      String?
-  priority  String    @default("normal")
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId   String   @db.ObjectId
+  /// Type de notification (new_message, missed_call, etc.) - utilisé pour construire le titre via i18n
+  type     String
+  /// Contenu principal ou preview du message
+  content  String
+  priority String   @default("normal")
+
+  // ===== CHAMPS GROUPÉS LOGIQUEMENT =====
+
+  /// ACTOR - Qui a déclenché la notification { id, username, displayName, avatar }
+  actor    Json?
+
+  /// CONTEXT - Où c'est arrivé { conversationId, conversationTitle, conversationType, messageId, callSessionId, etc. }
+  context  Json
+
+  /// METADATA - Données type-spécifiques structurées { action, messagePreview, attachments, reactionEmoji, callType, etc. }
+  metadata Json
+
+  /// STATE - État de lecture
+  /// Note: isRead, readAt, createdAt gardés à la racine pour performance des indexes
   isRead    Boolean   @default(false)
-  /// When the notification was read (more precise than isRead boolean)
   readAt    DateTime?
-  emailSent Boolean   @default(false)
-  pushSent  Boolean   @default(false)
   expiresAt DateTime?
   createdAt DateTime  @default(now())
 
-  /// Informations de l'expéditeur (pour les notifications de messages/appels)
-  senderId          String? @db.ObjectId
-  senderUsername    String?
-  senderAvatar      String?
-  senderDisplayName String?
-  senderFirstName   String?
-  senderLastName    String?
+  /// DELIVERY - Suivi multi-canal { emailSent, pushSent }
+  delivery Json
 
-  /// Aperçu du message (tronqué à 32 caractères)
-  messagePreview String?
+  // ===== RELATIONS =====
+  user User @relation(fields: [userId], references: [id])
 
-  /// Références pour navigation
-  conversationId String? @db.ObjectId
-  messageId      String? @db.ObjectId
-  callSessionId  String? @db.ObjectId
-
-  user    User     @relation(fields: [userId], references: [id])
-  message Message? @relation("NotificationMessage", fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
+  // ===== INDEXES =====
   @@index([userId, isRead])
   @@index([userId, type])
+  @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
-  @@index([messageId])
+  @@index([type])
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)

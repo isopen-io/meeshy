@@ -605,9 +605,7 @@ export class MessageProcessor {
           senderAvatar: sender.avatar || undefined,
           messageContent,
           conversationId,
-          conversationTitle: conversation.title,
           messageId,
-          attachments: messageAttachments.length > 0 ? messageAttachments : undefined
         },
         memberIds
       );

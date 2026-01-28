@@ -1509,50 +1509,164 @@ export const respondFriendRequestSchema = {
 // =============================================================================
 
 /**
+ * Actor schema - qui a déclenché la notification
+ */
+export const notificationActorSchema = {
+  type: 'object',
+  description: 'User who triggered the notification',
+  properties: {
+    id: { type: 'string', description: 'Actor user ID' },
+    username: { type: 'string', description: 'Actor username' },
+    displayName: { type: 'string', nullable: true, description: 'Actor display name' },
+    avatar: { type: 'string', nullable: true, description: 'Actor avatar URL' }
+  },
+  required: ['id', 'username']
+} as const;
+
+/**
+ * Context schema - où c'est arrivé
+ */
+export const notificationContextSchema = {
+  type: 'object',
+  description: 'Notification context for navigation',
+  properties: {
+    conversationId: { type: 'string', nullable: true, description: 'Related conversation ID' },
+    conversationTitle: { type: 'string', nullable: true, description: 'Conversation title' },
+    conversationType: {
+      type: 'string',
+      enum: ['direct', 'group', 'public', 'global', 'broadcast'],
+      nullable: true,
+      description: 'Conversation type'
+    },
+    messageId: { type: 'string', nullable: true, description: 'Related message ID' },
+    originalMessageId: { type: 'string', nullable: true, description: 'Original message ID (for replies)' },
+    callSessionId: { type: 'string', nullable: true, description: 'Related call session ID' },
+    friendRequestId: { type: 'string', nullable: true, description: 'Related friend request ID' },
+    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' }
+  }
+} as const;
+
+/**
+ * State schema - statut de lecture
+ */
+export const notificationStateSchema = {
+  type: 'object',
+  description: 'Notification state',
+  properties: {
+    isRead: { type: 'boolean', description: 'Whether notification is read' },
+    readAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read timestamp' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration timestamp' }
+  },
+  required: ['isRead', 'createdAt']
+} as const;
+
+/**
+ * Delivery schema - suivi multi-canal
+ */
+export const notificationDeliverySchema = {
+  type: 'object',
+  description: 'Notification delivery status',
+  properties: {
+    emailSent: { type: 'boolean', description: 'Email notification sent' },
+    pushSent: { type: 'boolean', description: 'Push notification sent' }
+  },
+  required: ['emailSent', 'pushSent']
+} as const;
+
+/**
+ * Metadata schema - données type-spécifiques
+ */
+export const notificationMetadataSchema = {
+  type: 'object',
+  description: 'Type-specific notification metadata',
+  properties: {
+    action: {
+      type: 'string',
+      enum: ['view_message', 'view_conversation', 'join_conversation', 'accept_or_reject_contact', 'open_call', 'view_details', 'update_app', 'none'],
+      nullable: true,
+      description: 'Action to perform when clicking notification'
+    },
+    messagePreview: { type: 'string', nullable: true, description: 'Message preview text' },
+    attachments: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        count: { type: 'number', description: 'Number of attachments' },
+        firstType: {
+          type: 'string',
+          enum: ['image', 'video', 'audio', 'document', 'text', 'code'],
+          description: 'Type of first attachment'
+        },
+        firstFilename: { type: 'string', description: 'Filename of first attachment' }
+      },
+      description: 'Attachment information'
+    },
+    reactionEmoji: { type: 'string', nullable: true, description: 'Reaction emoji' },
+    callType: {
+      type: 'string',
+      enum: ['audio', 'video'],
+      nullable: true,
+      description: 'Type of call'
+    },
+    memberCount: { type: 'number', nullable: true, description: 'Number of members' },
+    isMember: { type: 'boolean', nullable: true, description: 'Is user a member' },
+    joinMethod: {
+      type: 'string',
+      enum: ['via_link', 'invited'],
+      nullable: true,
+      description: 'How user joined'
+    },
+    systemType: {
+      type: 'string',
+      enum: ['maintenance', 'security', 'announcement', 'feature'],
+      nullable: true,
+      description: 'Type of system notification'
+    }
+  },
+  additionalProperties: true
+} as const;
+
+/**
  * Notification schema for API responses
+ * IMPORTANT: Pas de champ title - construit dynamiquement côté frontend via i18n
  */
 export const notificationSchema = {
   type: 'object',
-  description: 'User notification',
+  description: 'User notification (grouped structure)',
   properties: {
+    // === CORE - Identité ===
     id: { type: 'string', description: 'Notification unique identifier' },
     userId: { type: 'string', description: 'Recipient user ID' },
     type: {
       type: 'string',
-      enum: [
-        'new_conversation', 'new_message', 'message_edited',
-        'friend_request', 'friend_accepted', 'missed_call',
-        'mention', 'reaction', 'member_joined', 'system'
-      ],
-      description: 'Notification type'
+      description: 'Notification type (determines title via i18n)'
     },
-    title: { type: 'string', description: 'Notification title' },
-    content: { type: 'string', description: 'Notification content' },
-    data: { type: 'string', nullable: true, description: 'Additional data JSON' },
     priority: {
       type: 'string',
       enum: ['low', 'normal', 'high', 'urgent'],
       description: 'Notification priority'
     },
-    isRead: { type: 'boolean', description: 'Whether notification is read' },
-    readAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read timestamp' },
-    emailSent: { type: 'boolean', description: 'Email notification sent' },
-    pushSent: { type: 'boolean', description: 'Push notification sent' },
-    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration timestamp' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
 
-    // Sender info (for message/call notifications)
-    senderId: { type: 'string', nullable: true, description: 'Sender user ID' },
-    senderUsername: { type: 'string', nullable: true, description: 'Sender username' },
-    senderAvatar: { type: 'string', nullable: true, description: 'Sender avatar URL' },
-    senderDisplayName: { type: 'string', nullable: true, description: 'Sender display name' },
-    messagePreview: { type: 'string', nullable: true, description: 'Message preview (truncated)' },
+    // === CONTENT ===
+    content: { type: 'string', description: 'Notification content (preview or main text)' },
 
-    // References
-    conversationId: { type: 'string', nullable: true, description: 'Related conversation ID' },
-    messageId: { type: 'string', nullable: true, description: 'Related message ID' },
-    callSessionId: { type: 'string', nullable: true, description: 'Related call session ID' }
-  }
+    // === ACTOR - Qui a déclenché ===
+    actor: { ...notificationActorSchema, nullable: true, description: 'User who triggered the notification' },
+
+    // === CONTEXT - Où c'est arrivé ===
+    context: { ...notificationContextSchema, description: 'Navigation context' },
+
+    // === METADATA - Type-specific data ===
+    metadata: { ...notificationMetadataSchema, description: 'Type-specific metadata' },
+
+    // === STATE - Statut ===
+    state: { ...notificationStateSchema, description: 'Notification state' },
+
+    // === DELIVERY - Suivi ===
+    delivery: { ...notificationDeliverySchema, description: 'Delivery status' }
+  },
+  required: ['id', 'userId', 'type', 'priority', 'content', 'context', 'metadata', 'state', 'delivery']
 } as const;
 
 /**

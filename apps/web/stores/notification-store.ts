@@ -17,6 +17,7 @@ import type {
   NotificationPaginationOptions
 } from '@/types/notification';
 import { firebaseChecker } from '@/utils/firebase-availability-checker';
+import { playNotificationSound, initializeNotificationSound } from '@/utils/notification-sound';
 
 /**
  * État initial du store
@@ -75,10 +76,19 @@ export const useNotificationStore = create<NotificationStore>()(
           set({ isLoading: true, error: null });
 
           try {
-            // 1. Toujours charger les notifications depuis l'API (WebSocket)
+            // 1. Initialiser l'AudioContext pour les sons de notification
+            // Doit être fait après une interaction utilisateur (le montage du store est OK)
+            try {
+              initializeNotificationSound();
+              console.info('[NotificationStore] Notification sound system initialized');
+            } catch (soundError) {
+              console.warn('[NotificationStore] Sound init failed (non-critical):', soundError);
+            }
+
+            // 2. Toujours charger les notifications depuis l'API (WebSocket)
             await get().fetchNotifications({ offset: 0, limit: STORE_CONFIG.PAGE_SIZE });
 
-            // 2. Initialiser Firebase seulement si disponible
+            // 3. Initialiser Firebase seulement si disponible
             if (firebaseChecker.isAvailable()) {
               try {
                 console.info('[NotificationStore] Firebase available - initializing FCM');
@@ -210,27 +220,62 @@ export const useNotificationStore = create<NotificationStore>()(
         /**
          * Ajoute une notification (via Socket.IO)
          */
-        addNotification: (notification: Notification) => {
-          set(state => {
-            // Éviter les doublons
-            if (state.notifications.some(n => n.id === notification.id)) {
-              return state;
+        addNotification: async (notification: Notification) => {
+          // Vérifier si la notification doit être ajoutée
+          const state = get();
+
+          // Éviter les doublons
+          if (state.notifications.some(n => n.id === notification.id)) {
+            return;
+          }
+
+          // FILTRE: Ignorer les notifications de la conversation active
+          // Si l'utilisateur est déjà dans la conversation, pas besoin de notification
+          if (notification.context?.conversationId) {
+            const notificationConversationId = notification.context.conversationId;
+
+            // Utiliser activeConversationId qui est défini par les composants de conversation
+            // IMPORTANT: Toujours comparer avec les conversationId (ObjectIds), jamais avec les identifiers
+            if (state.activeConversationId === notificationConversationId) {
+              console.log('[NotificationStore] Notification ignorée - utilisateur déjà dans la conversation:', notificationConversationId);
+              return; // Ignorer cette notification
+            }
+          }
+
+          // Jouer le son AVANT d'ajouter la notification
+          // Cela permet au son de se jouer même si l'UI freeze temporairement
+          try {
+            // Import dynamique du store de préférences pour éviter circular deps
+            const { useUserPreferencesStore } = await import('@/stores/user-preferences-store');
+            const preferences = useUserPreferencesStore.getState().notifications;
+
+            // Déterminer le type de son selon le type de notification
+            let soundType: 'default' | 'message' | 'call' | 'urgent' = 'default';
+            if (notification.type === 'new_message' || notification.type === 'message_reply' || notification.type === 'message_mention') {
+              soundType = 'message';
+            } else if (notification.type === 'missed_call' || notification.type === 'incoming_call') {
+              soundType = 'call';
+            } else if (notification.priority === 'urgent' || notification.priority === 'high') {
+              soundType = 'urgent';
             }
 
-            // FILTRE: Ignorer les notifications de la conversation active
-            // Si l'utilisateur est déjà dans la conversation, pas besoin de notification
-            if (notification.context?.conversationId) {
-              const notificationConversationId = notification.context.conversationId;
-
-              // Utiliser activeConversationId qui est défini par les composants de conversation
-              // IMPORTANT: Toujours comparer avec les conversationId (ObjectIds), jamais avec les identifiers
-              if (state.activeConversationId === notificationConversationId) {
-                console.log('[NotificationStore] Notification ignorée - utilisateur déjà dans la conversation:', notificationConversationId);
-                return state; // Ignorer cette notification
+            // Jouer le son (respecte automatiquement les préférences DND et soundEnabled)
+            await playNotificationSound(
+              { type: soundType, volume: 0.4 },
+              {
+                soundEnabled: preferences.soundEnabled,
+                dndEnabled: preferences.dndEnabled,
+                dndStartTime: preferences.dndStartTime,
+                dndEndTime: preferences.dndEndTime
               }
-            }
+            );
+          } catch (error) {
+            console.error('[NotificationStore] Failed to play notification sound:', error);
+            // Ne pas bloquer l'ajout de la notification si le son échoue
+          }
 
-            // Ajouter au début de la liste
+          // Ajouter la notification à l'état
+          set(state => {
             const notifications = [notification, ...state.notifications];
 
             // LRU eviction si dépassement

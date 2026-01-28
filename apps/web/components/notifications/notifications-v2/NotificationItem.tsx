@@ -51,7 +51,7 @@ export function NotificationItem({
    */
   const handleClick = () => {
     // Marquer comme lue si nécessaire
-    if (!notification.isRead && onRead) {
+    if (!notification.state.isRead && onRead) {
       onRead(notification.id);
     }
 
@@ -178,18 +178,18 @@ export function NotificationItem({
   const notificationContent = (
     <>
       {/* Badge non lu */}
-      {!notification.isRead && (
+      {!notification.state.isRead && (
         <div className="absolute top-2 left-1 w-1.5 h-1.5 bg-blue-600 rounded-full" />
       )}
 
       {/* Colonne gauche: Avatar + Actions */}
       <div className="flex-shrink-0 flex flex-col items-center gap-1">
         {/* Avatar de l'utilisateur */}
-        {notification.sender ? (
+        {notification.actor ? (
           <Avatar className={cn('w-9 h-9', compact && 'w-7 h-7')}>
-            <AvatarImage src={notification.sender.avatar} alt={notification.sender.username} />
+            <AvatarImage src={notification.actor.avatar || undefined} alt={notification.actor.username} />
             <AvatarFallback>
-              {notification.sender.username[0]?.toUpperCase()}
+              {notification.actor.username[0]?.toUpperCase()}
             </AvatarFallback>
           </Avatar>
         ) : (
@@ -262,7 +262,7 @@ export function NotificationItem({
   const wrapperClasses = cn(
     'group relative flex gap-2 p-2 transition-colors cursor-pointer',
     'hover:bg-gray-50 dark:hover:bg-gray-800/50',
-    !notification.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
+    !notification.state.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
     compact && 'p-1.5'
   );
 

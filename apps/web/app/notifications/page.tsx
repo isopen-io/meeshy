@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { NotificationTest } from '@/components/notifications/NotificationTest';
 import { useI18n } from '@/hooks/use-i18n';
 import type { Notification } from '@/services/notification.service';
@@ -39,68 +39,9 @@ import { AttachmentDetails } from '@/components/attachments/AttachmentDetails';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { toast } from 'sonner';
-import { getUserDisplayName } from '@/utils/user-display-name';
+import { buildNotificationTitle } from '@/utils/notification-helpers';
 
 type SortOption = 'date-desc' | 'date-asc' | 'unread-first' | 'type';
-
-/**
- * Construit un titre formaté pour une notification avec le nom de l'expéditeur
- */
-function buildNotificationTitle(notification: Notification, t: (key: string, params?: Record<string, string>) => string): string {
-  // Utiliser la fonction centralisée pour obtenir le nom de l'expéditeur
-  // Support both nested (sender) and flat (legacy) structures
-  const senderName = getUserDisplayName({
-    displayName: notification.sender?.displayName || (notification.data?.senderDisplayName as string | undefined),
-    firstName: notification.sender?.firstName || (notification.data?.senderFirstName as string | undefined),
-    lastName: notification.sender?.lastName || (notification.data?.senderLastName as string | undefined),
-    username: notification.sender?.username || notification.senderUsername
-  }, 'Un utilisateur');
-
-  const conversationTitle = notification.context?.conversationTitle || (notification.data?.conversationTitle as string | undefined) || 'la conversation';
-
-  switch (notification.type) {
-    case 'new_message':
-    case 'message':
-      return t('titles.newMessage', { sender: senderName });
-
-    case 'message_reply':
-      return t('titles.reply', { sender: senderName });
-
-    case 'mention':
-    case 'user_mentioned':
-      return t('titles.mentioned', { sender: senderName });
-
-    case 'message_reaction':
-      const emoji = (notification.data?.emoji as string) || '❤️';
-      return t('titles.reaction', { sender: senderName, emoji });
-
-    case 'missed_call':
-      return t('titles.missedCall', { type: 'vidéo' });
-
-    case 'new_conversation':
-    case 'conversation':
-    case 'new_conversation_direct':
-    case 'new_conversation_group':
-      // Déterminer si c'est une conversation directe ou de groupe
-      if (notification.context?.conversationType === 'direct' || notification.type === 'new_conversation_direct') {
-        return t('titles.newConversationDirect', { sender: senderName });
-      } else {
-        return t('titles.newConversationGroup', { title: conversationTitle });
-      }
-
-    case 'contact_request':
-      return t('titles.contactRequest', { sender: senderName });
-
-    case 'contact_accepted':
-      return t('titles.contactAccepted', { sender: senderName });
-
-    case 'system':
-      return notification.title || t('titles.system');
-
-    default:
-      return notification.title || t('titles.default');
-  }
-}
 
 function NotificationsPageContent() {
   const { t } = useI18n('notifications');
@@ -110,28 +51,20 @@ function NotificationsPageContent() {
   const [sortOption, setSortOption] = useState<SortOption>('date-desc');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const {
     notifications,
-    unreadNotifications,
     unreadCount,
-    totalCount,
+    isLoading,
     markAsRead,
     markAllAsRead,
-    removeNotification,
-    clearAll,
-    isConnected
-  } = useNotifications();
+    deleteNotification,
+    counts
+  } = useNotificationsManagerRQ();
 
-  // Gérer le chargement initial pour éviter l'incohérence d'affichage
-  useEffect(() => {
-    // Attendre un court instant pour que les données se chargent
-    const timer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, []);
+  // Calculer les notifications non lues
+  const unreadNotifications = notifications.filter(n => !n.state.isRead);
+  const totalCount = counts.total;
+  const isInitialLoading = isLoading;
 
   // Filtrer, rechercher et trier les notifications
   const filteredNotifications = useMemo(() => {
@@ -158,15 +91,10 @@ function NotificationsPageContent() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(n => {
-        const title = (n.title || '').toLowerCase();
         const content = (n.content || '').toLowerCase();
-        const preview = (n.messagePreview || '').toLowerCase();
-        const senderName = (n.sender?.username || n.senderUsername || '').toLowerCase();
+        const actorName = (n.actor?.username || '').toLowerCase();
 
-        return title.includes(query) ||
-               content.includes(query) ||
-               preview.includes(query) ||
-               senderName.includes(query);
+        return content.includes(query) || actorName.includes(query);
       });
     }
 
@@ -174,21 +102,21 @@ function NotificationsPageContent() {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortOption) {
         case 'date-asc':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          return new Date(a.state.createdAt).getTime() - new Date(b.state.createdAt).getTime();
         case 'date-desc':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          return new Date(b.state.createdAt).getTime() - new Date(a.state.createdAt).getTime();
         case 'unread-first':
-          if (a.isRead === b.isRead) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          if (a.state.isRead === b.state.isRead) {
+            return new Date(b.state.createdAt).getTime() - new Date(a.state.createdAt).getTime();
           }
-          return a.isRead ? 1 : -1;
+          return a.state.isRead ? 1 : -1;
         case 'type':
           if (a.type === b.type) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return new Date(b.state.createdAt).getTime() - new Date(a.state.createdAt).getTime();
           }
           return a.type.localeCompare(b.type);
         default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          return new Date(b.state.createdAt).getTime() - new Date(a.state.createdAt).getTime();
       }
     });
 
@@ -224,7 +152,7 @@ function NotificationsPageContent() {
 
   const deleteSelected = async () => {
     for (const id of selectedNotifications) {
-      await removeNotification(id);
+      await deleteNotification(id);
     }
     setSelectedNotifications(new Set());
     setSelectionMode(false);
@@ -271,15 +199,15 @@ function NotificationsPageContent() {
     markAsRead(notification.id);
 
     // Naviguer vers la destination avec ancre #message-{messageId}
-    if (notification.conversationId) {
-      if (notification.messageId) {
+    if (notification.context?.conversationId) {
+      if (notification.context?.messageId) {
         // Construire l'URL avec ancre : /conversations/{conversationId}?messageId={messageId}#message-{messageId}
-        router.push(`/conversations/${notification.conversationId}?messageId=${notification.messageId}#message-${notification.messageId}`);
+        router.push(`/conversations/${notification.context.conversationId}?messageId=${notification.context.messageId}#message-${notification.context.messageId}`);
       } else {
-        router.push(`/conversations/${notification.conversationId}`);
+        router.push(`/conversations/${notification.context.conversationId}`);
       }
-    } else if (notification.callSessionId && notification.conversationId) {
-      router.push(`/conversations/${notification.conversationId}`);
+    } else if (notification.context?.callSessionId && notification.context?.conversationId) {
+      router.push(`/conversations/${notification.context.conversationId}`);
     }
   };
 
@@ -591,7 +519,7 @@ function NotificationsPageContent() {
                         key={notification.id}
                         className={cn(
                           "hover:shadow-md transition-all duration-300 cursor-pointer border group",
-                          !notification.isRead && "border-l-4 border-l-primary bg-accent/5",
+                          !notification.state.isRead && "border-l-4 border-l-primary bg-accent/5",
                           selectedNotifications.has(notification.id) && "ring-2 ring-primary bg-accent/10",
                           "animate-in fade-in slide-in-from-bottom-2"
                         )}
@@ -628,11 +556,11 @@ function NotificationsPageContent() {
                             )}
 
                             {/* Avatar ou icône */}
-                            {notification.sender?.avatar || notification.senderId ? (
+                            {notification.actor?.avatar || notification.actor ? (
                               <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
-                                <AvatarImage src={notification.sender?.avatar} alt={notification.sender?.username || 'User'} />
+                                <AvatarImage src={notification.actor?.avatar || undefined} alt={notification.actor?.username || 'User'} />
                                 <AvatarFallback className="text-xs sm:text-sm">
-                                  {(notification.sender?.username || 'U').charAt(0).toUpperCase()}
+                                  {(notification.actor?.username || 'U').charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                             ) : (
@@ -650,11 +578,11 @@ function NotificationsPageContent() {
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <h4 className={cn(
                                     "text-sm truncate",
-                                    !notification.isRead ? 'font-bold text-foreground' : 'font-semibold text-muted-foreground'
+                                    !notification.state.isRead ? 'font-bold text-foreground' : 'font-semibold text-muted-foreground'
                                   )}>
                                     {buildNotificationTitle(notification, t)}
                                   </h4>
-                                  {!notification.isRead && (
+                                  {!notification.state.isRead && (
                                     <span className="inline-block w-2 h-2 bg-primary rounded-full flex-shrink-0"></span>
                                   )}
                                 </div>
@@ -664,42 +592,42 @@ function NotificationsPageContent() {
                               </div>
 
                               {/* Message preview or attachment details */}
-                              {Array.isArray(notification.data?.attachments) && notification.data.attachments.length > 0 ? (
+                              {Array.isArray(notification.metadata?.attachments) && notification.metadata.attachments.length > 0 ? (
                                 <div className="mb-2 space-y-1">
-                                  {(notification.data.attachments as any[]).map((attachment: any) => (
+                                  {(notification.metadata.attachments as any[]).map((attachment: any) => (
                                     <div key={attachment.id} className="flex items-center gap-2">
                                       <AttachmentDetails
                                         attachment={attachment}
                                         className={cn(
                                           "text-sm",
-                                          !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
+                                          !notification.state.isRead ? 'text-foreground' : 'text-muted-foreground'
                                         )}
                                         iconSize="sm"
                                       />
                                     </div>
                                   ))}
-                                  {notification.messagePreview && (
+                                  {notification.content && (
                                     <p className={cn(
                                       "text-sm line-clamp-1 mt-1",
-                                      !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
+                                      !notification.state.isRead ? 'text-foreground' : 'text-muted-foreground'
                                     )}>
-                                      {notification.messagePreview}
+                                      {notification.content}
                                     </p>
                                   )}
                                 </div>
                               ) : (
                                 <p className={cn(
                                   "text-sm mb-2 line-clamp-2",
-                                  !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
+                                  !notification.state.isRead ? 'text-foreground' : 'text-muted-foreground'
                                 )}>
-                                  {notification.messagePreview || notification.content}
+                                  {notification.content}
                                 </p>
                               )}
 
                               {/* Actions pour les requêtes d'amitié */}
-                              {notification.type === 'friend_request' && Array.isArray(notification.data?.actions) && !notification.isRead && (
+                              {notification.type === 'friend_request' && Array.isArray(notification.metadata?.actions) && !notification.state.isRead && (
                                 <div className="flex gap-2 mt-3 mb-2">
-                                  {(notification.data.actions as any[]).map((action: any) => (
+                                  {(notification.metadata.actions as any[]).map((action: any) => (
                                     <Button
                                       key={action.type}
                                       size="sm"
@@ -737,7 +665,7 @@ function NotificationsPageContent() {
 
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-muted-foreground">
-                                  {formatNotificationTime(notification.createdAt)}
+                                  {formatNotificationTime(notification.state.createdAt)}
                                   {notification.context?.conversationType !== 'direct' && notification.context?.conversationTitle && (
                                     <span> {t('conversationContext').replace('{conversationTitle}', notification.context?.conversationTitle)}</span>
                                   )}
@@ -745,7 +673,7 @@ function NotificationsPageContent() {
 
                                 {/* Actions - visibles sur hover desktop, toujours visibles sur mobile */}
                                 <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                  {!notification.isRead && (
+                                  {!notification.state.isRead && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -764,7 +692,7 @@ function NotificationsPageContent() {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      removeNotification(notification.id);
+                                      deleteNotification(notification.id);
                                     }}
                                     className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                                     title={t('actions.delete')}
@@ -805,7 +733,7 @@ function NotificationsPageContent() {
                         <span className="text-muted-foreground">{t('service')}</span>
                         <div className={cn(
                           "w-2.5 h-2.5 rounded-full",
-                          isConnected ? 'bg-green-500' : 'bg-red-500'
+                          !isLoading ? 'bg-green-500' : 'bg-yellow-500'
                         )} />
                       </div>
 

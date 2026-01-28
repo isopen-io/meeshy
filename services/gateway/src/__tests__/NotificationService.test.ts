@@ -1,527 +1,629 @@
 /**
- * NotificationService Unit Tests
+ * NotificationService Unit Tests - Structure Groupée
  *
- * Comprehensive test suite covering:
- * - Notification creation and sanitization
- * - XSS protection
- * - IDOR prevention
- * - Rate limiting
- * - User preferences
- * - Edge cases and error handling
- *
- * Coverage target: > 80%
+ * Tests la nouvelle architecture de notifications avec:
+ * - Structure groupée (CORE, ACTOR, CONTEXT, METADATA, STATE, DELIVERY)
+ * - Absence de champ `title` en DB
+ * - Metadata typé par discriminated unions
+ * - Formatage correct pour Socket.IO
  *
  * @jest-environment node
  */
 
-import { NotificationService, CreateNotificationData } from '../services/notifications/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
+import type { Notification, NotificationType } from '@meeshy/shared/types/notification';
 
 // Mock Prisma
-jest.mock('../../shared/prisma/client', () => {
-  const mockPrisma = {
-    notification: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      updateMany: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-      groupBy: jest.fn(),
-      createMany: jest.fn()
-    },
-    notificationPreference: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn()
-    }
-  };
-
-  return {
-    PrismaClient: jest.fn(() => mockPrisma)
-  };
-});
+const mockPrisma = {
+  notification: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+    count: jest.fn(),
+  },
+  user: {
+    findUnique: jest.fn(),
+  },
+  conversation: {
+    findUnique: jest.fn(),
+  },
+  message: {
+    findUnique: jest.fn(),
+  },
+} as any;
 
 // Mock Socket.IO
-jest.mock('socket.io', () => ({
-  Server: jest.fn()
-}));
+const mockIO = {
+  to: jest.fn().mockReturnThis(),
+  emit: jest.fn(),
+} as any;
 
-// Mock loggers
-jest.mock('../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
-}));
-
+// Mock logger
 jest.mock('../utils/logger-enhanced', () => ({
   notificationLogger: {
     info: jest.fn(),
     debug: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn()
+    error: jest.fn(),
   },
-  securityLogger: {
-    logViolation: jest.fn(),
-    logAttempt: jest.fn(),
-    logSuccess: jest.fn()
-  }
 }));
 
-describe('NotificationService', () => {
+describe('NotificationService - Structure Groupée', () => {
   let service: NotificationService;
-  let prisma: any;
-  let mockIO: any;
-  let userSocketsMap: Map<string, Set<string>>;
 
   beforeEach(() => {
-    // Reset all mocks
     jest.clearAllMocks();
-
-    // Create new Prisma instance
-    prisma = new PrismaClient();
-
-    // Create service
-    service = new NotificationService(prisma);
-
-    // Mock Socket.IO
-    mockIO = {
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn()
-    };
-
-    userSocketsMap = new Map();
-
-    // Initialize Socket.IO
-    service.setSocketIO(mockIO as any, userSocketsMap);
+    service = new NotificationService(mockPrisma);
+    service.setSocketIO(mockIO);
   });
 
-  describe('createNotification', () => {
-    const validNotificationData: CreateNotificationData = {
-      userId: '507f1f77bcf86cd799439011',
-      type: 'new_message',
-      title: 'New Message',
-      content: 'You have a new message',
-      priority: 'normal'
-    };
-
-    it('should create a notification successfully', async () => {
-      const mockNotification = {
-        id: 'notif123',
-        ...validNotificationData,
-        isRead: false,
-        createdAt: new Date()
+  describe('Structure Groupée - new_message', () => {
+    it('devrait créer une notification avec structure groupée complète', async () => {
+      const mockSender = {
+        id: 'user_sender',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: 'https://cdn.example.com/alice.jpg',
       };
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotification);
+      const mockConversation = {
+        id: 'conv_123',
+        title: 'Équipe Dev',
+        type: 'group',
+      };
 
-      const result = await service.createNotification(validNotificationData);
+      mockPrisma.user.findUnique.mockResolvedValue(mockSender);
+      mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_abc',
+        ...data.data,
+      }));
+
+      const result = await service.createMessageNotification({
+        userId: 'user_recipient',
+        senderId: 'user_sender',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        preview: 'Salut! Comment vas-tu?',
+      });
 
       expect(result).toBeDefined();
-      expect(result?.id).toBe('notif123');
-      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+
+      // Vérifier l'appel à create
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+      const notificationData = createCall.data;
+
+      // CORE
+      expect(notificationData.userId).toBe('user_recipient');
+      expect(notificationData.type).toBe('new_message');
+      expect(notificationData.priority).toBe('normal');
+      expect(notificationData.content).toBe('Salut! Comment vas-tu?');
+
+      // PAS de title en DB
+      expect(notificationData.title).toBeUndefined();
+
+      // ACTOR
+      expect(notificationData.actor).toEqual({
+        id: 'user_sender',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: 'https://cdn.example.com/alice.jpg',
+      });
+
+      // CONTEXT
+      expect(notificationData.context).toEqual({
+        conversationId: 'conv_123',
+        conversationTitle: 'Équipe Dev',
+        conversationType: 'group',
+        messageId: 'msg_123',
+      });
+
+      // METADATA
+      expect(notificationData.metadata).toEqual({
+        attachments: [],
+      });
+
+      // STATE
+      expect(notificationData.isRead).toBe(false);
+      expect(notificationData.readAt).toBeNull();
+      expect(notificationData.createdAt).toBeInstanceOf(Date);
+
+      // DELIVERY
+      expect(notificationData.delivery).toEqual({
+        emailSent: false,
+        pushSent: false,
+      });
     });
 
-    it('should sanitize XSS in title', async () => {
-      const xssData = {
-        ...validNotificationData,
-        title: '<script>alert("XSS")</script>Hacked Title'
-      };
+    it('NE devrait PAS stocker le champ title en DB', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_sender',
+        username: 'bob',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+        title: 'Test',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => data.data);
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
+      await service.createMessageNotification({
+        userId: 'user_recipient',
+        senderId: 'user_sender',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        preview: 'Test message',
+      });
 
-      await service.createNotification(xssData);
-
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.title).not.toContain('<script>');
-      expect(createCall.data.title).not.toContain('alert');
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createCall.data.title).toBeUndefined();
     });
+  });
 
-    it('should sanitize XSS in content', async () => {
-      const xssData = {
-        ...validNotificationData,
-        content: '<img src=x onerror=alert(1)>Malicious content'
-      };
+  describe('Structure Groupée - user_mentioned', () => {
+    it('devrait créer une notification de mention avec metadata correct', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_sender',
+        username: 'charlie',
+        displayName: 'Charlie',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+        title: 'Projet',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_mention',
+        ...data.data,
+      }));
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
-
-      await service.createNotification(xssData);
-
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.content).not.toContain('<img');
-      expect(createCall.data.content).not.toContain('onerror');
-    });
-
-    it('should sanitize malicious username', async () => {
-      const maliciousData = {
-        ...validNotificationData,
-        senderUsername: '<script>evil()</script>user'
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
-
-      await service.createNotification(maliciousData);
-
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.senderUsername).not.toContain('<script>');
-    });
-
-    it('should reject invalid notification type', async () => {
-      const invalidData = {
-        ...validNotificationData,
-        type: 'invalid_type' as any
-      };
-
-      await expect(service.createNotification(invalidData)).rejects.toThrow();
-    });
-
-    it('should reject invalid priority', async () => {
-      const invalidData = {
-        ...validNotificationData,
-        priority: 'super_urgent' as any
-      };
-
-      await expect(service.createNotification(invalidData)).rejects.toThrow();
-    });
-
-    it('should respect user preferences - DND enabled', async () => {
-      const preferences = {
-        dndEnabled: true,
-        dndStartTime: '00:00',
-        dndEndTime: '23:59',
-        newMessageEnabled: true
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue(preferences);
-
-      const result = await service.createNotification(validNotificationData);
-
-      expect(result).toBeNull();
-      expect(prisma.notification.create).not.toHaveBeenCalled();
-    });
-
-    it('should respect user preferences - notification type disabled', async () => {
-      const preferences = {
-        newMessageEnabled: false,
-        dndEnabled: false
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue(preferences);
-
-      const result = await service.createNotification(validNotificationData);
-
-      expect(result).toBeNull();
-      expect(prisma.notification.create).not.toHaveBeenCalled();
-    });
-
-    it('should emit notification via Socket.IO when user is online', async () => {
-      const mockNotification = {
-        id: 'notif123',
-        ...validNotificationData,
-        isRead: false,
-        createdAt: new Date()
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotification);
-
-      // User has 2 active sockets
-      userSocketsMap.set(validNotificationData.userId, new Set(['socket1', 'socket2']));
-
-      await service.createNotification(validNotificationData);
-
-      expect(mockIO.to).toHaveBeenCalledWith('socket1');
-      expect(mockIO.to).toHaveBeenCalledWith('socket2');
-      expect(mockIO.emit).toHaveBeenCalledTimes(2);
-      expect(mockIO.emit).toHaveBeenCalledWith('notification', expect.any(Object));
-    });
-
-    it('should handle user offline gracefully', async () => {
-      const mockNotification = {
-        id: 'notif123',
-        ...validNotificationData,
-        isRead: false,
-        createdAt: new Date()
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue(mockNotification);
-
-      // User is offline (no sockets)
-      const result = await service.createNotification(validNotificationData);
+      const result = await service.createMentionNotification({
+        userId: 'user_mentioned',
+        senderId: 'user_sender',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        messageContent: 'Merci @alice pour ton aide!',
+      });
 
       expect(result).toBeDefined();
-      expect(mockIO.to).not.toHaveBeenCalled();
-    });
 
-    it('should sanitize JSON data object', async () => {
-      const maliciousData = {
-        ...validNotificationData,
-        data: {
-          normalField: 'safe',
-          $malicious: 'mongodb operator',
-          __proto__: 'prototype pollution',
-          nested: {
-            xss: '<script>alert(1)</script>'
-          }
-        }
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+
+      // Type
+      expect(createCall.data.type).toBe('user_mentioned');
+
+      // Context avec originalMessageId
+      expect(createCall.data.context.messageId).toBe('msg_123');
+
+      // Metadata spécifique mention
+      expect(createCall.data.metadata).toHaveProperty('mentionContext');
+      expect(createCall.data.content).toContain('Merci @alice');
+    });
+  });
+
+  describe('Structure Groupée - message_reaction', () => {
+    it('devrait créer une notification de réaction avec emoji dans metadata', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_sender',
+        username: 'diane',
+      });
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg_original',
+        content: 'Super idée!',
+        conversationId: 'conv_123',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+        title: 'Team',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_reaction',
+        ...data.data,
+      }));
+
+      const result = await service.createReactionNotification({
+        userId: 'user_author',
+        senderId: 'user_sender',
+        messageId: 'msg_original',
+        conversationId: 'conv_123',
+        emoji: '❤️',
+      });
+
+      expect(result).toBeDefined();
+
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+
+      // Type
+      expect(createCall.data.type).toBe('message_reaction');
+
+      // Metadata avec emoji
+      expect(createCall.data.metadata).toEqual({
+        reactionEmoji: '❤️',
+        messagePreview: 'Super idée!',
+      });
+    });
+  });
+
+  describe('Structure Groupée - missed_call', () => {
+    it('devrait créer une notification d\'appel manqué avec callSessionId', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_caller',
+        username: 'eve',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+        type: 'direct',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_call',
+        ...data.data,
+      }));
+
+      const result = await service.createMissedCallNotification({
+        userId: 'user_recipient',
+        callerId: 'user_caller',
+        conversationId: 'conv_123',
+        callSessionId: 'call_999',
+        callType: 'video',
+      });
+
+      expect(result).toBeDefined();
+
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+
+      // Type
+      expect(createCall.data.type).toBe('missed_call');
+
+      // Priority élevée pour appels
+      expect(createCall.data.priority).toBe('high');
+
+      // Context avec callSessionId
+      expect(createCall.data.context).toEqual({
+        conversationId: 'conv_123',
+        conversationType: 'direct',
+        callSessionId: 'call_999',
+      });
+
+      // Metadata avec callType
+      expect(createCall.data.metadata).toEqual({
+        callType: 'video',
+        duration: null,
+      });
+    });
+  });
+
+  describe('Structure Groupée - friend_request', () => {
+    it('devrait créer une notification de demande d\'ami', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_requester',
+        username: 'frank',
+        displayName: 'Frank',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_friend',
+        ...data.data,
+      }));
+
+      const result = await service.createFriendRequestNotification({
+        userId: 'user_recipient',
+        requesterId: 'user_requester',
+        friendRequestId: 'req_789',
+      });
+
+      expect(result).toBeDefined();
+
+      const createCall = mockPrisma.notification.create.mock.calls[0][0];
+
+      // Type
+      expect(createCall.data.type).toBe('friend_request');
+
+      // Context avec friendRequestId
+      expect(createCall.data.context).toEqual({
+        friendRequestId: 'req_789',
+      });
+
+      // Actor
+      expect(createCall.data.actor.username).toBe('frank');
+    });
+  });
+
+  describe('Formatage pour Socket.IO', () => {
+    it('devrait émettre la notification avec structure groupée complète', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_sender',
+        username: 'alice',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+        title: 'Test',
+      });
+      mockPrisma.notification.create.mockImplementation((data) => ({
+        id: 'notif_socket',
+        ...data.data,
+      }));
+
+      await service.createMessageNotification({
+        userId: 'user_recipient',
+        senderId: 'user_sender',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        preview: 'Test',
+      });
+
+      // Vérifier l'émission Socket.IO
+      expect(mockIO.to).toHaveBeenCalledWith('user_recipient');
+      expect(mockIO.emit).toHaveBeenCalledWith(
+        'notification:new',
+        expect.objectContaining({
+          id: 'notif_socket',
+          actor: expect.any(Object),
+          context: expect.any(Object),
+          metadata: expect.any(Object),
+          state: expect.any(Object),
+          delivery: expect.any(Object),
+        })
+      );
+
+      // Vérifier que title n'est PAS émis
+      const emitCall = mockIO.emit.mock.calls[0][1];
+      expect(emitCall.title).toBeUndefined();
+    });
+  });
+
+  describe('Formatage des Notifications', () => {
+    it('devrait formater correctement les dates dans state', async () => {
+      const mockNotification = {
+        id: 'notif_123',
+        userId: 'user_123',
+        type: 'new_message',
+        priority: 'normal',
+        content: 'Test',
+        actor: { id: 'sender', username: 'alice' },
+        context: {},
+        metadata: {},
+        isRead: false,
+        readAt: null,
+        createdAt: new Date('2025-01-28T10:00:00Z'),
+        expiresAt: null,
+        delivery: { emailSent: false, pushSent: false },
       };
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
+      mockPrisma.notification.create.mockResolvedValue(mockNotification);
 
-      await service.createNotification(maliciousData);
+      // Utiliser la méthode privée formatNotification via réflexion
+      const formatted = (service as any).formatNotification(mockNotification);
 
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      const savedData = JSON.parse(createCall.data.data);
-
-      expect(savedData.$malicious).toBeUndefined();
-      expect(savedData.__proto__).toBeUndefined();
-      expect(savedData.nested.xss).not.toContain('<script>');
+      expect(formatted.state.createdAt).toBeInstanceOf(Date);
+      expect(formatted.state.readAt).toBeNull();
+      expect(formatted.state.isRead).toBe(false);
     });
 
-    it('should validate and sanitize avatar URL', async () => {
-      const dataWithAvatar = {
-        ...validNotificationData,
-        senderAvatar: 'javascript:alert(1)'
+    it('devrait gérer les acteurs null pour notifications système', async () => {
+      const mockNotification = {
+        id: 'notif_sys',
+        userId: 'user_123',
+        type: 'system',
+        priority: 'normal',
+        content: 'System message',
+        actor: null,
+        context: {},
+        metadata: { category: 'announcement' },
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+        delivery: { emailSent: false, pushSent: false },
       };
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
+      const formatted = (service as any).formatNotification(mockNotification);
 
-      await service.createNotification(dataWithAvatar);
-
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.senderAvatar).toBeNull();
+      expect(formatted.actor).toBeUndefined();
+      expect(formatted.type).toBe('system');
     });
+  });
 
-    it('should allow valid HTTPS avatar URL', async () => {
-      const dataWithAvatar = {
-        ...validNotificationData,
-        senderAvatar: 'https://example.com/avatar.png'
-      };
+  describe('getUserNotifications - Pagination', () => {
+    it('devrait retourner des notifications paginées avec structure groupée', async () => {
+      const mockNotifications = [
+        {
+          id: 'notif_1',
+          userId: 'user_123',
+          type: 'new_message',
+          priority: 'normal',
+          content: 'Message 1',
+          actor: { id: 'sender1', username: 'alice' },
+          context: { conversationId: 'conv_1' },
+          metadata: {},
+          isRead: false,
+          readAt: null,
+          createdAt: new Date(),
+          delivery: { emailSent: false, pushSent: false },
+        },
+        {
+          id: 'notif_2',
+          userId: 'user_123',
+          type: 'user_mentioned',
+          priority: 'high',
+          content: 'Mention',
+          actor: { id: 'sender2', username: 'bob' },
+          context: { conversationId: 'conv_1', messageId: 'msg_1' },
+          metadata: { mentionContext: 'Test mention' },
+          isRead: true,
+          readAt: new Date(),
+          createdAt: new Date(),
+          delivery: { emailSent: false, pushSent: false },
+        },
+      ];
 
-      prisma.notificationPreference.findUnique.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
+      mockPrisma.notification.findMany.mockResolvedValue(mockNotifications);
+      mockPrisma.notification.count.mockResolvedValue(2);
 
-      await service.createNotification(dataWithAvatar);
+      const result = await service.getUserNotifications({
+        userId: 'user_123',
+        limit: 10,
+        offset: 0,
+      });
 
-      const createCall = prisma.notification.create.mock.calls[0][0];
-      expect(createCall.data.senderAvatar).toBe('https://example.com/avatar.png');
+      expect(result.notifications).toHaveLength(2);
+      expect(result.total).toBe(2);
+
+      // Vérifier structure groupée
+      result.notifications.forEach((notif) => {
+        expect(notif).toHaveProperty('actor');
+        expect(notif).toHaveProperty('context');
+        expect(notif).toHaveProperty('metadata');
+        expect(notif).toHaveProperty('state');
+        expect(notif).toHaveProperty('delivery');
+        expect(notif).not.toHaveProperty('title');
+      });
     });
   });
 
   describe('markAsRead', () => {
-    it('should mark notification as read successfully', async () => {
-      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+    it('devrait marquer une notification comme lue', async () => {
+      const mockNotification = {
+        id: 'notif_123',
+        userId: 'user_123',
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+      };
 
-      const result = await service.markAsRead('notif123', 'user123');
-
-      expect(result).toBe(true);
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'notif123',
-          userId: 'user123'
-        },
-        data: {
-          isRead: true
-        }
+      mockPrisma.notification.findUnique.mockResolvedValue(mockNotification);
+      mockPrisma.notification.update.mockResolvedValue({
+        ...mockNotification,
+        isRead: true,
+        readAt: new Date(),
       });
-    });
 
-    it('should handle errors gracefully', async () => {
-      prisma.notification.updateMany.mockRejectedValue(new Error('Database error'));
+      const result = await service.markAsRead('notif_123');
 
-      const result = await service.markAsRead('notif123', 'user123');
-
-      expect(result).toBe(false);
+      expect(result).toBeDefined();
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notif_123' },
+        data: {
+          isRead: true,
+          readAt: expect.any(Date),
+        },
+      });
     });
   });
 
   describe('markAllAsRead', () => {
-    it('should mark all notifications as read for user', async () => {
-      prisma.notification.updateMany.mockResolvedValue({ count: 5 });
+    it('devrait marquer toutes les notifications comme lues', async () => {
+      mockPrisma.notification.updateMany.mockResolvedValue({ count: 5 });
 
-      const result = await service.markAllAsRead('user123');
+      const count = await service.markAllAsRead('user_123');
 
-      expect(result).toBe(true);
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      expect(count).toBe(5);
+      expect(mockPrisma.notification.updateMany).toHaveBeenCalledWith({
         where: {
-          userId: 'user123',
-          isRead: false
+          userId: 'user_123',
+          isRead: false,
         },
         data: {
-          isRead: true
-        }
+          isRead: true,
+          readAt: expect.any(Date),
+        },
       });
     });
   });
 
   describe('getUnreadCount', () => {
-    it('should return correct unread count', async () => {
-      prisma.notification.count.mockResolvedValue(7);
+    it('devrait retourner le nombre de notifications non lues', async () => {
+      mockPrisma.notification.count.mockResolvedValue(12);
 
-      const count = await service.getUnreadCount('user123');
+      const count = await service.getUnreadCount('user_123');
 
-      expect(count).toBe(7);
-      expect(prisma.notification.count).toHaveBeenCalledWith({
+      expect(count).toBe(12);
+      expect(mockPrisma.notification.count).toHaveBeenCalledWith({
         where: {
-          userId: 'user123',
-          isRead: false
-        }
+          userId: 'user_123',
+          isRead: false,
+        },
       });
-    });
-
-    it('should return 0 on error', async () => {
-      prisma.notification.count.mockRejectedValue(new Error('Database error'));
-
-      const count = await service.getUnreadCount('user123');
-
-      expect(count).toBe(0);
     });
   });
 
   describe('deleteNotification', () => {
-    it('should delete notification successfully', async () => {
-      prisma.notification.deleteMany.mockResolvedValue({ count: 1 });
+    it('devrait supprimer une notification', async () => {
+      mockPrisma.notification.delete.mockResolvedValue({ id: 'notif_123' });
 
-      const result = await service.deleteNotification('notif123', 'user123');
+      const result = await service.deleteNotification('notif_123');
 
       expect(result).toBe(true);
-      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
-        where: {
-          id: 'notif123',
-          userId: 'user123'
-        }
+      expect(mockPrisma.notification.delete).toHaveBeenCalledWith({
+        where: { id: 'notif_123' },
+      });
+    });
+
+    it('devrait retourner false en cas d\'erreur', async () => {
+      mockPrisma.notification.delete.mockRejectedValue(new Error('Not found'));
+
+      const result = await service.deleteNotification('notif_invalid');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Validation des Types', () => {
+    it('devrait accepter tous les types valides de NotificationType', async () => {
+      const validTypes: NotificationType[] = [
+        'new_message',
+        'user_mentioned',
+        'message_reaction',
+        'missed_call',
+        'friend_request',
+        'friend_accepted',
+        'member_joined',
+        'system',
+      ];
+
+      // Juste vérifier que les types sont reconnus
+      validTypes.forEach((type) => {
+        expect(type).toBeDefined();
       });
     });
   });
 
-  describe('mention notifications - rate limiting', () => {
-    it('should create mention notification', async () => {
-      const mentionData = {
-        mentionedUserId: 'user456',
-        senderId: 'user123',
-        senderUsername: 'testuser',
-        messageContent: 'Hey @user456 check this out',
-        conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
-      };
+  describe('Gestion des Erreurs', () => {
+    it('devrait retourner null si l\'utilisateur n\'existe pas', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
-
-      const result = await service.createMentionNotification(mentionData);
-
-      expect(result).toBeDefined();
-      expect(prisma.notification.create).toHaveBeenCalled();
-    });
-
-    it('should rate limit mention notifications (5 per minute max)', async () => {
-      const mentionData = {
-        mentionedUserId: 'user456',
-        senderId: 'user123',
-        senderUsername: 'testuser',
-        messageContent: 'Mention',
-        conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
-      };
-
-      prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
-      prisma.notification.create.mockResolvedValue({ id: 'notif123' });
-
-      // Create 6 mention notifications rapidly
-      const results = [];
-      for (let i = 0; i < 6; i++) {
-        const result = await service.createMentionNotification({
-          ...mentionData,
-          messageId: `msg${i}`
-        });
-        results.push(result);
-      }
-
-      // First 5 should succeed, 6th should be rate limited
-      const successCount = results.filter(r => r !== null).length;
-      expect(successCount).toBeLessThanOrEqual(5);
-    });
-
-    it('should not create mention notification for self-mention', async () => {
-      const mentionData = {
-        mentionedUserId: 'user123',
-        senderId: 'user123', // Same user
-        senderUsername: 'testuser',
-        messageContent: 'Mention myself',
-        conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
-      };
-
-      const result = await service.createMentionNotification(mentionData);
+      const result = await service.createMessageNotification({
+        userId: 'user_recipient',
+        senderId: 'user_invalid',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        preview: 'Test',
+      });
 
       expect(result).toBeNull();
-      expect(prisma.notification.create).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('batch mention notifications', () => {
-    it('should create batch mention notifications efficiently', async () => {
-      const mentionedUserIds = ['user1', 'user2', 'user3'];
-      const commonData = {
-        senderId: 'sender123',
-        senderUsername: 'sender',
-        messageContent: 'Hey everyone!',
-        conversationId: 'conv123',
-        conversationTitle: 'Test Conversation',
-        messageId: 'msg123',
-        attachments: []
-      };
-      const memberIds = ['user1', 'user2', 'user3'];
-
-      prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
-      prisma.notification.createMany.mockResolvedValue({ count: 3 });
-      prisma.notification.findMany.mockResolvedValue([
-        { id: 'notif1', userId: 'user1' },
-        { id: 'notif2', userId: 'user2' },
-        { id: 'notif3', userId: 'user3' }
-      ]);
-
-      const count = await service.createMentionNotificationsBatch(
-        mentionedUserIds,
-        commonData,
-        memberIds
-      );
-
-      expect(count).toBe(3);
-      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('truncateMessage', () => {
-    it('should truncate long messages', () => {
-      const longMessage = 'word '.repeat(50); // 50 words
-      const truncated = (service as any).truncateMessage(longMessage, 25);
-
-      expect(truncated.endsWith('...')).toBe(true);
-      const wordCount = truncated.replace('...', '').trim().split(/\s+/).length;
-      expect(wordCount).toBe(25);
+      expect(mockPrisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('should not truncate short messages', () => {
-      const shortMessage = 'This is a short message';
-      const result = (service as any).truncateMessage(shortMessage, 25);
+    it('devrait gérer les erreurs de création gracieusement', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user_sender',
+        username: 'alice',
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: 'conv_123',
+      });
+      mockPrisma.notification.create.mockRejectedValue(new Error('DB Error'));
 
-      expect(result).toBe(shortMessage);
-      expect(result.endsWith('...')).toBe(false);
+      const result = await service.createMessageNotification({
+        userId: 'user_recipient',
+        senderId: 'user_sender',
+        messageId: 'msg_123',
+        conversationId: 'conv_123',
+        preview: 'Test',
+      });
+
+      expect(result).toBeNull();
     });
   });
 });

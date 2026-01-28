@@ -152,40 +152,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                           friendRequest.sender.username ||
                           `${friendRequest.sender.firstName} ${friendRequest.sender.lastName}`.trim();
 
-        const title = 'Nouvelle demande d\'amitie';
-        const content = body.message
-          ? `${senderName} vous a envoye une demande d'amitie : "${body.message}"`
-          : `${senderName} vous a envoye une demande d'amitie`;
-
-        await notificationService.createNotification({
-          userId: body.receiverId,
-          type: 'friend_request' as any, // TypeScript: on etendra le type plus tard
-          title,
-          content,
-          priority: 'normal',
-          senderId: userId,
-          senderUsername: friendRequest.sender.username,
-          senderAvatar: friendRequest.sender.avatar || undefined,
-          data: {
-            friendRequestId: friendRequest.id,
-            message: body.message,
-            actions: [
-              {
-                type: 'accept',
-                label: 'Accepter',
-                endpoint: `/api/friend-requests/${friendRequest.id}`,
-                method: 'PATCH',
-                payload: { status: 'accepted' }
-              },
-              {
-                type: 'reject',
-                label: 'Refuser',
-                endpoint: `/api/friend-requests/${friendRequest.id}`,
-                method: 'PATCH',
-                payload: { status: 'rejected' }
-              }
-            ]
-          }
+        // Utiliser la méthode publique V2
+        await notificationService.createFriendRequestNotification({
+          recipientUserId: body.receiverId,
+          requesterId: userId,
+          friendRequestId: friendRequest.id,
         });
       }
 
@@ -532,21 +503,30 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Marquer la notification de requete d'amitie comme lue
+      // Marquer les notifications de requete d'amitie comme lues
+      // Note: Filtre simplifié car Prisma MongoDB ne supporte pas les filtres JSON complexes
       const notificationService = (fastify as any).notificationService as NotificationService;
       try {
-        await fastify.prisma.notification.updateMany({
+        const notifications = await fastify.prisma.notification.findMany({
           where: {
             userId: userId,
             type: 'friend_request',
-            data: {
-              contains: `"friendRequestId":"${id}"`
-            }
-          },
-          data: {
-            isRead: true
+            isRead: false,
           }
         });
+
+        // Filtrer côté application pour trouver celles liées à cette demande
+        const relevantNotifications = notifications.filter((n: any) =>
+          n.context?.friendRequestId === id
+        );
+
+        // Marquer comme lues
+        for (const notif of relevantNotifications) {
+          await fastify.prisma.notification.update({
+            where: { id: notif.id },
+            data: { isRead: true, readAt: new Date() }
+          });
+        }
       } catch (error) {
         // Log mais ne pas bloquer
         logError(fastify.log, 'Error marking friend request notification as read:', error);
@@ -559,34 +539,18 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                             `${updatedRequest.receiver.firstName} ${updatedRequest.receiver.lastName}`.trim();
 
         if (body.status === 'accepted') {
-          await notificationService.createNotification({
-            userId: updatedRequest.senderId,
-            type: 'friend_request' as any,
-            title: 'Demande d\'amitie acceptee',
-            content: `${receiverName} a accepte votre demande d'amitie`,
-            priority: 'normal',
-            senderId: userId,
-            senderUsername: updatedRequest.receiver.username,
-            senderAvatar: updatedRequest.receiver.avatar || undefined,
-            data: {
-              friendRequestId: id,
-              action: 'accepted'
-            }
+          // Note: conversationId sera ajouté après création de la conversation
+          await notificationService.createFriendAcceptedNotification({
+            recipientUserId: updatedRequest.senderId,
+            accepterUserId: userId,
+            conversationId: undefined, // Sera ajouté après
           });
         } else if (body.status === 'rejected') {
-          await notificationService.createNotification({
-            userId: updatedRequest.senderId,
-            type: 'friend_request' as any,
-            title: 'Demande d\'amitie refusee',
+          await notificationService.createSystemNotification({
+            recipientUserId: updatedRequest.senderId,
             content: `${receiverName} a refuse votre demande d'amitie`,
             priority: 'low',
-            senderId: userId,
-            senderUsername: updatedRequest.receiver.username,
-            senderAvatar: updatedRequest.receiver.avatar || undefined,
-            data: {
-              friendRequestId: id,
-              action: 'rejected'
-            }
+            systemType: 'announcement',
           });
         }
       }
