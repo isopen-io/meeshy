@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -131,7 +132,14 @@ export function ConversationSettingsModal({
   const [encryptionMode, setEncryptionMode] = useState<'e2ee' | 'hybrid' | 'server' | ''>(
     (conversation as any).encryptionMode || ''
   );
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  // États pour l'édition inline avec X et ✓
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(conversation.title || '');
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editedDescription, setEditedDescription] = useState(conversation.description || '');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
 
   // Charger les préférences utilisateur
   useEffect(() => {
@@ -193,23 +201,67 @@ export function ConversationSettingsModal({
     }
   };
 
-  // Sauvegarder la configuration admin
-  const saveConfiguration = async () => {
-    setIsSavingConfig(true);
+  // Sauvegarder le titre inline
+  const saveTitleInline = async () => {
+    const trimmed = editedTitle.trim();
+    if (!trimmed || trimmed === convTitle) {
+      setIsEditingTitle(false);
+      setEditedTitle(convTitle);
+      return;
+    }
+
+    setIsSavingTitle(true);
     try {
       const updatedConv = await conversationsService.updateConversation(conversation.id, {
-        title: convTitle.trim(),
-        description: convDescription.trim(),
-        ...(encryptionMode && { encryptionMode }),
+        title: trimmed,
       });
+      setConvTitle(trimmed);
       onConversationUpdate?.(updatedConv);
-      toast.success(t('conversationDetails.configSaved') || 'Configuration enregistrée');
+      setIsEditingTitle(false);
+      toast.success('Titre mis à jour');
     } catch (error) {
-      console.error('Erreur sauvegarde configuration:', error);
-      toast.error(t('conversationDetails.configError') || 'Erreur lors de la sauvegarde');
+      console.error('Erreur sauvegarde titre:', error);
+      toast.error('Erreur lors de la sauvegarde du titre');
     } finally {
-      setIsSavingConfig(false);
+      setIsSavingTitle(false);
     }
+  };
+
+  // Annuler l'édition du titre
+  const cancelTitleEdit = () => {
+    setEditedTitle(convTitle);
+    setIsEditingTitle(false);
+  };
+
+  // Sauvegarder la description inline
+  const saveDescriptionInline = async () => {
+    const trimmed = editedDescription.trim();
+    if (trimmed === convDescription) {
+      setIsEditingDescription(false);
+      return;
+    }
+
+    setIsSavingDescription(true);
+    try {
+      const updatedConv = await conversationsService.updateConversation(conversation.id, {
+        description: trimmed,
+      });
+      setConvDescription(trimmed);
+      onConversationUpdate?.(updatedConv);
+      setIsEditingDescription(false);
+      toast.success('Description mise à jour');
+    } catch (error) {
+      console.error('Erreur sauvegarde description:', error);
+      toast.error('Erreur lors de la sauvegarde de la description');
+    } finally {
+      setIsSavingDescription(false);
+    }
+  };
+
+  // Annuler l'édition de la description
+  const cancelDescriptionEdit = () => {
+    setEditedDescription(convDescription);
+    setIsEditingDescription(false);
   };
 
   // Ajouter un tag
@@ -244,15 +296,15 @@ export function ConversationSettingsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "sm:max-w-[650px] max-h-[90vh] overflow-hidden flex flex-col",
-          "w-[calc(100vw-2rem)] p-0",
+          "w-[400px] sm:w-[500px] max-h-[90vh] overflow-hidden flex flex-col",
+          "p-0",
           "bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950",
-          "border border-white/20 dark:border-gray-700/30"
+          "border-r border-white/20 dark:border-gray-700/30"
         )}
         style={{ overscrollBehavior: 'contain' }}
       >
         {/* Header glassmorphism */}
-        <DialogHeader className="px-6 pt-6 pb-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
+        <DialogHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -266,13 +318,12 @@ export function ConversationSettingsModal({
             </Avatar>
             <div className="flex-1 min-w-0">
               <DialogTitle className="truncate text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-                {t('conversationDetails.title') || 'Paramètres de la conversation'}
+                {t('conversationDetails.title') || 'Paramètres'}
               </DialogTitle>
               <DialogDescription className="truncate text-sm">
                 {conversation.title || t('conversationDetails.conversation')}
               </DialogDescription>
             </div>
-            <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
           </motion.div>
         </DialogHeader>
 
@@ -289,10 +340,7 @@ export function ConversationSettingsModal({
                 className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-200"
               >
                 <User className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  {t('conversationDetails.myPreferences') || 'Mes préférences'}
-                </span>
-                <span className="sm:hidden">Préférences</span>
+                {t('conversationDetails.myPreferences') || 'Préférences'}
               </TabsTrigger>
               {canAccessAdminSettings && (
                 <TabsTrigger
@@ -300,17 +348,14 @@ export function ConversationSettingsModal({
                   className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-all duration-200"
                 >
                   <Settings className="h-4 w-4" />
-                  <span className="hidden sm:inline">
-                    {t('conversationDetails.configuration') || 'Configuration'}
-                  </span>
-                  <span className="sm:hidden">Config</span>
+                  {t('conversationDetails.configuration') || 'Configuration'}
                 </TabsTrigger>
               )}
             </TabsList>
           </div>
 
           {/* Contenu scrollable */}
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <ScrollArea className="flex-1 px-6 pb-6">
             {/* Onglet Préférences Utilisateur */}
             <TabsContent value="preferences" className="mt-6 space-y-6 focus-visible:outline-none">
               {isLoadingPrefs ? (
@@ -597,7 +642,7 @@ export function ConversationSettingsModal({
                       ) : (
                         <>
                           <Check className="mr-2 h-5 w-5" />
-                          {t('conversationDetails.savePreferences') || 'Enregistrer mes préférences'}
+                          {t('conversationDetails.savePreferences') || 'Enregistrer'}
                         </>
                       )}
                     </Button>
@@ -621,32 +666,158 @@ export function ConversationSettingsModal({
                     {t('conversationDetails.basicInfo') || 'Informations'}
                   </h3>
 
-                  {/* Titre */}
+                  {/* Titre avec édition inline */}
                   <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
-                    <Label htmlFor="convTitle" className="font-semibold">
-                      {t('conversationDetails.conversationName') || 'Nom de la conversation'}
+                    <Label className="font-semibold flex items-center gap-2">
+                      <Pencil className="h-4 w-4" />
+                      {t('conversationDetails.conversationName') || 'Nom'}
                     </Label>
-                    <Input
-                      id="convTitle"
-                      value={convTitle}
-                      onChange={(e) => setConvTitle(e.target.value)}
-                      placeholder={t('conversationDetails.namePlaceholder') || 'Entrez un nom...'}
-                      className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40"
-                    />
+                    {!isEditingTitle ? (
+                      <div className="flex items-center gap-2">
+                        <p className="flex-1 text-sm py-2">{convTitle || 'Sans titre'}</p>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditedTitle(convTitle);
+                              setIsEditingTitle(true);
+                            }}
+                            className="h-8 w-8"
+                            aria-label="Modifier le titre"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editedTitle}
+                          onChange={(e) => setEditedTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveTitleInline();
+                            } else if (e.key === 'Escape') {
+                              cancelTitleEdit();
+                            }
+                          }}
+                          disabled={isSavingTitle}
+                          autoFocus
+                          className="flex-1 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40"
+                        />
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={cancelTitleEdit}
+                            disabled={isSavingTitle}
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            aria-label="Annuler"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={saveTitleInline}
+                            disabled={isSavingTitle}
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            aria-label="Valider"
+                          >
+                            {isSavingTitle ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </motion.div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Description */}
+                  {/* Description avec édition inline */}
                   <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
-                    <Label htmlFor="convDescription" className="font-semibold">
+                    <Label className="font-semibold flex items-center gap-2">
+                      <Pencil className="h-4 w-4" />
                       {t('conversationDetails.description') || 'Description'}
                     </Label>
-                    <Textarea
-                      id="convDescription"
-                      value={convDescription}
-                      onChange={(e) => setConvDescription(e.target.value)}
-                      placeholder={t('conversationDetails.descriptionPlaceholder') || 'Ajoutez une description...'}
-                      className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 min-h-[100px] resize-none"
-                    />
+                    {!isEditingDescription ? (
+                      <div className="flex items-start gap-2">
+                        <p className="flex-1 text-sm py-2 whitespace-pre-wrap">{convDescription || 'Aucune description'}</p>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditedDescription(convDescription);
+                              setIsEditingDescription(true);
+                            }}
+                            className="h-8 w-8"
+                            aria-label="Modifier la description"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editedDescription}
+                          onChange={(e) => setEditedDescription(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.ctrlKey) {
+                              e.preventDefault();
+                              saveDescriptionInline();
+                            } else if (e.key === 'Escape') {
+                              cancelDescriptionEdit();
+                            }
+                          }}
+                          disabled={isSavingDescription}
+                          autoFocus
+                          className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 min-h-[100px] resize-none"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelDescriptionEdit}
+                              disabled={isSavingDescription}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Annuler
+                            </Button>
+                          </motion.div>
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={saveDescriptionInline}
+                              disabled={isSavingDescription}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            >
+                              {isSavingDescription ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4 mr-1" />
+                              )}
+                              Valider
+                            </Button>
+                          </motion.div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
 
@@ -703,7 +874,7 @@ export function ConversationSettingsModal({
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-purple-700 dark:text-purple-300">
-                      {encryptionMode === 'e2ee' && (t('conversationDetails.e2eeDescription') || 'Les messages sont chiffrés de bout en bout. Seuls les participants peuvent les lire.')}
+                      {encryptionMode === 'e2ee' && (t('conversationDetails.e2eeDescription') || 'Les messages sont chiffrés de bout en bout.')}
                       {encryptionMode === 'hybrid' && (t('conversationDetails.hybridDescription') || 'Chiffrement côté serveur avec clés partagées.')}
                       {encryptionMode === 'server' && (t('conversationDetails.serverDescription') || 'Les messages sont chiffrés sur le serveur.')}
                       {!encryptionMode && (t('conversationDetails.noEncryptionDescription') || 'Les messages ne sont pas chiffrés.')}
@@ -743,33 +914,9 @@ export function ConversationSettingsModal({
                     )}
                   </div>
                 </motion.div>
-
-                {/* Bouton Sauvegarder */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button
-                    onClick={saveConfiguration}
-                    disabled={isSavingConfig}
-                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-lg shadow-purple-500/30"
-                  >
-                    {isSavingConfig ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        {t('conversationDetails.saving') || 'Enregistrement...'}
-                      </>
-                    ) : (
-                      <>
-                        <Check className="mr-2 h-5 w-5" />
-                        {t('conversationDetails.saveConfig') || 'Enregistrer la configuration'}
-                      </>
-                    )}
-                  </Button>
-                </motion.div>
               </TabsContent>
             )}
-          </div>
+          </ScrollArea>
         </Tabs>
       </DialogContent>
     </Dialog>

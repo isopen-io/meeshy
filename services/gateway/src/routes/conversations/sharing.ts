@@ -658,6 +658,7 @@ export function registerSharingRoutes(
       });
 
       if (existingMember) {
+        console.log('[JOIN_CONVERSATION] Utilisateur déjà membre, conversationId:', shareLink.conversationId);
         return reply.send({
           success: true,
           data: { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId }
@@ -665,6 +666,7 @@ export function registerSharingRoutes(
       }
 
       // Ajouter l'utilisateur à la conversation
+      console.log('[JOIN_CONVERSATION] Ajout utilisateur', userToken.userId, 'à conversation', shareLink.conversationId);
       await prisma.conversationMember.create({
         data: {
           conversationId: shareLink.conversationId,
@@ -679,6 +681,7 @@ export function registerSharingRoutes(
         where: { id: shareLink.id },
         data: { currentUses: { increment: 1 } }
       });
+      console.log('[JOIN_CONVERSATION] Membre créé avec succès');
 
       // Envoyer des notifications
       const notificationService = (fastify as any).notificationService;
@@ -739,13 +742,15 @@ export function registerSharingRoutes(
         }
       }
 
-      return reply.send({
+      const responseData = {
         success: true,
         data: { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId }
-      });
+      };
+      console.log('[JOIN_CONVERSATION] Envoi réponse succès:', JSON.stringify(responseData, null, 2));
+      return reply.send(responseData);
 
     } catch (error) {
-      console.error('Error joining conversation via link:', error);
+      console.error('[JOIN_CONVERSATION] Error joining conversation via link:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la jointure de la conversation'
