@@ -4,12 +4,12 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -293,18 +293,13 @@ export function ConversationSettingsModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(
-          "w-[400px] sm:w-[500px] max-h-[90vh] overflow-hidden flex flex-col",
-          "p-0",
-          "bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950",
-          "border-r border-white/20 dark:border-gray-700/30"
-        )}
-        style={{ overscrollBehavior: 'contain' }}
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        className="w-[400px] sm:w-[500px] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30"
       >
-        {/* Header glassmorphism */}
-        <DialogHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
+        {/* Header avec effet glassmorphism */}
+        <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -317,15 +312,15 @@ export function ConversationSettingsModal({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <DialogTitle className="truncate text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+              <SheetTitle className="truncate text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
                 {t('conversationDetails.title') || 'Paramètres'}
-              </DialogTitle>
-              <DialogDescription className="truncate text-sm">
+              </SheetTitle>
+              <SheetDescription className="truncate text-sm">
                 {conversation.title || t('conversationDetails.conversation')}
-              </DialogDescription>
+              </SheetDescription>
             </div>
           </motion.div>
-        </DialogHeader>
+        </SheetHeader>
 
         <Tabs
           value={activeTab}
@@ -918,8 +913,8 @@ export function ConversationSettingsModal({
             )}
           </ScrollArea>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
