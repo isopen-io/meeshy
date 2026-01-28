@@ -11,7 +11,7 @@
 
 import { X3DHKeyAgreement, PreKeyBundle, X3DHInitiatorResult } from '../X3DHKeyAgreement';
 import { SignalKeyManager } from '../SignalKeyManager';
-import { PrismaClient } from '../../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 
 describe('X3DHKeyAgreement - Week 3-4 Implementation', () => {

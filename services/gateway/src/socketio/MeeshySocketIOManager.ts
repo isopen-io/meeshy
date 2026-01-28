@@ -204,15 +204,15 @@ export class MeeshySocketIOManager {
       try {
         await this.maintenanceService.startMaintenanceTasks();
       } catch (error) {
-        logger.error('[GATEWAY] ❌ Erreur lors du démarrage des tâches de maintenance', error);
-        logger.error('[GATEWAY] ❌ Stack trace', error instanceof Error ? error.stack : 'No stack trace');
+        logger.error('❌ Erreur lors du démarrage des tâches de maintenance', error);
+        logger.error('❌ Stack trace', error instanceof Error ? error.stack : 'No stack trace');
       }
       
       // Note: Les événements de traduction sont gérés via le singleton ZMQ
       
       
     } catch (error) {
-      logger.error('[GATEWAY] ❌ Erreur initialisation MeeshySocketIOManager', error);
+      logger.error('❌ Erreur initialisation MeeshySocketIOManager', error);
       throw error;
     }
   }

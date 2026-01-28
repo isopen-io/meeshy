@@ -41,30 +41,30 @@ export class ZmqConnectionManager {
    */
   async initialize(): Promise<void> {
     try {
-      console.log(`[GATEWAY] 🔧 Début initialisation ZMQ Connection Manager...`);
+      console.log(`🔧 Début initialisation ZMQ Connection Manager...`);
 
       // Créer le contexte ZMQ
       this.context = new zmq.Context();
-      console.log(`[GATEWAY] 🔧 Contexte ZMQ créé`);
+      console.log(`🔧 Contexte ZMQ créé`);
 
       // Socket PUSH pour envoyer les commandes de traduction
       this.pushSocket = new zmq.Push();
       await this.pushSocket.connect(`tcp://${this.config.host}:${this.config.pushPort}`);
-      console.log(`[GATEWAY] 🔧 Socket PUSH connecté à ${this.config.host}:${this.config.pushPort}`);
+      console.log(`🔧 Socket PUSH connecté à ${this.config.host}:${this.config.pushPort}`);
 
       // Socket SUB pour recevoir les résultats
       this.subSocket = new zmq.Subscriber();
       await this.subSocket.connect(`tcp://${this.config.host}:${this.config.subPort}`);
       await this.subSocket.subscribe(''); // S'abonner à tous les messages
-      console.log(`[GATEWAY] 🔧 Socket SUB connecté à ${this.config.host}:${this.config.subPort}`);
+      console.log(`🔧 Socket SUB connecté à ${this.config.host}:${this.config.subPort}`);
 
       this.isConnected = true;
-      console.log('[GATEWAY] ✅ ZMQ Connection Manager initialisé avec succès');
-      console.log(`[GATEWAY] 🔌 Socket PUSH connecté: ${this.config.host}:${this.config.pushPort} (envoi commandes)`);
-      console.log(`[GATEWAY] 🔌 Socket SUB connecté: ${this.config.host}:${this.config.subPort} (réception résultats)`);
+      console.log('✅ ZMQ Connection Manager initialisé avec succès');
+      console.log(`🔌 Socket PUSH connecté: ${this.config.host}:${this.config.pushPort} (envoi commandes)`);
+      console.log(`🔌 Socket SUB connecté: ${this.config.host}:${this.config.subPort} (réception résultats)`);
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Erreur initialisation Connection Manager: ${error}`);
+      console.error(`❌ Erreur initialisation Connection Manager: ${error}`);
       throw error;
     }
   }
@@ -80,7 +80,7 @@ export class ZmqConnectionManager {
     try {
       await this.pushSocket.send(JSON.stringify(payload));
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Erreur envoi message: ${error}`);
+      console.error(`❌ Erreur envoi message: ${error}`);
       throw error;
     }
   }
@@ -104,7 +104,7 @@ export class ZmqConnectionManager {
     // Envoyer en multipart
     await this.pushSocket.send(frames);
 
-    console.log(`[GATEWAY] [ZMQ-Client] Multipart envoyé: ${frames.length} frames, total ${frames.reduce((sum, f) => sum + f.length, 0)} bytes`);
+    console.log(`[ZMQ-Client] Multipart envoyé: ${frames.length} frames, total ${frames.reduce((sum, f) => sum + f.length, 0)} bytes`);
   }
 
   /**
@@ -151,14 +151,14 @@ export class ZmqConnectionManager {
     };
 
     await this.pushSocket.send(JSON.stringify(pingMessage));
-    console.log(`[GATEWAY] 🏓 Health check ping envoyé via port ${this.config.pushPort}`);
+    console.log(`🏓 Health check ping envoyé via port ${this.config.pushPort}`);
   }
 
   /**
    * Ferme les sockets et nettoie les ressources
    */
   async close(): Promise<void> {
-    console.log('[GATEWAY] 🛑 Arrêt Connection Manager...');
+    console.log('🛑 Arrêt Connection Manager...');
 
     this.isConnected = false;
 
@@ -177,10 +177,10 @@ export class ZmqConnectionManager {
         this.context = null;
       }
 
-      console.log('[GATEWAY] ✅ Connection Manager arrêté');
+      console.log('✅ Connection Manager arrêté');
 
     } catch (error) {
-      console.error(`[GATEWAY] ❌ Erreur arrêt Connection Manager: ${error}`);
+      console.error(`❌ Erreur arrêt Connection Manager: ${error}`);
     }
   }
 

@@ -270,7 +270,7 @@ export function registerSharingRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error creating new conversation link:', error);
+      console.error('Error creating new conversation link:', error);
       reply.status(500).send({
         success: false,
         error: 'Error creating link'
@@ -414,7 +414,7 @@ export function registerSharingRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error updating conversation:', error);
+      console.error('Error updating conversation:', error);
       
       // Gestion d'erreur améliorée avec détails spécifiques
       let errorMessage = 'Erreur lors de la mise à jour de la conversation';
@@ -434,7 +434,7 @@ export function registerSharingRoutes(
         statusCode = 400;
       }
       
-      console.error('[GATEWAY] Detailed error info:', {
+      console.error('Detailed error info:', {
         code: error.code,
         message: error.message,
         meta: error.meta,
@@ -564,7 +564,7 @@ export function registerSharingRoutes(
         isModerator // Indiquer au frontend si l'utilisateur peut gérer les liens
       });
     } catch (error) {
-      console.error('[GATEWAY] Error fetching conversation links:', error);
+      console.error('Error fetching conversation links:', error);
       return reply.status(500).send({ 
         success: false, 
         error: 'Error retrieving conversation links' 
@@ -728,13 +728,13 @@ export function registerSharingRoutes(
                 joinerUsername: userName,
                 joinerAvatar: joiningUser.avatar || undefined
               });
-              console.log(`[GATEWAY] 📩 Notification "membre a rejoint" envoyée à l'admin ${member.userId}`);
+              console.log(`📩 Notification "membre a rejoint" envoyée à l'admin ${member.userId}`);
             }
 
-            console.log(`[GATEWAY] 📩 Notification de confirmation envoyée à ${userToken.userId}`);
+            console.log(`📩 Notification de confirmation envoyée à ${userToken.userId}`);
           }
         } catch (notifError) {
-          console.error('[GATEWAY] Erreur lors de l\'envoi des notifications de jointure:', notifError);
+          console.error('Erreur lors de l\'envoi des notifications de jointure:', notifError);
           // Ne pas bloquer la jointure
         }
       }
@@ -745,7 +745,7 @@ export function registerSharingRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error joining conversation via link:', error);
+      console.error('Error joining conversation via link:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la jointure de la conversation'
@@ -934,10 +934,10 @@ export function registerSharingRoutes(
               conversationTitle: conversation.title,
               conversationType: conversation.type
             });
-            console.log(`[GATEWAY] 📩 Notification d'invitation envoyée à ${userId} pour la conversation ${conversationId}`);
+            console.log(`📩 Notification d'invitation envoyée à ${userId} pour la conversation ${conversationId}`);
           }
         } catch (notifError) {
-          console.error('[GATEWAY] Erreur lors de l\'envoi de la notification d\'invitation:', notifError);
+          console.error('Erreur lors de l\'envoi de la notification d\'invitation:', notifError);
           // Ne pas bloquer l'invitation
         }
       }
@@ -947,9 +947,9 @@ export function registerSharingRoutes(
       if (mentionService) {
         try {
           await mentionService.invalidateCacheForConversation(conversationId);
-          console.log(`[GATEWAY] 🔄 Cache d'autocomplete invalidé pour la conversation ${conversationId}`);
+          console.log(`🔄 Cache d'autocomplete invalidé pour la conversation ${conversationId}`);
         } catch (cacheError) {
-          console.error('[GATEWAY] Erreur lors de l\'invalidation du cache:', cacheError);
+          console.error('Erreur lors de l\'invalidation du cache:', cacheError);
           // Ne pas bloquer l'invitation
         }
       }

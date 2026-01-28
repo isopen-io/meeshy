@@ -422,7 +422,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error fetching conversations:', error);
+      console.error('Error fetching conversations:', error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving conversations'
@@ -586,7 +586,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error fetching conversation:', error);
+      console.error('Error fetching conversation:', error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving conversation'
@@ -793,11 +793,11 @@ export function registerCoreRoutes(
                 conversationTitle: displayTitle,
                 conversationType: type
               });
-              console.log(`[GATEWAY] 📩 Notification d'invitation envoyée à ${participantId} pour la conversation ${conversation.id}`);
+              console.log(`📩 Notification d'invitation envoyée à ${participantId} pour la conversation ${conversation.id}`);
             }
           }
         } catch (notifError) {
-          console.error('[GATEWAY] Erreur lors de l\'envoi des notifications d\'invitation:', notifError);
+          console.error('Erreur lors de l\'envoi des notifications d\'invitation:', notifError);
           // Ne pas bloquer la création de la conversation
         }
       }
@@ -901,7 +901,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error updating conversation:', error);
+      console.error('Error updating conversation:', error);
       reply.status(500).send({
         success: false,
         error: 'Error updating conversation'
@@ -994,7 +994,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error deleting conversation:', error);
+      console.error('Error deleting conversation:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la suppression de la conversation'

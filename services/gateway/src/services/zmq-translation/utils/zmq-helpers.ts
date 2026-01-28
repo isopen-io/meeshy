@@ -31,14 +31,14 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
   try {
     // Vérifier si le fichier existe
     if (!existsSync(audioPath)) {
-      console.log(`[GATEWAY] [ZMQ-Client] Fichier audio non accessible localement: ${audioPath}`);
+      console.log(`[ZMQ-Client] Fichier audio non accessible localement: ${audioPath}`);
       return null;
     }
 
     // Vérifier la taille
     const stats = statSync(audioPath);
     if (stats.size > AUDIO_BASE64_SIZE_THRESHOLD) {
-      console.log(`[GATEWAY] [ZMQ-Client] Fichier trop gros pour transfert ZMQ (${(stats.size / 1024 / 1024).toFixed(2)}MB > ${AUDIO_BASE64_SIZE_THRESHOLD / 1024 / 1024}MB), Translator téléchargera via URL`);
+      console.log(`[ZMQ-Client] Fichier trop gros pour transfert ZMQ (${(stats.size / 1024 / 1024).toFixed(2)}MB > ${AUDIO_BASE64_SIZE_THRESHOLD / 1024 / 1024}MB), Translator téléchargera via URL`);
       return null;
     }
 
@@ -58,11 +58,11 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
     };
     const mimeType = mimeTypes[ext] || 'audio/wav';
 
-    console.log(`[GATEWAY] [ZMQ-Client] Audio chargé en binaire: ${(stats.size / 1024).toFixed(1)}KB (${mimeType})`);
+    console.log(`[ZMQ-Client] Audio chargé en binaire: ${(stats.size / 1024).toFixed(1)}KB (${mimeType})`);
 
     return { buffer, mimeType, size: stats.size };
   } catch (error) {
-    console.warn(`[GATEWAY] [ZMQ-Client] Erreur lecture fichier audio: ${error}`);
+    console.warn(`[ZMQ-Client] Erreur lecture fichier audio: ${error}`);
     return null;
   }
 }

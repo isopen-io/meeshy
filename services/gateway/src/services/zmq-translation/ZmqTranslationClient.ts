@@ -206,13 +206,13 @@ export class ZmqTranslationClient extends EventEmitter {
    */
   async initialize(): Promise<void> {
     try {
-      logger.info(`[GATEWAY] 🔧 Début initialisation ZmqTranslationClient...`);
+      logger.info(`🔧 Début initialisation ZmqTranslationClient...`);
 
       // Initialiser le connection manager
       await this.connectionManager.initialize();
 
       // Démarrer l'écoute des résultats
-      logger.info(`[GATEWAY] 🔧 Démarrage de l'écoute des résultats...`);
+      logger.info(`🔧 Démarrage de l'écoute des résultats...`);
       this._startResultListener();
 
       // Vérification de connectivité après un délai
@@ -221,12 +221,12 @@ export class ZmqTranslationClient extends EventEmitter {
       }, 2000);
 
       this.running = true;
-      logger.info('[GATEWAY] ✅ ZmqTranslationClient initialisé avec succès');
-      logger.info(`[GATEWAY] 🔌 Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`);
-      logger.info(`[GATEWAY] 🔌 Socket SUB connecté: ${this.host}:${this.subPort} (réception résultats)`);
+      logger.info('✅ ZmqTranslationClient initialisé avec succès');
+      logger.info(`🔌 Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`);
+      logger.info(`🔌 Socket SUB connecté: ${this.host}:${this.subPort} (réception résultats)`);
 
     } catch (error) {
-      logger.error(`[GATEWAY] ❌ Erreur initialisation ZmqTranslationClient: ${error}`);
+      logger.error(`❌ Erreur initialisation ZmqTranslationClient: ${error}`);
       throw error;
     }
   }
@@ -236,21 +236,21 @@ export class ZmqTranslationClient extends EventEmitter {
    * COPIÉ DU FICHIER MONOLITHIQUE pour garantir compatibilité avec jest.useFakeTimers()
    */
   private async _startResultListener(): Promise<void> {
-    logger.info('[GATEWAY] 🎧 Démarrage écoute des résultats de traduction...');
+    logger.info('🎧 Démarrage écoute des résultats de traduction...');
 
     // Approche simple avec setInterval (compatible Jest)
     let heartbeatCount = 0;
 
     const checkForMessages = async () => {
       if (!this.running) {
-        logger.info('[GATEWAY] 🛑 Arrêt de l\'écoute - running=false');
+        logger.info('🛑 Arrêt de l\'écoute - running=false');
         return;
       }
 
       try {
         // Log périodique pour vérifier que la boucle fonctionne
         if (heartbeatCount % 1000 === 0) { // Toutes les 100 secondes (~1.5 minutes)
-          logger.info(`[GATEWAY] 💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
+          logger.info(`💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
         }
         heartbeatCount++;
 
@@ -262,11 +262,11 @@ export class ZmqTranslationClient extends EventEmitter {
             // LOG APRÈS RÉCEPTION
             if (Array.isArray(message)) {
               const totalSize = message.reduce((sum, f) => sum + f.length, 0);
-              logger.info(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
-              logger.info(`[GATEWAY]    📋 Message multipart: ${message.length} frames, ${totalSize} bytes total`);
+              logger.info(`🔍 APRÈS RÉCEPTION SUB:`);
+              logger.info(`   📋 Message multipart: ${message.length} frames, ${totalSize} bytes total`);
             } else {
-              logger.info(`[GATEWAY] 🔍 APRÈS RÉCEPTION SUB:`);
-              logger.info(`[GATEWAY]    📋 Message simple (taille): ${message.length} bytes`);
+              logger.info(`🔍 APRÈS RÉCEPTION SUB:`);
+              logger.info(`   📋 Message simple (taille): ${message.length} bytes`);
             }
 
             // Passer au message handler
@@ -279,13 +279,13 @@ export class ZmqTranslationClient extends EventEmitter {
 
       } catch (error) {
         if (this.running) {
-          logger.error(`[GATEWAY] ❌ Erreur réception résultat: ${error}`);
+          logger.error(`❌ Erreur réception résultat: ${error}`);
         }
       }
     };
 
     // Démarrer le polling avec setInterval
-    logger.info('[GATEWAY] 🔄 Démarrage polling avec setInterval...');
+    logger.info('🔄 Démarrage polling avec setInterval...');
     this.pollingIntervalId = setInterval(checkForMessages, 100); // 100ms entre chaque vérification
   }
 
@@ -392,7 +392,7 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      logger.error(`[GATEWAY] ❌ Health check échoué: ${error}`);
+      logger.error(`❌ Health check échoué: ${error}`);
       return false;
     }
   }
@@ -421,7 +421,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * Ferme le client et nettoie les ressources
    */
   async close(): Promise<void> {
-    logger.info('[GATEWAY] 🛑 Arrêt ZmqTranslationClient...');
+    logger.info('🛑 Arrêt ZmqTranslationClient...');
 
     this.running = false;
 
@@ -439,10 +439,10 @@ export class ZmqTranslationClient extends EventEmitter {
       this.requestSender.clear();
       this.messageHandler.clear();
 
-      logger.info('[GATEWAY] ✅ ZmqTranslationClient arrêté');
+      logger.info('✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
-      logger.error(`[GATEWAY] ❌ Erreur arrêt ZmqTranslationClient: ${error}`);
+      logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
 
@@ -450,22 +450,22 @@ export class ZmqTranslationClient extends EventEmitter {
    * Méthode de test pour vérifier la réception (pour tests)
    */
   async testReception(): Promise<void> {
-    logger.info('[GATEWAY] 🧪 [ZMQ-Client] Test de réception des messages...');
+    logger.info('🧪 [ZMQ-Client] Test de réception des messages...');
 
     // Envoyer un ping et attendre la réponse
     try {
       await this.connectionManager.sendPing();
-      logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
+      logger.info(`🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
 
       // Attendre un peu pour voir si on reçoit quelque chose
       setTimeout(() => {
-        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
-        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
-        logger.info(`[GATEWAY] 🧪 [ZMQ-Client] Running: ${this.running}`);
+        logger.info(`🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
+        logger.info(`🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
+        logger.info(`🧪 [ZMQ-Client] Running: ${this.running}`);
       }, 3000);
 
     } catch (error) {
-      logger.error(`[GATEWAY] ❌ [ZMQ-Client] Erreur test réception: ${error}`);
+      logger.error(`❌ [ZMQ-Client] Erreur test réception: ${error}`);
     }
   }
 }

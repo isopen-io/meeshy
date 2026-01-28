@@ -174,10 +174,10 @@ export class MeeshySocketIOManager {
       try {
         await this.maintenanceService.startMaintenanceTasks();
       } catch (error) {
-        console.error('[GATEWAY] ❌ Erreur démarrage maintenance:', error);
+        console.error('❌ Erreur démarrage maintenance:', error);
       }
     } catch (error) {
-      console.error('[GATEWAY] ❌ Erreur initialisation MeeshySocketIOManager:', error);
+      console.error('❌ Erreur initialisation MeeshySocketIOManager:', error);
       throw error;
     }
   }

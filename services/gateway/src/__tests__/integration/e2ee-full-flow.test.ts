@@ -12,7 +12,7 @@
  * - DMA interoperability
  */
 
-import { PrismaClient } from '../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
 import type { MessageRequest } from '../../../shared/types/messaging';

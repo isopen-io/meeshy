@@ -43,7 +43,7 @@ class ZMQSingleton {
       await this.instance.initialize();
 
     } catch (error) {
-      console.error('[GATEWAY] Erreur lors de l\'initialisation:', error);
+      console.error('Erreur lors de l\'initialisation:', error);
       this.instance = null;
       throw error;
     }
@@ -54,7 +54,7 @@ class ZMQSingleton {
       try {
         await this.instance.close();
       } catch (error) {
-        console.error('[GATEWAY] Erreur lors de la fermeture:', error);
+        console.error('Erreur lors de la fermeture:', error);
       } finally {
         this.instance = null;
       }

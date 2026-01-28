@@ -182,7 +182,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error searching communities:', error);
+      console.error('Error searching communities:', error);
       reply.status(500).send({
         success: false,
         error: 'Failed to search communities'

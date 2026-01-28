@@ -10,7 +10,7 @@
  */
 
 import { SignalKeyManager } from '../SignalKeyManager';
-import { PrismaClient } from '../../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 
 describe('SignalKeyManager - Week 1-2 Implementation', () => {

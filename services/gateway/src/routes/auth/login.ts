@@ -309,7 +309,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error in logout:', error);
+      console.error('Error in logout:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la déconnexion'

@@ -116,7 +116,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error in /auth/me', error);
+      logger.error('Error in /auth/me', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération du profil'
@@ -185,7 +185,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error in /auth/refresh', error);
+      logger.error('Error in /auth/refresh', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du rafraîchissement du token'

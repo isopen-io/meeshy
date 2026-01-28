@@ -97,7 +97,7 @@ export class ZmqMessageHandler extends EventEmitter {
       // Log multipart
       if (binaryFrames.length > 0) {
         const totalSize = binaryFrames.reduce((sum, f) => sum + f.length, 0);
-        logger.info(`[GATEWAY] 📦 Multipart reçu: ${binaryFrames.length} frames binaires, ${totalSize} bytes`);
+        logger.info(`📦 Multipart reçu: ${binaryFrames.length} frames binaires, ${totalSize} bytes`);
       }
 
       this.stats.messagesProcessed++;
@@ -106,7 +106,7 @@ export class ZmqMessageHandler extends EventEmitter {
       await this.routeEvent(event, binaryFrames);
 
     } catch (error) {
-      logger.error(`[GATEWAY] ❌ Erreur traitement message ZMQ: ${error}`);
+      logger.error(`❌ Erreur traitement message ZMQ: ${error}`);
     }
   }
 
@@ -205,7 +205,7 @@ export class ZmqMessageHandler extends EventEmitter {
         break;
 
       default:
-        logger.warn(`[GATEWAY] ⚠️ Type d'événement inconnu: ${(event as any).type}`);
+        logger.warn(`⚠️ Type d'événement inconnu: ${(event as any).type}`);
     }
   }
 
@@ -232,12 +232,12 @@ export class ZmqMessageHandler extends EventEmitter {
 
     // VALIDATION COMPLÈTE
     if (!event.result) {
-      logger.error(`[GATEWAY] ❌ Message sans résultat`);
+      logger.error(`❌ Message sans résultat`);
       return;
     }
 
     if (!event.result.messageId) {
-      logger.error(`[GATEWAY] ❌ Message sans messageId`);
+      logger.error(`❌ Message sans messageId`);
       return;
     }
 
@@ -258,7 +258,7 @@ export class ZmqMessageHandler extends EventEmitter {
   private handleTranslationError(event: TranslationErrorEvent): void {
     this.stats.translationErrors++;
 
-    logger.error(`[GATEWAY] ❌ Erreur traduction: ${event.error} pour ${event.messageId}`);
+    logger.error(`❌ Erreur traduction: ${event.error} pour ${event.messageId}`);
 
     // Émettre l'événement d'erreur avec métadonnées
     this.emit('translationError', {
@@ -274,11 +274,11 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de processing audio terminé (MULTIPART)
    */
   private handleAudioProcessCompleted(event: AudioProcessCompletedEvent, binaryFrames: Buffer[]): void {
-    logger.info(`[GATEWAY] 🎤 Audio process terminé: ${event.messageId}`);
+    logger.info(`🎤 Audio process terminé: ${event.messageId}`);
     if (event.transcription?.text) {
-      logger.info(`[GATEWAY]    📝 Transcription: ${event.transcription.text.substring(0, 50)}...`);
+      logger.info(`   📝 Transcription: ${event.transcription.text.substring(0, 50)}...`);
     }
-    logger.info(`[GATEWAY]    🌍 Traductions audio: ${event.translatedAudios?.length || 0} versions`);
+    logger.info(`   🌍 Traductions audio: ${event.translatedAudios?.length || 0} versions`);
 
     // ═══════════════════════════════════════════════════════════════
     // EXTRACTION DES BINAIRES DEPUIS FRAMES MULTIPART
@@ -300,7 +300,7 @@ export class ZmqMessageHandler extends EventEmitter {
           embeddingBinary = binaryFrames[frameIndex];
         }
       } else {
-        logger.warn(`[GATEWAY]    ⚠️ Frame index invalide pour ${key}: ${frameIndex}`);
+        logger.warn(`   ⚠️ Frame index invalide pour ${key}: ${frameIndex}`);
       }
     }
 
@@ -323,7 +323,7 @@ export class ZmqMessageHandler extends EventEmitter {
       };
     }
 
-    logger.info(`[GATEWAY]    ✅ Multipart décodé: ${audioBinaries.size} audios, embedding=${!!embeddingBinary}`);
+    logger.info(`   ✅ Multipart décodé: ${audioBinaries.size} audios, embedding=${!!embeddingBinary}`);
 
     this.stats.audioCompleted++;
 
@@ -345,7 +345,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement d'erreur de processing audio
    */
   private handleAudioProcessError(event: AudioProcessErrorEvent): void {
-    logger.error(`[GATEWAY] ❌ Audio process erreur: ${event.messageId} - ${event.error}`);
+    logger.error(`❌ Audio process erreur: ${event.messageId} - ${event.error}`);
 
     this.stats.audioErrors++;
 
@@ -363,7 +363,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de succès Voice API
    */
   private handleVoiceAPISuccess(event: VoiceAPISuccessEvent): void {
-    logger.info(`[GATEWAY] 🎤 Voice API success: ${event.taskId} (${event.processingTimeMs}ms)`);
+    logger.info(`🎤 Voice API success: ${event.taskId} (${event.processingTimeMs}ms)`);
 
     this.stats.voiceEvents++;
 
@@ -381,7 +381,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement d'erreur Voice API
    */
   private handleVoiceAPIError(event: VoiceAPIErrorEvent): void {
-    logger.error(`[GATEWAY] ❌ Voice API error: ${event.taskId} - ${event.errorCode}: ${event.error}`);
+    logger.error(`❌ Voice API error: ${event.taskId} - ${event.errorCode}: ${event.error}`);
 
     this.stats.voiceEvents++;
 
@@ -399,7 +399,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de progression Voice Job
    */
   private handleVoiceJobProgress(event: VoiceJobProgressEvent): void {
-    logger.info(`[GATEWAY] 📊 Voice job progress: ${event.jobId} - ${event.progress}% (${event.currentStep})`);
+    logger.info(`📊 Voice job progress: ${event.jobId} - ${event.progress}% (${event.currentStep})`);
 
     this.stats.voiceEvents++;
 
@@ -418,9 +418,9 @@ export class ZmqMessageHandler extends EventEmitter {
    */
   private handleVoiceProfileAnalyze(event: VoiceProfileAnalyzeResult): void {
     if (event.success) {
-      logger.info(`[GATEWAY] 🎤 Voice profile analyzed: ${event.request_id} - quality: ${event.quality_score}`);
+      logger.info(`🎤 Voice profile analyzed: ${event.request_id} - quality: ${event.quality_score}`);
     } else {
-      logger.error(`[GATEWAY] ❌ Voice profile analyze failed: ${event.request_id} - ${event.error}`);
+      logger.error(`❌ Voice profile analyze failed: ${event.request_id} - ${event.error}`);
     }
 
     this.stats.voiceEvents++;
@@ -433,9 +433,9 @@ export class ZmqMessageHandler extends EventEmitter {
    */
   private handleVoiceProfileVerify(event: VoiceProfileVerifyResult): void {
     if (event.success) {
-      logger.info(`[GATEWAY] 🎤 Voice profile verified: ${event.request_id} - match: ${event.is_match}, score: ${event.similarity_score}`);
+      logger.info(`🎤 Voice profile verified: ${event.request_id} - match: ${event.is_match}, score: ${event.similarity_score}`);
     } else {
-      logger.error(`[GATEWAY] ❌ Voice profile verify failed: ${event.request_id} - ${event.error}`);
+      logger.error(`❌ Voice profile verify failed: ${event.request_id} - ${event.error}`);
     }
 
     this.stats.voiceEvents++;
@@ -448,9 +448,9 @@ export class ZmqMessageHandler extends EventEmitter {
    */
   private handleVoiceProfileCompare(event: VoiceProfileCompareResult): void {
     if (event.success) {
-      logger.info(`[GATEWAY] 🎤 Voice profiles compared: ${event.request_id} - match: ${event.is_match}, score: ${event.similarity_score}`);
+      logger.info(`🎤 Voice profiles compared: ${event.request_id} - match: ${event.is_match}, score: ${event.similarity_score}`);
     } else {
-      logger.error(`[GATEWAY] ❌ Voice profile compare failed: ${event.request_id} - ${event.error}`);
+      logger.error(`❌ Voice profile compare failed: ${event.request_id} - ${event.error}`);
     }
 
     this.stats.voiceEvents++;
@@ -462,7 +462,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement d'erreur de profil vocal
    */
   private handleVoiceProfileError(event: VoiceProfileErrorEvent): void {
-    logger.error(`[GATEWAY] ❌ Voice profile error: ${event.request_id} - ${event.error}`);
+    logger.error(`❌ Voice profile error: ${event.request_id} - ${event.error}`);
 
     this.stats.voiceEvents++;
 
@@ -473,12 +473,12 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de transcription terminée
    */
   private handleTranscriptionCompleted(event: TranscriptionCompletedEvent): void {
-    logger.info(`[GATEWAY] 📝 Transcription terminée: ${event.messageId}`);
+    logger.info(`📝 Transcription terminée: ${event.messageId}`);
     if (event.transcription?.text) {
-      logger.info(`[GATEWAY]    📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
+      logger.info(`   📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
     }
     if (event.transcription?.language) {
-      logger.info(`[GATEWAY]    🌍 Langue: ${event.transcription.language}`);
+      logger.info(`   🌍 Langue: ${event.transcription.language}`);
     }
 
     this.stats.transcriptionCompleted++;
@@ -499,15 +499,15 @@ export class ZmqMessageHandler extends EventEmitter {
    * sans attendre que la traduction soit terminée.
    */
   private handleTranscriptionReady(event: TranscriptionReadyEvent): void {
-    logger.info(`[GATEWAY] 📤 Transcription READY (avant traduction): ${event.messageId}`);
+    logger.info(`📤 Transcription READY (avant traduction): ${event.messageId}`);
     if (event.transcription?.text) {
-      logger.info(`[GATEWAY]    📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
+      logger.info(`   📝 Texte: ${event.transcription.text.substring(0, 50)}...`);
     }
     if (event.transcription?.language) {
-      logger.info(`[GATEWAY]    🌍 Langue: ${event.transcription.language}`);
+      logger.info(`   🌍 Langue: ${event.transcription.language}`);
     }
     if (event.transcription?.speakerCount) {
-      logger.info(`[GATEWAY]    🎤 Speakers: ${event.transcription.speakerCount}`);
+      logger.info(`   🎤 Speakers: ${event.transcription.speakerCount}`);
     }
 
     // Émettre l'événement de transcription prête (avant traduction)
@@ -527,9 +527,9 @@ export class ZmqMessageHandler extends EventEmitter {
    * @deprecated Utilisez handleAudioTranslationReady, handleAudioTranslationsProgressive ou handleAudioTranslationsCompleted
    */
   private handleTranslationReady(event: TranslationReadyEvent): void {
-    logger.info(`[GATEWAY] 🌍 Translation READY (progressive - DEPRECATED): ${event.messageId}`);
-    logger.info(`[GATEWAY]    🔊 Langue: ${event.language}`);
-    logger.info(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+    logger.info(`🌍 Translation READY (progressive - DEPRECATED): ${event.messageId}`);
+    logger.info(`   🔊 Langue: ${event.language}`);
+    logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
 
     // Émettre l'événement de traduction prête (progressive)
     this.emit('translationReady', {
@@ -546,9 +546,9 @@ export class ZmqMessageHandler extends EventEmitter {
    * Événement final pour les traductions mono-langue.
    */
   private handleAudioTranslationReady(event: AudioTranslationReadyEvent): void {
-    logger.info(`[GATEWAY] 🎯 AUDIO_TRANSLATION_READY (langue unique): ${event.messageId}`);
-    logger.info(`[GATEWAY]    🔊 Langue: ${event.language}`);
-    logger.info(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+    logger.info(`🎯 AUDIO_TRANSLATION_READY (langue unique): ${event.messageId}`);
+    logger.info(`   🔊 Langue: ${event.language}`);
+    logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
 
     // Émettre l'événement de traduction unique prête
     this.emit('audioTranslationReady', {
@@ -565,9 +565,9 @@ export class ZmqMessageHandler extends EventEmitter {
    * Permet d'envoyer chaque traduction au fur et à mesure.
    */
   private handleAudioTranslationsProgressive(event: AudioTranslationsProgressiveEvent): void {
-    logger.info(`[GATEWAY] 🔄 AUDIO_TRANSLATIONS_PROGRESSIVE: ${event.messageId}`);
-    logger.info(`[GATEWAY]    🔊 Langue: ${event.language}`);
-    logger.info(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+    logger.info(`🔄 AUDIO_TRANSLATIONS_PROGRESSIVE: ${event.messageId}`);
+    logger.info(`   🔊 Langue: ${event.language}`);
+    logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
 
     // Émettre l'événement de traduction progressive
     this.emit('audioTranslationsProgressive', {
@@ -584,9 +584,9 @@ export class ZmqMessageHandler extends EventEmitter {
    * Signale que toutes les traductions sont complètes.
    */
   private handleAudioTranslationsCompleted(event: AudioTranslationsCompletedEvent): void {
-    logger.info(`[GATEWAY] ✅ AUDIO_TRANSLATIONS_COMPLETED (dernière): ${event.messageId}`);
-    logger.info(`[GATEWAY]    🔊 Langue: ${event.language}`);
-    logger.info(`[GATEWAY]    📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+    logger.info(`✅ AUDIO_TRANSLATIONS_COMPLETED (dernière): ${event.messageId}`);
+    logger.info(`   🔊 Langue: ${event.language}`);
+    logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
 
     // Émettre l'événement de traductions complétées
     this.emit('audioTranslationsCompleted', {
@@ -602,7 +602,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement d'erreur de transcription
    */
   private handleTranscriptionError(event: TranscriptionErrorEvent): void {
-    logger.error(`[GATEWAY] ❌ Transcription error: ${event.messageId} - ${event.error}`);
+    logger.error(`❌ Transcription error: ${event.messageId} - ${event.error}`);
 
     this.stats.transcriptionErrors++;
 
@@ -620,16 +620,16 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de job de traduction audio terminé
    */
   private handleVoiceTranslationCompleted(event: VoiceTranslationCompletedEvent): void {
-    logger.info(`[GATEWAY] 🎤 Voice translation job completed: ${event.jobId}`);
+    logger.info(`🎤 Voice translation job completed: ${event.jobId}`);
     if (event.result) {
       const transcription = event.result.originalAudio?.transcription;
       if (transcription) {
-        logger.info(`[GATEWAY]    📝 Original: ${transcription.substring(0, 50)}...`);
-        logger.info(`[GATEWAY]    🌍 Langue: ${event.result.originalAudio.language}`);
+        logger.info(`   📝 Original: ${transcription.substring(0, 50)}...`);
+        logger.info(`   🌍 Langue: ${event.result.originalAudio.language}`);
       }
       if (event.result.translations?.length) {
         const langs = event.result.translations.map(t => t.targetLanguage).join(', ');
-        logger.info(`[GATEWAY]    🌍 Traductions: ${event.result.translations.length} versions (${langs})`);
+        logger.info(`   🌍 Traductions: ${event.result.translations.length} versions (${langs})`);
       }
     }
 
@@ -649,7 +649,7 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de job de traduction audio échoué
    */
   private handleVoiceTranslationFailed(event: VoiceTranslationFailedEvent): void {
-    logger.error(`[GATEWAY] ❌ Voice translation job failed: ${event.jobId} - ${event.error}`);
+    logger.error(`❌ Voice translation job failed: ${event.jobId} - ${event.error}`);
 
     this.stats.voiceTranslationFailed++;
 

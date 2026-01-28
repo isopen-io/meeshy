@@ -718,7 +718,7 @@ export function registerMessagesRoutes(
           // Marquer les messages comme reçus (curseur automatiquement placé sur le dernier message)
           await readStatusService.markMessagesAsReceived(userId, conversationId);
         } catch (error) {
-          logger.warn('[GATEWAY] Error marking messages as received:', error);
+          logger.warn('Error marking messages as received:', error);
         }
       }
 
@@ -737,7 +737,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error fetching messages', error);
+      logger.error('Error fetching messages', error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving messages'
@@ -836,7 +836,7 @@ export function registerMessagesRoutes(
         // Marquer comme lu (curseur automatiquement placé sur le dernier message)
         await readStatusService.markMessagesAsRead(userId, conversationId);
       } catch (err) {
-        logger.warn('[GATEWAY] Error marking messages as read:', err);
+        logger.warn('Error marking messages as read:', err);
       }
 
       return reply.send({
@@ -845,7 +845,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error marking conversation as read', error);
+      logger.error('Error marking conversation as read', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du marquage des messages comme lus'
@@ -1087,7 +1087,7 @@ export function registerMessagesRoutes(
             const readStatusService = new MessageReadStatusService(prisma);
             await readStatusService.markMessagesAsRead(userId, conversationId, message.id);
           } catch (err) {
-            logger.warn('[GATEWAY] Error marking message as read for sender:', err);
+            logger.warn('Error marking message as read for sender:', err);
           }
         })()
       );
@@ -1201,7 +1201,7 @@ export function registerMessagesRoutes(
           replyToId
         } as any);
       } catch (error) {
-        logger.error('[GATEWAY] Error queuing translations via MessageTranslationService', error);
+        logger.error('Error queuing translations via MessageTranslationService', error);
         // Ne pas faire échouer l'envoi du message si la traduction échoue
       }
 
@@ -1225,7 +1225,7 @@ export function registerMessagesRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error sending message', error);
+      logger.error('Error sending message', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'envoi du message'
@@ -1303,7 +1303,7 @@ export function registerMessagesRoutes(
 
       reply.send({ success: true, data: { markedCount: unreadCount } });
     } catch (error) {
-      logger.error('[GATEWAY] Error marking conversation as read', error);
+      logger.error('Error marking conversation as read', error);
       reply.status(500).send({ success: false, error: 'Erreur lors du marquage comme lu' });
     }
   });

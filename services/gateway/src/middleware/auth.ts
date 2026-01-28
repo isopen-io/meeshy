@@ -550,7 +550,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     (request.user as any).id = userId;
     
   } catch (error) {
-    console.error('[GATEWAY] Authentication failed:', error);
+    console.error('Authentication failed:', error);
     reply.code(401).send({ 
       success: false,
       message: 'Token invalide ou manquant' 

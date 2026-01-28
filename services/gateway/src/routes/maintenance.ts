@@ -60,7 +60,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: stats
       });
     } catch (error) {
-      console.error('[GATEWAY] Error in /maintenance/stats:', error);
+      console.error('Error in /maintenance/stats:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des statistiques de maintenance'
@@ -101,7 +101,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: 'Nettoyage des données expirées terminé' }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error in /maintenance/cleanup:', error);
+      console.error('Error in /maintenance/cleanup:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du nettoyage des données expirées'
@@ -154,7 +154,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}` }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error in /maintenance/user-status:', error);
+      console.error('Error in /maintenance/user-status:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut utilisateur'
@@ -206,7 +206,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error in /maintenance/status-metrics:', error);
+      console.error('Error in /maintenance/status-metrics:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des métriques de statut'
@@ -247,7 +247,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: 'Métriques de statut réinitialisées avec succès' }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error in /maintenance/status-metrics/reset:', error);
+      console.error('Error in /maintenance/status-metrics/reset:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la réinitialisation des métriques'

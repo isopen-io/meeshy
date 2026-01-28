@@ -14,7 +14,7 @@
  * 9. Translation blocked in E2EE mode
  */
 
-import { PrismaClient } from '../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';

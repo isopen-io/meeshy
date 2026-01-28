@@ -304,7 +304,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error fetching conversation participants:', error);
+      console.error('Error fetching conversation participants:', error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving participants'
@@ -433,7 +433,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error adding participant:', error);
+      console.error('Error adding participant:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'ajout du participant'
@@ -549,7 +549,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error removing participant:', error);
+      console.error('Error removing participant:', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la suppression du participant'
@@ -739,7 +739,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error updating participant role:', error);
+      console.error('Error updating participant role:', error);
       reply.status(500).send({
         success: false,
         error: 'Error updating participant role'

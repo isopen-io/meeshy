@@ -141,7 +141,7 @@ export function registerSearchRoutes(
 
       reply.send({ success: true, data: conversationsWithTitle });
     } catch (error) {
-      console.error('[GATEWAY] Error searching conversations:', error);
+      console.error('Error searching conversations:', error);
       reply.status(500).send({ success: false, error: 'Erreur lors de la recherche de conversations' });
     }
   });

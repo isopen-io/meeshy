@@ -39,8 +39,8 @@ jest.mock('../../../services/ZmqSingleton', () => ({
 }));
 
 // Import after mocking
-import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/MessageTranslationService';
-import { TranslationResult } from '../../../services/ZmqTranslationClient';
+import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/message-translation/MessageTranslationService';
+import { TranslationResult } from '../../../services/zmq-translation';
 import { ZMQSingleton } from '../../../services/ZmqSingleton';
 
 // Mock Prisma client factory
@@ -1330,7 +1330,8 @@ describe('MessageTranslationService - Audio Translation Handling', () => {
     ...basePrisma,
     messageAttachment: {
       findUnique: jest.fn() as MockFn,
-      findFirst: jest.fn() as MockFn
+      findFirst: jest.fn() as MockFn,
+      update: jest.fn() as MockFn
     },
     messageAudioTranscription: {
       upsert: jest.fn() as MockFn,
@@ -1389,10 +1390,14 @@ describe('MessageTranslationService - Audio Translation Handling', () => {
     extendedMockPrisma.messageAttachment.findUnique.mockResolvedValue({
       id: 'attach-123',
       messageId: 'msg-audio-123',
+      duration: 3500,
+      translations: null
+    });
+    extendedMockPrisma.messageAttachment.update.mockResolvedValue({
+      id: 'attach-123',
+      messageId: 'msg-audio-123',
       duration: 3500
     });
-    extendedMockPrisma.messageAudioTranscription.upsert.mockResolvedValue({ id: 'trans-123' });
-    extendedMockPrisma.messageTranslatedAudio.upsert.mockResolvedValue({ id: 'audio-trans-123' });
 
     translationService.on('audioTranslationReady', (data) => {
       expect(data.taskId).toBe('audio-task-123');
@@ -1479,9 +1484,14 @@ describe('MessageTranslationService - Audio Translation Handling', () => {
     extendedMockPrisma.messageAttachment.findUnique.mockResolvedValue({
       id: 'attach-profile',
       messageId: 'msg-profile',
+      duration: 3000,
+      translations: null
+    });
+    extendedMockPrisma.messageAttachment.update.mockResolvedValue({
+      id: 'attach-profile',
+      messageId: 'msg-profile',
       duration: 3000
     });
-    extendedMockPrisma.messageAudioTranscription.upsert.mockResolvedValue({ id: 'trans-profile' });
     extendedMockPrisma.userVoiceModel.upsert.mockResolvedValue({ userId: 'user-voice-123' });
 
     translationService.on('audioTranslationReady', () => {

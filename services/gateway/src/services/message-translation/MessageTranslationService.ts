@@ -338,7 +338,7 @@ export class MessageTranslationService extends EventEmitter {
       const startTime = Date.now();
       
       if (!this.zmqClient) {
-        logger.error('[GATEWAY] ❌ ZMQ Client non disponible pour les traductions');
+        logger.error('❌ ZMQ Client non disponible pour les traductions');
         return;
       }
       
@@ -817,7 +817,7 @@ export class MessageTranslationService extends EventEmitter {
         const speakersInfo = data.transcription.speakerAnalysis
           ? data.transcription.speakerAnalysis.speakers.map((sp: any) => `${sp.sid}(primary=${sp.isPrimary}, score=${sp.voiceSimilarityScore})`).join(', ')
           : 'N/A';
-        logger.info(`🎤 [GATEWAY] Diarisation: ${data.transcription.speakerCount} locuteur(s) | primary=${data.transcription.primarySpeakerId} | senderIdentified=${data.transcription.senderVoiceIdentified} | senderSpeaker=${data.transcription.senderSpeakerId} | speakers=[${speakersInfo}]`);
+        logger.info(`🎤 Diarisation: ${data.transcription.speakerCount} locuteur(s) | primary=${data.transcription.primarySpeakerId} | senderIdentified=${data.transcription.senderVoiceIdentified} | senderSpeaker=${data.transcription.senderSpeakerId} | speakers=[${speakersInfo}]`);
       }
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
@@ -900,7 +900,7 @@ export class MessageTranslationService extends EventEmitter {
       // Log confirmation sauvegarde speakers en BDD
       if (transcriptionData.speakerCount) {
         logger.info(
-          `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+          `💾 Sauvegarde BDD avec diarisation: ` +
           `${transcriptionData.speakerCount} speaker(s), ` +
           `primary=${transcriptionData.primarySpeakerId}, ` +
           `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +
@@ -1112,7 +1112,7 @@ export class MessageTranslationService extends EventEmitter {
       // Log confirmation sauvegarde speakers en BDD
       if (transcriptionData.speakerCount) {
         logger.info(
-          `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+          `💾 Sauvegarde BDD avec diarisation: ` +
           `${transcriptionData.speakerCount} speaker(s), ` +
           `primary=${transcriptionData.primarySpeakerId}, ` +
           `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +
@@ -1251,7 +1251,7 @@ export class MessageTranslationService extends EventEmitter {
       // Log diarisation si présente
       if (transcriptionData.speakerCount) {
         logger.info(
-          `💾 [GATEWAY] Transcription avec diarisation: ` +
+          `💾 Transcription avec diarisation: ` +
           `${transcriptionData.speakerCount} speaker(s), ` +
           `primary=${transcriptionData.primarySpeakerId}, ` +
           `sender_identified=${transcriptionData.senderVoiceIdentified}`
@@ -1650,7 +1650,7 @@ export class MessageTranslationService extends EventEmitter {
         // Log confirmation sauvegarde speakers en BDD
         if (transcriptionData && transcriptionData.speakerCount) {
           logger.info(
-            `💾 [GATEWAY] Sauvegarde BDD avec diarisation: ` +
+            `💾 Sauvegarde BDD avec diarisation: ` +
             `${transcriptionData.speakerCount} speaker(s), ` +
             `primary=${transcriptionData.primarySpeakerId}, ` +
             `sender_identified=${transcriptionData.senderVoiceIdentified}, ` +

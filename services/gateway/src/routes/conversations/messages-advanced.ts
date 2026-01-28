@@ -196,7 +196,7 @@ export function registerMessagesAdvancedRoutes(
         logger.info(`Processing tracking links in edited message messageId=${messageId}`);
 
       try {
-        logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         logger.info(`Processing tracking links in edited message messageId=${messageId}`);
         const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
           content: content.trim(),
@@ -208,10 +208,10 @@ export function registerMessagesAdvancedRoutes(
         logger.info(`Edit - Processed content after links processedContent=${processedContent}`);
 
         if (trackingLinks.length > 0) {
-          logger.info(`[GATEWAY] ✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
+          logger.info(`✅ ${trackingLinks.length} tracking link(s) created/reused in edited message`);
         }
       } catch (linkError) {
-        logger.error('[GATEWAY] Error processing tracking links in edit', linkError);
+        logger.error('Error processing tracking links in edit', linkError);
         // Continue with unprocessed content if tracking links fail
       }
 
@@ -258,12 +258,12 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      logger.info('[GATEWAY] ===== POST MESSAGE UPDATE - BEFORE MENTIONS =====');
+      logger.info('===== POST MESSAGE UPDATE - BEFORE MENTIONS =====');
       logger.info(`Message updated successfully, ID messageId=${messageId}`);
       // ÉTAPE: Traitement des mentions @username lors de l'édition
-      logger.info('[GATEWAY] ===== STARTING MENTION PROCESSING BLOCK =====');
+      logger.info('===== STARTING MENTION PROCESSING BLOCK =====');
       try {
-        logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const mentionService = (fastify as any).mentionService;
         logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
 
@@ -278,13 +278,13 @@ export function registerMessagesAdvancedRoutes(
           // Extraire les nouvelles mentions du contenu traité (avec tracking links déjà remplacés)
           const mentionedUsernames = mentionService.extractMentions(processedContent);
           logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
-          logger.info('[GATEWAY] Edit - Mentions extracted:', mentionedUsernames);
-          logger.info('[GATEWAY] Edit - Number of mentions:', mentionedUsernames.length);
+          logger.info('Edit - Mentions extracted:', mentionedUsernames);
+          logger.info('Edit - Number of mentions:', mentionedUsernames.length);
 
           if (mentionedUsernames.length > 0) {
             // Résoudre les usernames en utilisateurs réels
             const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            logger.info('[GATEWAY] UserMap size:', userMap.size);
+            logger.info('UserMap size:', userMap.size);
             const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
 
             if (mentionedUserIds.length > 0) {
@@ -294,7 +294,7 @@ export function registerMessagesAdvancedRoutes(
                 mentionedUserIds,
                 userId
               );
-              logger.info(`[GATEWAY] Validation result: isValid=${validationResult.isValid}, validUserIdsCount=${validationResult.validUserIds.length}`);
+              logger.info(`Validation result: isValid=${validationResult.isValid}, validUserIdsCount=${validationResult.validUserIds.length}`);
 
               if (validationResult.validUserIds.length > 0) {
                 // Créer les nouvelles entrées de mention
@@ -308,7 +308,7 @@ export function registerMessagesAdvancedRoutes(
                   .filter(([_, user]) => validationResult.validUserIds.includes(user.id))
                   .map(([username, _]) => username);
 
-                logger.info('[GATEWAY] Mise à jour avec validatedMentions:', validatedUsernames);
+                logger.info('Mise à jour avec validatedMentions:', validatedUsernames);
 
                 // Mettre à jour le message avec les usernames validés
                 await prisma.message.update({
@@ -319,8 +319,8 @@ export function registerMessagesAdvancedRoutes(
                 // IMPORTANT: Mettre à jour l'objet en mémoire
                 updatedMessage.validatedMentions = validatedUsernames;
 
-                logger.info(`[GATEWAY] ✅ ${validationResult.validUserIds.length} mention(s) mise(s) à jour`);
-                logger.info(`[GATEWAY] updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
+                logger.info(`✅ ${validationResult.validUserIds.length} mention(s) mise(s) à jour`);
+                logger.info(`updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
 
                 // Déclencher les notifications de mention pour les utilisateurs mentionnés
                 const notificationService = (fastify as any).notificationService;
@@ -366,16 +366,16 @@ export function registerMessagesAdvancedRoutes(
                           },
                           memberIds
                         );
-                        logger.info(`[GATEWAY] 📩 ${count} notifications de mention créées en batch`);
+                        logger.info(`📩 ${count} notifications de mention créées en batch`);
                       }
                     }
                   } catch (notifError) {
-                    logger.error('[GATEWAY] Erreur notifications mentions', notifError);
+                    logger.error('Erreur notifications mentions', notifError);
                   }
                 }
               }
             } else {
-              logger.info('[GATEWAY] Aucun utilisateur trouvé pour les mentions');
+              logger.info('Aucun utilisateur trouvé pour les mentions');
               // Mettre à jour avec un tableau vide
               await prisma.message.update({
                 where: { id: messageId },
@@ -384,7 +384,7 @@ export function registerMessagesAdvancedRoutes(
               updatedMessage.validatedMentions = [];
             }
           } else {
-            logger.info('[GATEWAY] Aucune mention dans le message édité');
+            logger.info('Aucune mention dans le message édité');
             // Mettre à jour avec un tableau vide
             await prisma.message.update({
               where: { id: messageId },
@@ -393,7 +393,7 @@ export function registerMessagesAdvancedRoutes(
             updatedMessage.validatedMentions = [];
           }
         } else {
-          logger.warn('[GATEWAY] Edit - MentionService NOT AVAILABLE - mentions will not be processed!');
+          logger.warn('Edit - MentionService NOT AVAILABLE - mentions will not be processed!');
           // Clear mentions if service not available
           await prisma.message.update({
             where: { id: messageId },
@@ -402,8 +402,8 @@ export function registerMessagesAdvancedRoutes(
           updatedMessage.validatedMentions = [];
         }
       } catch (mentionError) {
-        logger.error('[GATEWAY] Edit - Error processing mentions', mentionError);
-        logger.error('[GATEWAY] Edit - Stack trace', mentionError.stack);
+        logger.error('Edit - Error processing mentions', mentionError);
+        logger.error('Edit - Stack trace', mentionError.stack);
         // Ne pas faire échouer l'édition si les mentions échouent
         // Clear mentions on error to avoid stale data
         try {
@@ -413,13 +413,13 @@ export function registerMessagesAdvancedRoutes(
           });
           updatedMessage.validatedMentions = [];
         } catch (e) {
-          logger.error('[GATEWAY] Edit - Error clearing mentions', e);
+          logger.error('Edit - Error clearing mentions', e);
         }
       }
 
       // Déclencher la retraduction automatique du message modifié
       try {
-        logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService: MessageTranslationService = (fastify as any).translationService;
 
@@ -440,10 +440,10 @@ export function registerMessagesAdvancedRoutes(
 
         // Déclencher la retraduction via la méthode privée existante
         await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
-        logger.info(`[GATEWAY] Edit - Retranslation queued for message ${messageId}`);
+        logger.info(`Edit - Retranslation queued for message ${messageId}`);
 
       } catch (translationError) {
-        logger.error('[GATEWAY] Erreur lors de la retraduction', translationError);
+        logger.error('Erreur lors de la retraduction', translationError);
         // Ne pas faire échouer l'édition si la retraduction échoue
       }
 
@@ -462,16 +462,16 @@ export function registerMessagesAdvancedRoutes(
         meta: { conversationStats: stats }
       };
 
-      logger.info(`[GATEWAY] Edit - Response includes ${(updatedMessage.validatedMentions || []).length} validated mentions`);
+      logger.info(`Edit - Response includes ${(updatedMessage.validatedMentions || []).length} validated mentions`);
 
       // Diffuser la mise à jour via Socket.IO
       try {
-        logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = `conversation_${conversationId}`;
           (socketIOManager as any).io.to(room).emit('message:edited', messageResponse);
-          logger.info(`[GATEWAY] Edit - Broadcasted message:edited to room ${room}`);
+          logger.info(`Edit - Broadcasted message:edited to room ${room}`);
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
@@ -484,7 +484,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error updating message', error);
+      logger.error('Error updating message', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la modification du message'
@@ -638,7 +638,7 @@ export function registerMessagesAdvancedRoutes(
 
       // Diffuser la suppression via Socket.IO
       try {
-        logger.info('[GATEWAY] ===== ENTERED TRY BLOCK FOR MENTIONS =====');
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = `conversation_${conversationId}`;
@@ -658,7 +658,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error deleting message', error);
+      logger.error('Error deleting message', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la suppression du message'
@@ -804,7 +804,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error updating message', error);
+      logger.error('Error updating message', error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la modification du message'
@@ -942,7 +942,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error fetching conversation reactions', error);
+      logger.error('Error fetching conversation reactions', error);
       return reply.status(500).send({
         success: false,
         error: 'Error retrieving reactions'
@@ -1085,7 +1085,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
     } catch (error) {
-      logger.error('[GATEWAY] Error fetching conversation statuses', error);
+      logger.error('Error fetching conversation statuses', error);
       return reply.status(500).send({
         success: false,
         error: 'Error retrieving statuses'

@@ -161,7 +161,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[GATEWAY] Error in register:', error);
+      console.error('Error in register:', error);
 
       if (error instanceof Error) {
         const errorMessage = error.message;
@@ -299,7 +299,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         data: result
       });
     } catch (error) {
-      console.error('[GATEWAY] Error checking availability:', error);
+      console.error('Error checking availability:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'
@@ -319,7 +319,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         data: { message: 'Database initialized successfully' }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error during forced initialization:', error);
+      console.error('Error during forced initialization:', error);
       return reply.status(500).send({
         success: false,
         error: 'Failed to initialize database'
