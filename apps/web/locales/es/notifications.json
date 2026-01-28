@@ -1,5 +1,6 @@
 {
   "notifications": {
+    "pageTitle": "Notificaciones",
     "title": "Notificaciones",
     "empty": "Sin notificaciones",
     "emptyUnread": "¡Al día! Sin notificaciones sin leer.",
@@ -23,10 +24,16 @@
       "clearAll": "Borrar todo",
       "all": "Todas",
       "read": "Leídas",
-      "unread": "Sin leer"
+      "unread": "Sin leer",
+      "new_message": "Mensajes",
+      "friend_request": "Solicitudes de amistad",
+      "missed_call": "Llamadas perdidas",
+      "system": "Sistema",
+      "conversation": "Conversaciones"
     },
     "types": {
       "new_message": "Nuevo mensaje",
+      "message": "Mensaje",
       "message_reply": "Respuesta",
       "user_mentioned": "Mención",
       "message_reaction": "Reacción",
@@ -70,7 +77,14 @@
       "join": "Unirse",
       "callBack": "Devolver llamada",
       "view": "Ver",
-      "reply": "Responder"
+      "reply": "Responder",
+      "select": "Seleccionar"
+    },
+    "unreadCount": {
+      "single": "{count} sin leer de {total}",
+      "plural": "{count} sin leer de {total}",
+      "allRead": "Todas tus {total} notificación{plural} están leídas",
+      "empty": "No tienes notificaciones"
     },
     "timestamps": {
       "justNow": "ahora mismo",

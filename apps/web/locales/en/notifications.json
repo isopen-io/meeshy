@@ -1,5 +1,6 @@
 {
   "notifications": {
+    "pageTitle": "Notifications",
     "title": "Notifications",
     "empty": "No notifications",
     "emptyUnread": "All caught up! No unread notifications.",
@@ -23,10 +24,16 @@
       "clearAll": "Clear all",
       "all": "All",
       "read": "Read",
-      "unread": "Unread"
+      "unread": "Unread",
+      "new_message": "Messages",
+      "friend_request": "Friend requests",
+      "missed_call": "Missed calls",
+      "system": "System",
+      "conversation": "Conversations"
     },
     "types": {
       "new_message": "New message",
+      "message": "Message",
       "message_reply": "Reply",
       "user_mentioned": "Mention",
       "message_reaction": "Reaction",
@@ -70,7 +77,14 @@
       "join": "Join",
       "callBack": "Call Back",
       "view": "View",
-      "reply": "Reply"
+      "reply": "Reply",
+      "select": "Select"
+    },
+    "unreadCount": {
+      "single": "{count} unread of {total}",
+      "plural": "{count} unread of {total}",
+      "allRead": "All your {total} notification{plural} are read",
+      "empty": "You have no notifications"
     },
     "timestamps": {
       "justNow": "just now",
