@@ -104,7 +104,7 @@ interface ConversationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
-  currentUser: any; // User from shared/types
+  currentUser?: any; // User from shared/types - optionnel pour compatibilité
   messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
   onConversationUpdate?: (conversation: Conversation) => void;
@@ -130,12 +130,21 @@ export function ConversationSettingsModal({
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Utilisateur factice si currentUser n'est pas fourni (pour compatibilité avec anciens appels)
+  const safeCurrentUser = currentUser || {
+    id: '',
+    username: '',
+    email: '',
+    role: 'MEMBER' as any,
+    systemLanguage: 'en'
+  };
+
   // Hooks pour les stats et la gestion des participants
-  const { isAdmin, canModifyImage } = useParticipantManagement(conversation, currentUser);
+  const { isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
   const { messageLanguageStats, activeLanguageStats, activeUsers } = useConversationStats(
     conversation,
     messages,
-    currentUser
+    safeCurrentUser
   );
 
   // Déterminer si l'utilisateur peut accéder aux paramètres admin
@@ -646,7 +655,7 @@ export function ConversationSettingsModal({
                               </Tooltip>
                             </TooltipProvider>
                           </div>
-                          <TagsManager conversationId={conversation.id} currentUser={currentUser} />
+                          <TagsManager conversationId={conversation.id} currentUser={safeCurrentUser} />
                         </div>
 
                         {/* Catégorie personnelle */}
@@ -667,12 +676,12 @@ export function ConversationSettingsModal({
                               </Tooltip>
                             </TooltipProvider>
                           </div>
-                          <CategorySelector conversationId={conversation.id} currentUser={currentUser} />
+                          <CategorySelector conversationId={conversation.id} currentUser={safeCurrentUser} />
                         </div>
 
                         {/* Personnalisation avancée */}
                         <div className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/30">
-                          <CustomizationManager conversationId={conversation.id} currentUser={currentUser} />
+                          <CustomizationManager conversationId={conversation.id} currentUser={safeCurrentUser} />
                         </div>
                       </div>
                     </Suspense>
@@ -697,7 +706,7 @@ export function ConversationSettingsModal({
                           <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
                             <SidebarLanguageHeader
                               languageStats={messageLanguageStats}
-                              userLanguage={currentUser.systemLanguage}
+                              userLanguage={safeCurrentUser.systemLanguage}
                             />
                           </div>
                         )}
