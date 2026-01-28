@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { authManager } from '@/services/auth-manager.service';
+import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import {
   useUserPreferencesStore,
@@ -104,45 +105,26 @@ export function EncryptionSettings() {
   const generateKeys = async () => {
     setGeneratingKeys(true);
     try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        toast.error(t('encryption.errors.notAuthenticated'));
-        return;
-      }
+      // Generate Signal Protocol keys
+      const response = await apiService.post('/signal/keys', {});
 
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/users/me/encryption-keys`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
+      if (response.success) {
+        // Refresh user data to get updated Signal keys
+        const userResponse = await apiService.get('/auth/me');
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          // Refresh user data to get updated Signal keys
-          const userResponse = await fetch(`${API_CONFIG.getApiUrl()}/auth/me`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            if (userData.success && userData.data?.user) {
-              useAuthStore.getState().setUser(userData.data.user);
-            }
-          }
-
-          toast.success(t('encryption.status.keysGenerated'));
+        if (userResponse.success && userResponse.data?.data?.user) {
+          useAuthStore.getState().setUser(userResponse.data.data.user);
         }
-      } else {
-        const error = await response.json();
-        toast.error(error.error || t('encryption.errors.generateFailed'));
+
+        toast.success(t('encryption.status.keysGenerated'));
       }
     } catch (error) {
       console.error('Error generating keys:', error);
-      toast.error(t('encryption.errors.networkError'));
+      if (error instanceof Error) {
+        toast.error(error.message || t('encryption.errors.generateFailed'));
+      } else {
+        toast.error(t('encryption.errors.networkError'));
+      }
     } finally {
       setGeneratingKeys(false);
     }
