@@ -1,382 +1,388 @@
 /**
- * Tests for notification-helpers utility
+ * Tests pour notification-helpers - Structure Groupée V2
+ * Valide buildNotificationTitle, buildNotificationContent et autres helpers
  */
 
 import {
-  NOTIFICATION_ICONS,
-  getNotificationIcon,
-  getNotificationBorderColor,
-  formatNotificationTimestamp,
-  formatNotificationContext,
-  formatMessagePreview,
-  getNotificationLink,
-  requiresUserAction,
-  getSenderDisplayName,
   buildNotificationTitle,
   buildNotificationContent,
-} from '../../utils/notification-helpers';
-import { NotificationTypeEnum, type Notification } from '../../types/notification';
+  getNotificationIcon,
+  formatNotificationContext,
+  getNotificationLink,
+  requiresUserAction,
+  getActorDisplayName,
+} from '@/utils/notification-helpers';
+import { NotificationTypeEnum } from '@/types/notification';
+import type { Notification } from '@/types/notification';
 
-describe('notification-helpers', () => {
-  const createMockNotification = (overrides: Partial<Notification> = {}): Notification => ({
-    id: 'notif-123',
-    userId: 'user-123',
-    type: NotificationTypeEnum.NEW_MESSAGE,
-    title: 'Test Notification',
-    content: 'Test content',
-    priority: 'normal',
-    isRead: false,
-    createdAt: new Date(),
-    ...overrides,
+describe('notification-helpers - Structure Groupée V2', () => {
+  describe('getActorDisplayName', () => {
+    it('devrait retourner le displayName si disponible', () => {
+      const actor = {
+        id: 'user_123',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: null,
+      };
+
+      expect(getActorDisplayName(actor)).toBe('Alice Martin');
+    });
+
+    it('devrait retourner le username si pas de displayName', () => {
+      const actor = {
+        id: 'user_123',
+        username: 'alice',
+        displayName: null,
+        avatar: null,
+      };
+
+      expect(getActorDisplayName(actor)).toBe('alice');
+    });
+
+    it('devrait retourner le fallback si pas d\'actor', () => {
+      expect(getActorDisplayName(undefined)).toBe('Un utilisateur');
+    });
   });
 
-  describe('NOTIFICATION_ICONS', () => {
-    it('should have icons for core notification types', () => {
-      // Only test the core types that are defined in NOTIFICATION_ICONS
-      const coreTypes = [
-        NotificationTypeEnum.NEW_MESSAGE,
-        NotificationTypeEnum.MESSAGE_REPLY,
-        NotificationTypeEnum.USER_MENTIONED,
-        NotificationTypeEnum.MESSAGE_REACTION,
-        NotificationTypeEnum.CONTACT_REQUEST,
-        NotificationTypeEnum.CONTACT_ACCEPTED,
-        NotificationTypeEnum.NEW_CONVERSATION_DIRECT,
-        NotificationTypeEnum.NEW_CONVERSATION_GROUP,
-        NotificationTypeEnum.MEMBER_JOINED,
-        NotificationTypeEnum.MISSED_CALL,
-        NotificationTypeEnum.SYSTEM,
-      ];
-      coreTypes.forEach(type => {
-        expect(NOTIFICATION_ICONS[type]).toBeDefined();
-        expect(NOTIFICATION_ICONS[type]).toHaveProperty('emoji');
-        expect(NOTIFICATION_ICONS[type]).toHaveProperty('color');
-        expect(NOTIFICATION_ICONS[type]).toHaveProperty('bgColor');
+  describe('buildNotificationTitle', () => {
+    const createNotification = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'notif_123',
+      userId: 'user_recipient',
+      type: NotificationTypeEnum.NEW_MESSAGE,
+      priority: 'normal',
+      content: 'Test content',
+      actor: {
+        id: 'user_sender',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: null,
+      },
+      context: {
+        conversationId: 'conv_123',
+        conversationTitle: 'Team Chat',
+      },
+      metadata: {},
+      state: {
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+      },
+      delivery: {
+        emailSent: false,
+        pushSent: false,
+      },
+      ...overrides,
+    });
+
+    it('devrait construire le title pour NEW_MESSAGE avec actor', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
       });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Message de Alice Martin');
+    });
+
+    it('devrait construire le title pour USER_MENTIONED', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.USER_MENTIONED,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Alice Martin vous a cité');
+    });
+
+    it('devrait construire le title pour MESSAGE_REACTION', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.MESSAGE_REACTION,
+        metadata: {
+          reactionEmoji: '👍',
+        },
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Alice Martin a réagi à votre message');
+    });
+
+    it('devrait construire le title pour MISSED_CALL', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.MISSED_CALL,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toContain('Appel manqué');
+      expect(title).toContain('Alice Martin');
+    });
+
+    it('devrait construire le title pour CONTACT_REQUEST', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.CONTACT_REQUEST,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Alice Martin veut se connecter');
+    });
+
+    it('devrait construire le title pour CONTACT_ACCEPTED', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.CONTACT_ACCEPTED,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Alice Martin a accepté votre invitation');
+    });
+
+    it('devrait construire le title pour NEW_CONVERSATION_GROUP', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.NEW_CONVERSATION_GROUP,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Invitation de Alice Martin');
+    });
+
+    it('devrait construire le title pour MEMBER_JOINED', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.MEMBER_JOINED,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Nouveau membre dans Team Chat');
+    });
+
+    it('devrait construire le title pour SYSTEM', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.SYSTEM,
+        actor: undefined, // Pas d'actor pour notifications système
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toBe('Notification système');
+    });
+
+    it('devrait gérer les notifications sans actor avec fallback', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: undefined,
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toContain('Un utilisateur');
+    });
+
+    it('devrait utiliser username si pas de displayName', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: {
+          id: 'user_123',
+          username: 'alice',
+          displayName: null,
+          avatar: null,
+        },
+      });
+
+      const title = buildNotificationTitle(notification);
+      expect(title).toContain('alice');
+    });
+  });
+
+  describe('buildNotificationContent', () => {
+    const createNotification = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'notif_123',
+      userId: 'user_recipient',
+      type: NotificationTypeEnum.NEW_MESSAGE,
+      priority: 'normal',
+      content: 'This is the notification content',
+      actor: {
+        id: 'user_sender',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: null,
+      },
+      context: {},
+      metadata: {},
+      state: {
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+      },
+      delivery: {
+        emailSent: false,
+        pushSent: false,
+      },
+      ...overrides,
+    });
+
+    it('devrait retourner le content de la notification', () => {
+      const notification = createNotification({
+        content: 'Hey comment ça va?',
+      });
+
+      const content = buildNotificationContent(notification);
+      expect(content).toBe('Hey comment ça va?');
+    });
+
+    it('devrait retourner chaîne vide si pas de content', () => {
+      const notification = createNotification({
+        content: '',
+      });
+
+      const content = buildNotificationContent(notification);
+      expect(content).toBe('');
+    });
+
+    it('devrait gérer le content undefined', () => {
+      const notification = createNotification({
+        content: undefined as any,
+      });
+
+      const content = buildNotificationContent(notification);
+      expect(content).toBe('');
     });
   });
 
   describe('getNotificationIcon', () => {
-    it('should return icon for NEW_MESSAGE type', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.NEW_MESSAGE });
+    it('devrait retourner l\'icône pour NEW_MESSAGE', () => {
+      const notification = { type: NotificationTypeEnum.NEW_MESSAGE } as Notification;
       const icon = getNotificationIcon(notification);
-      expect(icon.emoji).toBeDefined();
+      expect(icon).toEqual({
+        emoji: '💬',
+        bgColor: 'bg-blue-50',
+        color: 'text-blue-600',
+      });
     });
 
-    it('should return icon for CONTACT_REQUEST type', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.CONTACT_REQUEST });
+    it('devrait retourner l\'icône pour USER_MENTIONED', () => {
+      const notification = { type: NotificationTypeEnum.USER_MENTIONED } as Notification;
       const icon = getNotificationIcon(notification);
-      expect(icon.emoji).toBeDefined();
+      expect(icon).toEqual({
+        emoji: '@',
+        bgColor: 'bg-orange-50',
+        color: 'text-orange-600',
+      });
     });
 
-    it('should return SYSTEM icon for unknown type', () => {
-      const notification = createMockNotification({ type: 'unknown' as any });
+    it('devrait retourner l\'icône pour MISSED_CALL', () => {
+      const notification = { type: NotificationTypeEnum.MISSED_CALL } as Notification;
       const icon = getNotificationIcon(notification);
-      expect(icon).toEqual(NOTIFICATION_ICONS[NotificationTypeEnum.SYSTEM]);
-    });
-  });
-
-  describe('getNotificationBorderColor', () => {
-    it('should return blue border for NEW_MESSAGE', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.NEW_MESSAGE });
-      const color = getNotificationBorderColor(notification);
-      expect(color).toContain('blue');
+      expect(icon).toEqual({
+        emoji: '📞',
+        bgColor: 'bg-red-50',
+        color: 'text-red-600',
+      });
     });
 
-    it('should return green border for CONTACT_REQUEST', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.CONTACT_REQUEST });
-      const color = getNotificationBorderColor(notification);
-      expect(color).toContain('green');
-    });
-
-    it('should return red border for MISSED_CALL', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.MISSED_CALL });
-      const color = getNotificationBorderColor(notification);
-      expect(color).toContain('red');
-    });
-
-    it('should return default color for unknown type', () => {
-      const notification = createMockNotification({ type: 'unknown' as any });
-      const color = getNotificationBorderColor(notification);
-      expect(color).toContain('blue');
-    });
-  });
-
-  describe('formatNotificationTimestamp', () => {
-    it('should return "a l\'instant" for very recent timestamps', () => {
-      const now = new Date();
-      const result = formatNotificationTimestamp(now);
-      expect(result).toContain('instant');
-    });
-
-    it('should return seconds ago for less than a minute', () => {
-      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-      const result = formatNotificationTimestamp(thirtySecondsAgo);
-      expect(result).toMatch(/il y a \d+s/);
-    });
-
-    it('should return minutes ago for less than an hour', () => {
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-      const result = formatNotificationTimestamp(thirtyMinutesAgo);
-      expect(result).toMatch(/il y a \d+min/);
-    });
-
-    it('should return hours ago for less than a day', () => {
-      const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
-      const result = formatNotificationTimestamp(fiveHoursAgo);
-      expect(result).toMatch(/il y a \d+h/);
-    });
-
-    it('should return days ago for less than a week', () => {
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-      const result = formatNotificationTimestamp(threeDaysAgo);
-      expect(result).toMatch(/il y a \d+j/);
-    });
-
-    it('should return formatted date for more than a week', () => {
-      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-      const result = formatNotificationTimestamp(twoWeeksAgo);
-      // Should be a date format like "4 nov."
-      expect(result).toMatch(/\d+/);
-    });
-
-    it('should accept string date input', () => {
-      const dateString = new Date().toISOString();
-      const result = formatNotificationTimestamp(dateString);
-      expect(result).toContain('instant');
+    it('devrait retourner l\'icône par défaut pour type inconnu', () => {
+      const notification = { type: 'UNKNOWN_TYPE' as any } as Notification;
+      const icon = getNotificationIcon(notification);
+      expect(icon).toEqual({
+        emoji: '🔔',
+        bgColor: 'bg-gray-50',
+        color: 'text-gray-600',
+      });
     });
   });
 
   describe('formatNotificationContext', () => {
-    it('should include conversation title when present', () => {
-      const notification = createMockNotification({
-        context: { conversationTitle: 'Test Conversation' },
-      });
-      const result = formatNotificationContext(notification);
-      expect(result).toContain('Test Conversation');
+    it('devrait formater une date récente', () => {
+      const now = new Date();
+      const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+
+      const notification = {
+        state: {
+          createdAt: twoMinutesAgo,
+          isRead: false,
+          readAt: null,
+        },
+      } as Notification;
+
+      const context = formatNotificationContext(notification);
+      expect(context).toContain('il y a');
     });
 
-    it('should include timestamp', () => {
-      const notification = createMockNotification();
-      const result = formatNotificationContext(notification);
-      expect(result).toBeDefined();
-      expect(result.length).toBeGreaterThan(0);
-    });
+    it('devrait gérer une date très ancienne', () => {
+      const oldDate = new Date('2020-01-01');
 
-    it('should handle missing context', () => {
-      const notification = createMockNotification({ context: undefined });
-      const result = formatNotificationContext(notification);
-      expect(result).toBeDefined();
-    });
-  });
+      const notification = {
+        state: {
+          createdAt: oldDate,
+          isRead: false,
+          readAt: null,
+        },
+      } as Notification;
 
-  describe('formatMessagePreview', () => {
-    it('should return content when no attachments', () => {
-      const result = formatMessagePreview('Hello world', []);
-      expect(result).toBe('Hello world');
-    });
-
-    it('should return content when attachments undefined', () => {
-      const result = formatMessagePreview('Hello world');
-      expect(result).toBe('Hello world');
-    });
-
-    it('should return photo indicator for image attachments', () => {
-      const attachments = [{ mimeType: 'image/jpeg' }];
-      const result = formatMessagePreview('', attachments);
-      expect(result).toContain('Photo');
-    });
-
-    it('should return file indicator for non-image attachments', () => {
-      const attachments = [{ mimeType: 'application/pdf' }];
-      const result = formatMessagePreview('', attachments);
-      expect(result).toContain('Fichier');
-    });
-
-    it('should show count for multiple attachments', () => {
-      const attachments = [
-        { mimeType: 'image/jpeg' },
-        { mimeType: 'image/png' },
-        { mimeType: 'image/gif' },
-      ];
-      const result = formatMessagePreview('', attachments);
-      expect(result).toContain('(3)');
+      const context = formatNotificationContext(notification);
+      expect(context).toBeTruthy();
     });
   });
 
   describe('getNotificationLink', () => {
-    it('should return conversation link when conversationId exists', () => {
-      const notification = createMockNotification({
-        context: { conversationId: 'conv-123' },
-      });
-      const link = getNotificationLink(notification);
-      expect(link).toBe('/conversations/conv-123');
+    const createNotification = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'notif_123',
+      userId: 'user_recipient',
+      type: NotificationTypeEnum.NEW_MESSAGE,
+      priority: 'normal',
+      content: 'Test',
+      actor: undefined,
+      context: {},
+      metadata: {},
+      state: {
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+      },
+      delivery: {
+        emailSent: false,
+        pushSent: false,
+      },
+      ...overrides,
     });
 
-    it('should include messageId in link when present', () => {
-      const notification = createMockNotification({
-        context: { conversationId: 'conv-123', messageId: 'msg-456' },
+    it('devrait retourner le lien vers la conversation pour NEW_MESSAGE', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        context: {
+          conversationId: 'conv_123',
+          messageId: 'msg_456',
+        },
       });
+
       const link = getNotificationLink(notification);
-      expect(link).toBe('/conversations/conv-123?messageId=msg-456');
+      expect(link).toBe('/conversations/conv_123?messageId=msg_456');
     });
 
-    it('should return null when no conversationId', () => {
-      const notification = createMockNotification({ context: undefined });
+    it('devrait retourner le lien vers la conversation sans messageId', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.USER_MENTIONED,
+        context: {
+          conversationId: 'conv_123',
+        },
+      });
+
+      const link = getNotificationLink(notification);
+      expect(link).toBe('/conversations/conv_123');
+    });
+
+    it('devrait retourner null si pas de conversationId', () => {
+      const notification = createNotification({
+        type: NotificationTypeEnum.SYSTEM_ANNOUNCEMENT,
+        context: {},
+      });
+
       const link = getNotificationLink(notification);
       expect(link).toBeNull();
     });
   });
 
   describe('requiresUserAction', () => {
-    it('should return true for CONTACT_REQUEST', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.CONTACT_REQUEST });
+    it('devrait retourner true pour CONTACT_REQUEST', () => {
+      const notification = { type: NotificationTypeEnum.CONTACT_REQUEST } as Notification;
       expect(requiresUserAction(notification)).toBe(true);
     });
 
-    it('should return false for NEW_MESSAGE', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.NEW_MESSAGE });
+    it('devrait retourner false pour NEW_MESSAGE', () => {
+      const notification = { type: NotificationTypeEnum.NEW_MESSAGE } as Notification;
       expect(requiresUserAction(notification)).toBe(false);
-    });
-
-    it('should return false for SYSTEM', () => {
-      const notification = createMockNotification({ type: NotificationTypeEnum.SYSTEM });
-      expect(requiresUserAction(notification)).toBe(false);
-    });
-  });
-
-  describe('getSenderDisplayName', () => {
-    it('should return displayName when present', () => {
-      const sender = { displayName: 'John Doe' };
-      expect(getSenderDisplayName(sender as any)).toBe('John Doe');
-    });
-
-    it('should return firstName lastName when displayName missing', () => {
-      const sender = { firstName: 'John', lastName: 'Doe' };
-      expect(getSenderDisplayName(sender as any)).toBe('John Doe');
-    });
-
-    it('should return username as fallback', () => {
-      const sender = { username: 'johndoe' };
-      expect(getSenderDisplayName(sender as any)).toBe('johndoe');
-    });
-
-    it('should return default for undefined sender', () => {
-      expect(getSenderDisplayName(undefined)).toBe('Un utilisateur');
-    });
-  });
-
-  describe('buildNotificationTitle', () => {
-    describe('without translation function', () => {
-      it('should build NEW_MESSAGE title', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.NEW_MESSAGE,
-          sender: { displayName: 'John' } as any,
-        });
-        const title = buildNotificationTitle(notification);
-        expect(title).toContain('Message de');
-        expect(title).toContain('John');
-      });
-
-      it('should build CONTACT_REQUEST title', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.CONTACT_REQUEST,
-          sender: { displayName: 'John' } as any,
-        });
-        const title = buildNotificationTitle(notification);
-        expect(title).toContain('connecter');
-      });
-
-      it('should build MESSAGE_REACTION title', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.MESSAGE_REACTION,
-          sender: { displayName: 'John' } as any,
-        });
-        const title = buildNotificationTitle(notification);
-        expect(title).toContain('réagi');
-      });
-
-      it('should return original title for SYSTEM type', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.SYSTEM,
-          title: 'System Update',
-        });
-        const title = buildNotificationTitle(notification);
-        expect(title).toBe('System Update');
-      });
-    });
-
-    describe('with translation function', () => {
-      const mockT = (key: string, params?: Record<string, string>) => {
-        return `translated:${key}:${JSON.stringify(params)}`;
-      };
-
-      it('should use translation for NEW_MESSAGE', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.NEW_MESSAGE,
-          sender: { displayName: 'John' } as any,
-        });
-        const title = buildNotificationTitle(notification, mockT);
-        expect(title).toContain('translated:titles.newMessage');
-      });
-
-      it('should use translation for CONTACT_REQUEST', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.CONTACT_REQUEST,
-          sender: { displayName: 'John' } as any,
-        });
-        const title = buildNotificationTitle(notification, mockT);
-        expect(title).toContain('translated:titles.contactRequest');
-      });
-    });
-  });
-
-  describe('buildNotificationContent', () => {
-    describe('without translation function', () => {
-      it('should return messagePreview when present', () => {
-        const notification = createMockNotification({
-          messagePreview: 'Preview text',
-        });
-        const content = buildNotificationContent(notification);
-        expect(content).toBe('Preview text');
-      });
-
-      it('should return content when no messagePreview', () => {
-        const notification = createMockNotification({
-          messagePreview: undefined,
-          content: 'Notification content',
-        });
-        const content = buildNotificationContent(notification);
-        expect(content).toBe('Notification content');
-      });
-
-      it('should build default content for CONTACT_ACCEPTED', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.CONTACT_ACCEPTED,
-          messagePreview: undefined,
-          content: '',
-          sender: { displayName: 'John' } as any,
-        });
-        const content = buildNotificationContent(notification);
-        expect(content).toContain('John');
-        expect(content).toContain('accepté');
-      });
-    });
-
-    describe('with translation function', () => {
-      const mockT = (key: string, params?: Record<string, string>) => {
-        return `translated:${key}`;
-      };
-
-      it('should use translation for CONTACT_ACCEPTED', () => {
-        const notification = createMockNotification({
-          type: NotificationTypeEnum.CONTACT_ACCEPTED,
-          messagePreview: undefined,
-          content: '',
-          sender: { displayName: 'John' } as any,
-        });
-        const content = buildNotificationContent(notification, mockT);
-        expect(content).toContain('translated:content.contactAcceptedMessage');
-      });
     });
   });
 });

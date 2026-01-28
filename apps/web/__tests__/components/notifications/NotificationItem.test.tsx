@@ -50,16 +50,26 @@ jest.mock('next/link', () => {
   );
 });
 
-// Create mock notification
+// Create mock notification with grouped structure V2
 const createMockNotification = (overrides = {}) => ({
   id: 'notif-123',
   type: NotificationTypeEnum.NEW_MESSAGE,
-  isRead: false,
   priority: 'normal' as const,
-  createdAt: new Date().toISOString(),
-  metadata: {},
+  content: 'Notification content',
+
+  // Structure groupée V2
+  actor: null,
   context: {},
-  sender: null,
+  metadata: {},
+  state: {
+    isRead: false,
+    readAt: null,
+    createdAt: new Date(),
+  },
+  delivery: {
+    emailSent: false,
+    pushSent: false,
+  },
   ...overrides,
 });
 
@@ -111,8 +121,8 @@ describe('NotificationItem', () => {
       expect(screen.getByText('2 minutes ago')).toBeInTheDocument();
     });
 
-    it('should render notification icon emoji when no sender', () => {
-      const notification = createMockNotification({ sender: null });
+    it('should render notification icon emoji when no actor', () => {
+      const notification = createMockNotification({ actor: null });
 
       render(<NotificationItem notification={notification} />);
 
@@ -121,12 +131,13 @@ describe('NotificationItem', () => {
     });
   });
 
-  describe('Sender Avatar', () => {
-    it('should render sender avatar when sender exists', () => {
+  describe('Actor Avatar', () => {
+    it('should render actor avatar when actor exists', () => {
       const notification = createMockNotification({
-        sender: {
+        actor: {
           id: 'user-123',
           username: 'johndoe',
+          displayName: 'John Doe',
           avatar: '/avatar.jpg',
         },
       });
@@ -139,11 +150,12 @@ describe('NotificationItem', () => {
       expect(avatar).toBeTruthy();
     });
 
-    it('should render sender initial in fallback', () => {
+    it('should render actor initial in fallback', () => {
       const notification = createMockNotification({
-        sender: {
+        actor: {
           id: 'user-123',
           username: 'johndoe',
+          displayName: 'John Doe',
           avatar: null,
         },
       });
@@ -156,7 +168,9 @@ describe('NotificationItem', () => {
 
   describe('Unread Indicator', () => {
     it('should show unread indicator for unread notifications', () => {
-      const notification = createMockNotification({ isRead: false });
+      const notification = createMockNotification({
+        state: { isRead: false, readAt: null, createdAt: new Date() },
+      });
 
       const { container } = render(<NotificationItem notification={notification} />);
 
@@ -166,7 +180,9 @@ describe('NotificationItem', () => {
     });
 
     it('should not show unread indicator for read notifications', () => {
-      const notification = createMockNotification({ isRead: true });
+      const notification = createMockNotification({
+        state: { isRead: true, readAt: new Date(), createdAt: new Date() },
+      });
 
       const { container } = render(<NotificationItem notification={notification} />);
 
@@ -176,7 +192,9 @@ describe('NotificationItem', () => {
     });
 
     it('should have different background for unread vs read', () => {
-      const unreadNotification = createMockNotification({ isRead: false });
+      const unreadNotification = createMockNotification({
+        state: { isRead: false, readAt: null, createdAt: new Date() },
+      });
 
       const { container: unreadContainer } = render(
         <NotificationItem notification={unreadNotification} />
@@ -220,7 +238,9 @@ describe('NotificationItem', () => {
       const helpers = require('@/utils/notification-helpers');
       helpers.getNotificationLink.mockReturnValue('/conversations/123');
 
-      const notification = createMockNotification({ isRead: false });
+      const notification = createMockNotification({
+        state: { isRead: false, readAt: null, createdAt: new Date() },
+      });
 
       render(
         <NotificationItem
@@ -240,7 +260,9 @@ describe('NotificationItem', () => {
       const helpers = require('@/utils/notification-helpers');
       helpers.getNotificationLink.mockReturnValue('/conversations/123');
 
-      const notification = createMockNotification({ isRead: true });
+      const notification = createMockNotification({
+        state: { isRead: true, readAt: new Date(), createdAt: new Date() },
+      });
 
       render(
         <NotificationItem
@@ -427,9 +449,10 @@ describe('NotificationItem', () => {
 
     it('should have smaller avatar in compact mode', () => {
       const notification = createMockNotification({
-        sender: {
+        actor: {
           id: 'user-123',
           username: 'johndoe',
+          displayName: 'John Doe',
           avatar: null,
         },
       });

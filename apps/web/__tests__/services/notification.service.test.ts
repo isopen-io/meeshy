@@ -1,646 +1,595 @@
 /**
- * Tests for NotificationService
- *
- * Tests notification CRUD operations, retry logic, pagination,
- * notification parsing, and wrapper class functionality
+ * Tests pour NotificationService - Structure Groupée V2
+ * Valide le parsing simplifié et la gestion des nouvelles structures
  */
 
-import { NotificationService, notificationService, Notification } from '@/services/notification.service';
+import { NotificationService } from '@/services/notification.service';
 import { apiService } from '@/services/api.service';
+import { NotificationTypeEnum } from '@/types/notification';
 
-// Mock the apiService
+// Mock apiService
 jest.mock('@/services/api.service', () => ({
   apiService: {
     get: jest.fn(),
     post: jest.fn(),
-    patch: jest.fn(),
-    put: jest.fn(),
     delete: jest.fn(),
+    patch: jest.fn(),
   },
 }));
 
-const mockApiService = apiService as jest.Mocked<typeof apiService>;
-
-describe('NotificationService', () => {
+describe('NotificationService - Structure Groupée V2', () => {
   beforeEach(() => {
-    jest.resetAllMocks();
-    // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+    jest.clearAllMocks();
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
+  describe('parseNotification - Structure Groupée', () => {
+    it('devrait parser une notification avec structure groupée complète', async () => {
+      const rawNotification = {
+        id: 'notif_message_123',
+        userId: 'user_recipient',
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        priority: 'normal',
+        content: 'Alice Martin: Hey comment ça va?',
+
+        // ACTOR - Qui a déclenché
+        actor: {
+          id: 'user_sender',
+          username: 'alice',
+          displayName: 'Alice Martin',
+          avatar: 'https://cdn.example.com/alice.jpg',
+        },
+
+        // CONTEXT - Où c'est arrivé
+        context: {
+          conversationId: 'conv_direct_123',
+          conversationTitle: 'Conversation avec Alice',
+          conversationType: 'direct',
+          messageId: 'msg_123',
+        },
+
+        // METADATA - Données type-spécifiques
+        metadata: {
+          messagePreview: 'Hey comment ça va?',
+          action: 'view_message',
+        },
+
+        // STATE - Statut lecture
+        // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
+        // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
+        isRead: false,
+        readAt: null,
+        createdAt: '2024-01-15T10:30:00Z',
+        expiresAt: null,
+
+        // DELIVERY - Suivi multi-canal
+        delivery: {
+          emailSent: false,
+          pushSent: true,
+        },
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [rawNotification],
+          pagination: {
+            offset: 0,
+            limit: 50,
+            total: 1,
+            hasMore: false,
+          },
+          unreadCount: 1,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications();
+
+      expect(response.data?.notifications).toHaveLength(1);
+
+      const notification = response.data!.notifications[0];
+
+      // CORE
+      expect(notification.id).toBe('notif_message_123');
+      expect(notification.userId).toBe('user_recipient');
+      expect(notification.type).toBe(NotificationTypeEnum.NEW_MESSAGE);
+      expect(notification.priority).toBe('normal');
+
+      // CONTENT
+      expect(notification.content).toBe('Alice Martin: Hey comment ça va?');
+
+      // ACTOR (groupé)
+      expect(notification.actor).toEqual({
+        id: 'user_sender',
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: 'https://cdn.example.com/alice.jpg',
+      });
+
+      // CONTEXT (groupé)
+      expect(notification.context).toEqual({
+        conversationId: 'conv_direct_123',
+        conversationTitle: 'Conversation avec Alice',
+        conversationType: 'direct',
+        messageId: 'msg_123',
+      });
+
+      // METADATA (groupé)
+      expect(notification.metadata).toEqual({
+        messagePreview: 'Hey comment ça va?',
+        action: 'view_message',
+      });
+
+      // STATE (groupé)
+      expect(notification.state.isRead).toBe(false);
+      expect(notification.state.readAt).toBeNull();
+      expect(notification.state.createdAt).toBeInstanceOf(Date);
+      expect(notification.state.expiresAt).toBeUndefined();
+
+      // DELIVERY (groupé)
+      expect(notification.delivery).toEqual({
+        emailSent: false,
+        pushSent: true,
+      });
+    });
+
+    it('devrait gérer les champs optionnels manquants', async () => {
+      const minimalNotification = {
+        id: 'notif_minimal',
+        userId: 'user_123',
+        type: NotificationTypeEnum.SYSTEM_ANNOUNCEMENT,
+        content: 'System message',
+        // Le backend envoie les champs à la racine
+        isRead: false,
+        createdAt: '2024-01-15T10:30:00Z',
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [minimalNotification],
+          pagination: {
+            offset: 0,
+            limit: 50,
+            total: 1,
+            hasMore: false,
+          },
+          unreadCount: 1,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications();
+      const notification = response.data!.notifications[0];
+
+      // Champs par défaut
+      expect(notification.priority).toBe('normal');
+      expect(notification.actor).toBeUndefined();
+      expect(notification.context).toEqual({});
+      expect(notification.metadata).toEqual({});
+      expect(notification.delivery).toEqual({ emailSent: false, pushSent: false });
+    });
+
+    it('devrait parser correctement les dates dans state', async () => {
+      const notificationWithDates = {
+        id: 'notif_dates',
+        userId: 'user_123',
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: 'Test message',
+        // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
+        // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
+        isRead: true,
+        readAt: '2024-01-15T11:00:00Z',
+        createdAt: '2024-01-15T10:30:00Z',
+        expiresAt: '2024-02-15T10:30:00Z',
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [notificationWithDates],
+          pagination: {
+            offset: 0,
+            limit: 50,
+            total: 1,
+            hasMore: false,
+          },
+          unreadCount: 0,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications();
+      const notification = response.data!.notifications[0];
+
+      expect(notification.state.createdAt).toBeInstanceOf(Date);
+      expect(notification.state.createdAt.toISOString()).toBe('2024-01-15T10:30:00.000Z');
+
+      expect(notification.state.readAt).toBeInstanceOf(Date);
+      expect(notification.state.readAt!.toISOString()).toBe('2024-01-15T11:00:00.000Z');
+
+      expect(notification.state.expiresAt).toBeInstanceOf(Date);
+      expect(notification.state.expiresAt!.toISOString()).toBe('2024-02-15T10:30:00.000Z');
+    });
+
+    it('devrait gérer la rétrocompatibilité avec les champs à la racine (legacy)', async () => {
+      // Si le backend envoie encore certains champs à la racine
+      const legacyNotification = {
+        id: 'notif_legacy',
+        userId: 'user_123',
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: 'Test message',
+
+        // Champs legacy à la racine (backward compat)
+        isRead: true,
+        readAt: '2024-01-15T11:00:00Z',
+        createdAt: '2024-01-15T10:30:00Z',
+
+        // Pas de state groupé
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [legacyNotification],
+          pagination: {
+            offset: 0,
+            limit: 50,
+            total: 1,
+            hasMore: false,
+          },
+          unreadCount: 0,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications();
+      const notification = response.data!.notifications[0];
+
+      // Devrait utiliser les valeurs legacy si state n'existe pas
+      expect(notification.state.isRead).toBe(true);
+      expect(notification.state.readAt).toBeInstanceOf(Date);
+      expect(notification.state.createdAt).toBeInstanceOf(Date);
+    });
   });
 
   describe('fetchNotifications', () => {
-    const mockNotificationRaw = {
-      id: 'notif-123',
-      userId: 'user-1',
-      type: 'message',
-      title: 'New Message',
-      content: 'You have a new message',
-      priority: 'normal',
-      isRead: false,
-      createdAt: '2024-01-15T10:00:00Z',
-      senderId: 'user-2',
-      senderUsername: 'johndoe',
-      conversationId: 'conv-123',
-      data: JSON.stringify({ conversationTitle: 'Team Chat' }),
-    };
-
-    it('should fetch notifications with default options', async () => {
-      mockApiService.get.mockResolvedValue({
+    it('devrait construire les query params correctement', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
         data: {
-          success: true,
-          data: {
-            notifications: [mockNotificationRaw],
-            pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
+          data: [],
+          pagination: {
+            offset: 0,
+            limit: 50,
+            total: 0,
+            hasMore: false,
           },
+          unreadCount: 0,
         },
       });
 
-      const resultPromise = NotificationService.fetchNotifications();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('/notifications?')
-      );
-      expect(result.data?.notifications).toHaveLength(1);
-      expect(result.data?.notifications[0].id).toBe('notif-123');
-      expect(result.data?.notifications[0].sender?.username).toBe('johndoe');
-    });
-
-    it('should apply filters correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: {
-          success: true,
-          data: {
-            notifications: [],
-            pagination: { offset: 0, limit: 20, total: 0, hasMore: false },
-          },
-        },
-      });
-
-      const resultPromise = NotificationService.fetchNotifications({
-        type: 'message',
+      await NotificationService.fetchNotifications({
+        offset: 10,
+        limit: 20,
+        type: NotificationTypeEnum.NEW_MESSAGE,
         isRead: false,
         priority: 'high',
-        limit: 20,
-        offset: 10,
+        conversationId: 'conv_123',
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
       });
-      await jest.runAllTimersAsync();
-      await resultPromise;
 
-      const calledUrl = mockApiService.get.mock.calls[0][0];
-      expect(calledUrl).toContain('type=message');
-      expect(calledUrl).toContain('isRead=false');
-      expect(calledUrl).toContain('priority=high');
-      expect(calledUrl).toContain('limit=20');
-      expect(calledUrl).toContain('offset=10');
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('offset=10')
+      );
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('limit=20')
+      );
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('type=new_message')
+      );
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('unreadOnly=true')
+      );
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('priority=high')
+      );
+      expect(apiService.get).toHaveBeenCalledWith(
+        expect.stringContaining('conversationId=conv_123')
+      );
     });
 
-    it('should exclude type=all from filters', async () => {
-      mockApiService.get.mockResolvedValue({
+    it('devrait gérer les dates dans les filtres', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
         data: {
-          success: true,
-          data: {
-            notifications: [],
-            pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
-          },
+          data: [],
+          pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
+          unreadCount: 0,
         },
       });
 
-      const resultPromise = NotificationService.fetchNotifications({ type: 'all' });
-      await jest.runAllTimersAsync();
-      await resultPromise;
+      const startDate = new Date('2024-01-01');
+      const endDate = new Date('2024-01-31');
 
-      const calledUrl = mockApiService.get.mock.calls[0][0];
-      expect(calledUrl).not.toContain('type=');
-    });
-
-    it('should parse JSON data field in notification', async () => {
-      const rawNotification = {
-        id: 'notif-1',
-        userId: 'user-1',
-        type: 'message',
-        title: 'Test',
-        createdAt: '2024-01-15T10:00:00Z',
-        data: '{"conversationTitle":"Team Chat","emoji":"thumbs_up"}',
-      };
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: {
-          success: true,
-          data: {
-            notifications: [rawNotification],
-            pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
-          },
-        },
+      await NotificationService.fetchNotifications({
+        startDate,
+        endDate,
       });
 
-      const resultPromise = NotificationService.fetchNotifications();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(result.data?.notifications[0].context?.conversationTitle).toBe('Team Chat');
-      expect(result.data?.notifications[0].metadata?.reactionEmoji).toBe('thumbs_up');
+      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
+      expect(callArg).toContain('startDate=2024-01-01T00');
+      expect(callArg).toContain('endDate=2024-01-31T00');
     });
 
-    it('should handle invalid JSON in data field', async () => {
-      const rawNotification = {
-        id: 'notif-1',
-        userId: 'user-1',
-        type: 'message',
-        title: 'Test',
-        createdAt: '2024-01-15T10:00:00Z',
-        data: 'invalid json {{{',
-      };
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: {
-          success: true,
-          data: {
-            notifications: [rawNotification],
-            pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
-          },
-        },
-      });
-
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      const resultPromise = NotificationService.fetchNotifications();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(consoleSpy).toHaveBeenCalled();
-      expect(result.data?.notifications).toHaveLength(1);
-
-      consoleSpy.mockRestore();
-    });
-
-    it('should return empty array on missing data', async () => {
-      mockApiService.get.mockResolvedValue({
+    it('devrait retourner une structure vide en cas de données manquantes', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
         data: null,
       });
 
-      const resultPromise = NotificationService.fetchNotifications();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
+      const response = await NotificationService.fetchNotifications();
 
-      expect(result.data?.notifications).toEqual([]);
-    });
-  });
-
-  describe('getUnreadCount', () => {
-    it('should fetch unread count', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: { count: 5 },
+      expect(response.data?.notifications).toEqual([]);
+      expect(response.data?.pagination).toEqual({
+        offset: 0,
+        limit: 50,
+        total: 0,
+        hasMore: false,
       });
-
-      const resultPromise = NotificationService.getUnreadCount();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.get).toHaveBeenCalledWith('/notifications/unread/count');
-      expect(result.data?.count).toBe(5);
-    });
-  });
-
-  describe('getCounts', () => {
-    it('should fetch detailed counts', async () => {
-      const mockCounts = {
-        total: 100,
-        unread: 25,
-        byType: {
-          message: 50,
-          system: 30,
-          user_action: 10,
-          conversation: 5,
-          translation: 5,
-        },
-        byPriority: {
-          low: 20,
-          normal: 60,
-          high: 15,
-          urgent: 5,
-        },
-      };
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: { counts: mockCounts },
-      });
-
-      const resultPromise = NotificationService.getCounts();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(result.data?.counts.total).toBe(100);
-      expect(result.data?.counts.byType.message).toBe(50);
+      expect(response.data?.unreadCount).toBe(0);
     });
   });
 
   describe('markAsRead', () => {
-    it('should mark notification as read', async () => {
-      mockApiService.patch.mockResolvedValue({
+    it('devrait marquer une notification comme lue et parser la réponse', async () => {
+      const updatedNotification = {
+        id: 'notif_123',
+        userId: 'user_123',
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: 'Test',
+        // Le backend envoie les champs à la racine
+        isRead: true,
+        readAt: '2024-01-15T11:00:00Z',
+        createdAt: '2024-01-15T10:30:00Z',
+        context: {},
+        metadata: {},
+        delivery: { emailSent: false, pushSent: false },
+      };
+
+      (apiService.post as jest.Mock).mockResolvedValue({
         success: true,
-        data: { success: true },
+        data: {
+          data: updatedNotification,
+        },
       });
 
-      const resultPromise = NotificationService.markAsRead('notif-123');
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
+      const response = await NotificationService.markAsRead('notif_123');
 
-      expect(mockApiService.patch).toHaveBeenCalledWith('/notifications/notif-123/read');
-      expect(result.data?.success).toBe(true);
+      expect(apiService.post).toHaveBeenCalledWith('/notifications/notif_123/read');
+      expect(response.data?.data.state.isRead).toBe(true);
+      expect(response.data?.data.state.readAt).toBeInstanceOf(Date);
     });
   });
 
   describe('markAllAsRead', () => {
-    it('should mark all notifications as read', async () => {
-      mockApiService.patch.mockResolvedValue({
+    it('devrait marquer toutes les notifications comme lues', async () => {
+      (apiService.post as jest.Mock).mockResolvedValue({
         success: true,
-        data: { success: true, count: 10 },
+        data: {
+          count: 5,
+        },
       });
 
-      const resultPromise = NotificationService.markAllAsRead();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
+      const response = await NotificationService.markAllAsRead();
 
-      expect(mockApiService.patch).toHaveBeenCalledWith('/notifications/read-all');
-      expect(result.data?.count).toBe(10);
+      expect(apiService.post).toHaveBeenCalledWith('/notifications/read-all');
+      expect(response.data?.count).toBe(5);
     });
   });
 
   describe('deleteNotification', () => {
-    it('should delete a notification', async () => {
-      mockApiService.delete.mockResolvedValue({
+    it('devrait supprimer une notification', async () => {
+      (apiService.delete as jest.Mock).mockResolvedValue({
         success: true,
-        data: { success: true },
       });
 
-      const resultPromise = NotificationService.deleteNotification('notif-123');
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
+      await NotificationService.deleteNotification('notif_123');
 
-      expect(mockApiService.delete).toHaveBeenCalledWith('/notifications/notif-123');
-      expect(result.data?.success).toBe(true);
+      expect(apiService.delete).toHaveBeenCalledWith('/notifications/notif_123');
     });
   });
 
-  describe('deleteAllRead', () => {
-    it('should delete all read notifications', async () => {
-      mockApiService.delete.mockResolvedValue({
-        success: true,
-        data: { success: true, count: 15 },
-      });
-
-      const resultPromise = NotificationService.deleteAllRead();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.delete).toHaveBeenCalledWith('/notifications/read');
-      expect(result.data?.count).toBe(15);
-    });
-  });
-
-  describe('getPreferences', () => {
-    it('should fetch notification preferences', async () => {
-      const mockPreferences = {
-        emailNotifications: true,
-        pushNotifications: true,
-        messageNotifications: true,
-        mentionNotifications: true,
-        muteAll: false,
-      };
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: { success: true, data: mockPreferences },
-      });
-
-      const resultPromise = NotificationService.getPreferences();
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.get).toHaveBeenCalledWith('/me/preferences/notification');
-      expect(result.data?.preferences.emailNotifications).toBe(true);
-    });
-  });
-
-  describe('updatePreferences', () => {
-    it('should update notification preferences', async () => {
-      const updatedPreferences = {
-        emailNotifications: false,
-      };
-
-      mockApiService.put.mockResolvedValue({
+  describe('getUnreadCount', () => {
+    it('devrait récupérer le nombre de notifications non lues', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
         data: {
-          success: true,
-          data: { emailNotifications: false, pushNotifications: true },
+          count: 42,
         },
       });
 
-      const resultPromise = NotificationService.updatePreferences(updatedPreferences);
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
+      const response = await NotificationService.getUnreadCount();
 
-      expect(mockApiService.put).toHaveBeenCalledWith(
-        '/me/preferences/notification',
-        updatedPreferences
-      );
-      expect(result.data?.preferences.emailNotifications).toBe(false);
-    });
-  });
-
-  describe('muteConversation', () => {
-    it('should mute a conversation', async () => {
-      mockApiService.post.mockResolvedValue({
-        success: true,
-        data: { success: true },
-      });
-
-      const resultPromise = NotificationService.muteConversation('conv-123');
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.post).toHaveBeenCalledWith('/notifications/mute', {
-        conversationId: 'conv-123',
-      });
-      expect(result.data?.success).toBe(true);
-    });
-  });
-
-  describe('unmuteConversation', () => {
-    it('should unmute a conversation', async () => {
-      mockApiService.post.mockResolvedValue({
-        success: true,
-        data: { success: true },
-      });
-
-      const resultPromise = NotificationService.unmuteConversation('conv-123');
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.post).toHaveBeenCalledWith('/notifications/unmute', {
-        conversationId: 'conv-123',
-      });
-    });
-  });
-
-  describe('Retry logic', () => {
-    it('should retry on failure and succeed', async () => {
-      mockApiService.get
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce({
-          success: true,
-          data: { count: 3 },
-        });
-
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-
-      const resultPromise = NotificationService.getUnreadCount();
-
-      // Run through retries
-      await jest.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(mockApiService.get).toHaveBeenCalledTimes(3);
-      expect(result.data?.count).toBe(3);
-      expect(consoleSpy).toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-    });
-
-    // Note: Testing max retries with fake timers is complex due to async timing.
-    // The retry logic is tested implicitly by the success case above.
-    // Manual/integration tests should verify the full retry exhaustion behavior.
-  });
-});
-
-describe('NotificationServiceWrapper', () => {
-  beforeEach(() => {
-    jest.resetAllMocks();
-    // Clear wrapper state
-    (notificationService as any).notifications = [];
-    (notificationService as any).counts = {
-      total: 0,
-      unread: 0,
-      byType: { message: 0, system: 0, user_action: 0, conversation: 0, translation: 0 },
-      byPriority: { low: 0, normal: 0, high: 0, urgent: 0 },
-    };
-    (notificationService as any).callbacks = {};
-  });
-
-  describe('initialize', () => {
-    it('should initialize and call onConnect', async () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
-      const onConnect = jest.fn();
-
-      notificationService.initialize({
-        token: 'test-token',
-        userId: 'user-1',
-        onConnect,
-      });
-
-      jest.advanceTimersByTime(200);
-
-      expect(onConnect).toHaveBeenCalled();
-      jest.useRealTimers();
-    });
-  });
-
-  describe('disconnect', () => {
-    it('should call onDisconnect and clear callbacks', () => {
-      const onDisconnect = jest.fn();
-
-      notificationService.initialize({
-        token: 'test-token',
-        userId: 'user-1',
-        onDisconnect,
-      });
-
-      notificationService.disconnect();
-
-      expect(onDisconnect).toHaveBeenCalled();
-    });
-  });
-
-  describe('getNotifications', () => {
-    it('should return empty array initially', () => {
-      const notifications = notificationService.getNotifications();
-      expect(notifications).toEqual([]);
-    });
-  });
-
-  describe('getUnreadNotifications', () => {
-    it('should filter unread notifications', () => {
-      // Set some notifications directly for testing
-      (notificationService as any).notifications = [
-        { id: '1', isRead: false, type: 'message' },
-        { id: '2', isRead: true, type: 'message' },
-        { id: '3', isRead: false, type: 'system' },
-      ];
-
-      const unread = notificationService.getUnreadNotifications();
-
-      expect(unread).toHaveLength(2);
-      expect(unread.every((n) => !n.isRead)).toBe(true);
-    });
-  });
-
-  describe('markAsRead (wrapper)', () => {
-    it('should mark local notification as read and call API', async () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
-
-      mockApiService.patch.mockResolvedValue({
-        success: true,
-        data: { success: true },
-      });
-
-      (notificationService as any).notifications = [
-        { id: 'notif-1', isRead: false, type: 'message', priority: 'normal' },
-      ];
-
-      const resultPromise = notificationService.markAsRead('notif-1');
-      await jest.runAllTimersAsync();
-      await resultPromise;
-
-      const notifications = notificationService.getNotifications();
-      expect(notifications[0].isRead).toBe(true);
-      expect(mockApiService.patch).toHaveBeenCalled();
-
-      jest.useRealTimers();
-    });
-
-    it('should update counts after marking as read', async () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
-
-      mockApiService.patch.mockResolvedValue({
-        success: true,
-        data: { success: true },
-      });
-
-      const onCountsUpdated = jest.fn();
-      notificationService.initialize({
-        token: 'test',
-        userId: 'user-1',
-        onCountsUpdated,
-      });
-
-      (notificationService as any).notifications = [
-        { id: 'notif-1', isRead: false, type: 'message', priority: 'normal' },
-      ];
-
-      const resultPromise = notificationService.markAsRead('notif-1');
-      await jest.runAllTimersAsync();
-      await resultPromise;
-
-      expect(onCountsUpdated).toHaveBeenCalled();
-
-      jest.useRealTimers();
-    });
-  });
-
-  describe('markAllAsRead (wrapper)', () => {
-    it('should mark all local notifications as read', async () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
-
-      mockApiService.patch.mockResolvedValue({
-        success: true,
-        data: { success: true, count: 2 },
-      });
-
-      (notificationService as any).notifications = [
-        { id: '1', isRead: false, type: 'message', priority: 'normal' },
-        { id: '2', isRead: false, type: 'system', priority: 'high' },
-      ];
-
-      const resultPromise = notificationService.markAllAsRead();
-      await jest.runAllTimersAsync();
-      await resultPromise;
-
-      const notifications = notificationService.getNotifications();
-      expect(notifications.every((n) => n.isRead)).toBe(true);
-
-      jest.useRealTimers();
-    });
-  });
-
-  describe('removeNotification', () => {
-    it('should remove notification from local state', () => {
-      (notificationService as any).notifications = [
-        { id: '1', type: 'message', priority: 'normal' },
-        { id: '2', type: 'system', priority: 'normal' },
-      ];
-
-      notificationService.removeNotification('1');
-
-      const notifications = notificationService.getNotifications();
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0].id).toBe('2');
-    });
-  });
-
-  describe('clearAll', () => {
-    it('should clear all notifications', () => {
-      (notificationService as any).notifications = [
-        { id: '1', type: 'message', priority: 'normal' },
-        { id: '2', type: 'system', priority: 'normal' },
-      ];
-
-      notificationService.clearAll();
-
-      expect(notificationService.getNotifications()).toEqual([]);
+      expect(apiService.get).toHaveBeenCalledWith('/notifications/unread-count');
+      expect(response.data?.count).toBe(42);
     });
   });
 
   describe('getCounts', () => {
-    it('should return notification counts', () => {
-      (notificationService as any).notifications = [
-        { id: '1', type: 'message', priority: 'normal', isRead: false },
-        { id: '2', type: 'message', priority: 'high', isRead: true },
-        { id: '3', type: 'system', priority: 'normal', isRead: false },
-      ];
+    it('devrait récupérer et formater les compteurs', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          count: 15,
+        },
+      });
 
-      // Manually trigger count update
-      (notificationService as any).updateCounts();
+      const response = await NotificationService.getCounts();
 
-      const counts = notificationService.getCounts();
-
-      expect(counts.total).toBe(3);
-      expect(counts.unread).toBe(2);
-      expect(counts.byType.message).toBe(2);
-      expect(counts.byType.system).toBe(1);
-      expect(counts.byPriority.normal).toBe(2);
-      expect(counts.byPriority.high).toBe(1);
+      expect(response.data?.total).toBe(15);
+      expect(response.data?.unread).toBe(15);
     });
   });
 
-  describe('Proxy methods', () => {
-    it('should have proxy methods to API service', () => {
-      expect(typeof notificationService.fetchNotifications).toBe('function');
-      expect(typeof notificationService.fetchUnreadCount).toBe('function');
-      expect(typeof notificationService.fetchCounts).toBe('function');
-      expect(typeof notificationService.fetchStats).toBe('function');
-      expect(typeof notificationService.fetchPreferences).toBe('function');
-      expect(typeof notificationService.updatePreferences).toBe('function');
-      expect(typeof notificationService.deleteNotification).toBe('function');
-      expect(typeof notificationService.testNotification).toBe('function');
+  describe('Retry Logic', () => {
+    it('devrait réessayer en cas d\'erreur temporaire', async () => {
+      (apiService.get as jest.Mock)
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce({
+          success: true,
+          data: {
+            data: [],
+            pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
+            unreadCount: 0,
+          },
+        });
+
+      const response = await NotificationService.fetchNotifications();
+
+      expect(apiService.get).toHaveBeenCalledTimes(3);
+      expect(response.success).toBe(true);
+    });
+
+    it('devrait échouer après le nombre max de retries', async () => {
+      (apiService.get as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+      await expect(NotificationService.fetchNotifications()).rejects.toThrow('Network error');
+
+      // MAX_RETRIES = 3, donc 4 appels au total (1 initial + 3 retries)
+      expect(apiService.get).toHaveBeenCalledTimes(4);
+    }, 10000);
+  });
+
+  describe('Types de Notifications Spécifiques', () => {
+    it('devrait parser notification mention avec metadata approprié', async () => {
+      const mentionNotification = {
+        id: 'notif_mention',
+        userId: 'user_123',
+        type: NotificationTypeEnum.USER_MENTIONED,
+        content: '@bob tu as été mentionné',
+        actor: {
+          id: 'user_alice',
+          username: 'alice',
+          displayName: 'Alice',
+          avatar: null,
+        },
+        context: {
+          conversationId: 'conv_123',
+          messageId: 'msg_456',
+        },
+        metadata: {
+          mentionText: '@bob',
+          messagePreview: 'Salut @bob comment ça va?',
+        },
+        // Le backend envoie les champs à la racine
+        isRead: false,
+        readAt: null,
+        createdAt: '2024-01-15T10:30:00Z',
+        delivery: { emailSent: false, pushSent: false },
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [mentionNotification],
+          pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
+          unreadCount: 1,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications({
+        type: NotificationTypeEnum.USER_MENTIONED,
+      });
+
+      const notification = response.data!.notifications[0];
+      expect(notification.type).toBe(NotificationTypeEnum.USER_MENTIONED);
+      expect(notification.metadata).toHaveProperty('mentionText');
+      expect(notification.metadata).toHaveProperty('messagePreview');
+    });
+
+    it('devrait parser notification appel manqué avec context approprié', async () => {
+      const missedCallNotification = {
+        id: 'notif_call',
+        userId: 'user_123',
+        type: NotificationTypeEnum.MISSED_CALL,
+        content: 'Appel manqué de Alice',
+        priority: 'high',
+        actor: {
+          id: 'user_alice',
+          username: 'alice',
+          displayName: 'Alice Martin',
+          avatar: null,
+        },
+        context: {
+          conversationId: 'conv_123',
+          callSessionId: 'call_789',
+        },
+        metadata: {
+          callType: 'video',
+          duration: 0,
+        },
+        // Le backend envoie les champs à la racine
+        isRead: false,
+        readAt: null,
+        createdAt: '2024-01-15T10:30:00Z',
+        delivery: { emailSent: false, pushSent: true },
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [missedCallNotification],
+          pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
+          unreadCount: 1,
+        },
+      });
+
+      const response = await NotificationService.fetchNotifications({
+        type: NotificationTypeEnum.MISSED_CALL,
+      });
+
+      const notification = response.data!.notifications[0];
+      expect(notification.type).toBe(NotificationTypeEnum.MISSED_CALL);
+      expect(notification.priority).toBe('high');
+      expect(notification.context).toHaveProperty('callSessionId');
+      expect(notification.metadata).toHaveProperty('callType');
+    });
+  });
+
+  describe('getPreferences', () => {
+    it('devrait récupérer les préférences de notifications', async () => {
+      const mockPreferences = {
+        emailNotifications: true,
+        pushNotifications: true,
+      };
+
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: mockPreferences,
+      });
+
+      const response = await NotificationService.getPreferences();
+
+      expect(apiService.get).toHaveBeenCalledWith('/notifications/preferences');
+      expect(response.data).toEqual(mockPreferences);
+    });
+  });
+
+  describe('updatePreferences', () => {
+    it('devrait mettre à jour les préférences de notifications', async () => {
+      const updatedPreferences = {
+        emailNotifications: false,
+        pushNotifications: true,
+      };
+
+      (apiService.patch as jest.Mock).mockResolvedValue({
+        success: true,
+        data: updatedPreferences,
+      });
+
+      const response = await NotificationService.updatePreferences(updatedPreferences);
+
+      expect(apiService.patch).toHaveBeenCalledWith('/notifications/preferences', updatedPreferences);
+      expect(response.data).toEqual(updatedPreferences);
     });
   });
 });
