@@ -95,25 +95,31 @@ export * from './attachment-audio.js';
 // Export des types suppression de messages
 export * from './message-deletion.js';
 
-// Export des types notifications complètes (Prisma-aligned + frontend unified)
+// Export des types notifications complètes (Structure Groupée V2)
 export {
   // Enums
   NotificationTypeEnum,
-  NotificationPriorityEnum,
 
   // Type unions
   type NotificationType,
   type NotificationPriority,
-  type NotificationConversationType,
-  type NotificationAttachmentType,
-  type NotificationAction,
 
-  // Main interfaces
-  type NotificationSender,
-  type NotificationSenderInfo,
+  // Main interfaces (Structure Groupée)
+  type NotificationActor,
   type NotificationContext,
+  type NotificationState,
+  type NotificationDelivery,
   type NotificationMetadata,
   type Notification,
+
+  // Type guards (metadata discriminated unions)
+  isMessageNotification,
+  isMentionNotification,
+  isReactionNotification,
+  isCallNotification,
+  isFriendRequestNotification,
+  isMemberEventNotification,
+  isSystemNotification,
 
   // DTOs
   type CreateNotificationDTO,
@@ -121,20 +127,12 @@ export {
 
   // Filters and pagination
   type NotificationFilters,
-  type NotificationPaginationOptions,
-  type NotificationCounts,
-  type NotificationStats,
   type NotificationResponse,
 
   // Preferences
   type NotificationPreference,
-  type NotificationPreferences,
   type CreateNotificationPreferenceDTO,
   type UpdateNotificationPreferenceDTO,
-
-  // Push notifications
-  type PushNotificationPayload,
-  type PushNotificationResult,
 
   // Utility functions
   isNotificationExpired,
@@ -142,7 +140,6 @@ export {
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
-  getNotificationSender,
   getDefaultNotificationPreferences,
 } from './notification.js';
 

@@ -17,16 +17,23 @@ export {
   // Type unions
   type NotificationType,
   type NotificationPriority,
-  type NotificationConversationType,
-  type NotificationAttachmentType,
-  type NotificationAction,
 
-  // Interfaces principales
-  type NotificationSender,
-  type NotificationSenderInfo,
+  // Interfaces principales (structure groupée)
+  type NotificationActor,
   type NotificationContext,
+  type NotificationState,
+  type NotificationDelivery,
   type NotificationMetadata,
   type Notification,
+
+  // Type guards
+  isMessageNotification,
+  isMentionNotification,
+  isReactionNotification,
+  isCallNotification,
+  isFriendRequestNotification,
+  isMemberEventNotification,
+  isSystemNotification,
 
   // DTOs
   type CreateNotificationDTO,
@@ -34,20 +41,12 @@ export {
 
   // Filtres et pagination
   type NotificationFilters,
-  type NotificationPaginationOptions,
-  type NotificationCounts,
-  type NotificationStats,
   type NotificationResponse,
 
   // Préférences
   type NotificationPreference,
-  type NotificationPreferences,
   type CreateNotificationPreferenceDTO,
   type UpdateNotificationPreferenceDTO,
-
-  // Push notifications
-  type PushNotificationPayload,
-  type PushNotificationResult,
 
   // Utility functions
   isNotificationExpired,
@@ -55,7 +54,6 @@ export {
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
-  getNotificationSender,
   getDefaultNotificationPreferences,
 } from '@meeshy/shared/types/notification';
 
@@ -65,9 +63,17 @@ export {
 import type {
   Notification,
   NotificationFilters,
-  NotificationCounts,
   NotificationType,
 } from '@meeshy/shared/types/notification';
+
+/**
+ * Compteurs de notifications (frontend-specific)
+ */
+export interface NotificationCounts {
+  total: number;
+  unread: number;
+  byType?: Partial<Record<NotificationType, number>>;
+}
 
 /**
  * Événement Socket.IO pour les notifications

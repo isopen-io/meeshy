@@ -1,9 +1,9 @@
 /**
  * Types pour les notifications utilisateur
- * Alignés avec les modèles Prisma: Notification, NotificationPreference
+ * Architecture groupée logiquement pour meilleure organisation
  *
- * Ces types gèrent les notifications push, email et in-app
- * ainsi que les préférences utilisateur.
+ * IMPORTANT: Le titre est construit dynamiquement côté frontend via i18n
+ * à partir du `type`, `actor`, `context` et `metadata`.
  */
 
 // =====================================================
@@ -12,7 +12,6 @@
 
 /**
  * Types de notifications supportés - ENUM complet
- * Synchronisé avec les besoins frontend et backend
  */
 export enum NotificationTypeEnum {
   // ===== MESSAGE EVENTS =====
@@ -134,88 +133,37 @@ export enum NotificationTypeEnum {
 
 /**
  * Type union de tous les types de notifications
- * Pour rétrocompatibilité avec le code existant
  */
 export type NotificationType = `${NotificationTypeEnum}` | string;
 
 /**
- * Priorité de notification - ENUM
- */
-export enum NotificationPriorityEnum {
-  LOW = 'low',
-  NORMAL = 'normal',
-  HIGH = 'high',
-  URGENT = 'urgent',
-}
-
-/**
- * Priorité de notification - type union
+ * Priorité de notification
  */
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 // =====================================================
-// NOTIFICATION
+// STRUCTURE GROUPÉE LOGIQUEMENT
 // =====================================================
 
 /**
- * Types de conversations pour les notifications
+ * ACTOR - Qui a déclenché la notification
+ * Informations sur l'utilisateur qui a effectué l'action
  */
-export type NotificationConversationType = 'direct' | 'group' | 'public' | 'global' | 'broadcast';
-
-/**
- * Types d'attachments pour les notifications
- */
-export type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
-
-/**
- * Actions possibles pour les notifications
- */
-export type NotificationAction =
-  | 'view_message'
-  | 'view_conversation'
-  | 'join_conversation'
-  | 'accept_or_reject_contact'
-  | 'open_call'
-  | 'view_details'
-  | 'update_app'
-  | 'none';
-
-/**
- * Informations sur l'expéditeur d'une notification - NESTED structure
- * Ordre de priorité pour l'affichage:
- * 1. displayName (si existe)
- * 2. firstName + lastName
- * 3. username (fallback)
- */
-export interface NotificationSender {
+export interface NotificationActor {
   readonly id: string;
   readonly username: string;
-  readonly displayName?: string;
-  readonly firstName?: string;
-  readonly lastName?: string;
-  readonly avatar?: string;
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
 }
 
 /**
- * Informations sur l'expéditeur - structure plate (legacy)
- * @deprecated Utilisez NotificationSender à la place
- */
-export interface NotificationSenderInfo {
-  readonly senderId?: string;
-  readonly senderUsername?: string;
-  readonly senderAvatar?: string;
-  readonly senderDisplayName?: string;
-  readonly senderFirstName?: string;
-  readonly senderLastName?: string;
-}
-
-/**
- * Contexte de navigation pour les notifications
+ * CONTEXT - Où c'est arrivé
+ * Contexte de navigation pour la notification
  */
 export interface NotificationContext {
   readonly conversationId?: string;
   readonly conversationTitle?: string;
-  readonly conversationType?: NotificationConversationType;
+  readonly conversationType?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
   readonly messageId?: string;
   readonly originalMessageId?: string;
   readonly callSessionId?: string;
@@ -224,124 +172,234 @@ export interface NotificationContext {
 }
 
 /**
- * Métadonnées enrichies pour l'UI
+ * STATE - Statut de lecture
+ * État de la notification
  */
-export interface NotificationMetadata {
-  readonly attachments?: {
-    readonly count: number;
-    readonly firstType: NotificationAttachmentType;
-    readonly firstFilename: string;
-  } | readonly any[];
-  readonly reactionEmoji?: string;
-  readonly memberCount?: number;
-  readonly action?: NotificationAction;
-  readonly joinMethod?: 'via_link' | 'invited';
-  readonly systemType?: 'maintenance' | 'security' | 'announcement' | 'feature';
-  readonly isMember?: boolean;
-  /** Type d'appel pour les notifications d'appels manqués */
-  readonly callType?: 'audio' | 'video';
+export interface NotificationState {
+  readonly isRead: boolean;
+  readonly readAt: Date | null;
+  readonly createdAt: Date;
+  readonly expiresAt?: Date;
 }
 
 /**
- * Notification utilisateur - structure unifiée
- * Aligned with schema.prisma Notification + frontend requirements
+ * DELIVERY - Suivi multi-canal
+ * Statut d'envoi des notifications
+ */
+export interface NotificationDelivery {
+  readonly emailSent: boolean;
+  readonly pushSent: boolean;
+}
+
+// =====================================================
+// METADATA - Type-specific data (Discriminated Unions)
+// =====================================================
+
+/**
+ * Metadata de base commune à toutes les notifications
+ */
+interface BaseNotificationMetadata {
+  readonly action?: 'view_message' | 'view_conversation' | 'join_conversation' | 'accept_or_reject_contact' | 'open_call' | 'view_details' | 'update_app' | 'none';
+}
+
+/**
+ * Metadata pour new_message
+ */
+export interface MessageNotificationMetadata extends BaseNotificationMetadata {
+  readonly messagePreview: string;
+  readonly attachments?: {
+    readonly count: number;
+    readonly firstType: 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
+    readonly firstFilename: string;
+  };
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour user_mentioned
+ */
+export interface MentionNotificationMetadata extends BaseNotificationMetadata {
+  readonly messagePreview: string;
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour message_reaction
+ */
+export interface ReactionNotificationMetadata extends BaseNotificationMetadata {
+  readonly reactionEmoji: string;
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour missed_call / call_declined
+ */
+export interface CallNotificationMetadata extends BaseNotificationMetadata {
+  readonly callType: 'audio' | 'video';
+  readonly action: 'view_conversation';
+}
+
+/**
+ * Metadata pour friend_request_received
+ */
+export interface FriendRequestNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'accept_or_reject_contact';
+}
+
+/**
+ * Metadata pour friend_request_accepted
+ */
+export interface FriendAcceptedNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_conversation';
+}
+
+/**
+ * Metadata pour user_joined_conversation / user_left_conversation
+ */
+export interface MemberEventNotificationMetadata extends BaseNotificationMetadata {
+  readonly memberCount?: number;
+  readonly isMember?: boolean;
+  readonly joinMethod?: 'via_link' | 'invited';
+  readonly action: 'view_conversation';
+}
+
+/**
+ * Metadata pour conversation_created
+ */
+export interface ConversationCreatedNotificationMetadata extends BaseNotificationMetadata {
+  readonly memberCount?: number;
+  readonly action: 'view_conversation' | 'join_conversation';
+}
+
+/**
+ * Metadata pour translation_ready
+ */
+export interface TranslationNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour system_announcement
+ */
+export interface SystemNotificationMetadata extends BaseNotificationMetadata {
+  readonly systemType?: 'maintenance' | 'security' | 'announcement' | 'feature';
+  readonly action: 'view_details' | 'update_app' | 'none';
+}
+
+/**
+ * Metadata générique pour autres types
+ */
+export interface GenericNotificationMetadata extends BaseNotificationMetadata {
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Union discriminée de tous les types de metadata
+ */
+export type NotificationMetadata =
+  | MessageNotificationMetadata
+  | MentionNotificationMetadata
+  | ReactionNotificationMetadata
+  | CallNotificationMetadata
+  | FriendRequestNotificationMetadata
+  | FriendAcceptedNotificationMetadata
+  | MemberEventNotificationMetadata
+  | ConversationCreatedNotificationMetadata
+  | TranslationNotificationMetadata
+  | SystemNotificationMetadata
+  | GenericNotificationMetadata;
+
+// =====================================================
+// NOTIFICATION - MAIN INTERFACE
+// =====================================================
+
+/**
+ * Notification - Structure groupée logiquement
  *
- * IMPORTANT: Le backend ne doit PAS construire le `title`.
- * Le frontend construit le titre via `buildNotificationTitle(notification)`
- * à partir du `type` et des données brutes (`sender`, `context`, `metadata`).
+ * IMPORTANT: Pas de champ `title` - construit dynamiquement côté frontend via i18n
  */
 export interface Notification {
+  // === CORE - Identité ===
   readonly id: string;
-
-  /** Utilisateur destinataire */
   readonly userId: string;
-
-  /** Type de notification (new_message, missed_call, etc.) */
   readonly type: NotificationType;
-
-  /** Priorité (low, normal, high, urgent) */
   readonly priority: NotificationPriority;
 
-  /** Si la notification a été lue */
-  readonly isRead: boolean;
+  // === CONTENT - Ce qui est affiché ===
+  readonly content: string; // Message preview ou contenu principal
 
-  /** Quand la notification a été lue */
-  readonly readAt?: Date;
+  // === ACTOR - Qui a déclenché (optionnel) ===
+  readonly actor?: NotificationActor;
 
-  /** Date de création */
-  readonly createdAt: Date;
+  // === CONTEXT - Où c'est arrivé ===
+  readonly context: NotificationContext;
 
-  /** Date d'expiration (optionnelle) */
-  readonly expiresAt?: Date;
+  // === METADATA - Données type-spécifiques ===
+  readonly metadata: NotificationMetadata;
 
-  // === SENDER INFO (NESTED - preferred) ===
+  // === STATE - Statut ===
+  readonly state: NotificationState;
 
-  /** Informations de l'expéditeur (utilisées pour construire le titre) */
-  readonly sender?: NotificationSender;
-
-  // === SENDER INFO (FLAT - legacy, for Prisma compatibility) ===
-
-  /** @deprecated Utilisez sender.id à la place */
-  readonly senderId?: string;
-
-  /** @deprecated Utilisez sender.username à la place */
-  readonly senderUsername?: string;
-
-  /** @deprecated Utilisez sender.avatar à la place */
-  readonly senderAvatar?: string;
-
-  /** @deprecated Utilisez sender.displayName à la place */
-  readonly senderDisplayName?: string;
-
-  /** @deprecated Utilisez sender.firstName à la place */
-  readonly senderFirstName?: string;
-
-  /** @deprecated Utilisez sender.lastName à la place */
-  readonly senderLastName?: string;
-
-  // === CONTEXT (NESTED - preferred) ===
-
-  /** Contexte de navigation (utilisé pour construire le titre) */
-  readonly context?: NotificationContext;
-
-  // === CONTEXT (FLAT - legacy, for Prisma compatibility) ===
-
-  /** @deprecated Utilisez context.conversationId à la place */
-  readonly conversationId?: string;
-
-  /** @deprecated Utilisez context.messageId à la place */
-  readonly messageId?: string;
-
-  /** @deprecated Utilisez context.callSessionId à la place */
-  readonly callSessionId?: string;
-
-  // === CONTENT ===
-
-  /** Aperçu du message */
-  readonly messagePreview?: string;
-
-  /** Métadonnées enrichies (utilisées pour construire le titre) */
-  readonly metadata?: NotificationMetadata;
-
-  /** Données brutes pour compatibilité (JSON object) */
-  readonly data?: Record<string, unknown>;
-
-  // === TITLE/CONTENT (deprecated for new code) ===
-
-  /** @deprecated Le frontend construit le titre à partir du type + données brutes */
-  readonly title?: string;
-
-  /** @deprecated Fallback ou contenu additionnel */
-  readonly content?: string;
-
-  // === DELIVERY STATUS (backend-only) ===
-
-  /** Si un email a été envoyé */
-  readonly emailSent?: boolean;
-
-  /** Si une notification push a été envoyée */
-  readonly pushSent?: boolean;
+  // === DELIVERY - Suivi multi-canal ===
+  readonly delivery: NotificationDelivery;
 }
+
+// =====================================================
+// TYPE GUARDS
+// =====================================================
+
+/**
+ * Type guard pour new_message
+ */
+export function isMessageNotification(n: Notification): n is Notification & { metadata: MessageNotificationMetadata } {
+  return n.type === 'new_message';
+}
+
+/**
+ * Type guard pour user_mentioned
+ */
+export function isMentionNotification(n: Notification): n is Notification & { metadata: MentionNotificationMetadata } {
+  return n.type === 'user_mentioned' || n.type === 'mention';
+}
+
+/**
+ * Type guard pour message_reaction
+ */
+export function isReactionNotification(n: Notification): n is Notification & { metadata: ReactionNotificationMetadata } {
+  return n.type === 'message_reaction' || n.type === 'reaction';
+}
+
+/**
+ * Type guard pour missed_call / call_declined
+ */
+export function isCallNotification(n: Notification): n is Notification & { metadata: CallNotificationMetadata } {
+  return n.type === 'missed_call' || n.type === 'call_declined' || n.type === 'incoming_call';
+}
+
+/**
+ * Type guard pour friend_request_received
+ */
+export function isFriendRequestNotification(n: Notification): n is Notification & { metadata: FriendRequestNotificationMetadata } {
+  return n.type === 'friend_request' || n.type === 'contact_request';
+}
+
+/**
+ * Type guard pour member events
+ */
+export function isMemberEventNotification(n: Notification): n is Notification & { metadata: MemberEventNotificationMetadata } {
+  return n.type === 'member_joined' || n.type === 'member_left' || n.type === 'added_to_conversation' || n.type === 'removed_from_conversation';
+}
+
+/**
+ * Type guard pour system notifications
+ */
+export function isSystemNotification(n: Notification): n is Notification & { metadata: SystemNotificationMetadata } {
+  return n.type === 'system' || n.type === 'security_alert' || n.type === 'maintenance';
+}
+
+// =====================================================
+// DTOs
+// =====================================================
 
 /**
  * DTO pour créer une notification
@@ -350,35 +408,11 @@ export interface CreateNotificationDTO {
   readonly userId: string;
   readonly type: NotificationType;
   readonly priority?: NotificationPriority;
+  readonly content: string;
+  readonly actor?: NotificationActor;
+  readonly context: NotificationContext;
+  readonly metadata: NotificationMetadata;
   readonly expiresAt?: Date;
-
-  // Sender info (nested preferred)
-  readonly sender?: NotificationSender;
-
-  // Sender info (flat legacy)
-  readonly senderId?: string;
-  readonly senderUsername?: string;
-  readonly senderAvatar?: string;
-  readonly senderDisplayName?: string;
-  readonly senderFirstName?: string;
-  readonly senderLastName?: string;
-
-  // Context (nested preferred)
-  readonly context?: NotificationContext;
-
-  // Context (flat legacy)
-  readonly conversationId?: string;
-  readonly messageId?: string;
-  readonly callSessionId?: string;
-
-  // Content
-  readonly messagePreview?: string;
-  readonly metadata?: NotificationMetadata;
-  readonly data?: Record<string, unknown>;
-
-  // Legacy (deprecated)
-  readonly title?: string;
-  readonly content?: string;
 }
 
 /**
@@ -410,40 +444,6 @@ export interface NotificationFilters {
 }
 
 /**
- * Options de pagination
- */
-export interface NotificationPaginationOptions {
-  readonly offset: number;
-  readonly limit: number;
-  readonly sortBy?: 'createdAt' | 'priority' | 'readAt';
-  readonly sortOrder?: 'asc' | 'desc';
-}
-
-/**
- * Compteurs de notifications
- */
-export interface NotificationCounts {
-  readonly total: number;
-  readonly unread: number;
-  readonly byType: Partial<Record<NotificationType, number>>;
-  readonly byPriority: Record<NotificationPriority, number>;
-}
-
-/**
- * Statistiques des notifications
- */
-export interface NotificationStats {
-  readonly totalSent: number;
-  readonly totalRead: number;
-  readonly totalUnread: number;
-  readonly byType: Partial<Record<NotificationType, number>>;
-  readonly performance: {
-    readonly averageDeliveryTime: number;
-    readonly successRate: number;
-  };
-}
-
-/**
  * Réponse paginée pour les notifications
  */
 export interface NotificationResponse {
@@ -455,75 +455,41 @@ export interface NotificationResponse {
     readonly hasMore: boolean;
   };
   readonly unreadCount: number;
-  readonly counts?: NotificationCounts;
 }
 
 // =====================================================
-// NOTIFICATION PREFERENCE
+// NOTIFICATION PREFERENCES
 // =====================================================
 
 /**
  * Préférences de notifications utilisateur
- * Aligned with schema.prisma NotificationPreference + frontend requirements
  */
 export interface NotificationPreference {
   readonly id: string;
   readonly userId: string;
 
   // === GLOBAL SETTINGS ===
-
-  /** Activer les notifications push */
   readonly pushEnabled: boolean;
-
-  /** Activer les notifications email */
   readonly emailEnabled: boolean;
-
-  /** Activer les sons de notification */
   readonly soundEnabled: boolean;
 
   // === PER-TYPE SETTINGS ===
-
-  /** Notifications de nouveaux messages */
   readonly newMessageEnabled: boolean;
-
-  /** Notifications d'appels manqués */
   readonly missedCallEnabled: boolean;
-
-  /** Notifications système */
   readonly systemEnabled: boolean;
-
-  /** Notifications de nouvelles conversations */
   readonly conversationEnabled: boolean;
-
-  /** Notifications de réponses */
   readonly replyEnabled: boolean;
-
-  /** Notifications de mentions */
   readonly mentionEnabled: boolean;
-
-  /** Notifications de réactions */
   readonly reactionEnabled: boolean;
-
-  /** Notifications de demandes de contact */
   readonly contactRequestEnabled: boolean;
-
-  /** Notifications de nouveaux membres */
   readonly memberJoinedEnabled: boolean;
 
   // === DO NOT DISTURB ===
-
-  /** Mode "Ne pas déranger" activé */
   readonly dndEnabled: boolean;
-
-  /** Heure de début DND (format: "22:00") */
   readonly dndStartTime?: string;
-
-  /** Heure de fin DND (format: "08:00") */
   readonly dndEndTime?: string;
 
   // === MUTED CONVERSATIONS ===
-
-  /** Liste des IDs de conversations mutées */
   readonly mutedConversations?: readonly string[];
 
   readonly createdAt: Date;
@@ -531,39 +497,7 @@ export interface NotificationPreference {
 }
 
 /**
- * Alias simplifié pour les préférences (frontend-style, sans id/timestamps)
- * Utilisé pour les formulaires de préférences
- */
-export interface NotificationPreferences {
-  readonly userId: string;
-
-  // Canaux
-  readonly pushEnabled: boolean;
-  readonly emailEnabled: boolean;
-  readonly soundEnabled: boolean;
-
-  // Préférences par type
-  readonly newMessageEnabled: boolean;
-  readonly replyEnabled: boolean;
-  readonly mentionEnabled: boolean;
-  readonly reactionEnabled: boolean;
-  readonly missedCallEnabled: boolean;
-  readonly systemEnabled: boolean;
-  readonly conversationEnabled: boolean;
-  readonly contactRequestEnabled: boolean;
-  readonly memberJoinedEnabled: boolean;
-
-  // Do Not Disturb
-  readonly dndEnabled: boolean;
-  readonly dndStartTime?: string;
-  readonly dndEndTime?: string;
-
-  // Mute par conversation
-  readonly mutedConversations: readonly string[];
-}
-
-/**
- * DTO pour créer des préférences de notification
+ * DTO pour créer des préférences
  */
 export interface CreateNotificationPreferenceDTO {
   readonly userId: string;
@@ -585,7 +519,7 @@ export interface CreateNotificationPreferenceDTO {
 }
 
 /**
- * DTO pour mettre à jour des préférences de notification
+ * DTO pour mettre à jour des préférences
  */
 export interface UpdateNotificationPreferenceDTO {
   readonly pushEnabled?: boolean;
@@ -606,61 +540,28 @@ export interface UpdateNotificationPreferenceDTO {
 }
 
 // =====================================================
-// PUSH NOTIFICATION PAYLOAD
-// =====================================================
-
-/**
- * Payload pour notification push (APNs/FCM)
- */
-export interface PushNotificationPayload {
-  readonly notificationId: string;
-  readonly type: NotificationType | string;
-  readonly title: string;
-  readonly body: string;
-  readonly badge?: number;
-  readonly sound?: string;
-  readonly data?: Record<string, unknown>;
-  readonly conversationId?: string;
-  readonly messageId?: string;
-  readonly senderId?: string;
-  readonly senderAvatar?: string;
-  readonly priority?: 'low' | 'normal' | 'high';
-}
-
-/**
- * Résultat d'envoi de notification push
- */
-export interface PushNotificationResult {
-  readonly success: boolean;
-  readonly notificationId: string;
-  readonly deviceToken?: string;
-  readonly error?: string;
-  readonly errorCode?: string;
-}
-
-// =====================================================
-// TYPE GUARDS & UTILITIES
+// UTILITIES
 // =====================================================
 
 /**
  * Vérifie si une notification est expirée
  */
 export function isNotificationExpired(notification: Notification): boolean {
-  if (!notification.expiresAt) {
+  if (!notification.state.expiresAt) {
     return false;
   }
-  return new Date() > notification.expiresAt;
+  return new Date() > notification.state.expiresAt;
 }
 
 /**
  * Vérifie si une notification est non lue et valide
  */
 export function isNotificationUnread(notification: Notification): boolean {
-  return !notification.isRead && !isNotificationExpired(notification);
+  return !notification.state.isRead && !isNotificationExpired(notification);
 }
 
 /**
- * Vérifie si le mode DND est actif pour un utilisateur
+ * Vérifie si le mode DND est actif
  */
 export function isDNDActive(prefs: NotificationPreference): boolean {
   if (!prefs.dndEnabled) {
@@ -687,7 +588,7 @@ export function isDNDActive(prefs: NotificationPreference): boolean {
 }
 
 /**
- * Vérifie si un type de notification est activé pour un utilisateur
+ * Vérifie si un type de notification est activé
  */
 export function isNotificationTypeEnabled(
   prefs: NotificationPreference,
@@ -706,8 +607,10 @@ export function isNotificationTypeEnabled(
     case 'reply':
       return prefs.replyEnabled;
     case 'mention':
+    case 'user_mentioned':
       return prefs.mentionEnabled;
     case 'reaction':
+    case 'message_reaction':
       return prefs.reactionEnabled;
     case 'contact_request':
     case 'friend_request':
@@ -729,7 +632,6 @@ export function shouldSendNotification(
   type: NotificationType | string,
   channel: 'push' | 'email'
 ): boolean {
-  // Vérifier si le canal est activé
   if (channel === 'push' && !prefs.pushEnabled) {
     return false;
   }
@@ -737,12 +639,10 @@ export function shouldSendNotification(
     return false;
   }
 
-  // Vérifier si le type est activé
   if (!isNotificationTypeEnabled(prefs, type)) {
     return false;
   }
 
-  // Vérifier le mode DND (sauf pour les alertes de sécurité)
   if (type !== 'security_alert' && isDNDActive(prefs)) {
     return false;
   }
@@ -751,25 +651,7 @@ export function shouldSendNotification(
 }
 
 /**
- * Extrait les informations de l'expéditeur d'une notification
- */
-export function getNotificationSender(notification: Notification): NotificationSenderInfo | null {
-  if (!notification.senderId) {
-    return null;
-  }
-
-  return {
-    senderId: notification.senderId,
-    senderUsername: notification.senderUsername,
-    senderAvatar: notification.senderAvatar,
-    senderDisplayName: notification.senderDisplayName,
-    senderFirstName: notification.senderFirstName,
-    senderLastName: notification.senderLastName,
-  };
-}
-
-/**
- * Crée les préférences par défaut pour un utilisateur
+ * Crée les préférences par défaut
  */
 export function getDefaultNotificationPreferences(userId: string): CreateNotificationPreferenceDTO {
   return {
