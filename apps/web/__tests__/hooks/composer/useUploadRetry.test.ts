@@ -79,30 +79,51 @@ describe('useUploadRetry', () => {
   });
 
   it('should track retry attempts', async () => {
+    let resolveUpload: (value: any) => void;
+    const uploadPromise = new Promise((resolve) => {
+      resolveUpload = resolve;
+    });
+
     const uploadFn = jest.fn()
       .mockRejectedValueOnce(new Error('Error'))
-      .mockResolvedValueOnce({ success: true });
+      .mockImplementationOnce(() => uploadPromise);
 
     const { result } = renderHook(() => useUploadRetry({ maxRetries: 3 }));
 
-    const promise = act(() => {
-      return result.current.uploadWithRetry('test-file', uploadFn);
+    let uploadPromiseResult: Promise<any>;
+
+    act(() => {
+      uploadPromiseResult = result.current.uploadWithRetry('test-file', uploadFn);
     });
 
-    // First attempt fails immediately, status shows attempt 0 (not retrying yet)
+    // First attempt fails immediately
     await act(async () => {
       await jest.advanceTimersByTimeAsync(0);
     });
 
-    // Now advance to first retry (1s)
+    // Now advance to first retry (1s) - this triggers the second call
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1000);
     });
 
-    // At this point, we're on attempt 1 (first retry) which succeeds
-    // Status should be cleared after success
-    const finalResult = await promise;
-    expect(finalResult).toEqual({ success: true });
+    // Wait for state update
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Verify status during retry
+    expect(result.current.retryStatus['test-file']).toEqual({
+      attempt: 1,
+      maxRetries: 3,
+      isRetrying: true
+    });
+
+    // Complete the retry
+    await act(async () => {
+      resolveUpload!({ success: true });
+      await uploadPromiseResult!;
+    });
+
     expect(uploadFn).toHaveBeenCalledTimes(2);
     expect(result.current.retryStatus['test-file']).toBeUndefined();
   });

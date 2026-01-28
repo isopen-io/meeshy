@@ -27,7 +27,7 @@ export const useUploadRetry = ({ maxRetries = 3 }: UseUploadRetryProps = {}) => 
             [fileId]: {
               attempt,
               maxRetries,
-              isRetrying: attempt > 0
+              isRetrying: true
             }
           }));
 
