@@ -36,7 +36,7 @@ const mockFirebaseAdmin = {
 jest.mock('firebase-admin', () => mockFirebaseAdmin);
 
 // Mock Prisma
-jest.mock('../../shared/prisma/client', () => {
+jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
     notification: {
       create: jest.fn(),

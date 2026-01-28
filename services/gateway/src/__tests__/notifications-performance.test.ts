@@ -15,7 +15,7 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // Mock Prisma
-jest.mock('../../shared/prisma/client', () => {
+jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
     notification: {
       create: jest.fn(),

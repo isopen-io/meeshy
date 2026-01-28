@@ -14,7 +14,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
 
 // Mock Prisma
-jest.mock('../../shared/prisma/client', () => {
+jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
     notification: {
       create: jest.fn(),

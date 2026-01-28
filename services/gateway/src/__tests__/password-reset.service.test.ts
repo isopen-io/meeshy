@@ -271,10 +271,13 @@ describe('PasswordResetService', () => {
       expect(validation.errors).toContain('one digit');
     });
 
-    it('should reject passwords without special characters', () => {
+    it('should reject weak passwords based on zxcvbn score', () => {
       const validation = (service as any).validatePasswordStrength('WeakPassword123');
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one special character');
+      // Check that the password is rejected due to low strength score (uses zxcvbn)
+      const scoreError = validation.errors.find((err: string) => err.includes('password strength score'));
+      expect(scoreError).toBeDefined();
+      expect(scoreError).toContain('minimum: 3/4');
     });
 
     it('should reject passwords shorter than 8 characters', () => {
