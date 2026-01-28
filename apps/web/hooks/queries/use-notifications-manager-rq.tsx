@@ -122,6 +122,15 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
         (old: number | undefined) => (old ?? 0) + 1
       );
 
+      // Ne pas afficher de toast si l'utilisateur est dans la conversation active
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const notificationConversationId = notification.context?.conversationId;
+
+      if (notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`)) {
+        console.log('[useNotificationsManagerRQ] Skipping toast - user in active conversation');
+        return;
+      }
+
       // Afficher le toast
       showNotificationToast(notification);
     };

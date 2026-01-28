@@ -358,4 +358,125 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  // ============================================
+  // DELETE /notifications/test/clear-all - Nettoyer toutes les notifications (TEMP - NO AUTH CHECK)
+  // ============================================
+
+  fastify.delete(
+    '/notifications/test/clear-all',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        fastify.log.warn('TEMP: Clearing all notifications (no admin check)');
+
+        const result = await fastify.prisma.notification.deleteMany({});
+
+        return {
+          success: true,
+          deletedCount: result.count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error clearing notifications');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to clear notifications',
+        });
+      }
+    }
+  );
+
+  // ============================================
+  // POST /notifications/test/create - Créer une notification de test
+  // ============================================
+
+  fastify.post(
+    '/notifications/test/create',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { userId } = request.user as any;
+        const body = request.body as any;
+
+        const notification = await notificationService.createMessageNotification({
+          recipientUserId: body.recipientUserId || userId,
+          senderId: userId,
+          messageId: 'test-msg-' + Date.now(),
+          conversationId: body.conversationId || 'test-conv-' + Date.now(),
+          messagePreview: body.message || 'Test notification depuis API',
+        });
+
+        return {
+          success: true,
+          notification,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error creating test notification');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to create test notification',
+        });
+      }
+    }
+  );
+
+  // ============================================
+  // DELETE /notifications/admin/clear-all - Nettoyer toutes les notifications (ADMIN ONLY)
+  // ============================================
+
+  fastify.delete(
+    '/notifications/admin/clear-all',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Delete ALL notifications (admin only - for testing)',
+        tags: ['notifications', 'admin'],
+        summary: 'Clear all notifications',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              deletedCount: { type: 'number' },
+            },
+          },
+          403: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const user = request.user as any;
+
+        // Vérification admin
+        if (user.role !== 'ADMIN' && user.role !== 'BIGBOSS') {
+          return reply.code(403).send({
+            success: false,
+            error: 'Admin access required',
+            debug: { user },
+          });
+        }
+
+        fastify.log.warn({ user }, 'Admin clearing all notifications');
+
+        const result = await fastify.prisma.notification.deleteMany({});
+
+        return {
+          success: true,
+          deletedCount: result.count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error clearing notifications');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to clear notifications',
+        });
+      }
+    }
+  );
 }

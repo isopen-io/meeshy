@@ -419,8 +419,36 @@ export class MessageHandler {
    * Créer des notifications pour un message
    */
   private async _createMessageNotifications(message: Message, senderId: string): Promise<void> {
-    // Implémentation déléguée au NotificationService
-    // Cette méthode est un placeholder pour future implémentation
+    try {
+      const conversationId = message.conversationId;
+      const messageId = message.id;
+      const messagePreview = message.content.substring(0, 100);
+
+      // Récupérer tous les membres de la conversation sauf l'expéditeur
+      const members = await this.prisma.conversationMember.findMany({
+        where: {
+          conversationId,
+          isActive: true,
+          userId: { not: senderId }
+        },
+        select: { userId: true }
+      });
+
+      // Créer une notification pour chaque membre
+      for (const member of members) {
+        await this.notificationService.createMessageNotification({
+          recipientUserId: member.userId,
+          senderId,
+          messageId,
+          conversationId,
+          messagePreview,
+        });
+      }
+
+      console.log(`[NOTIFICATIONS] Created ${members.length} notifications for message ${messageId}`);
+    } catch (error) {
+      console.error('[NOTIFICATIONS] Error creating message notifications:', error);
+    }
   }
 
   /**
