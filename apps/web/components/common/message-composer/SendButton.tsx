@@ -1,7 +1,7 @@
 // apps/web/components/common/message-composer/SendButton.tsx
 'use client';
 
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AnimationConfig } from '@/constants/animations';
 import { PerformanceProfile } from '@/hooks/usePerformanceProfile';
@@ -30,6 +30,8 @@ export const SendButton = ({
 }: SendButtonProps) => {
   if (!isVisible) return null;
 
+  const isProcessing = isCompressing || isRecording || isUploading;
+
   const getAriaLabel = () => {
     if (isCompressing) return 'Compression en cours';
     if (isRecording) return "Arrêtez l'enregistrement avant d'envoyer";
@@ -46,7 +48,7 @@ export const SendButton = ({
         ${styles.sendButton}
         ${animConfig.enableGradient ? styles.withGradient : styles.solidColor}
         ${animConfig.enableRotation ? styles.withRotation : styles.simpleScale}
-        bg-blue-600 hover:bg-blue-700 text-white
+        text-white relative
         h-6 w-6 sm:h-9 sm:w-9 p-0 rounded-full
         shadow-lg hover:shadow-xl transition-all duration-200
         focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
@@ -58,6 +60,11 @@ export const SendButton = ({
       aria-keyshortcuts="Enter"
     >
       <Send className="h-3 w-3 sm:h-5 sm:w-5" aria-hidden="true" />
+      {isProcessing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-blue-600/50 rounded-full">
+          <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+        </div>
+      )}
     </Button>
   );
 };
