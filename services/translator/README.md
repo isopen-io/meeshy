@@ -35,22 +35,38 @@ Le **Meeshy Translation Service** est un microservice de traduction multi-langue
 
 ### Installation locale
 
+#### Méthode 1: uv sync (⚡ Recommandé - Ultra rapide!)
+
 ```bash
 # Cloner le projet
 git clone <repository-url>
 cd meeshy/translator
 
-# Créer un environnement virtuel
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou venv\\Scripts\\activate  # Windows
+# Installer uv si pas déjà fait
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Installer les dépendances
-pip install -r requirements.txt
+# Synchroniser les dépendances (crée automatiquement le venv)
+uv sync
+# Ou avec le Makefile: make uv-sync
+
+# Activer l'environnement
+source .venv/bin/activate  # Linux/Mac
+# ou .venv\\Scripts\\activate  # Windows
 
 # Configuration (optionnel)
 cp env.example .env
 # Éditer .env selon vos besoins
+```
+
+#### Méthode 2: Mode compatibilité (pour anciens workflows)
+
+```bash
+# Créer un environnement virtuel
+python3 -m venv venv
+source venv/bin/activate
+
+# Installer avec uv (10x plus rapide que pip)
+uv pip install -r requirements.txt
 ```
 
 ### Installation Docker
@@ -75,7 +91,7 @@ Pour les tests et développement, utilisez le serveur mock :
 ```bash
 # Créer un venv de test
 python3 -m venv test_venv
-test_venv/bin/pip install fastapi uvicorn aiohttp pyzmq
+test_venv/bin/uv pip install fastapi uvicorn aiohttp pyzmq
 
 # Lancer le serveur mock
 test_venv/bin/python mock_server.py
@@ -185,16 +201,18 @@ python3 --version  # Should be 3.12+
 ```bash
 cd services/translator
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
+# Méthode recommandée: uv sync (inclut les dépendances de test)
+uv sync --extra dev
+# Ou: make uv-sync
 
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+# Activer l'environnement
+source .venv/bin/activate  # macOS/Linux
 
-# Install test dependencies
-pip install pytest pytest-asyncio pytest-cov
+# Alternative - Mode compatibilité:
+# python3 -m venv venv
+# source venv/bin/activate
+# uv pip install -r requirements.txt
+# uv pip install pytest pytest-asyncio pytest-cov
 ```
 
 #### Running Tests

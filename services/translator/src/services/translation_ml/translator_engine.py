@@ -101,7 +101,8 @@ def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
 ML_AVAILABLE = False
 try:
     import torch
-    from transformers import pipeline as create_pipeline
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+    from .seq2seq_translator import Seq2SeqTranslator
     ML_AVAILABLE = True
 except ImportError:
     logger.warning("⚠️ Dependencies ML non disponibles")
@@ -227,14 +228,19 @@ class TranslatorEngine:
                     logger.error(f"❌ Tokenizer non disponible pour {model_type}")
                     return None, False
 
-                # Créer le pipeline pour cette paire
-                # Note: Pour NLLB, le même pipeline peut gérer toutes les paires
-                # mais le cache LRU permet de tracker les paires fréquentes
+                # Créer le wrapper Seq2Seq générique pour cette paire
+                # Note: Transformers 5.0+ n'a PAS de task "translation" dans le registry
+                # On utilise donc directement AutoModelForSeq2SeqLM + AutoTokenizer
+                # via notre wrapper Seq2SeqTranslator qui:
+                # - Auto-détecte le type de modèle (NLLB, T5, mT5, mBART)
+                # - Adapte automatiquement la stratégie de traduction
+                # - Émule l'API pipeline pour compatibilité
                 device = self.model_loader.device
-                new_pipeline = create_pipeline(
-                    "translation",
+                new_pipeline = Seq2SeqTranslator(
                     model=model,
                     tokenizer=tokenizer,
+                    src_lang=source_lang,  # Format dépend du modèle (ex: eng_Latn pour NLLB)
+                    tgt_lang=target_lang,  # Format dépend du modèle (ex: fra_Latn pour NLLB)
                     device=0 if device == 'cuda' and torch.cuda.is_available() else -1,
                     max_length=512,
                     batch_size=8
@@ -368,9 +374,13 @@ class TranslatorEngine:
                     )
 
                 # Extraire le résultat
-                if result and len(result) > 0 and 'translation_text' in result[0]:
+                # Note: Seq2SeqTranslator retourne un dict pour un texte unique
+                if result and 'translation_text' in result:
+                    return result['translation_text']
+                elif result and isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
                     return result[0]['translation_text']
                 else:
+                    logger.error(f"[NLLB] Résultat inattendu: {result}")
                     return f"[NLLB-No-Result] {text}"
 
             except Exception as e:

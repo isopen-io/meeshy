@@ -44,7 +44,7 @@ curl http://localhost:8000/health
 
 ```bash
 cd services/translator
-pip install pytest pytest-asyncio pyzmq
+uv pip install pytest pytest-asyncio pyzmq
 ```
 
 ### 3. Fichier audio de test (optionnel)

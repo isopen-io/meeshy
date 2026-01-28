@@ -14,6 +14,9 @@
 
 FROM python:3.9-slim
 
+# Copier uv depuis l'image officielle (ultra-rapide package manager)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 LABEL maintainer="Meeshy Platform"
 LABEL description="Translator Service avec OpenVoice V2 pour clonage vocal avancé"
 LABEL python.version="3.9"
@@ -65,13 +68,13 @@ COPY services/translator/requirements.txt ./
 
 # Installer dépendances Python (inclut maintenant pyannote.audio + scikit-learn)
 # Note: pyannote.audio et scikit-learn sont maintenant dans requirements.txt (installation par défaut)
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+RUN uv pip install --system --no-cache-dir --upgrade pip && \
+    uv pip install --system --no-cache-dir -r requirements.txt && \
     echo "✅ Dépendances principales installées (incluant pyannote.audio + scikit-learn)"
 
 # Installer OpenVoice depuis GitHub (Python 3.9 compatible)
 RUN echo "🎤 Installation d'OpenVoice V2..." && \
-    pip install --no-cache-dir git+https://github.com/myshell-ai/OpenVoice.git && \
+    uv pip install --system --no-cache-dir git+https://github.com/myshell-ai/OpenVoice.git && \
     echo "✅ OpenVoice V2 installé avec succès" || \
     echo "⚠️  OpenVoice installation échouée - utilisation de Chatterbox seul"
 
