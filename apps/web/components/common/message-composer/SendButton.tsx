@@ -62,7 +62,7 @@ export const SendButton = ({
       <Send className="h-3 w-3 sm:h-5 sm:w-5" aria-hidden="true" />
       {isProcessing && (
         <div className="absolute inset-0 flex items-center justify-center bg-blue-600/50 rounded-full">
-          <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+          <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" aria-hidden="true" />
         </div>
       )}
     </Button>

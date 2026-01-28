@@ -145,7 +145,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-lg backdrop-blur-sm">
             <div className="flex items-start justify-between space-x-2">
               <div className="flex items-start space-x-2 flex-1 min-w-0">
-                <MessageCircle className="h-4 w-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <MessageCircle className="h-4 w-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
@@ -166,7 +166,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                   )}
                   {composerState.replyingTo.translations && composerState.replyingTo.translations.length > 0 && (
                     <div className="mt-1 flex items-center space-x-1">
-                      <Languages className="h-3 w-3 text-blue-500/60 dark:text-blue-400/60" />
+                      <Languages className="h-3 w-3 text-blue-500/60 dark:text-blue-400/60" aria-hidden="true" />
                       <span className="text-xs text-blue-600/60 dark:text-blue-400/60">
                         {composerState.replyingTo.translations.length} traductions
                       </span>
@@ -179,8 +179,9 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 size="sm"
                 onClick={composerState.clearReply}
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1 h-6 w-6"
+                aria-label="Annuler la réponse"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -190,7 +191,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         {composerState.isCompressing && Object.keys(composerState.compressionProgress).length > 0 && (
           <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-hidden="true" />
               <span className="text-sm font-medium text-blue-900">Compression en cours...</span>
             </div>
             <div className="space-y-1">
@@ -341,7 +342,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           {/* Location */}
           {props.location && (
             <div className="flex items-center space-x-1">
-              <MapPin className="h-[22px] w-[22px] sm:h-[22px] sm:w-[22px]" />
+              <MapPin className="h-[22px] w-[22px] sm:h-[22px] sm:w-[22px]" aria-hidden="true" />
               <span className="hidden sm:inline">{props.location}</span>
             </div>
           )}
@@ -381,6 +382,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           ref={composerState.fileInputRef}
           type="file"
           multiple
+          id="message-composer-file-input"
           className="hidden"
           onChange={composerState.handleFileInputChange}
           accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip"
