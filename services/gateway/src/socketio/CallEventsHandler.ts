@@ -1125,13 +1125,11 @@ export class CallEventsHandler {
 
       for (const participantId of unrespondedParticipants) {
         await this.notificationService.createMissedCallNotification({
-          recipientId: participantId,
+          recipientUserId: participantId,
           callerId: callSession.initiatorId,
-          callerUsername: callerName,
-          callerAvatar,
           conversationId: callSession.conversationId,
           callSessionId: callSession.id,
-          callType: 'video' // TODO: Récupérer le type d'appel depuis les métadonnées
+          callType: 'video', // TODO: Récupérer le type d'appel depuis les métadonnées
         });
       }
 

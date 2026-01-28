@@ -2544,15 +2544,10 @@ export class MeeshySocketIOManager {
           // Fire-and-forget pour éviter les timeouts
           this.notificationService.createReactionNotification({
             messageAuthorId,
-            reactorId,
-            reactorUsername: '', // sera récupéré par fetchSenderInfo
-            reactorAvatar: undefined,
-            emoji: data.emoji,
-            messageContent: message.content,
-            conversationId: message.conversationId,
-            conversationTitle: message.conversation.title || undefined,
+            reactorUserId: reactorId,
             messageId: data.messageId,
-            reactionId: reaction.id
+            conversationId: message.conversationId,
+            reactionEmoji: data.emoji,
           }).catch((notifError) => {
             logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
           });
@@ -2891,16 +2886,12 @@ export class MeeshySocketIOManager {
         if (!isOriginalAuthorMentioned) {
           // L'auteur n'est pas mentionné, on crée une notification de réponse
           await this.notificationService.createReplyNotification({
-            originalMessageAuthorId,
-            replierId: message.senderId || '',
-            replierUsername: senderUsername,
-            replierAvatar: senderAvatar,
-            replyContent: message.content,
+            recipientUserId: originalMessageAuthorId,
+            replierUserId: message.senderId || '',
+            messageId: message.id,
             conversationId: message.conversationId,
-            conversationTitle: conversation.title || undefined,
+            messagePreview: message.content,
             originalMessageId: message.replyToId!,
-            replyMessageId: message.id,
-            attachments: messageAttachments.length > 0 ? messageAttachments : undefined
           });
           logger.info(`📢 [NOTIFICATIONS] Notification de réponse créée pour ${originalMessageAuthorId}`);
         } else {
@@ -2925,19 +2916,14 @@ export class MeeshySocketIOManager {
         }
 
         await this.notificationService.createMessageNotification({
-          recipientId: member.userId,
+          recipientUserId: member.userId,
           senderId: message.senderId || '',
-          senderUsername,
-          senderAvatar,
-          senderDisplayName,
-          senderFirstName,
-          senderLastName,
-          messageContent: message.content,
-          conversationId: message.conversationId,
           messageId: message.id,
-          conversationType: conversation.type,
-          conversationTitle: conversation.title || undefined,
-          attachments: messageAttachments.length > 0 ? messageAttachments : undefined
+          conversationId: message.conversationId,
+          messagePreview: message.content,
+          hasAttachments: messageAttachments.length > 0,
+          attachmentCount: messageAttachments.length,
+          firstAttachmentType: messageAttachments[0]?.mimeType?.startsWith('image/') ? 'image' : 'document',
         });
       }
 
