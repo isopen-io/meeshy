@@ -1084,10 +1084,12 @@ model Notification {
   actor    Json?
 
   /// CONTEXT - Où c'est arrivé { conversationId, conversationTitle, conversationType, messageId, callSessionId, etc. }
-  context  Json
+  /// Note: Nullable temporairement pour supporter les anciennes données avant migration
+  context  Json?     @default("{}")
 
   /// METADATA - Données type-spécifiques structurées { action, messagePreview, attachments, reactionEmoji, callType, etc. }
-  metadata Json
+  /// Note: Nullable temporairement pour supporter les anciennes données avant migration
+  metadata Json?     @default("{}")
 
   /// STATE - État de lecture
   /// Note: isRead, readAt, createdAt gardés à la racine pour performance des indexes
@@ -1097,7 +1099,8 @@ model Notification {
   createdAt DateTime  @default(now())
 
   /// DELIVERY - Suivi multi-canal { emailSent, pushSent }
-  delivery Json
+  /// Note: Nullable temporairement pour supporter les anciennes données avant migration
+  delivery Json?     @default("{\"emailSent\":false,\"pushSent\":false}")
 
   // ===== RELATIONS =====
   /// Optional messageId pour faciliter les queries (duplique context.messageId)

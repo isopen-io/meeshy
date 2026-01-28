@@ -795,9 +795,19 @@ export class NotificationService {
       });
 
       // Filtrer côté application pour trouver celles liées à cette conversation
-      const relevantNotifications = notifications.filter((n: any) =>
-        n.context?.conversationId === conversationId
-      );
+      // Note: Vérifier que context existe et n'est pas null (anciennes données)
+      const relevantNotifications = notifications.filter((n: any) => {
+        // Ignorer les notifications avec context null ou invalide
+        if (!n.context || typeof n.context !== 'object') {
+          notificationLogger.warn('Notification with invalid context found', {
+            notificationId: n.id,
+            userId: n.userId,
+            contextValue: n.context
+          });
+          return false;
+        }
+        return n.context.conversationId === conversationId;
+      });
 
       // Marquer comme lues
       let count = 0;

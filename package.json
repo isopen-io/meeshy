@@ -46,6 +46,7 @@
     "sync-versions": "node scripts/sync-versions.js",
     "release:local": "pnpm version && git add -A && git commit -m 'chore: version packages' || true",
     "fix:notification-dates": "tsx scripts/migrations/fix-notification-dates.ts",
+    "fix:notification-context-null": "tsx scripts/migrations/fix-notification-context-null.ts",
     "test:notification-serialization": "tsx scripts/test-notification-serialization.ts"
   },
   "devDependencies": {
