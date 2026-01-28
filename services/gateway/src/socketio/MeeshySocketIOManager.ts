@@ -929,8 +929,16 @@ export class MeeshySocketIOManager {
             this._addUserSocket(user.id, socket.id);
 
             // IMPORTANT: Rejoindre la room personnelle pour les notifications
-            socket.join(user.id);
-            logger.info(`[Socket.IO] User ${user.id} joined personal room for notifications`);
+            try {
+              if (user.id && typeof user.id === 'string') {
+                socket.join(user.id);
+                logger.info(`[Socket.IO] User ${user.id} joined personal room for notifications`);
+              } else {
+                logger.error(`[Socket.IO] Invalid userId for socket.join: ${JSON.stringify(user.id)}`);
+              }
+            } catch (error) {
+              logger.error(`[Socket.IO] Failed to join personal room for user ${user.id}:`, error);
+            }
 
             // Mettre à jour l'état en ligne dans la base de données et broadcaster
             await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
@@ -1007,8 +1015,16 @@ export class MeeshySocketIOManager {
             this._addUserSocket(user.id, socket.id);
 
             // IMPORTANT: Rejoindre la room personnelle pour les notifications
-            socket.join(user.id);
-            logger.info(`[Socket.IO] Anonymous user ${user.id} joined personal room for notifications`);
+            try {
+              if (user.id && typeof user.id === 'string') {
+                socket.join(user.id);
+                logger.info(`[Socket.IO] Anonymous user ${user.id} joined personal room for notifications`);
+              } else {
+                logger.error(`[Socket.IO] Invalid userId for socket.join (anonymous): ${JSON.stringify(user.id)}`);
+              }
+            } catch (error) {
+              logger.error(`[Socket.IO] Failed to join personal room for anonymous user ${user.id}:`, error);
+            }
 
             // CORRECTION: Mettre à jour l'état en ligne dans la base de données pour les anonymes et broadcaster
             await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
