@@ -29,6 +29,10 @@ export interface UsePhoneValidationOptions {
   debounceMs?: number;
   /** Callback quand le numéro change de validité */
   onValidationChange?: (isValid: boolean, formatted?: string) => void;
+  /** Valider automatiquement à chaque changement (défaut: false)
+   * PERFORMANCE: Désactivé par défaut pour éviter validation continue.
+   * Utilisez validate() manuellement au blur ou à la soumission. */
+  validateOnChange?: boolean;
 }
 
 export interface UsePhoneValidationReturn {
@@ -59,7 +63,8 @@ export function usePhoneValidation({
   disabled = false,
   checkAvailability = false,
   debounceMs = AVAILABILITY_CHECK_DEBOUNCE,
-  onValidationChange
+  onValidationChange,
+  validateOnChange = false
 }: UsePhoneValidationOptions): UsePhoneValidationReturn {
   const [status, setStatus] = useState<PhoneValidationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -174,9 +179,17 @@ export function usePhoneValidation({
   }, [countryCode]);
 
   /**
-   * Effet de validation automatique
+   * Effet de validation automatique (optionnel, désactivé par défaut pour performance)
+   * IMPORTANT: validateOnChange=false par défaut pour éviter validation continue
+   * qui cause des milliers de logs et bloque la machine.
+   * Utilisez validate() manuellement au blur ou soumission du formulaire.
    */
   useEffect(() => {
+    // PERFORMANCE: Ne valider automatiquement que si explicitement demandé
+    if (!validateOnChange) {
+      return;
+    }
+
     performValidation();
 
     return () => {
@@ -184,17 +197,18 @@ export function usePhoneValidation({
         clearTimeout(checkTimeout.current);
       }
     };
-  }, [performValidation]);
+  }, [performValidation, validateOnChange]);
 
   /**
    * Reset quand le pays change
+   * PERFORMANCE: Ne valider que si validateOnChange est activé
    */
   useEffect(() => {
     lastCheckedPhone.current = '';
-    if (phoneNumber) {
+    if (validateOnChange && phoneNumber) {
       performValidation();
     }
-  }, [countryCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [countryCode, validateOnChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     status,

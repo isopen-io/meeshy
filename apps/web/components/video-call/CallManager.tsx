@@ -27,7 +27,7 @@ const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
 export function CallManager() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isChecking } = useAuth();
   const {
     currentCall,
     isInCall,
@@ -397,6 +397,12 @@ export function CallManager() {
     const LOG_THROTTLE_MS = 5000; // Only log every 5 seconds to avoid spam
 
     const setupListeners = () => {
+      // CRITICAL: Don't attempt setup while auth is still checking
+      // This prevents infinite retry loops during app startup
+      if (isChecking) {
+        return false; // Silently wait - no logs needed during normal startup
+      }
+
       // Wait for user to be loaded before setting up listeners
       if (!user || !user.id) {
         const now = Date.now();
@@ -525,6 +531,7 @@ export function CallManager() {
     };
   }, [
     user,
+    isChecking,
     handleIncomingCall,
     handleParticipantJoined,
     handleParticipantLeft,

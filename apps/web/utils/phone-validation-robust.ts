@@ -65,7 +65,13 @@ export function validatePhoneNumber(
       countryCode: parsed.country || countryCode
     };
   } catch (error) {
-    console.warn('[phone-validation] Parse error:', error);
+    // IMPORTANT: Ne pas logger les erreurs "TOO_SHORT" car elles sont normales
+    // pendant la saisie progressive d'un numéro de téléphone.
+    // Seules les vraies erreurs de format doivent être loggées.
+    const errorStr = String(error);
+    if (!errorStr.includes('TOO_SHORT')) {
+      console.warn('[phone-validation] Parse error:', error);
+    }
     return {
       isValid: false,
       error: 'phoneInvalidFormat'
@@ -124,7 +130,13 @@ export function validateInternationalPhone(phoneNumber: string): PhoneValidation
       countryCode: parsed.country
     };
   } catch (error) {
-    console.warn('[phone-validation] Parse error:', error);
+    // IMPORTANT: Ne pas logger les erreurs "TOO_SHORT" car elles sont normales
+    // pendant la saisie progressive d'un numéro de téléphone.
+    // Seules les vraies erreurs de format doivent être loggées.
+    const errorStr = String(error);
+    if (!errorStr.includes('TOO_SHORT')) {
+      console.warn('[phone-validation] Parse error:', error);
+    }
     return {
       isValid: false,
       error: 'phoneInvalidFormat'

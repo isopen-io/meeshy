@@ -20,6 +20,7 @@ interface ContactStepProps {
   disabled?: boolean;
   onEmailChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
+  onPhoneBlur?: () => void;
   onCountryChange: (country: typeof COUNTRY_CODES[0]) => void;
 }
 
@@ -35,6 +36,7 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
   disabled,
   onEmailChange,
   onPhoneChange,
+  onPhoneBlur,
   onCountryChange,
 }, ref) => {
   const { t } = useI18n('auth');
@@ -127,6 +129,7 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
                 placeholder="6 12 34 56 78"
                 value={formData.phoneNumber}
                 onChange={(e) => onPhoneChange(e.target.value)}
+                onBlur={() => onPhoneBlur?.()}
                 disabled={disabled}
                 className={cn(
                   inputBaseClass,

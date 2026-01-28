@@ -144,11 +144,13 @@ export function RegisterFormWizard({
   } = validation;
 
   // Robust phone validation with libphonenumber-js
+  // PERFORMANCE: validateOnChange=false pour éviter validation continue
   const phoneValidation = usePhoneValidation({
     countryCode: selectedCountry.code as CountryCode,
     phoneNumber: formData.phoneNumber,
     disabled: disabled || currentStepData?.id !== 'contact',
     checkAvailability: true,
+    validateOnChange: false, // CRITICAL: Validation manuelle uniquement
     onValidationChange: (isValid, formatted) => {
       if (isValid && formatted) {
         // Check if phone already exists
@@ -162,6 +164,7 @@ export function RegisterFormWizard({
     errorMessage: phoneErrorMessage,
     formattedE164,
     formatAsYouType,
+    validate: validatePhone,
   } = phoneValidation;
 
   const submission = useRegistrationSubmit({
@@ -357,6 +360,7 @@ export function RegisterFormWizard({
               disabled={isLoading || disabled}
               onEmailChange={handleEmailChange}
               onPhoneChange={handlePhoneChange}
+              onPhoneBlur={validatePhone}
               onCountryChange={setSelectedCountry}
             />
             <ExistingAccountAlert

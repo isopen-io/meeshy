@@ -144,11 +144,14 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   });
 
   // Validation robuste du téléphone avec libphonenumber-js
+  // PERFORMANCE: validateOnChange=false pour éviter validation continue
+  // La validation se fait manuellement au blur ou à la soumission
   const phoneValidation = usePhoneValidation({
     countryCode: selectedPhoneCountry.code as CountryCode,
     phoneNumber: newPhone,
     disabled: !isChangingPhone,
     checkAvailability: true,
+    validateOnChange: false, // CRITICAL: Validation manuelle uniquement
   });
 
   useEffect(() => {
@@ -1104,6 +1107,13 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                         // Format as you type
                         const formatted = phoneValidation.formatAsYouType(e.target.value);
                         setNewPhone(formatted);
+                      }}
+                      onBlur={() => {
+                        // PERFORMANCE: Valider uniquement au blur (défocus) pour optimiser performance
+                        // Évite validation continue qui cause milliers de logs et bloque la machine
+                        if (newPhone.trim()) {
+                          phoneValidation.validate();
+                        }
                       }}
                       placeholder="6 12 34 56 78"
                       className={`w-full pl-10 pr-24 ${
