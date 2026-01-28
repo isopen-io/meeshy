@@ -45,7 +45,7 @@ export const SendButton = ({
       className={`
         ${styles.sendButton}
         ${animConfig.enableGradient ? styles.withGradient : styles.solidColor}
-        ${animConfig.enableRotation ? '' : styles.simpleScale}
+        ${animConfig.enableRotation ? styles.withRotation : styles.simpleScale}
         bg-blue-600 hover:bg-blue-700 text-white
         h-6 w-6 sm:h-9 sm:w-9 p-0 rounded-full
         shadow-lg hover:shadow-xl transition-all duration-200

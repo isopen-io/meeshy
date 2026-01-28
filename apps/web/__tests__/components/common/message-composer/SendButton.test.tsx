@@ -82,4 +82,24 @@ describe('SendButton', () => {
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
   });
+
+  it('should use simple scale animation when rotation disabled', () => {
+    render(
+      <SendButton
+        isVisible={true}
+        canSend={true}
+        onClick={jest.fn()}
+        performanceProfile="low"
+        animConfig={{
+          sendButtonDuration: 200,
+          enableRotation: false,
+          enableGradient: false,
+        }}
+      />
+    );
+
+    const button = screen.getByRole('button');
+    expect(button).toHaveClass('simpleScale');
+    expect(button).not.toHaveClass('withRotation');
+  });
 });

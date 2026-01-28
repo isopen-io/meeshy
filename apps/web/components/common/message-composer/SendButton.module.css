@@ -43,6 +43,11 @@
   animation-timing-function: ease-out;
 }
 
+.sendButton.withRotation {
+  animation-name: sendButtonAppear;
+  animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .sendButton.withGradient {
   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #3b82f6 100%);
   background-size: 200% 200%;
