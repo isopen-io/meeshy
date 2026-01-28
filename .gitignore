@@ -260,3 +260,23 @@ apps/ios/scripts/voice_cloning_output/history/**/*.wav
 *.backup
 infrastructure/docker/compose/.env.staging
 secrets/
+# Fichiers de debug notifications (temporaires)
+NOTIFICATION_DB_ERROR_FIX.md
+NOTIFICATION_DEBUG_SCRIPT.md
+NOTIFICATION_DIAGNOSTIC_SUMMARY.md
+NOTIFICATION_PAGE_FIX.md
+NOTIFICATION_QUERY_DEBUG.md
+NOTIFICATION_REALTIME_FIX_PLAN.md
+NOTIFICATION_SYSTEM_FIXES.md
+NOTIFICATION_SYSTEM_TEST_PLAN.md
+TEST_NOTIFICATION_SYSTEM.md
+
+# Anciens fichiers de service (backups)
+services/gateway/src/routes/notifications.old.ts
+services/gateway/src/services/notifications/NotificationServiceExtensions.ts.old
+
+# Dossier de debug temporaire
+apps/web/components/debug/
+
+# Tests temporaires
+services/gateway/src/services/notifications/__tests__/
