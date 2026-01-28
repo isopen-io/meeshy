@@ -782,6 +782,120 @@ export function ConversationSettingsModal({
             {/* Onglet Configuration Admin */}
             {canAccessAdminSettings && (
               <TabsContent value="config" className="mt-6 space-y-6 focus-visible:outline-none">
+                {/* Section Médias & Apparence - Header visuel moderne */}
+                {canModifyImage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 }}
+                    className="space-y-3"
+                  >
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4" />
+                      {t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}
+                    </h3>
+
+                    {/* Container visuel avec bannière + avatar */}
+                    <div className="relative rounded-xl overflow-hidden backdrop-blur-xl bg-gradient-to-br from-slate-100/80 to-gray-100/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-white/30 dark:border-gray-700/40 shadow-lg">
+                      {/* Bannière cliquable */}
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                        className="relative h-32 cursor-pointer group"
+                        onClick={() => conversation.type !== 'direct' && setIsBannerUploadDialogOpen(true)}
+                      >
+                        {(conversation as any).bannerImage ? (
+                          <img
+                            src={(conversation as any).bannerImage}
+                            alt="Bannière"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-blue-400 via-indigo-500 to-purple-600" />
+                        )}
+
+                        {/* Overlay au hover */}
+                        {conversation.type !== 'direct' && (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                            <div className="flex flex-col items-center gap-2 text-white">
+                              <Upload className="h-6 w-6" />
+                              <p className="text-sm font-medium">
+                                {(conversation as any).bannerImage
+                                  ? (t('conversationDetails.changeBanner') || 'Modifier la bannière')
+                                  : (t('conversationDetails.uploadBanner') || 'Ajouter une bannière')}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Badge type conversation si bannière présente */}
+                        {(conversation as any).bannerImage && conversation.type === 'direct' && (
+                          <div className="absolute top-3 right-3">
+                            <Badge className="backdrop-blur-sm bg-white/20 text-white border-white/30">
+                              Conversation directe
+                            </Badge>
+                          </div>
+                        )}
+                      </motion.div>
+
+                      {/* Avatar par-dessus la bannière - cliquable */}
+                      <div className="relative px-6 pb-4">
+                        <motion.div
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="absolute -top-16 cursor-pointer group"
+                          onClick={() => setIsImageUploadDialogOpen(true)}
+                        >
+                          <div className="relative">
+                            <Avatar className="h-32 w-32 border-4 border-white dark:border-gray-900 shadow-2xl">
+                              <AvatarImage
+                                src={conversation.image || conversation.avatar}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-4xl font-bold">
+                                {(conversation.title || 'C')[0].toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+
+                            {/* Overlay au hover sur avatar */}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full flex items-center justify-center">
+                              <div className="flex flex-col items-center gap-1 text-white">
+                                <ImagePlus className="h-6 w-6" />
+                                <p className="text-xs font-medium">Modifier</p>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+
+                        {/* Infos conversation à côté de l'avatar */}
+                        <div className="pt-20 pl-36">
+                          <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                            {conversation.title || 'Sans titre'}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
+                              {conversation.type === 'direct' ? 'Direct' : 'Groupe'}
+                            </Badge>
+                            {conversation.participants && (
+                              <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
+                                {conversation.participants.length} {conversation.participants.length > 1 ? 'membres' : 'membre'}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Instructions */}
+                      <div className="px-6 pb-4">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                          <Info className="h-3 w-3" />
+                          Cliquez sur l'avatar ou la bannière pour modifier les images
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Informations de base */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -1008,119 +1122,6 @@ export function ConversationSettingsModal({
                       {!encryptionMode && (t('conversationDetails.noEncryptionDescription') || 'Les messages ne sont pas chiffrés.')}
                     </p>
                   </div>
-                </motion.div>
-
-                {/* Médias & Apparence */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="space-y-4"
-                >
-                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    {t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}
-                  </h3>
-
-                  {/* Upload image de conversation */}
-                  {canModifyImage && (
-                    <motion.div
-                      whileHover={{ scale: 1.01 }}
-                      className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-cyan-50/80 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200/50 dark:border-blue-800/30 shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-500/30 flex-shrink-0">
-                          <ImagePlus className="h-4 w-4 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
-                            {t('conversationDetails.conversationImage') || 'Image de conversation'}
-                          </p>
-                          <p className="text-xs text-blue-700 dark:text-blue-300">
-                            {t('conversationDetails.conversationImageDescription') || 'Photo ou avatar du groupe'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Aperçu de l'image actuelle */}
-                      {(conversation.image || conversation.avatar) && (
-                        <div className="relative rounded-lg overflow-hidden backdrop-blur-sm bg-white/50 dark:bg-gray-900/50 border border-blue-200/30 dark:border-blue-800/20 p-2">
-                          <div className="flex items-center justify-center">
-                            <Avatar className="h-24 w-24 border-2 border-white dark:border-gray-800 shadow-xl">
-                              <AvatarImage src={conversation.image || conversation.avatar} className="object-cover" />
-                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-600 text-white text-2xl font-bold">
-                                {(conversation.title || 'C')[0].toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-                          <p className="text-center text-xs text-blue-600 dark:text-blue-400 mt-2">
-                            Image actuelle
-                          </p>
-                        </div>
-                      )}
-
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsImageUploadDialogOpen(true)}
-                        className="w-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-blue-200/50 dark:border-blue-800/30 hover:bg-blue-500/10 transition-all duration-200"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        {(conversation.image || conversation.avatar)
-                          ? (t('conversationDetails.changeImage') || 'Modifier l\'image')
-                          : (t('conversationDetails.uploadImage') || 'Charger une image')}
-                      </Button>
-                    </motion.div>
-                  )}
-
-                  {/* Upload bannière de groupe */}
-                  {canModifyImage && conversation.type !== 'direct' && (
-                    <motion.div
-                      whileHover={{ scale: 1.01 }}
-                      className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200/50 dark:border-indigo-800/30 shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 shadow-lg shadow-indigo-500/30 flex-shrink-0">
-                          <ImagePlus className="h-4 w-4 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-indigo-900 dark:text-indigo-100">
-                            {t('conversationDetails.groupBanner') || 'Bannière de groupe'}
-                          </p>
-                          <p className="text-xs text-indigo-700 dark:text-indigo-300">
-                            {t('conversationDetails.groupBannerDescription') || 'Image en haut du groupe'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Aperçu de la bannière actuelle */}
-                      {(conversation as any).bannerImage && (
-                        <div className="relative rounded-lg overflow-hidden backdrop-blur-sm bg-white/50 dark:bg-gray-900/50 border border-indigo-200/30 dark:border-indigo-800/20 p-2">
-                          <div className="relative w-full h-32 rounded-md overflow-hidden">
-                            <img
-                              src={(conversation as any).bannerImage}
-                              alt="Bannière du groupe"
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                          </div>
-                          <p className="text-center text-xs text-indigo-600 dark:text-indigo-400 mt-2">
-                            Bannière actuelle
-                          </p>
-                        </div>
-                      )}
-
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsBannerUploadDialogOpen(true)}
-                        className="w-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-indigo-200/50 dark:border-indigo-800/30 hover:bg-indigo-500/10 transition-all duration-200"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        {(conversation as any).bannerImage
-                          ? (t('conversationDetails.changeBanner') || 'Modifier la bannière')
-                          : (t('conversationDetails.uploadBanner') || 'Charger une bannière')}
-                      </Button>
-                    </motion.div>
-                  )}
                 </motion.div>
 
                 {/* Informations Conversation */}
