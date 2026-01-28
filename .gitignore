@@ -280,3 +280,6 @@ apps/web/components/debug/
 
 # Tests temporaires
 services/gateway/src/services/notifications/__tests__/
+
+# User uploaded files (avatars, images, etc.)
+apps/web/public/u/
