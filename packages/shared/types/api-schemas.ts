@@ -739,29 +739,66 @@ export const messageMinimalSchema = {
 // =============================================================================
 
 /**
- * Conversation participant schema
+ * Conversation participant schema with full user information
  */
 export const conversationParticipantSchema = {
   type: 'object',
-  description: 'Participant in a conversation',
+  description: 'Participant in a conversation with full user information',
   properties: {
-    userId: { type: 'string', description: 'User ID' },
+    id: { type: 'string', description: 'User ID' },
+    userId: { type: 'string', description: 'User ID (duplicate for backward compatibility)' },
+    username: { type: 'string', description: 'Username' },
+    firstName: { type: 'string', nullable: true, description: 'First name' },
+    lastName: { type: 'string', nullable: true, description: 'Last name' },
+    displayName: { type: 'string', nullable: true, description: 'Display name' },
+    avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+    email: { type: 'string', nullable: true, description: 'Email address' },
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
       description: 'Participant global role (aligned with Prisma enum UserRole)'
     },
-    joinedAt: { type: 'string', format: 'date-time', description: 'Join timestamp' },
+    conversationRole: {
+      type: 'string',
+      enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'],
+      nullable: true,
+      description: 'Role in this specific conversation'
+    },
+    isOnline: { type: 'boolean', description: 'User is currently online' },
+    lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last activity timestamp' },
+    systemLanguage: { type: 'string', nullable: true, description: 'System language preference' },
+    regionalLanguage: { type: 'string', nullable: true, description: 'Regional language' },
+    customDestinationLanguage: { type: 'string', nullable: true, description: 'Custom destination language' },
+    autoTranslateEnabled: { type: 'boolean', nullable: true, description: 'Auto-translate enabled' },
+    translateToSystemLanguage: { type: 'boolean', nullable: true, description: 'Translate to system language' },
+    translateToRegionalLanguage: { type: 'boolean', nullable: true, description: 'Translate to regional language' },
+    useCustomDestination: { type: 'boolean', nullable: true, description: 'Use custom destination language' },
     isActive: { type: 'boolean', description: 'Participant is active' },
+    createdAt: { type: 'string', format: 'date-time', description: 'User creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', description: 'User last update timestamp' },
+    joinedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Join timestamp' },
+    isAnonymous: { type: 'boolean', nullable: true, description: 'Is anonymous participant' },
+    canSendMessages: { type: 'boolean', nullable: true, description: 'Can send messages (anonymous)' },
+    canSendFiles: { type: 'boolean', nullable: true, description: 'Can send files (anonymous)' },
+    canSendImages: { type: 'boolean', nullable: true, description: 'Can send images (anonymous)' },
     permissions: {
       type: 'object',
       nullable: true,
       properties: {
+        canAccessAdmin: { type: 'boolean', description: 'Can access admin panel' },
+        canManageUsers: { type: 'boolean', description: 'Can manage users' },
+        canManageGroups: { type: 'boolean', description: 'Can manage groups' },
+        canManageConversations: { type: 'boolean', description: 'Can manage conversations' },
+        canViewAnalytics: { type: 'boolean', description: 'Can view analytics' },
+        canModerateContent: { type: 'boolean', description: 'Can moderate content' },
+        canViewAuditLogs: { type: 'boolean', description: 'Can view audit logs' },
+        canManageNotifications: { type: 'boolean', description: 'Can manage notifications' },
+        canManageTranslations: { type: 'boolean', description: 'Can manage translations' },
         canInvite: { type: 'boolean', description: 'Can invite others' },
         canRemove: { type: 'boolean', description: 'Can remove participants' },
         canEdit: { type: 'boolean', description: 'Can edit conversation' },
         canDelete: { type: 'boolean', description: 'Can delete messages' },
-        canModerate: { type: 'boolean', description: 'Can moderate content' }
+        canModerate: { type: 'boolean', description: 'Can moderate content (conversation level)' }
       }
     }
   }

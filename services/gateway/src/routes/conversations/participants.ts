@@ -38,10 +38,11 @@ export function registerParticipantsRoutes(
       role?: string;
       search?: string;
       limit?: string;
+      cursor?: string;
     };
   }>('/conversations/:id/participants', {
     schema: {
-      description: 'Get participants in a conversation with optional filtering by online status, role, or search query',
+      description: 'Get participants in a conversation with optional filtering and cursor-based pagination',
       tags: ['conversations', 'participants'],
       summary: 'Get conversation participants',
       params: {
@@ -57,7 +58,8 @@ export function registerParticipantsRoutes(
           onlineOnly: { type: 'string', enum: ['true', 'false'], description: 'Filter to only online participants' },
           role: { type: 'string', enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'], description: 'Filter by participant role' },
           search: { type: 'string', description: 'Search participants by name or username' },
-          limit: { type: 'string', description: 'Maximum number of participants to return' }
+          limit: { type: 'string', description: 'Maximum number of participants to return (default: 20, max: 100)' },
+          cursor: { type: 'string', description: 'Cursor for pagination (ConversationMember ID)' }
         }
       },
       response: {
@@ -68,6 +70,14 @@ export function registerParticipantsRoutes(
             data: {
               type: 'array',
               items: conversationParticipantSchema
+            },
+            pagination: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                nextCursor: { type: 'string', nullable: true, description: 'Cursor for next page' },
+                hasMore: { type: 'boolean', description: 'Whether there are more results' }
+              }
             }
           }
         },
@@ -80,7 +90,7 @@ export function registerParticipantsRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { onlineOnly, role, search, limit } = request.query;
+      const { onlineOnly, role, search, limit, cursor } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -161,7 +171,18 @@ export function registerParticipantsRoutes(
         };
       }
 
-      // Récupérer les participants avec filtres
+      // Configuration de la pagination
+      const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20; // Max 100, défaut 20
+
+      // Si un cursor est fourni, ajouter la condition de cursor
+      if (cursor) {
+        whereConditions.id = {
+          gt: cursor // Récupérer les participants après ce cursor (ID)
+        };
+      }
+
+      // Récupérer les participants avec filtres et pagination
+      // On prend pageLimit + 1 pour savoir s'il y a une page suivante
       const participants = await prisma.conversationMember.findMany({
         where: whereConditions,
         include: {
@@ -190,13 +211,18 @@ export function registerParticipantsRoutes(
           { user: { isOnline: 'desc' } }, // Utilisateurs en ligne en premier
           { user: { firstName: 'asc' } },  // Puis par prénom
           { user: { lastName: 'asc' } },   // Puis par nom
-          { joinedAt: 'asc' }              // Enfin par date d'entrée
+          { id: 'asc' }                    // Ordre stable pour la pagination
         ],
-        ...(limit && { take: parseInt(limit, 10) }) // Limite optionnelle
+        take: pageLimit + 1 // +1 pour détecter s'il y a plus de résultats
       });
 
+      // Déterminer s'il y a plus de résultats
+      const hasMore = participants.length > pageLimit;
+      const paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
+      const nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
+
       // Transformer les données pour correspondre au format attendu
-      const formattedParticipants = participants.map(participant => ({
+      const formattedParticipants = paginatedParticipants.map(participant => ({
         id: participant.user.id,
         userId: participant.userId, // Ajouter l'ID utilisateur pour la correspondance
         username: participant.user.username,
@@ -297,10 +323,14 @@ export function registerParticipantsRoutes(
       // Combiner les participants authentifiés et anonymes
       const allParticipants = [...formattedParticipants, ...formattedAnonymousParticipants];
 
-
+      // Construire la réponse avec pagination
       reply.send({
         success: true,
-        data: allParticipants
+        data: allParticipants,
+        pagination: {
+          nextCursor,
+          hasMore
+        }
       });
 
     } catch (error) {
