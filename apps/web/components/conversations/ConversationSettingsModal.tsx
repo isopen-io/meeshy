@@ -614,7 +614,7 @@ export function ConversationSettingsModal({
                     </div>
                   </motion.div>
 
-                  {/* Section Personnalisation */}
+                  {/* Section Personnalisation - Composant réutilisable */}
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -626,102 +626,120 @@ export function ConversationSettingsModal({
                       {t('conversationDetails.customization') || 'Personnalisation'}
                     </h3>
 
-                    {/* Nom personnalisé */}
-                    <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/30">
-                      <Label htmlFor="customName" className="flex items-center gap-2 font-semibold text-blue-900 dark:text-blue-100">
-                        <Pencil className="h-4 w-4" />
-                        {t('conversationDetails.customName') || 'Nom personnalisé'}
-                      </Label>
-                      <Input
-                        id="customName"
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        placeholder={t('conversationDetails.customNamePlaceholder') || 'Entrez un nom...'}
-                        className="backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-blue-200/50 dark:border-blue-800/30 focus-visible:ring-blue-500"
-                      />
-                      <p className="text-xs text-blue-700 dark:text-blue-300">
-                        {t('conversationDetails.customNameHelp') || 'Visible uniquement par vous'}
-                      </p>
-                    </div>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                      <div className="space-y-4">
+                        {/* Tags personnels */}
+                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Tag className="h-4 w-4 text-green-700 dark:text-green-300" />
+                            <label className="text-sm font-medium text-green-900 dark:text-green-100">
+                              {t('conversationDetails.personalTags')}
+                            </label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-3.5 w-3.5 text-green-700/60 dark:text-green-300/60 cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <p className="text-xs">{t('conversationDetails.tagsTooltip')}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <TagsManager conversationId={conversation.id} currentUser={currentUser} />
+                        </div>
 
-                    {/* Réaction */}
-                    <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-amber-50/80 to-orange-50/80 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200/50 dark:border-amber-800/30">
-                      <Label htmlFor="reaction" className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-100">
-                        <Smile className="h-4 w-4" />
-                        {t('conversationDetails.reaction') || 'Réaction'}
-                      </Label>
-                      <Input
-                        id="reaction"
-                        value={reaction}
-                        onChange={(e) => setReaction(e.target.value)}
-                        placeholder="😀"
-                        maxLength={2}
-                        className="backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-amber-200/50 dark:border-amber-800/30 w-24 text-center text-2xl focus-visible:ring-amber-500"
-                      />
-                    </div>
+                        {/* Catégorie personnelle */}
+                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-violet-50/80 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200/50 dark:border-purple-800/30">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FolderOpen className="h-4 w-4 text-purple-700 dark:text-purple-300" />
+                            <label className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                              {t('conversationDetails.category')}
+                            </label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-3.5 w-3.5 text-purple-700/60 dark:text-purple-300/60 cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <p className="text-xs">{t('conversationDetails.categoryTooltip')}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <CategorySelector conversationId={conversation.id} currentUser={currentUser} />
+                        </div>
 
-                    {/* Tags */}
-                    <div className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30">
-                      <Label className="flex items-center gap-2 font-semibold text-green-900 dark:text-green-100">
-                        <Tag className="h-4 w-4" />
-                        {t('conversationDetails.personalTags') || 'Tags personnels'}
-                      </Label>
-                      <div className="flex flex-wrap gap-2 min-h-[2rem]">
-                        <AnimatePresence mode="popLayout">
-                          {tags.map((tag) => (
-                            <motion.div
-                              key={tag}
-                              initial={{ scale: 0, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              exit={{ scale: 0, opacity: 0 }}
-                              layout
-                            >
-                              <Badge
-                                variant="secondary"
-                                className="gap-1 pr-1 bg-white/80 dark:bg-gray-900/80 border-green-200 dark:border-green-800"
-                              >
-                                {tag}
-                                <button
-                                  type="button"
-                                  onClick={() => removeTag(tag)}
-                                  className="ml-1 rounded-full p-0.5 hover:bg-red-500/20 transition-colors"
-                                  aria-label={`Supprimer le tag ${tag}`}
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                        {tags.length === 0 && (
-                          <span className="text-sm text-green-700 dark:text-green-300">
-                            {t('conversationDetails.noTags') || 'Aucun tag'}
-                          </span>
+                        {/* Personnalisation avancée */}
+                        <div className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/30">
+                          <CustomizationManager conversationId={conversation.id} currentUser={currentUser} />
+                        </div>
+                      </div>
+                    </Suspense>
+                  </motion.div>
+
+                  {/* Section Langues & Utilisateurs Actifs */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="space-y-4"
+                  >
+                    <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                      <Languages className="h-4 w-4" />
+                      {t('conversationDetails.activity') || 'Activité'}
+                    </h3>
+
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                      <div className="space-y-4">
+                        {/* Stats langues */}
+                        {messages.length > 0 && (
+                          <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                            <SidebarLanguageHeader
+                              languageStats={messageLanguageStats}
+                              userLanguage={currentUser.systemLanguage}
+                            />
+                          </div>
                         )}
+
+                        {/* Langues actives */}
+                        <FoldableSection
+                          title={t('conversationDetails.activeLanguages')}
+                          icon={<Languages className="h-4 w-4 mr-2" />}
+                          defaultExpanded={true}
+                        >
+                          <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                            <LanguageIndicators languageStats={activeLanguageStats} />
+                          </div>
+                        </FoldableSection>
+
+                        {/* Utilisateurs actifs avec bouton pour ouvrir drawer participants */}
+                        <FoldableSection
+                          title={`${t('conversationDetails.activeUsers')} (${activeUsers.length})`}
+                          icon={<Users className="h-4 w-4 mr-2" />}
+                          defaultExpanded={true}
+                        >
+                          <div className="space-y-3">
+                            <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                              <ActiveUsersSection activeUsers={activeUsers} />
+                            </div>
+                            {onOpenParticipantsDrawer && (
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  onOpenChange(false); // Fermer ce drawer
+                                  onOpenParticipantsDrawer(); // Ouvrir le drawer participants
+                                }}
+                                className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 hover:bg-blue-500/10 border-white/30 dark:border-gray-700/40"
+                              >
+                                <Users className="h-4 w-4 mr-2" />
+                                {t('conversationDetails.viewAllParticipants') || 'Voir tous les participants'}
+                              </Button>
+                            )}
+                          </div>
+                        </FoldableSection>
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          value={newTag}
-                          onChange={(e) => setNewTag(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                          placeholder={t('conversationDetails.addTag') || 'Ajouter un tag...'}
-                          className="flex-1 backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-green-200/50 dark:border-green-800/30 focus-visible:ring-green-500"
-                        />
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={addTag}
-                            disabled={!newTag.trim()}
-                            className="backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-green-200/50 dark:border-green-800/30 hover:bg-green-500 hover:text-white"
-                            aria-label="Ajouter le tag"
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-                      </div>
-                    </div>
+                    </Suspense>
                   </motion.div>
 
                   {/* Bouton Sauvegarder */}
@@ -982,11 +1000,154 @@ export function ConversationSettingsModal({
                   </div>
                 </motion.div>
 
-                {/* Statut actuel */}
+                {/* Médias & Apparence */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
+                  className="space-y-4"
+                >
+                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    {t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}
+                  </h3>
+
+                  {/* Upload image de conversation */}
+                  {canModifyImage && (
+                    <div className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-cyan-50/80 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200/50 dark:border-blue-800/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-500/30">
+                            <ImagePlus className="h-4 w-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                              {t('conversationDetails.conversationImage') || 'Image de conversation'}
+                            </p>
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              {t('conversationDetails.conversationImageDescription') || 'Photo ou avatar du groupe'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsImageUploadDialogOpen(true)}
+                        className="w-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-blue-200/50 dark:border-blue-800/30 hover:bg-blue-500/10"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {t('conversationDetails.uploadImage') || 'Charger une image'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Upload bannière de groupe */}
+                  {canModifyImage && conversation.type !== 'direct' && (
+                    <div className="space-y-3 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200/50 dark:border-indigo-800/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 shadow-lg shadow-indigo-500/30">
+                            <ImagePlus className="h-4 w-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-indigo-900 dark:text-indigo-100">
+                              {t('conversationDetails.groupBanner') || 'Bannière de groupe'}
+                            </p>
+                            <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                              {t('conversationDetails.groupBannerDescription') || 'Image en haut du groupe'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsBannerUploadDialogOpen(true)}
+                        className="w-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-indigo-200/50 dark:border-indigo-800/30 hover:bg-indigo-500/10"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {t('conversationDetails.uploadBanner') || 'Charger une bannière'}
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Informations Conversation */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="space-y-4"
+                >
+                  <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <Info className="h-4 w-4" />
+                    {t('conversationDetails.information') || 'Informations'}
+                  </h3>
+
+                  <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 space-y-3">
+                    {/* Type de conversation */}
+                    <div className="flex items-center justify-between py-2 border-b border-gray-200/50 dark:border-gray-700/50">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('conversationDetails.conversationType') || 'Type'}
+                      </span>
+                      <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
+                        {conversation.type === 'direct'
+                          ? (t('conversationDetails.directConversation') || 'Direct')
+                          : (t('conversationDetails.groupConversation') || 'Groupe')}
+                      </Badge>
+                    </div>
+
+                    {/* Nombre de participants */}
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('conversationDetails.totalParticipants') || 'Participants'}
+                      </span>
+                      <Badge variant="outline" className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50">
+                        {conversation.participants?.length || 0}
+                      </Badge>
+                    </div>
+
+                    {/* Avertissement si conversation direct avec plus de 2 participants */}
+                    {conversation.type === 'direct' && (conversation.participants?.length || 0) > 2 && (
+                      <div className="p-3 rounded-lg bg-yellow-50/80 dark:bg-yellow-900/20 border border-yellow-200/50 dark:border-yellow-800/30">
+                        <p className="text-xs text-yellow-800 dark:text-yellow-200 flex items-start gap-2">
+                          <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                          <span>
+                            {t('conversationDetails.directConversationWarning') ||
+                            'Une conversation directe ne devrait normalement avoir que 2 participants.'}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+
+                {/* Liens partagés - Groupes uniquement */}
+                {conversation.type !== 'direct' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="space-y-4"
+                  >
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                      <FoldableSection
+                        title={t('conversationDetails.shareLinks')}
+                        icon={<Link2 className="h-4 w-4 mr-2" />}
+                        defaultExpanded={false}
+                      >
+                        <div className="p-3 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40">
+                          <ShareLinksSection conversationId={conversation.id} />
+                        </div>
+                      </FoldableSection>
+                    </Suspense>
+                  </motion.div>
+                )}
+
+                {/* Statut actuel */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
                   className="p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-gray-50/80 to-slate-50/80 dark:from-gray-900/80 dark:to-slate-900/80 border border-gray-200/50 dark:border-gray-700/30 space-y-3"
                 >
                   <h4 className="text-sm font-semibold flex items-center gap-2">
@@ -1019,6 +1180,23 @@ export function ConversationSettingsModal({
           </ScrollArea>
         </Tabs>
       </SheetContent>
+
+      {/* Dialogs d'upload d'images */}
+      <ConversationImageUploadDialog
+        open={isImageUploadDialogOpen}
+        onClose={() => setIsImageUploadDialogOpen(false)}
+        onImageUploaded={handleImageUpload}
+        isUploading={isUploadingImage}
+        conversationTitle={conversation.title || conversation.id}
+      />
+
+      <ConversationImageUploadDialog
+        open={isBannerUploadDialogOpen}
+        onClose={() => setIsBannerUploadDialogOpen(false)}
+        onImageUploaded={handleBannerUpload}
+        isUploading={isUploadingBanner}
+        conversationTitle={`Bannière - ${conversation.title || conversation.id}`}
+      />
     </Sheet>
   );
 }
