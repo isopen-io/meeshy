@@ -571,6 +571,11 @@ input[type="button"] {
   touch-action: manipulation;
 }
 
+/* Utility class pour touch-action */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
 /**
  * Amélioration de l'overscroll dans les modals/drawers
  * (Web Interface Guidelines - Touch & Interaction)

@@ -7,7 +7,7 @@
 
 'use client';
 
-import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback } from 'react';
+import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback, useState } from 'react';
 import { Send, MapPin, X, MessageCircle, Languages, Paperclip, Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,6 +101,21 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     // Récupérer la locale de l'utilisateur
     const { locale } = useI18n('conversations');
 
+    // Dark mode detection pour colorScheme
+    const [isDarkMode, setIsDarkMode] = useState(false);
+
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      setIsDarkMode(mediaQuery.matches);
+
+      const listener = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+      mediaQuery.addEventListener('change', listener);
+
+      return () => mediaQuery.removeEventListener('change', listener);
+    }, []);
+
     // Performance profile (Phase 1)
     const performanceProfile = usePerformanceProfile();
     const animConfig = getAnimationConfig(performanceProfile);
@@ -173,6 +188,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     return (
       <div
         className={containerClassName}
+        style={{ colorScheme: isDarkMode ? 'dark' : 'light' }}
         onDragEnter={composerState.handleDragEnter}
         onDragOver={composerState.handleDragOver}
         onDragLeave={composerState.handleDragLeave}
@@ -334,7 +350,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             disabled={!props.isComposingEnabled}
             size="sm"
             variant="ghost"
-            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 touch-manipulation"
             aria-label="Enregistrer un message vocal"
           >
             <Mic className={`h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] ${composerState.showAudioRecorder ? 'text-blue-600' : 'text-gray-600'}`} aria-hidden="true" />
@@ -346,7 +362,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             disabled={!props.isComposingEnabled || composerState.isUploading || composerState.isCompressing}
             size="sm"
             variant="ghost"
-            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 touch-manipulation"
             aria-label={composerState.isCompressing ? 'Compression en cours' : composerState.isUploading ? 'Upload en cours' : 'Ajouter des fichiers'}
           >
             {composerState.isCompressing || composerState.isUploading ? (
