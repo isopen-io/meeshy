@@ -38,7 +38,7 @@ export const useAnimationConfig = (): AnimationConfig => {
     return {
       staggerDelay: 0.08,
       duration: 0.3,
-      enableBlur: true,
+      enableBlur: false,
       enableShimmer: false,
       enableRotation: false,
       blurAmount: 16,
@@ -53,7 +53,7 @@ export const useAnimationConfig = (): AnimationConfig => {
   return {
     staggerDelay: 0,
     duration: 0.2,
-    enableBlur: true,
+    enableBlur: false,
     enableShimmer: false,
     enableRotation: false,
     blurAmount: 8,

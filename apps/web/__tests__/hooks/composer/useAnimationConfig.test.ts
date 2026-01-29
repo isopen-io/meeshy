@@ -30,7 +30,7 @@ describe('useAnimationConfig', () => {
 
     expect(result.current.staggerDelay).toBe(0.08);
     expect(result.current.duration).toBe(0.3);
-    expect(result.current.enableBlur).toBe(true);
+    expect(result.current.enableBlur).toBe(false);
     expect(result.current.enableShimmer).toBe(false);
     expect(result.current.enableRotation).toBe(false);
     expect(result.current.blurAmount).toBe(16);
@@ -47,7 +47,7 @@ describe('useAnimationConfig', () => {
 
     expect(result.current.staggerDelay).toBe(0);
     expect(result.current.duration).toBe(0.2);
-    expect(result.current.enableBlur).toBe(true);
+    expect(result.current.enableBlur).toBe(false);
     expect(result.current.enableShimmer).toBe(false);
     expect(result.current.enableRotation).toBe(false);
     expect(result.current.blurAmount).toBe(8);
