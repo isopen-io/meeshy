@@ -32,6 +32,17 @@ export function MentionAutocomplete({
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Dark mode detection
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
   // Fetch suggestions from API
   const fetchSuggestions = useCallback(async () => {
     if (!conversationId) return;
@@ -233,18 +244,29 @@ export function MentionAutocomplete({
           ...(!isMobile && position.top !== undefined && { top: `${position.top}px` }),
           ...(!isMobile && position.bottom !== undefined && { bottom: `${position.bottom}px` }),
           ...(!isMobile && { left: `${position.left}px` }),
-          zIndex: 2147483647, // Valeur maximale pour z-index (2^31 - 1)
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.98) 50%, rgba(255, 255, 255, 0.95) 100%)',
+          zIndex: 2147483647,
+          background: isDarkMode
+            ? 'linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(30, 58, 138, 0.98) 50%, rgba(31, 41, 55, 0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.98) 50%, rgba(255, 255, 255, 0.95) 100%)',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           borderRadius: '16px',
-          border: '2px solid rgba(59, 130, 246, 0.3)',
-          boxShadow: `
-            0 0 0 1px rgba(59, 130, 246, 0.2),
-            0 4px 16px rgba(59, 130, 246, 0.15),
-            0 12px 32px rgba(59, 130, 246, 0.12),
-            inset 0 1px 0 rgba(255, 255, 255, 0.8)
-          `,
+          border: isDarkMode
+            ? '2px solid rgba(59, 130, 246, 0.4)'
+            : '2px solid rgba(59, 130, 246, 0.3)',
+          boxShadow: isDarkMode
+            ? `
+              0 0 0 1px rgba(59, 130, 246, 0.3),
+              0 4px 16px rgba(59, 130, 246, 0.25),
+              0 12px 32px rgba(59, 130, 246, 0.18),
+              inset 0 1px 0 rgba(59, 130, 246, 0.2)
+            `
+            : `
+              0 0 0 1px rgba(59, 130, 246, 0.2),
+              0 4px 16px rgba(59, 130, 246, 0.15),
+              0 12px 32px rgba(59, 130, 246, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8)
+            `,
         }}
       >
       {isLoading && (
@@ -254,9 +276,11 @@ export function MentionAutocomplete({
           className="p-4 text-center text-sm text-gray-600 dark:text-gray-400"
         >
           <motion.div
-            className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mx-auto mb-2"
+            className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 dark:border-blue-400 mx-auto mb-2"
             style={{
-              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+              boxShadow: isDarkMode
+                ? '0 2px 8px rgba(59, 130, 246, 0.4)'
+                : '0 2px 8px rgba(59, 130, 246, 0.3)',
             }}
           />
           Recherche...
@@ -304,7 +328,9 @@ export function MentionAutocomplete({
               style={{
                 backdropFilter: index === selectedIndex ? 'blur(8px)' : 'none',
                 boxShadow: index === selectedIndex
-                  ? '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+                  ? isDarkMode
+                    ? '0 2px 8px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(59, 130, 246, 0.2)'
+                    : '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
                   : 'none',
               }}
               onClick={() => onSelect(suggestion.username, suggestion.id)}
