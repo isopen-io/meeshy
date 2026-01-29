@@ -63,6 +63,7 @@ class TranscriptionStageResult:
     sender_voice_identified: Optional[bool] = None
     sender_speaker_id: Optional[str] = None
     speaker_analysis: Optional[Dict[str, Any]] = None
+    diarization_speakers: Optional[List[Any]] = None  # Segments de diarization bruts (pour clonage vocal propre)
 
 
 class TranscriptionStage:
@@ -266,7 +267,8 @@ class TranscriptionStage:
             primary_speaker_id=transcription_result.primary_speaker_id,
             sender_voice_identified=transcription_result.sender_voice_identified,
             sender_speaker_id=transcription_result.sender_speaker_id,
-            speaker_analysis=transcription_result.speaker_analysis
+            speaker_analysis=transcription_result.speaker_analysis,
+            diarization_speakers=transcription_result.diarization_speakers
         )
 
         if use_cache:
@@ -329,7 +331,8 @@ class TranscriptionStage:
                     primary_speaker_id=cached.get("primary_speaker_id"),
                     sender_voice_identified=cached.get("sender_voice_identified"),
                     sender_speaker_id=cached.get("sender_speaker_id"),
-                    speaker_analysis=cached.get("speaker_analysis")
+                    speaker_analysis=cached.get("speaker_analysis"),
+                    diarization_speakers=None  # Non cachable (objets Python complexes)
                 )
 
             return None

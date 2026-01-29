@@ -572,7 +572,8 @@ class AudioMessagePipeline:
                 user_voice_model=voice_model,
                 sender_speaker_id=transcription.sender_speaker_id,
                 model_type=model_type,
-                on_translation_ready=on_translation_ready
+                on_translation_ready=on_translation_ready,
+                diarization_speakers=transcription.diarization_speakers
             )
 
             if not translations:

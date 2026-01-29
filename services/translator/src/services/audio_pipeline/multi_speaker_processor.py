@@ -152,7 +152,8 @@ async def process_multi_speaker_audio(
     user_voice_model: Optional[Any] = None,
     sender_speaker_id: Optional[str] = None,
     model_type: str = "premium",
-    on_translation_ready: Optional[Any] = None
+    on_translation_ready: Optional[Any] = None,
+    diarization_speakers: Optional[List[Any]] = None
 ) -> Dict[str, Any]:
     """
     Traite un audio multi-speaker en créant des tours de parole.
@@ -197,6 +198,7 @@ async def process_multi_speaker_audio(
         model_type: Type de modèle de traduction
         on_translation_ready: Callback appelé après chaque traduction de langue
                              (permet remontée progressive à la gateway)
+        diarization_speakers: Segments de diarization bruts (pour filtrage overlaps)
 
     Returns:
         Dict avec les traductions par langue
@@ -231,7 +233,8 @@ async def process_multi_speaker_audio(
         audio_path = await _extract_speaker_audio(
             speaker_id=speaker_id,
             source_audio_path=source_audio_path,
-            segments=data['segments']
+            segments=data['segments'],
+            all_diarization_speakers=diarization_speakers
         )
 
         if not audio_path:
@@ -713,24 +716,67 @@ def _create_turns_of_speech(
     return turns
 
 
+def _check_overlap_with_others(
+    seg_start: int,
+    seg_end: int,
+    speaker_id: str,
+    all_diarization_speakers: Optional[List]
+) -> bool:
+    """
+    Vérifie si d'autres speakers parlent dans cette zone temporelle.
+
+    Args:
+        seg_start: Début du segment (ms)
+        seg_end: Fin du segment (ms)
+        speaker_id: ID du speaker actuel
+        all_diarization_speakers: Liste de tous les speakers de diarization
+
+    Returns:
+        True si overlap détecté (un autre speaker parle), False si ce speaker parle seul
+    """
+    if not all_diarization_speakers:
+        return False  # Pas de diarization, pas d'overlap possible
+
+    for speaker in all_diarization_speakers:
+        # Skip self
+        if speaker.speaker_id == speaker_id:
+            continue
+
+        # Vérifier overlap avec ce speaker
+        for diar_seg in speaker.segments:
+            # Il y a overlap si les segments se chevauchent
+            if (diar_seg.start_ms < seg_end and diar_seg.end_ms > seg_start):
+                return True  # Overlap détecté
+
+    return False  # Aucun overlap, ce speaker parle seul
+
+
 async def _extract_speaker_audio(
     speaker_id: str,
     source_audio_path: str,
-    segments: List[Dict[str, Any]]
+    segments: List[Dict[str, Any]],
+    all_diarization_speakers: Optional[List] = None
 ) -> Optional[str]:
     """
     Extrait l'audio de RÉFÉRENCE d'un speaker pour le clonage vocal.
 
-    IMPORTANT: On utilise uniquement le SEGMENT LE PLUS LONG du speaker,
-    car c'est le meilleur échantillon pour capturer sa voix naturelle.
+    STRATÉGIE DE FILTRAGE OVERLAP:
+    1. Si all_diarization_speakers fourni, filtre les segments en deux catégories:
+       - Segments PROPRES : ce speaker parle seul (aucun autre speaker)
+       - Segments OVERLAP : un autre speaker parle en même temps
+    2. Priorise les segments PROPRES pour un voice model pur
+    3. Si pas assez d'audio propre (< 3s), ajoute des segments avec overlap
+
+    Cette stratégie garantit un clonage vocal de haute qualité sans contamination.
 
     Args:
         speaker_id: ID du speaker
         source_audio_path: Chemin audio source
-        segments: Segments de ce speaker
+        segments: Segments de ce speaker (transcrits avec succès)
+        all_diarization_speakers: Liste des speakers de diarization (pour filtrage overlap)
 
     Returns:
-        Chemin vers l'audio de référence (segment le plus long)
+        Chemin vers l'audio de référence (N segments les plus longs, jusqu'à 7s)
     """
     try:
         import soundfile as sf
@@ -802,43 +848,123 @@ async def _extract_speaker_audio(
         audio_data, sample_rate = sf.read(audio_path_to_read)
 
         # ═══════════════════════════════════════════════════════════════
-        # TROUVER LE SEGMENT LE PLUS LONG (meilleur échantillon vocal)
+        # STRATÉGIE : Concaténer les segments TRANSCRITS les plus longs
+        # pour créer un échantillon vocal propre et suffisant
         # ═══════════════════════════════════════════════════════════════
-        longest_segment = None
-        longest_duration = 0
 
-        for seg in segments:
+        # Trier segments par durée (les plus longs en premier)
+        sorted_segments = sorted(
+            segments,
+            key=lambda s: s.get('end_ms', s.get('endMs', 0)) - s.get('start_ms', s.get('startMs', 0)),
+            reverse=True
+        )
+
+        # ═══════════════════════════════════════════════════════════════
+        # FILTRER LES OVERLAPS (si diarization fournie)
+        # ═══════════════════════════════════════════════════════════════
+        if all_diarization_speakers:
+            clean_segments = []
+            overlap_segments = []
+
+            for seg in sorted_segments:
+                start_ms = seg.get('start_ms', seg.get('startMs', 0))
+                end_ms = seg.get('end_ms', seg.get('endMs', 0))
+
+                # Vérifier overlap avec d'autres speakers
+                has_overlap = _check_overlap_with_others(
+                    start_ms, end_ms, speaker_id, all_diarization_speakers
+                )
+
+                if has_overlap:
+                    overlap_segments.append(seg)
+                else:
+                    clean_segments.append(seg)
+
+            logger.info(
+                f"[MULTI_SPEAKER] 🔍 {speaker_id}: "
+                f"{len(clean_segments)} segments propres, "
+                f"{len(overlap_segments)} avec overlap"
+            )
+
+            # Remplacer sorted_segments : clean d'abord, overlap ensuite
+            sorted_segments = clean_segments + overlap_segments
+
+        # Prendre les N segments les plus longs jusqu'à atteindre 5-10s d'audio
+        TARGET_DURATION_MS = 7000  # 7 secondes cible
+        MIN_DURATION_MS = 3000     # 3 secondes minimum
+        MIN_SEGMENT_DURATION = 200  # Ignorer segments < 200ms (trop courts/bruités)
+
+        selected_segments = []
+        total_duration = 0
+
+        for seg in sorted_segments:
             start_ms = seg.get('start_ms', seg.get('startMs', 0))
             end_ms = seg.get('end_ms', seg.get('endMs', 0))
             duration = end_ms - start_ms
 
-            if duration > longest_duration:
-                longest_duration = duration
-                longest_segment = seg
+            # Ignorer segments trop courts (bruit, artefacts)
+            if duration < MIN_SEGMENT_DURATION:
+                continue
 
-        if not longest_segment:
-            logger.error(f"[MULTI_SPEAKER] ❌ Aucun segment trouvé pour {speaker_id}")
+            selected_segments.append(seg)
+            total_duration += duration
+
+            # Stop si on a assez d'audio
+            if total_duration >= TARGET_DURATION_MS:
+                break
+
+        if not selected_segments:
+            logger.error(f"[MULTI_SPEAKER] ❌ Aucun segment valide trouvé pour {speaker_id}")
             return None
 
-        # Extraire UNIQUEMENT le segment le plus long
-        start_ms = longest_segment.get('start_ms', longest_segment.get('startMs', 0))
-        end_ms = longest_segment.get('end_ms', longest_segment.get('endMs', 0))
-
-        start_sample = int((start_ms / 1000.0) * sample_rate)
-        end_sample = int((end_ms / 1000.0) * sample_rate)
-
-        if start_sample >= len(audio_data) or end_sample > len(audio_data):
-            logger.error(
-                f"[MULTI_SPEAKER] ❌ Segment hors limites pour {speaker_id}: "
-                f"{start_ms}-{end_ms}ms (audio: {len(audio_data)/sample_rate*1000:.0f}ms)"
+        if total_duration < MIN_DURATION_MS:
+            logger.warning(
+                f"[MULTI_SPEAKER] ⚠️ Seulement {total_duration}ms d'audio pour {speaker_id} "
+                f"(minimum recommandé: {MIN_DURATION_MS}ms)"
             )
+
+        # Logger statistiques de filtrage overlap
+        if all_diarization_speakers and (clean_segments or overlap_segments):
+            clean_used = sum(1 for seg in selected_segments if seg in clean_segments)
+            overlap_used = len(selected_segments) - clean_used
+            logger.info(
+                f"[MULTI_SPEAKER] 🎯 {speaker_id}: "
+                f"{len(selected_segments)} segments sélectionnés "
+                f"({clean_used} propres, {overlap_used} avec overlap) "
+                f"= {total_duration}ms total"
+            )
+
+        # Extraire et concaténer les segments sélectionnés
+        audio_chunks = []
+        for seg in selected_segments:
+            start_ms = seg.get('start_ms', seg.get('startMs', 0))
+            end_ms = seg.get('end_ms', seg.get('endMs', 0))
+
+            start_sample = int((start_ms / 1000.0) * sample_rate)
+            end_sample = int((end_ms / 1000.0) * sample_rate)
+
+            # Vérifier limites
+            if start_sample >= len(audio_data) or end_sample > len(audio_data):
+                logger.warning(
+                    f"[MULTI_SPEAKER] ⚠️ Segment hors limites ignoré: "
+                    f"{start_ms}-{end_ms}ms"
+                )
+                continue
+
+            chunk = audio_data[start_sample:end_sample]
+            audio_chunks.append(chunk)
+
+        if not audio_chunks:
+            logger.error(f"[MULTI_SPEAKER] ❌ Aucun audio extrait pour {speaker_id}")
             return None
 
-        reference_audio = audio_data[start_sample:end_sample]
+        # Concaténer tous les chunks
+        reference_audio = np.concatenate(audio_chunks)
 
         logger.info(
-            f"[MULTI_SPEAKER] 🎯 Segment de référence pour {speaker_id}: "
-            f"{longest_duration}ms (le plus long parmi {len(segments)} segments)"
+            f"[MULTI_SPEAKER] 🎯 Audio de référence pour {speaker_id}: "
+            f"{total_duration}ms concaténés depuis {len(selected_segments)} segments "
+            f"(parmi {len(segments)} disponibles)"
         )
 
         # Normaliser l'audio de référence

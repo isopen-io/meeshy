@@ -6,6 +6,8 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { spawn } from 'child_process';
+import os from 'os';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   getAttachmentType,
@@ -152,14 +154,100 @@ export class UploadProcessor {
   }
 
   /**
-   * Sauvegarde physiquement un fichier avec permissions sécurisées
+   * Amplifie le volume d'un fichier audio avec ffmpeg
+   * Applique +9dB pour améliorer la transcription et la diarization
    */
-  async saveFile(buffer: Buffer, relativePath: string): Promise<void> {
+  private async amplifyAudio(buffer: Buffer, mimeType: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}.tmp`);
+      const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}.tmp`);
+
+      // Déterminer le format de sortie basé sur le mimeType
+      let outputFormat = 'mp4';
+      if (mimeType.includes('webm')) outputFormat = 'webm';
+      else if (mimeType.includes('wav')) outputFormat = 'wav';
+      else if (mimeType.includes('mp3')) outputFormat = 'mp3';
+      else if (mimeType.includes('ogg')) outputFormat = 'ogg';
+      else if (mimeType.includes('m4a')) outputFormat = 'm4a';
+
+      // Écrire le buffer temporairement
+      fs.writeFile(tempInputPath, buffer)
+        .then(() => {
+          // Amplifier avec ffmpeg (+9dB)
+          const ffmpeg = spawn('ffmpeg', [
+            '-i', tempInputPath,
+            '-af', 'volume=9dB',  // Amplification de +9dB
+            '-c:a', 'aac',        // Codec audio AAC (universel)
+            '-b:a', '128k',       // Bitrate 128kbps
+            '-y',                 // Overwrite output
+            tempOutputPath
+          ]);
+
+          let stderr = '';
+          ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+          });
+
+          ffmpeg.on('close', async (code) => {
+            try {
+              // Nettoyer le fichier d'entrée
+              await fs.unlink(tempInputPath).catch(() => {});
+
+              if (code !== 0) {
+                console.error('[UploadProcessor] ⚠️ Amplification ffmpeg échouée:', stderr);
+                // En cas d'erreur, retourner le buffer original
+                await fs.unlink(tempOutputPath).catch(() => {});
+                resolve(buffer);
+                return;
+              }
+
+              // Lire le fichier amplifié
+              const amplifiedBuffer = await fs.readFile(tempOutputPath);
+
+              // Nettoyer le fichier de sortie
+              await fs.unlink(tempOutputPath).catch(() => {});
+
+              console.log(`[UploadProcessor] ✅ Audio amplifié de +9dB (${buffer.length} → ${amplifiedBuffer.length} bytes)`);
+              resolve(amplifiedBuffer);
+            } catch (error) {
+              console.error('[UploadProcessor] ❌ Erreur lecture audio amplifié:', error);
+              await fs.unlink(tempOutputPath).catch(() => {});
+              resolve(buffer);
+            }
+          });
+
+          ffmpeg.on('error', async (error) => {
+            console.error('[UploadProcessor] ❌ Erreur spawn ffmpeg:', error);
+            await fs.unlink(tempInputPath).catch(() => {});
+            await fs.unlink(tempOutputPath).catch(() => {});
+            resolve(buffer);
+          });
+        })
+        .catch((error) => {
+          console.error('[UploadProcessor] ❌ Erreur écriture fichier temp:', error);
+          resolve(buffer);
+        });
+    });
+  }
+
+  /**
+   * Sauvegarde physiquement un fichier avec permissions sécurisées
+   * Pour les fichiers audio, applique automatiquement une amplification de +9dB
+   */
+  async saveFile(buffer: Buffer, relativePath: string, mimeType?: string): Promise<void> {
     const fullPath = path.join(this.uploadBasePath, relativePath);
     const directory = path.dirname(fullPath);
 
     await fs.mkdir(directory, { recursive: true });
-    await fs.writeFile(fullPath, buffer);
+
+    // Amplifier automatiquement les fichiers audio
+    let finalBuffer = buffer;
+    if (mimeType && mimeType.startsWith('audio/')) {
+      console.log(`[UploadProcessor] 🔊 Amplification audio avant sauvegarde...`);
+      finalBuffer = await this.amplifyAudio(buffer, mimeType);
+    }
+
+    await fs.writeFile(fullPath, finalBuffer);
 
     try {
       await fs.chmod(fullPath, 0o644);
@@ -215,7 +303,7 @@ export class UploadProcessor {
     }
 
     const filePath = this.generateFilePath(userId, file.filename);
-    await this.saveFile(file.buffer, filePath);
+    await this.saveFile(file.buffer, filePath, file.mimeType);
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
     const metadata = await this.metadataManager.extractMetadata(
@@ -318,13 +406,20 @@ export class UploadProcessor {
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
 
+    // Amplifier l'audio AVANT chiffrement pour améliorer la transcription/diarization
+    let fileBuffer = file.buffer;
+    if (attachmentType === 'audio') {
+      console.log(`[UploadProcessor] 🔊 Amplification audio avant chiffrement...`);
+      fileBuffer = await this.amplifyAudio(file.buffer, file.mimeType);
+    }
+
     let thumbnailBuffer: Buffer | undefined;
     if (attachmentType === 'image') {
-      thumbnailBuffer = await this.metadataManager.generateThumbnailFromBuffer(file.buffer);
+      thumbnailBuffer = await this.metadataManager.generateThumbnailFromBuffer(fileBuffer);
     }
 
     const encryptionResult = await this.encryptionService.encryptAttachment({
-      fileBuffer: file.buffer,
+      fileBuffer: fileBuffer,
       filename: file.filename,
       mimeType: file.mimeType,
       mode: encryptionMode,
@@ -350,7 +445,7 @@ export class UploadProcessor {
     const metadata: AttachmentMetadata = {};
 
     if (attachmentType === 'image') {
-      const imageMeta = await this.metadataManager.extractImageMetadataFromBuffer(file.buffer);
+      const imageMeta = await this.metadataManager.extractImageMetadataFromBuffer(fileBuffer);
       metadata.width = imageMeta.width;
       metadata.height = imageMeta.height;
     }

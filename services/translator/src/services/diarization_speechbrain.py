@@ -277,9 +277,9 @@ class SpeechBrainDiarization:
     async def diarize(
         self,
         audio_path: str,
-        window_size_ms: int = 2500,  # Fenêtre de 2.5s (réduit sur-segmentation)
-        hop_size_ms: int = 750,       # Hop de 0.75s (50% overlap)
-        max_speakers: int = 2,        # ✅ RÉDUIT: 5 → 2 (moins sensible)
+        window_size_ms: int = 1500,  # Fenêtre de 1.5s (détecte tours courts)
+        hop_size_ms: int = 500,       # Hop de 0.5s pour plus de granularité
+        max_speakers: int = 3,        # Augmenté à 3 pour détecter plus de tours
         num_speakers: Optional[int] = None  # ✅ NOUVEAU: Forcer nombre exact
     ) -> DiarizationResult:
         """
@@ -353,9 +353,9 @@ class SpeechBrainDiarization:
 
                 logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
 
-                # ✅ AUGMENTÉ: 0.25 → 0.35 (seuil plus strict, moins de faux positifs)
-                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
-                if score > best_score and score > 0.45:  # Seuil strict pour éviter sur-segmentation
+                # ✅ RÉDUIT: 0.45 → 0.35 → 0.30 (très sensible, détecte plus de tours de parole)
+                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, 0.25-0.35=faible, <0.25=très faible
+                if score > best_score and score > 0.30:  # Seuil très sensible pour détecter tous les tours
                     best_score = score
                     best_n_clusters = n
                     logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
@@ -430,25 +430,62 @@ class SpeechBrainDiarization:
             data['segments'] = segments_sorted
             data['total_duration_ms'] = total_duration
 
-        # Filtrer uniquement les speakers avec durée vraiment insignifiante
-        # On fait confiance au clustering SpeechBrain (basé sur embeddings vocaux)
-        # pour différencier les speakers, même si quelqu'un dit juste "OK"
-        MIN_DURATION_MS = 300  # Au moins 300ms (un mot court comme "OK")
+        # Filtrer les faux positifs: speakers avec très peu d'audio
+        # Critères ADAPTATIFS selon la durée totale de l'audio:
+        # 1. Durée minimale absolue: 300ms (un mot court)
+        # 2. Ratio minimum adaptatif:
+        #    - Audio < 15s : ratio minimum 16% (tolérant pour conversations courtes)
+        #    - Audio ≥ 15s : ratio minimum 20% (strict pour longs audios)
+        MIN_DURATION_MS = 300  # Durée minimale absolue
+        AUDIO_THRESHOLD_MS = 15000  # Seuil pour changer de critère (15 secondes)
+        MIN_RATIO_SHORT_AUDIO = 0.16  # 16% pour audios < 15s
+        MIN_RATIO_LONG_AUDIO = 0.20   # 20% pour audios ≥ 15s
+
+        # Déterminer le ratio minimum selon la durée totale
+        if duration_ms < AUDIO_THRESHOLD_MS:
+            min_ratio_threshold = MIN_RATIO_SHORT_AUDIO
+            ratio_label = "court"
+        else:
+            min_ratio_threshold = MIN_RATIO_LONG_AUDIO
+            ratio_label = "long"
+
+        logger.info(
+            f"[SPEECHBRAIN] Filtre faux positifs: audio {duration_ms}ms ({ratio_label}), "
+            f"ratio minimum = {min_ratio_threshold*100}%"
+        )
 
         speakers_filtered = {}
         for speaker_id, data in speakers_data.items():
             speaking_ratio = data['total_duration_ms'] / duration_ms if duration_ms > 0 else 0
+            speaker_duration = data['total_duration_ms']
 
-            # Seul critère: durée minimale
-            # La fusion post-traitement s'occupera de regrouper les speakers trop similaires
-            if data['total_duration_ms'] >= MIN_DURATION_MS:
-                speakers_filtered[speaker_id] = data
-            else:
+            # Critère 1: Durée minimale absolue
+            if speaker_duration < MIN_DURATION_MS:
                 logger.info(
                     f"[SPEECHBRAIN]    Filtré {speaker_id}: "
                     f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
-                    f"{data['total_duration_ms']}ms (trop court, min={MIN_DURATION_MS}ms)"
+                    f"{speaker_duration}ms (< {MIN_DURATION_MS}ms minimum absolu)"
                 )
+                continue
+
+            # Critère 2: Ratio adaptatif selon durée audio
+            # Si ratio trop faible → probable faux positif
+            if speaking_ratio < min_ratio_threshold:
+                logger.info(
+                    f"[SPEECHBRAIN]    Filtré {speaker_id}: "
+                    f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
+                    f"{speaker_duration}ms (ratio < {min_ratio_threshold*100}% pour audio {ratio_label}, "
+                    f"total={duration_ms}ms = probable faux positif)"
+                )
+                continue
+
+            # Speaker valide
+            speakers_filtered[speaker_id] = data
+            logger.info(
+                f"[SPEECHBRAIN]    ✅ {speaker_id} valide: "
+                f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
+                f"{speaker_duration}ms"
+            )
 
         speakers_data = speakers_filtered
 
@@ -803,5 +840,6 @@ def get_speechbrain_diarization() -> SpeechBrainDiarization:
     """Retourne l'instance singleton"""
     global _diarizer
     if _diarizer is None:
-        _diarizer = SpeechBrainDiarization()
+        # ✅ DÉSACTIVÉ TEMPORAIREMENT pour debug (éviter fusion des segments)
+        _diarizer = SpeechBrainDiarization(enable_cleaning=False)
     return _diarizer
