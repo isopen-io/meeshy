@@ -45,6 +45,7 @@ import { LoadingState } from '@/components/common/LoadingStates';
 // Services et utils
 import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { detectLanguage } from '@/utils/language-detection';
 import { getMaxMessageLength } from '@/lib/constants/languages';
 
@@ -192,9 +193,11 @@ export function BubbleStreamPage({
 
   // Handler pour les nouveaux messages reçus via WebSocket
   const handleNewMessage = useCallback((message: Message) => {
-    // CORRECTION BUG: Filtrer les messages par conversationId pour éviter
-    // que les messages d'autres conversations n'apparaissent dans le feed
-    if (message.conversationId !== conversationId) {
+    // CORRECTION BUG: Filtrer les messages par conversationId normalisé
+    // Le backend renvoie un ObjectId MongoDB, pas l'identifier "meeshy"
+    const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
+
+    if (message.conversationId !== normalizedConvId) {
       // Ignorer les messages des autres conversations
       // Le système de notifications gérera les toasts pour ces messages
       return;
@@ -217,7 +220,7 @@ export function BubbleStreamPage({
         }
       }, 300);
     }
-  }, [addMessage, user.id, conversationId]);
+  }, [addMessage, user.id]);
 
   // Hook Socket.IO (NOUVEAU - extrait)
   const {
@@ -237,10 +240,13 @@ export function BubbleStreamPage({
     isLoadingTranslations,
     onNewMessage: handleNewMessage,
     onMessageEdited: (message: Message) => {
-      // CORRECTION BUG: Filtrer les messages édités par conversationId
-      if (message.conversationId !== conversationId) {
+      // CORRECTION BUG: Filtrer les messages édités par conversationId normalisé
+      const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
+
+      if (message.conversationId !== normalizedConvId) {
         return;
       }
+
       updateMessageTranslations(message.id, message);
       toast.info(tCommon('messages.messageEditedByOther'));
     },
