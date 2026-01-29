@@ -1,27 +1,28 @@
-/* apps/web/components/common/message-composer/SendButton.module.css */
-@keyframes sendButtonAppear {
-  0% {
-    transform: scale(0) rotate(15deg);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.15) rotate(-3deg);
-  }
-  100% {
-    transform: scale(1) rotate(0deg);
-    opacity: 1;
-  }
-}
-
-@keyframes sendButtonAppearSimple {
-  0% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+.sendButton {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 1) 0%,
+    rgba(147, 51, 234, 1) 50%,
+    rgba(236, 72, 153, 1) 100%
+  );
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+  box-shadow:
+    0 4px 12px rgba(59, 130, 246, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+  outline: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @keyframes gradientShift {
@@ -33,44 +34,53 @@
   }
 }
 
-.sendButton {
-  animation-fill-mode: both;
+.sendButton:hover {
+  box-shadow:
+    0 6px 16px rgba(59, 130, 246, 0.4),
+    0 3px 6px rgba(0, 0, 0, 0.15);
 }
 
-.sendButton.simpleScale {
-  animation: sendButtonAppearSimple ease-out;
+.sendButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  animation: none;
+  background: #9ca3af;
 }
 
-.sendButton.withRotation {
-  animation: sendButtonAppear cubic-bezier(0.34, 1.56, 0.64, 1);
+.sendButton:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline-offset: 2px;
 }
 
-.sendButton.withGradient {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #3b82f6 100%);
-  background-size: 200% 200%;
+/* Icon SVG */
+.icon {
+  width: 20px;
+  height: 20px;
+  color: white;
 }
 
-.sendButton.withGradient.simpleScale {
-  animation: sendButtonAppearSimple ease-out, gradientShift 3s ease infinite;
+/* Loading spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.sendButton.withGradient.withRotation {
-  animation: sendButtonAppear cubic-bezier(0.34, 1.56, 0.64, 1), gradientShift 3s ease infinite;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.sendButton.solidColor {
-  background: #3b82f6;
-}
-
-.sendButton.solidColor:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-/* Reduced motion support */
+/* Accessibility: respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .sendButton {
     animation: none !important;
-    opacity: 1;
-    transform: none;
+    background-position: 0% 50%;
+  }
+
+  .spinner {
+    animation: spin 2s linear infinite;  /* Slower for reduced motion */
   }
 }

@@ -1,70 +1,104 @@
 // apps/web/components/common/message-composer/SendButton.tsx
 'use client';
 
-import { Send, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { AnimationConfig } from '@/constants/animations';
-import { PerformanceProfile } from '@/hooks/usePerformanceProfile';
+import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAnimationConfig } from '@/hooks/composer/useAnimationConfig';
 import styles from './SendButton.module.css';
 
 interface SendButtonProps {
-  isVisible: boolean;
-  canSend: boolean;
   onClick: () => void;
-  isCompressing?: boolean;
-  isRecording?: boolean;
-  isUploading?: boolean;
-  performanceProfile: PerformanceProfile;
-  animConfig: AnimationConfig;
+  disabled?: boolean;
+  isLoading?: boolean;
+  className?: string;
+  'aria-label'?: string;
 }
 
-export const SendButton = ({
-  isVisible,
-  canSend,
+export const SendButton: React.FC<SendButtonProps> = ({
   onClick,
-  isCompressing,
-  isRecording,
-  isUploading,
-  performanceProfile,
-  animConfig,
-}: SendButtonProps) => {
-  if (!isVisible) return null;
+  disabled = false,
+  isLoading = false,
+  className = '',
+  'aria-label': ariaLabel = 'Send message',
+}) => {
+  const config = useAnimationConfig();
 
-  const isProcessing = isCompressing || isRecording || isUploading;
+  const buttonVariants = {
+    hidden: {
+      scale: 0,
+      rotate: config.enableRotation ? 15 : 0,
+      opacity: 0,
+    },
+    visible: {
+      scale: config.enableRotation ? [0, 1.15, 1] : [0, 1],
+      rotate: config.enableRotation ? [15, -3, 0] : 0,
+      opacity: 1,
+      transition: {
+        duration: config.duration,
+        times: config.enableRotation ? [0, 0.6, 1] : [0, 1],
+        ease: [0.34, 1.56, 0.64, 1],
+      },
+    },
+    exit: {
+      scale: 0,
+      rotate: config.enableRotation ? -15 : 0,
+      opacity: 0,
+      transition: {
+        duration: config.duration * 0.5,
+      },
+    },
+    hover: !disabled && !isLoading ? {
+      scale: 1.05,
+      rotate: 0,
+      transition: {
+        duration: 0.2,
+      },
+    } : {},
+    tap: !disabled && !isLoading ? {
+      scale: 0.95,
+      rotate: 0,
+    } : {},
+  };
 
-  const getAriaLabel = () => {
-    if (isCompressing) return 'Compression en cours';
-    if (isRecording) return "Arrêtez l'enregistrement avant d'envoyer";
-    if (isUploading) return 'Upload en cours';
-    return 'Envoyer le message';
+  const handleClick = () => {
+    if (!disabled && !isLoading) {
+      onClick();
+    }
   };
 
   return (
-    <Button
-      onClick={onClick}
-      disabled={!canSend}
-      size="sm"
-      className={`
-        ${styles.sendButton}
-        ${animConfig.enableGradient ? styles.withGradient : styles.solidColor}
-        ${animConfig.enableRotation ? styles.withRotation : styles.simpleScale}
-        text-white relative
-        h-6 w-6 sm:h-9 sm:w-9 p-0 rounded-full
-        shadow-lg hover:shadow-xl transition-all duration-200
-        focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
-      `}
-      style={{
-        animationDuration: `${animConfig.sendButtonDuration}ms`,
-      }}
-      aria-label={getAriaLabel()}
-      aria-keyshortcuts="Enter"
-    >
-      <Send className="h-3 w-3 sm:h-5 sm:w-5" aria-hidden="true" />
-      {isProcessing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-blue-600/50 rounded-full">
-          <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" aria-hidden="true" />
-        </div>
-      )}
-    </Button>
+    <AnimatePresence mode="wait">
+      <motion.button
+        className={`${styles.sendButton} ${className}`}
+        onClick={handleClick}
+        disabled={disabled || isLoading}
+        aria-label={ariaLabel}
+        aria-busy={isLoading}
+        variants={buttonVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        whileHover="hover"
+        whileTap="tap"
+      >
+        {isLoading ? (
+          <div className={styles.spinner} />
+        ) : (
+          <svg
+            className={styles.icon}
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        )}
+      </motion.button>
+    </AnimatePresence>
   );
 };
