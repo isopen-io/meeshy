@@ -361,7 +361,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           placeholder={composerState.finalPlaceholder}
           className={textareaClassName}
           maxLength={composerState.maxMessageLength}
-          disabled={!props.isComposingEnabled}
+          disabled={props.isComposingEnabled === false}
           style={textareaStyle}
           aria-label="Message input"
         />
@@ -396,7 +396,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           <ToolbarButtons
             onMicClick={composerState.handleMicrophoneClick}
             onAttachmentClick={composerState.handleAttachmentClick}
-            disabled={!props.isComposingEnabled || composerState.isUploading || composerState.isCompressing}
+            disabled={props.isComposingEnabled === false || composerState.isUploading || composerState.isCompressing}
           />
 
           {/* Location */}
