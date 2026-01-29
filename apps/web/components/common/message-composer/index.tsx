@@ -105,19 +105,29 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     // Récupérer la locale de l'utilisateur
     const { locale } = useI18n('conversations');
 
-    // Dark mode detection pour colorScheme
+    // Dark mode detection - utilise les classes appliquées par ThemeProvider
     const [isDarkMode, setIsDarkMode] = useState(false);
 
     useEffect(() => {
       if (typeof window === 'undefined') return;
 
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      setIsDarkMode(mediaQuery.matches);
+      // Fonction pour détecter le mode dark via la classe HTML
+      const checkDarkMode = () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        setIsDarkMode(isDark);
+      };
 
-      const listener = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-      mediaQuery.addEventListener('change', listener);
+      // Check initial
+      checkDarkMode();
 
-      return () => mediaQuery.removeEventListener('change', listener);
+      // Observer les changements de classe sur <html>
+      const observer = new MutationObserver(checkDarkMode);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+
+      return () => observer.disconnect();
     }, []);
 
     // Performance profile (Phase 1)
