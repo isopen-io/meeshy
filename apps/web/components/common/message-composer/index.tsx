@@ -7,7 +7,7 @@
 
 'use client';
 
-import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback, useState } from 'react';
+import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback, useState, useRef } from 'react';
 import { Send, MapPin, X, MessageCircle, Languages, Paperclip, Loader2, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,8 +27,11 @@ import { useClipboardPaste } from '@/hooks/composer/useClipboardPaste';
 import { useUploadRetry } from '@/hooks/composer/useUploadRetry';
 import { useI18n } from '@/hooks/useI18n';
 
-// Components testés (Phase 3)
+// Components animés (Phase 6)
 import { SendButton } from './SendButton';
+import { GlassContainer } from './GlassContainer';
+import { DynamicGlow } from './DynamicGlow';
+import { ToolbarButtons } from './ToolbarButtons';
 
 export interface MessageComposerRef {
   focus: () => void;
@@ -120,8 +123,40 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     const performanceProfile = usePerformanceProfile();
     const animConfig = getAnimationConfig(performanceProfile);
 
+    // Typing detection pour DynamicGlow (Phase 6)
+    const [isTyping, setIsTyping] = useState(false);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     // État centralisé (Phase 2)
     const composerState = useComposerState(props);
+
+    // Wrapper pour handleTextareaChange avec typing detection
+    const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      // Appeler le handler original
+      composerState.handleTextareaChangeComplete(e);
+
+      // Marquer comme "typing"
+      setIsTyping(true);
+
+      // Reset timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Arrêter "typing" après 2s d'inactivité
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+      }, 2000);
+    }, [composerState]);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+      return () => {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+      };
+    }, []);
 
     // Upload retry logic (Phase 1)
     const { uploadWithRetry, retryStatus } = useUploadRetry({ maxRetries: 3 });
@@ -188,14 +223,26 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     return (
       <div
         className={containerClassName}
-        style={{ colorScheme: isDarkMode ? 'dark' : 'light' }}
+        style={{ colorScheme: isDarkMode ? 'dark' : 'light', position: 'relative' }}
         onDragEnter={composerState.handleDragEnter}
         onDragOver={composerState.handleDragOver}
         onDragLeave={composerState.handleDragLeave}
         onDrop={composerState.handleDrop}
       >
-        {/* Reply preview */}
-        {composerState.replyingTo ? (
+        {/* DynamicGlow overlay - Phase 6 */}
+        <DynamicGlow
+          currentLength={props.value.length}
+          maxLength={composerState.maxMessageLength}
+          isTyping={isTyping}
+        />
+
+        {/* GlassContainer wrapper - Phase 6 */}
+        <GlassContainer
+          theme={isDarkMode ? 'dark' : 'light'}
+          performanceProfile={performanceProfile}
+        >
+          {/* Reply preview */}
+          {composerState.replyingTo ? (
           <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-lg backdrop-blur-sm">
             <div className="flex items-start justify-between space-x-2">
               <div className="flex items-start space-x-2 flex-1 min-w-0">
@@ -309,7 +356,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         <Textarea
           ref={composerState.textareaRef}
           value={props.value}
-          onChange={composerState.handleTextareaChangeComplete}
+          onChange={handleTextareaChange}
           onKeyPress={props.onKeyPress}
           placeholder={composerState.finalPlaceholder}
           className={textareaClassName}
@@ -344,38 +391,12 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             />
           </div>
 
-          {/* Microphone button */}
-          <Button
-            onClick={composerState.handleMicrophoneClick}
-            disabled={!props.isComposingEnabled}
-            size="sm"
-            variant="ghost"
-            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 touch-manipulation"
-            aria-label="Enregistrer un message vocal"
-          >
-            <Mic className={`h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] ${composerState.showAudioRecorder ? 'text-blue-600' : 'text-gray-600'}`} aria-hidden="true" />
-          </Button>
-
-          {/* Attachment button */}
-          <Button
-            onClick={composerState.handleAttachmentClick}
+          {/* Toolbar buttons (Mic + Attachment) - Phase 6 */}
+          <ToolbarButtons
+            onMicClick={composerState.handleMicrophoneClick}
+            onAttachmentClick={composerState.handleAttachmentClick}
             disabled={!props.isComposingEnabled || composerState.isUploading || composerState.isCompressing}
-            size="sm"
-            variant="ghost"
-            className="h-[30px] w-[30px] sm:h-[32px] sm:w-[32px] p-0 rounded-full hover:bg-gray-100 relative min-w-0 min-h-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 touch-manipulation"
-            aria-label={composerState.isCompressing ? 'Compression en cours' : composerState.isUploading ? 'Upload en cours' : 'Ajouter des fichiers'}
-          >
-            {composerState.isCompressing || composerState.isUploading ? (
-              <Loader2 className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-blue-600 animate-spin" aria-hidden="true" />
-            ) : (
-              <Paperclip className="h-[20px] w-[20px] sm:h-[22px] sm:w-[22px] text-gray-600" aria-hidden="true" />
-            )}
-            {composerState.selectedFiles.length > 0 ? (
-              <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] rounded-full h-3.5 w-3.5 flex items-center justify-center" aria-label={`${composerState.selectedFiles.length} fichiers sélectionnés`}>
-                {composerState.selectedFiles.length}
-              </span>
-            ) : null}
-          </Button>
+          />
 
           {/* Location */}
           {props.location ? (
@@ -414,6 +435,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             animConfig={animConfig}
           />
         </div>
+        </GlassContainer>
 
         {/* Hidden file input */}
         <input
