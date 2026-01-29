@@ -26,16 +26,19 @@ export const SendButton: React.FC<SendButtonProps> = ({
   const buttonVariants = {
     hidden: {
       scale: 0,
-      rotate: config.enableRotation ? 15 : 0,
+      rotate: config.enableRotation ? 25 : 0,
       opacity: 0,
     },
     visible: {
-      scale: config.enableRotation ? [0, 1.15, 1] : [0, 1],
-      rotate: config.enableRotation ? [15, -3, 0] : 0,
+      scale: config.enableRotation ? [0, 1.3, 1] : [0, 1],
+      rotate: config.enableRotation ? [25, -5, 0] : 0,
       opacity: 1,
-      transition: {
+      transition: config.enableRotation ? {
+        type: 'spring',
+        stiffness: 300,
+        damping: 20,
+      } : {
         duration: config.duration,
-        times: config.enableRotation ? [0, 0.6, 1] : [0, 1],
         ease: [0.34, 1.56, 0.64, 1],
       },
     },
@@ -48,14 +51,16 @@ export const SendButton: React.FC<SendButtonProps> = ({
       },
     },
     hover: !disabled && !isLoading ? {
-      scale: 1.05,
+      scale: 1.1,
       rotate: 0,
       transition: {
-        duration: 0.2,
+        type: 'spring',
+        stiffness: 400,
+        damping: 10,
       },
     } : {},
     tap: !disabled && !isLoading ? {
-      scale: 0.95,
+      scale: 0.9,
       rotate: 0,
     } : {},
   };
