@@ -10,6 +10,7 @@ import { NotificationService } from '../../services/NotificationService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 
 export interface ReactionHandlerDependencies {
   io: SocketIOServer;
@@ -96,6 +97,15 @@ export class ReactionHandler {
       // Broadcaster l'événement
       await this._broadcastReactionEvent(data.messageId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
 
+      // Invalider le cache des conversations pour tous les membres (réaction = conversation modifiée)
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true }
+      });
+      if (message) {
+        invalidateConversationCacheAsync(message.conversationId, this.prisma);
+      }
+
       // Créer une notification
       await this._createReactionNotification(data.messageId, data.emoji, userId, isAnonymous, reaction.id);
     } catch (error: unknown) {
@@ -167,6 +177,15 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       await this._broadcastReactionEvent(data.messageId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
+
+      // Invalider le cache des conversations pour tous les membres (réaction supprimée = conversation modifiée)
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true }
+      });
+      if (message) {
+        invalidateConversationCacheAsync(message.conversationId, this.prisma);
+      }
     } catch (error: unknown) {
       console.error('❌ Erreur lors de la suppression de réaction:', error);
       const errorResponse: SocketIOResponse<unknown> = {

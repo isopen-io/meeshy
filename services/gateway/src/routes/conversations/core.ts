@@ -26,7 +26,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { conversationListCache } from '../../services/ConversationListCache';
+import { conversationListCache, invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant (peut être un ObjectID ou un identifier)
@@ -802,6 +802,9 @@ export function registerCoreRoutes(
         }
       }
 
+      // Invalider le cache des conversations pour tous les membres (nouvelle conversation créée)
+      invalidateConversationCacheAsync(conversation.id, prisma);
+
       reply.status(201).send({
         success: true,
         data: {
@@ -895,6 +898,9 @@ export function registerCoreRoutes(
         }
       });
 
+      // Invalider le cache des conversations pour tous les membres (conversation modifiée)
+      invalidateConversationCacheAsync(id, prisma);
+
       reply.send({
         success: true,
         data: updatedConversation
@@ -987,6 +993,9 @@ export function registerCoreRoutes(
         where: { id: conversationId },
         data: { isActive: false }
       });
+
+      // Invalider le cache des conversations pour tous les membres (conversation supprimée)
+      invalidateConversationCacheAsync(conversationId, prisma);
 
       reply.send({
         success: true,
