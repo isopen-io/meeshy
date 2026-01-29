@@ -25,6 +25,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useNotificationActions } from '@/stores/notification-store';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
 import { useReplyStore } from '@/stores/reply-store';
 
@@ -92,6 +93,9 @@ export function BubbleStreamPage({
 
   // Notifications
   const { setActiveConversationId } = useNotificationActions();
+
+  // Hook pour le système de notifications (toasts pour les messages d'autres conversations)
+  useNotificationsManagerRQ();
 
   // Hook pour les messages (React Query avec pagination infinie)
   const {
