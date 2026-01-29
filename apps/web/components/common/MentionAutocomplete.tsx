@@ -252,8 +252,8 @@ export function MentionAutocomplete({
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           borderRadius: '16px',
           border: isDarkMode
-            ? '2px solid rgba(59, 130, 246, 0.3)'
-            : '2px solid rgba(59, 130, 246, 0.25)',
+            ? '1px solid rgba(59, 130, 246, 0.25)'
+            : '1px solid rgba(59, 130, 246, 0.2)',
           boxShadow: isDarkMode
             ? `
               0 0 0 1px rgba(59, 130, 246, 0.2),
