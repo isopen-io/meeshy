@@ -59,8 +59,12 @@
           "description": "Discutez avec des locuteurs natifs du monde entier. Chaque conversation est une opportunité d'apprendre du vocabulaire, des expressions idiomatiques et la culture associée à la langue."
         },
         {
-          "title": "Voir les Deux Versions",
+          "title": "Voir Toutes les Versions",
           "description": "Chaque message s'affiche dans votre langue ET dans la langue originale. Meeshy permet aussi de voir les traductions vers les langues parlées par les autres utilisateurs de la même conversation. Vous comprenez immédiatement le sens tout en voyant comment chacun s'exprime réellement. C'est comme avoir un tuteur personnel 24/7."
+        },
+        {
+          "title": "Voix Naturelle Préservée",
+          "description": "Les traductions audio maintiennent la voix originale de l'interlocuteur. Vous entendez le message traduit dans votre langue avec l'intonation, l'émotion et la personnalité vocale de la personne qui parle. Une expérience immersive unique."
         },
         {
           "title": "Apprentissage Progressif",
