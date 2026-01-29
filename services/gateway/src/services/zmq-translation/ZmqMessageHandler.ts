@@ -170,16 +170,22 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'audio_translation_ready':
         // Traduction unique (1 seule langue demandée)
+        // Attacher les frames binaires à l'événement pour extraction
+        (event as any).__binaryFrames = binaryFrames;
         this.handleAudioTranslationReady(event as unknown as AudioTranslationReadyEvent);
         break;
 
       case 'audio_translations_progressive':
         // Traduction progressive (multi-langues, pas la dernière)
+        // Attacher les frames binaires à l'événement pour extraction
+        (event as any).__binaryFrames = binaryFrames;
         this.handleAudioTranslationsProgressive(event as unknown as AudioTranslationsProgressiveEvent);
         break;
 
       case 'audio_translations_completed':
         // Dernière traduction terminée (multi-langues)
+        // Attacher les frames binaires à l'événement pour extraction
+        (event as any).__binaryFrames = binaryFrames;
         this.handleAudioTranslationsCompleted(event as unknown as AudioTranslationsCompletedEvent);
         break;
 
@@ -545,10 +551,29 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de traduction audio unique (1 seule langue demandée).
    * Événement final pour les traductions mono-langue.
    */
-  private handleAudioTranslationReady(event: AudioTranslationReadyEvent): void {
+  private handleAudioTranslationReady(event: AudioTranslationReadyEvent & { binaryFrames?: any }): void {
     logger.info(`🎯 AUDIO_TRANSLATION_READY (langue unique): ${event.messageId}`);
     logger.info(`   🔊 Langue: ${event.language}`);
     logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Extraire le binaire audio depuis les frames multipart
+    let audioBinary: Buffer | null = null;
+    const binaryFrames = (event as any).__binaryFrames;
+
+    if (binaryFrames && binaryFrames.length > 0) {
+      // Frame 0 = JSON metadata, Frame 1+ = binaires
+      // Pour les événements single, il n'y a qu'un seul audio (frame 1)
+      if (binaryFrames.length >= 2) {
+        audioBinary = binaryFrames[1];
+        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
+      }
+    }
+
+    // Enrichir l'audio traduit avec le binaire
+    const enrichedTranslatedAudio = {
+      ...event.translatedAudio,
+      _audioBinary: audioBinary
+    };
 
     // Émettre l'événement de traduction unique prête
     this.emit('audioTranslationReady', {
@@ -556,7 +581,7 @@ export class ZmqMessageHandler extends EventEmitter {
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudio: event.translatedAudio
+      translatedAudio: enrichedTranslatedAudio
     });
   }
 
@@ -564,10 +589,29 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de traduction progressive (multi-langues, pas la dernière).
    * Permet d'envoyer chaque traduction au fur et à mesure.
    */
-  private handleAudioTranslationsProgressive(event: AudioTranslationsProgressiveEvent): void {
+  private handleAudioTranslationsProgressive(event: AudioTranslationsProgressiveEvent & { binaryFrames?: any }): void {
     logger.info(`🔄 AUDIO_TRANSLATIONS_PROGRESSIVE: ${event.messageId}`);
     logger.info(`   🔊 Langue: ${event.language}`);
     logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Extraire le binaire audio depuis les frames multipart
+    let audioBinary: Buffer | null = null;
+    const binaryFrames = (event as any).__binaryFrames;
+
+    if (binaryFrames && binaryFrames.length > 0) {
+      // Frame 0 = JSON metadata, Frame 1+ = binaires
+      // Pour les événements progressifs, il n'y a qu'un seul audio (frame 1)
+      if (binaryFrames.length >= 2) {
+        audioBinary = binaryFrames[1];
+        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
+      }
+    }
+
+    // Enrichir l'audio traduit avec le binaire
+    const enrichedTranslatedAudio = {
+      ...event.translatedAudio,
+      _audioBinary: audioBinary
+    };
 
     // Émettre l'événement de traduction progressive
     this.emit('audioTranslationsProgressive', {
@@ -575,7 +619,7 @@ export class ZmqMessageHandler extends EventEmitter {
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudio: event.translatedAudio
+      translatedAudio: enrichedTranslatedAudio
     });
   }
 
@@ -583,10 +627,29 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de dernière traduction terminée (multi-langues).
    * Signale que toutes les traductions sont complètes.
    */
-  private handleAudioTranslationsCompleted(event: AudioTranslationsCompletedEvent): void {
+  private handleAudioTranslationsCompleted(event: AudioTranslationsCompletedEvent & { binaryFrames?: any }): void {
     logger.info(`✅ AUDIO_TRANSLATIONS_COMPLETED (dernière): ${event.messageId}`);
     logger.info(`   🔊 Langue: ${event.language}`);
     logger.info(`   📝 Segments: ${event.translatedAudio.segments?.length || 0}`);
+
+    // Extraire le binaire audio depuis les frames multipart
+    let audioBinary: Buffer | null = null;
+    const binaryFrames = (event as any).__binaryFrames;
+
+    if (binaryFrames && binaryFrames.length > 0) {
+      // Frame 0 = JSON metadata, Frame 1+ = binaires
+      // Pour les événements complétés, il n'y a qu'un seul audio (frame 1)
+      if (binaryFrames.length >= 2) {
+        audioBinary = binaryFrames[1];
+        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
+      }
+    }
+
+    // Enrichir l'audio traduit avec le binaire
+    const enrichedTranslatedAudio = {
+      ...event.translatedAudio,
+      _audioBinary: audioBinary
+    };
 
     // Émettre l'événement de traductions complétées
     this.emit('audioTranslationsCompleted', {
@@ -594,7 +657,7 @@ export class ZmqMessageHandler extends EventEmitter {
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudio: event.translatedAudio
+      translatedAudio: enrichedTranslatedAudio
     });
   }
 

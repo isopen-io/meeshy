@@ -20,16 +20,16 @@ export const useAnimationConfig = (): AnimationConfig => {
 
   if (profile === 'high') {
     return {
-      staggerDelay: 0.05,
-      duration: 0.4,
+      staggerDelay: 0.08,
+      duration: 0.6,
       enableBlur: true,
       enableShimmer: true,
       enableRotation: true,
       blurAmount: 20,
       spring: {
         type: 'spring',
-        stiffness: 400,
-        damping: 25,
+        stiffness: 260,
+        damping: 20,
       },
     };
   }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { useAnimationConfig } from '@/hooks/composer/useAnimationConfig';
 import styles from './GlassContainer.module.css';
 
@@ -30,13 +31,16 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
     .join(' ');
 
   return (
-    <div
+    <motion.div
       className={containerClasses}
       data-theme={theme}
       data-performance={effectiveProfile}
       data-testid="glass-container"
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={config.spring}
     >
       <div className={styles.content}>{children}</div>
-    </div>
+    </motion.div>
   );
 };

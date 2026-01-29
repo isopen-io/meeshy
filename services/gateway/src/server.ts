@@ -705,7 +705,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     try {
       // Socket.IO sera configuré directement avec le serveur HTTP
-      this.socketIOHandler.setupSocketIO(this.server);
+      await this.socketIOHandler.setupSocketIO(this.server);
       logger.info('[GWY] ✅ Socket.IO configured with MeeshySocketIOHandler');
 
       // Expose NotificationService from SocketIOManager for use in routes

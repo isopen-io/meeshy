@@ -76,11 +76,11 @@ export class NotificationFormatter {
       // METADATA (cast car Prisma Json type)
       metadata: (raw.metadata || {}) as any,
 
-      // STATE - avec sanitization des dates
+      // STATE - avec sanitization des dates - PAS de fallback new Date() !
       state: {
         isRead: raw.isRead ?? false,
         readAt: this.sanitizeDate(raw.readAt, null),
-        createdAt: this.sanitizeDate(raw.createdAt, new Date())!,
+        createdAt: this.sanitizeDate(raw.createdAt, null)!,
         expiresAt: this.sanitizeDate(raw.expiresAt, null) || undefined,
       },
 

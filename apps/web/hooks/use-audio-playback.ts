@@ -104,13 +104,13 @@ export function useAudioPlayback({
         AudioManager.getInstance().stop(audioRef.current);
       }
 
+      let apiPath = audioUrl;
+
       try {
         setIsLoading(true);
         setHasError(false);
         setHasLoadedMetadata(false); // Réinitialiser le flag lors du chargement d'un nouvel audio
         setCurrentTime(0); // Réinitialiser le temps de lecture à 0
-
-        let apiPath = audioUrl;
 
         if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) {
           try {

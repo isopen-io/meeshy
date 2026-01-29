@@ -26,13 +26,13 @@ export class MeeshySocketIOHandler {
   /**
    * Configure Socket.IO sur l'instance Fastify
    */
-  public setupSocketIO(fastify: FastifyInstance): void {
+  public async setupSocketIO(fastify: FastifyInstance): Promise<void> {
     // Récupérer le serveur HTTP sous-jacent de Fastify
     const httpServer = fastify.server as HTTPServer;
 
     // Initialiser Socket.IO avec le serveur HTTP, translationService et Redis optionnel
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService, this.redis);
-    this.socketIOManager.initialize();
+    await this.socketIOManager.initialize();
 
     // Ajouter une route pour les statistiques Socket.IO
     fastify.get('/api/socketio/stats', async (request, reply) => {

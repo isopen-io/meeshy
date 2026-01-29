@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useI18n } from '@/hooks/use-i18n';
 import type { Notification } from '@/services/notification.service';
-import { AuthGuard } from '@/components/auth/AuthGuard';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { cn } from '@/lib/utils';
 import {
   Bell,
@@ -103,11 +103,19 @@ function NotificationsPageContent() {
     if (process.env.NODE_ENV === 'development' && notifications.length > 0) {
       console.group('📋 Notifications Debug');
       console.log('Total notifications:', notifications.length);
-      console.log('First 3 notifications dates:');
+      console.log('First 3 notifications:');
       notifications.slice(0, 3).forEach((n, i) => {
-        console.log(`  ${i + 1}. ID: ${n.id}`);
-        console.log(`     createdAt: ${n.state.createdAt}`);
-        console.log(`     isRead: ${n.state.isRead}`);
+        console.log(`\n${i + 1}. Notification ${n.id}`);
+        console.log(`   Type: ${n.type}`);
+        console.log(`   Content: ${n.content.substring(0, 40)}...`);
+        console.log(`   createdAt:`, n.state.createdAt);
+        console.log(`   createdAt type:`, typeof n.state.createdAt);
+        console.log(`   createdAt instanceof Date:`, n.state.createdAt instanceof Date);
+        if (n.state.createdAt instanceof Date) {
+          console.log(`   createdAt.toISOString():`, n.state.createdAt.toISOString());
+          console.log(`   createdAt.getTime():`, n.state.createdAt.getTime());
+        }
+        console.log(`   isRead: ${n.state.isRead}`);
       });
       console.groupEnd();
     }
@@ -124,15 +132,25 @@ function NotificationsPageContent() {
     }
   };
 
-  const formatTimeAgo = (timestamp: Date | string) => {
+  const formatTimeAgo = (timestamp: Date | string | null) => {
     try {
+      // Si timestamp est null/undefined, afficher un message d'erreur
+      if (!timestamp) {
+        console.error('❌ [formatTimeAgo] timestamp is null/undefined');
+        return '⚠️ Date invalide';
+      }
+
       const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
       const now = new Date();
 
       // Vérifier si la date est valide
       if (isNaN(date.getTime())) {
-        console.warn('Invalid date:', timestamp);
-        return t('timeAgo.now');
+        console.error('❌ [formatTimeAgo] Invalid date:', {
+          timestamp,
+          typeofTimestamp: typeof timestamp,
+          parsedDate: date,
+        });
+        return '⚠️ Date invalide';
       }
 
       const diffMs = now.getTime() - date.getTime();
@@ -160,59 +178,28 @@ function NotificationsPageContent() {
 
       return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
     } catch (error) {
-      console.error('Error formatting time:', error);
-      return t('timeAgo.now');
+      console.error('❌ [formatTimeAgo] Error:', error);
+      return '⚠️ Erreur';
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-          className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
-        />
-      </div>
+      <DashboardLayout title={t('pageTitle')} hideSearch={true}>
+        <div className="flex items-center justify-center py-20">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+            className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
+          />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Animated gradient background - same as login */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
-
-      {/* Animated decorative blobs */}
-      <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-          x: [0, 30, 0],
-          y: [0, -20, 0],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 dark:from-blue-600/20 dark:to-indigo-700/20 rounded-full blur-3xl"
-      />
-      <motion.div
-        animate={{
-          scale: [1, 1.1, 1],
-          x: [0, -20, 0],
-          y: [0, 30, 0],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1,
-        }}
-        className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 dark:from-cyan-600/20 dark:to-blue-700/20 rounded-full blur-3xl"
-      />
-
-      {/* Main content */}
-      <div className="relative z-10 min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+    <DashboardLayout title={t('pageTitle')} hideSearch={true}>
+      <div className="py-6">
         <div className="max-w-4xl mx-auto">
           {/* Header with glass effect */}
           <motion.div
@@ -221,39 +208,25 @@ function NotificationsPageContent() {
             transition={{ duration: 0.5 }}
             className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 mb-6"
           >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                  <Bell className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {t('pageTitle')}
-                  </h1>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {unreadCount > 0
-                      ? t('unreadCount.plural').replace('{count}', unreadCount.toString())
-                      : t('unreadCount.empty')
-                    }
-                  </p>
-                </div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+                <Bell className="h-6 w-6 text-white" />
               </div>
-
-              {unreadCount > 0 && (
-                <Button
-                  onClick={markAllAsRead}
-                  size="sm"
-                  variant="outline"
-                  className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border-white/30 dark:border-gray-700/40 hover:bg-white/70 dark:hover:bg-gray-800/70"
-                >
-                  <Check className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">{t('markAllRead')}</span>
-                </Button>
-              )}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('pageTitle')}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {unreadCount > 0
+                    ? `${unreadCount} non ${unreadCount === 1 ? 'lue' : 'lues'} sur ${notifications.length}`
+                    : t('unreadCount.empty')
+                  }
+                </p>
+              </div>
             </div>
 
             {/* Search bar */}
-            <div className="relative mb-6">
+            <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
               <Input
                 ref={searchInputRef}
@@ -273,6 +246,21 @@ function NotificationsPageContent() {
                 </button>
               )}
             </div>
+
+            {/* Bouton Tout Lu */}
+            {unreadCount > 0 && (
+              <div className="mb-4">
+                <Button
+                  onClick={markAllAsRead}
+                  size="sm"
+                  variant="outline"
+                  className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border-white/30 dark:border-gray-700/40 hover:bg-white/70 dark:hover:bg-gray-800/70"
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  <span>{t('markAllRead')}</span>
+                </Button>
+              </div>
+            )}
 
             {/* Filters */}
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
@@ -437,14 +425,10 @@ function NotificationsPageContent() {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
 
 export default function NotificationsPage() {
-  return (
-    <AuthGuard>
-      <NotificationsPageContent />
-    </AuthGuard>
-  );
+  return <NotificationsPageContent />;
 }

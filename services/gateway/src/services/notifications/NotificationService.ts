@@ -167,19 +167,28 @@ export class NotificationService {
    * Formate une notification DB → API
    */
   private formatNotification(raw: any): Notification {
-    // Sanitize les dates d'abord
+    // Debug: Log AVANT sanitize pour voir ce que Prisma envoie
+    notificationLogger.info('🔍 formatNotification AVANT sanitize', {
+      notificationId: raw.id,
+      rawCreatedAt: raw.createdAt,
+      typeofCreatedAt: typeof raw.createdAt,
+      isDate: raw.createdAt instanceof Date,
+      toISOString: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : 'N/A',
+      rawJSON: JSON.stringify({ createdAt: raw.createdAt, readAt: raw.readAt, expiresAt: raw.expiresAt }),
+    });
+
+    // Sanitize les dates - PAS de fallback new Date() !
     const readAtDate = this.sanitizeDate(raw.readAt, null);
-    const createdAtDate = this.sanitizeDate(raw.createdAt, new Date())!;
+    const createdAtDate = this.sanitizeDate(raw.createdAt, null);
     const expiresAtDate = this.sanitizeDate(raw.expiresAt, null);
 
-    // Debug: Log si createdAt est null/invalide pour cette notification
-    if (!raw.createdAt || !(raw.createdAt instanceof Date)) {
-      notificationLogger.warn('⚠️ Notification missing valid createdAt', {
+    // Debug: Log si createdAt est null/invalide
+    if (!createdAtDate) {
+      notificationLogger.error('❌ Notification createdAt est null après sanitize', {
         notificationId: raw.id,
         rawCreatedAt: raw.createdAt,
         typeofCreatedAt: typeof raw.createdAt,
-        usingFallback: true,
-        fallbackDate: createdAtDate.toISOString(),
+        rawCreatedAtValue: raw.createdAt?.toString(),
       });
     }
 

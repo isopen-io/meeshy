@@ -945,7 +945,8 @@ async def _concatenate_turns_in_order(
         import subprocess
         from pathlib import Path
 
-        output_path = f"generated/audios/translated/{message_id}_{attachment_id}_{target_lang}_multi.mp3"
+        # Utiliser un chemin absolu pour éviter les problèmes de répertoire de travail
+        output_path = os.path.abspath(f"generated/audios/translated/{message_id}_{attachment_id}_{target_lang}_multi.mp3")
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
         # Créer liste de concaténation
@@ -973,7 +974,8 @@ async def _concatenate_turns_in_order(
         if result.returncode == 0 and os.path.exists(output_path):
             logger.info(
                 f"[MULTI_SPEAKER] ✅ Audio final: {output_path} | "
-                f"{len(translated_segments)} segments traduits"
+                f"{len(translated_segments)} segments traduits | "
+                f"Taille: {os.path.getsize(output_path) / 1024:.1f}KB"
             )
 
             # Joindre tous les textes traduits
@@ -985,17 +987,21 @@ async def _concatenate_turns_in_order(
             except:
                 pass
 
+            # Le fichier sera lu et envoyé en binaire multipart par zmq_audio_handler.py
+            # (voir ligne 673-679: lecture depuis audio_path et envoi via send_multipart)
+            # Donc: pas besoin d'encoder en base64, juste fournir le chemin correct
+
             return TranslatedAudioVersion(
                 language=target_lang,
                 translated_text=full_translated_text,
                 audio_path=output_path,
-                audio_url=f"/audio/{os.path.basename(output_path)}",
+                audio_url=f"/audio/{os.path.basename(output_path)}",  # URL utilisée seulement si binaire échoue
                 duration_ms=total_duration_ms,
                 format="mp3",
                 voice_cloned=True,
                 voice_quality=0.85,
                 processing_time_ms=0,
-                audio_data_base64=None,
+                audio_data_base64=None,  # Pas de base64, on utilise le binaire multipart
                 audio_mime_type="audio/mpeg",
                 segments=translated_segments  # ✅ Segments traduits pour synchronisation
             )

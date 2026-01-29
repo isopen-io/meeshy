@@ -60,45 +60,60 @@ async function withRetry<T>(
  * On parse juste les dates.
  */
 function parseNotification(raw: any): Notification {
-  // Support pour les deux formats: state à la racine OU données à la racine
-  // Le backend peut envoyer soit raw.state.createdAt soit raw.createdAt
-  const stateData = raw.state || {};
-
   // Helper pour parser une date de manière robuste
-  const parseDate = (dateValue: any): Date | null => {
-    if (!dateValue) return null;
+  const parseDate = (dateValue: any, debugName: string): Date | null => {
+    if (!dateValue) {
+      console.log(`🔍 [parseDate] ${debugName} est null/undefined`);
+      return null;
+    }
+
+    console.log(`🔍 [parseDate] ${debugName}:`, {
+      value: dateValue,
+      type: typeof dateValue,
+      isString: typeof dateValue === 'string',
+    });
+
     try {
       const date = new Date(dateValue);
-      return isNaN(date.getTime()) ? null : date;
-    } catch {
+      const isValid = !isNaN(date.getTime());
+
+      console.log(`🔍 [parseDate] ${debugName} parsed:`, {
+        parsedDate: date,
+        isValid,
+        toISOString: isValid ? date.toISOString() : 'N/A',
+      });
+
+      return isValid ? date : null;
+    } catch (error) {
+      console.error(`❌ [parseDate] ${debugName} erreur:`, error);
       return null;
     }
   };
 
-  // Essayer de trouver createdAt dans différents endroits
-  const createdAtValue = stateData.createdAt || raw.createdAt || raw.created_at || raw.createdDate;
-  const createdAtDate = parseDate(createdAtValue);
+  // Le backend envoie les données dans la structure state
+  // raw.state = { isRead, readAt, createdAt, expiresAt }
+  const state = raw.state || {};
 
-  // Debug: Log la structure complète reçue du backend
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 [parseNotification] Raw notification:', {
+  console.group(`📦 [parseNotification] ID: ${raw.id}`);
+  console.log('Raw state:', state);
+  console.log('state.createdAt:', state.createdAt);
+
+  // Parser les dates - PAS DE FALLBACK new Date() !
+  const createdAt = parseDate(state.createdAt, 'createdAt');
+  const readAt = parseDate(state.readAt, 'readAt');
+  const expiresAt = parseDate(state.expiresAt, 'expiresAt');
+
+  console.log('Résultat parsing createdAt:', createdAt);
+  console.groupEnd();
+
+  // Debug: Log si createdAt est null après parsing
+  if (!createdAt && process.env.NODE_ENV === 'development') {
+    console.error('❌ [parseNotification] createdAt est null après parsing', {
       id: raw.id,
-      hasState: !!raw.state,
-      stateCreatedAt: stateData.createdAt,
-      rawCreatedAt: raw.createdAt,
-      raw_created_at: raw.created_at,
-      parsedCreatedAt: createdAtDate?.toISOString(),
-      stateIsRead: stateData.isRead,
-      rawIsRead: raw.isRead,
-      createdAtValue: createdAtValue,
-      typeofCreatedAtValue: typeof createdAtValue,
-      fullRawKeys: Object.keys(raw),
+      stateCreatedAt: state.createdAt,
+      typeofStateCreatedAt: typeof state.createdAt,
+      rawState: JSON.stringify(raw.state),
     });
-
-    // Log l'objet complet pour la première notification
-    if (Math.random() < 0.3) {
-      console.log('📦 Full raw object:', JSON.stringify(raw, null, 2));
-    }
   }
 
   return {
@@ -108,20 +123,17 @@ function parseNotification(raw: any): Notification {
     priority: raw.priority || 'normal',
     content: raw.content,
 
-    // Groupes déjà structurés par le backend
     actor: raw.actor,
     context: raw.context || {},
     metadata: raw.metadata || {},
 
-    // State avec parsing des dates
     state: {
-      isRead: stateData.isRead ?? raw.isRead ?? false,
-      readAt: parseDate(stateData.readAt || raw.readAt),
-      createdAt: createdAtDate || new Date(),
-      expiresAt: parseDate(stateData.expiresAt || raw.expiresAt) || undefined,
+      isRead: state.isRead ?? false,
+      readAt,
+      createdAt: createdAt!, // Force non-null (on gère dans l'UI)
+      expiresAt,
     },
 
-    // Delivery
     delivery: raw.delivery || { emailSent: false, pushSent: false },
   };
 }
@@ -191,13 +203,6 @@ export const NotificationService = {
         };
         unreadCount: number;
       }>(`/notifications?${params.toString()}`);
-
-      // Debug: Log la réponse brute de l'API
-      if (process.env.NODE_ENV === 'development' && response.data?.data) {
-        console.log('🌐 [API Response] First notification from backend:',
-          response.data.data[0] ? JSON.stringify(response.data.data[0], null, 2) : 'No notifications'
-        );
-      }
 
       if (response.data?.data) {
         const notifications: Notification[] = response.data.data.map(parseNotification);

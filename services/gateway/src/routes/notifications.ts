@@ -91,17 +91,26 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         const pagination = validatePagination(offset, limit, 100);
 
-        const { notifications, total } = await notificationService.getUserNotifications({
-          userId,
-          limit: pagination.limit,
-          offset: pagination.offset,
-          unreadOnly,
-        });
+        // Récupérer les notifications BRUTES de Prisma (pas encore formatées)
+        const where: any = { userId };
+        if (unreadOnly) {
+          where.isRead = false;
+        }
 
-        const unreadCount = await notificationService.getUnreadCount(userId);
+        const [rawNotifications, total, unreadCount] = await Promise.all([
+          fastify.prisma.notification.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: pagination.limit,
+            skip: pagination.offset,
+          }),
+          fastify.prisma.notification.count({ where }),
+          notificationService.getUnreadCount(userId),
+        ]);
 
+        // Formatter UNE SEULE FOIS avec NotificationFormatter
         return NotificationFormatter.formatPaginatedResponse({
-          notifications,
+          notifications: rawNotifications,
           total,
           offset: pagination.offset,
           limit: pagination.limit,

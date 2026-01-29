@@ -136,8 +136,6 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     const handleNotificationRead = (notificationId: string) => {
-      console.log('[useNotificationsManagerRQ] Marking notification as read:', notificationId);
-
       queryClient.setQueryData(
         queryKeys.notifications.lists(),
         (old: any) => {

@@ -6,6 +6,12 @@
  *   npx ts-node scripts/check-notification-dates.ts
  */
 
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Charger les variables d'environnement
+config({ path: resolve(__dirname, '../.env') });
+
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const prisma = new PrismaClient();
