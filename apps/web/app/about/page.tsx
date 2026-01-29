@@ -2,8 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Users, Globe, Heart, Target, Lightbulb, Mail,
-  Shield, Zap, Database, Code, BookOpen, Briefcase,
-  TrendingUp, Languages, Award, Rocket, CheckCircle2
+  Zap, BookOpen, Briefcase, Languages, Award, Rocket, CheckCircle2
 } from 'lucide-react';
 import Link from 'next/link';
 import { getAboutTranslations } from '@/lib/i18n-server';
@@ -19,8 +18,6 @@ export default async function AboutPage() {
   const learningBenefits = tArray('languageLearning.benefits') as unknown as Array<{ title: string; description: string }>;
   const businessUseCases = tArray('businessWithoutBorders.useCases') as unknown as Array<{ title: string; description: string }>;
   const diversityCommitment = tArray('linguisticDiversity.commitment') as unknown as Array<{ title: string; description: string }>;
-  const visionTimeline = tArray('networkVision.vision') as unknown as Array<{ title: string; description: string }>;
-  const technologies = tArray('technicalInnovation.technologies') as unknown as Array<{ title: string; description: string }>;
 
   return (
     <>
@@ -177,60 +174,6 @@ export default async function AboutPage() {
                   <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed italic">
                     {t('linguisticDiversity.why')}
                   </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Network Vision */}
-            <Card className="mb-12 shadow-xl border-2 border-blue-200 dark:border-blue-800">
-              <CardHeader className="text-center bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 dark:from-blue-950 dark:via-purple-950 dark:to-pink-950">
-                <div className="flex items-center justify-center space-x-2 mb-4">
-                  <Rocket className="h-10 w-10 text-blue-600" />
-                  <CardTitle className="text-3xl">{t('networkVision.title')}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-8">
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed mb-8">
-                  {t('networkVision.intro')}
-                </p>
-                <div className="space-y-8">
-                  {visionTimeline.map((phase, index) => (
-                    <div key={`vision-${index}`} className="relative pl-8 pb-8 border-l-2 border-blue-300 dark:border-blue-700 last:border-l-0 last:pb-0">
-                      <div className="absolute -left-3 top-0 w-6 h-6 bg-blue-600 rounded-full border-4 border-white dark:border-gray-900"></div>
-                      <h4 className="text-2xl font-bold mb-3 text-blue-700 dark:text-blue-400">{phase.title}</h4>
-                      <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">{phase.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Technical Innovation */}
-            <Card className="mb-12 shadow-lg">
-              <CardHeader className="text-center bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-                <div className="flex items-center justify-center space-x-2 mb-4">
-                  <Code className="h-8 w-8 text-gray-700 dark:text-gray-300" />
-                  <CardTitle className="text-2xl">{t('technicalInnovation.title')}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-8">
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed mb-8">
-                  {t('technicalInnovation.intro')}
-                </p>
-                <div className="grid md:grid-cols-2 gap-6">
-                  {technologies.map((tech, index) => (
-                    <div key={`tech-${index}`} className="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-start space-x-3 mb-3">
-                        {index === 0 && <Shield className="h-6 w-6 text-blue-600 flex-shrink-0" />}
-                        {index === 1 && <Lightbulb className="h-6 w-6 text-yellow-600 flex-shrink-0" />}
-                        {index === 2 && <Zap className="h-6 w-6 text-purple-600 flex-shrink-0" />}
-                        {index === 3 && <Database className="h-6 w-6 text-green-600 flex-shrink-0" />}
-                        {index === 4 && <TrendingUp className="h-6 w-6 text-red-600 flex-shrink-0" />}
-                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{tech.title}</h4>
-                      </div>
-                      <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{tech.description}</p>
-                    </div>
-                  ))}
                 </div>
               </CardContent>
             </Card>

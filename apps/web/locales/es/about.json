@@ -9,8 +9,8 @@
       "intro": "Meeshy es mucho más que una simple plataforma de mensajería multilingüe. Es una revolución en la forma en que nos comunicamos a través de idiomas y culturas.",
       "description": "Imagine una red social donde publica en español, su amigo en Japón lee en japonés, su socio comercial en Nigeria lee en yoruba y su colega en Alemania lee en alemán, todo desde el mismo mensaje original. Esa es la promesa de Meeshy: una red donde cada contenido se consume automáticamente en el idioma nativo del usuario.",
       "keyPoints": [
-        "🌍 Traducción en tiempo real en más de 100 idiomas con modelos de IA avanzados alojados localmente",
-        "🔒 Cifrado de extremo a extremo con Signal Protocol: sus conversaciones permanecen privadas",
+        "🌍 Traducción en tiempo real en más de 100 idiomas",
+        "🔒 Cifrado de extremo a extremo: sus conversaciones permanecen privadas",
         "🎯 Traducción del lado del servidor para calidad profesional y privacidad total",
         "🗣️ Transcripción y traducción de audio para romper las barreras orales",
         "📚 Aprendizaje natural de idiomas comunicándose con el mundo entero",
@@ -25,7 +25,7 @@
 
     "whyServerSide": {
       "title": "¿Por qué Traducción del Lado del Servidor?",
-      "intro": "Muchos servicios usan APIs de terceros como Google Translate. Meeshy no. He aquí por qué hicimos la elección radical de la traducción del lado del servidor con modelos de IA alojados internamente:",
+      "intro": "Muchos servicios usan APIs de terceros como Google Translate. Meeshy no. He aquí por qué hicimos la elección de la traducción del lado del servidor:",
       "reasons": [
         {
           "title": "Privacidad Total",
@@ -33,19 +33,19 @@
         },
         {
           "title": "Calidad Profesional",
-          "description": "Nuestros modelos de IA (basados en la arquitectura Transformer) están especialmente entrenados para la comunicación conversacional, con comprensión del contexto, el tono y los matices culturales. Resultado: traducciones naturales y fieles."
+          "description": "Utilizamos lo último en inteligencia artificial para traducciones naturales que comprenden el contexto, el tono y los matices culturales. Resultado: traducciones fluidas y fieles."
         },
         {
           "title": "Velocidad Óptima",
-          "description": "Sin latencia de red hacia APIs externas. La traducción se realiza directamente en nuestros servidores a través de ZMQ (Zero Message Queue) para una respuesta casi instantánea, incluso para conversaciones grupales con más de 50 participantes."
+          "description": "Sin latencia de red hacia APIs externas. La traducción se realiza directamente en nuestros servidores para una respuesta casi instantánea, incluso para conversaciones grupales con más de 50 participantes."
         },
         {
           "title": "Independencia Tecnológica",
-          "description": "No dependemos de ningún gigante tecnológico. Meeshy es soberano: si mañana Google cambia sus precios o políticas, no nos afecta. Su servicio permanece estable, predecible y bajo su control."
+          "description": "No dependemos de ningún gigante tecnológico. Si mañana Google cambia sus precios o políticas, no nos afecta. Su servicio permanece estable, predecible y bajo su control."
         },
         {
           "title": "Personalización Infinita",
-          "description": "Alojar nuestros propios modelos nos permite agregar idiomas raros, mejorar la traducción de jerga técnica específica de su sector y adaptar la traducción según sus preferencias (formal vs informal)."
+          "description": "Alojar nuestros propios modelos nos permite agregar idiomas raros, mejorar la traducción de jerga técnica específica de su sector y adaptar la traducción según sus preferencias."
         }
       ]
     },
@@ -120,56 +120,6 @@
       "why": "Cada idioma perdido es una visión única del mundo que desaparece. Al dar a los hablantes de idiomas minoritarios herramientas para comunicarse globalmente, preservamos la riqueza cultural de la humanidad."
     },
 
-    "networkVision": {
-      "title": "Visión: La Red Sin Barreras Lingüísticas",
-      "intro": "Nuestra ambición no es crear otra aplicación. Es crear la primera verdadera red social planetaria donde el idioma ya no es un factor limitante.",
-      "vision": [
-        {
-          "title": "2026: Los Fundamentos",
-          "description": "Mensajería multilingüe en tiempo real con más de 100 idiomas. Traducción y transcripción de audio. Cifrado E2EE con Signal Protocol. Comunidades multilingües. 100,000 usuarios activos mensuales."
-        },
-        {
-          "title": "2027-2028: La Red Social",
-          "description": "Feed de noticias multilingüe donde cada publicación se muestra en el idioma del lector. Grupos internacionales autoorganizados por intereses. Mercado multilingüe. Eventos virtuales traducidos en tiempo real. 10 millones de usuarios."
-        },
-        {
-          "title": "2029-2030: El Ecosistema Global",
-          "description": "Meeshy se convierte en la plataforma de referencia para la colaboración internacional. Integración con herramientas empresariales (Slack, Teams, Notion). API pública para desarrolladores de terceros. Soporte de más de 300 idiomas, incluidos dialectos regionales. 100 millones de usuarios."
-        },
-        {
-          "title": "2031+: El Futuro",
-          "description": "El idioma ya no es un criterio para segmentar usuarios. Un adolescente en Camerún puede volverse viral globalmente publicando en duala. Una startup en Vietnam negocia con inversores estadounidenses en tiempo real. La humanidad se comunica como una sola especie, celebrando su diversidad lingüística."
-        }
-      ]
-    },
-
-    "technicalInnovation": {
-      "title": "Innovación Técnica al Servicio de la Humanidad",
-      "intro": "Meeshy combina las tecnologías más avanzadas para crear una experiencia única:",
-      "technologies": [
-        {
-          "title": "Signal Protocol E2EE",
-          "description": "El mismo protocolo de cifrado que utilizan Signal, WhatsApp y el ejército estadounidense. Sus conversaciones privadas permanecen privadas, incluso si los servidores se ven comprometidos."
-        },
-        {
-          "title": "Modelos de IA Transformer",
-          "description": "Arquitectura neuronal de vanguardia para traducciones contextuales y naturales. Nuestros modelos comprenden el contexto, el tono y la intención detrás de cada mensaje."
-        },
-        {
-          "title": "ZMQ (Zero Message Queue)",
-          "description": "Sistema de mensajería ultrarrápido para enrutar mensajes y traducciones con latencia mínima, incluso para conversaciones grupales masivas."
-        },
-        {
-          "title": "MongoDB + Redis",
-          "description": "Base de datos NoSQL para flexibilidad y caché en memoria para un rendimiento ultrarrápido. Sus mensajes se cargan instantáneamente."
-        },
-        {
-          "title": "Arquitectura de Microservicios",
-          "description": "Cada componente (traducción, transcripción, cifrado, notificaciones) es un servicio independiente, lo que permite una escalabilidad infinita y una confiabilidad máxima."
-        }
-      ]
-    },
-
     "values": {
       "title": "Nuestros Valores Fundamentales",
       "globalAccess": {
@@ -178,11 +128,11 @@
       },
       "innovation": {
         "title": "Innovación Continua",
-        "description": "Utilizamos IA, aprendizaje automático y los últimos avances en procesamiento del lenguaje natural para mejorar constantemente la calidad de la traducción."
+        "description": "Utilizamos inteligencia artificial y los últimos avances para mejorar constantemente la calidad de la traducción."
       },
       "privacy": {
         "title": "Privacidad por Diseño",
-        "description": "E2EE opcional, traducción del lado del servidor sin fugas a terceros, datos alojados en Europa, cumplimiento total del RGPD. Su privacidad no es negociable."
+        "description": "Cifrado de extremo a extremo opcional, traducción del lado del servidor sin fugas a terceros, datos alojados en Europa, cumplimiento total del RGPD. Su privacidad no es negociable."
       },
       "openness": {
         "title": "Apertura e Inclusividad",
@@ -193,7 +143,7 @@
     "team": {
       "title": "Nuestro Equipo",
       "description": "Meeshy está construido por un equipo apasionado de desarrolladores, lingüistas, diseñadores y visionarios que comparten la misma convicción: la humanidad necesita una red sin barreras lingüísticas.",
-      "details": "Con sede en París con colaboradores de todo el mundo, nuestro equipo combina experiencia técnica en IA/ML, comprensión profunda de los problemas lingüísticos y visión humanista de un mundo más conectado."
+      "details": "Con sede en París con colaboradores de todo el mundo, nuestro equipo combina experiencia técnica, comprensión profunda de los problemas lingüísticos y visión humanista de un mundo más conectado."
     },
 
     "joinMovement": {
