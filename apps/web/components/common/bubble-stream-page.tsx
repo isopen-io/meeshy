@@ -192,6 +192,14 @@ export function BubbleStreamPage({
 
   // Handler pour les nouveaux messages reçus via WebSocket
   const handleNewMessage = useCallback((message: Message) => {
+    // CORRECTION BUG: Filtrer les messages par conversationId pour éviter
+    // que les messages d'autres conversations n'apparaissent dans le feed
+    if (message.conversationId !== conversationId) {
+      // Ignorer les messages des autres conversations
+      // Le système de notifications gérera les toasts pour ces messages
+      return;
+    }
+
     addMessage(message);
 
     // Scroll automatique pour les nouveaux messages
@@ -209,7 +217,7 @@ export function BubbleStreamPage({
         }
       }, 300);
     }
-  }, [addMessage, user.id]);
+  }, [addMessage, user.id, conversationId]);
 
   // Hook Socket.IO (NOUVEAU - extrait)
   const {
@@ -229,10 +237,16 @@ export function BubbleStreamPage({
     isLoadingTranslations,
     onNewMessage: handleNewMessage,
     onMessageEdited: (message: Message) => {
+      // CORRECTION BUG: Filtrer les messages édités par conversationId
+      if (message.conversationId !== conversationId) {
+        return;
+      }
       updateMessageTranslations(message.id, message);
       toast.info(tCommon('messages.messageEditedByOther'));
     },
     onMessageDeleted: (messageId: string) => {
+      // NOTE: Pas besoin de filtrer ici car removeMessage() est sûr
+      // Si le message n'existe pas dans le cache, il ne fait rien
       removeMessage(messageId);
       toast.info(tCommon('messages.messageDeletedByOther'));
     },
