@@ -89,11 +89,23 @@ export class NotificationService {
       });
 
       if (this.io) {
+        // DEBUG: Vérifier les sockets dans la room
+        const socketsInRoom = this.io.sockets.adapter.rooms.get(params.userId);
+        const socketCount = socketsInRoom ? socketsInRoom.size : 0;
+
+        notificationLogger.info('🔍 [SOCKET.IO] État de la room avant émission', {
+          roomName: params.userId,
+          socketsInRoom: socketCount,
+          allRooms: Array.from(this.io.sockets.adapter.rooms.keys()).slice(0, 10),
+        });
+
         this.io.to(params.userId).emit('notification:new', this.formatForSocket(notification));
         notificationLogger.info('📤 [SOCKET.IO] Notification émise', {
           userId: params.userId,
           notificationId: notification.id,
           event: 'notification:new',
+          socketsInRoom: socketCount,
+          warningIfZero: socketCount === 0 ? '⚠️ AUCUN socket dans la room!' : undefined,
         });
       } else {
         notificationLogger.error('❌ [SOCKET.IO] this.io est undefined - notification NON émise !', {

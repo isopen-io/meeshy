@@ -118,16 +118,22 @@ function getCursorPosition(
 
   document.body.appendChild(mirror);
 
-  // Mesurer
-  const markerRect = marker.getBoundingClientRect();
-  const textareaRect = textarea.getBoundingClientRect();
+  // Mesurer les positions relatives dans le miroir (offsetLeft/offsetTop sont relatifs au parent)
+  const markerOffsetLeft = marker.offsetLeft;
+  const markerOffsetTop = marker.offsetTop;
 
   // Nettoyer
   document.body.removeChild(mirror);
 
+  // Retourner les positions relatives (pas absolutes)
+  // offsetLeft/offsetTop donnent la position dans le conteneur, ce qui correspond à la position dans le textarea
+  // Obtenir la position du textarea dans le viewport
+  const textareaRect = textarea.getBoundingClientRect();
+
+  // Calculer la position absolue dans le viewport
   return {
-    x: markerRect.left - textareaRect.left + textarea.scrollLeft,
-    y: markerRect.top - textareaRect.top + textarea.scrollTop,
+    x: textareaRect.left + markerOffsetLeft - textarea.scrollLeft,
+    y: textareaRect.top + markerOffsetTop - textarea.scrollTop,
   };
 }
 
@@ -184,16 +190,8 @@ export function useMentions({
     cursorPosition: number,
     textarea: HTMLTextAreaElement | null
   ) => {
-    console.log('[DEBUG useMentions.handleTextChange] Called with:', {
-      value,
-      cursorPosition,
-      conversationId,
-      textareaExists: !!textarea
-    });
-
     // Vérifier que conversationId est un ObjectId valide
     const isValidObjectId = conversationId && OBJECT_ID_REGEX.test(conversationId);
-    console.log('[DEBUG useMentions] ObjectId validation:', { conversationId, isValidObjectId });
     if (!isValidObjectId) {
       setShowMentionAutocomplete(false);
       setMentionQuery('');
@@ -202,10 +200,8 @@ export function useMentions({
 
     // Détecter la mention
     const detection = detectMentionAtCursor(value, cursorPosition);
-    console.log('[DEBUG useMentions] Detection result:', detection);
 
     if (detection && /^\w{0,30}$/.test(detection.query)) {
-      console.log('[DEBUG useMentions] Detection VALID, showing autocomplete');
 
       // Calculer la position
       if (textarea) {
@@ -221,17 +217,13 @@ export function useMentions({
           lineHeight
         );
 
-        console.log('[DEBUG useMentions] Position calculated:', adjusted);
         setMentionPosition(adjusted);
       }
 
       mentionCursorStartRef.current = detection.start;
       setMentionQuery(detection.query);
-      console.log('[DEBUG useMentions] Calling setShowMentionAutocomplete(true)');
       setShowMentionAutocomplete(true);
-      console.log('[DEBUG useMentions] After setState - this is ASYNC so showMentionAutocomplete may still be false here');
     } else {
-      console.log('[DEBUG useMentions] Detection INVALID or empty, hiding autocomplete');
       setShowMentionAutocomplete(false);
       setMentionQuery('');
     }
