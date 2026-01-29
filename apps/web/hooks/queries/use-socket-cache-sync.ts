@@ -66,6 +66,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               : conv
           )
       );
+
+      // Invalidate conversations lists to refresh all queries
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     };
 
     // Handler for edited messages
@@ -87,6 +90,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           };
         }
       );
+
+      // Invalidate conversations lists (message édité = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     };
 
     // Handler for deleted messages
@@ -108,6 +114,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           }
         );
       }
+
+      // Invalidate conversations lists (message supprimé = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     };
 
     // Handler for message translations

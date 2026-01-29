@@ -367,6 +367,9 @@ export function useReactionsQuery({
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
+
+      // Invalidate conversations lists (réaction ajoutée = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     };
 
     const handleReactionRemoved = (event: ReactionUpdateEvent) => {
@@ -395,6 +398,9 @@ export function useReactionsQuery({
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
+
+      // Invalidate conversations lists (réaction supprimée = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     };
 
     const unsubAdded = meeshySocketIOService.onReactionAdded(handleReactionAdded);

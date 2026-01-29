@@ -170,6 +170,9 @@ export function useSendMessageMutation() {
               : conv
           )
       );
+
+      // Invalidate conversations lists (nouveau message = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     },
 
     onSettled: (_data, _error, { conversationId }) => {
@@ -234,6 +237,11 @@ export function useEditMessageMutation() {
         );
       }
     },
+
+    onSuccess: () => {
+      // Invalidate conversations lists (message édité = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+    },
   });
 }
 
@@ -285,6 +293,11 @@ export function useDeleteMessageMutation() {
           context.previousMessages
         );
       }
+    },
+
+    onSuccess: () => {
+      // Invalidate conversations lists (message supprimé = conversation modifiée)
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
     },
   });
 }
