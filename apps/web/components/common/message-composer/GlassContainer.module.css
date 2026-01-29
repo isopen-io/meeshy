@@ -3,9 +3,9 @@
   -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
   backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
   background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.75) 0%,
-    rgba(239, 246, 255, 0.85) 50%,
-    rgba(255, 255, 255, 0.75) 100%);
+    rgba(255, 255, 255, 0.60) 0%,
+    rgba(239, 246, 255, 0.70) 50%,
+    rgba(255, 255, 255, 0.60) 100%);
   border-radius: 20px;
   box-shadow:
     0 0 0 1px rgba(59, 130, 246, 0.15),
@@ -111,7 +111,7 @@
 
 /* Dark mode - using data-theme attribute instead of media query */
 .glassContainer[data-theme="dark"] {
-  background: rgba(17, 24, 39, 0.75);
+  background: rgba(17, 24, 39, 0.60);
   box-shadow:
     0 8px 32px rgba(59, 130, 246, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
