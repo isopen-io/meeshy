@@ -131,6 +131,16 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     // État centralisé (Phase 2)
     const composerState = useComposerState(props);
 
+    // DEBUG: Log mention autocomplete state changes
+    useEffect(() => {
+      console.log('[DEBUG MessageComposer] composerState.showMentionAutocomplete changed:', {
+        showMentionAutocomplete: composerState.showMentionAutocomplete,
+        mentionQuery: composerState.mentionQuery,
+        mentionPosition: composerState.mentionPosition,
+        conversationId: props.conversationId,
+      });
+    }, [composerState.showMentionAutocomplete, composerState.mentionQuery, composerState.mentionPosition, props.conversationId]);
+
     // Wrapper pour handleTextareaChange avec typing detection
     const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
       // Appeler le handler original

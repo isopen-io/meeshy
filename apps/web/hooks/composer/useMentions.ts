@@ -205,6 +205,8 @@ export function useMentions({
     console.log('[DEBUG useMentions] Detection result:', detection);
 
     if (detection && /^\w{0,30}$/.test(detection.query)) {
+      console.log('[DEBUG useMentions] Detection VALID, showing autocomplete');
+
       // Calculer la position
       if (textarea) {
         const cursorPos = getCursorPosition(textarea, cursorPosition);
@@ -219,13 +221,17 @@ export function useMentions({
           lineHeight
         );
 
+        console.log('[DEBUG useMentions] Position calculated:', adjusted);
         setMentionPosition(adjusted);
       }
 
       mentionCursorStartRef.current = detection.start;
       setMentionQuery(detection.query);
+      console.log('[DEBUG useMentions] Calling setShowMentionAutocomplete(true)');
       setShowMentionAutocomplete(true);
+      console.log('[DEBUG useMentions] After setState - this is ASYNC so showMentionAutocomplete may still be false here');
     } else {
+      console.log('[DEBUG useMentions] Detection INVALID or empty, hiding autocomplete');
       setShowMentionAutocomplete(false);
       setMentionQuery('');
     }
