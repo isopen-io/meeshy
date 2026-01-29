@@ -1,0 +1,55 @@
+.glowContainer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.glowContainer.active {
+  opacity: 1;
+}
+
+/* Glow effect via box-shadow */
+.glowContainer::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 20px;
+  box-shadow:
+    0 0 20px var(--glow-color, rgba(59, 130, 246, 0.4)),
+    inset 0 0 20px var(--glow-color, rgba(59, 130, 246, 0.4));
+  opacity: var(--glow-intensity, 0);
+  transition: opacity 0.3s ease, box-shadow 0.3s ease;
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: var(--glow-intensity, 0);
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: calc(var(--glow-intensity, 0) * 0.8);
+  }
+}
+
+/* Warning state (isNearLimit) */
+.glowContainer.warning::before {
+  animation: glowPulse 1s ease-in-out infinite;
+}
+
+/* Accessibility: respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .glowContainer::before {
+    animation: none !important;
+    transition: none;
+  }
+
+  .glowContainer {
+    transition: none;
+  }
+}
