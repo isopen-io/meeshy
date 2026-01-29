@@ -81,8 +81,25 @@ export class NotificationService {
       });
 
       // Émettre via Socket.IO
+      notificationLogger.info('🔍 [SOCKET.IO] Tentative d\'émission notification', {
+        hasIo: !!this.io,
+        ioType: this.io ? typeof this.io : 'undefined',
+        userId: params.userId,
+        notificationId: notification.id,
+      });
+
       if (this.io) {
         this.io.to(params.userId).emit('notification:new', this.formatForSocket(notification));
+        notificationLogger.info('📤 [SOCKET.IO] Notification émise', {
+          userId: params.userId,
+          notificationId: notification.id,
+          event: 'notification:new',
+        });
+      } else {
+        notificationLogger.error('❌ [SOCKET.IO] this.io est undefined - notification NON émise !', {
+          userId: params.userId,
+          notificationId: notification.id,
+        });
       }
 
       notificationLogger.info('Notification created', {
@@ -888,7 +905,14 @@ export class NotificationService {
    * Configure Socket.IO pour les notifications temps réel
    */
   setSocketIO(io: SocketIOServer, _userSocketsMap?: Map<string, Set<string>>): void {
+    notificationLogger.info('🔌 [SOCKET.IO] setSocketIO appelé', {
+      hasIo: !!io,
+      ioType: typeof io,
+    });
     this.io = io;
+    notificationLogger.info('✅ [SOCKET.IO] this.io configuré avec succès', {
+      hasThisIo: !!this.io,
+    });
     // userSocketsMap non utilisé dans V2 (utilise io.to(userId) directement)
   }
 }

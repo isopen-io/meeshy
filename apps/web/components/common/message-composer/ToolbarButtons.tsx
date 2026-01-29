@@ -43,7 +43,7 @@ export const ToolbarButtons: React.FC<ToolbarButtonsProps> = ({
     },
     hover: !disabled
       ? {
-          scale: 1.1,
+          scale: 1.2,
           transition: {
             duration: 0.2,
           },
@@ -51,7 +51,7 @@ export const ToolbarButtons: React.FC<ToolbarButtonsProps> = ({
       : {},
     tap: !disabled
       ? {
-          scale: 0.9,
+          scale: 0.85,
         }
       : {},
   };

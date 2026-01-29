@@ -1,12 +1,12 @@
 .toolbarContainer {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   align-items: center;
 }
 
 .toolbarButton {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: none;
   background: rgba(59, 130, 246, 0.08);
@@ -28,7 +28,7 @@
   background: rgba(59, 130, 246, 0.15);
   color: rgba(59, 130, 246, 1);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-  transform: scale(1.15) translateZ(0);
+  transform: scale(1.2) translateZ(0);
 }
 
 .toolbarButton:disabled {
@@ -43,8 +43,8 @@
 }
 
 .icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Dark mode */

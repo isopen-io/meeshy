@@ -576,12 +576,13 @@ export class ZmqMessageHandler extends EventEmitter {
     };
 
     // Émettre l'événement de traduction unique prête
+    // IMPORTANT: MeeshySocketIOManager attend translatedAudios (pluriel, array)
     this.emit('audioTranslationReady', {
       taskId: event.taskId,
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudio: enrichedTranslatedAudio
+      translatedAudios: [enrichedTranslatedAudio]  // Array avec un seul élément
     });
   }
 

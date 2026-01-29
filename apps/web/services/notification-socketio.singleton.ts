@@ -33,6 +33,13 @@ class NotificationSocketIOSingleton {
    * Initialise la connexion Socket.IO
    */
   public async connect(token: string): Promise<void> {
+    console.log('🔌 [NotificationSocketIO] connect() appelé', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      isAlreadyConnected: this.socket?.connected,
+      isConnecting: this.isConnecting,
+    });
+
     // Si déjà connecté avec le même token, ne rien faire
     if (this.socket?.connected && this.authToken === token) {
       console.log('[NotificationSocketIO] Already connected');
@@ -54,9 +61,13 @@ class NotificationSocketIOSingleton {
     this.isConnecting = true;
     this.authToken = token;
 
-    console.log('[NotificationSocketIO] Initializing Socket.IO connection...');
+    const backendUrl = APP_CONFIG.getBackendUrl();
+    console.log('[NotificationSocketIO] Initializing Socket.IO connection...', {
+      backendUrl,
+      transports: ['websocket', 'polling'],
+    });
 
-    this.socket = io(APP_CONFIG.getBackendUrl(), {
+    this.socket = io(backendUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -65,7 +76,9 @@ class NotificationSocketIOSingleton {
       reconnectionDelay: this.reconnectDelay
     });
 
+    console.log('[NotificationSocketIO] Socket.IO instance created, setting up listeners...');
     this.setupEventListeners();
+    console.log('[NotificationSocketIO] Event listeners configured ✅');
   }
 
   /**
@@ -107,7 +120,8 @@ class NotificationSocketIOSingleton {
 
     // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
     const handleNotification = (data: any) => {
-      console.log('[NotificationSocketIO] Received notification:', data);
+      console.log('📨 [NotificationSocketIO] Received notification:', data);
+      console.log('📨 [NotificationSocketIO] Callbacks registered:', this.notificationCallbacks.size);
 
       // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {

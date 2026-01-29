@@ -7,6 +7,12 @@
 
 'use client';
 
+// LOG GLOBAL AU CHARGEMENT DU MODULE
+if (typeof window !== 'undefined') {
+  console.log('🚨🚨🚨 [useNotificationsManagerRQ] MODULE LOADED AT:', new Date().toISOString());
+  (window as any).__USE_NOTIFICATIONS_RQ_LOADED__ = true;
+}
+
 import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -30,12 +36,22 @@ interface UseNotificationsManagerRQOptions {
   limit?: number;
 }
 
+console.log('🚀 [useNotificationsManagerRQ] Hook file loaded!');
+
 export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOptions = {}) {
+  console.log('🚀 [useNotificationsManagerRQ] Hook function called!', { options });
+
   const { filters, limit = 20 } = options;
   const { t } = useI18n('notifications');
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
+
+  console.log('🚀 [useNotificationsManagerRQ] Hooks initialized', {
+    isAuthenticated,
+    limit,
+    filters,
+  });
 
   // Query pour les notifications
   const {
@@ -68,6 +84,10 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     const link = getNotificationLink(notification);
     const borderColor = getNotificationBorderColor(notification);
 
+    // Durée réduite sur mobile (2s au lieu de 4s)
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const duration = isMobile ? 2000 : 4000;
+
     toast.custom(
       () => (
         <div
@@ -84,22 +104,39 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
           </div>
         </div>
       ),
-      { duration: 4000 }
+      { duration }
     );
   }, [t, router]);
 
   // Écouter les événements Socket.IO pour mettre à jour le cache
   useEffect(() => {
-    if (!isAuthenticated) return;
+    console.log('🎯 [useNotificationsManagerRQ] useEffect monté', {
+      isAuthenticated,
+      hasToken: !!useAuthStore.getState().authToken,
+    });
+
+    if (!isAuthenticated) {
+      console.log('[useNotificationsManagerRQ] User not authenticated, skipping Socket.IO connection');
+      return;
+    }
 
     // Connecter le Socket.IO avec le token d'auth
-    const authToken = useAuthStore.getState().token;
+    const authToken = useAuthStore.getState().authToken;
     if (authToken) {
       console.log('[useNotificationsManagerRQ] Connecting Socket.IO...');
       notificationSocketIO.connect(authToken);
+    } else {
+      console.warn('[useNotificationsManagerRQ] No auth token found!');
     }
 
     const handleNewNotification = (notification: Notification) => {
+      console.log('🔔 [useNotificationsManagerRQ] handleNewNotification appelé', {
+        notificationId: notification.id,
+        type: notification.type,
+        userId: notification.userId,
+        content: notification.content,
+      });
+
       // Mettre à jour le cache React Query
       queryClient.setQueryData(
         queryKeys.notifications.lists(),
@@ -122,16 +159,31 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
         (old: number | undefined) => (old ?? 0) + 1
       );
 
-      // Ne pas afficher de toast si l'utilisateur est dans la conversation active
+      // Ne pas afficher de toast si l'utilisateur est sur la page des notifications ou dans la conversation active
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const notificationConversationId = notification.context?.conversationId;
 
+      console.log('[useNotificationsManagerRQ] Toast filter check', {
+        currentPath,
+        notificationConversationId,
+        isOnNotificationsPage: currentPath === '/notifications',
+        isInActiveConversation: notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`),
+      });
+
+      // Ne pas afficher si déjà sur la page des notifications
+      if (currentPath === '/notifications') {
+        console.log('[useNotificationsManagerRQ] Skipping toast - user on notifications page');
+        return;
+      }
+
+      // Ne pas afficher si dans la conversation concernée par la notification
       if (notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`)) {
         console.log('[useNotificationsManagerRQ] Skipping toast - user in active conversation');
         return;
       }
 
       // Afficher le toast
+      console.log('[useNotificationsManagerRQ] Showing toast notification...');
       showNotificationToast(notification);
     };
 
@@ -162,10 +214,13 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     // S'abonner aux événements via les méthodes du singleton
+    console.log('[useNotificationsManagerRQ] Subscribing to Socket.IO events...');
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
+    console.log('[useNotificationsManagerRQ] Subscribed to Socket.IO events ✅');
 
     return () => {
+      console.log('[useNotificationsManagerRQ] Unsubscribing from Socket.IO events...');
       unsubscribeNotification();
       unsubscribeRead();
     };
