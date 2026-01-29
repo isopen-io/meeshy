@@ -114,7 +114,7 @@ export const useComposerState = (props: MessageComposerProps) => {
   const canSend = useMemo(() => {
     return hasContent &&
            props.value.length <= maxMessageLength &&
-           props.isComposingEnabled &&
+           props.isComposingEnabled !== false &&
            !attachmentState.isUploading &&
            !attachmentState.isCompressing &&
            !audioState.isRecording &&
