@@ -47,6 +47,25 @@
   height: 16px;
 }
 
+/* Mobile: taille encore plus réduite */
+@media (max-width: 640px) {
+  .toolbarContainer {
+    gap: 4px !important;
+  }
+
+  .toolbarButton {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+  }
+
+  .icon {
+    width: 15px !important;
+    height: 15px !important;
+  }
+}
+
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
   .toolbarButton {

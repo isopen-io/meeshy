@@ -142,17 +142,28 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
       // Vérifier d'abord si la notification existe déjà dans le cache
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
-      const notificationExists = queries.some(([_, data]: any) => {
-        if (!data || !data.pages) return false;
-        return data.pages.some((page: any) =>
+      console.log('[useNotificationsManagerRQ] Queries found:', queries.length);
+
+      const notificationExists = queries.some(([key, data]: any) => {
+        if (!data || !data.pages) {
+          console.log('[useNotificationsManagerRQ] Query has no pages:', key);
+          return false;
+        }
+        const exists = data.pages.some((page: any) =>
           (page.notifications ?? []).some((n: Notification) => n.id === notification.id)
         );
+        if (exists) {
+          console.log('[useNotificationsManagerRQ] Found duplicate in query:', key);
+        }
+        return exists;
       });
 
       if (notificationExists) {
-        console.log('[useNotificationsManagerRQ] Notification already exists, skipping duplicate:', notification.id);
+        console.log('[useNotificationsManagerRQ] ⚠️ Notification already exists, skipping duplicate:', notification.id);
         return;
       }
+
+      console.log('[useNotificationsManagerRQ] ✅ Notification is new, adding to cache:', notification.id);
 
       // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
       queryClient.setQueriesData(

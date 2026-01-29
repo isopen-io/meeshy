@@ -336,26 +336,26 @@ export class MessageTranslationService extends EventEmitter {
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
     try {
       const startTime = Date.now();
-      
+
       if (!this.zmqClient) {
         logger.error('❌ ZMQ Client non disponible pour les traductions');
         return;
       }
-      
+
       // 1. DÉTERMINER LES LANGUES CIBLES
       let targetLanguages: string[];
-      
+
       if (targetLanguage) {
         // Utiliser la langue cible spécifiée par le client
         targetLanguages = [targetLanguage];
       } else {
         // Extraire les langues de la conversation (comportement par défaut)
         targetLanguages = await this._extractConversationLanguages(message.conversationId);
-        
+
         if (targetLanguages.length === 0) {
         }
       }
-      
+
       // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
       const filteredTargetLanguages = targetLanguages.filter(targetLang => {
         const sourceLang = message.originalLanguage;
@@ -365,32 +365,88 @@ export class MessageTranslationService extends EventEmitter {
         return true;
       });
 
-
       // Si aucune langue cible après filtrage, ne pas envoyer de requête
       if (filteredTargetLanguages.length === 0) {
         return;
       }
-      
-      // 2. DÉTERMINER LE MODEL TYPE
-      // Priorité: 1) modelType passé en paramètre, 2) modelType du message, 3) auto-détection
+
+      // 2. CACHE-FIRST: Vérifier le cache pour chaque langue cible
+      const cacheMisses: string[] = [];
+      const cacheResults: Array<{ lang: string; result: TranslationResult }> = [];
+
+      for (const targetLang of filteredTargetLanguages) {
+        const cacheKey = TranslationCache.generateKey(
+          message.id,
+          targetLang,
+          message.originalLanguage
+        );
+
+        // Vérifier cache mémoire d'abord
+        let cached = this.translationCache.get(cacheKey);
+
+        // Si pas en cache mémoire, vérifier DB
+        if (!cached) {
+          cached = await this.getTranslation(message.id, targetLang, message.originalLanguage);
+
+          // Si trouvé en DB, mettre en cache mémoire pour les prochaines requêtes
+          if (cached) {
+            this.translationCache.set(cacheKey, cached);
+          }
+        }
+
+        if (cached) {
+          // ✅ CACHE HIT
+          cacheResults.push({ lang: targetLang, result: cached });
+          this.stats.incrementCacheHits();
+          logger.info(`💾 [CACHE HIT] Message ${message.id} → ${targetLang} (0ms from cache)`);
+        } else {
+          // ❌ CACHE MISS
+          cacheMisses.push(targetLang);
+          this.stats.incrementCacheMisses();
+        }
+      }
+
+      // 3. Émettre immédiatement les résultats cachés
+      for (const { lang, result } of cacheResults) {
+        this.emit('translationCompleted', {
+          type: 'translation_completed',
+          taskId: `cached_${message.id}_${lang}_${Date.now()}`,
+          result: {
+            ...result,
+            fromCache: true
+          }
+        });
+      }
+
+      // 4. Si toutes les traductions sont en cache, terminé !
+      if (cacheMisses.length === 0) {
+        const processingTime = Date.now() - startTime;
+        logger.info(`🎉 [ALL CACHED] Message ${message.id}: ${cacheResults.length} langue(s) from cache (${processingTime}ms total)`);
+        return;
+      }
+
+      // 5. Envoyer SEULEMENT les cache misses au service de traduction
+      logger.info(`📤 [PARTIAL CACHE] Message ${message.id}: ${cacheResults.length} cached, ${cacheMisses.length} to translate`);
+
+      // Déterminer le model type
       const finalModelType = modelType || (message as any).modelType || ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
-      
-      
-      // 3. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ
+
+      // 6. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ (seulement pour cache misses)
       const request: TranslationRequest = {
         messageId: message.id,
         text: message.content,
         sourceLanguage: message.originalLanguage,
-        targetLanguages: filteredTargetLanguages,
+        targetLanguages: cacheMisses,  // ✨ Seulement les langues non cachées
         conversationId: message.conversationId,
         modelType: finalModelType
       };
-      
+
       const taskId = await this.zmqClient.sendTranslationRequest(request);
       this.stats.incrementRequestsSent();
-      
+
       const processingTime = Date.now() - startTime;
-      
+      logger.info(`⏱️ [TIMING] Message ${message.id}: ${processingTime}ms (${cacheResults.length} cached + ${cacheMisses.length} queued)`);
+
     } catch (error) {
       logger.error(`❌ Erreur traitement asynchrone: ${error}`);
       this.stats.incrementErrors();
@@ -1451,6 +1507,8 @@ export class MessageTranslationService extends EventEmitter {
       voiceQuality: number;
       audioMimeType: string;
       segments?: TranscriptionSegment[];
+      _audioBinary?: Buffer | null;
+      audioDataBase64?: string;
     };
   }) {
     await this._processTranslationEvent(data, 'audioTranslationReady', '🎯');
@@ -1474,6 +1532,8 @@ export class MessageTranslationService extends EventEmitter {
       voiceQuality: number;
       audioMimeType: string;
       segments?: TranscriptionSegment[];
+      _audioBinary?: Buffer | null;
+      audioDataBase64?: string;
     };
   }) {
     await this._processTranslationEvent(data, 'audioTranslationsProgressive', '🔄');
@@ -1497,6 +1557,8 @@ export class MessageTranslationService extends EventEmitter {
       voiceQuality: number;
       audioMimeType: string;
       segments?: TranscriptionSegment[];
+      _audioBinary?: Buffer | null;
+      audioDataBase64?: string;
     };
   }) {
     await this._processTranslationEvent(data, 'audioTranslationsCompleted', '✅');

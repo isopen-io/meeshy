@@ -11,6 +11,9 @@ export interface TranslationServiceStats {
   avg_processing_time: number;
   uptime_seconds: number;
   memory_usage_mb: number;
+  cache_hits: number;
+  cache_misses: number;
+  cache_hit_rate: number;
 }
 
 export class TranslationStats {
@@ -27,7 +30,10 @@ export class TranslationStats {
       pool_full_rejections: 0,
       avg_processing_time: 0,
       uptime_seconds: 0,
-      memory_usage_mb: 0
+      memory_usage_mb: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_hit_rate: 0
     };
   }
 
@@ -83,6 +89,30 @@ export class TranslationStats {
   }
 
   /**
+   * Incrémente le compteur de cache hits
+   */
+  incrementCacheHits(): void {
+    this.stats.cache_hits++;
+    this._updateCacheHitRate();
+  }
+
+  /**
+   * Incrémente le compteur de cache misses
+   */
+  incrementCacheMisses(): void {
+    this.stats.cache_misses++;
+    this._updateCacheHitRate();
+  }
+
+  /**
+   * Met à jour le taux de cache hit
+   */
+  private _updateCacheHitRate(): void {
+    const total = this.stats.cache_hits + this.stats.cache_misses;
+    this.stats.cache_hit_rate = total > 0 ? (this.stats.cache_hits / total) * 100 : 0;
+  }
+
+  /**
    * Retourne les statistiques actuelles
    */
   getStats(): TranslationServiceStats {
@@ -108,7 +138,10 @@ export class TranslationStats {
       pool_full_rejections: 0,
       avg_processing_time: 0,
       uptime_seconds: 0,
-      memory_usage_mb: 0
+      memory_usage_mb: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_hit_rate: 0
     };
   }
 
