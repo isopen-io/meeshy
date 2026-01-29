@@ -193,27 +193,26 @@ export function BubbleStreamPage({
 
   // Handler pour les nouveaux messages reçus via WebSocket
   const handleNewMessage = useCallback((message: Message) => {
-    // CORRECTION BUG: Filtrer les messages par conversationId normalisé
-    // Le backend renvoie un ObjectId MongoDB, pas l'identifier "meeshy"
     const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
 
     console.log('🔍 [BubbleStreamPage] handleNewMessage called', {
       messageConvId: message.conversationId,
       normalizedConvId,
       conversationId,
-      willFilter: message.conversationId !== normalizedConvId,
       messageContent: message.content?.substring(0, 50),
+      messageSender: message.sender?.username || message.anonymousSender?.displayName,
     });
 
-    if (normalizedConvId && message.conversationId !== normalizedConvId) {
-      // Ignorer les messages des autres conversations
-      // Le système de notifications gérera les toasts pour ces messages
-      console.log('⚠️ [BubbleStreamPage] Message filtered out - different conversation');
-      return;
-    }
+    // TEMPORAIRE: Désactiver le filtre pour déboguer
+    // TODO: Réactiver une fois qu'on comprend pourquoi les messages ne passent pas
+    // if (normalizedConvId && message.conversationId !== normalizedConvId) {
+    //   console.log('⚠️ [BubbleStreamPage] Message filtered out - different conversation');
+    //   return;
+    // }
 
     console.log('✅ [BubbleStreamPage] Adding message to feed');
-    addMessage(message);
+    const wasAdded = addMessage(message);
+    console.log('✅ [BubbleStreamPage] addMessage returned:', wasAdded);
 
     // Scroll automatique pour les nouveaux messages
     if (message.senderId !== user.id && message.anonymousSenderId !== user.id) {
