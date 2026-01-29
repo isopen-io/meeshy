@@ -18,6 +18,13 @@ interface CompressionProgress {
   status: string;
 }
 
+interface BatchProgress {
+  current: number;
+  total: number;
+  currentBatch: number;
+  totalBatches: number;
+}
+
 interface UseAttachmentUploadOptions {
   /** Token d'authentification */
   token?: string;
@@ -27,6 +34,8 @@ interface UseAttachmentUploadOptions {
   onAttachmentsChange?: (ids: string[], mimeTypes: string[]) => void;
   /** Fonction de traduction */
   t?: (key: string, options?: any) => string;
+  /** Taille des batches pour upload multiple */
+  batchSize?: number;
 }
 
 interface UseAttachmentUploadReturn {
@@ -44,6 +53,8 @@ interface UseAttachmentUploadReturn {
   uploadProgress: Record<number, number>;
   /** Progression de la compression par index */
   compressionProgress: Record<number, CompressionProgress>;
+  /** Progression du batch upload */
+  batchProgress: BatchProgress;
   /** Afficher la modale de limite */
   showAttachmentLimitModal: boolean;
   /** Nombre de fichiers tentés */
@@ -103,6 +114,7 @@ export function useAttachmentUpload({
   maxAttachments = MAX_ATTACHMENTS_DEFAULT,
   onAttachmentsChange,
   t = (key: string) => key,
+  batchSize = 10,
 }: UseAttachmentUploadOptions = {}): UseAttachmentUploadReturn {
   // États
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -112,6 +124,12 @@ export function useAttachmentUpload({
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [compressionProgress, setCompressionProgress] = useState<Record<number, CompressionProgress>>({});
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>({
+    current: 0,
+    total: 0,
+    currentBatch: 0,
+    totalBatches: 0,
+  });
   const [showAttachmentLimitModal, setShowAttachmentLimitModal] = useState(false);
   const [attemptedCount, setAttemptedCount] = useState(0);
 
@@ -146,6 +164,70 @@ export function useAttachmentUpload({
 
     lastNotifiedIdsStringRef.current = attachmentIdsString;
   }, [attachmentIdsString, onAttachmentsChange]);
+
+  // Upload en batches
+  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: any) => {
+    const totalFiles = files.length;
+    const totalBatches = Math.ceil(totalFiles / batchSize);
+
+    setBatchProgress({
+      current: 0,
+      total: totalFiles,
+      currentBatch: 0,
+      totalBatches,
+    });
+
+    let uploadedCount = 0;
+    const allUploadedAttachments: UploadedAttachmentResponse[] = [];
+
+    for (let i = 0; i < totalBatches; i++) {
+      const start = i * batchSize;
+      const end = Math.min(start + batchSize, totalFiles);
+      const batch = files.slice(start, end);
+
+      setBatchProgress(prev => ({
+        ...prev,
+        currentBatch: i + 1,
+      }));
+
+      try {
+        const response = await AttachmentService.uploadFiles(
+          batch,
+          token,
+          additionalMetadata,
+          (percentage, loaded, total) => {
+            setUploadProgress(prev => ({ ...prev, [i]: percentage }));
+          }
+        );
+
+        const attachments = response.attachments || response.data?.attachments;
+        if (response.success && attachments) {
+          allUploadedAttachments.push(...attachments);
+        }
+      } catch (error) {
+        console.error(`❌ Batch ${i + 1} upload error:`, error);
+      }
+
+      uploadedCount += batch.length;
+      setBatchProgress(prev => ({
+        ...prev,
+        current: uploadedCount,
+      }));
+    }
+
+    // Update uploaded attachments
+    if (allUploadedAttachments.length > 0) {
+      setUploadedAttachments(prev => [...prev, ...allUploadedAttachments]);
+    }
+
+    // Reset progress
+    setBatchProgress({
+      current: 0,
+      total: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+    });
+  }, [batchSize, token]);
 
   // Ajouter des fichiers
   const handleFilesSelected = useCallback(async (files: File[], additionalMetadata?: any) => {
@@ -251,28 +333,33 @@ export function useAttachmentUpload({
     setIsUploading(true);
 
     try {
-      const response = await AttachmentService.uploadFiles(
-        uniqueFiles,
-        token,
-        additionalMetadata,
-        (percentage, loaded, total) => {
-          setUploadProgress(prev => ({ ...prev, 0: percentage }));
-          if (percentage % 25 === 0) {
-            const totalSizeMB = total / (1024 * 1024);
-            if (totalSizeMB > 50) {
-              console.log(`📊 ${percentage}% - ${(loaded / (1024 * 1024)).toFixed(1)}/${totalSizeMB.toFixed(1)}MB`);
+      if (uniqueFiles.length > batchSize) {
+        console.log(`📦 Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
+        await uploadFilesInBatches(uniqueFiles, additionalMetadata);
+      } else {
+        const response = await AttachmentService.uploadFiles(
+          uniqueFiles,
+          token,
+          additionalMetadata,
+          (percentage, loaded, total) => {
+            setUploadProgress(prev => ({ ...prev, 0: percentage }));
+            if (percentage % 25 === 0) {
+              const totalSizeMB = total / (1024 * 1024);
+              if (totalSizeMB > 50) {
+                console.log(`📊 ${percentage}% - ${(loaded / (1024 * 1024)).toFixed(1)}/${totalSizeMB.toFixed(1)}MB`);
+              }
             }
           }
-        }
-      );
+        );
 
-      // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
-      const attachments = response.attachments || response.data?.attachments;
-      if (response.success && attachments) {
-        console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
-        setUploadedAttachments(prev => [...prev, ...attachments]);
-      } else {
-        console.warn('⚠️ Upload sans succès:', response);
+        // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
+        const attachments = response.attachments || response.data?.attachments;
+        if (response.success && attachments) {
+          console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
+          setUploadedAttachments(prev => [...prev, ...attachments]);
+        } else {
+          console.warn('⚠️ Upload sans succès:', response);
+        }
       }
     } catch (error) {
       console.error('❌ Upload error:', error);
@@ -284,7 +371,7 @@ export function useAttachmentUpload({
     } finally {
       setIsUploading(false);
     }
-  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t]);
+  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches]);
 
   // Créer un attachment texte
   const handleCreateTextAttachment = useCallback(async (text: string) => {
@@ -399,6 +486,7 @@ export function useAttachmentUpload({
     isDragOver,
     uploadProgress,
     compressionProgress,
+    batchProgress,
     showAttachmentLimitModal,
     attemptedCount,
     handleFilesSelected,
