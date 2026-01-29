@@ -104,38 +104,18 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
   // ÉTAPE 3: Configurer les listeners
   useEffect(() => {
     const unsubscribers: Array<() => void> = [];
-
+    
     if (onNewMessage) {
-      // CORRECTION BUG: Filtrer les messages par conversationId pour éviter
-      // que les messages d'autres conversations n'apparaissent dans la mauvaise conversation
-      const filteredOnNewMessage = (message: Message) => {
-        // Si conversationId est défini, ne traiter que les messages de cette conversation
-        if (conversationId && message.conversationId !== conversationId) {
-          return;
-        }
-        onNewMessage(message);
-      };
-
-      const unsub = meeshySocketIOService.onNewMessage(filteredOnNewMessage);
+      const unsub = meeshySocketIOService.onNewMessage(onNewMessage);
       unsubscribers.push(unsub);
     }
     
     if (onMessageEdited) {
-      // CORRECTION BUG: Filtrer les messages édités par conversationId
-      const filteredOnMessageEdited = (message: Message) => {
-        if (conversationId && message.conversationId !== conversationId) {
-          return;
-        }
-        onMessageEdited(message);
-      };
-
-      const unsub = meeshySocketIOService.onMessageEdited(filteredOnMessageEdited);
+      const unsub = meeshySocketIOService.onMessageEdited(onMessageEdited);
       unsubscribers.push(unsub);
     }
-
+    
     if (onMessageDeleted) {
-      // NOTE: Pour les messages supprimés, on ne peut pas filtrer car on n'a que l'ID
-      // Le backend devrait envoyer aussi le conversationId pour permettre le filtrage
       const unsub = meeshySocketIOService.onMessageDeleted(onMessageDeleted);
       unsubscribers.push(unsub);
     }
@@ -174,7 +154,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [conversationId, onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
+  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
 
   // ÉTAPE 4: Surveiller l'état de connexion
   // OPTIMISATION: Réduit la fréquence de polling de 1s à 3s (suffisant pour l'UX)
