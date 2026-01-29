@@ -9,6 +9,7 @@
 
 import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback, useState, useRef } from 'react';
 import { Send, MapPin, X, MessageCircle, Languages, Paperclip, Loader2, Mic } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { LanguageFlagSelector } from '@/components/translation';
@@ -379,18 +380,29 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
 
         {/* Left side: Language selector, Audio, Attachment, Location */}
         <div className="absolute bottom-2 sm:bottom-3 left-3 flex items-center space-x-1 text-xs sm:text-sm text-gray-600 pointer-events-auto">
-          {/* Language selector */}
-          <div className="scale-100 sm:scale-100 origin-left">
-            <LanguageFlagSelector
-              value={props.selectedLanguage}
-              onValueChange={props.onLanguageChange}
-              choices={props.choices}
-              popoverSide="top"
-              popoverAlign="start"
-              popoverSideOffset={8}
-              showLanguageName={false}
-            />
-          </div>
+          {/* Language selector - Hidden when recording audio */}
+          <AnimatePresence mode="wait">
+            {!composerState.showAudioRecorder && (
+              <motion.div
+                key="language-selector"
+                initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="scale-100 sm:scale-100 origin-left"
+              >
+                <LanguageFlagSelector
+                  value={props.selectedLanguage}
+                  onValueChange={props.onLanguageChange}
+                  choices={props.choices}
+                  popoverSide="top"
+                  popoverAlign="start"
+                  popoverSideOffset={8}
+                  showLanguageName={false}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Toolbar buttons (Mic + Attachment) - Phase 6 */}
           <ToolbarButtons
@@ -399,23 +411,47 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             disabled={props.isComposingEnabled === false || composerState.isUploading || composerState.isCompressing}
           />
 
-          {/* Location */}
-          {props.location ? (
-            <div className="flex items-center space-x-1">
-              <MapPin className="h-[22px] w-[22px] sm:h-[22px] sm:w-[22px]" aria-hidden="true" />
-              <span className="hidden sm:inline">{props.location}</span>
-            </div>
-          ) : null}
+          {/* Location - Animated appearance */}
+          <AnimatePresence mode="wait">
+            {props.location && (
+              <motion.div
+                key="location"
+                initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="flex items-center space-x-1"
+              >
+                <MapPin className="h-[22px] w-[22px] sm:h-[22px] sm:w-[22px]" aria-hidden="true" />
+                <span className="hidden sm:inline">{props.location}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Right side: Character counter and send button */}
         <div className="absolute bottom-2 sm:bottom-3 right-3 sm:right-4 flex items-center space-x-2 pointer-events-auto">
-          {/* Character counter */}
-          {props.value.length > composerState.maxMessageLength * 0.9 ? (
-            <span className={`hidden sm:inline text-xs ${props.value.length > composerState.maxMessageLength ? 'text-red-500' : 'text-orange-500'}`}>
-              {props.value.length}/{composerState.maxMessageLength}
-            </span>
-          ) : null}
+          {/* Character counter - Progressive appearance from 70% */}
+          <AnimatePresence mode="wait">
+            {props.value.length > composerState.maxMessageLength * 0.7 && (
+              <motion.span
+                key="char-counter"
+                initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className={`hidden sm:inline text-xs font-medium ${
+                  props.value.length > composerState.maxMessageLength
+                    ? 'text-red-500'
+                    : props.value.length > composerState.maxMessageLength * 0.9
+                    ? 'text-orange-500'
+                    : 'text-gray-500'
+                }`}
+              >
+                {props.value.length}/{composerState.maxMessageLength}
+              </motion.span>
+            )}
+          </AnimatePresence>
 
           {/* Attachment counter */}
           {(composerState.selectedFiles.length + composerState.uploadedAttachments.length) > 40 ? (
