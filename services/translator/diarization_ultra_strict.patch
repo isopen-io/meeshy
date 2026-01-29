@@ -1,0 +1,98 @@
+--- a/services/translator/src/services/diarization_speechbrain.py
++++ b/services/translator/src/services/diarization_speechbrain.py
+@@ -332,44 +332,65 @@ class SpeechBrainDiarization:
+         embeddings = np.array(embeddings)
+         logger.info(f"[SPEECHBRAIN]    Extrait {len(embeddings)} embeddings")
+
+-        # Clustering des embeddings
++        # ═══════════════════════════════════════════════════════════════
++        # CLUSTERING ULTRA-STRICT POUR ÉVITER SUR-SEGMENTATION
++        # ═══════════════════════════════════════════════════════════════
++        # Basé sur recherche académique (ISCA Odyssey 2020):
++        # - Silhouette > 0.7 = "strong" clustering
++        # - Silhouette > 0.5 = "reasonable" clustering
++        # - Silhouette < 0.5 = qualité douteuse → forcer 1 speaker
++        #
++        # Stratégie: distance_threshold au lieu de n_clusters
++        # - Distance 0.40 = similarité cosinus <60% requis pour séparer
++        # - Force des voix VRAIMENT distinctes
++        # ═══════════════════════════════════════════════════════════════
++
+         if not SKLEARN_AVAILABLE:
+             raise RuntimeError("scikit-learn requis pour le clustering")
+
+-        # Trouver le nombre optimal de clusters
+         best_n_clusters = 1
+         best_score = -1
++        final_labels = None
+
+         if len(embeddings) >= 4:  # Minimum pour clustering
+-            # Limiter le nombre max de clusters testés
+-            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)  # ✅ RÉDUIT: 4 → 3
+-
+-            for n in range(2, max_clusters_to_test):
+-                clustering = AgglomerativeClustering(
+-                    n_clusters=n,
+-                    metric='cosine',
+-                    linkage='average'
+-                )
+-                labels = clustering.fit_predict(embeddings)
+-
+-                # Score de silhouette (qualité du clustering)
+-                score = silhouette_score(embeddings, labels, metric='cosine')
+-
+-                logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
+-
+-                # ✅ AUGMENTÉ: 0.25 → 0.35 (seuil plus strict, moins de faux positifs)
+-                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
+-                if score > best_score and score > 0.35:  # Seuil strict pour éviter sur-segmentation
+-                    best_score = score
+-                    best_n_clusters = n
+-                    logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={best_score:.3f}")
++            # APPROCHE: Distance threshold (plus strict que n_clusters)
++            # Distance 0.40 = seuls embeddings avec similarité <60% séparés
++            logger.info("[SPEECHBRAIN]    Clustering avec distance_threshold=0.40 (similarité <60% requis)")
++
++            clustering_distance = AgglomerativeClustering(
++                n_clusters=None,
++                distance_threshold=0.40,  # ✅ CRITIQUE: Force similarité <60% pour séparer
++                metric='cosine',
++                linkage='average'
++            )
++            labels_distance = clustering_distance.fit_predict(embeddings)
++            n_clusters_found = len(set(labels_distance))
++
++            logger.info(f"[SPEECHBRAIN]    Distance threshold → {n_clusters_found} cluster(s)")
++
++            # Si on trouve plus d'1 cluster, calculer silhouette score
++            if n_clusters_found > 1:
++                score_distance = silhouette_score(embeddings, labels_distance, metric='cosine')
++                logger.info(f"[SPEECHBRAIN]    Score silhouette: {score_distance:.3f}")
++
++                # ✅ THRESHOLD AUGMENTÉ: 0.35 → 0.60 (recherche: 0.5+ = "reasonable")
++                # Si score < 0.60, séparation NON fiable → forcer 1 speaker
++                if score_distance >= 0.60:
++                    best_n_clusters = n_clusters_found
++                    best_score = score_distance
++                    final_labels = labels_distance
++                    logger.info(f"[SPEECHBRAIN]    ✅ Clustering accepté: {n_clusters_found} speakers (score={score_distance:.3f} ≥ 0.60)")
++                else:
++                    logger.info(f"[SPEECHBRAIN]    ⚠️ Score {score_distance:.3f} < 0.60 → Sur-segmentation probable → Forçage 1 speaker")
++                    best_n_clusters = 1
++            else:
++                logger.info("[SPEECHBRAIN]    1 seul speaker détecté")
++                best_n_clusters = 1
+
+         # Appliquer le clustering final
+-        if best_n_clusters > 1:
+-            clustering = AgglomerativeClustering(
+-                n_clusters=best_n_clusters,
+-                metric='cosine',
+-                linkage='average'
+-            )
+-            labels = clustering.fit_predict(embeddings)
++        if final_labels is not None and best_n_clusters > 1:
++            labels = final_labels
+             logger.info(f"[SPEECHBRAIN]    Détecté {best_n_clusters} speakers (score={best_score:.3f})")
+         else:
+             labels = np.zeros(len(embeddings), dtype=int)

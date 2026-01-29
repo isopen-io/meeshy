@@ -277,7 +277,7 @@ class SpeechBrainDiarization:
     async def diarize(
         self,
         audio_path: str,
-        window_size_ms: int = 1500,  # Fenêtre de 1.5s
+        window_size_ms: int = 2500,  # Fenêtre de 2.5s (réduit sur-segmentation)
         hop_size_ms: int = 750,       # Hop de 0.75s (50% overlap)
         max_speakers: int = 2,        # ✅ RÉDUIT: 5 → 2 (moins sensible)
         num_speakers: Optional[int] = None  # ✅ NOUVEAU: Forcer nombre exact
@@ -355,7 +355,7 @@ class SpeechBrainDiarization:
 
                 # ✅ AUGMENTÉ: 0.25 → 0.35 (seuil plus strict, moins de faux positifs)
                 # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
-                if score > best_score and score > 0.35:  # Seuil strict pour éviter sur-segmentation
+                if score > best_score and score > 0.60:  # Seuil strict pour éviter sur-segmentation
                     best_score = score
                     best_n_clusters = n
                     logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
