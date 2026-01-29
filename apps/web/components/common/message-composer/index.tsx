@@ -424,17 +424,14 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             </span>
           ) : null}
 
-          {/* Send button (Phase 3 component) */}
-          <SendButton
-            isVisible={composerState.hasContent}
-            canSend={composerState.canSend}
-            onClick={composerState.handleSendMessage}
-            isCompressing={composerState.isCompressing}
-            isRecording={composerState.isRecording}
-            isUploading={composerState.isUploading}
-            performanceProfile={performanceProfile}
-            animConfig={animConfig}
-          />
+          {/* Send button (Phase 6 component) */}
+          {composerState.hasContent && (
+            <SendButton
+              onClick={composerState.handleSendMessage}
+              disabled={!composerState.canSend}
+              isLoading={composerState.isCompressing || composerState.isRecording || composerState.isUploading}
+            />
+          )}
         </div>
         </GlassContainer>
 
