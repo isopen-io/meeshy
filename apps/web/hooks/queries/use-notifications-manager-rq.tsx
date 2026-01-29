@@ -140,7 +140,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
         content: notification.content,
       });
 
-      // Vérifier d'abord si la notification existe déjà dans le cache
+      // Vérifier si la notification existe déjà dans le cache
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
       console.log('[useNotificationsManagerRQ] Queries found:', queries.length);
 
@@ -159,45 +159,46 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       });
 
       if (notificationExists) {
-        console.log('[useNotificationsManagerRQ] ⚠️ Notification already exists, skipping duplicate:', notification.id);
-        return;
+        console.log('[useNotificationsManagerRQ] ⚠️ Notification already exists in cache:', notification.id);
+        console.log('[useNotificationsManagerRQ] This is normal if React Query fetched it before Socket.IO delivered it');
+        // NE PAS ajouter à nouveau au cache, mais continuer pour afficher le toast si approprié
+      } else {
+        console.log('[useNotificationsManagerRQ] ✅ Notification is new, adding to cache:', notification.id);
+
+        // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.notifications.lists(), exact: false },
+          (old: any) => {
+            if (!old || !old.pages) return old;
+
+            // Ajouter la nouvelle notification au début de la première page
+            const updatedPages = old.pages.map((page: any, index: number) => {
+              if (index === 0) {
+                return {
+                  ...page,
+                  notifications: [notification, ...(page.notifications ?? [])],
+                  // Incrémenter unreadCount si présent
+                  unreadCount: (page.unreadCount ?? 0) + 1,
+                };
+              }
+              return page;
+            });
+
+            return {
+              ...old,
+              pages: updatedPages,
+            };
+          }
+        );
+
+        // Mettre à jour le compteur (uniquement si nouveau)
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(),
+          (old: number | undefined) => (old ?? 0) + 1
+        );
       }
 
-      console.log('[useNotificationsManagerRQ] ✅ Notification is new, adding to cache:', notification.id);
-
-      // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.notifications.lists(), exact: false },
-        (old: any) => {
-          if (!old || !old.pages) return old;
-
-          // Ajouter la nouvelle notification au début de la première page
-          const updatedPages = old.pages.map((page: any, index: number) => {
-            if (index === 0) {
-              return {
-                ...page,
-                notifications: [notification, ...(page.notifications ?? [])],
-                // Incrémenter unreadCount si présent
-                unreadCount: (page.unreadCount ?? 0) + 1,
-              };
-            }
-            return page;
-          });
-
-          return {
-            ...old,
-            pages: updatedPages,
-          };
-        }
-      );
-
-      // Mettre à jour le compteur (uniquement si ce n'est pas un doublon)
-      queryClient.setQueryData(
-        queryKeys.notifications.unreadCount(),
-        (old: number | undefined) => (old ?? 0) + 1
-      );
-
-      // Ne pas afficher de toast si l'utilisateur est sur la page des notifications ou dans la conversation active
+      // Décider si on affiche un toast
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const notificationConversationId = notification.context?.conversationId;
 

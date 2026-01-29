@@ -184,8 +184,16 @@ export function useMentions({
     cursorPosition: number,
     textarea: HTMLTextAreaElement | null
   ) => {
+    console.log('[DEBUG useMentions.handleTextChange] Called with:', {
+      value,
+      cursorPosition,
+      conversationId,
+      textareaExists: !!textarea
+    });
+
     // Vérifier que conversationId est un ObjectId valide
     const isValidObjectId = conversationId && OBJECT_ID_REGEX.test(conversationId);
+    console.log('[DEBUG useMentions] ObjectId validation:', { conversationId, isValidObjectId });
     if (!isValidObjectId) {
       setShowMentionAutocomplete(false);
       setMentionQuery('');
@@ -194,6 +202,7 @@ export function useMentions({
 
     // Détecter la mention
     const detection = detectMentionAtCursor(value, cursorPosition);
+    console.log('[DEBUG useMentions] Detection result:', detection);
 
     if (detection && /^\w{0,30}$/.test(detection.query)) {
       // Calculer la position

@@ -124,6 +124,13 @@ export const useComposerState = (props: MessageComposerProps) => {
   // Handlers
   const handleTextareaChangeComplete = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
+    console.log('[DEBUG useComposerState.handleTextareaChangeComplete] Called with:', {
+      newValue,
+      cursorPosition: e.target.selectionStart,
+      mentionStateKeys: Object.keys(mentionState),
+      hasHandleTextChange: typeof mentionState.handleTextChange === 'function'
+    });
+
     props.onChange(newValue);
     handleAutosize(e);
 
@@ -137,6 +144,11 @@ export const useComposerState = (props: MessageComposerProps) => {
 
     // Mention detection
     const cursorPosition = e.target.selectionStart;
+    console.log('[DEBUG useComposerState] Calling mentionState.handleTextChange with:', {
+      newValue,
+      cursorPosition,
+      textareaRefCurrent: !!textareaRef.current
+    });
     mentionState.handleTextChange(newValue, cursorPosition, textareaRef.current);
   }, [props.onChange, handleAutosize, saveDraft, mentionState.handleTextChange, textareaRef]);
 
