@@ -81,19 +81,42 @@ class DiarizationResult:
 
 class SpeechBrainDiarization:
     """
-    Diarisation des locuteurs avec SpeechBrain
+    Diarisation des locuteurs avec SpeechBrain + nettoyage automatique
     Fonctionne SANS token HuggingFace (comme NLLB)
     """
 
-    def __init__(self, models_dir: Optional[str] = None):
+    def __init__(self, models_dir: Optional[str] = None, enable_cleaning: bool = True):
         """
         Args:
             models_dir: Répertoire pour stocker les modèles (optionnel)
+            enable_cleaning: Activer le nettoyage post-diarisation (défaut: True)
         """
         self.models_dir = models_dir or str(
             Path(__file__).parent.parent.parent / "models" / "speechbrain"
         )
         self._encoder = None
+        self.enable_cleaning = enable_cleaning
+
+        # ✨ Initialiser le nettoyeur de diarisation
+        if self.enable_cleaning:
+            try:
+                from services.audio_processing.diarization_cleaner import (
+                    DiarizationCleaner,
+                    merge_consecutive_same_speaker
+                )
+                # Configuration pour monologue/dialogue (cas typique)
+                self._cleaner = DiarizationCleaner(
+                    similarity_threshold=0.85,      # Fusion si similarité > 85%
+                    min_speaker_percentage=0.15,    # Fusion si < 15% du temps
+                    max_sentence_gap=0.5,           # Continuité phrase < 0.5s
+                    min_transition_gap=0.3          # Transition anormale < 0.3s
+                )
+                self._merge_consecutive = merge_consecutive_same_speaker
+                logger.info("[SPEECHBRAIN] ✅ Nettoyeur de diarisation activé")
+            except ImportError as e:
+                logger.warning(f"[SPEECHBRAIN] ⚠️ Nettoyeur non disponible: {e}")
+                self.enable_cleaning = False
+                self._cleaner = None
 
         # Initialiser le service d'analyse vocale
         from services.voice_analyzer_service import VoiceAnalyzerService
@@ -429,6 +452,89 @@ class SpeechBrainDiarization:
 
         speakers_data = speakers_filtered
 
+        # ✨ NETTOYAGE AUTOMATIQUE (si activé)
+        cleaning_stats = None
+        if self.enable_cleaning and self._cleaner and len(speakers_data) > 0:
+            initial_speaker_count = len(speakers_data)
+            logger.info(f"[SPEECHBRAIN] 🧹 Début nettoyage automatique ({initial_speaker_count} speakers bruts)...")
+
+            # Convertir segments en format compatible avec cleaner
+            segments_for_cleaner = []
+            for speaker_id, data in speakers_data.items():
+                for seg in data['segments']:
+                    segments_for_cleaner.append({
+                        'speaker_id': speaker_id,
+                        'start': seg.start_ms / 1000,  # Convertir en secondes
+                        'end': seg.end_ms / 1000,
+                        'duration': seg.duration_ms / 1000,
+                        'confidence': seg.confidence
+                    })
+
+            # Préparer embeddings par speaker (moyenne des embeddings de ses segments)
+            speaker_embeddings = {}
+            for i, (label, _) in enumerate(zip(labels, timestamps)):
+                speaker_id = f"s{label}"
+                if speaker_id not in speaker_embeddings:
+                    speaker_embeddings[speaker_id] = []
+                if i < len(embeddings):
+                    speaker_embeddings[speaker_id].append(embeddings[i])
+
+            # Calculer embedding moyen par speaker
+            speaker_embeddings_avg = {}
+            for speaker_id, embs in speaker_embeddings.items():
+                if embs and speaker_id in speakers_data:
+                    speaker_embeddings_avg[speaker_id] = np.mean(embs, axis=0)
+
+            # Appliquer le nettoyage
+            try:
+                cleaned_segments, cleaning_stats = self._cleaner.clean_diarization(
+                    segments=segments_for_cleaner,
+                    embeddings=speaker_embeddings_avg if speaker_embeddings_avg else None,
+                    transcripts=None  # Pas de transcripts disponibles ici
+                )
+
+                # Fusion consécutive (optimisation finale)
+                cleaned_segments = self._merge_consecutive(cleaned_segments)
+
+                cleaned_speaker_count = len(set(seg['speaker_id'] for seg in cleaned_segments))
+                logger.info(
+                    f"[SPEECHBRAIN] ✅ Nettoyage terminé: "
+                    f"{initial_speaker_count} → {cleaned_speaker_count} speaker(s)"
+                )
+
+                # Log des fusions effectuées
+                if cleaning_stats and cleaning_stats.get('merges_performed'):
+                    for merge_msg in cleaning_stats['merges_performed']:
+                        logger.info(f"[SPEECHBRAIN]    🔄 {merge_msg}")
+
+                # Reconvertir segments nettoyés en format speakers_data
+                speakers_data_cleaned = {}
+                for seg in cleaned_segments:
+                    speaker_id = seg['speaker_id']
+                    if speaker_id not in speakers_data_cleaned:
+                        speakers_data_cleaned[speaker_id] = {
+                            'segments': [],
+                            'total_duration_ms': 0
+                        }
+
+                    # Recréer SpeakerSegment
+                    cleaned_seg = SpeakerSegment(
+                        speaker_id=speaker_id,
+                        start_ms=int(seg['start'] * 1000),
+                        end_ms=int(seg['end'] * 1000),
+                        duration_ms=int(seg['duration'] * 1000),
+                        confidence=seg.get('confidence', 1.0)
+                    )
+                    speakers_data_cleaned[speaker_id]['segments'].append(cleaned_seg)
+                    speakers_data_cleaned[speaker_id]['total_duration_ms'] += cleaned_seg.duration_ms
+
+                # Remplacer speakers_data par la version nettoyée
+                speakers_data = speakers_data_cleaned
+
+            except Exception as e:
+                logger.warning(f"[SPEECHBRAIN] ⚠️ Erreur nettoyage: {e}")
+                logger.warning("[SPEECHBRAIN]    Utilisation des segments bruts")
+
         # Créer SpeakerInfo avec analyse des caractéristiques vocales
         speakers = []
         for speaker_id, data in speakers_data.items():
@@ -469,8 +575,12 @@ class SpeechBrainDiarization:
             speakers=speakers,
             primary_speaker_id=primary_speaker_id,
             total_duration_ms=duration_ms,
-            method="speechbrain"
+            method="speechbrain" + ("_cleaned" if self.enable_cleaning and cleaning_stats else "")
         )
+
+        # Ajouter stats de nettoyage si disponibles
+        if cleaning_stats:
+            result.cleaning_stats = cleaning_stats
 
         # Logs détaillés
         logger.info("=" * 80)
