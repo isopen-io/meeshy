@@ -225,11 +225,16 @@ export interface UpdateUserProfileDTO {
   lastName?: string;
   displayName?: string | null;
   bio?: string;
+  email?: string;
   phoneNumber?: string | null;
+  phoneCountryCode?: string | null;
   avatar?: string | null;
+  banner?: string | null;
+  timezone?: string | null;
   systemLanguage?: string;
-  regionalLanguage?: string;
+  regionalLanguage?: string | null;
   customDestinationLanguage?: string | null;
+  birthDate?: Date | null;
 }
 
 /**

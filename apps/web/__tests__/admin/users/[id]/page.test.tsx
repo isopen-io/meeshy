@@ -465,7 +465,7 @@ describe('UserDetailPage', () => {
 
       await waitFor(() => {
         expect(mockApiService.patch).toHaveBeenCalledWith(
-          '/admin/user-management/user-123',
+          '/admin/users/user-123',
           expect.objectContaining({ firstName: 'Jane' })
         );
         expect(mockToast.success).toHaveBeenCalledWith('Profil mis à jour avec succès');
@@ -762,7 +762,7 @@ describe('UserDetailPage', () => {
 
       await waitFor(() => {
         expect(mockApiService.post).toHaveBeenCalledWith(
-          '/admin/user-management/user-123/reset-password',
+          '/admin/users/user-123/reset-password',
           expect.objectContaining({ newPassword: 'newpassword123' })
         );
         expect(mockToast.success).toHaveBeenCalledWith('Mot de passe réinitialisé avec succès');

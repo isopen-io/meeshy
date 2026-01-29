@@ -2,7 +2,13 @@
   "notifications": {
     "pageTitle": "Notifications",
     "title": "Notifications",
-    "empty": "No notifications",
+    "empty": {
+      "title": "No notifications",
+      "description": "You have no notifications at the moment",
+      "tryDifferentSearch": "Try a different search"
+    },
+    "noResults": "No notifications found",
+    "search": "Search notifications...",
     "emptyUnread": "All caught up! No unread notifications.",
     "emptyMentions": "No mentions yet",
     "markAllAsRead": "Mark all as read",
@@ -25,6 +31,16 @@
       "all": "All",
       "read": "Read",
       "unread": "Unread",
+      "messages": "Messages",
+      "messagesShort": "Msg",
+      "mentions": "Mentions",
+      "mentionsShort": "@",
+      "conversations": "Conversations",
+      "conversationsShort": "Conv",
+      "calls": "Missed calls",
+      "callsShort": "📞",
+      "friendRequests": "Friend requests",
+      "friendRequestsShort": "Friends",
       "new_message": "Messages",
       "friend_request": "Friend requests",
       "missed_call": "Missed calls",
@@ -71,6 +87,17 @@
       "contactRequestMessage": "{sender} sent you an invitation",
       "notMemberHint": "You are not a member of this conversation. Click to join."
     },
+    "conversationTypes": {
+      "private": "Private",
+      "direct": "Private",
+      "group": "Group"
+    },
+    "timeAgo": {
+      "now": "just now",
+      "minute": "{count} min ago",
+      "hour": "{count}h ago",
+      "day": "{count}d ago"
+    },
     "actions": {
       "accept": "Accept",
       "decline": "Decline",
@@ -78,7 +105,10 @@
       "callBack": "Call Back",
       "view": "View",
       "reply": "Reply",
-      "select": "Select"
+      "select": "Select",
+      "markAsRead": "Mark as read",
+      "delete": "Delete",
+      "clearSearch": "Clear search"
     },
     "unreadCount": {
       "single": "{count} unread of {total}",

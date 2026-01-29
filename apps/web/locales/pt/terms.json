@@ -46,8 +46,12 @@
       "title": "Lei Aplicável",
       "content": "Estes termos são regidos pelas leis francesas. Qualquer disputa será submetida à jurisdição exclusiva dos tribunais de Paris."
     },
-    "email": "Email: legal@meeshy.me",
-    "address": "Endereço: 12 Rue de la Paix, 75002 Paris, França",
+    "contact": {
+      "title": "Contato",
+      "intro": "Para quaisquer perguntas sobre estes termos de uso, entre em contato conosco:",
+      "email": "Email: legal@meeshy.me",
+      "address": "Endereço: 12 Rue de la Paix, 75002 Paris, França"
+    },
     "footer": {
       "title": "Links Úteis",
       "about": "Sobre",

@@ -172,6 +172,17 @@ export class NotificationService {
     const createdAtDate = this.sanitizeDate(raw.createdAt, new Date())!;
     const expiresAtDate = this.sanitizeDate(raw.expiresAt, null);
 
+    // Debug: Log si createdAt est null/invalide pour cette notification
+    if (!raw.createdAt || !(raw.createdAt instanceof Date)) {
+      notificationLogger.warn('⚠️ Notification missing valid createdAt', {
+        notificationId: raw.id,
+        rawCreatedAt: raw.createdAt,
+        typeofCreatedAt: typeof raw.createdAt,
+        usingFallback: true,
+        fallbackDate: createdAtDate.toISOString(),
+      });
+    }
+
     return {
       id: raw.id,
       userId: raw.userId,

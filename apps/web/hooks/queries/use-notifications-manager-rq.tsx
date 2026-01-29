@@ -136,6 +136,8 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     const handleNotificationRead = (notificationId: string) => {
+      console.log('[useNotificationsManagerRQ] Marking notification as read:', notificationId);
+
       queryClient.setQueryData(
         queryKeys.notifications.lists(),
         (old: any) => {
@@ -145,7 +147,9 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
             pages: old.pages.map((page: any) => ({
               ...page,
               notifications: page.notifications?.map((n: Notification) =>
-                n.id === notificationId ? { ...n, isRead: true } : n
+                n.id === notificationId
+                  ? { ...n, state: { ...n.state, isRead: true, readAt: new Date() } }
+                  : n
               ),
             })),
           };

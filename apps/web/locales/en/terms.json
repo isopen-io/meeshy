@@ -5,8 +5,6 @@
     "intro": "By accessing and using Meeshy, you agree to be bound by these terms of service.",
     "backHome": "Back to home",
     "print": "Print",
-    "address": "Meeshy SAS, 9-11 Avenue de l'Arche, 92400 Courbevoie, France",
-    "email": "legal@meeshy.me",
     "acceptance": {
       "title": "1. Acceptance of Terms",
       "content": "By accessing and using Meeshy, you agree to be bound by these terms of use. If you do not agree to these terms, please do not use our service."
@@ -62,6 +60,12 @@
     "governing": {
       "title": "9. Governing Law",
       "content": "These terms shall be governed by and construed in accordance with the laws of France, without regard to its conflict of law provisions."
+    },
+    "contact": {
+      "title": "10. Contact",
+      "intro": "If you have any questions about these Terms of Service, please contact us:",
+      "email": "Email: legal@meeshy.me",
+      "address": "Address: Meeshy SAS, 9-11 Avenue de l'Arche, 92400 Courbevoie, France"
     },
     "footer": {
       "title": "Questions?",

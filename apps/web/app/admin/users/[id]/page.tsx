@@ -5,36 +5,34 @@ import { useRouter, useParams } from 'next/navigation';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
-  User as UserIcon,
-  Shield,
-  Mail,
-  Phone,
-  Calendar,
   Edit2,
-  Save,
-  X,
   Trash2,
-  Key,
   CheckCircle,
   XCircle,
   AlertCircle,
   MessageSquare,
   Users as UsersIcon,
-  Activity
+  Activity,
+  Shield,
+  Calendar
 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { adminService, type User as AdminUserType } from '@/services/admin.service';
+import { toast } from 'sonner';
 
-// Type pour les réponses API admin
+// Import des composants modulaires
+import { UserPersonalInfoSection } from '@/components/admin/user-detail/UserPersonalInfoSection';
+import { UserContactInfoSection } from '@/components/admin/user-detail/UserContactInfoSection';
+import { UserLanguageSection } from '@/components/admin/user-detail/UserLanguageSection';
+import { UserSecuritySection } from '@/components/admin/user-detail/UserSecuritySection';
+
 interface AdminApiResponse<T> {
   success: boolean;
   data: T;
 }
-import { toast } from 'sonner';
 
 export default function UserDetailPage() {
   const router = useRouter();
@@ -43,18 +41,7 @@ export default function UserDetailPage() {
 
   const [user, setUser] = useState<AdminUserType | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    displayName: '',
-    username: '',
-    bio: '',
-    systemLanguage: 'fr',
-    regionalLanguage: 'fr'
-  });
 
   const [roleEdit, setRoleEdit] = useState({
     editing: false,
@@ -78,20 +65,11 @@ export default function UserDetailPage() {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get<AdminApiResponse<AdminUserType>>(`/admin/user-management/${userId}`);
+      const response = await apiService.get<AdminApiResponse<AdminUserType>>(`/admin/users/${userId}`);
 
       if (response.data?.success && response.data?.data) {
         const userData = response.data.data as AdminUserType;
         setUser(userData);
-        setFormData({
-          firstName: userData.firstName || '',
-          lastName: userData.lastName || '',
-          displayName: userData.displayName || '',
-          username: userData.username || '',
-          bio: userData.bio || '',
-          systemLanguage: userData.systemLanguage || 'fr',
-          regionalLanguage: userData.regionalLanguage || 'fr'
-        });
         setRoleEdit(prev => ({ ...prev, role: userData.role }));
       }
     } catch (error) {
@@ -100,23 +78,6 @@ export default function UserDetailPage() {
       router.push('/admin/users');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleUpdateProfile = async () => {
-    try {
-      setSaving(true);
-      const response = await apiService.patch<AdminApiResponse<AdminUserType>>(`/admin/user-management/${userId}`, formData);
-
-      if (response.data?.success) {
-        toast.success('Profil mis à jour avec succès');
-        setEditMode(false);
-        loadUserData();
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -166,7 +127,7 @@ export default function UserDetailPage() {
 
     try {
       setSaving(true);
-      const response = await apiService.post<AdminApiResponse<void>>(`/admin/user-management/${userId}/reset-password`, {
+      const response = await apiService.post<AdminApiResponse<void>>(`/admin/users/${userId}/reset-password`, {
         newPassword: passwordReset.newPassword,
         reason: passwordReset.reason
       });
@@ -217,6 +178,7 @@ export default function UserDetailPage() {
       'BIGBOSS': 'destructive',
       'ADMIN': 'default',
       'MODO': 'secondary',
+      'MODERATOR': 'secondary',
       'AUDIT': 'outline',
       'ANALYST': 'outline',
       'USER': 'secondary'
@@ -228,6 +190,7 @@ export default function UserDetailPage() {
     const labels: Record<string, string> = {
       'BIGBOSS': 'Super Admin',
       'ADMIN': 'Administrateur',
+      'MODERATOR': 'Modérateur',
       'MODO': 'Modérateur',
       'AUDIT': 'Auditeur',
       'ANALYST': 'Analyste',
@@ -253,7 +216,9 @@ export default function UserDetailPage() {
         <div className="text-center py-12">
           <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Utilisateur introuvable</h3>
-          <Button onClick={() => router.push('/admin/users')} className="dark:bg-blue-700 dark:hover:bg-blue-800">Retour à la liste</Button>
+          <Button onClick={() => router.push('/admin/users')} className="dark:bg-blue-700 dark:hover:bg-blue-800">
+            Retour à la liste
+          </Button>
         </div>
       </AdminLayout>
     );
@@ -274,212 +239,60 @@ export default function UserDetailPage() {
               <span>Retour</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.displayName || user.username}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {user.displayName || user.username}
+              </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">@{user.username}</p>
             </div>
           </div>
-          <Badge variant={user.isActive ? 'default' : 'secondary'}>
-            {user.isActive ? (
-              <>
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Actif
-              </>
-            ) : (
-              <>
-                <XCircle className="h-4 w-4 mr-1" />
-                Inactif
-              </>
-            )}
-          </Badge>
+          <div className="flex items-center space-x-2">
+            <Badge variant={user.isActive ? 'default' : 'secondary'}>
+              {user.isActive ? (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Actif
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Inactif
+                </>
+              )}
+            </Badge>
+            <Badge variant={getRoleBadgeVariant(user.role)}>
+              <Shield className="h-4 w-4 mr-1" />
+              {getRoleLabel(user.role)}
+            </Badge>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Colonne gauche - Informations principales */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Informations du profil */}
-            <Card className="dark:bg-gray-900 dark:border-gray-800">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
-                  <UserIcon className="h-5 w-5" />
-                  <span>Informations du profil</span>
-                </CardTitle>
-                {!editMode ? (
-                  <Button variant="outline" size="sm" onClick={() => setEditMode(true)} className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200">
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Modifier
-                  </Button>
-                ) : (
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => {
-                      setEditMode(false);
-                      setFormData({
-                        firstName: user.firstName || '',
-                        lastName: user.lastName || '',
-                        displayName: user.displayName || '',
-                        username: user.username || '',
-                        bio: user.bio || '',
-                        systemLanguage: user.systemLanguage || 'fr',
-                        regionalLanguage: user.regionalLanguage || 'fr'
-                      });
-                    }}>
-                      <X className="h-4 w-4 mr-1" />
-                      Annuler
-                    </Button>
-                    <Button size="sm" onClick={handleUpdateProfile} disabled={saving}>
-                      <Save className="h-4 w-4 mr-1" />
-                      Sauvegarder
-                    </Button>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {editMode ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium dark:text-gray-200">Prénom</label>
-                        <Input
-                          value={formData.firstName}
-                          onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                          className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium dark:text-gray-200">Nom</label>
-                        <Input
-                          value={formData.lastName}
-                          onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                          className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Nom d'affichage</label>
-                      <Input
-                        value={formData.displayName}
-                        onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                        className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Nom d'utilisateur (username)</label>
-                      <Input
-                        value={formData.username}
-                        onChange={(e) => {
-                          // Filtrer les caractères non autorisés en temps réel
-                          const value = e.target.value.replace(/[^a-zA-Z0-9_-]/g, '');
-                          setFormData({ ...formData, username: value });
-                        }}
-                        className="font-mono dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                        placeholder="nom-utilisateur"
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Uniquement lettres, chiffres, tirets et underscores</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Biographie</label>
-                      <textarea
-                        className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] dark:bg-gray-800 dark:text-gray-100"
-                        value={formData.bio}
-                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                        maxLength={500}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium dark:text-gray-200">Langue système</label>
-                        <select
-                          className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
-                          value={formData.systemLanguage}
-                          onChange={(e) => setFormData({ ...formData, systemLanguage: e.target.value })}
-                        >
-                          <option value="en">Anglais</option>
-                          <option value="fr">Français</option>
-                          <option value="pt">Portugais</option>
-                          <option value="es">Espagnol</option>
-                          <option value="de">Allemand</option>
-                          <option value="it">Italien</option>
-                          <option value="zh">Chinois</option>
-                          <option value="ja">Japonais</option>
-                          <option value="ar">Arabe</option>
-                          <option value="ru">Russe</option>
-                          <option value="ko">Coréen</option>
-                          <option value="hi">Hindi</option>
-                          <option value="tr">Turc</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium dark:text-gray-200">Langue régionale</label>
-                        <select
-                          className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
-                          value={formData.regionalLanguage}
-                          onChange={(e) => setFormData({ ...formData, regionalLanguage: e.target.value })}
-                        >
-                          <option value="en">Anglais</option>
-                          <option value="fr">Français</option>
-                          <option value="pt">Portugais</option>
-                          <option value="es">Espagnol</option>
-                          <option value="de">Allemand</option>
-                          <option value="it">Italien</option>
-                          <option value="zh">Chinois</option>
-                          <option value="ja">Japonais</option>
-                          <option value="ar">Arabe</option>
-                          <option value="ru">Russe</option>
-                          <option value="ko">Coréen</option>
-                          <option value="hi">Hindi</option>
-                          <option value="tr">Turc</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center text-sm">
-                      <span className="w-32 text-gray-600 dark:text-gray-400">Nom complet:</span>
-                      <span className="font-medium dark:text-gray-200">{user.firstName} {user.lastName}</span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <span className="w-32 text-gray-600 dark:text-gray-400">Username:</span>
-                      <span className="font-medium font-mono flex items-center dark:text-gray-200">
-                        <UserIcon className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
-                        @{user.username}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <span className="w-32 text-gray-600 dark:text-gray-400">Email:</span>
-                      <span className="font-medium flex items-center dark:text-gray-200">
-                        <Mail className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
-                        {user.email}
-                      </span>
-                    </div>
-                    {user.phoneNumber && (
-                      <div className="flex items-center text-sm">
-                        <span className="w-32 text-gray-600 dark:text-gray-400">Téléphone:</span>
-                        <span className="font-medium flex items-center dark:text-gray-200">
-                          <Phone className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
-                          {user.phoneNumber}
-                        </span>
-                      </div>
-                    )}
-                    {user.bio && (
-                      <div className="text-sm">
-                        <span className="text-gray-600 dark:text-gray-400 block mb-1">Biographie:</span>
-                        <p className="text-gray-900 dark:text-gray-200">{user.bio}</p>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-4 pt-2">
-                      <div className="text-sm">
-                        <span className="text-gray-600 dark:text-gray-400 block">Langue système:</span>
-                        <span className="font-medium dark:text-gray-200">{user.systemLanguage}</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="text-gray-600 dark:text-gray-400 block">Langue régionale:</span>
-                        <span className="font-medium dark:text-gray-200">{user.regionalLanguage}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <UserPersonalInfoSection
+              user={user}
+              userId={userId}
+              onUpdate={loadUserData}
+            />
+
+            <UserContactInfoSection
+              user={user}
+              userId={userId}
+              onUpdate={loadUserData}
+            />
+
+            <UserLanguageSection
+              user={user}
+              userId={userId}
+              onUpdate={loadUserData}
+            />
+
+            <UserSecuritySection
+              user={user}
+              userId={userId}
+              onUpdate={loadUserData}
+              onResetPassword={() => setPasswordReset({ ...passwordReset, open: true })}
+            />
 
             {/* Gestion du rôle */}
             <Card className="dark:bg-gray-900 dark:border-gray-800">
@@ -498,7 +311,12 @@ export default function UserDetailPage() {
                         {getRoleLabel(user.role)}
                       </Badge>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setRoleEdit({ ...roleEdit, editing: true })} className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRoleEdit({ ...roleEdit, editing: true })}
+                      className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
+                    >
                       <Edit2 className="h-4 w-4 mr-1" />
                       Modifier
                     </Button>
@@ -514,14 +332,16 @@ export default function UserDetailPage() {
                       >
                         <option value="USER">Utilisateur</option>
                         <option value="ADMIN">Administrateur</option>
-                        <option value="MODO">Modérateur</option>
+                        <option value="MODERATOR">Modérateur</option>
                         <option value="AUDIT">Auditeur</option>
                         <option value="ANALYST">Analyste</option>
                         <option value="BIGBOSS">Super Admin</option>
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Raison du changement (requis)</label>
+                      <label className="text-sm font-medium dark:text-gray-200">
+                        Raison du changement (requis)
+                      </label>
                       <textarea
                         className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[60px] dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                         placeholder="Expliquez pourquoi vous changez ce rôle..."
@@ -530,66 +350,15 @@ export default function UserDetailPage() {
                       />
                     </div>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => setRoleEdit({ editing: false, role: user.role, reason: '' })}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRoleEdit({ editing: false, role: user.role, reason: '' })}
+                      >
                         Annuler
                       </Button>
                       <Button size="sm" onClick={handleUpdateRole} disabled={saving}>
                         Enregistrer
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sécurité */}
-            <Card className="dark:bg-gray-900 dark:border-gray-800">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
-                  <Key className="h-5 w-5" />
-                  <span>Sécurité</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!passwordReset.open ? (
-                  <Button variant="outline" onClick={() => setPasswordReset({ ...passwordReset, open: true })} className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200">
-                    <Key className="h-4 w-4 mr-2" />
-                    Réinitialiser le mot de passe
-                  </Button>
-                ) : (
-                  <div className="space-y-4 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Nouveau mot de passe</label>
-                      <Input
-                        type="password"
-                        value={passwordReset.newPassword}
-                        onChange={(e) => setPasswordReset({ ...passwordReset, newPassword: e.target.value })}
-                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Confirmer le mot de passe</label>
-                      <Input
-                        type="password"
-                        value={passwordReset.confirmPassword}
-                        onChange={(e) => setPasswordReset({ ...passwordReset, confirmPassword: e.target.value })}
-                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Raison</label>
-                      <textarea
-                        className="w-full p-2 border dark:border-gray-600 rounded-md text-sm min-h-[60px] dark:bg-gray-700 dark:text-gray-100"
-                        value={passwordReset.reason}
-                        onChange={(e) => setPasswordReset({ ...passwordReset, reason: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' })}>
-                        Annuler
-                      </Button>
-                      <Button size="sm" onClick={handleResetPassword} disabled={saving}>
-                        Réinitialiser
                       </Button>
                     </div>
                   </div>
@@ -634,6 +403,20 @@ export default function UserDetailPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Dernière activité</span>
                     <span className="font-medium text-xs dark:text-gray-200">{formatDate(user.lastActiveAt)}</span>
+                  </div>
+                )}
+                {user.profileCompletionRate !== null && (
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="text-gray-600 dark:text-gray-400">Complétion du profil</span>
+                      <span className="font-medium dark:text-gray-200">{user.profileCompletionRate}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${user.profileCompletionRate}%` }}
+                      />
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -699,60 +482,66 @@ export default function UserDetailPage() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
 
-            {/* Informations de sécurité */}
-            <Card className="dark:bg-gray-900 dark:border-gray-800">
+        {/* Modal Reset Password */}
+        {passwordReset.open && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md dark:bg-gray-900 dark:border-gray-800">
               <CardHeader>
-                <CardTitle className="dark:text-gray-100">Sécurité du compte</CardTitle>
+                <CardTitle className="dark:text-gray-100">Réinitialiser le mot de passe</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Email vérifié</span>
-                  {user.emailVerifiedAt ? (
-                    <Badge variant="default" className="text-xs">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Oui
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Non
-                    </Badge>
-                  )}
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium dark:text-gray-200">Nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    value={passwordReset.newPassword}
+                    onChange={(e) =>
+                      setPasswordReset({ ...passwordReset, newPassword: e.target.value })
+                    }
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm dark:bg-gray-800 dark:text-gray-100"
+                  />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">2FA activé</span>
-                  {/* TODO: twoFactorEnabled n'existe pas encore sur le type AdminUser */}
-                  {false ? (
-                    <Badge variant="default" className="text-xs">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Oui
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Non
-                    </Badge>
-                  )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium dark:text-gray-200">Confirmer le mot de passe</label>
+                  <input
+                    type="password"
+                    value={passwordReset.confirmPassword}
+                    onChange={(e) =>
+                      setPasswordReset({ ...passwordReset, confirmPassword: e.target.value })
+                    }
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm dark:bg-gray-800 dark:text-gray-100"
+                  />
                 </div>
-                {user.profileCompletionRate !== null && (
-                  <div className="pt-2 border-t dark:border-gray-700">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-gray-600 dark:text-gray-400">Complétion du profil</span>
-                      <span className="font-medium dark:text-gray-200">{user.profileCompletionRate}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all"
-                        style={{ width: `${user.profileCompletionRate}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium dark:text-gray-200">Raison</label>
+                  <textarea
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[60px] dark:bg-gray-800 dark:text-gray-100"
+                    value={passwordReset.reason}
+                    onChange={(e) => setPasswordReset({ ...passwordReset, reason: e.target.value })}
+                    placeholder="Raison de la réinitialisation..."
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' })
+                    }
+                    className="flex-1 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+                  >
+                    Annuler
+                  </Button>
+                  <Button onClick={handleResetPassword} disabled={saving} className="flex-1 dark:bg-blue-700 dark:hover:bg-blue-800">
+                    Réinitialiser
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
-        </div>
+        )}
       </div>
     </AdminLayout>
   );

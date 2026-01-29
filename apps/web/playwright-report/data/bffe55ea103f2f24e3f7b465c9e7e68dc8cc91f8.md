@@ -1,0 +1,68 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e7]:
+    - link "Meeshy" [ref=e9] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e10]:
+        - img [ref=e11]
+        - heading "Meeshy" [level=1] [ref=e13]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - heading "Login" [level=1] [ref=e17]
+        - paragraph [ref=e18]: Enter your credentials to log in
+      - generic [ref=e19]:
+        - textbox
+        - generic [ref=e20]:
+          - generic [ref=e21]: Username, Email or Phone
+          - generic [ref=e22]:
+            - img [ref=e23]
+            - textbox "Username, Email or Phone" [ref=e26]:
+              - /placeholder: Enter your username, email or phone
+        - generic [ref=e27]:
+          - generic [ref=e28]: Password
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - textbox "Password" [ref=e33]:
+              - /placeholder: Your password
+            - button "Show password" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+          - link "Forgot Password?" [ref=e39] [cursor=pointer]:
+            - /url: /forgot-password
+        - generic [ref=e40]:
+          - checkbox "Remember this device (long session)" [ref=e41] [cursor=pointer]
+          - checkbox
+          - generic [ref=e42] [cursor=pointer]:
+            - img [ref=e43]
+            - text: Remember this device (long session)
+        - button "Login" [ref=e45] [cursor=pointer]
+        - generic [ref=e46]:
+          - generic [ref=e47]: Don't have an account?
+          - link "Sign up here" [ref=e48] [cursor=pointer]:
+            - /url: /signup
+      - generic [ref=e53]: or continue with
+      - button "Login with Magic Link" [ref=e54] [cursor=pointer]:
+        - img
+        - text: Login with Magic Link
+    - generic [ref=e55]:
+      - link "Forgot Password?" [ref=e57] [cursor=pointer]:
+        - /url: /forgot-password
+      - generic [ref=e58]:
+        - link "Terms of Service" [ref=e59] [cursor=pointer]:
+          - /url: /terms
+        - generic [ref=e60]: •
+        - link "Privacy Policy" [ref=e61] [cursor=pointer]:
+          - /url: /privacy
+        - generic [ref=e62]: •
+        - link "Contact us" [ref=e63] [cursor=pointer]:
+          - /url: /contact
+  - generic [ref=e64]:
+    - img [ref=e66]
+    - button "Open Tanstack query devtools" [ref=e114] [cursor=pointer]:
+      - img [ref=e115]
+  - region "Notifications alt+T"
+  - alert [ref=e163]: Connexion - Meeshy
+  - button "Open Next.js Dev Tools" [ref=e169] [cursor=pointer]:
+    - img [ref=e170]
+```

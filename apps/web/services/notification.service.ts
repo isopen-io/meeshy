@@ -60,6 +60,47 @@ async function withRetry<T>(
  * On parse juste les dates.
  */
 function parseNotification(raw: any): Notification {
+  // Support pour les deux formats: state à la racine OU données à la racine
+  // Le backend peut envoyer soit raw.state.createdAt soit raw.createdAt
+  const stateData = raw.state || {};
+
+  // Helper pour parser une date de manière robuste
+  const parseDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+    try {
+      const date = new Date(dateValue);
+      return isNaN(date.getTime()) ? null : date;
+    } catch {
+      return null;
+    }
+  };
+
+  // Essayer de trouver createdAt dans différents endroits
+  const createdAtValue = stateData.createdAt || raw.createdAt || raw.created_at || raw.createdDate;
+  const createdAtDate = parseDate(createdAtValue);
+
+  // Debug: Log la structure complète reçue du backend
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [parseNotification] Raw notification:', {
+      id: raw.id,
+      hasState: !!raw.state,
+      stateCreatedAt: stateData.createdAt,
+      rawCreatedAt: raw.createdAt,
+      raw_created_at: raw.created_at,
+      parsedCreatedAt: createdAtDate?.toISOString(),
+      stateIsRead: stateData.isRead,
+      rawIsRead: raw.isRead,
+      createdAtValue: createdAtValue,
+      typeofCreatedAtValue: typeof createdAtValue,
+      fullRawKeys: Object.keys(raw),
+    });
+
+    // Log l'objet complet pour la première notification
+    if (Math.random() < 0.3) {
+      console.log('📦 Full raw object:', JSON.stringify(raw, null, 2));
+    }
+  }
+
   return {
     id: raw.id,
     userId: raw.userId,
@@ -73,13 +114,11 @@ function parseNotification(raw: any): Notification {
     metadata: raw.metadata || {},
 
     // State avec parsing des dates
-    // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
-    // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
     state: {
-      isRead: raw.isRead ?? false,
-      readAt: raw.readAt ? new Date(raw.readAt) : null,
-      createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
-      expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : undefined,
+      isRead: stateData.isRead ?? raw.isRead ?? false,
+      readAt: parseDate(stateData.readAt || raw.readAt),
+      createdAt: createdAtDate || new Date(),
+      expiresAt: parseDate(stateData.expiresAt || raw.expiresAt) || undefined,
     },
 
     // Delivery
@@ -152,6 +191,13 @@ export const NotificationService = {
         };
         unreadCount: number;
       }>(`/notifications?${params.toString()}`);
+
+      // Debug: Log la réponse brute de l'API
+      if (process.env.NODE_ENV === 'development' && response.data?.data) {
+        console.log('🌐 [API Response] First notification from backend:',
+          response.data.data[0] ? JSON.stringify(response.data.data[0], null, 2) : 'No notifications'
+        );
+      }
 
       if (response.data?.data) {
         const notifications: Notification[] = response.data.data.map(parseNotification);

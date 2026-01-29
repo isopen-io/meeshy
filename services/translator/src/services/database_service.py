@@ -12,20 +12,43 @@ import logging
 import os
 from typing import Optional, Dict, Any
 import httpx
-from prisma import Prisma
 
 logger = logging.getLogger(__name__)
 
 class DatabaseService:
     """Service de base de données pour le Translator"""
-    
+
     def __init__(self, database_url: str = None):
         self.database_url = database_url
         self.prisma = None
         self.is_connected = False
+        self._prisma_available = False
+
+        # Vérifier si Prisma est disponible
+        try:
+            from prisma import Prisma
+            self._prisma_available = True
+            logger.info("[TRANSLATOR-DB] ✅ Module Prisma disponible")
+        except ImportError:
+            logger.warning("[TRANSLATOR-DB] ⚠️ Module Prisma non disponible - DatabaseService désactivé")
+            self._prisma_available = False
     
     async def connect(self, max_retries: int = 3):
         """Établit la connexion à la base de données avec retry"""
+        # Vérifier si Prisma est disponible
+        if not self._prisma_available:
+            logger.warning("[TRANSLATOR-DB] ⚠️ Prisma non installé - connexion ignorée")
+            self.is_connected = False
+            return False
+
+        # Importer Prisma dynamiquement
+        try:
+            from prisma import Prisma
+        except ImportError:
+            logger.error("[TRANSLATOR-DB] ❌ Impossible d'importer Prisma")
+            self.is_connected = False
+            return False
+
         # Afficher l'URL de connexion (masquée) pour debug
         db_url = self.database_url or os.getenv('DATABASE_URL', 'NON DÉFINIE')
         # Masquer le mot de passe dans l'URL
@@ -39,9 +62,9 @@ class DatabaseService:
                 if ':' in credentials:
                     user = credentials.split(':')[0]
                     masked_url = f"{protocol}://{user}:***@{host_and_path}"
-        
+
         logger.info(f"[TRANSLATOR-DB] 🔗 DATABASE_URL: {masked_url}")
-        
+
         for attempt in range(1, max_retries + 1):
             try:
                 if not self.prisma:
@@ -109,7 +132,7 @@ class DatabaseService:
     async def save_translation(self, translation_data: Dict[str, Any]) -> bool:
         """
         Sauvegarde une traduction en base de données (upsert)
-        
+
         Args:
             translation_data: Dictionnaire contenant les données de traduction
                 - messageId: ID du message
@@ -121,12 +144,12 @@ class DatabaseService:
                 - processingTime: Temps de traitement
                 - workerName: Nom du worker
                 - poolType: Type de pool utilisée
-        
+
         Returns:
             bool: True si la sauvegarde a réussi, False sinon
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée, pas de sauvegarde")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible, pas de sauvegarde")
             return False
         
         try:
@@ -225,16 +248,16 @@ class DatabaseService:
     async def get_translation(self, message_id: str, target_language: str) -> Optional[Dict[str, Any]]:
         """
         Récupère une traduction depuis la base de données
-        
+
         Args:
             message_id: ID du message
             target_language: Langue cible
-        
+
         Returns:
             Dict ou None: Données de traduction ou None si non trouvée
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return None
         
         try:
@@ -268,15 +291,15 @@ class DatabaseService:
     async def invalidate_message_translations(self, message_id: str) -> bool:
         """
         Invalide toutes les traductions d'un message (pour forcer la retraduction)
-        
+
         Args:
             message_id: ID du message
-        
+
         Returns:
             bool: True si succès, False sinon
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return False
         
         try:
@@ -297,6 +320,13 @@ class DatabaseService:
     async def health_check(self) -> Dict[str, Any]:
         """Vérifie la santé de la connexion à la base de données"""
         try:
+            if not self._prisma_available:
+                return {
+                    "connected": False,
+                    "status": "unavailable",
+                    "error": "Prisma module not installed"
+                }
+
             if not self.is_connected:
                 return {
                     "connected": False,
@@ -366,8 +396,8 @@ class DatabaseService:
         Returns:
             Dict avec les données du profil ou None si erreur
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée, pas de sauvegarde")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible, pas de sauvegarde")
             return None
 
         try:
@@ -445,8 +475,8 @@ class DatabaseService:
         Returns:
             Dict avec les données du profil (incluant embedding) ou None si non trouvé
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return None
 
         try:
@@ -491,8 +521,8 @@ class DatabaseService:
         Returns:
             bytes de l'embedding ou None si non trouvé
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return None
 
         try:
@@ -528,8 +558,8 @@ class DatabaseService:
         Returns:
             bool: True si mise à jour réussie
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return False
 
         try:
@@ -574,8 +604,8 @@ class DatabaseService:
         Returns:
             bool: True si suppression réussie
         """
-        if not self.is_connected:
-            logger.warning("⚠️ [TRANSLATOR-DB] Base de données non connectée")
+        if not self._prisma_available or not self.is_connected:
+            logger.debug("⚠️ [TRANSLATOR-DB] Base de données non disponible")
             return False
 
         try:
@@ -603,7 +633,7 @@ class DatabaseService:
         Returns:
             bool: True si le profil existe
         """
-        if not self.is_connected:
+        if not self._prisma_available or not self.is_connected:
             return False
 
         try:

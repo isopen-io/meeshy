@@ -17,9 +17,34 @@ import {
   updateEmailValidationSchema,
   updateRoleValidationSchema,
   updateStatusValidationSchema,
-  resetPasswordValidationSchema,
-  formatZodErrors
+  resetPasswordValidationSchema
 } from '@meeshy/shared/types/validation';
+
+// Schémas de validation locaux pour les endpoints admin
+const verifyEmailSchema = z.object({
+  email: z.string().email().optional(),
+  verified: z.boolean(),
+  reason: z.string().optional()
+});
+
+const verifyPhoneSchema = z.object({
+  phone: z.string().optional(),
+  verified: z.boolean(),
+  reason: z.string().optional()
+});
+
+const toggleVoiceConsentSchema = z.object({
+  voiceConsent: z.boolean().optional(),
+  consentType: z.enum(['voiceProfile', 'voiceData', 'dataProcessing', 'voiceCloning']).optional(),
+  enabled: z.boolean().optional(),
+  reason: z.string().optional()
+});
+
+const verifyAgeSchema = z.object({
+  isAdult: z.boolean().optional(),
+  verified: z.boolean().optional(),
+  reason: z.string().optional()
+});
 import { UserManagementService } from '../../services/admin/user-management.service';
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
@@ -650,6 +675,514 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         success: false,
         error: 'Internal server error',
         message: 'Failed to delete user'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/unlock - Déverrouiller un compte utilisateur
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/unlock', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Déverrouiller le compte
+      const updatedUser = await userManagementService.unlockAccount(
+        request.params.userId,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'UNLOCK_ACCOUNT' as any,
+        entityId: request.params.userId,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      reply.send({
+        success: true,
+        data: { message: 'Account unlocked successfully' }
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error unlocking account');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to unlock account'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/enable-2fa - Activer 2FA pour un utilisateur
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/enable-2fa', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Note: L'activation réelle du 2FA nécessiterait la génération d'un secret TOTP
+      // Pour l'instant, on se contente de définir la date
+      const updatedUser = await userManagementService.enable2FA(
+        request.params.userId,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'ENABLE_2FA' as any,
+        entityId: request.params.userId,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      reply.send({
+        success: true,
+        data: { message: '2FA enabled successfully' }
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error enabling 2FA');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to enable 2FA'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/disable-2fa - Désactiver 2FA pour un utilisateur
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/disable-2fa', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Désactiver 2FA
+      const updatedUser = await userManagementService.disable2FA(
+        request.params.userId,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'DISABLE_2FA' as any,
+        entityId: request.params.userId,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      reply.send({
+        success: true,
+        data: { message: '2FA disabled successfully' }
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error disabling 2FA');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to disable 2FA'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/verify-email - Vérifier ou dévérifier l'email
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+    Body: { verified: boolean; reason?: string };
+  }>('/admin/users/:userId/verify-email', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      // Valider les données
+      const validatedData = verifyEmailSchema.parse(request.body);
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Vérifier les permissions
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        reply.status(403).send({
+          success: false,
+          error: 'Insufficient permissions',
+          message: 'Access denied'
+        });
+        return;
+      }
+
+      // Mettre à jour la vérification email
+      const updatedUser = await userManagementService.verifyEmail(
+        request.params.userId,
+        validatedData.verified,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'VERIFY_EMAIL' as any,
+        entityId: request.params.userId,
+        metadata: { verified: validatedData.verified, reason: validatedData.reason },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      // Sanitize la réponse
+      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
+
+      reply.send({
+        success: true,
+        data: sanitizedUser,
+        message: validatedData.verified ? 'Email verified' : 'Email unverified'
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          message: 'Invalid input data',
+          details: error.errors
+        });
+        return;
+      }
+
+      fastify.log.error({ err: error }, 'Error verifying email');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to verify email'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/verify-phone - Vérifier ou dévérifier le téléphone
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+    Body: { verified: boolean; reason?: string };
+  }>('/admin/users/:userId/verify-phone', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      // Valider les données
+      const validatedData = verifyPhoneSchema.parse(request.body);
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Vérifier les permissions
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        reply.status(403).send({
+          success: false,
+          error: 'Insufficient permissions',
+          message: 'Access denied'
+        });
+        return;
+      }
+
+      // Mettre à jour la vérification téléphone
+      const updatedUser = await userManagementService.verifyPhone(
+        request.params.userId,
+        validatedData.verified,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'VERIFY_PHONE' as any,
+        entityId: request.params.userId,
+        metadata: { verified: validatedData.verified, reason: validatedData.reason },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      // Sanitize la réponse
+      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
+
+      reply.send({
+        success: true,
+        data: sanitizedUser,
+        message: validatedData.verified ? 'Phone verified' : 'Phone unverified'
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          message: 'Invalid input data',
+          details: error.errors
+        });
+        return;
+      }
+
+      fastify.log.error({ err: error }, 'Error verifying phone');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to verify phone'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/voice-consent - Gérer les consentements voice/GDPR
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+    Body: { consentType: 'voiceProfile' | 'voiceData' | 'dataProcessing' | 'voiceCloning'; enabled: boolean; reason?: string };
+  }>('/admin/users/:userId/voice-consent', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      // Valider les données
+      const validatedData = toggleVoiceConsentSchema.parse(request.body);
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Vérifier les permissions
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        reply.status(403).send({
+          success: false,
+          error: 'Insufficient permissions',
+          message: 'Access denied'
+        });
+        return;
+      }
+
+      // Mettre à jour le consentement
+      const updatedUser = await userManagementService.toggleVoiceConsent(
+        request.params.userId,
+        validatedData.consentType,
+        validatedData.enabled,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'UPDATE_PROFILE' as any,
+        entityId: request.params.userId,
+        metadata: {
+          consentType: validatedData.consentType,
+          enabled: validatedData.enabled,
+          reason: validatedData.reason
+        },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      // Sanitize la réponse
+      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
+
+      reply.send({
+        success: true,
+        data: sanitizedUser,
+        message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          message: 'Invalid input data',
+          details: error.errors
+        });
+        return;
+      }
+
+      fastify.log.error({ err: error }, 'Error updating voice consent');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to update voice consent'
+      });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/verify-age - Vérifier ou dévérifier l'âge
+   * (BIGBOSS & ADMIN uniquement)
+   */
+  fastify.post<{
+    Params: { userId: string };
+    Body: { verified: boolean; reason?: string };
+  }>('/admin/users/:userId/verify-age', {
+    preHandler: [fastify.authenticate, requireUserModifyAccess]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      // Valider les données
+      const validatedData = verifyAgeSchema.parse(request.body);
+
+      // Récupérer l'utilisateur cible
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        reply.status(404).send({
+          success: false,
+          error: 'User not found',
+          message: 'The requested user does not exist'
+        });
+        return;
+      }
+
+      // Vérifier les permissions
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        reply.status(403).send({
+          success: false,
+          error: 'Insufficient permissions',
+          message: 'Access denied'
+        });
+        return;
+      }
+
+      // Mettre à jour la vérification d'âge
+      const updatedUser = await userManagementService.verifyAge(
+        request.params.userId,
+        validatedData.verified,
+        authContext.registeredUser.id
+      );
+
+      // Log d'audit
+      await userAuditService.createAuditLog({
+        userId: request.params.userId,
+        adminId: authContext.registeredUser.id,
+        action: 'UPDATE_PROFILE' as any,
+        entityId: request.params.userId,
+        metadata: { ageVerified: validatedData.verified, reason: validatedData.reason },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent']
+      });
+
+      // Sanitize la réponse
+      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
+
+      reply.send({
+        success: true,
+        data: sanitizedUser,
+        message: validatedData.verified ? 'Age verified' : 'Age unverified'
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          message: 'Invalid input data',
+          details: error.errors
+        });
+        return;
+      }
+
+      fastify.log.error({ err: error }, 'Error verifying age');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to verify age'
       });
     }
   });

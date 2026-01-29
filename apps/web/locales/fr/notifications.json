@@ -4,7 +4,8 @@
     "title": "Notifications",
     "empty": {
       "title": "Aucune notification",
-      "description": "Vous n'avez aucune notification pour le moment"
+      "description": "Vous n'avez aucune notification pour le moment",
+      "tryDifferentSearch": "Essayez une autre recherche"
     },
     "emptyUnread": "Tout est lu ! Aucune notification non lue.",
     "emptyMentions": "Aucune mention pour le moment",
@@ -23,6 +24,11 @@
     "unread": "Non lues",
     "quickActions": "Actions rapides",
     "conversationContext": "dans {conversationTitle}",
+    "conversationTypes": {
+      "private": "En privé",
+      "direct": "En privé",
+      "group": "Groupe"
+    },
     "tabs": {
       "all": "Toutes",
       "unread": "Non lues",
@@ -36,10 +42,20 @@
       "all": "Toutes",
       "read": "Lues",
       "unread": "Non lues",
+      "messages": "Messages",
+      "messagesShort": "Msg",
+      "mentions": "Mentions",
+      "mentionsShort": "@",
+      "conversations": "Conversations",
+      "conversationsShort": "Conv",
+      "calls": "Appels manqués",
+      "callsShort": "📞",
+      "friendRequests": "Demandes d'amis",
+      "friendRequestsShort": "Amis",
+      "system": "Système",
       "new_message": "Messages",
       "friend_request": "Demandes d'amis",
       "missed_call": "Appels manqués",
-      "system": "Système",
       "conversation": "Conversations"
     },
     "types": {
@@ -100,7 +116,8 @@
       "deleteCount": "Supprimer {count}",
       "select": "Sélectionner",
       "selectAll": "Tout sélectionner",
-      "deselectAll": "Tout désélectionner"
+      "deselectAll": "Tout désélectionner",
+      "clearSearch": "Effacer la recherche"
     },
     "selection": {
       "count": "{selected} sur {total} sélectionnée",

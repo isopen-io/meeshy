@@ -99,7 +99,12 @@
       "tech": {
         "title": "Parceiros Tecnológicos",
         "description": "Integre Meeshy em suas soluções",
-        "features": "API completa, SDK, webhooks, documentação detalhada"
+        "features": [
+          "API REST completa e documentada",
+          "SDKs disponíveis (JavaScript, Python, Go)",
+          "Webhooks para integração em tempo real",
+          "Documentação técnica detalhada e exemplos"
+        ]
       }
     },
     "become": {

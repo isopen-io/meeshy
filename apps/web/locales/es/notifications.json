@@ -2,7 +2,13 @@
   "notifications": {
     "pageTitle": "Notificaciones",
     "title": "Notificaciones",
-    "empty": "Sin notificaciones",
+    "empty": {
+      "title": "Sin notificaciones",
+      "description": "No tienes notificaciones en este momento",
+      "tryDifferentSearch": "Prueba con otra búsqueda"
+    },
+    "noResults": "No se encontraron notificaciones",
+    "search": "Buscar notificaciones...",
     "emptyUnread": "¡Al día! Sin notificaciones sin leer.",
     "emptyMentions": "Sin menciones aún",
     "markAllAsRead": "Marcar todas como leídas",
@@ -25,6 +31,16 @@
       "all": "Todas",
       "read": "Leídas",
       "unread": "Sin leer",
+      "messages": "Mensajes",
+      "messagesShort": "Msg",
+      "mentions": "Menciones",
+      "mentionsShort": "@",
+      "conversations": "Conversaciones",
+      "conversationsShort": "Conv",
+      "calls": "Llamadas perdidas",
+      "callsShort": "📞",
+      "friendRequests": "Solicitudes de amistad",
+      "friendRequestsShort": "Amigos",
       "new_message": "Mensajes",
       "friend_request": "Solicitudes de amistad",
       "missed_call": "Llamadas perdidas",
@@ -71,6 +87,17 @@
       "contactRequestMessage": "{sender} te envió una invitación",
       "notMemberHint": "No eres miembro de esta conversación. Haz clic para unirte."
     },
+    "conversationTypes": {
+      "private": "Privado",
+      "direct": "Privado",
+      "group": "Grupo"
+    },
+    "timeAgo": {
+      "now": "ahora mismo",
+      "minute": "hace {count} min",
+      "hour": "hace {count}h",
+      "day": "hace {count}d"
+    },
     "actions": {
       "accept": "Aceptar",
       "decline": "Rechazar",
@@ -78,7 +105,10 @@
       "callBack": "Devolver llamada",
       "view": "Ver",
       "reply": "Responder",
-      "select": "Seleccionar"
+      "select": "Seleccionar",
+      "markAsRead": "Marcar como leída",
+      "delete": "Eliminar",
+      "clearSearch": "Borrar búsqueda"
     },
     "unreadCount": {
       "single": "{count} sin leer de {total}",

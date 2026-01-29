@@ -46,8 +46,12 @@
       "title": "Droit Applicable",
       "content": "Ces conditions sont régies par les lois françaises. Tout litige sera soumis à la juridiction exclusive des tribunaux de Paris."
     },
-    "email": "Email : legal@meeshy.me",
-    "address": "Adresse : 12 Rue de la Paix, 75002 Paris, France",
+    "contact": {
+      "title": "Contact",
+      "intro": "Pour toute question concernant ces conditions d'utilisation, veuillez nous contacter :",
+      "email": "Email : legal@meeshy.me",
+      "address": "Adresse : 12 Rue de la Paix, 75002 Paris, France"
+    },
     "footer": {
       "title": "Liens Utiles",
       "about": "À propos",

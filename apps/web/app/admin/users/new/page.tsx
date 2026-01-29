@@ -90,7 +90,7 @@ export default function NewUserPage() {
         regionalLanguage: formData.regionalLanguage
       };
 
-      const response = await apiService.post('/admin/user-management', userData);
+      const response = await apiService.post('/admin/users', userData);
 
       if (response.data?.success) {
         toast.success('Utilisateur créé avec succès!');

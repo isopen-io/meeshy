@@ -320,4 +320,138 @@ export class UserManagementService {
 
     return user as unknown as FullUser;
   }
+
+  /**
+   * Vérifie ou dévérifie l'email d'un utilisateur
+   */
+  async verifyEmail(
+    userId: string,
+    verified: boolean,
+    updaterId: string
+  ): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifiedAt: verified ? new Date() : null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Vérifie ou dévérifie le téléphone d'un utilisateur
+   */
+  async verifyPhone(
+    userId: string,
+    verified: boolean,
+    updaterId: string
+  ): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        phoneVerifiedAt: verified ? new Date() : null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Déverrouille un compte utilisateur
+   */
+  async unlockAccount(userId: string, updaterId: string): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lockedReason: null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Active la 2FA pour un utilisateur
+   */
+  async enable2FA(userId: string, updaterId: string): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        twoFactorEnabledAt: new Date(),
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Désactive la 2FA pour un utilisateur
+   */
+  async disable2FA(userId: string, updaterId: string): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        twoFactorEnabledAt: null,
+        twoFactorSecret: null,
+        twoFactorBackupCodes: null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Active ou désactive un consentement voice/GDPR
+   */
+  async toggleVoiceConsent(
+    userId: string,
+    consentType: 'voiceProfile' | 'voiceData' | 'dataProcessing' | 'voiceCloning',
+    enabled: boolean,
+    updaterId: string
+  ): Promise<FullUser> {
+    const fieldMap = {
+      voiceProfile: 'voiceProfileConsentAt',
+      voiceData: 'voiceDataConsentAt',
+      dataProcessing: 'dataProcessingConsentAt',
+      voiceCloning: 'voiceCloningEnabledAt'
+    };
+
+    const field = fieldMap[consentType];
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        [field]: enabled ? new Date() : null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
+
+  /**
+   * Vérifie ou dévérifie l'âge d'un utilisateur
+   */
+  async verifyAge(
+    userId: string,
+    verified: boolean,
+    updaterId: string
+  ): Promise<FullUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ageVerifiedAt: verified ? new Date() : null,
+        updatedAt: new Date()
+      },
+    });
+
+    return user as unknown as FullUser;
+  }
 }

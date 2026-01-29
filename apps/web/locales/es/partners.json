@@ -99,7 +99,12 @@
       "tech": {
         "title": "Socios Tecnológicos",
         "description": "Integre Meeshy en sus soluciones",
-        "features": "API completa, SDK, webhooks, documentación detallada"
+        "features": [
+          "API REST completa y documentada",
+          "SDK disponibles (JavaScript, Python, Go)",
+          "Webhooks para integración en tiempo real",
+          "Documentación técnica detallada y ejemplos"
+        ]
       }
     },
     "become": {
