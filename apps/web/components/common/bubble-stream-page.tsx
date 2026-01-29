@@ -82,6 +82,7 @@ export function BubbleStreamPage({
   const messageComposerRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitialized = useRef(false);
+  const conversationObjectIdRef = useRef<string | null>(null);
 
   // Limite de caractères
   const maxMessageLength = getMaxMessageLength(user?.role);
@@ -112,6 +113,14 @@ export function BubbleStreamPage({
     scrollDirection: 'down',
     disableAutoFill: false
   });
+
+  // Mettre à jour la ref avec l'ObjectId de la conversation courante
+  useEffect(() => {
+    if (messages.length > 0 && messages[0].conversationId) {
+      conversationObjectIdRef.current = messages[0].conversationId;
+      console.log('🔍 [BubbleStreamPage] Conversation ObjectId updated:', messages[0].conversationId);
+    }
+  }, [messages]);
 
   // Hook pour les préférences de traduction
   const {
@@ -193,22 +202,24 @@ export function BubbleStreamPage({
 
   // Handler pour les nouveaux messages reçus via WebSocket
   const handleNewMessage = useCallback((message: Message) => {
-    const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
+    // CORRECTION: Utiliser l'ObjectId du premier message chargé comme référence
+    // car normalizedConvId retourne l'identifier "meeshy", pas l'ObjectId MongoDB
+    const currentConversationObjectId = conversationObjectIdRef.current;
 
     console.log('🔍 [BubbleStreamPage] handleNewMessage called', {
       messageConvId: message.conversationId,
-      normalizedConvId,
-      conversationId,
+      currentConversationObjectId,
+      conversationIdentifier: conversationId,
+      willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
       messageSender: message.sender?.username || message.anonymousSender?.displayName,
     });
 
-    // TEMPORAIRE: Désactiver le filtre pour déboguer
-    // TODO: Réactiver une fois qu'on comprend pourquoi les messages ne passent pas
-    // if (normalizedConvId && message.conversationId !== normalizedConvId) {
-    //   console.log('⚠️ [BubbleStreamPage] Message filtered out - different conversation');
-    //   return;
-    // }
+    // Filtrer si on a déjà chargé des messages ET que le message ne correspond pas
+    if (currentConversationObjectId && message.conversationId !== currentConversationObjectId) {
+      console.log('⚠️ [BubbleStreamPage] Message filtered out - different conversation');
+      return;
+    }
 
     console.log('✅ [BubbleStreamPage] Adding message to feed');
     const wasAdded = addMessage(message);
@@ -229,7 +240,7 @@ export function BubbleStreamPage({
         }
       }, 300);
     }
-  }, [addMessage, user.id]);
+  }, [addMessage, user.id, conversationId]);
 
   // Hook Socket.IO (NOUVEAU - extrait)
   const {
@@ -249,10 +260,10 @@ export function BubbleStreamPage({
     isLoadingTranslations,
     onNewMessage: handleNewMessage,
     onMessageEdited: (message: Message) => {
-      // CORRECTION BUG: Filtrer les messages édités par conversationId normalisé
-      const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
+      // CORRECTION BUG: Filtrer les messages édités par conversationId ObjectId
+      const currentConversationObjectId = conversationObjectIdRef.current;
 
-      if (message.conversationId !== normalizedConvId) {
+      if (currentConversationObjectId && message.conversationId !== currentConversationObjectId) {
         return;
       }
 
