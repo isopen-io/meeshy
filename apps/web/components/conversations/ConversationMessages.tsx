@@ -234,9 +234,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       };
       container.addEventListener('scroll', handleNativeScroll);
 
-      // Test initial pour vérifier l'état
-      setTimeout(() => {
-      }, 1000);
+      // Vérifier la position initiale immédiatement
+      handleNativeScroll();
 
       return () => {
         container.removeEventListener('scroll', handleNativeScroll);
@@ -247,6 +246,22 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       }
     }
   }, [scrollContainerRef, handleScroll, scrollDirection]);
+
+  // Vérifier la position quand les messages changent
+  useEffect(() => {
+    if (scrollContainerRef?.current && messages.length > 0) {
+      const container = scrollContainerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+      // Mettre à jour l'affichage du bouton selon la position
+      if (scrollDirection === 'down') {
+        setShowScrollButton(scrollTop > 200);
+      } else {
+        setShowScrollButton(distanceFromBottom > 200);
+      }
+    }
+  }, [messages.length, scrollContainerRef, scrollDirection]);
 
   // Réinitialiser le flag de premier chargement quand la conversation change
   useEffect(() => {
@@ -446,20 +461,27 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           {content}
         </div>
       )}
-      
+
       {/* Bouton flottant pour scroller - Direction adaptée au contexte */}
       {(() => {
         const shouldRender = showScrollButton && !isLoadingMessages && messages.length > 0;
+        // Calculer la position: 10px au-dessus du composer
+        // Composer height estimée: mobile ~82px (p-4), desktop ~98px (p-6)
+        const bottomOffset = isMobile ? 'bottom-[92px]' : 'bottom-[108px]';
+
         return shouldRender ? (
           <Button
             onClick={handleScrollButtonClick}
             className={cn(
-              "fixed bottom-32 z-50",
+              "fixed z-50",
+              bottomOffset,
               // Positionnement adapté: pour BubbleStream avec sidebar, ajuster la position
               scrollDirection === 'down' ? "right-6 xl:right-[360px]" : "right-6",
-              "rounded-full w-12 h-12 p-0",
-              "shadow-2xl hover:shadow-3xl",
-              "bg-primary hover:bg-primary/90",
+              "rounded-full w-6 h-6 p-0",
+              "backdrop-blur-xl bg-white/60 dark:bg-gray-900/60",
+              "shadow-xl shadow-black/5 dark:shadow-black/20",
+              "border border-white/30 dark:border-gray-700/40",
+              "hover:bg-white/80 dark:hover:bg-gray-900/80",
               "transition-all duration-300 ease-in-out",
               "animate-in slide-in-from-bottom-5"
             )}
@@ -467,9 +489,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
             title={scrollButtonDirection === 'up' ? 'Remonter vers les messages récents' : 'Aller au bas de la conversation'}
           >
             {scrollButtonDirection === 'up' ? (
-              <ArrowUp className="h-5 w-5 text-primary-foreground" />
+              <ArrowUp className="h-3 w-3 text-gray-900 dark:text-gray-100" />
             ) : (
-              <ArrowDown className="h-5 w-5 text-primary-foreground" />
+              <ArrowDown className="h-3 w-3 text-gray-900 dark:text-gray-100" />
             )}
           </Button>
         ) : null;

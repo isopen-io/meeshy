@@ -34,6 +34,12 @@ interface AudioTranscription {
   text: string;
   language: string;
   confidence?: number;
+  segments?: readonly any[]; // TranscriptionSegment[]
+  speakerCount?: number;
+  primarySpeakerId?: string;
+  senderVoiceIdentified?: boolean;
+  senderSpeakerId?: string | null;
+  speakerAnalysis?: any;
 }
 
 interface UseAudioTranslationOptions {
@@ -129,16 +135,26 @@ export function useAudioTranslation({
         attachmentId: data.attachmentId,
         text: data.transcription.text,
         language: data.transcription.language,
-        confidence: data.transcription.confidence
+        confidence: data.transcription.confidence,
+        hasSegments: !!data.transcription.segments,
+        segmentsCount: data.transcription.segments?.length || 0,
+        speakerCount: data.transcription.speakerCount,
+        senderVoiceIdentified: data.transcription.senderVoiceIdentified
       });
 
       setTranscription({
         text: data.transcription.text,
         language: data.transcription.language,
         confidence: data.transcription.confidence,
+        segments: data.transcription.segments,
+        speakerCount: data.transcription.speakerCount,
+        primarySpeakerId: data.transcription.primarySpeakerId,
+        senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+        senderSpeakerId: data.transcription.senderSpeakerId,
+        speakerAnalysis: data.transcription.speakerAnalysis,
       });
 
-      console.log('✅ [useAudioTranslation] Transcription mise à jour (affichage immédiat)');
+      console.log('✅ [useAudioTranslation] Transcription mise à jour avec segments et speakers (affichage immédiat)');
     });
 
     return () => {
@@ -331,7 +347,13 @@ export function useAudioTranslation({
         text: translatedAudio.translatedText,
         language: selectedLanguage,
         confidence: 1.0,
-        segments: translatedAudio.segments as any[]
+        segments: translatedAudio.segments as any[],
+        // Inclure les informations de diarisation de la transcription originale
+        speakerCount: transcription?.speakerCount,
+        primarySpeakerId: transcription?.primarySpeakerId,
+        senderVoiceIdentified: transcription?.senderVoiceIdentified,
+        senderSpeakerId: transcription?.senderSpeakerId,
+        speakerAnalysis: transcription?.speakerAnalysis,
       };
     }
 
