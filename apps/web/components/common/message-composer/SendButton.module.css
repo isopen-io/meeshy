@@ -17,10 +17,10 @@
   background-size: 200% 200%;
   animation: gradientShift 4s ease infinite, pulse 2s ease-in-out infinite;
   box-shadow:
-    0 0 0 0 rgba(59, 130, 246, 0.4),
-    0 4px 16px rgba(59, 130, 246, 0.4),
-    0 2px 8px rgba(147, 51, 234, 0.3),
-    0 1px 4px rgba(236, 72, 153, 0.2);
+    0 0 0 0 rgba(59, 130, 246, 0.2),
+    0 4px 16px rgba(59, 130, 246, 0.25),
+    0 2px 8px rgba(147, 51, 234, 0.15),
+    0 1px 4px rgba(236, 72, 153, 0.1);
   transition: box-shadow 0.3s ease, transform 0.3s ease;
   outline: none;
   transform: translateZ(0);
@@ -30,17 +30,17 @@
 @keyframes pulse {
   0%, 100% {
     box-shadow:
-      0 0 0 0 rgba(59, 130, 246, 0.4),
-      0 4px 16px rgba(59, 130, 246, 0.4),
-      0 2px 8px rgba(147, 51, 234, 0.3),
-      0 1px 4px rgba(236, 72, 153, 0.2);
+      0 0 0 0 rgba(59, 130, 246, 0.2),
+      0 4px 16px rgba(59, 130, 246, 0.25),
+      0 2px 8px rgba(147, 51, 234, 0.15),
+      0 1px 4px rgba(236, 72, 153, 0.1);
   }
   50% {
     box-shadow:
-      0 0 0 4px rgba(59, 130, 246, 0),
-      0 6px 20px rgba(59, 130, 246, 0.5),
-      0 3px 12px rgba(147, 51, 234, 0.4),
-      0 2px 6px rgba(236, 72, 153, 0.3);
+      0 0 0 3px rgba(59, 130, 246, 0),
+      0 6px 20px rgba(59, 130, 246, 0.3),
+      0 3px 12px rgba(147, 51, 234, 0.25),
+      0 2px 6px rgba(236, 72, 153, 0.2);
   }
 }
 
@@ -55,11 +55,11 @@
 
 .sendButton:hover {
   box-shadow:
-    0 0 0 0 rgba(59, 130, 246, 0.6),
-    0 8px 24px rgba(59, 130, 246, 0.6),
-    0 4px 16px rgba(147, 51, 234, 0.5),
-    0 2px 8px rgba(236, 72, 153, 0.4);
-  transform: translateY(-2px) scale(1.02) translateZ(0);
+    0 0 0 0 rgba(59, 130, 246, 0.35),
+    0 8px 24px rgba(59, 130, 246, 0.35),
+    0 4px 16px rgba(147, 51, 234, 0.25),
+    0 2px 8px rgba(236, 72, 153, 0.2);
+  transform: translateY(-1px) scale(1.02) translateZ(0);
 }
 
 .sendButton:disabled {

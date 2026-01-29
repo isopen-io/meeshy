@@ -252,19 +252,19 @@ export function MentionAutocomplete({
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           borderRadius: '16px',
           border: isDarkMode
-            ? '2px solid rgba(59, 130, 246, 0.4)'
-            : '2px solid rgba(59, 130, 246, 0.3)',
+            ? '2px solid rgba(59, 130, 246, 0.3)'
+            : '2px solid rgba(59, 130, 246, 0.25)',
           boxShadow: isDarkMode
             ? `
-              0 0 0 1px rgba(59, 130, 246, 0.3),
-              0 4px 16px rgba(59, 130, 246, 0.25),
-              0 12px 32px rgba(59, 130, 246, 0.18),
-              inset 0 1px 0 rgba(59, 130, 246, 0.2)
-            `
-            : `
               0 0 0 1px rgba(59, 130, 246, 0.2),
               0 4px 16px rgba(59, 130, 246, 0.15),
               0 12px 32px rgba(59, 130, 246, 0.12),
+              inset 0 1px 0 rgba(59, 130, 246, 0.15)
+            `
+            : `
+              0 0 0 1px rgba(59, 130, 246, 0.15),
+              0 4px 16px rgba(59, 130, 246, 0.1),
+              0 12px 32px rgba(59, 130, 246, 0.08),
               inset 0 1px 0 rgba(255, 255, 255, 0.8)
             `,
         }}
@@ -329,8 +329,8 @@ export function MentionAutocomplete({
                 backdropFilter: index === selectedIndex ? 'blur(8px)' : 'none',
                 boxShadow: index === selectedIndex
                   ? isDarkMode
-                    ? '0 2px 8px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(59, 130, 246, 0.2)'
-                    : '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+                    ? '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(59, 130, 246, 0.15)'
+                    : '0 2px 8px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
                   : 'none',
               }}
               onClick={() => onSelect(suggestion.username, suggestion.id)}

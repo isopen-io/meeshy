@@ -21,14 +21,14 @@
   outline: none;
   transform: translateZ(0);
   backface-visibility: hidden;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.05);
 }
 
 .toolbarButton:hover {
   background: rgba(59, 130, 246, 0.15);
   color: rgba(59, 130, 246, 1);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-  transform: scale(1.2) translateZ(0);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  transform: scale(1.15) translateZ(0);
 }
 
 .toolbarButton:disabled {
@@ -38,7 +38,7 @@
 }
 
 .toolbarButton:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline: 2px solid rgba(59, 130, 246, 0.5);
   outline-offset: 2px;
 }
 
