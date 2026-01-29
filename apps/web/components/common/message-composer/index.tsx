@@ -229,18 +229,18 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         onDragLeave={composerState.handleDragLeave}
         onDrop={composerState.handleDrop}
       >
-        {/* DynamicGlow overlay - Phase 6 - TEMPORAIREMENT DÉSACTIVÉ */}
-        {/* <DynamicGlow
+        {/* DynamicGlow overlay - Phase 6 */}
+        <DynamicGlow
           currentLength={props.value.length}
           maxLength={composerState.maxMessageLength}
           isTyping={isTyping}
-        /> */}
+        />
 
-        {/* GlassContainer wrapper - Phase 6 - TEMPORAIREMENT DÉSACTIVÉ */}
-        {/* <GlassContainer
+        {/* GlassContainer wrapper - Phase 6 */}
+        <GlassContainer
           theme={isDarkMode ? 'dark' : 'light'}
           performanceProfile={performanceProfile}
-        > */}
+        >
           {/* Reply preview */}
           {composerState.replyingTo ? (
           <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-lg backdrop-blur-sm">
@@ -433,7 +433,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             />
           )}
         </div>
-        {/* </GlassContainer> */}
+        </GlassContainer>
 
         {/* Hidden file input */}
         <input
