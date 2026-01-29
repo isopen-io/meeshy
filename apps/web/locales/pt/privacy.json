@@ -9,47 +9,42 @@
       "content": "No Meeshy, levamos sua privacidade muito a sério. Esta política de privacidade detalhada explica como coletamos, usamos e protegemos suas informações em conformidade com o RGPD e regulamentações internacionais de proteção de dados."
     },
     "dataCollection": {
-      "title": "Coleta de Dados",
+      "title": "Informações Coletadas",
       "personal": {
-        "title": "Informações de Identidade",
+        "title": "Informações de Perfil",
         "items": [
-          "Nome, sobrenome e nome de usuário (com histórico de alterações)",
-          "Endereço de email (com verificação)",
-          "Número de telefone e código do país (opcional, com verificação)",
-          "Data de nascimento (opcional, necessário para perfil de voz)",
-          "Bio, foto de perfil e banner (opcionais)",
-          "Nome de exibição personalizado"
+          "Nome, sobrenome e nome de usuário",
+          "Endereço de email",
+          "Número de telefone (opcional)",
+          "Data de nascimento (opcional, necessária para certas funcionalidades)",
+          "Foto de perfil e banner (opcionais)"
         ]
       },
       "language": {
-        "title": "Configuração de Idioma",
+        "title": "Preferências de Idioma",
         "items": [
-          "Idioma do sistema principal (ISO 639-1)",
-          "Idioma regional secundário (opcional)",
-          "Idioma de tradução personalizado",
+          "Idioma do sistema principal",
+          "Idiomas adicionais (opcionais)",
           "Preferências de tradução automática"
         ]
       },
       "security": {
-        "title": "Dados de Segurança",
+        "title": "Segurança da Sua Conta",
         "items": [
-          "Senha (hasheada com bcrypt cost=12)",
-          "Histórico de senhas (anti-reutilização)",
-          "Segredo 2FA TOTP e códigos de recuperação (se ativado)",
-          "Chaves de criptografia Signal Protocol (para E2EE)",
-          "Sessões ativas (dispositivo, navegador, SO, versão)",
-          "Tentativas de login falhadas e bloqueios de conta",
-          "Registro de auditoria de eventos de segurança"
+          "Senha criptografada de forma segura",
+          "Autenticação de dois fatores (se ativada)",
+          "Chaves de criptografia para proteger suas conversas privadas",
+          "Sessões ativas em seus dispositivos",
+          "Histórico de logins para sua segurança"
         ]
       },
       "location": {
-        "title": "Localização e Dispositivo",
+        "title": "Informações Técnicas",
         "items": [
-          "Endereço IP (no registro e login)",
-          "Localização geográfica (cidade, país, coordenadas)",
-          "Impressão digital do dispositivo",
-          "User agent (tipo e versão do navegador)",
-          "Fuso horário IANA (ex: Europe/Paris)"
+          "Endereço IP ao fazer login",
+          "Localização aproximada (cidade, país)",
+          "Tipo de dispositivo e navegador",
+          "Fuso horário"
         ]
       },
       "voice": {
@@ -63,36 +58,30 @@
         ]
       },
       "translation": {
-        "title": "Dados de Mensagens e Tradução",
+        "title": "Mensagens e Tradução",
         "items": [
-          "Mensagens originais e traduções geradas",
-          "Idioma de origem e destino para cada mensagem",
-          "Metadados de tradução (hora, status, qualidade)",
-          "Transcrições de áudio (se ativado)",
-          "Histórico de conversa (com datas e participantes)"
+          "Suas mensagens e suas traduções",
+          "Idiomas usados em suas conversas",
+          "Transcrições de áudio (se ativadas)",
+          "Histórico de suas conversas"
         ]
       },
       "preferences": {
-        "title": "Preferências de Usuário (Armazenadas como JSON)",
+        "title": "Suas Preferências",
         "items": [
-          "Configurações de privacidade (visibilidade, criptografia)",
-          "Configurações de áudio (transcrição, tradução, TTS)",
-          "Configurações de mensagens (formatação, salvamento automático)",
-          "Configurações de notificações (32 tipos diferentes)",
-          "Configurações de vídeo (chamadas, qualidade, codec)",
-          "Configurações de documentos (visualização, download, armazenamento)",
-          "Configurações de aplicativo (tema, idioma, UI)"
+          "Configurações de privacidade",
+          "Configurações de áudio e vídeo",
+          "Preferências de notificações",
+          "Configurações de exibição (tema, idioma)"
         ]
       },
       "activity": {
-        "title": "Atividade e Relacionamentos",
+        "title": "Atividade",
         "items": [
           "Status online e última atividade",
           "Lista de usuários bloqueados",
-          "Conversas, comunidades e solicitações de amizade",
-          "Menções, reações e chamadas",
-          "Links de compartilhamento e afiliações",
-          "Taxa de completude do perfil"
+          "Suas conversas e comunidades",
+          "Menções e reações"
         ]
       }
     },
@@ -122,36 +111,36 @@
       ]
     },
     "protection": {
-      "title": "Proteção de Dados",
+      "title": "Proteção de Seus Dados",
       "encryption": {
-        "title": "Modos de Criptografia",
-        "content": "Meeshy oferece múltiplos modos de criptografia conforme suas necessidades: (1) E2EE - Criptografia de ponta a ponta com Signal Protocol, sem acesso do servidor ao conteúdo; (2) Híbrido - Criptografia do lado do servidor com chaves compartilhadas entre participantes; (3) Servidor - Criptografia em repouso no servidor com chaves gerenciadas; (4) Nenhum - Sem criptografia, apenas conversas públicas. Todas as comunicações são criptografadas em trânsito com TLS 1.3."
+        "title": "Criptografia de Suas Conversas",
+        "content": "Meeshy oferece vários níveis de proteção conforme suas necessidades: criptografia de ponta a ponta (ninguém, nem mesmo nós, pode ler suas mensagens), criptografia no servidor (suas mensagens são protegidas em nossos servidores), ou conversas públicas. Todas as comunicações são seguras durante sua transmissão pela Internet."
       },
       "anonymous": {
-        "title": "Usuários Anônimos e Limitações",
-        "content": "Usuários anônimos não possuem uma chave de criptografia Signal Protocol pessoal. Portanto, suas mensagens não podem ser criptografadas de ponta a ponta (E2EE). Apenas a criptografia do servidor está disponível. Para se beneficiar de proteção completa com E2EE, por favor crie uma conta de usuário e ative a criptografia de ponta a ponta."
+        "title": "Usuários Sem Conta",
+        "content": "Se você usa o Meeshy sem criar uma conta, suas mensagens só podem se beneficiar da criptografia no servidor. Para proteção máxima, crie uma conta e ative a criptografia de ponta a ponta."
       },
       "storage": {
         "title": "Armazenamento Seguro",
-        "content": "Seus dados são armazenados em servidores MongoDB seguros com replicação e backups regulares. Senhas são hasheadas com bcrypt (cost=12). Chaves privadas E2EE são criptografadas antes do armazenamento. Redis é usado para sessões com expiração automática."
+        "content": "Seus dados são armazenados em servidores seguros na Europa com backups regulares. Sua senha é criptografada e nunca pode ser lida em texto simples. Suas chaves de criptografia privadas são protegidas."
       },
       "local": {
-        "title": "Processamento no Servidor",
-        "content": "As traduções são realizadas no servidor através de um serviço de tradução dedicado (ZMQ) para garantir qualidade e consistência. Transcrições de áudio usam modelos de IA hospedados localmente. Nenhum dado é enviado para serviços de terceiros para tradução."
+        "title": "Processamento Interno",
+        "content": "As traduções são realizadas diretamente em nossos servidores seguros. Nenhum dado é enviado para serviços de terceiros como Google ou Microsoft para tradução. Controlamos todo o processo."
       },
       "audit": {
         "title": "Registro de Segurança",
-        "content": "Mantemos um registro de auditoria completo de todos os eventos de segurança: logins bem-sucedidos/falhados, alterações de senha, ativação de 2FA, sessões criadas/revogadas, detecção de atividade suspeita. Você pode revisar seu histórico nas configurações de segurança."
+        "content": "Mantemos um histórico de todos os eventos de segurança de sua conta: logins, alterações de senha, ativação de autenticação de dois fatores. Você pode consultar este histórico a qualquer momento em suas configurações."
       }
     },
     "sharing": {
       "title": "Compartilhamento de Dados",
       "intro": "NUNCA vendemos seus dados pessoais a terceiros. Compartilhamos seus dados apenas nos seguintes casos:",
       "cases": [
-        "Com outros participantes em suas conversas (mensagens, traduções, metadados)",
+        "Com outros participantes em suas conversas (suas mensagens e traduções)",
         "Com seu consentimento explícito (exportação de dados, compartilhamento de perfil)",
         "Para cumprir obrigações legais (ordens judiciais)",
-        "Com provedores de serviços confiáveis sob acordos de confidencialidade (hospedagem MongoDB, cache Redis)",
+        "Com parceiros técnicos confiáveis (hospedagem de servidores) sob acordos rigorosos de confidencialidade",
         "Em caso de fusão ou aquisição (você será notificado antecipadamente)"
       ],
       "thirdParty": "Nenhum dado é compartilhado com serviços de terceiros para tradução ou análise. Todo o processamento é feito internamente."
@@ -160,28 +149,28 @@
       "title": "Seus Direitos RGPD",
       "intro": "De acordo com o RGPD, você tem os seguintes direitos:",
       "list": [
-        "Direito de acesso: Ver todos os seus dados pessoais",
-        "Direito de retificação: Corrigir informações incorretas",
-        "Direito ao esquecimento: Excluir sua conta e todos os seus dados (exclusão suave com período de carência de 30 dias)",
-        "Direito à portabilidade: Exportar seus dados em formato JSON",
-        "Direito de oposição: Opor-se ao processamento de seus dados por motivos legítimos",
-        "Direito à limitação: Limitar o processamento de seus dados em certos casos",
-        "Direito de retirar o consentimento: Retirar o consentimento para o perfil de voz ou processamento de dados de voz a qualquer momento"
+        "Consultar todos os seus dados pessoais",
+        "Corrigir informações incorretas",
+        "Excluir sua conta e todos os seus dados (com um período de carência de 30 dias)",
+        "Exportar seus dados em um formato padrão",
+        "Opor-se ao processamento de seus dados",
+        "Limitar o processamento em certos casos",
+        "Retirar seu consentimento a qualquer momento"
       ],
       "contact": "Para exercer esses direitos, vá para Configurações > Privacidade ou entre em contato conosco em privacy@meeshy.me. Responderemos em 30 dias."
     },
     "retention": {
-      "title": "Período de Retenção de Dados",
-      "content": "Retemos seus dados pessoais enquanto sua conta estiver ativa. Em caso de exclusão de conta: (1) Exclusão suave com período de carência de 30 dias permitindo recuperação; (2) Após 30 dias, exclusão permanente de todos os seus dados pessoais; (3) Mensagens em conversas compartilhadas são anonimizadas (nome substituído por 'Usuário excluído'); (4) Registros de segurança são mantidos por 90 dias por motivos legais; (5) Dados de cobrança são mantidos conforme obrigações legais (até 10 anos).",
+      "title": "Conservação de Seus Dados",
+      "content": "Retemos seus dados enquanto sua conta estiver ativa. Se você excluir sua conta: (1) Período de carência de 30 dias permitindo recuperação; (2) Após 30 dias, exclusão definitiva de todos os seus dados pessoais; (3) Mensagens em conversas compartilhadas são anonimizadas; (4) Registros de segurança são mantidos por 90 dias; (5) Dados de cobrança conforme obrigações legais.",
       "voiceData": "Perfis de voz expiram automaticamente com base em sua idade: 18-25 anos = 5 anos, 26-40 anos = 10 anos, 41-60 anos = 15 anos, 60+ anos = 20 anos."
     },
     "notifications": {
-      "title": "Notificações e Comunicações",
-      "content": "Oferecemos 32 tipos diferentes de notificações que você pode configurar individualmente: mensagens, chamadas, menções, reações, solicitações de amizade, eventos de segurança, anúncios do sistema, etc. Você pode ativar/desativar notificações push, email e som para cada tipo. O modo Não Perturbe permite definir intervalos de tempo sem notificações (exceto alertas de segurança críticos)."
+      "title": "Notificações",
+      "content": "Você pode configurar individualmente as notificações para mensagens, chamadas, menções, reações, solicitações de amizade, eventos de segurança, etc. O modo Não Perturbe permite definir horários sem notificações (exceto alertas de segurança críticos)."
     },
     "cookies": {
-      "title": "Cookies e Tecnologias Similares",
-      "content": "Usamos cookies essenciais para a funcionalidade do serviço (autenticação, sessões, preferências de idioma). Nenhum cookie de rastreamento publicitário é usado. Sessões são armazenadas no Redis com expiração automática. Você pode gerenciar suas preferências de cookies nas configurações do seu navegador."
+      "title": "Cookies",
+      "content": "Usamos apenas cookies essenciais para o funcionamento do serviço (autenticação, sessões, preferências). Nenhum cookie publicitário ou de rastreamento. Você pode gerenciar suas preferências nas configurações do seu navegador."
     },
     "international": {
       "title": "Transferências Internacionais",

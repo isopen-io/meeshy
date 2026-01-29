@@ -6,169 +6,185 @@
     "print": "Imprimer",
     "introduction": {
       "title": "Introduction",
-      "content": "Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique de confidentialité explique en détail comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD et aux réglementations internationales sur la protection des données."
+      "content": "Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD."
     },
     "dataCollection": {
-      "title": "Collecte de Données",
+      "title": "Informations Collectées",
       "personal": {
-        "title": "Informations d'Identité",
+        "title": "Informations de Profil",
         "items": [
-          "Nom, prénom et nom d'utilisateur (avec historique des changements)",
-          "Adresse email (avec vérification)",
-          "Numéro de téléphone et code pays (optionnel, avec vérification)",
-          "Date de naissance (optionnel, requis pour le profil vocal)",
-          "Bio, photo de profil et bannière (optionnels)",
-          "Nom d'affichage personnalisé"
+          "Nom, prénom et nom d'utilisateur",
+          "Adresse email",
+          "Numéro de téléphone (optionnel)",
+          "Date de naissance (optionnel, requis pour certaines fonctionnalités)",
+          "Photo de profil et bannière (optionnels)"
         ]
       },
       "language": {
-        "title": "Configuration Linguistique",
+        "title": "Préférences Linguistiques",
         "items": [
-          "Langue système principale (ISO 639-1)",
-          "Langue régionale secondaire (optionnel)",
-          "Langue de traduction personnalisée",
+          "Langue système principale",
+          "Langues additionnelles (optionnel)",
           "Préférences de traduction automatique"
         ]
       },
       "security": {
-        "title": "Données de Sécurité",
+        "title": "Sécurité de Votre Compte",
         "items": [
-          "Mot de passe (hashé avec bcrypt cost=12)",
-          "Historique des mots de passe (anti-réutilisation)",
-          "Secret 2FA TOTP et codes de récupération (si activé)",
-          "Clés de chiffrement Signal Protocol (pour E2EE)",
-          "Sessions actives (appareil, navigateur, OS, version)",
-          "Tentatives de connexion échouées et verrouillage de compte",
-          "Journal d'audit des événements de sécurité"
+          "Mot de passe chiffré de manière sécurisée",
+          "Double authentification (si activée)",
+          "Clés de chiffrement pour protéger vos conversations privées",
+          "Sessions actives sur vos appareils",
+          "Journal des connexions pour votre sécurité"
         ]
       },
       "location": {
-        "title": "Localisation et Appareil",
+        "title": "Informations Techniques",
         "items": [
-          "Adresse IP (lors de l'inscription et des connexions)",
-          "Localisation géographique (ville, pays, coordonnées)",
-          "Device fingerprint (empreinte de l'appareil)",
-          "User agent (type de navigateur et version)",
-          "Fuseau horaire IANA (ex: Europe/Paris)"
+          "Adresse IP lors des connexions",
+          "Localisation approximative (ville, pays)",
+          "Type d'appareil et navigateur",
+          "Fuseau horaire"
         ]
       },
       "voice": {
-        "title": "Données Vocales et Consentements",
+        "title": "Données Vocales",
         "items": [
-          "Consentement pour créer un profil vocal (DateTime ou null)",
-          "Consentement pour le traitement des données vocales",
-          "Consentement pour le traitement général des données",
-          "Statut du clonage vocal (activé/désactivé)",
-          "Vérification de l'âge (requis pour profil vocal)"
+          "Votre consentement pour utiliser les fonctionnalités vocales",
+          "Enregistrements audio (si vous utilisez les fonctions vocales)",
+          "Vérification de l'âge (pour certaines fonctionnalités)"
         ]
       },
       "translation": {
-        "title": "Données de Messagerie et Traduction",
+        "title": "Messagerie et Traduction",
         "items": [
-          "Messages originaux et traductions générées",
-          "Langue source et langue cible pour chaque message",
-          "Métadonnées de traduction (heure, statut, qualité)",
+          "Vos messages et leurs traductions",
+          "Langues utilisées dans vos conversations",
           "Transcriptions audio (si activées)",
-          "Historique de conversation (avec dates et participants)"
+          "Historique de vos conversations"
         ]
       },
       "preferences": {
-        "title": "Préférences Utilisateur (Stockées en JSON)",
+        "title": "Vos Préférences",
         "items": [
-          "Paramètres de confidentialité (visibilité, chiffrement)",
-          "Paramètres audio (transcription, traduction, TTS)",
-          "Paramètres de messages (formatage, auto-save)",
-          "Paramètres de notifications (32 types différents)",
-          "Paramètres vidéo (appels, qualité, codec)",
-          "Paramètres documents (preview, download, storage)",
-          "Paramètres application (thème, langue, UI)"
+          "Paramètres de confidentialité",
+          "Paramètres audio et vidéo",
+          "Préférences de notifications",
+          "Paramètres d'affichage (thème, langue)"
         ]
       },
       "activity": {
-        "title": "Activité et Relations",
+        "title": "Activité",
         "items": [
           "Statut en ligne et dernière activité",
           "Liste des utilisateurs bloqués",
-          "Conversations, communautés et demandes d'ami",
-          "Mentions, réactions et appels",
-          "Liens de partage et affiliations",
-          "Taux de complétion du profil"
+          "Vos conversations et communautés",
+          "Mentions et réactions"
         ]
       }
     },
     "usage": {
-      "title": "Utilisation des Données",
+      "title": "Utilisation de Vos Données",
       "items": [
         {
-          "title": "Fourniture du service :",
-          "description": "Traduction en temps réel de vos messages"
+          "title": "Fourniture du service",
+          "description": "Traduction en temps réel de vos messages et fonctionnement de toutes les fonctionnalités"
         },
         {
-          "title": "Amélioration du service :",
-          "description": "Développement de nouvelles fonctionnalités"
+          "title": "Amélioration",
+          "description": "Développer de nouvelles fonctionnalités et améliorer l'expérience"
         },
         {
-          "title": "Support client :",
+          "title": "Support",
           "description": "Répondre à vos questions et résoudre les problèmes"
         },
         {
-          "title": "Sécurité :",
-          "description": "Protection contre les abus et la fraude"
+          "title": "Sécurité",
+          "description": "Protéger votre compte contre les abus et la fraude"
         },
         {
-          "title": "Communication :",
-          "description": "Informations importantes sur le service"
+          "title": "Communication",
+          "description": "Vous tenir informé des nouveautés et changements importants"
         }
       ]
     },
     "protection": {
-      "title": "Protection des Données",
+      "title": "Protection de Vos Données",
       "encryption": {
-        "title": "Modes de Chiffrement",
-        "content": "Meeshy propose plusieurs modes de chiffrement selon vos besoins : (1) E2EE - Chiffrement de bout en bout avec Signal Protocol, aucun accès serveur au contenu ; (2) Hybrid - Chiffrement côté serveur avec clés partagées entre participants ; (3) Server - Chiffrement au repos sur le serveur avec clés gérées ; (4) None - Aucun chiffrement, pour conversations publiques uniquement. Toutes les communications sont chiffrées en transit avec TLS 1.3."
+        "title": "Chiffrement de Vos Conversations",
+        "content": "Meeshy propose plusieurs niveaux de protection selon vos besoins : chiffrement de bout en bout (personne, même pas nous, ne peut lire vos messages), chiffrement serveur (vos messages sont protégés sur nos serveurs), ou conversations publiques. Toutes les communications sont sécurisées pendant leur transmission sur Internet."
       },
       "anonymous": {
-        "title": "Utilisateurs Anonymes et Limitations",
-        "content": "Les utilisateurs anonymes n'ont pas de clé de chiffrement personnelle Signal Protocol. Par conséquent, leurs messages ne peuvent pas être chiffrés de bout en bout (E2EE). Seul le chiffrement serveur est disponible. Pour bénéficier d'une protection complète avec E2EE, veuillez créer un compte utilisateur et activer le chiffrement de bout en bout."
+        "title": "Utilisateurs Sans Compte",
+        "content": "Si vous utilisez Meeshy sans créer de compte, vos messages ne peuvent bénéficier que du chiffrement serveur. Pour une protection maximale, créez un compte et activez le chiffrement de bout en bout."
       },
       "storage": {
         "title": "Stockage Sécurisé",
-        "content": "Vos données sont stockées sur des serveurs MongoDB sécurisés avec réplication et sauvegardes régulières. Les mots de passe sont hashés avec bcrypt (cost=12). Les clés E2EE privées sont chiffrées avant stockage. Redis est utilisé pour les sessions avec expiration automatique."
+        "content": "Vos données sont stockées sur des serveurs sécurisés en Europe avec des sauvegardes régulières. Votre mot de passe est chiffré et ne peut jamais être lu en clair. Vos clés de chiffrement privées sont protégées."
       },
       "local": {
-        "title": "Traitement Serveur",
-        "content": "Les traductions sont effectuées côté serveur via un service de traduction dédié (ZMQ) pour garantir la qualité et la cohérence. Les transcriptions audio utilisent des modèles IA hébergés localement. Aucune donnée n'est envoyée à des services tiers pour la traduction."
+        "title": "Traitement Interne",
+        "content": "Les traductions sont effectuées directement sur nos serveurs sécurisés. Aucune donnée n'est envoyée à des services tiers comme Google ou Microsoft pour la traduction. Nous contrôlons tout le processus."
       },
       "audit": {
         "title": "Journal de Sécurité",
-        "content": "Nous conservons un journal d'audit complet de tous les événements de sécurité : connexions réussies/échouées, changements de mot de passe, activation 2FA, sessions créées/révoquées, détection d'activité suspecte. Vous pouvez consulter votre historique dans les paramètres de sécurité."
+        "content": "Nous conservons un historique de tous les événements de sécurité de votre compte : connexions, changements de mot de passe, activation de la double authentification. Vous pouvez consulter cet historique à tout moment dans vos paramètres."
       }
     },
     "sharing": {
-      "title": "Partage de Données",
-      "intro": "Nous ne vendons JAMAIS vos données personnelles à des tiers. Nous ne partageons vos données que dans les cas suivants :",
+      "title": "Partage de Vos Données",
+      "intro": "Nous ne vendons JAMAIS vos données personnelles. Nous ne partageons vos données que dans les cas suivants :",
       "cases": [
-        "Avec les autres participants de vos conversations (messages, traductions, métadonnées)",
+        "Avec les autres participants de vos conversations (vos messages et traductions)",
         "Avec votre consentement explicite (export de données, partage de profil)",
-        "Pour se conformer aux obligations légales (réquisitions judiciaires)",
-        "Avec des prestataires de services de confiance sous contrat de confidentialité (hébergement MongoDB, cache Redis)",
+        "Pour respecter nos obligations légales (réquisitions judiciaires)",
+        "Avec des partenaires techniques de confiance (hébergement de serveurs) sous contrat de confidentialité stricte",
         "En cas de fusion ou acquisition (vous serez notifié au préalable)"
       ],
-      "thirdParty": "Aucune donnée n'est partagée avec des services tiers pour la traduction ou l'analyse. Tout le traitement est effectué en interne."
+      "thirdParty": "Aucune donnée n'est partagée avec des services tiers pour la traduction. Tout est fait en interne sur nos serveurs."
     },
     "rights": {
-      "title": "Vos Droits RGPD",
-      "intro": "Conformément au RGPD, vous disposez des droits suivants :",
+      "title": "Vos Droits",
+      "intro": "Conformément au RGPD, vous avez les droits suivants :",
       "list": [
-        "Droit d'accès : Consulter toutes vos données personnelles",
-        "Droit de rectification : Corriger des informations inexactes",
-        "Droit à l'effacement : Supprimer votre compte et toutes vos données (soft delete avec période de grâce de 30 jours)",
-        "Droit à la portabilité : Exporter vos données au format JSON",
-        "Droit d'opposition : Vous opposer au traitement de vos données pour motifs légitimes",
-        "Droit à la limitation : Limiter le traitement de vos données dans certains cas",
-        "Droit de retirer votre consentement : Retirer votre consentement pour le profil vocal ou le traitement des données vocales à tout moment"
+        "Consulter toutes vos données personnelles",
+        "Corriger des informations inexactes",
+        "Supprimer votre compte et toutes vos données (avec une période de grâce de 30 jours)",
+        "Exporter vos données dans un format standard",
+        "Vous opposer au traitement de vos données",
+        "Limiter le traitement dans certains cas",
+        "Retirer votre consentement à tout moment"
       ],
-      "contact": "Pour exercer ces droits, rendez-vous dans Paramètres > Confidentialité ou contactez-nous à privacy@meeshy.me. Nous répondrons dans un délai de 30 jours."
+      "contact": "Pour exercer ces droits, rendez-vous dans Paramètres > Confidentialité ou contactez-nous à privacy@meeshy.me. Nous répondrons sous 30 jours."
+    },
+    "retention": {
+      "title": "Conservation de Vos Données",
+      "content": "Nous conservons vos données tant que votre compte est actif. Si vous supprimez votre compte : (1) Période de grâce de 30 jours permettant la récupération ; (2) Après 30 jours, suppression définitive de toutes vos données personnelles ; (3) Les messages dans les conversations partagées sont anonymisés ; (4) Les journaux de sécurité sont conservés 90 jours ; (5) Les données de facturation selon les obligations légales.",
+      "voiceData": "Les profils vocaux expirent automatiquement selon votre âge : 18-25 ans = 5 ans, 26-40 ans = 10 ans, 41-60 ans = 15 ans, 60+ ans = 20 ans."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "content": "Vous pouvez configurer individuellement les notifications pour les messages, appels, mentions, réactions, demandes d'ami, événements de sécurité, etc. Le mode Ne Pas Déranger vous permet de définir des plages horaires sans notifications (sauf alertes de sécurité critiques)."
+    },
+    "cookies": {
+      "title": "Cookies",
+      "content": "Nous utilisons uniquement des cookies essentiels pour le fonctionnement du service (authentification, sessions, préférences). Aucun cookie publicitaire ou de tracking. Vous pouvez gérer vos préférences dans votre navigateur."
+    },
+    "international": {
+      "title": "Transferts Internationaux",
+      "content": "Vos données sont hébergées en France et dans l'Union Européenne. Si vous accédez à Meeshy depuis l'extérieur de l'UE, vos données peuvent être transférées vers l'UE avec toutes les protections RGPD."
+    },
+    "updates": {
+      "title": "Mises à Jour",
+      "content": "Nous pouvons mettre à jour cette politique. Les changements importants vous seront notifiés par email et dans l'application. La date de dernière mise à jour est indiquée en haut de cette page."
+    },
+    "contact": {
+      "title": "Nous Contacter",
+      "intro": "Pour toute question concernant vos données personnelles ou pour exercer vos droits :",
+      "email": "Email : privacy@meeshy.me",
+      "response": "Délai de réponse : Maximum 30 jours",
+      "address": "Adresse postale : 12 Rue de la Paix, 75002 Paris, France",
+      "dpa": "En cas de litige, vous pouvez déposer une plainte auprès de la CNIL (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr"
     },
     "footer": {
       "title": "Liens Utiles",
@@ -176,35 +192,6 @@
       "about": "À propos",
       "contact": "Contact",
       "partners": "Partenaires"
-    },
-    "contact": {
-      "title": "Nous Contacter",
-      "intro": "Pour toute question concernant cette politique de confidentialité, vos données personnelles, ou pour exercer vos droits RGPD :",
-      "email": "Email DPO : privacy@meeshy.me",
-      "response": "Délai de réponse : 30 jours maximum",
-      "address": "Adresse postale : 12 Rue de la Paix, 75002 Paris, France",
-      "dpa": "En cas de litige non résolu, vous avez le droit de déposer une plainte auprès de la CNIL (Commission Nationale de l'Informatique et des Libertés) à l'adresse : www.cnil.fr"
-    },
-    "retention": {
-      "title": "Durée de Conservation des Données",
-      "content": "Nous conservons vos données personnelles tant que votre compte est actif. En cas de suppression de compte : (1) Soft delete avec période de grâce de 30 jours permettant la récupération ; (2) Après 30 jours, suppression définitive de toutes vos données personnelles ; (3) Les messages dans les conversations partagées sont anonymisés (nom remplacé par 'Utilisateur supprimé') ; (4) Les journaux de sécurité sont conservés 90 jours pour des raisons légales ; (5) Les données de facturation sont conservées selon les obligations légales (jusqu'à 10 ans).",
-      "voiceData": "Les profils vocaux expirent automatiquement en fonction de votre âge : 18-25 ans = 5 ans, 26-40 ans = 10 ans, 41-60 ans = 15 ans, 60+ ans = 20 ans."
-    },
-    "notifications": {
-      "title": "Notifications et Communications",
-      "content": "Nous proposons 32 types de notifications différents que vous pouvez configurer individuellement : messages, appels, mentions, réactions, demandes d'ami, événements de sécurité, annonces système, etc. Vous pouvez activer/désactiver les notifications push, email et son pour chaque type. Le mode Ne Pas Déranger permet de définir des plages horaires sans notifications (sauf alertes de sécurité critiques)."
-    },
-    "cookies": {
-      "title": "Cookies et Technologies Similaires",
-      "content": "Nous utilisons des cookies essentiels pour le fonctionnement du service (authentification, sessions, préférences linguistiques). Aucun cookie de tracking publicitaire n'est utilisé. Les sessions sont stockées dans Redis avec expiration automatique. Vous pouvez gérer vos préférences de cookies dans les paramètres de votre navigateur."
-    },
-    "international": {
-      "title": "Transferts Internationaux",
-      "content": "Vos données sont hébergées sur des serveurs situés en France et dans l'Union Européenne. Si vous accédez à Meeshy depuis l'extérieur de l'UE, vos données peuvent être transférées vers l'UE. Ces transferts sont protégés par les clauses contractuelles types de la Commission européenne et conformes au RGPD."
-    },
-    "updates": {
-      "title": "Mises à Jour de la Politique",
-      "content": "Nous pouvons mettre à jour cette politique de temps en temps. Les changements importants vous seront notifiés par email et via une notification dans l'application. La date de dernière mise à jour est indiquée en haut de cette page. Continuer à utiliser Meeshy après une mise à jour signifie que vous acceptez la nouvelle politique."
     }
   }
 }
