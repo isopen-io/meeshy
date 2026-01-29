@@ -12,8 +12,13 @@ export default async function PrivacyPage() {
 
   // Pre-load arrays for server rendering
   const personalItems = tArray('dataCollection.personal.items');
+  const languageItems = tArray('dataCollection.language.items');
+  const securityItems = tArray('dataCollection.security.items');
+  const locationItems = tArray('dataCollection.location.items');
+  const voiceItems = tArray('dataCollection.voice.items');
   const translationItems = tArray('dataCollection.translation.items');
-  const technicalItems = tArray('dataCollection.technical.items');
+  const preferencesItems = tArray('dataCollection.preferences.items');
+  const activityItems = tArray('dataCollection.activity.items');
   const usageItems = tArray('usage.items') as unknown as Array<{ title: string; description: string }>;
   const sharingCases = tArray('sharing.cases');
   const rightsList = tArray('rights.list');
@@ -61,6 +66,34 @@ export default async function PrivacyPage() {
                   ))}
                 </ul>
 
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.language.title')}</h3>
+                <ul className="list-disc pl-6 space-y-1 mb-4">
+                  {languageItems.map((item, index) => (
+                    <li key={`language-${index}`}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.security.title')}</h3>
+                <ul className="list-disc pl-6 space-y-1 mb-4">
+                  {securityItems.map((item, index) => (
+                    <li key={`security-${index}`}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.location.title')}</h3>
+                <ul className="list-disc pl-6 space-y-1 mb-4">
+                  {locationItems.map((item, index) => (
+                    <li key={`location-${index}`}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.voice.title')}</h3>
+                <ul className="list-disc pl-6 space-y-1 mb-4">
+                  {voiceItems.map((item, index) => (
+                    <li key={`voice-${index}`}>{item}</li>
+                  ))}
+                </ul>
+
                 <h3 className="text-lg font-medium mb-2">{t('dataCollection.translation.title')}</h3>
                 <ul className="list-disc pl-6 space-y-1 mb-4">
                   {translationItems.map((item, index) => (
@@ -68,10 +101,17 @@ export default async function PrivacyPage() {
                   ))}
                 </ul>
 
-                <h3 className="text-lg font-medium mb-2">{t('dataCollection.technical.title')}</h3>
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.preferences.title')}</h3>
+                <ul className="list-disc pl-6 space-y-1 mb-4">
+                  {preferencesItems.map((item, index) => (
+                    <li key={`preferences-${index}`}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3 className="text-lg font-medium mb-2">{t('dataCollection.activity.title')}</h3>
                 <ul className="list-disc pl-6 space-y-1">
-                  {technicalItems.map((item, index) => (
-                    <li key={`technical-${index}`}>{item}</li>
+                  {activityItems.map((item, index) => (
+                    <li key={`activity-${index}`}>{item}</li>
                   ))}
                 </ul>
               </div>
@@ -91,33 +131,46 @@ export default async function PrivacyPage() {
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('protection.title')}</h2>
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                <h3 className="text-lg font-medium mb-2">{t('protection.local.title')}</h3>
-                <p className="mb-4">
-                  {t('protection.local.content')}
-                </p>
-
                 <h3 className="text-lg font-medium mb-2">{t('protection.encryption.title')}</h3>
                 <p className="mb-4">
                   {t('protection.encryption.content')}
                 </p>
 
+                <h3 className="text-lg font-medium mb-2">{t('protection.anonymous.title')}</h3>
+                <p className="mb-4">
+                  {t('protection.anonymous.content')}
+                </p>
+
                 <h3 className="text-lg font-medium mb-2">{t('protection.storage.title')}</h3>
-                <p>
+                <p className="mb-4">
                   {t('protection.storage.content')}
+                </p>
+
+                <h3 className="text-lg font-medium mb-2">{t('protection.local.title')}</h3>
+                <p className="mb-4">
+                  {t('protection.local.content')}
+                </p>
+
+                <h3 className="text-lg font-medium mb-2">{t('protection.audit.title')}</h3>
+                <p>
+                  {t('protection.audit.content')}
                 </p>
               </div>
             </section>
 
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('sharing.title')}</h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
                 {t('sharing.intro')}
               </p>
-              <ul className="list-disc pl-6 space-y-1 mt-4">
+              <ul className="list-disc pl-6 space-y-1 mb-4">
                 {sharingCases.map((case_, index) => (
                   <li key={`sharing-${index}`}>{case_}</li>
                 ))}
               </ul>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed italic">
+                {t('sharing.thirdParty')}
+              </p>
             </section>
 
             <section className="mb-8">
@@ -136,9 +189,35 @@ export default async function PrivacyPage() {
             </section>
 
             <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('retention.title')}</h2>
+              <div className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                <p className="mb-4">
+                  {t('retention.content')}
+                </p>
+                <p className="italic">
+                  {t('retention.voiceData')}
+                </p>
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('notifications.title')}</h2>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                {t('notifications.content')}
+              </p>
+            </section>
+
+            <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('cookies.title')}</h2>
               <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                 {t('cookies.content')}
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('international.title')}</h2>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                {t('international.content')}
               </p>
             </section>
 
@@ -151,10 +230,17 @@ export default async function PrivacyPage() {
 
             <section className="mb-8">
               <h2 className="text-2xl font-semibold mb-4 text-gray-900">{t('contact.title')}</h2>
-              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg space-y-2">
-                <p className="text-gray-700 dark:text-gray-300">{t('contact.address')}</p>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                {t('contact.intro')}
+              </p>
+              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg space-y-2">
                 <p className="text-gray-700 dark:text-gray-300">{t('contact.email')}</p>
+                <p className="text-gray-700 dark:text-gray-300">{t('contact.response')}</p>
+                <p className="text-gray-700 dark:text-gray-300">{t('contact.address')}</p>
               </div>
+              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mt-4 text-sm italic">
+                {t('contact.dpa')}
+              </p>
             </section>
           </CardContent>
         </Card>

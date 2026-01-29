@@ -1,61 +1,203 @@
 {
   "privacy": {
     "title": "Política de Privacidade",
-    "lastUpdated": "Última atualização: 25 de outubro de 2025",
+    "lastUpdated": "Última atualização: 29 de janeiro de 2026",
     "backHome": "Voltar ao início",
     "print": "Imprimir",
     "introduction": {
       "title": "Introdução",
-      "content": "No Meeshy, levamos sua privacidade a sério. Esta política de privacidade explica como coletamos, usamos e protegemos suas informações pessoais."
+      "content": "No Meeshy, levamos sua privacidade muito a sério. Esta política de privacidade detalhada explica como coletamos, usamos e protegemos suas informações em conformidade com o RGPD e regulamentações internacionais de proteção de dados."
     },
     "dataCollection": {
       "title": "Coleta de Dados",
       "personal": {
-        "title": "Informações Pessoais",
-        "items": ["Nome e sobrenome", "Endereço de email", "Preferências de idioma", "Foto de perfil (opcional)"]
+        "title": "Informações de Identidade",
+        "items": [
+          "Nome, sobrenome e nome de usuário (com histórico de alterações)",
+          "Endereço de email (com verificação)",
+          "Número de telefone e código do país (opcional, com verificação)",
+          "Data de nascimento (opcional, necessário para perfil de voz)",
+          "Bio, foto de perfil e banner (opcionais)",
+          "Nome de exibição personalizado"
+        ]
       },
-      "technical": {
-        "title": "Informações Técnicas",
-        "items": ["Endereço IP", "Tipo de navegador", "Sistema operacional", "Cookies e dados de sessão"]
+      "language": {
+        "title": "Configuração de Idioma",
+        "items": [
+          "Idioma do sistema principal (ISO 639-1)",
+          "Idioma regional secundário (opcional)",
+          "Idioma de tradução personalizado",
+          "Preferências de tradução automática"
+        ]
+      },
+      "security": {
+        "title": "Dados de Segurança",
+        "items": [
+          "Senha (hasheada com bcrypt cost=12)",
+          "Histórico de senhas (anti-reutilização)",
+          "Segredo 2FA TOTP e códigos de recuperação (se ativado)",
+          "Chaves de criptografia Signal Protocol (para E2EE)",
+          "Sessões ativas (dispositivo, navegador, SO, versão)",
+          "Tentativas de login falhadas e bloqueios de conta",
+          "Registro de auditoria de eventos de segurança"
+        ]
+      },
+      "location": {
+        "title": "Localização e Dispositivo",
+        "items": [
+          "Endereço IP (no registro e login)",
+          "Localização geográfica (cidade, país, coordenadas)",
+          "Impressão digital do dispositivo",
+          "User agent (tipo e versão do navegador)",
+          "Fuso horário IANA (ex: Europe/Paris)"
+        ]
+      },
+      "voice": {
+        "title": "Dados de Voz e Consentimentos",
+        "items": [
+          "Consentimento para criar perfil de voz (DateTime ou null)",
+          "Consentimento para processamento de dados de voz",
+          "Consentimento para processamento geral de dados",
+          "Status de clonagem de voz (ativado/desativado)",
+          "Verificação de idade (necessário para perfil de voz)"
+        ]
       },
       "translation": {
-        "title": "Dados de Tradução",
-        "items": ["Mensagens originais", "Traduções geradas", "Preferências linguísticas", "Histórico de conversa"]
+        "title": "Dados de Mensagens e Tradução",
+        "items": [
+          "Mensagens originais e traduções geradas",
+          "Idioma de origem e destino para cada mensagem",
+          "Metadados de tradução (hora, status, qualidade)",
+          "Transcrições de áudio (se ativado)",
+          "Histórico de conversa (com datas e participantes)"
+        ]
+      },
+      "preferences": {
+        "title": "Preferências de Usuário (Armazenadas como JSON)",
+        "items": [
+          "Configurações de privacidade (visibilidade, criptografia)",
+          "Configurações de áudio (transcrição, tradução, TTS)",
+          "Configurações de mensagens (formatação, salvamento automático)",
+          "Configurações de notificações (32 tipos diferentes)",
+          "Configurações de vídeo (chamadas, qualidade, codec)",
+          "Configurações de documentos (visualização, download, armazenamento)",
+          "Configurações de aplicativo (tema, idioma, UI)"
+        ]
+      },
+      "activity": {
+        "title": "Atividade e Relacionamentos",
+        "items": [
+          "Status online e última atividade",
+          "Lista de usuários bloqueados",
+          "Conversas, comunidades e solicitações de amizade",
+          "Menções, reações e chamadas",
+          "Links de compartilhamento e afiliações",
+          "Taxa de completude do perfil"
+        ]
       }
     },
     "usage": {
       "title": "Uso de Dados",
-      "items": ["Fornecer e melhorar nossos serviços de tradução", "Personalizar sua experiência", "Analisar e melhorar o desempenho", "Garantir a segurança da plataforma"]
+      "items": [
+        {
+          "title": "Provisão do serviço:",
+          "description": "Tradução em tempo real de suas mensagens"
+        },
+        {
+          "title": "Melhoria do serviço:",
+          "description": "Desenvolvimento de novas funcionalidades"
+        },
+        {
+          "title": "Suporte ao cliente:",
+          "description": "Responder suas perguntas e resolver problemas"
+        },
+        {
+          "title": "Segurança:",
+          "description": "Proteção contra abusos e fraude"
+        },
+        {
+          "title": "Comunicação:",
+          "description": "Informações importantes sobre o serviço"
+        }
+      ]
     },
     "protection": {
       "title": "Proteção de Dados",
       "encryption": {
-        "title": "Criptografia",
-        "content": "Todas as comunicações são criptografadas em trânsito e em repouso usando padrões da indústria."
+        "title": "Modos de Criptografia",
+        "content": "Meeshy oferece múltiplos modos de criptografia conforme suas necessidades: (1) E2EE - Criptografia de ponta a ponta com Signal Protocol, sem acesso do servidor ao conteúdo; (2) Híbrido - Criptografia do lado do servidor com chaves compartilhadas entre participantes; (3) Servidor - Criptografia em repouso no servidor com chaves gerenciadas; (4) Nenhum - Sem criptografia, apenas conversas públicas. Todas as comunicações são criptografadas em trânsito com TLS 1.3."
       },
       "anonymous": {
-        "title": "Usuários Anônimos e Criptografia",
-        "content": "Usuários anônimos não possuem uma chave de criptografia pessoal. Portanto, seus dados não podem ser criptografados em repouso. Se você deseja se beneficiar de proteção completa de seus dados, por favor crie uma conta de usuário."
+        "title": "Usuários Anônimos e Limitações",
+        "content": "Usuários anônimos não possuem uma chave de criptografia Signal Protocol pessoal. Portanto, suas mensagens não podem ser criptografadas de ponta a ponta (E2EE). Apenas a criptografia do servidor está disponível. Para se beneficiar de proteção completa com E2EE, por favor crie uma conta de usuário e ative a criptografia de ponta a ponta."
       },
       "storage": {
-        "title": "Armazenamento",
-        "content": "Seus dados são armazenados em servidores seguros com backups regulares."
+        "title": "Armazenamento Seguro",
+        "content": "Seus dados são armazenados em servidores MongoDB seguros com replicação e backups regulares. Senhas são hasheadas com bcrypt (cost=12). Chaves privadas E2EE são criptografadas antes do armazenamento. Redis é usado para sessões com expiração automática."
       },
       "local": {
-        "title": "Processamento Local",
-        "content": "As traduções são realizadas no servidor para garantir a confidencialidade e qualidade."
+        "title": "Processamento no Servidor",
+        "content": "As traduções são realizadas no servidor através de um serviço de tradução dedicado (ZMQ) para garantir qualidade e consistência. Transcrições de áudio usam modelos de IA hospedados localmente. Nenhum dado é enviado para serviços de terceiros para tradução."
+      },
+      "audit": {
+        "title": "Registro de Segurança",
+        "content": "Mantemos um registro de auditoria completo de todos os eventos de segurança: logins bem-sucedidos/falhados, alterações de senha, ativação de 2FA, sessões criadas/revogadas, detecção de atividade suspeita. Você pode revisar seu histórico nas configurações de segurança."
       }
     },
     "sharing": {
       "title": "Compartilhamento de Dados",
-      "intro": "Nunca vendemos seus dados pessoais. Compartilhamos apenas:",
-      "cases": ["Com seu consentimento explícito", "Para cumprir obrigações legais", "Com provedores de serviços confiáveis (hospedagem, analytics)"]
+      "intro": "NUNCA vendemos seus dados pessoais a terceiros. Compartilhamos seus dados apenas nos seguintes casos:",
+      "cases": [
+        "Com outros participantes em suas conversas (mensagens, traduções, metadados)",
+        "Com seu consentimento explícito (exportação de dados, compartilhamento de perfil)",
+        "Para cumprir obrigações legais (ordens judiciais)",
+        "Com provedores de serviços confiáveis sob acordos de confidencialidade (hospedagem MongoDB, cache Redis)",
+        "Em caso de fusão ou aquisição (você será notificado antecipadamente)"
+      ],
+      "thirdParty": "Nenhum dado é compartilhado com serviços de terceiros para tradução ou análise. Todo o processamento é feito internamente."
     },
     "rights": {
-      "title": "Seus Direitos",
-      "intro": "Você tem o direito de:",
-      "list": ["Acessar seus dados pessoais", "Corrigir informações incorretas", "Excluir sua conta e seus dados", "Exportar seus dados", "Opor-se ao processamento de seus dados"],
-      "contact": "Para exercer esses direitos, entre em contato conosco em privacy@meeshy.me"
+      "title": "Seus Direitos RGPD",
+      "intro": "De acordo com o RGPD, você tem os seguintes direitos:",
+      "list": [
+        "Direito de acesso: Ver todos os seus dados pessoais",
+        "Direito de retificação: Corrigir informações incorretas",
+        "Direito ao esquecimento: Excluir sua conta e todos os seus dados (exclusão suave com período de carência de 30 dias)",
+        "Direito à portabilidade: Exportar seus dados em formato JSON",
+        "Direito de oposição: Opor-se ao processamento de seus dados por motivos legítimos",
+        "Direito à limitação: Limitar o processamento de seus dados em certos casos",
+        "Direito de retirar o consentimento: Retirar o consentimento para o perfil de voz ou processamento de dados de voz a qualquer momento"
+      ],
+      "contact": "Para exercer esses direitos, vá para Configurações > Privacidade ou entre em contato conosco em privacy@meeshy.me. Responderemos em 30 dias."
+    },
+    "retention": {
+      "title": "Período de Retenção de Dados",
+      "content": "Retemos seus dados pessoais enquanto sua conta estiver ativa. Em caso de exclusão de conta: (1) Exclusão suave com período de carência de 30 dias permitindo recuperação; (2) Após 30 dias, exclusão permanente de todos os seus dados pessoais; (3) Mensagens em conversas compartilhadas são anonimizadas (nome substituído por 'Usuário excluído'); (4) Registros de segurança são mantidos por 90 dias por motivos legais; (5) Dados de cobrança são mantidos conforme obrigações legais (até 10 anos).",
+      "voiceData": "Perfis de voz expiram automaticamente com base em sua idade: 18-25 anos = 5 anos, 26-40 anos = 10 anos, 41-60 anos = 15 anos, 60+ anos = 20 anos."
+    },
+    "notifications": {
+      "title": "Notificações e Comunicações",
+      "content": "Oferecemos 32 tipos diferentes de notificações que você pode configurar individualmente: mensagens, chamadas, menções, reações, solicitações de amizade, eventos de segurança, anúncios do sistema, etc. Você pode ativar/desativar notificações push, email e som para cada tipo. O modo Não Perturbe permite definir intervalos de tempo sem notificações (exceto alertas de segurança críticos)."
+    },
+    "cookies": {
+      "title": "Cookies e Tecnologias Similares",
+      "content": "Usamos cookies essenciais para a funcionalidade do serviço (autenticação, sessões, preferências de idioma). Nenhum cookie de rastreamento publicitário é usado. Sessões são armazenadas no Redis com expiração automática. Você pode gerenciar suas preferências de cookies nas configurações do seu navegador."
+    },
+    "international": {
+      "title": "Transferências Internacionais",
+      "content": "Seus dados são hospedados em servidores localizados na França e na União Europeia. Se você acessar o Meeshy de fora da UE, seus dados podem ser transferidos para a UE. Essas transferências são protegidas pelas cláusulas contratuais padrão da Comissão Europeia e em conformidade com o RGPD."
+    },
+    "updates": {
+      "title": "Atualizações da Política",
+      "content": "Podemos atualizar esta política periodicamente. Mudanças importantes serão notificadas por email e através de uma notificação no aplicativo. A data da última atualização está indicada no topo desta página. Continuar usando o Meeshy após uma atualização significa que você aceita a nova política."
+    },
+    "contact": {
+      "title": "Entre em Contato",
+      "intro": "Para qualquer dúvida sobre esta política de privacidade, seus dados pessoais ou para exercer seus direitos RGPD:",
+      "email": "Email DPO: privacy@meeshy.me",
+      "response": "Tempo de resposta: Máximo 30 dias",
+      "address": "Endereço postal: 12 Rue de la Paix, 75002 Paris, França",
+      "dpa": "Em caso de disputa não resolvida, você tem o direito de apresentar uma reclamação à CNIL (Autoridade Francesa de Proteção de Dados) em: www.cnil.fr"
     },
     "footer": {
       "title": "Links Úteis",
@@ -63,19 +205,6 @@
       "about": "Sobre",
       "contact": "Contato",
       "partners": "Parceiros"
-    },
-    "contact": {
-      "title": "Entre em Contato",
-      "email": "Email: privacy@meeshy.me",
-      "address": "Endereço: 12 Rue de la Paix, 75002 Paris, França"
-    },
-    "cookies": {
-      "title": "Cookies e Tecnologias Similares",
-      "content": "Usamos cookies para melhorar sua experiência, lembrar suas preferências e analisar o uso do site."
-    },
-    "updates": {
-      "title": "Atualizações da Política",
-      "content": "Podemos atualizar esta política periodicamente. Informaremos sobre mudanças importantes por email ou via notificação na plataforma."
     }
   }
 }
