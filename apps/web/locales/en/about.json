@@ -1,33 +1,209 @@
 {
   "about": {
     "title": "About Meeshy",
-    "subtitle": "We believe that language barriers should never stand in the way of meaningful connections.",
+    "subtitle": "The social network where language is no longer a barrier. Communicate, learn and collaborate without borders.",
     "backHome": "Back to home",
+
+    "whatIsMeeshy": {
+      "title": "What is Meeshy?",
+      "intro": "Meeshy is much more than a simple multilingual messaging platform. It's a revolution in how we communicate across languages and cultures.",
+      "description": "Imagine a social network where you post in English, your friend in Japan reads in Japanese, your business partner in Nigeria reads in Yoruba, and your colleague in Germany reads in German - all from the same original message. That's Meeshy's promise: a network where every piece of content is automatically consumed in the user's native language.",
+      "keyPoints": [
+        "🌍 Real-time translation in 100+ languages with advanced AI models hosted locally",
+        "🔒 End-to-end encryption with Signal Protocol - your conversations stay private",
+        "🎯 Server-side translation for professional quality and total privacy",
+        "🗣️ Audio transcription and translation to break down oral barriers",
+        "📚 Natural language learning by communicating with the world",
+        "🌐 Active promotion of minority African, Asian and indigenous languages"
+      ]
+    },
+
     "mission": {
       "title": "Our Mission",
-      "description": "Connect the world, one translation at a time. Our platform empowers people from all corners of the globe to communicate freely, breaking down the walls that separate us and building bridges of understanding."
+      "description": "Connect humanity beyond language barriers. We're building the first true multilingual social network where the language you speak no longer determines who you can communicate with, learn from or do business with."
     },
+
+    "whyServerSide": {
+      "title": "Why Server-Side Translation?",
+      "intro": "Many services use third-party APIs like Google Translate. Not Meeshy. Here's why we made the radical choice of server-side translation with in-house hosted AI models:",
+      "reasons": [
+        {
+          "title": "Total Privacy",
+          "description": "Your messages NEVER leave our secure servers in Europe. No data is sent to Google, Microsoft or any other third-party service. We control 100% of the translation chain."
+        },
+        {
+          "title": "Professional Quality",
+          "description": "Our AI models (based on Transformer architecture) are specially trained for conversational communication, with understanding of context, tone and cultural nuances. Result: natural and faithful translations."
+        },
+        {
+          "title": "Optimal Speed",
+          "description": "No network latency to external APIs. Translation happens directly on our servers via ZMQ (Zero Message Queue) for near-instant response, even for group conversations with 50+ participants."
+        },
+        {
+          "title": "Technological Independence",
+          "description": "We don't depend on any tech giant. Meeshy is sovereign: if tomorrow Google changes its pricing or policies, we're not affected. Your service remains stable, predictable and under your control."
+        },
+        {
+          "title": "Infinite Customization",
+          "description": "Hosting our own models allows us to add rare languages, improve translation of industry-specific technical jargon, and adapt translation according to your preferences (formal vs informal)."
+        }
+      ]
+    },
+
+    "languageLearning": {
+      "title": "Learning Languages Through Natural Communication",
+      "intro": "Forget traditional learning apps with their artificial lessons. With Meeshy, you learn languages in real situations.",
+      "benefits": [
+        {
+          "title": "Authentic Immersion",
+          "description": "Chat with native speakers from around the world. Every conversation is an opportunity to learn vocabulary, idiomatic expressions and the culture associated with the language."
+        },
+        {
+          "title": "See Both Versions",
+          "description": "Each message displays in your language AND in the original language. You immediately understand the meaning while seeing how a native actually expresses themselves. It's like having a personal tutor 24/7."
+        },
+        {
+          "title": "Progressive Learning",
+          "description": "Start by reading translations, then gradually try to guess the meaning before looking. Meeshy adapts to your level and encourages you to step out of your linguistic comfort zone."
+        },
+        {
+          "title": "Real Context",
+          "description": "Learn vocabulary that really matters: the one used in real conversations about topics you're passionate about, not sentences like 'The apple is red' that no native ever says."
+        }
+      ]
+    },
+
+    "businessWithoutBorders": {
+      "title": "Business Without Borders",
+      "intro": "In a globalized world, your ability to communicate effectively in multiple languages determines your success. Meeshy eliminates this barrier.",
+      "useCases": [
+        {
+          "title": "International Teams",
+          "description": "Your developer in India, your designer in Brazil and your manager in France collaborate in real time, each in their language. No misunderstandings, no frustration, no costly human translator."
+        },
+        {
+          "title": "Multilingual Customer Support",
+          "description": "Offer support in 100+ languages without hiring an army of translators. A single agent can respond to Japanese, Arabic and Spanish customers simultaneously."
+        },
+        {
+          "title": "International Expansion",
+          "description": "Test new markets without massive localization investment. Communicate directly with potential customers in Africa, Asia or Latin America from day one."
+        },
+        {
+          "title": "Business Negotiations",
+          "description": "Negotiate contracts with international partners confidently. Each party reads and responds in their language, eliminating ambiguities and accelerating decisions."
+        }
+      ]
+    },
+
+    "linguisticDiversity": {
+      "title": "Promoting Linguistic Diversity",
+      "intro": "The Internet is dominated by English, Mandarin and a few major languages. Meeshy fights to ensure ALL languages have their place in the digital world.",
+      "commitment": [
+        {
+          "title": "African Languages",
+          "description": "Yoruba, Swahili, Zulu, Amharic, Hausa, Wolof, Lingala... Africa has over 2000 living languages. We're actively working to integrate them so Africans can communicate globally in their mother tongues."
+        },
+        {
+          "title": "Asian Languages",
+          "description": "Beyond Mandarin and Japanese, we support Tagalog, Vietnamese, Thai, Khmer, Burmese, Nepali and dozens of other South and Southeast Asian languages."
+        },
+        {
+          "title": "Indigenous Languages",
+          "description": "Quechua in South America, Aboriginal languages of Australia, Native American languages of North America... These languages deserve to survive and thrive in the digital age."
+        },
+        {
+          "title": "Dialects and Variants",
+          "description": "Moroccan Arabic is not Egyptian Arabic. Brazilian Portuguese differs from European Portuguese. Meeshy recognizes and respects these regional nuances."
+        }
+      ],
+      "why": "Every language lost is a unique vision of the world that disappears. By giving minority language speakers tools to communicate globally, we preserve humanity's cultural richness."
+    },
+
+    "networkVision": {
+      "title": "Vision: The Barrier-Free Network",
+      "intro": "Our ambition is not to create another app. It's to create the first true planetary social network where language is no longer a limiting factor.",
+      "vision": [
+        {
+          "title": "2026: The Foundations",
+          "description": "Real-time multilingual messaging with 100+ languages. Audio translation and transcription. E2EE encryption with Signal Protocol. Multilingual communities. 100,000 monthly active users."
+        },
+        {
+          "title": "2027-2028: The Social Network",
+          "description": "Multilingual news feed where each post displays in the reader's language. International groups self-organized by interests. Multilingual marketplace. Real-time translated virtual events. 10 million users."
+        },
+        {
+          "title": "2029-2030: The Global Ecosystem",
+          "description": "Meeshy becomes the reference platform for international collaboration. Integration with business tools (Slack, Teams, Notion). Public API for third-party developers. Support for 300+ languages including regional dialects. 100 million users."
+        },
+        {
+          "title": "2031+: The Future",
+          "description": "Language is no longer a criterion for segmenting users. A teenager in Cameroon can go viral globally by posting in Duala. A startup in Vietnam negotiates with American investors in real time. Humanity communicates as one species, celebrating its linguistic diversity."
+        }
+      ]
+    },
+
+    "technicalInnovation": {
+      "title": "Technical Innovation Serving Humanity",
+      "intro": "Meeshy combines the most advanced technologies to create a unique experience:",
+      "technologies": [
+        {
+          "title": "Signal Protocol E2EE",
+          "description": "The same encryption protocol used by Signal, WhatsApp and the US military. Your private conversations stay private, even if servers are compromised."
+        },
+        {
+          "title": "Transformer AI Models",
+          "description": "State-of-the-art neural architecture for contextual and natural translations. Our models understand context, tone and intent behind each message."
+        },
+        {
+          "title": "ZMQ (Zero Message Queue)",
+          "description": "Ultra-fast messaging system to route messages and translations with minimal latency, even for massive group conversations."
+        },
+        {
+          "title": "MongoDB + Redis",
+          "description": "NoSQL database for flexibility and in-memory cache for lightning performance. Your messages load instantly."
+        },
+        {
+          "title": "Microservices Architecture",
+          "description": "Each component (translation, transcription, encryption, notifications) is an independent service, enabling infinite scalability and maximum reliability."
+        }
+      ]
+    },
+
     "values": {
+      "title": "Our Core Values",
       "globalAccess": {
-        "title": "Global Accessibility",
-        "description": "Making multilingual communication accessible to everyone, everywhere in the world."
+        "title": "Universal Accessibility",
+        "description": "Multilingual communication must not be a privilege reserved for multinationals. Meeshy is accessible to everyone, everywhere, free or at minimal cost."
       },
       "innovation": {
-        "title": "Innovation",
-        "description": "Using the latest AI technologies for accurate and fast translations."
+        "title": "Continuous Innovation",
+        "description": "We use AI, machine learning and the latest advances in natural language processing to constantly improve translation quality."
       },
       "privacy": {
-        "title": "Privacy Respect",
-        "description": "Your conversations remain private and secure with server-side translation powered by advanced AI models."
+        "title": "Privacy by Design",
+        "description": "Optional E2EE, server-side translation without third-party leaks, data hosted in Europe, full GDPR compliance. Your privacy is non-negotiable."
+      },
+      "openness": {
+        "title": "Openness and Inclusivity",
+        "description": "All languages are equal at Meeshy. From Mandarin to Wolof, from Swahili to Quechua, every language deserves its place in the digital world."
       }
     },
+
     "team": {
       "title": "Our Team",
-      "description": "Made with ❤️ by developers who believe communication should have no boundaries.",
-      "details": "Meeshy is developed by a passionate team of developers, linguists and designers who share a common vision: a world where language is no longer an obstacle to human communication."
+      "description": "Meeshy is built by a passionate team of developers, linguists, designers and visionaries who share the same belief: humanity needs a barrier-free network.",
+      "details": "Based in Paris with contributors worldwide, our team combines technical expertise in AI/ML, deep understanding of linguistic issues, and humanistic vision of a more connected world."
     },
+
+    "joinMovement": {
+      "title": "Join the Movement",
+      "description": "We're building something bigger than an app. We're building the communication infrastructure of the multilingual future.",
+      "cta": "Whether you're a curious user, developer, linguist or investor, there's a place for you in this revolution."
+    },
+
     "cta": {
-      "title": "Want to know more?",
+      "title": "Ready to discover Meeshy?",
       "contact": "Contact us",
       "joinUs": "Join us",
       "terms": "Terms of Service",

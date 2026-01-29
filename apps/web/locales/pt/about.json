@@ -1,33 +1,209 @@
 {
   "about": {
     "title": "Sobre o Meeshy",
-    "subtitle": "Acreditamos que as barreiras linguísticas nunca deveriam ser um obstáculo para conexões significativas.",
+    "subtitle": "A rede social onde o idioma não é mais uma barreira. Comunique-se, aprenda e colabore sem fronteiras.",
     "backHome": "Voltar ao início",
+
+    "whatIsMeeshy": {
+      "title": "O que é o Meeshy?",
+      "intro": "Meeshy é muito mais do que uma simples plataforma de mensagens multilíngue. É uma revolução na forma como nos comunicamos através de idiomas e culturas.",
+      "description": "Imagine uma rede social onde você posta em português, seu amigo no Japão lê em japonês, seu parceiro de negócios na Nigéria lê em iorubá e seu colega na Alemanha lê em alemão - tudo a partir da mesma mensagem original. Essa é a promessa do Meeshy: uma rede onde cada conteúdo é automaticamente consumido no idioma nativo do usuário.",
+      "keyPoints": [
+        "🌍 Tradução em tempo real em mais de 100 idiomas com modelos de IA avançados hospedados localmente",
+        "🔒 Criptografia de ponta a ponta com Signal Protocol - suas conversas permanecem privadas",
+        "🎯 Tradução no servidor para qualidade profissional e privacidade total",
+        "🗣️ Transcrição e tradução de áudio para quebrar barreiras orais",
+        "📚 Aprendizado natural de idiomas comunicando-se com o mundo inteiro",
+        "🌐 Promoção ativa de idiomas minoritários africanos, asiáticos e indígenas"
+      ]
+    },
+
     "mission": {
       "title": "Nossa Missão",
-      "description": "Conectar o mundo, uma tradução de cada vez. Nossa plataforma permite que pessoas dos quatro cantos do mundo se comuniquem livremente, derrubando os muros que nos separam e construindo pontes de compreensão."
+      "description": "Conectar a humanidade além das barreiras linguísticas. Estamos construindo a primeira verdadeira rede social multilíngue onde o idioma que você fala não determina mais com quem você pode se comunicar, aprender ou fazer negócios."
     },
+
+    "whyServerSide": {
+      "title": "Por que Tradução no Servidor?",
+      "intro": "Muitos serviços usam APIs de terceiros como o Google Translate. O Meeshy não. Veja por que fizemos a escolha radical da tradução no servidor com modelos de IA hospedados internamente:",
+      "reasons": [
+        {
+          "title": "Privacidade Total",
+          "description": "Suas mensagens NUNCA saem dos nossos servidores seguros na Europa. Nenhum dado é enviado ao Google, Microsoft ou qualquer outro serviço de terceiros. Controlamos 100% da cadeia de tradução."
+        },
+        {
+          "title": "Qualidade Profissional",
+          "description": "Nossos modelos de IA (baseados na arquitetura Transformer) são especialmente treinados para comunicação conversacional, com compreensão de contexto, tom e nuances culturais. Resultado: traduções naturais e fiéis."
+        },
+        {
+          "title": "Velocidade Ideal",
+          "description": "Sem latência de rede para APIs externas. A tradução acontece diretamente em nossos servidores via ZMQ (Zero Message Queue) para resposta quase instantânea, mesmo para conversas em grupo com mais de 50 participantes."
+        },
+        {
+          "title": "Independência Tecnológica",
+          "description": "Não dependemos de nenhum gigante da tecnologia. Meeshy é soberano: se amanhã o Google mudar seus preços ou políticas, não somos afetados. Seu serviço permanece estável, previsível e sob seu controle."
+        },
+        {
+          "title": "Personalização Infinita",
+          "description": "Hospedar nossos próprios modelos nos permite adicionar idiomas raros, melhorar a tradução de jargão técnico específico do seu setor e adaptar a tradução de acordo com suas preferências (formal vs informal)."
+        }
+      ]
+    },
+
+    "languageLearning": {
+      "title": "Aprender Idiomas Comunicando-se Naturalmente",
+      "intro": "Esqueça os aplicativos de aprendizado tradicionais com suas lições artificiais. Com o Meeshy, você aprende idiomas em situações reais.",
+      "benefits": [
+        {
+          "title": "Imersão Autêntica",
+          "description": "Converse com falantes nativos de todo o mundo. Cada conversa é uma oportunidade de aprender vocabulário, expressões idiomáticas e a cultura associada ao idioma."
+        },
+        {
+          "title": "Ver Ambas as Versões",
+          "description": "Cada mensagem é exibida no seu idioma E no idioma original. Você compreende imediatamente o significado enquanto vê como um nativo realmente se expressa. É como ter um tutor pessoal 24/7."
+        },
+        {
+          "title": "Aprendizado Progressivo",
+          "description": "Comece lendo as traduções, depois gradualmente tente adivinhar o significado antes de olhar. Meeshy se adapta ao seu nível e o encoraja a sair da sua zona de conforto linguística."
+        },
+        {
+          "title": "Contexto Real",
+          "description": "Aprenda o vocabulário que realmente importa: aquele usado em conversas reais sobre assuntos que você é apaixonado, não frases como 'A maçã é vermelha' que nenhum nativo nunca diz."
+        }
+      ]
+    },
+
+    "businessWithoutBorders": {
+      "title": "Negócios Sem Fronteiras",
+      "intro": "Em um mundo globalizado, sua capacidade de se comunicar eficazmente em múltiplos idiomas determina seu sucesso. Meeshy elimina essa barreira.",
+      "useCases": [
+        {
+          "title": "Equipes Internacionais",
+          "description": "Seu desenvolvedor na Índia, seu designer no Brasil e seu gerente na França colaboram em tempo real, cada um em seu idioma. Sem mal-entendidos, sem frustração, sem tradutor humano caro."
+        },
+        {
+          "title": "Suporte ao Cliente Multilíngue",
+          "description": "Ofereça suporte em mais de 100 idiomas sem contratar um exército de tradutores. Um único agente pode responder a clientes japoneses, árabes e espanhóis simultaneamente."
+        },
+        {
+          "title": "Expansão Internacional",
+          "description": "Teste novos mercados sem investimento massivo em localização. Comunique-se diretamente com clientes em potencial na África, Ásia ou América Latina desde o primeiro dia."
+        },
+        {
+          "title": "Negociações Comerciais",
+          "description": "Negocie contratos com parceiros internacionais com confiança. Cada parte lê e responde em seu idioma, eliminando ambiguidades e acelerando decisões."
+        }
+      ]
+    },
+
+    "linguisticDiversity": {
+      "title": "Promoção da Diversidade Linguística",
+      "intro": "A Internet é dominada pelo inglês, mandarim e alguns idiomas principais. Meeshy luta para que TODOS os idiomas tenham seu lugar no mundo digital.",
+      "commitment": [
+        {
+          "title": "Idiomas Africanos",
+          "description": "Iorubá, suaíli, zulu, amárico, hauçá, uolofe, lingala... A África tem mais de 2000 idiomas vivos. Estamos trabalhando ativamente para integrá-los para que os africanos possam se comunicar globalmente em suas línguas maternas."
+        },
+        {
+          "title": "Idiomas Asiáticos",
+          "description": "Além do mandarim e japonês, apoiamos tagalo, vietnamita, tailandês, khmer, birmanês, nepalês e dezenas de outros idiomas do sul e sudeste asiático."
+        },
+        {
+          "title": "Idiomas Indígenas",
+          "description": "Quíchua na América do Sul, línguas aborígenes da Austrália, línguas ameríndias da América do Norte... Esses idiomas merecem sobreviver e prosperar na era digital."
+        },
+        {
+          "title": "Dialetos e Variantes",
+          "description": "O árabe marroquino não é o árabe egípcio. O português brasileiro difere do português europeu. Meeshy reconhece e respeita essas nuances regionais."
+        }
+      ],
+      "why": "Cada idioma perdido é uma visão única do mundo que desaparece. Ao dar aos falantes de idiomas minoritários ferramentas para se comunicar globalmente, preservamos a riqueza cultural da humanidade."
+    },
+
+    "networkVision": {
+      "title": "Visão: A Rede Sem Barreiras Linguísticas",
+      "intro": "Nossa ambição não é criar mais um aplicativo. É criar a primeira verdadeira rede social planetária onde o idioma não é mais um fator limitante.",
+      "vision": [
+        {
+          "title": "2026: As Fundações",
+          "description": "Mensagens multilíngues em tempo real com mais de 100 idiomas. Tradução e transcrição de áudio. Criptografia E2EE com Signal Protocol. Comunidades multilíngues. 100.000 usuários ativos mensais."
+        },
+        {
+          "title": "2027-2028: A Rede Social",
+          "description": "Feed de notícias multilíngue onde cada postagem é exibida no idioma do leitor. Grupos internacionais auto-organizados por interesses. Marketplace multilíngue. Eventos virtuais traduzidos em tempo real. 10 milhões de usuários."
+        },
+        {
+          "title": "2029-2030: O Ecossistema Global",
+          "description": "Meeshy se torna a plataforma de referência para colaboração internacional. Integração com ferramentas de negócios (Slack, Teams, Notion). API pública para desenvolvedores terceiros. Suporte para mais de 300 idiomas, incluindo dialetos regionais. 100 milhões de usuários."
+        },
+        {
+          "title": "2031+: O Futuro",
+          "description": "O idioma não é mais um critério para segmentar usuários. Um adolescente em Camarões pode se tornar viral globalmente postando em duala. Uma startup no Vietnã negocia com investidores americanos em tempo real. A humanidade se comunica como uma única espécie, celebrando sua diversidade linguística."
+        }
+      ]
+    },
+
+    "technicalInnovation": {
+      "title": "Inovação Técnica a Serviço da Humanidade",
+      "intro": "Meeshy combina as tecnologias mais avançadas para criar uma experiência única:",
+      "technologies": [
+        {
+          "title": "Signal Protocol E2EE",
+          "description": "O mesmo protocolo de criptografia usado pelo Signal, WhatsApp e pelo exército dos EUA. Suas conversas privadas permanecem privadas, mesmo se os servidores forem comprometidos."
+        },
+        {
+          "title": "Modelos de IA Transformer",
+          "description": "Arquitetura neural de ponta para traduções contextuais e naturais. Nossos modelos entendem contexto, tom e intenção por trás de cada mensagem."
+        },
+        {
+          "title": "ZMQ (Zero Message Queue)",
+          "description": "Sistema de mensagens ultrarrápido para rotear mensagens e traduções com latência mínima, mesmo para conversas em grupo massivas."
+        },
+        {
+          "title": "MongoDB + Redis",
+          "description": "Banco de dados NoSQL para flexibilidade e cache em memória para desempenho ultrarrápido. Suas mensagens carregam instantaneamente."
+        },
+        {
+          "title": "Arquitetura de Microsserviços",
+          "description": "Cada componente (tradução, transcrição, criptografia, notificações) é um serviço independente, permitindo escalabilidade infinita e confiabilidade máxima."
+        }
+      ]
+    },
+
     "values": {
+      "title": "Nossos Valores Fundamentais",
       "globalAccess": {
-        "title": "Acessibilidade Mundial",
-        "description": "Tornar a comunicação multilíngue acessível a todos, em qualquer lugar do mundo."
+        "title": "Acessibilidade Universal",
+        "description": "A comunicação multilíngue não deve ser um privilégio reservado para multinacionais. Meeshy é acessível a todos, em qualquer lugar, gratuitamente ou a custo mínimo."
       },
       "innovation": {
-        "title": "Inovação",
-        "description": "Usar as mais recentes tecnologias de IA para traduções precisas e rápidas."
+        "title": "Inovação Contínua",
+        "description": "Usamos IA, aprendizado de máquina e os últimos avanços em processamento de linguagem natural para melhorar constantemente a qualidade da tradução."
       },
       "privacy": {
-        "title": "Respeito à Privacidade",
-        "description": "Suas conversas permanecem privadas e seguras graças à tradução no servidor alimentada por modelos avançados de IA."
+        "title": "Privacidade por Design",
+        "description": "E2EE opcional, tradução no servidor sem vazamentos para terceiros, dados hospedados na Europa, conformidade total com RGPD. Sua privacidade não é negociável."
+      },
+      "openness": {
+        "title": "Abertura e Inclusividade",
+        "description": "Todos os idiomas são iguais no Meeshy. Do mandarim ao uolofe, do suaíli ao quíchua, cada idioma merece seu lugar no mundo digital."
       }
     },
+
     "team": {
       "title": "Nossa Equipe",
-      "description": "Feito com ❤️ por desenvolvedores que acreditam que a comunicação não deveria ter limites.",
-      "details": "Meeshy é desenvolvido por uma equipe apaixonada de desenvolvedores, linguistas e designers que compartilham uma visão comum: um mundo onde a língua não é mais um obstáculo à comunicação humana."
+      "description": "Meeshy é construído por uma equipe apaixonada de desenvolvedores, linguistas, designers e visionários que compartilham a mesma convicção: a humanidade precisa de uma rede sem barreiras linguísticas.",
+      "details": "Sediada em Paris com colaboradores em todo o mundo, nossa equipe combina expertise técnica em IA/ML, profunda compreensão de questões linguísticas e visão humanista de um mundo mais conectado."
     },
+
+    "joinMovement": {
+      "title": "Junte-se ao Movimento",
+      "description": "Estamos construindo algo maior do que um aplicativo. Estamos construindo a infraestrutura de comunicação do futuro multilíngue.",
+      "cta": "Seja você um usuário curioso, desenvolvedor, linguista ou investidor, há um lugar para você nesta revolução."
+    },
+
     "cta": {
-      "title": "Quer saber mais?",
+      "title": "Pronto para descobrir o Meeshy?",
       "contact": "Entre em contato",
       "joinUs": "Junte-se a nós",
       "terms": "Termos de uso",
