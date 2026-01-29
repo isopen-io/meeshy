@@ -441,7 +441,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
         <div className="relative flex flex-row items-center justify-between gap-2 !w-48 !h-24 !min-w-[192px] !min-h-[96px] !max-w-[192px] !max-h-[96px] bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/30 dark:to-orange-900/30 border-2 border-red-400 dark:border-red-500 rounded-lg !px-3 !py-2">
           {/* Timer et indicateur */}
           <div className="flex flex-col items-start justify-center gap-1">
-            <div className="text-sm font-bold text-red-600 dark:text-red-400 font-mono leading-none">
+            <div className="text-sm font-bold text-red-600 dark:text-red-400 font-mono tabular-nums leading-none">
               {formatTime(recordingTime)}
             </div>
             <div className="flex items-center gap-1 mt-0.5">
@@ -490,7 +490,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
 
           {/* Infos audio */}
           <div className="flex flex-col items-start justify-center gap-0">
-            <div className="text-xs font-bold text-green-600 dark:text-green-400 font-mono leading-none">
+            <div className="text-xs font-bold text-green-600 dark:text-green-400 font-mono tabular-nums leading-none">
               {formatTime(recordingTime)}
             </div>
             <div className="text-[7px] text-green-600 dark:text-green-400 font-medium leading-none mt-0.5">

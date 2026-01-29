@@ -474,19 +474,19 @@ export function BetaPlayground() {
       {metrics.latency > 0 && (
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{t('betaPlayground.metrics.latency')}:</span>
-          <span className="font-mono">{metrics.latency.toFixed(2)} ms</span>
+          <span className="font-mono tabular-nums">{metrics.latency.toFixed(2)} ms</span>
         </div>
       )}
       {metrics.tokensPerSecond !== undefined && metrics.tokensPerSecond > 0 && (
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{t('betaPlayground.metrics.tokensPerSecond')}:</span>
-          <span className="font-mono">{metrics.tokensPerSecond} tok/s</span>
+          <span className="font-mono tabular-nums">{metrics.tokensPerSecond} tok/s</span>
         </div>
       )}
       {metrics.charactersProcessed !== undefined && metrics.charactersProcessed > 0 && (
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{t('betaPlayground.metrics.charactersProcessed')}:</span>
-          <span className="font-mono">{metrics.charactersProcessed}</span>
+          <span className="font-mono tabular-nums">{metrics.charactersProcessed}</span>
         </div>
       )}
       {metrics.error && (

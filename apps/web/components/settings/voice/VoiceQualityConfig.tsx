@@ -75,7 +75,7 @@ function QualityMetric({ label, value, unit = '', description, goodRange }: Qual
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono">
+          <span className="text-sm font-mono tabular-nums">
             {typeof value === 'number' ? value.toFixed(2) : value}
             {unit}
           </span>
@@ -154,7 +154,7 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span>Score global</span>
-                <span className="font-mono font-medium">
+                <span className="font-mono tabular-nums font-medium">
                   {(qualityMetrics.overallScore * 100).toFixed(0)}%
                 </span>
               </div>

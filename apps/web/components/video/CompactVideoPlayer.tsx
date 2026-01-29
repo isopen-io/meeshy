@@ -142,7 +142,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
         </button>
       </div>
 
-      <span className="text-sm font-mono text-purple-700 dark:text-purple-300 pr-2">
+      <span className="text-sm font-mono tabular-nums text-purple-700 dark:text-purple-300 pr-2">
         {formatDuration(duration)}
       </span>
     </div>

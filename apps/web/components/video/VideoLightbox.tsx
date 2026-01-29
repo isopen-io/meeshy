@@ -622,7 +622,7 @@ export function VideoLightbox({
               </Button>
 
               {/* Temps */}
-              <span className="text-sm font-mono flex-shrink-0">
+              <span className="text-sm font-mono tabular-nums flex-shrink-0">
                 {formatTime(currentTime)} / {formatTime(duration)}
               </span>
 

@@ -197,7 +197,7 @@ export function VoiceRecorder({
         <div className="flex flex-col items-center gap-4">
           {/* Timer */}
           <div className="text-center">
-            <div className="text-4xl font-mono">
+            <div className="text-4xl font-mono tabular-nums">
               {recordingTime.toFixed(1)}s
             </div>
             <div className="text-sm text-muted-foreground">

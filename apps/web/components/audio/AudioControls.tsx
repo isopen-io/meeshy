@@ -106,7 +106,7 @@ export const AudioControls = memo<AudioControlsProps>(({
   return (
     <div className="flex items-center justify-center gap-2">
       {/* Timer */}
-      <div className="text-[12px] font-mono text-gray-600 dark:text-gray-300">
+      <div className="text-[12px] font-mono tabular-nums text-gray-600 dark:text-gray-300">
         {hasError ? (
           <span className="font-semibold text-red-600 dark:text-red-400 text-[10px]">
             {errorMessage}

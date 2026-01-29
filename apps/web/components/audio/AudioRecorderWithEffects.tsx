@@ -692,7 +692,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
 
         {/* Centre: Timer centré verticalement avec barre de progression */}
         <div className="flex flex-col items-center justify-center flex-1 gap-1.5">
-          <div className={`text-2xl font-bold font-mono ${
+          <div className={`text-2xl font-bold font-mono tabular-nums ${
             isRecording ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'
           }`}>
             {formatTime(recordingTime)}

@@ -109,7 +109,7 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
       <div className="flex flex-col gap-1 flex-1 min-w-0">
         {/* Countdown et format */}
         <div className="flex items-center justify-between">
-          <div className="text-sm font-bold text-green-600 dark:text-green-400 font-mono">
+          <div className="text-sm font-bold text-green-600 dark:text-green-400 font-mono tabular-nums">
             {formatTime(isPlayingAudio ? audioDuration - currentTime : audioDuration)}
           </div>
           <div className="text-[9px] text-green-600 dark:text-green-400 font-medium">

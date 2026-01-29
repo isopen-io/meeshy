@@ -359,7 +359,7 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
       </button>
 
       {/* Durée */}
-      <span className="text-sm font-mono text-blue-700 dark:text-blue-300">
+      <span className="text-sm font-mono tabular-nums text-blue-700 dark:text-blue-300">
         {formatDuration(duration)}
       </span>
 

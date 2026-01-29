@@ -78,7 +78,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
         )}
       </Button>
 
-      <span className="text-xs font-mono text-gray-600 dark:text-gray-300 flex-shrink-0">
+      <span className="text-xs font-mono tabular-nums text-gray-600 dark:text-gray-300 flex-shrink-0">
         {formatTime(currentTime)}
       </span>
 
@@ -121,7 +121,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
         />
       </div>
 
-      <span className="text-xs font-mono text-gray-600 dark:text-gray-300 flex-shrink-0">
+      <span className="text-xs font-mono tabular-nums text-gray-600 dark:text-gray-300 flex-shrink-0">
         {formatTime(duration)}
       </span>
 

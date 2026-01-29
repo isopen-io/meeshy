@@ -95,7 +95,7 @@ export function VoiceSettingsPanel({ profileExists, reducedMotion }: VoiceSettin
                 {t('voiceProfile.settings.exaggerationDesc', 'Amplifie les caractéristiques vocales')}
               </p>
             </div>
-            <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+            <span className="text-sm font-mono tabular-nums bg-muted px-2 py-1 rounded">
               {voiceCloningSettings.voiceCloningExaggeration.toFixed(2)}
             </span>
           </div>
@@ -122,7 +122,7 @@ export function VoiceSettingsPanel({ profileExists, reducedMotion }: VoiceSettin
                 {t('voiceProfile.settings.cfgWeightDesc', 'Fidélité au texte vs créativité. 0 = réduit le transfert d\'accent')}
               </p>
             </div>
-            <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+            <span className="text-sm font-mono tabular-nums bg-muted px-2 py-1 rounded">
               {voiceCloningSettings.voiceCloningCfgWeight.toFixed(2)}
             </span>
           </div>
@@ -149,7 +149,7 @@ export function VoiceSettingsPanel({ profileExists, reducedMotion }: VoiceSettin
                 {t('voiceProfile.settings.temperatureDesc', 'Variabilité de la génération')}
               </p>
             </div>
-            <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+            <span className="text-sm font-mono tabular-nums bg-muted px-2 py-1 rounded">
               {voiceCloningSettings.voiceCloningTemperature.toFixed(2)}
             </span>
           </div>
@@ -176,7 +176,7 @@ export function VoiceSettingsPanel({ profileExists, reducedMotion }: VoiceSettin
                 {t('voiceProfile.settings.topPDesc', 'Filtrage des tokens improbables')}
               </p>
             </div>
-            <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
+            <span className="text-sm font-mono tabular-nums bg-muted px-2 py-1 rounded">
               {voiceCloningSettings.voiceCloningTopP.toFixed(2)}
             </span>
           </div>
