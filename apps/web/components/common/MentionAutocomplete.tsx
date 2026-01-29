@@ -238,7 +238,7 @@ export function MentionAutocomplete({
           zIndex: 2147483647,
           background: isDarkMode
             ? 'linear-gradient(135deg, rgba(31, 41, 55, 0.70) 0%, rgba(30, 58, 138, 0.80) 50%, rgba(31, 41, 55, 0.70) 100%)'
-            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(239, 246, 255, 0.65) 50%, rgba(255, 255, 255, 0.55) 100%)',
+            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(239, 246, 255, 0.95) 50%, rgba(255, 255, 255, 0.92) 100%)',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           borderRadius: '16px',
