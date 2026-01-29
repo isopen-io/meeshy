@@ -34,6 +34,7 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
       className={containerClasses}
       data-theme={theme}
       data-performance={effectiveProfile}
+      data-testid="glass-container"
     >
       <div className={styles.content}>{children}</div>
     </div>

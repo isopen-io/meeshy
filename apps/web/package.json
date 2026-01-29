@@ -13,6 +13,10 @@
     "test": "jest --maxWorkers=50%",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --maxWorkers=50%",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
     "clean": "rm -rf .next node_modules dist"
   },
   "dependencies": {
@@ -93,6 +97,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.3",
     "@next/bundle-analyzer": "^16.1.4",
+    "@playwright/test": "^1.58.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

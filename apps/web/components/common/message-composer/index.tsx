@@ -363,6 +363,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           maxLength={composerState.maxMessageLength}
           disabled={!props.isComposingEnabled}
           style={textareaStyle}
+          aria-label="Message input"
         />
 
         {/* Mention autocomplete */}
