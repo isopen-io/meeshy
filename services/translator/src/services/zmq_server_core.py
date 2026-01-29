@@ -88,6 +88,16 @@ class ZMQTranslationServer:
         self.running = False
         self.worker_tasks = []
 
+        # ✨ Tracking des tâches asynchrones en cours (pour métriques et cleanup)
+        self.active_tasks: set[asyncio.Task] = set()
+        self.task_counters = {
+            'translation': 0,
+            'audio_process': 0,
+            'transcription': 0,
+            'voice_api': 0,
+            'voice_profile': 0
+        }
+
         # OPTIMISATION: Cache CPU pour éviter le sleep(0.1) dans _publish_translation_result
         self._cached_cpu_usage = 0.0
         self._cpu_update_task = None
@@ -220,6 +230,35 @@ class ZMQTranslationServer:
     # Méthodes de routing vers les handlers spécialisés
     # ══════════════════════════════════════════════════════════════
 
+    def _create_tracked_task(self, coro, task_type: str) -> asyncio.Task:
+        """
+        Crée une tâche asynchrone avec tracking automatique
+
+        Args:
+            coro: Coroutine à exécuter
+            task_type: Type de tâche ('translation', 'audio_process', etc.)
+
+        Returns:
+            La tâche créée
+        """
+        task = asyncio.create_task(coro)
+        self.active_tasks.add(task)
+        self.task_counters[task_type] += 1
+
+        # Callback pour nettoyer à la fin
+        def task_done_callback(t):
+            self.active_tasks.discard(t)
+            # Logger les erreurs non catchées
+            try:
+                exc = t.exception()
+                if exc:
+                    logger.error(f"❌ Erreur non catchée dans tâche {task_type}: {exc}")
+            except asyncio.CancelledError:
+                pass
+
+        task.add_done_callback(task_done_callback)
+        return task
+
     def _inject_binary_frames(self, request_data: dict, binary_frames: list):
         """
         Injecte les frames binaires dans request_data selon binaryFrames indices.
@@ -260,7 +299,13 @@ class ZMQTranslationServer:
             logger.info(f"📦 [ZMQ-SERVER] Voice Profile embedding binaire extrait du frame {voice_profile_idx}: {voice_profile_size / 1024:.1f}KB")
 
     async def _handle_translation_request_multipart(self, frames):
-        """Route la requête multipart vers le handler approprié"""
+        """
+        Route la requête multipart vers le handler approprié EN MODE NON-BLOQUANT
+
+        IMPORTANT: Les handlers sont lancés avec asyncio.create_task() pour éviter
+        de bloquer la boucle principale. Cela permet de traiter plusieurs requêtes
+        en parallèle (translation + audio + transcription simultanément).
+        """
         # Le premier frame contient toujours le JSON
         metadata_frame = frames[0]
         binary_frames = frames[1:] if len(frames) > 1 else []
@@ -269,27 +314,58 @@ class ZMQTranslationServer:
         request_data = json.loads(metadata_frame.decode('utf-8'))
         request_type = request_data.get('type', 'translation')
 
-        # Router vers le handler approprié
+        # Router vers le handler approprié EN MODE NON-BLOQUANT
+        # ✨ Utiliser _create_tracked_task() pour ne PAS bloquer la boucle principale
         if request_type == 'ping':
-            # Health check - déléguer au TranslationHandler
+            # Health check - traitement rapide, peut rester synchrone
             await self.translation_handler._handle_translation_request_multipart(frames)
         elif request_type == 'translation':
-            await self.translation_handler._handle_translation_request_multipart(frames)
+            # ✨ Lancer en tâche asynchrone trackée pour ne pas bloquer
+            self._create_tracked_task(
+                self.translation_handler._handle_translation_request_multipart(frames),
+                'translation'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Translation task créée ({len(self.active_tasks)} actives)")
         elif request_type == 'audio_process':
             # Injecter les binaires dans request_data pour audio_process
             self._inject_binary_frames(request_data, binary_frames)
-            await self.audio_handler._handle_audio_process_request(request_data)
+            # ✨ Lancer en tâche asynchrone trackée (peut prendre 5-10s)
+            self._create_tracked_task(
+                self.audio_handler._handle_audio_process_request(request_data),
+                'audio_process'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Audio process task créée ({len(self.active_tasks)} actives)")
         elif request_type == 'transcription_only':
             # Injecter les binaires dans request_data pour transcription_only
             self._inject_binary_frames(request_data, binary_frames)
-            await self.transcription_handler._handle_transcription_only_request(request_data)
+            # ✨ Lancer en tâche asynchrone trackée (peut prendre 2-3s)
+            self._create_tracked_task(
+                self.transcription_handler._handle_transcription_only_request(request_data),
+                'transcription'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Transcription task créée ({len(self.active_tasks)} actives)")
         elif request_type == 'voice_api':
-            await self.voice_handler._handle_voice_api_request(request_data)
+            # ✨ Lancer en tâche asynchrone trackée
+            self._create_tracked_task(
+                self.voice_handler._handle_voice_api_request(request_data),
+                'voice_api'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Voice API task créée ({len(self.active_tasks)} actives)")
         elif request_type == 'voice_profile':
-            await self.voice_handler._handle_voice_profile_request(request_data)
+            # ✨ Lancer en tâche asynchrone trackée
+            self._create_tracked_task(
+                self.voice_handler._handle_voice_profile_request(request_data),
+                'voice_profile'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Voice profile task créée ({len(self.active_tasks)} actives)")
         elif self.voice_handler and hasattr(self.voice_handler, 'is_voice_api_request') and self.voice_handler.is_voice_api_request(request_type):
             # Support direct voice API request types (voice_translate_async, etc.)
-            await self.voice_handler._handle_voice_api_request(request_data)
+            # ✨ Lancer en tâche asynchrone trackée
+            self._create_tracked_task(
+                self.voice_handler._handle_voice_api_request(request_data),
+                'voice_api'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] Voice API direct task créée ({len(self.active_tasks)} actives)")
         else:
             logger.warning(f"Type de requête inconnu: {request_type}")
 
@@ -320,12 +396,28 @@ class ZMQTranslationServer:
         if self.translation_handler:
             await self.translation_handler._publish_translation_result(task_id, result, target_language)
 
+    def get_active_tasks_stats(self) -> dict:
+        """
+        Retourne les statistiques des tâches actives
+
+        Returns:
+            Dictionnaire avec le nombre de tâches par type et total
+        """
+        return {
+            'total_active': len(self.active_tasks),
+            'counters': self.task_counters.copy(),
+            'types_breakdown': {
+                task_type: sum(1 for t in self.active_tasks if not t.done())
+                for task_type in self.task_counters.keys()
+            }
+        }
+
     # ══════════════════════════════════════════════════════════════
     # Lifecycle et monitoring
     # ══════════════════════════════════════════════════════════════
 
     async def stop(self):
-        """Arrête le serveur"""
+        """Arrête le serveur et attend la fin des tâches actives"""
         self.running = False
 
         # Arrêter le monitoring CPU
@@ -336,27 +428,43 @@ class ZMQTranslationServer:
             except asyncio.CancelledError:
                 pass
 
+        # ✨ Attendre la fin des tâches actives (avec timeout)
+        if self.active_tasks:
+            active_count = len(self.active_tasks)
+            logger.info(f"⏳ Attente de {active_count} tâche(s) active(s) (timeout: 30s)...")
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self.active_tasks, return_exceptions=True),
+                    timeout=30.0
+                )
+                logger.info(f"✅ {active_count} tâche(s) terminée(s)")
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️ Timeout: {len(self.active_tasks)} tâche(s) encore active(s), annulation forcée")
+                for task in self.active_tasks:
+                    task.cancel()
+
         # Arrêter les workers
         await self.pool_manager.stop_workers()
 
         # Attendre que tous les workers se terminent
         if self.worker_tasks:
             await asyncio.gather(*self.worker_tasks, return_exceptions=True)
-        
+
         # Fermer la connexion à la base de données
         await self.database_service.disconnect()
-        
+
         # Fermer les sockets
         if self.pull_socket:
             self.pull_socket.close()
         if self.pub_socket:
             self.pub_socket.close()
-        
+
         logger.info("ZMQTranslationServer arrêté")
     
     def get_stats(self) -> dict:
-        """Retourne les statistiques du serveur"""
+        """Retourne les statistiques du serveur incluant les tâches actives"""
         pool_stats = self.pool_manager.get_stats()
+        tasks_stats = self.get_active_tasks_stats()
 
         return {
             'server_status': 'running' if self.running else 'stopped',
@@ -364,6 +472,7 @@ class ZMQTranslationServer:
             'gateway_sub_port': self.gateway_sub_port,
             'normal_workers': self.pool_manager.normal_pool.current_workers,
             'any_workers': self.pool_manager.any_pool.current_workers,
+            'active_tasks': tasks_stats,  # ✨ Nouveau: stats des tâches actives
             **pool_stats
         }
     
