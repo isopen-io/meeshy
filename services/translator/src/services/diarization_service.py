@@ -189,8 +189,13 @@ class DiarizationService:
         logger.info("[DIARIZATION] 🎯 Détection avec pyannote.audio")
 
         try:
-            # Exécuter la diarisation
-            diarization = pipeline(audio_path)
+            # ✅ Exécuter la diarisation avec paramètres min/max speakers
+            # Réduit la sur-segmentation (faux positifs)
+            diarization = pipeline(
+                audio_path,
+                min_speakers=1,        # ✅ Accepter 1 seul speaker
+                max_speakers=2         # ✅ Limiter à 2 (au lieu de détection libre)
+            )
 
             # Parser les résultats
             speakers_data = {}

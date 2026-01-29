@@ -109,30 +109,28 @@
   transform: scale(1.005) translateZ(0);
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .glassContainer {
-    background: rgba(17, 24, 39, 0.85);
-    box-shadow:
-      0 8px 32px rgba(59, 130, 246, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
+/* Dark mode - using data-theme attribute instead of media query */
+.glassContainer[data-theme="dark"] {
+  background: rgba(17, 24, 39, 0.75);
+  box-shadow:
+    0 8px 32px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
 
-  .glassContainer:hover {
-    box-shadow:
-      0 0 0 1px rgba(59, 130, 246, 0.3),
-      0 10px 36px rgba(59, 130, 246, 0.2),
-      0 20px 56px rgba(59, 130, 246, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  }
+.glassContainer[data-theme="dark"]:hover {
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.3),
+    0 10px 36px rgba(59, 130, 246, 0.2),
+    0 20px 56px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
 
-  .glassContainer:focus-within {
-    box-shadow:
-      0 0 0 2px rgba(59, 130, 246, 0.5),
-      0 12px 40px rgba(59, 130, 246, 0.25),
-      0 24px 72px rgba(59, 130, 246, 0.18),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
+.glassContainer[data-theme="dark"]:focus-within {
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.5),
+    0 12px 40px rgba(59, 130, 246, 0.25),
+    0 24px 72px rgba(59, 130, 246, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 /* Performance profiles */

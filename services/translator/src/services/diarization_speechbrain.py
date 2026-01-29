@@ -256,7 +256,8 @@ class SpeechBrainDiarization:
         audio_path: str,
         window_size_ms: int = 1500,  # Fenêtre de 1.5s
         hop_size_ms: int = 750,       # Hop de 0.75s (50% overlap)
-        max_speakers: int = 5
+        max_speakers: int = 2,        # ✅ RÉDUIT: 5 → 2 (moins sensible)
+        num_speakers: Optional[int] = None  # ✅ NOUVEAU: Forcer nombre exact
     ) -> DiarizationResult:
         """
         Diarise un fichier audio avec SpeechBrain
@@ -314,7 +315,7 @@ class SpeechBrainDiarization:
 
         if len(embeddings) >= 4:  # Minimum pour clustering
             # Limiter le nombre max de clusters testés
-            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 4)
+            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)  # ✅ RÉDUIT: 4 → 3
 
             for n in range(2, max_clusters_to_test):
                 clustering = AgglomerativeClustering(
@@ -329,9 +330,9 @@ class SpeechBrainDiarization:
 
                 logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
 
-                # Seuil de 0.25 : acceptable pour voix humaines réelles
-                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.25-0.5=acceptable, <0.25=faible
-                if score > best_score and score > 0.25:  # Seuil réaliste pour voix humaines
+                # ✅ AUGMENTÉ: 0.25 → 0.35 (seuil plus strict, moins de faux positifs)
+                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
+                if score > best_score and score > 0.35:  # Seuil strict pour éviter sur-segmentation
                     best_score = score
                     best_n_clusters = n
                     logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
