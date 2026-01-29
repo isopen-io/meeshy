@@ -80,8 +80,33 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   // Détecter si mobile une seule fois au montage
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
+  // Set pour tracker les toasts récents (éviter les doublons)
+  const recentToasts = typeof window !== 'undefined'
+    ? (window as any).__NOTIFICATION_TOASTS_SHOWN__ || new Set<string>()
+    : new Set<string>();
+
+  if (typeof window !== 'undefined') {
+    (window as any).__NOTIFICATION_TOASTS_SHOWN__ = recentToasts;
+  }
+
   // Afficher un toast pour une nouvelle notification (une seule fois globalement)
   const showNotificationToast = useCallback((notification: Notification) => {
+    // Éviter les toasts dupliqués en vérifiant si déjà affiché récemment
+    const toastKey = `${notification.id}-${notification.state.createdAt}`;
+
+    if (recentToasts.has(toastKey)) {
+      console.log('[useNotificationsManagerRQ] Toast déjà affiché récemment, skipping:', toastKey);
+      return;
+    }
+
+    // Marquer comme affiché
+    recentToasts.add(toastKey);
+
+    // Nettoyer après 5 secondes (au cas où la même notification serait re-émise)
+    setTimeout(() => {
+      recentToasts.delete(toastKey);
+    }, 5000);
+
     const title = buildNotificationTitle(notification, t);
     const content = buildNotificationContent(notification, t);
     const link = getNotificationLink(notification);
@@ -118,15 +143,21 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       hasToken: !!useAuthStore.getState().authToken,
     });
 
-    if (!isAuthenticated) {
-      console.log('[useNotificationsManagerRQ] User not authenticated, skipping Socket.IO connection');
+    // Connecter pour les utilisateurs authentifiés OU anonymes avec sessionToken
+    const authToken = useAuthStore.getState().authToken;
+
+    if (!isAuthenticated && !authToken) {
+      console.log('[useNotificationsManagerRQ] User not authenticated and no token, skipping Socket.IO connection');
       return;
     }
 
-    // Connecter le Socket.IO avec le token d'auth
-    const authToken = useAuthStore.getState().authToken;
+    // Connecter le Socket.IO avec le token d'auth (ou sessionToken pour anonymes)
     if (authToken) {
-      console.log('[useNotificationsManagerRQ] Connecting Socket.IO...');
+      console.log('[useNotificationsManagerRQ] Connecting Socket.IO...', {
+        isAuthenticated,
+        hasAuthToken: !!authToken,
+        tokenPreview: authToken ? `${authToken.substring(0, 20)}...` : 'none',
+      });
       notificationSocketIO.connect(authToken);
     } else {
       console.warn('[useNotificationsManagerRQ] No auth token found!');
@@ -224,6 +255,24 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       // Afficher le toast
       console.log('[useNotificationsManagerRQ] Showing toast notification...');
       showNotificationToast(notification);
+
+      // Jouer le son approprié selon le type de notification
+      try {
+        // Utiliser mention.wav pour les mentions, notification.wav pour le reste
+        const soundFile = notification.type === 'user_mentioned'
+          ? '/sounds/mention.wav'
+          : '/sounds/notification.wav';
+
+        const volume = notification.type === 'user_mentioned' ? 0.7 : 0.6;
+
+        const audio = new Audio(soundFile);
+        audio.volume = volume;
+        audio.play().catch(err => {
+          console.warn('[useNotificationsManagerRQ] Could not play notification sound:', err);
+        });
+      } catch (error) {
+        console.warn('[useNotificationsManagerRQ] Audio playback error:', error);
+      }
     };
 
     const handleNotificationRead = (notificationId: string) => {

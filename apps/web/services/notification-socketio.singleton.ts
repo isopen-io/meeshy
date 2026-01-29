@@ -76,7 +76,12 @@ class NotificationSocketIOSingleton {
       reconnectionDelay: this.reconnectDelay
     });
 
-    console.log('[NotificationSocketIO] Socket.IO instance created, setting up listeners...');
+    console.log('[NotificationSocketIO] Socket.IO instance created', {
+      backendUrl,
+      hasToken: !!token,
+      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none',
+    });
+    console.log('[NotificationSocketIO] Setting up event listeners...');
     this.setupEventListeners();
     console.log('[NotificationSocketIO] Event listeners configured ✅');
   }
@@ -89,7 +94,11 @@ class NotificationSocketIOSingleton {
 
     // Connexion établie
     this.socket.on('connect', () => {
-      console.log('[NotificationSocketIO] Connected');
+      console.log('[NotificationSocketIO] Connected', {
+        socketId: this.socket?.id,
+        connected: this.socket?.connected,
+        hasAuthToken: !!this.authToken,
+      });
       this.isConnected = true;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
@@ -120,8 +129,11 @@ class NotificationSocketIOSingleton {
 
     // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
     const handleNotification = (data: any) => {
+      console.log('📨📨📨 [NotificationSocketIO] ===== RECEIVED NOTIFICATION =====');
       console.log('📨 [NotificationSocketIO] Received notification:', data);
       console.log('📨 [NotificationSocketIO] Callbacks registered:', this.notificationCallbacks.size);
+      console.log('📨 [NotificationSocketIO] Socket ID:', this.socket?.id);
+      console.log('📨 [NotificationSocketIO] ===================================');
 
       // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {
@@ -160,6 +172,22 @@ class NotificationSocketIOSingleton {
 
     this.socket.on('notification:new', handleNotification);
     this.socket.on('notification', handleNotification); // Legacy support
+
+    // Écouter l'événement d'authentification
+    this.socket.on('authenticated', (data: any) => {
+      console.log('✅ [NotificationSocketIO] AUTHENTICATED by backend', data);
+    });
+
+    // Écouter les erreurs
+    this.socket.on('error', (error: any) => {
+      console.error('❌ [NotificationSocketIO] ERROR from backend', error);
+    });
+
+    console.log('[NotificationSocketIO] Event listeners configured:');
+    console.log('  - notification:new');
+    console.log('  - notification (legacy)');
+    console.log('  - authenticated');
+    console.log('  - error');
 
     // Notification marquée comme lue
     this.socket.on('notification:read', (data: { notificationId: string }) => {
