@@ -195,7 +195,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
 
     // Memoize textarea className
     const textareaClassName = useMemo(() => {
-      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border-blue-200/60 bg-white/90 backdrop-blur-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:bg-white/95 placeholder:text-gray-600 scroll-hidden transition-all duration-200';
+      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border-2 border-blue-300/40 bg-gradient-to-br from-white/95 via-blue-50/80 to-white/95 backdrop-blur-md focus:border-blue-400/80 focus:ring-4 focus:ring-blue-400/20 focus:bg-gradient-to-br focus:from-white focus:via-blue-50/60 focus:to-white placeholder:text-gray-500 scroll-hidden transition-all duration-400';
       const roundingClasses = composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder
         ? 'rounded-b-2xl rounded-t-none border-t-0'
         : 'rounded-2xl';
@@ -206,7 +206,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     // Memoize textarea style
     const textareaStyle = useMemo(() => ({
       borderRadius: composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder ? '0 0 16px 16px' : '16px',
-      boxShadow: '0 4px 20px rgba(59, 130, 246, 0.15)',
+      boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.15), 0 2px 12px rgba(59, 130, 246, 0.12), 0 8px 32px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
       fontSize: composerState.isMobile ? '16px' : undefined
     }), [composerState.replyingTo, composerState.selectedFiles.length, composerState.showAudioRecorder, composerState.isMobile]);
 
@@ -244,7 +244,16 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
         >
           {/* Reply preview */}
           {composerState.replyingTo ? (
-          <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-lg backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="p-3 bg-gradient-to-br from-blue-50/95 via-indigo-50/90 to-blue-50/95 dark:from-blue-900/40 dark:via-indigo-900/35 dark:to-blue-900/40 border-l-4 border-blue-400 dark:border-blue-500 rounded-t-2xl backdrop-blur-md shadow-lg shadow-blue-500/10"
+            style={{
+              boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+            }}
+          >
             <div className="flex items-start justify-between space-x-2">
               <div className="flex items-start space-x-2 flex-1 min-w-0">
                 <MessageCircle className="h-4 w-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
@@ -286,12 +295,20 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
-          </div>
+          </motion.div>
         ) : null}
 
         {/* Compression indicator */}
         {composerState.isCompressing && Object.keys(composerState.compressionProgress).length > 0 ? (
-          <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -5 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="mb-2 p-3 bg-gradient-to-br from-blue-50/95 via-indigo-50/90 to-blue-50/95 dark:from-blue-900/40 dark:via-indigo-900/35 dark:to-blue-900/40 border-2 border-blue-300/40 rounded-2xl backdrop-blur-md"
+            style={{
+              boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.15), 0 2px 12px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+            }}
+          >
             <div className="flex items-center gap-2 mb-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-hidden="true" />
               <span className="text-sm font-medium text-blue-900">Compression en cours...</span>
@@ -303,16 +320,18 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                     <span className="truncate">{status}</span>
                     <span className="ml-2 font-medium">{progress}%</span>
                   </div>
-                  <div className="w-full bg-blue-200 rounded-full h-1.5">
-                    <div
-                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
+                  <div className="w-full bg-blue-200/60 rounded-full h-2 overflow-hidden backdrop-blur-sm border border-blue-300/30">
+                    <motion.div
+                      className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500 h-2 rounded-full shadow-lg shadow-blue-500/50"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
                     />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         ) : null}
 
         {/* Attachment carousel */}

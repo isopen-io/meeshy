@@ -77,7 +77,10 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     page => page.notifications ?? []
   ) ?? [];
 
-  // Afficher un toast pour une nouvelle notification
+  // Détecter si mobile une seule fois au montage
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // Afficher un toast pour une nouvelle notification (une seule fois globalement)
   const showNotificationToast = useCallback((notification: Notification) => {
     const title = buildNotificationTitle(notification, t);
     const content = buildNotificationContent(notification, t);
@@ -85,14 +88,14 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     const borderColor = getNotificationBorderColor(notification);
 
     // Durée réduite sur mobile (2s au lieu de 4s)
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     const duration = isMobile ? 2000 : 4000;
 
     toast.custom(
-      () => (
+      (toastId) => (
         <div
           className={`flex items-start gap-3 p-4 bg-background border rounded-lg shadow-lg cursor-pointer ${borderColor}`}
           onClick={() => {
+            toast.dismiss(toastId);
             if (link) {
               router.push(link);
             }
@@ -106,7 +109,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       ),
       { duration }
     );
-  }, [t, router]);
+  }, [t, router, isMobile]);
 
   // Écouter les événements Socket.IO pour mettre à jour le cache
   useEffect(() => {
@@ -137,23 +140,47 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
         content: notification.content,
       });
 
-      // Mettre à jour le cache React Query
-      queryClient.setQueryData(
-        queryKeys.notifications.lists(),
+      // Vérifier d'abord si la notification existe déjà dans le cache
+      const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
+      const notificationExists = queries.some(([_, data]: any) => {
+        if (!data || !data.pages) return false;
+        return data.pages.some((page: any) =>
+          (page.notifications ?? []).some((n: Notification) => n.id === notification.id)
+        );
+      });
+
+      if (notificationExists) {
+        console.log('[useNotificationsManagerRQ] Notification already exists, skipping duplicate:', notification.id);
+        return;
+      }
+
+      // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
         (old: any) => {
-          if (!old) return old;
+          if (!old || !old.pages) return old;
+
+          // Ajouter la nouvelle notification au début de la première page
+          const updatedPages = old.pages.map((page: any, index: number) => {
+            if (index === 0) {
+              return {
+                ...page,
+                notifications: [notification, ...(page.notifications ?? [])],
+                // Incrémenter unreadCount si présent
+                unreadCount: (page.unreadCount ?? 0) + 1,
+              };
+            }
+            return page;
+          });
+
           return {
             ...old,
-            pages: old.pages.map((page: any, index: number) =>
-              index === 0
-                ? { ...page, notifications: [notification, ...(page.notifications ?? [])] }
-                : page
-            ),
+            pages: updatedPages,
           };
         }
       );
 
-      // Mettre à jour le compteur
+      // Mettre à jour le compteur (uniquement si ce n'est pas un doublon)
       queryClient.setQueryData(
         queryKeys.notifications.unreadCount(),
         (old: number | undefined) => (old ?? 0) + 1

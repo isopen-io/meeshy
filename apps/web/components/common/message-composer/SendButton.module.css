@@ -15,14 +15,33 @@
     rgba(236, 72, 153, 1) 100%
   );
   background-size: 200% 200%;
-  animation: gradientShift 4s ease infinite;
+  animation: gradientShift 4s ease infinite, pulse 2s ease-in-out infinite;
   box-shadow:
-    0 4px 12px rgba(59, 130, 246, 0.3),
-    0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.3s ease;
+    0 0 0 0 rgba(59, 130, 246, 0.4),
+    0 4px 16px rgba(59, 130, 246, 0.4),
+    0 2px 8px rgba(147, 51, 234, 0.3),
+    0 1px 4px rgba(236, 72, 153, 0.2);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
   outline: none;
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.4),
+      0 4px 16px rgba(59, 130, 246, 0.4),
+      0 2px 8px rgba(147, 51, 234, 0.3),
+      0 1px 4px rgba(236, 72, 153, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(59, 130, 246, 0),
+      0 6px 20px rgba(59, 130, 246, 0.5),
+      0 3px 12px rgba(147, 51, 234, 0.4),
+      0 2px 6px rgba(236, 72, 153, 0.3);
+  }
 }
 
 @keyframes gradientShift {
@@ -36,15 +55,22 @@
 
 .sendButton:hover {
   box-shadow:
-    0 6px 16px rgba(59, 130, 246, 0.4),
-    0 3px 6px rgba(0, 0, 0, 0.15);
+    0 0 0 0 rgba(59, 130, 246, 0.6),
+    0 8px 24px rgba(59, 130, 246, 0.6),
+    0 4px 16px rgba(147, 51, 234, 0.5),
+    0 2px 8px rgba(236, 72, 153, 0.4);
+  transform: translateY(-2px) scale(1.02) translateZ(0);
 }
 
 .sendButton:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
   animation: none;
-  background: #9ca3af;
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.05);
+  filter: grayscale(0.5);
 }
 
 .sendButton:focus-visible {
