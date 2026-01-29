@@ -195,7 +195,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
 
     // Memoize textarea className
     const textareaClassName = useMemo(() => {
-      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border-2 border-blue-300/40 dark:border-blue-600/50 bg-gradient-to-br from-white/95 via-blue-50/80 to-white/95 dark:from-gray-800/95 dark:via-blue-950/80 dark:to-gray-800/95 backdrop-blur-md focus:border-blue-400/60 dark:focus:border-blue-500/60 focus:ring-2 focus:ring-blue-400/12 dark:focus:ring-blue-500/18 focus:bg-gradient-to-br focus:from-white focus:via-blue-50/60 focus:to-white dark:focus:from-gray-800 dark:focus:via-blue-950/60 dark:focus:to-gray-800 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-gray-900 dark:text-gray-100 scroll-hidden transition-all duration-400';
+      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border border-blue-300/40 dark:border-blue-600/40 bg-gradient-to-br from-white/95 via-blue-50/90 to-white/95 dark:from-gray-800/95 dark:via-blue-950/80 dark:to-gray-800/95 backdrop-blur-md focus:border-blue-400/60 dark:focus:border-blue-500/50 focus:ring-2 focus:ring-blue-400/18 dark:focus:ring-blue-500/18 focus:bg-gradient-to-br focus:from-white focus:via-blue-50/70 focus:to-white dark:focus:from-gray-800 dark:focus:via-blue-950/60 dark:focus:to-gray-800 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-gray-900 dark:text-gray-100 scroll-hidden transition-all duration-400';
       const roundingClasses = composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder
         ? 'rounded-b-2xl rounded-t-none border-t-0'
         : 'rounded-2xl';
@@ -208,7 +208,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       borderRadius: composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder ? '0 0 16px 16px' : '16px',
       boxShadow: isDarkMode
         ? '0 0 0 1px rgba(59, 130, 246, 0.2), 0 2px 12px rgba(59, 130, 246, 0.12), 0 8px 32px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(59, 130, 246, 0.12)'
-        : '0 0 0 1px rgba(59, 130, 246, 0.12), 0 2px 12px rgba(59, 130, 246, 0.08), 0 8px 32px rgba(59, 130, 246, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+        : '0 0 0 1px rgba(59, 130, 246, 0.15), 0 2px 12px rgba(59, 130, 246, 0.1), 0 8px 32px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7)',
       fontSize: composerState.isMobile ? '16px' : undefined
     }), [composerState.replyingTo, composerState.selectedFiles.length, composerState.showAudioRecorder, composerState.isMobile, isDarkMode]);
 

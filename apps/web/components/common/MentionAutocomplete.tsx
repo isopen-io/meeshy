@@ -262,10 +262,10 @@ export function MentionAutocomplete({
               inset 0 1px 0 rgba(59, 130, 246, 0.15)
             `
             : `
-              0 0 0 1px rgba(59, 130, 246, 0.15),
-              0 4px 16px rgba(59, 130, 246, 0.1),
-              0 12px 32px rgba(59, 130, 246, 0.08),
-              inset 0 1px 0 rgba(255, 255, 255, 0.8)
+              0 0 0 1px rgba(59, 130, 246, 0.18),
+              0 4px 16px rgba(59, 130, 246, 0.12),
+              0 12px 32px rgba(59, 130, 246, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.85)
             `,
         }}
       >
@@ -308,7 +308,7 @@ export function MentionAutocomplete({
         >
           <motion.div
             variants={itemVariants}
-            className="px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b-2 border-blue-200/40 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/50 via-indigo-50/40 to-blue-50/50 dark:from-blue-900/20 dark:via-indigo-900/15 dark:to-blue-900/20"
+            className="px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b-2 border-blue-200/50 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/60 via-indigo-50/50 to-blue-50/60 dark:from-blue-900/20 dark:via-indigo-900/15 dark:to-blue-900/20"
             style={{
               backdropFilter: 'blur(8px)',
             }}
@@ -322,15 +322,15 @@ export function MentionAutocomplete({
               variants={itemVariants}
               className={`w-full flex items-center gap-3 px-3 py-2 transition-all duration-300 ${
                 index === selectedIndex
-                  ? 'bg-gradient-to-r from-blue-100/80 via-indigo-100/70 to-blue-100/80 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-blue-900/40'
-                  : 'hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-indigo-50/50 hover:to-blue-50/60 dark:hover:from-blue-900/20 dark:hover:via-indigo-900/15 dark:hover:to-blue-900/20'
+                  ? 'bg-gradient-to-r from-blue-100/85 via-indigo-100/75 to-blue-100/85 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-blue-900/40'
+                  : 'hover:bg-gradient-to-r hover:from-blue-50/70 hover:via-indigo-50/60 hover:to-blue-50/70 dark:hover:from-blue-900/20 dark:hover:via-indigo-900/15 dark:hover:to-blue-900/20'
               }`}
               style={{
                 backdropFilter: index === selectedIndex ? 'blur(8px)' : 'none',
                 boxShadow: index === selectedIndex
                   ? isDarkMode
                     ? '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(59, 130, 246, 0.15)'
-                    : '0 2px 8px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+                    : '0 2px 8px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
                   : 'none',
               }}
               onClick={() => onSelect(suggestion.username, suggestion.id)}
@@ -407,7 +407,7 @@ export function MentionAutocomplete({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t-2 border-blue-200/40 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/30 via-indigo-50/20 to-blue-50/30 dark:from-blue-900/15 dark:via-indigo-900/10 dark:to-blue-900/15"
+        className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t-2 border-blue-200/50 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/40 via-indigo-50/30 to-blue-50/40 dark:from-blue-900/15 dark:via-indigo-900/10 dark:to-blue-900/15"
         style={{
           backdropFilter: 'blur(8px)',
           fontWeight: 500,
