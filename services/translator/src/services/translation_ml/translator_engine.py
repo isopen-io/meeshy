@@ -361,17 +361,21 @@ class TranslatorEngine:
                 if not is_available or reusable_pipeline is None:
                     raise Exception(f"Pipeline non disponible pour {model_type}")
 
-                # OPTIMISATION AVANCÉE: Greedy decoding (4x plus rapide)
-                with create_inference_context():
-                    result = reusable_pipeline(
-                        text,
-                        src_lang=nllb_source,
-                        tgt_lang=nllb_target,
-                        max_length=256,       # Optimisé pour chunks courts (découpage intelligent avant)
-                        num_beams=1,          # GREEDY (4x plus rapide!)
-                        do_sample=False       # Déterministe
-                        # early_stopping retiré: incompatible avec num_beams=1 (greedy decoding)
-                    )
+                # ✨ THREAD-SAFETY: Lock d'inférence pour protéger le modèle PyTorch
+                model_lock = self.model_loader.get_model_inference_lock(model_type)
+
+                with model_lock:
+                    # OPTIMISATION AVANCÉE: Greedy decoding (4x plus rapide)
+                    with create_inference_context():
+                        result = reusable_pipeline(
+                            text,
+                            src_lang=nllb_source,
+                            tgt_lang=nllb_target,
+                            max_length=256,       # Optimisé pour chunks courts (découpage intelligent avant)
+                            num_beams=1,          # GREEDY (4x plus rapide!)
+                            do_sample=False       # Déterministe
+                            # early_stopping retiré: incompatible avec num_beams=1 (greedy decoding)
+                        )
 
                 # Extraire le résultat
                 # Note: Seq2SeqTranslator retourne un dict pour un texte unique
@@ -452,36 +456,45 @@ class TranslatorEngine:
 
                 all_results = []
 
-                # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
-                with create_inference_context():
-                    for i in range(0, len(texts), batch_size):
-                        chunk = texts[i:i + batch_size]
+                # ✨ THREAD-SAFETY: Lock d'inférence pour protéger le modèle PyTorch
+                # Les modèles PyTorch ne sont PAS thread-safe, donc on sérialise les inférences
+                model_lock = self.model_loader.get_model_inference_lock(model_type)
 
-                        # ═══════════════════════════════════════════════════════════════
-                        # OPTIMISATIONS NLLB AVANCÉES:
-                        # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
-                        # - do_sample=False: Désactive sampling (déterministe)
-                        # - max_length=256: Optimisé pour segments courts
-                        # ═══════════════════════════════════════════════════════════════
-                        results = reusable_pipeline(
-                            chunk,
-                            src_lang=nllb_source,
-                            tgt_lang=nllb_target,
-                            max_length=256,       # Optimisé pour segments courts (découpage avant si besoin)
-                            num_beams=1,          # GREEDY DECODING (4x plus rapide!)
-                            do_sample=False       # Déterministe
-                            # early_stopping retiré: incompatible avec num_beams=1
-                        )
+                with model_lock:
+                    logger.info(f"🔒 [MODEL_LOCK] Lock acquis pour modèle '{model_type}'")
 
-                        logger.info(f"[BATCH-SYNC] ✅ Chunk {i//batch_size + 1}: {len(results)} résultats")
+                    # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
+                    with create_inference_context():
+                        for i in range(0, len(texts), batch_size):
+                            chunk = texts[i:i + batch_size]
 
-                        for result in results:
-                            if isinstance(result, dict) and 'translation_text' in result:
-                                all_results.append(result['translation_text'])
-                            elif isinstance(result, list) and len(result) > 0:
-                                all_results.append(result[0].get('translation_text', '[No-Result]'))
-                            else:
-                                all_results.append('[Batch-No-Result]')
+                            # ═══════════════════════════════════════════════════════════════
+                            # OPTIMISATIONS NLLB AVANCÉES:
+                            # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
+                            # - do_sample=False: Désactive sampling (déterministe)
+                            # - max_length=256: Optimisé pour segments courts
+                            # ═══════════════════════════════════════════════════════════════
+                            results = reusable_pipeline(
+                                chunk,
+                                src_lang=nllb_source,
+                                tgt_lang=nllb_target,
+                                max_length=256,       # Optimisé pour segments courts (découpage avant si besoin)
+                                num_beams=1,          # GREEDY DECODING (4x plus rapide!)
+                                do_sample=False       # Déterministe
+                                # early_stopping retiré: incompatible avec num_beams=1
+                            )
+
+                            logger.info(f"[BATCH-SYNC] ✅ Chunk {i//batch_size + 1}: {len(results)} résultats")
+
+                            for result in results:
+                                if isinstance(result, dict) and 'translation_text' in result:
+                                    all_results.append(result['translation_text'])
+                                elif isinstance(result, list) and len(result) > 0:
+                                    all_results.append(result[0].get('translation_text', '[No-Result]'))
+                                else:
+                                    all_results.append('[Batch-No-Result]')
+
+                    logger.info(f"🔓 [MODEL_LOCK] Lock libéré pour modèle '{model_type}'")
 
                 logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
 

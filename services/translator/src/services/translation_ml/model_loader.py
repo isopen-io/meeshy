@@ -64,6 +64,11 @@ class ModelLoader:
         self.models: Dict[str, Any] = {}
         self.tokenizers: Dict[str, Any] = {}
 
+        # ✨ Locks par modèle pour thread-safety des inférences PyTorch
+        # Les modèles PyTorch ne sont PAS thread-safe, donc on doit sérialiser les inférences
+        # Utilisation de threading.Lock car les inférences sont exécutées dans un ThreadPoolExecutor
+        self._model_inference_locks: Dict[str, threading.Lock] = {}
+
         # Cache thread-local pour éviter "Already borrowed"
         self._thread_local_tokenizers: Dict[str, Any] = {}
         self._tokenizer_lock = threading.Lock()
@@ -308,6 +313,26 @@ class ModelLoader:
     def get_tokenizer(self, model_type: str) -> Optional[Any]:
         """Retourne le tokenizer chargé ou None"""
         return self.tokenizers.get(model_type)
+
+    def get_model_inference_lock(self, model_type: str) -> threading.Lock:
+        """
+        Retourne le lock d'inférence pour un modèle spécifique
+
+        Les modèles PyTorch ne sont PAS thread-safe. Ce lock garantit qu'une seule
+        inférence s'exécute à la fois sur un modèle donné, évitant les corruptions
+        de mémoire et les résultats incorrects.
+
+        Args:
+            model_type: Type de modèle ('basic', 'medium', 'premium')
+
+        Returns:
+            threading.Lock pour ce modèle
+        """
+        if model_type not in self._model_inference_locks:
+            self._model_inference_locks[model_type] = threading.Lock()
+            logger.info(f"🔒 [MODEL_LOCK] Lock d'inférence créé pour modèle '{model_type}'")
+
+        return self._model_inference_locks[model_type]
 
     def is_model_loaded(self, model_type: str) -> bool:
         """Vérifie si un modèle est chargé"""
