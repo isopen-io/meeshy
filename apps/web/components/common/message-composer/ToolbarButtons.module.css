@@ -1,0 +1,63 @@
+.toolbarContainer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.toolbarButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(59, 130, 246, 1);
+  transition: background 0.2s ease, color 0.2s ease;
+  outline: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.toolbarButton:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.toolbarButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toolbarButton:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .toolbarButton {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(147, 197, 253, 1);
+  }
+
+  .toolbarButton:hover {
+    background: rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .toolbarButton {
+    transition: none;
+  }
+}
