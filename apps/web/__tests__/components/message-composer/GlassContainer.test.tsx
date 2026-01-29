@@ -23,31 +23,7 @@ describe('GlassContainer', () => {
     expect(screen.getByText('Test Content')).toBeInTheDocument();
   });
 
-  it('should apply blur when config.enableBlur is true', () => {
-    (useAnimationConfig as jest.Mock).mockReturnValue({
-      enableBlur: true,
-      enableShimmer: false,
-      blurAmount: 20,
-    });
-
-    const { container } = render(
-      <GlassContainer blurAmount={16}>
-        <div>Content</div>
-      </GlassContainer>
-    );
-
-    const glassDiv = container.firstChild as HTMLElement;
-    expect(glassDiv.style.getPropertyValue('--glass-blur')).toBe('16px');
-    expect(glassDiv.className).not.toContain('blurDisabled');
-  });
-
-  it('should not apply blur when config.enableBlur is false', () => {
-    (useAnimationConfig as jest.Mock).mockReturnValue({
-      enableBlur: false,
-      enableShimmer: false,
-      blurAmount: 8,
-    });
-
+  it('should apply high performance by default', () => {
     const { container } = render(
       <GlassContainer>
         <div>Content</div>
@@ -55,51 +31,43 @@ describe('GlassContainer', () => {
     );
 
     const glassDiv = container.firstChild as HTMLElement;
-    expect(glassDiv.style.getPropertyValue('--glass-blur')).toBe('');
-    expect(glassDiv.className).toContain('blurDisabled');
+    expect(glassDiv.getAttribute('data-performance')).toBe('high');
   });
 
-  it('should apply shimmer when enableShimmer prop and config.enableShimmer are true', () => {
-    (useAnimationConfig as jest.Mock).mockReturnValue({
-      enableBlur: true,
-      enableShimmer: true,
-      blurAmount: 20,
-    });
-
+  it('should apply dark theme when theme prop is dark', () => {
     const { container } = render(
-      <GlassContainer enableShimmer={true}>
+      <GlassContainer theme="dark">
         <div>Content</div>
       </GlassContainer>
     );
 
     const glassDiv = container.firstChild as HTMLElement;
-    expect(glassDiv.className).toContain('shimmer');
+    expect(glassDiv.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('should not apply shimmer when enableShimmer prop is false', () => {
-    (useAnimationConfig as jest.Mock).mockReturnValue({
-      enableBlur: true,
-      enableShimmer: true,
-      blurAmount: 20,
-    });
-
+  it('should apply medium performance when specified', () => {
     const { container } = render(
-      <GlassContainer enableShimmer={false}>
+      <GlassContainer performanceProfile="medium">
         <div>Content</div>
       </GlassContainer>
     );
 
     const glassDiv = container.firstChild as HTMLElement;
-    expect(glassDiv.className).not.toContain('shimmer');
+    expect(glassDiv.getAttribute('data-performance')).toBe('medium');
   });
 
-  it('should apply custom className', () => {
-    (useAnimationConfig as jest.Mock).mockReturnValue({
-      enableBlur: true,
-      enableShimmer: false,
-      blurAmount: 20,
-    });
+  it('should apply low performance when specified', () => {
+    const { container } = render(
+      <GlassContainer performanceProfile="low">
+        <div>Content</div>
+      </GlassContainer>
+    );
 
+    const glassDiv = container.firstChild as HTMLElement;
+    expect(glassDiv.getAttribute('data-performance')).toBe('low');
+  });
+
+  it('should forward className prop', () => {
     const { container } = render(
       <GlassContainer className="custom-class">
         <div>Content</div>

@@ -5,33 +5,36 @@ import styles from './GlassContainer.module.css';
 interface GlassContainerProps {
   children: React.ReactNode;
   className?: string;
-  enableShimmer?: boolean;
-  blurAmount?: number;
+  theme?: 'light' | 'dark';
+  performanceProfile?: 'high' | 'medium' | 'low';
 }
 
 export const GlassContainer: React.FC<GlassContainerProps> = ({
   children,
   className = '',
-  enableShimmer = false,
-  blurAmount = 20,
+  theme = 'light',
+  performanceProfile,
 }) => {
   const config = useAnimationConfig();
 
+  // Utiliser performanceProfile prop ou fallback sur config
+  const effectiveProfile = performanceProfile ||
+    (config.enableBlur ? (config.enableShimmer ? 'high' : 'medium') : 'low');
+
   const containerClasses = [
     styles.glassContainer,
-    !config.enableBlur && styles.blurDisabled,
-    enableShimmer && config.enableShimmer && styles.shimmer,
+    config.enableShimmer && styles.shimmer,
     className,
   ]
     .filter(Boolean)
     .join(' ');
 
-  const style = config.enableBlur
-    ? { '--glass-blur': `${blurAmount}px` } as React.CSSProperties
-    : undefined;
-
   return (
-    <div className={containerClasses} style={style}>
+    <div
+      className={containerClasses}
+      data-theme={theme}
+      data-performance={effectiveProfile}
+    >
       <div className={styles.content}>{children}</div>
     </div>
   );

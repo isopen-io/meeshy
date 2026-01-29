@@ -1,5 +1,6 @@
 .glassContainer {
   position: relative;
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
   backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
   background: rgba(255, 255, 255, 0.75);
   border-radius: 16px;
@@ -24,7 +25,13 @@
     rgba(236, 72, 153, 0.3) 100%
   );
   border-radius: 16px;
-  z-index: -1;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
   animation: gradientShift 3s ease infinite;
 }
 
@@ -70,9 +77,33 @@
   }
 }
 
-/* Blur disabled (medium/low profiles) */
-.blurDisabled {
-  backdrop-filter: none;
+/* Performance profiles */
+.glassContainer[data-performance="high"] {
+  --glass-blur: 20px;
+}
+
+.glassContainer[data-performance="medium"] {
+  --glass-blur: 16px;
+}
+
+.glassContainer[data-performance="low"] {
+  --glass-blur: 8px;
+}
+
+.glassContainer[data-performance="low"]::before {
+  animation: none;
+}
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .glassContainer::before {
+    animation: none !important;
+    background-position: 0% 50%;
+  }
+
+  .shimmer::before {
+    animation: none !important;
+  }
 }
 
 /* Content wrapper */
