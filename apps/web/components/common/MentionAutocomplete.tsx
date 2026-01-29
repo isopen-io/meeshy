@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getUserInitials } from '@/lib/avatar-utils';
@@ -161,54 +162,164 @@ export function MentionAutocomplete({
   // Détecter mobile
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
+  // Variantes d'animation pour le container
+  const containerVariants = {
+    hidden: {
+      opacity: 0,
+      scale: 0.92,
+      y: -10,
+    },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: {
+        type: 'spring',
+        stiffness: 280,
+        damping: 22,
+        staggerChildren: 0.04,
+        delayChildren: 0.08,
+      },
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.95,
+      y: -8,
+      transition: {
+        duration: 0.2,
+        ease: 'easeInOut',
+      },
+    },
+  };
+
+  // Variantes d'animation pour les items
+  const itemVariants = {
+    hidden: {
+      opacity: 0,
+      x: -12,
+      scale: 0.96,
+    },
+    visible: {
+      opacity: 1,
+      x: 0,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        stiffness: 300,
+        damping: 24,
+      },
+    },
+  };
+
   // Utiliser un portail React pour "teleporter" le composant au niveau body
   // Cela garantit qu'il apparaît au-dessus de TOUS les autres éléments
   // Sur mobile: afficher en modal centré en haut pour garantir la visibilité
   // Sur desktop: positionner relatif au curseur
   const autocompleteContent = (
-    <div
-      ref={containerRef}
-      className={`fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-y-auto ${
-        isMobile
-          ? 'left-1/2 -translate-x-1/2 top-4 w-[90vw] max-w-sm max-h-[40vh]'
-          : 'max-h-64 w-56'
-      }`}
-      style={{
-        ...(!isMobile && position.top !== undefined && { top: `${position.top}px` }),
-        ...(!isMobile && position.bottom !== undefined && { bottom: `${position.bottom}px` }),
-        ...(!isMobile && { left: `${position.left}px` }),
-        zIndex: 2147483647 // Valeur maximale pour z-index (2^31 - 1)
-      }}
-    >
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="mention-autocomplete"
+        ref={containerRef}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className={`fixed overflow-y-auto ${
+          isMobile
+            ? 'left-1/2 -translate-x-1/2 top-4 w-[90vw] max-w-sm max-h-[40vh]'
+            : 'max-h-64 w-56'
+        }`}
+        style={{
+          ...(!isMobile && position.top !== undefined && { top: `${position.top}px` }),
+          ...(!isMobile && position.bottom !== undefined && { bottom: `${position.bottom}px` }),
+          ...(!isMobile && { left: `${position.left}px` }),
+          zIndex: 2147483647, // Valeur maximale pour z-index (2^31 - 1)
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.98) 50%, rgba(255, 255, 255, 0.95) 100%)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          borderRadius: '16px',
+          border: '2px solid rgba(59, 130, 246, 0.3)',
+          boxShadow: `
+            0 0 0 1px rgba(59, 130, 246, 0.2),
+            0 4px 16px rgba(59, 130, 246, 0.15),
+            0 12px 32px rgba(59, 130, 246, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8)
+          `,
+        }}
+      >
       {isLoading && (
-        <div className="p-4 text-center text-sm text-gray-500">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mx-auto mb-2"></div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="p-4 text-center text-sm text-gray-600 dark:text-gray-400"
+        >
+          <motion.div
+            className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mx-auto mb-2"
+            style={{
+              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+            }}
+          />
           Recherche...
-        </div>
+        </motion.div>
       )}
 
       {error && (
-        <div className="p-4 text-center text-sm text-red-500">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="p-4 text-center text-sm text-red-500 dark:text-red-400 font-medium"
+          style={{
+            textShadow: '0 1px 2px rgba(239, 68, 68, 0.1)',
+          }}
+        >
           {error}
-        </div>
+        </motion.div>
       )}
 
       {!isLoading && !error && suggestions.length > 0 && (
-        <div className="py-1">
-          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+        <motion.div
+          className="py-1"
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div
+            variants={itemVariants}
+            className="px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b-2 border-blue-200/40 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/50 via-indigo-50/40 to-blue-50/50 dark:from-blue-900/20 dark:via-indigo-900/15 dark:to-blue-900/20"
+            style={{
+              backdropFilter: 'blur(8px)',
+            }}
+          >
             Mentionner un utilisateur
-          </div>
+          </motion.div>
           {suggestions.map((suggestion, index) => (
-            <button
+            <motion.button
               key={suggestion.id}
               data-index={index}
-              className={`w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+              variants={itemVariants}
+              className={`w-full flex items-center gap-3 px-3 py-2 transition-all duration-300 ${
                 index === selectedIndex
-                  ? 'bg-blue-50 dark:bg-blue-900/20'
-                  : ''
+                  ? 'bg-gradient-to-r from-blue-100/80 via-indigo-100/70 to-blue-100/80 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-blue-900/40'
+                  : 'hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-indigo-50/50 hover:to-blue-50/60 dark:hover:from-blue-900/20 dark:hover:via-indigo-900/15 dark:hover:to-blue-900/20'
               }`}
+              style={{
+                backdropFilter: index === selectedIndex ? 'blur(8px)' : 'none',
+                boxShadow: index === selectedIndex
+                  ? '0 2px 8px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+                  : 'none',
+              }}
               onClick={() => onSelect(suggestion.username, suggestion.id)}
               onMouseEnter={() => setSelectedIndex(index)}
+              whileHover={{
+                x: 4,
+                transition: {
+                  type: 'spring',
+                  stiffness: 400,
+                  damping: 20,
+                },
+              }}
+              whileTap={{
+                scale: 0.98,
+              }}
             >
               <Avatar className="h-8 w-8 flex-shrink-0">
                 {suggestion.avatar && (
@@ -223,7 +334,7 @@ export function MentionAutocomplete({
               </Avatar>
 
               <div className="flex-1 min-w-0 text-left">
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                   @{suggestion.username}
                 </div>
                 {suggestion.displayName && (
@@ -233,30 +344,53 @@ export function MentionAutocomplete({
                 )}
               </div>
 
-              <Badge variant={getBadgeVariant(suggestion.badge)} className="text-xs flex-shrink-0">
+              <Badge
+                variant={getBadgeVariant(suggestion.badge)}
+                className="text-xs flex-shrink-0 shadow-sm"
+              >
                 {getBadgeLabel(suggestion.badge)}
               </Badge>
-            </button>
+            </motion.button>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {!isLoading && !error && suggestions.length === 0 && !query && (
-        <div className="p-4 text-center text-sm text-gray-500">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 font-medium"
+        >
           Tapez pour rechercher un utilisateur...
-        </div>
+        </motion.div>
       )}
 
       {!isLoading && !error && suggestions.length === 0 && query && (
-        <div className="p-4 text-center text-sm text-gray-500">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, type: 'spring' }}
+          className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 font-medium"
+        >
           Aucun utilisateur trouvé pour "{query}"
-        </div>
+        </motion.div>
       )}
 
-      <div className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t-2 border-blue-200/40 dark:border-blue-700/40 bg-gradient-to-r from-blue-50/30 via-indigo-50/20 to-blue-50/30 dark:from-blue-900/15 dark:via-indigo-900/10 dark:to-blue-900/15"
+        style={{
+          backdropFilter: 'blur(8px)',
+          fontWeight: 500,
+        }}
+      >
         ↑↓ pour naviguer • Entrée pour sélectionner • Échap pour fermer
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    </AnimatePresence>
   );
 
   // Utiliser createPortal pour monter le composant directement dans le body
