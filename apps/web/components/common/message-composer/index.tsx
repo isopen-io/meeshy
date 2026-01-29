@@ -195,7 +195,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
 
     // Memoize textarea className
     const textareaClassName = useMemo(() => {
-      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border border-blue-300/40 dark:border-blue-600/40 bg-gradient-to-br from-white/95 via-blue-50/90 to-white/95 dark:from-gray-800/95 dark:via-blue-950/80 dark:to-gray-800/95 backdrop-blur-md focus:border-blue-400/60 dark:focus:border-blue-500/50 focus:ring-2 focus:ring-blue-400/18 dark:focus:ring-blue-500/18 focus:bg-gradient-to-br focus:from-white focus:via-blue-50/70 focus:to-white dark:focus:from-gray-800 dark:focus:via-blue-950/60 dark:focus:to-gray-800 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-gray-900 dark:text-gray-100 scroll-hidden transition-all duration-400';
+      const baseClasses = 'expandable-textarea min-h-[60px] sm:min-h-[80px] max-h-40 resize-none pr-20 sm:pr-28 pb-12 pt-3 pl-3 border border-blue-300/40 dark:border-blue-600/40 bg-gradient-to-br from-white/70 via-blue-50/60 to-white/70 dark:from-gray-800/85 dark:via-blue-950/70 dark:to-gray-800/85 backdrop-blur-md focus:border-blue-400/60 dark:focus:border-blue-500/50 focus:ring-2 focus:ring-blue-400/18 dark:focus:ring-blue-500/18 focus:bg-gradient-to-br focus:from-white/80 focus:via-blue-50/70 focus:to-white/80 dark:focus:from-gray-800/90 dark:focus:via-blue-950/80 dark:focus:to-gray-800/90 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-gray-900 dark:text-gray-100 scroll-hidden transition-all duration-400';
       const roundingClasses = composerState.replyingTo || composerState.selectedFiles.length > 0 || composerState.showAudioRecorder
         ? 'rounded-b-2xl rounded-t-none border-t-0'
         : 'rounded-2xl';
@@ -396,6 +396,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             onSelect={handleMentionSelect}
             onClose={composerState.closeMentionAutocomplete}
             position={composerState.mentionPosition}
+            isDarkMode={isDarkMode}
           />
         ) : null}
 

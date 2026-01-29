@@ -16,6 +16,7 @@ interface MentionAutocompleteProps {
   onClose: () => void;
   position: { top?: number; bottom?: number; left: number };
   maxSuggestions?: number;
+  isDarkMode?: boolean;
 }
 
 export function MentionAutocomplete({
@@ -24,24 +25,14 @@ export function MentionAutocomplete({
   onSelect,
   onClose,
   position,
-  maxSuggestions = 10
+  maxSuggestions = 10,
+  isDarkMode = false
 }: MentionAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<MentionSuggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Dark mode detection
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDarkMode(mediaQuery.matches);
-    const listener = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-    mediaQuery.addEventListener('change', listener);
-    return () => mediaQuery.removeEventListener('change', listener);
-  }, []);
 
   // Fetch suggestions from API
   const fetchSuggestions = useCallback(async () => {
