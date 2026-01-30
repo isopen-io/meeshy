@@ -44,9 +44,6 @@ async function withRetry<T>(
       throw error;
     }
 
-    console.warn(
-      `[NotificationService] Retry attempt (${SERVICE_CONFIG.MAX_RETRIES - retries + 1}/${SERVICE_CONFIG.MAX_RETRIES})`
-    );
     await delay(retryDelay);
 
     return withRetry(fn, retries - 1, retryDelay * 2);
@@ -61,31 +58,16 @@ async function withRetry<T>(
  */
 function parseNotification(raw: any): Notification {
   // Helper pour parser une date de manière robuste
-  const parseDate = (dateValue: any, debugName: string): Date | null => {
+  const parseDate = (dateValue: any): Date | null => {
     if (!dateValue) {
-      console.log(`🔍 [parseDate] ${debugName} est null/undefined`);
       return null;
     }
-
-    console.log(`🔍 [parseDate] ${debugName}:`, {
-      value: dateValue,
-      type: typeof dateValue,
-      isString: typeof dateValue === 'string',
-    });
 
     try {
       const date = new Date(dateValue);
       const isValid = !isNaN(date.getTime());
-
-      console.log(`🔍 [parseDate] ${debugName} parsed:`, {
-        parsedDate: date,
-        isValid,
-        toISOString: isValid ? date.toISOString() : 'N/A',
-      });
-
       return isValid ? date : null;
     } catch (error) {
-      console.error(`❌ [parseDate] ${debugName} erreur:`, error);
       return null;
     }
   };
@@ -94,27 +76,10 @@ function parseNotification(raw: any): Notification {
   // raw.state = { isRead, readAt, createdAt, expiresAt }
   const state = raw.state || {};
 
-  console.group(`📦 [parseNotification] ID: ${raw.id}`);
-  console.log('Raw state:', state);
-  console.log('state.createdAt:', state.createdAt);
-
   // Parser les dates - PAS DE FALLBACK new Date() !
-  const createdAt = parseDate(state.createdAt, 'createdAt');
-  const readAt = parseDate(state.readAt, 'readAt');
-  const expiresAt = parseDate(state.expiresAt, 'expiresAt');
-
-  console.log('Résultat parsing createdAt:', createdAt);
-  console.groupEnd();
-
-  // Debug: Log si createdAt est null après parsing
-  if (!createdAt && process.env.NODE_ENV === 'development') {
-    console.error('❌ [parseNotification] createdAt est null après parsing', {
-      id: raw.id,
-      stateCreatedAt: state.createdAt,
-      typeofStateCreatedAt: typeof state.createdAt,
-      rawState: JSON.stringify(raw.state),
-    });
-  }
+  const createdAt = parseDate(state.createdAt);
+  const readAt = parseDate(state.readAt);
+  const expiresAt = parseDate(state.expiresAt);
 
   return {
     id: raw.id,

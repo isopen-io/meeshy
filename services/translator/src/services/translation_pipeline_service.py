@@ -137,7 +137,7 @@ class PipelineResult:
         # Convertir translations dict en array pour le Gateway
         translations_array = []
         for lang, translation_data in self.translations.items():
-            translations_array.append({
+            translation_entry = {
                 "targetLanguage": lang,
                 "translatedText": translation_data.get("translated_text", ""),
                 "audioUrl": translation_data.get("audio_url"),
@@ -145,7 +145,13 @@ class PipelineResult:
                 "durationMs": translation_data.get("duration_ms", 0),
                 "voiceCloned": translation_data.get("voice_cloned", False),
                 "voiceQuality": translation_data.get("voice_quality", 0.0)
-            })
+            }
+
+            # ✅ Ajouter les segments traduits si disponibles
+            if translation_data.get("segments"):
+                translation_entry["segments"] = translation_data.get("segments")
+
+            translations_array.append(translation_entry)
 
         # Construire originalAudio avec segments si disponibles
         original_audio = {
@@ -236,6 +242,18 @@ class TranslationPipelineService:
         self.tts_service = tts_service
         self.translation_service = translation_service
 
+        # ═══════════════════════════════════════════════════════════════
+        # TRANSLATION STAGE: Architecture réutilisable mono/multi-speaker
+        # ═══════════════════════════════════════════════════════════════
+        from .audio_pipeline.translation_stage import create_translation_stage
+
+        self.translation_stage = create_translation_stage(
+            translation_service=translation_service,
+            tts_service=tts_service,
+            voice_clone_service=voice_clone_service
+        )
+        logger.info("[PIPELINE] TranslationStage créé (architecture réutilisable)")
+
         # CRITIQUE: Callback pour notifier quand un job est complété
         # Utilisé pour publier via ZMQ PUB vers le Gateway
         self.on_job_completed = on_job_completed
@@ -290,6 +308,9 @@ class TranslationPipelineService:
             self.tts_service = tts_service
         if translation_service:
             self.translation_service = translation_service
+            # ✅ Mettre à jour translation_stage aussi
+            if hasattr(self, 'translation_stage') and self.translation_stage:
+                self.translation_stage.translation_service = translation_service
 
     async def initialize(self) -> bool:
         """Initialise le service et démarre les workers"""
@@ -503,45 +524,119 @@ class TranslationPipelineService:
             # ÉTAPE 3: CLONAGE VOCAL (si activé)
             # ═══════════════════════════════════════════════════════════════
             voice_model = None
+            voice_model_user_id = job.user_id
+
             if job.generate_voice_clone and self.voice_clone_service:
                 await self._update_job_progress(job, "clone_voice", 30)
 
                 try:
-                    voice_model = await self.voice_clone_service.get_or_create_voice_model(
-                        user_id=job.user_id,
-                        current_audio_path=audio_path,
-                        current_audio_duration_ms=result.original_duration_ms
+                    # Utiliser la méthode de translation_stage pour créer le modèle vocal
+                    voice_model, voice_model_user_id = await self.translation_stage.create_voice_model(
+                        sender_id=job.user_id,
+                        audio_path=audio_path,
+                        audio_duration_ms=result.original_duration_ms,
+                        existing_voice_profile=None
                     )
-                    result.voice_cloned = True
-                    result.voice_quality = voice_model.quality_score
-                    result.voice_model_version = voice_model.version
+                    if voice_model:
+                        result.voice_cloned = True
+                        result.voice_quality = voice_model.quality_score
+                        result.voice_model_version = voice_model.version
+                        logger.info(f"[PIPELINE] ✅ Modèle vocal créé: qualité={voice_model.quality_score:.2f}")
                 except Exception as e:
                     logger.warning(f"[PIPELINE] ⚠️ Clonage vocal échoué: {e}")
 
             # ═══════════════════════════════════════════════════════════════
-            # ÉTAPE 4: TRADUCTION + TTS POUR CHAQUE LANGUE
+            # ÉTAPE 4: DÉTECTION MULTI-SPEAKER & ROUTING INTELLIGENT
             # ═══════════════════════════════════════════════════════════════
-            total_languages = len(job.target_languages)
-            base_progress = 40
-            progress_per_lang = 50 // total_languages
+            await self._update_job_progress(job, "translate_audio", 40)
 
-            for i, target_lang in enumerate(job.target_languages):
-                current_progress = base_progress + (i * progress_per_lang)
-                await self._update_job_progress(job, f"translate_to_{target_lang}", current_progress)
+            # Détecter si multi-speaker à partir de la transcription
+            speaker_count = getattr(transcription, 'speaker_count', None)
+            is_multi_speaker = (
+                speaker_count is not None and
+                speaker_count > 1 and
+                result.transcription_segments and
+                len(result.transcription_segments) > 0
+            )
 
-                try:
-                    translation_result = await self._process_single_language(
-                        job=job,
-                        text=result.original_text,
-                        source_lang=result.original_language,
-                        target_lang=target_lang,
-                        voice_model=voice_model,
-                        audio_path=audio_path
+            logger.info(
+                f"[PIPELINE] 🎤 Détection: {speaker_count or 1} speaker(s), "
+                f"mode={'MULTI-SPEAKER' if is_multi_speaker else 'MONO-SPEAKER'}"
+            )
+
+            try:
+                if is_multi_speaker:
+                    # ═══════════════════════════════════════════════════════════
+                    # ROUTE A: MULTI-SPEAKER (architecture réutilisable)
+                    # ═══════════════════════════════════════════════════════════
+                    logger.info(f"[PIPELINE] 🎤 Traitement multi-speaker: {speaker_count} speakers")
+
+                    from .audio_pipeline.multi_speaker_processor import process_multi_speaker_audio
+
+                    translations = await process_multi_speaker_audio(
+                        translation_stage=self.translation_stage,
+                        voice_clone_service=self.voice_clone_service,
+                        segments=result.transcription_segments,
+                        source_audio_path=audio_path,
+                        target_languages=job.target_languages,
+                        source_language=result.original_language,
+                        message_id=job_id,
+                        attachment_id=job_id,
+                        user_voice_model=voice_model,
+                        sender_speaker_id=getattr(transcription, 'sender_speaker_id', None),
+                        model_type="medium",
+                        on_translation_ready=None,
+                        diarization_speakers=getattr(transcription, 'diarization_speakers', None)
                     )
-                    result.translations[target_lang] = translation_result
 
-                except Exception as e:
-                    logger.error(f"[PIPELINE] ❌ Erreur traduction {target_lang}: {e}")
+                    logger.info(f"[PIPELINE] ✅ Multi-speaker: {len(translations)} langues traduites")
+
+                else:
+                    # ═══════════════════════════════════════════════════════════
+                    # ROUTE B: MONO-SPEAKER (architecture réutilisable)
+                    # ═══════════════════════════════════════════════════════════
+                    logger.info("[PIPELINE] 🎤 Traitement mono-speaker: utilisation chaîne simple")
+
+                    translations = await self.translation_stage.process_languages(
+                        target_languages=job.target_languages,
+                        source_text=result.original_text,
+                        source_language=result.original_language,
+                        audio_hash=f"{job_id}_{result.original_duration_ms}",
+                        voice_model=voice_model,
+                        message_id=job_id,
+                        attachment_id=job_id,
+                        model_type="medium",
+                        cloning_params=None,
+                        max_workers=min(len(job.target_languages), 4),
+                        source_audio_path=audio_path,
+                        on_translation_ready=None
+                    )
+
+                    logger.info(f"[PIPELINE] ✅ Mono-speaker: {len(translations)} langues traduites")
+
+                # ═══════════════════════════════════════════════════════════
+                # Convertir TranslatedAudioVersion vers format dict attendu
+                # ═══════════════════════════════════════════════════════════
+                for lang, translated_audio in translations.items():
+                    result.translations[lang] = {
+                        "language": lang,
+                        "translated_text": translated_audio.translated_text,
+                        "audio_path": translated_audio.audio_path,
+                        "audio_url": translated_audio.audio_url,
+                        "duration_ms": translated_audio.duration_ms,
+                        "voice_cloned": translated_audio.voice_cloned,
+                        "voice_quality": translated_audio.voice_quality,
+                        "segments": translated_audio.segments,
+                        "success": True
+                    }
+
+            except Exception as e:
+                logger.error(f"[PIPELINE] ❌ Erreur traitement audio: {e}")
+                import traceback
+                traceback.print_exc()
+
+                # Fallback sur toutes les langues
+                for target_lang in job.target_languages:
                     result.translations[target_lang] = {
                         "error": str(e),
                         "success": False
@@ -606,91 +701,23 @@ class TranslationPipelineService:
             if job.webhook_url:
                 await self._send_webhook(job)
 
-    async def _process_single_language(
-        self,
-        job: TranslationJob,
-        text: str,
-        source_lang: str,
-        target_lang: str,
-        voice_model=None,
-        audio_path: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Traite une seule langue cible"""
-        result = {
-            "language": target_lang,
-            "success": True,
-            "voice_cloned": False,
-            "voice_quality": 0.0
-        }
-
-        # Traduire le texte
-        translated_text = text
-        if source_lang != target_lang and self.translation_service:
-            try:
-                trans_result = await self.translation_service.translate_with_structure(
-                    text=text,
-                    source_language=source_lang,
-                    target_language=target_lang,
-                    model_type="medium",
-                    source_channel="voice_pipeline"
-                )
-                translated_text = trans_result.get('translated_text', text)
-            except Exception as e:
-                logger.warning(f"[PIPELINE] Traduction fallback: {e}")
-
-        result["translated_text"] = translated_text
-        logger.info(f"[PIPELINE] ✅ Texte traduit ({len(translated_text)} chars): {translated_text[:50]}...")
-
-        # Générer l'audio
-        logger.info(f"[PIPELINE] 🎤 Début génération audio TTS (tts_service={self.tts_service is not None})")
-        if self.tts_service:
-            # Récupérer le profile_id du voice model si disponible
-            profile_id = getattr(voice_model, 'profile_id', None) if voice_model else None
-            output_filename = self._generate_output_filename(
-                job=job,
-                target_lang=target_lang,
-                profile_id=profile_id
-            )
-            output_path = self.audio_output_dir / output_filename
-
-            if voice_model:
-                # Utiliser l'audio source comme référence pour le clonage
-                speaker_audio = None
-                if audio_path and os.path.exists(audio_path):
-                    speaker_audio = audio_path
-                elif hasattr(voice_model, 'reference_audio_path') and voice_model.reference_audio_path:
-                    speaker_audio = voice_model.reference_audio_path
-
-                # Récupérer les conditionals si disponibles
-                conditionals = getattr(voice_model, 'chatterbox_conditionals', None)
-
-                tts_result = await self.tts_service.synthesize_with_voice(
-                    text=translated_text,
-                    speaker_audio_path=speaker_audio,
-                    target_language=target_lang,
-                    output_format="mp3",
-                    message_id=f"{job.id}_{target_lang}",
-                    conditionals=conditionals
-                )
-            else:
-                tts_result = await self.tts_service.synthesize(
-                    text=translated_text,
-                    language=target_lang,
-                    output_format="mp3"
-                )
-
-            result["audio_path"] = tts_result.audio_path
-            result["audio_url"] = tts_result.audio_url
-            result["duration_ms"] = tts_result.duration_ms
-            result["voice_cloned"] = tts_result.voice_cloned
-            result["voice_quality"] = tts_result.voice_quality
-
-            # Encoder en base64 si demandé
-            if os.path.exists(tts_result.audio_path):
-                with open(tts_result.audio_path, 'rb') as f:
-                    result["audio_base64"] = base64.b64encode(f.read()).decode('utf-8')
-
-        return result
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NOTE: _process_single_language() SUPPRIMÉE - OBSOLÈTE
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Cette méthode a été remplacée par l'architecture réutilisable qui unifie
+    # les deux pipelines (ZMQ et HTTP) :
+    #
+    # - Mono-speaker  : translation_stage.process_languages()
+    # - Multi-speaker : process_multi_speaker_audio() + translation_stage
+    #
+    # L'architecture réutilisable :
+    # 1. Évite la duplication de code
+    # 2. Garantit le même comportement sur les deux APIs
+    # 3. Supporte automatiquement le multi-speaker avec clonage vocal par speaker
+    # 4. Inclut la re-transcription avec segments fins et timestamps
+    #
+    # Voir _process_job() lignes 523-640 pour la nouvelle implémentation.
+    # ═══════════════════════════════════════════════════════════════════════════
 
     async def _prepare_audio_input(self, job: TranslationJob) -> Optional[str]:
         """Prépare l'input audio (télécharge si nécessaire)"""

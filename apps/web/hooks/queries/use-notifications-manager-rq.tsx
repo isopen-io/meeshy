@@ -7,9 +7,7 @@
 
 'use client';
 
-// LOG GLOBAL AU CHARGEMENT DU MODULE
 if (typeof window !== 'undefined') {
-  console.log('🚨🚨🚨 [useNotificationsManagerRQ] MODULE LOADED AT:', new Date().toISOString());
   (window as any).__USE_NOTIFICATIONS_RQ_LOADED__ = true;
 }
 
@@ -36,22 +34,13 @@ interface UseNotificationsManagerRQOptions {
   limit?: number;
 }
 
-console.log('🚀 [useNotificationsManagerRQ] Hook file loaded!');
-
 export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOptions = {}) {
-  console.log('🚀 [useNotificationsManagerRQ] Hook function called!', { options });
 
   const { filters, limit = 20 } = options;
   const { t } = useI18n('notifications');
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
-
-  console.log('🚀 [useNotificationsManagerRQ] Hooks initialized', {
-    isAuthenticated,
-    limit,
-    filters,
-  });
 
   // Query pour les notifications
   const {
@@ -95,7 +84,6 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     const toastKey = `${notification.id}-${notification.state.createdAt}`;
 
     if (recentToasts.has(toastKey)) {
-      console.log('[useNotificationsManagerRQ] Toast déjà affiché récemment, skipping:', toastKey);
       return;
     }
 
@@ -138,63 +126,35 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
   // Écouter les événements Socket.IO pour mettre à jour le cache
   useEffect(() => {
-    console.log('🎯 [useNotificationsManagerRQ] useEffect monté', {
-      isAuthenticated,
-      hasToken: !!useAuthStore.getState().authToken,
-    });
-
     // Connecter pour les utilisateurs authentifiés OU anonymes avec sessionToken
     const authToken = useAuthStore.getState().authToken;
 
     if (!isAuthenticated && !authToken) {
-      console.log('[useNotificationsManagerRQ] User not authenticated and no token, skipping Socket.IO connection');
       return;
     }
 
     // Connecter le Socket.IO avec le token d'auth (ou sessionToken pour anonymes)
     if (authToken) {
-      console.log('[useNotificationsManagerRQ] Connecting Socket.IO...', {
-        isAuthenticated,
-        hasAuthToken: !!authToken,
-        tokenPreview: authToken ? `${authToken.substring(0, 20)}...` : 'none',
-      });
       notificationSocketIO.connect(authToken);
-    } else {
-      console.warn('[useNotificationsManagerRQ] No auth token found!');
     }
 
     const handleNewNotification = (notification: Notification) => {
-      console.log('🔔 [useNotificationsManagerRQ] handleNewNotification appelé', {
-        notificationId: notification.id,
-        type: notification.type,
-        userId: notification.userId,
-        content: notification.content,
-      });
-
       // Vérifier si la notification existe déjà dans le cache
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
-      console.log('[useNotificationsManagerRQ] Queries found:', queries.length);
 
       const notificationExists = queries.some(([key, data]: any) => {
         if (!data || !data.pages) {
-          console.log('[useNotificationsManagerRQ] Query has no pages:', key);
           return false;
         }
         const exists = data.pages.some((page: any) =>
           (page.notifications ?? []).some((n: Notification) => n.id === notification.id)
         );
-        if (exists) {
-          console.log('[useNotificationsManagerRQ] Found duplicate in query:', key);
-        }
         return exists;
       });
 
       if (notificationExists) {
-        console.log('[useNotificationsManagerRQ] ⚠️ Notification already exists in cache:', notification.id);
-        console.log('[useNotificationsManagerRQ] This is normal if React Query fetched it before Socket.IO delivered it');
         // NE PAS ajouter à nouveau au cache, mais continuer pour afficher le toast si approprié
       } else {
-        console.log('[useNotificationsManagerRQ] ✅ Notification is new, adding to cache:', notification.id);
 
         // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
         queryClient.setQueriesData(
@@ -233,27 +193,17 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const notificationConversationId = notification.context?.conversationId;
 
-      console.log('[useNotificationsManagerRQ] Toast filter check', {
-        currentPath,
-        notificationConversationId,
-        isOnNotificationsPage: currentPath === '/notifications',
-        isInActiveConversation: notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`),
-      });
-
       // Ne pas afficher si déjà sur la page des notifications
       if (currentPath === '/notifications') {
-        console.log('[useNotificationsManagerRQ] Skipping toast - user on notifications page');
         return;
       }
 
       // Ne pas afficher si dans la conversation concernée par la notification
       if (notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`)) {
-        console.log('[useNotificationsManagerRQ] Skipping toast - user in active conversation');
         return;
       }
 
       // Afficher le toast
-      console.log('[useNotificationsManagerRQ] Showing toast notification...');
       showNotificationToast(notification);
 
       // Jouer le son approprié selon le type de notification
@@ -267,11 +217,11 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
         const audio = new Audio(soundFile);
         audio.volume = volume;
-        audio.play().catch(err => {
-          console.warn('[useNotificationsManagerRQ] Could not play notification sound:', err);
+        audio.play().catch(() => {
+          // Silently ignore audio playback errors
         });
       } catch (error) {
-        console.warn('[useNotificationsManagerRQ] Audio playback error:', error);
+        // Silently ignore audio playback errors
       }
     };
 
@@ -302,13 +252,10 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     // S'abonner aux événements via les méthodes du singleton
-    console.log('[useNotificationsManagerRQ] Subscribing to Socket.IO events...');
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
-    console.log('[useNotificationsManagerRQ] Subscribed to Socket.IO events ✅');
 
     return () => {
-      console.log('[useNotificationsManagerRQ] Unsubscribing from Socket.IO events...');
       unsubscribeNotification();
       unsubscribeRead();
     };
@@ -319,7 +266,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     try {
       await markAsReadMutation.mutateAsync(notificationId);
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      // Silently ignore errors
     }
   }, [markAsReadMutation]);
 
@@ -327,7 +274,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     try {
       await markAllAsReadMutation.mutateAsync();
     } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
+      // Silently ignore errors
     }
   }, [markAllAsReadMutation]);
 
@@ -335,7 +282,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     try {
       await deleteMutation.mutateAsync(notificationId);
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      // Silently ignore errors
     }
   }, [deleteMutation]);
 

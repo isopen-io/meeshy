@@ -481,11 +481,6 @@ class SpeechBrainDiarization:
 
             # Speaker valide
             speakers_filtered[speaker_id] = data
-            logger.info(
-                f"[SPEECHBRAIN]    ✅ {speaker_id} valide: "
-                f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
-                f"{speaker_duration}ms"
-            )
 
         speakers_data = speakers_filtered
 

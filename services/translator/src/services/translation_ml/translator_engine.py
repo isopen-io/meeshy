@@ -484,8 +484,6 @@ class TranslatorEngine:
                                 # early_stopping retiré: incompatible avec num_beams=1
                             )
 
-                            logger.info(f"[BATCH-SYNC] ✅ Chunk {i//batch_size + 1}: {len(results)} résultats")
-
                             for result in results:
                                 if isinstance(result, dict) and 'translation_text' in result:
                                     all_results.append(result['translation_text'])
@@ -494,7 +492,8 @@ class TranslatorEngine:
                                 else:
                                     all_results.append('[Batch-No-Result]')
 
-                    logger.info(f"🔓 [MODEL_LOCK] Lock libéré pour modèle '{model_type}'")
+                # Lock automatiquement libéré ici (sortie du with)
+                logger.info(f"🔓 [MODEL_LOCK] Lock libéré pour modèle '{model_type}'")
 
                 logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
 

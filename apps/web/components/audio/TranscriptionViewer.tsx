@@ -233,9 +233,29 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
 
     const translated = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
     if (translated) {
+      // Enrichir les segments traduits avec les informations de speaker de l'original
+      const enrichedSegments = (translated.segments || []).map((translatedSegment, index) => {
+        // Trouver le segment original correspondant par timestamp ou par index
+        const originalSegment = transcription.segments?.find(
+          orig => Math.abs(orig.startMs - translatedSegment.startMs) < 100
+        ) || transcription.segments?.[index];
+
+        // Copier les informations de speaker de l'original si disponibles
+        if (originalSegment) {
+          return {
+            ...translatedSegment,
+            speakerId: translatedSegment.speakerId || originalSegment.speakerId,
+            voiceSimilarityScore: translatedSegment.voiceSimilarityScore !== undefined
+              ? translatedSegment.voiceSimilarityScore
+              : originalSegment.voiceSimilarityScore,
+          };
+        }
+        return translatedSegment;
+      });
+
       return {
         text: translated.translatedText,
-        segments: translated.segments || [],
+        segments: enrichedSegments,
         language: translated.targetLanguage
       };
     }

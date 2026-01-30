@@ -56,6 +56,11 @@ async def retranscribe_translated_audio(
         f"{len(turns_metadata)} tours de parole"
     )
 
+    # Vérifier que le fichier audio existe
+    if not os.path.exists(audio_path):
+        logger.error(f"[RETRANSCRIBE] ❌ Fichier audio introuvable: {audio_path}")
+        return _create_coarse_segments_from_turns(turns_metadata)
+
     try:
         # ════════════════════════════════════════════════════════════
         # ÉTAPE 1: TRANSCRIPTION PURE (sans diarisation)
@@ -63,6 +68,11 @@ async def retranscribe_translated_audio(
         if transcription_service is None:
             from ..transcription_service import get_transcription_service
             transcription_service = get_transcription_service()
+
+        # S'assurer que le service est initialisé
+        if not transcription_service.is_initialized:
+            logger.info("[RETRANSCRIBE] Initialisation du service de transcription...")
+            await transcription_service.initialize()
 
         # Désactiver temporairement la diarisation
         original_diarization_setting = os.getenv('ENABLE_DIARIZATION', 'true')
@@ -131,11 +141,15 @@ async def retranscribe_translated_audio(
         return segments_with_speakers
 
     except Exception as e:
-        logger.error(f"[RETRANSCRIBE] ❌ Erreur re-transcription: {e}")
+        logger.error(f"[RETRANSCRIBE] ❌ ERREUR CRITIQUE re-transcription: {e}")
+        logger.error(f"[RETRANSCRIBE] Audio: {audio_path}")
+        logger.error(f"[RETRANSCRIBE] Language: {target_language}")
+        logger.error(f"[RETRANSCRIBE] Turns: {len(turns_metadata)}")
         import traceback
         traceback.print_exc()
 
         # Fallback: créer segments grossiers depuis les tours
+        logger.warning("[RETRANSCRIBE] ⚠️ UTILISATION DU FALLBACK - SEGMENTS INCOMPLETS")
         return _create_coarse_segments_from_turns(turns_metadata)
 
 

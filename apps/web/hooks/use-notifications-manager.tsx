@@ -44,19 +44,6 @@ export function useNotificationsManager() {
   // Ref pour stocker la dernière version de showNotificationToast
   const showNotificationToastRef = useRef<((notification: Notification) => void) | null>(null);
 
-  // Debug: Log l'état du hook i18n
-  useEffect(() => {
-    if (!isI18nLoading) {
-      console.log('[useNotifications] i18n READY:', {
-        isLoading: isI18nLoading,
-        locale,
-        testNewMessage: t('titles.newMessage', { sender: 'TestUser' }),
-        testReaction: t('titles.reaction', { sender: 'André', emoji: '❤️' }),
-        testMentioned: t('titles.mentioned', { sender: 'Marie' })
-      });
-    }
-  }, [isI18nLoading, locale, t]);
-
   // Sélecteurs du store
   const notifications = useNotifications();
   const unreadCount = useUnreadCount();
@@ -79,25 +66,10 @@ export function useNotificationsManager() {
    * Intègre l'avatar de l'auteur comme dans custom-toast.tsx
    */
   const showNotificationToast = useCallback((notification: Notification) => {
-    console.log('[Toast Debug] Notification received:', {
-      id: notification.id,
-      type: notification.type,
-      sender: notification.sender,
-      isI18nLoading,
-      locale
-    });
-
     const title = buildNotificationTitle(notification, t);
     const content = buildNotificationContent(notification, t);
     const link = getNotificationLink(notification);
     const borderColor = getNotificationBorderColor(notification);
-
-    console.log('[Toast Debug] Toast data:', {
-      title,
-      content,
-      link,
-      borderColor
-    });
 
     // Helper pour obtenir les initiales
     const getInitials = (name: string): string => {
@@ -181,12 +153,9 @@ export function useNotificationsManager() {
       return;
     }
 
-    console.log('[useNotifications] Starting polling fallback...');
-
     pollingInterval.current = setInterval(() => {
-      console.log('[useNotifications] Polling notifications...');
-      actions.refresh().catch(error => {
-        console.error('[useNotifications] Polling error:', error);
+      actions.refresh().catch(() => {
+        // Silently handle polling errors
       });
     }, HOOK_CONFIG.POLLING_INTERVAL);
   }, [actions]);
@@ -198,7 +167,6 @@ export function useNotificationsManager() {
     if (pollingInterval.current) {
       clearInterval(pollingInterval.current);
       pollingInterval.current = null;
-      console.log('[useNotifications] Polling stopped');
     }
   }, []);
 
@@ -210,48 +178,39 @@ export function useNotificationsManager() {
       return;
     }
 
-    console.log('[useNotifications] Initializing with singleton...');
     isInitialized.current = true;
 
     // Initialiser le store (charge les notifications depuis l'API)
     actions.initialize().then(() => {
-      console.log('[useNotifications] Store initialized, connecting Socket.IO...');
-
       // Connecter via le singleton
       notificationSocketIO.connect(authToken);
     });
 
     // Enregistrer les callbacks pour les événements du singleton
     const unsubNotification = notificationSocketIO.onNotification((notification) => {
-      console.log('[useNotifications] Received notification via singleton:', notification);
       actions.addNotification(notification);
       // Utiliser la ref pour avoir la dernière version de showNotificationToast
       showNotificationToastRef.current?.(notification);
     });
 
     const unsubRead = notificationSocketIO.onNotificationRead((notificationId) => {
-      console.log('[useNotifications] Notification read:', notificationId);
       actions.markAsRead(notificationId);
     });
 
     const unsubDeleted = notificationSocketIO.onNotificationDeleted((notificationId) => {
-      console.log('[useNotifications] Notification deleted:', notificationId);
       actions.deleteNotification(notificationId);
     });
 
     const unsubCounts = notificationSocketIO.onCounts((counts) => {
-      console.log('[useNotifications] Counts updated:', counts);
       actions.updateCounts(counts);
     });
 
     const unsubConnect = notificationSocketIO.onConnect(() => {
-      console.log('[useNotifications] Socket connected');
       setIsSocketConnected(true);
       stopPolling();
     });
 
     const unsubDisconnect = notificationSocketIO.onDisconnect((reason) => {
-      console.warn('[useNotifications] Socket disconnected:', reason);
       setIsSocketConnected(false);
 
       // Démarrer le polling en fallback si déconnexion involontaire
@@ -262,7 +221,6 @@ export function useNotificationsManager() {
 
     // Cleanup à la déconnexion du composant
     return () => {
-      console.log('[useNotifications] Cleaning up...');
 
       // Désinscrire tous les callbacks
       unsubNotification();

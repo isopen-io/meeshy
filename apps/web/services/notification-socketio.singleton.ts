@@ -33,28 +33,18 @@ class NotificationSocketIOSingleton {
    * Initialise la connexion Socket.IO
    */
   public async connect(token: string): Promise<void> {
-    console.log('🔌 [NotificationSocketIO] connect() appelé', {
-      hasToken: !!token,
-      tokenLength: token?.length,
-      isAlreadyConnected: this.socket?.connected,
-      isConnecting: this.isConnecting,
-    });
-
     // Si déjà connecté avec le même token, ne rien faire
     if (this.socket?.connected && this.authToken === token) {
-      console.log('[NotificationSocketIO] Already connected');
       return;
     }
 
     // Si connexion en cours, attendre
     if (this.isConnecting) {
-      console.log('[NotificationSocketIO] Connection already in progress');
       return;
     }
 
     // Déconnecter l'ancienne socket si elle existe
     if (this.socket) {
-      console.log('[NotificationSocketIO] Disconnecting old socket');
       this.disconnect();
     }
 
@@ -62,10 +52,6 @@ class NotificationSocketIOSingleton {
     this.authToken = token;
 
     const backendUrl = APP_CONFIG.getBackendUrl();
-    console.log('[NotificationSocketIO] Initializing Socket.IO connection...', {
-      backendUrl,
-      transports: ['websocket', 'polling'],
-    });
 
     this.socket = io(backendUrl, {
       auth: { token },
@@ -76,14 +62,7 @@ class NotificationSocketIOSingleton {
       reconnectionDelay: this.reconnectDelay
     });
 
-    console.log('[NotificationSocketIO] Socket.IO instance created', {
-      backendUrl,
-      hasToken: !!token,
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none',
-    });
-    console.log('[NotificationSocketIO] Setting up event listeners...');
     this.setupEventListeners();
-    console.log('[NotificationSocketIO] Event listeners configured ✅');
   }
 
   /**
@@ -94,11 +73,6 @@ class NotificationSocketIOSingleton {
 
     // Connexion établie
     this.socket.on('connect', () => {
-      console.log('[NotificationSocketIO] Connected', {
-        socketId: this.socket?.id,
-        connected: this.socket?.connected,
-        hasAuthToken: !!this.authToken,
-      });
       this.isConnected = true;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
@@ -109,7 +83,6 @@ class NotificationSocketIOSingleton {
 
     // Déconnexion
     this.socket.on('disconnect', (reason) => {
-      console.warn('[NotificationSocketIO] Disconnected:', reason);
       this.isConnected = false;
 
       // Notifier tous les callbacks de déconnexion
@@ -118,23 +91,12 @@ class NotificationSocketIOSingleton {
 
     // Erreur de connexion
     this.socket.on('connect_error', (error) => {
-      console.error('[NotificationSocketIO] Connection error:', error);
       this.reconnectAttempts++;
       this.isConnecting = false;
-
-      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        console.error('[NotificationSocketIO] Max reconnection attempts reached');
-      }
     });
 
     // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
     const handleNotification = (data: any) => {
-      console.log('📨📨📨 [NotificationSocketIO] ===== RECEIVED NOTIFICATION =====');
-      console.log('📨 [NotificationSocketIO] Received notification:', data);
-      console.log('📨 [NotificationSocketIO] Callbacks registered:', this.notificationCallbacks.size);
-      console.log('📨 [NotificationSocketIO] Socket ID:', this.socket?.id);
-      console.log('📨 [NotificationSocketIO] ===================================');
-
       // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {
         id: data.id,
@@ -175,35 +137,26 @@ class NotificationSocketIOSingleton {
 
     // Écouter l'événement d'authentification
     this.socket.on('authenticated', (data: any) => {
-      console.log('✅ [NotificationSocketIO] AUTHENTICATED by backend', data);
+      // Silently handle authentication
     });
 
     // Écouter les erreurs
     this.socket.on('error', (error: any) => {
-      console.error('❌ [NotificationSocketIO] ERROR from backend', error);
+      // Silently handle errors
     });
-
-    console.log('[NotificationSocketIO] Event listeners configured:');
-    console.log('  - notification:new');
-    console.log('  - notification (legacy)');
-    console.log('  - authenticated');
-    console.log('  - error');
 
     // Notification marquée comme lue
     this.socket.on('notification:read', (data: { notificationId: string }) => {
-      console.log('[NotificationSocketIO] Notification read:', data.notificationId);
       this.readCallbacks.forEach(cb => cb(data.notificationId));
     });
 
     // Notification supprimée
     this.socket.on('notification:deleted', (data: { notificationId: string }) => {
-      console.log('[NotificationSocketIO] Notification deleted:', data.notificationId);
       this.deletedCallbacks.forEach(cb => cb(data.notificationId));
     });
 
     // Mise à jour des compteurs
     this.socket.on('notification:counts', (counts: any) => {
-      console.log('[NotificationSocketIO] Counts updated:', counts);
       this.countsCallbacks.forEach(cb => cb(counts));
     });
   }
@@ -213,7 +166,6 @@ class NotificationSocketIOSingleton {
    */
   public disconnect(): void {
     if (this.socket) {
-      console.log('[NotificationSocketIO] Disconnecting...');
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;

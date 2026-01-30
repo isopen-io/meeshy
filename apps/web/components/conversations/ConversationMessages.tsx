@@ -465,16 +465,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       {/* Bouton flottant pour scroller - Direction adaptée au contexte */}
       {(() => {
         const shouldRender = showScrollButton && !isLoadingMessages && messages.length > 0;
-        // Calculer la position: 10px au-dessus du composer
-        // Composer height estimée: mobile ~82px (p-4), desktop ~98px (p-6)
-        const bottomOffset = isMobile ? 'bottom-[92px]' : 'bottom-[108px]';
 
         return shouldRender ? (
           <Button
             onClick={handleScrollButtonClick}
             className={cn(
               "fixed z-50",
-              bottomOffset,
+              "bottom-[116px]", // Position unifiée: ~82px composer + 10px + 24px (hauteur icône)
               // Positionnement adapté: pour BubbleStream avec sidebar, ajuster la position
               scrollDirection === 'down' ? "right-6 xl:right-[360px]" : "right-6",
               "rounded-full w-6 h-6 p-0",

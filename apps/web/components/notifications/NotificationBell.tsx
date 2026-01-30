@@ -7,9 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 
-// LOG GLOBAL AU CHARGEMENT DU MODULE
 if (typeof window !== 'undefined') {
-  console.log('🚨🚨🚨 [NotificationBell] MODULE LOADED AT:', new Date().toISOString());
   (window as any).__NOTIFICATION_BELL_LOADED__ = true;
 }
 
@@ -19,18 +17,12 @@ interface NotificationBellProps {
   onClick?: () => void;
 }
 
-console.log('🔔 [NotificationBell] Component file loaded!');
-
 export function NotificationBell({
   className = '',
   showBadge = true,
   onClick
 }: NotificationBellProps) {
-  console.log('🔔 [NotificationBell] Component rendering', { className, showBadge, onClick });
-
   const { unreadCount } = useNotificationsManagerRQ();
-
-  console.log('🔔 [NotificationBell] unreadCount:', unreadCount);
 
   const ariaLabel = `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`;
 

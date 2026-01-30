@@ -228,8 +228,6 @@ async def process_multi_speaker_audio(
     # ÉTAPE 2: EXTRAIRE L'AUDIO DE CHAQUE SPEAKER
     # ═══════════════════════════════════════════════════════════════
     for speaker_id, data in speakers_data.items():
-        logger.info(f"[MULTI_SPEAKER] 🎤 Extraction audio pour {speaker_id}...")
-
         audio_path = await _extract_speaker_audio(
             speaker_id=speaker_id,
             source_audio_path=source_audio_path,
@@ -242,14 +240,11 @@ async def process_multi_speaker_audio(
             return {}
 
         data['audio_path'] = audio_path
-        logger.info(f"[MULTI_SPEAKER] ✅ Audio extrait: {audio_path}")
 
     # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 3: CRÉER VOICE MODEL POUR CHAQUE SPEAKER
     # ═══════════════════════════════════════════════════════════════
     for speaker_id, data in speakers_data.items():
-        logger.info(f"[MULTI_SPEAKER] 🎙️ Création voice model pour {speaker_id}...")
-
         # Si c'est l'expéditeur et qu'on a son modèle, l'utiliser
         if sender_speaker_id == speaker_id and user_voice_model:
             logger.info(f"[MULTI_SPEAKER] ✅ Utilisation du modèle utilisateur pour {speaker_id}")
@@ -269,7 +264,6 @@ async def process_multi_speaker_audio(
             return {}
 
         data['voice_model'] = voice_model
-        logger.info(f"[MULTI_SPEAKER] ✅ Voice model créé pour {speaker_id}")
 
     # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 4: FUSIONNER LES SPEAKERS SIMILAIRES
@@ -315,12 +309,6 @@ async def process_multi_speaker_audio(
 
             voice_model = speaker_data['voice_model']
 
-            logger.info(
-                f"[MULTI_SPEAKER]   → Tour {turn_idx+1}/{len(turns_of_speech)}: "
-                f"Speaker {speaker_id}, {len(turn.text)} chars, "
-                f"{len(turn.segments)} segments"
-            )
-
             # ═══════════════════════════════════════════════════════════════
             # UTILISER LA CHAÎNE MONO-LOCUTEUR POUR CE TOUR DE PAROLE
             # ═══════════════════════════════════════════════════════════════
@@ -354,11 +342,6 @@ async def process_multi_speaker_audio(
                 'turn': turn
             })
 
-            logger.info(
-                f"[MULTI_SPEAKER] ✅ Tour {turn_idx+1} traité: "
-                f"{translation_result.duration_ms}ms"
-            )
-
         # ═══════════════════════════════════════════════════════════════
         # ÉTAPE 7: CONCATÉNER LES TOURS DE PAROLE DANS L'ORDRE
         # ═══════════════════════════════════════════════════════════════
@@ -382,8 +365,6 @@ async def process_multi_speaker_audio(
                 # Essayer la re-transcription, mais ne pas bloquer si elle échoue
                 fine_segments = None
                 try:
-                    logger.info(f"[MULTI_SPEAKER] 🎯 Re-transcription pour segments fins ({target_lang})...")
-
                     # Extraire les métadonnées des tours depuis turn_translations
                     turns_metadata = []
                     current_time_ms = 0
@@ -411,13 +392,23 @@ async def process_multi_speaker_audio(
                         turns_metadata=turns_metadata
                     )
 
+                    # Vérifier si on a reçu des segments invalides
+                    # 1. Liste vide = re-transcription échouée silencieusement
+                    # 2. Segments de fallback = re-transcription échouée explicitement
+                    is_empty = not fine_segments or len(fine_segments) == 0
+                    is_fallback = fine_segments and len(fine_segments) > 0 and fine_segments[0].get('fallback', False)
+
+                    if is_empty or is_fallback:
+                        logger.warning(
+                            f"[MULTI_SPEAKER] ⚠️ Re-transcription invalide pour {target_lang} "
+                            f"(vide={is_empty}, fallback={is_fallback}), utilisation des textes traduits"
+                        )
+                        # Forcer l'utilisation du fallback avec vrais textes
+                        raise Exception("Re-transcription invalide, utilisation des textes traduits")
+
                     # Remplacer les segments grossiers par les segments fins
                     final_audio.segments = fine_segments
 
-                    logger.info(
-                        f"[MULTI_SPEAKER] ✅ {len(fine_segments)} segments fins "
-                        f"au lieu de {len(turns_metadata)} segments grossiers"
-                    )
                 except Exception as e:
                     logger.warning(
                         f"[MULTI_SPEAKER] ⚠️ Échec re-transcription pour {target_lang}: {e}"
@@ -442,10 +433,6 @@ async def process_multi_speaker_audio(
                             current_time_ms += translation.duration_ms
 
                     final_audio.segments = fine_segments
-                    logger.info(
-                        f"[MULTI_SPEAKER] 📝 Utilisation segments grossiers (fallback): "
-                        f"{len(fine_segments)} segments basés sur les tours"
-                    )
 
                 translations[target_lang] = final_audio
 
@@ -454,8 +441,6 @@ async def process_multi_speaker_audio(
                 # ═══════════════════════════════════════════════════════════════
                 if on_translation_ready:
                     try:
-                        logger.info(f"[MULTI_SPEAKER] 📤 Remontée traduction {target_lang} à la gateway...")
-
                         # Déterminer le type d'événement selon le nombre de langues
                         total_languages = len(target_languages)
                         is_single_language = total_languages == 1
@@ -481,14 +466,9 @@ async def process_multi_speaker_audio(
                         else:
                             on_translation_ready(translation_data)
 
-                        logger.info(
-                            f"[MULTI_SPEAKER] ✅ Traduction {target_lang} remontée "
-                            f"({current_index}/{total_languages})"
-                        )
                     except Exception as e:
                         logger.warning(f"[MULTI_SPEAKER] ⚠️ Erreur callback traduction: {e}")
 
-                logger.info(f"[MULTI_SPEAKER] ✅ Langue {target_lang} complète")
             else:
                 logger.error(f"[MULTI_SPEAKER] ❌ Échec concaténation pour {target_lang}")
 
@@ -991,7 +971,7 @@ async def _extract_speaker_audio(
 
         logger.info(
             f"[MULTI_SPEAKER] ✅ Audio de référence extrait pour {speaker_id}: "
-            f"{longest_duration}ms → {output_path}"
+            f"{total_duration}ms → {output_path}"
         )
 
         # Ne PAS supprimer le fichier WAV en cache (réutilisable pendant 7 jours)

@@ -381,7 +381,8 @@ class TranslationStage:
                 voice_quality=cached_data.get("voice_quality", 0.0),
                 processing_time_ms=0,
                 audio_data_base64=audio_data_base64,
-                audio_mime_type=audio_mime_type
+                audio_mime_type=audio_mime_type,
+                segments=cached_data.get("segments")  # Charger les segments depuis le cache
             )
 
         except Exception as e:
@@ -547,11 +548,6 @@ class TranslationStage:
                 model_type=model_type
             )
 
-            logger.info(
-                f"[TRANSLATION_STAGE] Translated ({target_lang}): "
-                f"'{translated_text[:50]}...'"
-            )
-
             # 2. Generate TTS audio
             if voice_model:
                 # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
@@ -562,10 +558,6 @@ class TranslationStage:
                 )
 
                 if has_conditionals:
-                    logger.info(
-                        f"[TRANSLATION_STAGE] 🎤 Clonage vocal: conditionals pré-calculés "
-                        f"(profil vocal réutilisé - optimisé)"
-                    )
                     tts_result = await self.tts_service.synthesize_with_conditionals(
                         text=translated_text,
                         conditionals=voice_model.chatterbox_conditionals,
@@ -578,17 +570,6 @@ class TranslationStage:
                     # PRIORITÉ 2: Calculer depuis l'audio de référence
                     # (fallback si pas de conditionals pré-calculés)
                     speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
-
-                    if speaker_audio:
-                        logger.info(
-                            f"[TRANSLATION_STAGE] 🎤 Clonage vocal: calcul depuis audio "
-                            f"(ref={os.path.basename(speaker_audio)})"
-                        )
-                    else:
-                        logger.warning(
-                            f"[TRANSLATION_STAGE] ⚠️ Pas d'audio de référence ni conditionals "
-                            f"→ voix générique"
-                        )
 
                     tts_result = await self.tts_service.synthesize_with_voice(
                         text=translated_text,
@@ -606,22 +587,11 @@ class TranslationStage:
                     cloning_params=cloning_params
                 )
 
-            lang_time = int((time.time() - lang_start) * 1000)
-            logger.info(
-                f"[TRANSLATION_STAGE] Audio generated ({target_lang}): "
-                f"{tts_result.audio_url} [{lang_time}ms]"
-            )
-
             # 3. RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS (mono-locuteur)
             # ═══════════════════════════════════════════════════════════════
             fine_segments = None
             if tts_result.audio_path and os.path.exists(tts_result.audio_path):
                 try:
-                    logger.info(
-                        f"[TRANSLATION_STAGE] 🎯 Re-transcription pour segments fins "
-                        f"({target_lang}, mono-speaker)..."
-                    )
-
                     # Créer métadonnées de "tour" unique pour mono-speaker
                     turns_metadata = [{
                         'start_ms': 0,
@@ -638,23 +608,63 @@ class TranslationStage:
                         turns_metadata=turns_metadata
                     )
 
-                    logger.info(
-                        f"[TRANSLATION_STAGE] ✅ {len(fine_segments)} segments fins créés "
-                        f"pour mono-speaker"
-                    )
+                    # Vérifier si les segments sont valides
+                    is_empty = not fine_segments or len(fine_segments) == 0
+                    is_fallback = fine_segments and len(fine_segments) > 0 and fine_segments[0].get('fallback', False)
+
+                    if is_empty or is_fallback:
+                        logger.warning(
+                            f"[TRANSLATION_STAGE] ⚠️ Re-transcription invalide pour {target_lang} "
+                            f"(vide={is_empty}, fallback={is_fallback}), création segment avec texte traduit"
+                        )
+                        # Créer un segment unique avec le texte traduit complet
+                        fine_segments = [{
+                            'text': translated_text,
+                            'startMs': 0,
+                            'endMs': tts_result.duration_ms,
+                            'speakerId': 's0',
+                            'confidence': 0.9,
+                            'voiceSimilarityScore': tts_result.voice_quality if tts_result.voice_cloned else None,
+                            'language': target_lang
+                        }]
 
                 except Exception as e:
                     logger.warning(
                         f"[TRANSLATION_STAGE] ⚠️ Échec re-transcription segments fins: {e}"
                     )
-                    # Continuer sans segments fins (fallback)
+                    # Fallback: créer un segment avec le texte traduit complet
+                    fine_segments = [{
+                        'text': translated_text,
+                        'startMs': 0,
+                        'endMs': tts_result.duration_ms,
+                        'speakerId': 's0',
+                        'confidence': 0.9,
+                        'voiceSimilarityScore': tts_result.voice_quality if tts_result.voice_cloned else None,
+                        'language': target_lang
+                    }]
+            else:
+                # Fichier audio introuvable - créer segment de fallback
+                logger.warning(
+                    f"[TRANSLATION_STAGE] ⚠️ Fichier audio introuvable pour {target_lang}, "
+                    f"création segment de fallback"
+                )
+                fine_segments = [{
+                    'text': translated_text,
+                    'startMs': 0,
+                    'endMs': tts_result.duration_ms,
+                    'speakerId': 's0',
+                    'confidence': 0.9,
+                    'voiceSimilarityScore': tts_result.voice_quality if tts_result.voice_cloned else None,
+                    'language': target_lang
+                }]
 
-            # 4. Cache audio
+            # 4. Cache audio (avec segments)
             await self._cache_translated_audio(
                 audio_hash=audio_hash,
                 language=target_lang,
                 translated_text=translated_text,
-                tts_result=tts_result
+                tts_result=tts_result,
+                segments=fine_segments  # Sauvegarder les segments dans le cache
             )
 
             # 5. Créer le résultat
@@ -676,8 +686,6 @@ class TranslationStage:
             # 6. Callback pour remontée progressive (MONO-SPEAKER)
             if on_translation_ready and target_languages:
                 try:
-                    logger.info(f"[TRANSLATION_STAGE] 📤 Remontée traduction {target_lang} à la gateway (mono-speaker)...")
-
                     # Déterminer le type d'événement selon le nombre de langues
                     total_languages = len(target_languages)
                     is_single_language = total_languages == 1
@@ -703,10 +711,6 @@ class TranslationStage:
                     else:
                         on_translation_ready(translation_data)
 
-                    logger.info(
-                        f"[TRANSLATION_STAGE] ✅ Traduction {target_lang} remontée "
-                        f"({current_index}/{total_languages})"
-                    )
                 except Exception as e:
                     logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
                     import traceback
@@ -797,7 +801,8 @@ class TranslationStage:
         audio_hash: str,
         language: str,
         translated_text: str,
-        tts_result: TTSResult
+        tts_result: TTSResult,
+        segments: Optional[List[Dict[str, Any]]] = None  # Segments traduits pour synchronisation
     ) -> bool:
         """Cache translated audio for reuse"""
         try:
@@ -810,7 +815,8 @@ class TranslationStage:
                 "voice_cloned": tts_result.voice_cloned,
                 "voice_quality": tts_result.voice_quality,
                 "processing_time_ms": tts_result.processing_time_ms,
-                "cached_at": datetime.now().isoformat()
+                "cached_at": datetime.now().isoformat(),
+                "segments": segments  # Sauvegarder les segments pour synchronisation
             }
 
             await self.audio_cache.set_translated_audio_by_hash(

@@ -28,6 +28,18 @@ const authCache = {
   result: null as AuthState | null
 };
 
+/**
+ * Fonction utilitaire pour invalider le cache d'authentification
+ * À utiliser après une mise à jour des données utilisateur (ex: vérification email)
+ */
+export function invalidateAuthCache() {
+  authCache.result = null;
+  authCache.lastCheck = 0;
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[USE_AUTH] Cache d\'authentification invalidé');
+  }
+}
+
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,

@@ -39,6 +39,7 @@ import { useFieldValidation } from '@/hooks/use-field-validation';
 import { usePhoneValidation } from '@/hooks/use-phone-validation';
 import { COUNTRY_CODES } from '@/constants/countries';
 import type { CountryCode } from 'libphonenumber-js';
+import { invalidateAuthCache } from '@/hooks/use-auth';
 
 interface UserSettingsProps {
   user: UserType | null;
@@ -587,7 +588,38 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       if (response.ok && data.success) {
         toast.success(t('profile.verification.email.sent', 'Email de vérification envoyé ! Vérifiez votre boîte mail.'));
       } else {
-        toast.error(data.error || t('profile.verification.email.error', 'Erreur lors de l\'envoi'));
+        // Si l'erreur indique que l'email est déjà vérifié, recharger les données utilisateur
+        if (data.error && data.error.includes('déjà vérifiée')) {
+          toast.info(t('profile.verification.email.alreadyVerified', 'Votre email est déjà vérifié !'));
+
+          // Invalider le cache d'authentification pour forcer un rechargement
+          invalidateAuthCache();
+
+          // Recharger les données utilisateur pour mettre à jour l'interface
+          try {
+            const meResponse = await fetch(buildApiUrl('/auth/me'), {
+              headers: {
+                'Authorization': `Bearer ${authManager.getAuthToken()}`
+              }
+            });
+
+            if (meResponse.ok) {
+              const meData = await meResponse.json();
+              if (meData.success && meData.data?.user) {
+                const updatedUser: UserType = {
+                  ...user,
+                  emailVerifiedAt: meData.data.user.emailVerifiedAt
+                };
+                onUserUpdate(updatedUser);
+              }
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing user data:', refreshError);
+            // Même si le rechargement échoue, on informe l'utilisateur que l'email est vérifié
+          }
+        } else {
+          toast.error(data.error || t('profile.verification.email.error', 'Erreur lors de l\'envoi'));
+        }
       }
     } catch (error) {
       console.error('Error resending email verification:', error);

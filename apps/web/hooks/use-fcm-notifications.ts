@@ -153,7 +153,6 @@ export function useFCMNotifications(options: UseFCMNotificationsOptions = {}) {
           iosCapabilities,
         });
       } catch (error) {
-        console.error('[useFCMNotifications] Initialization error:', error);
         setState(prev => ({
           ...prev,
           isLoading: false,
@@ -216,7 +215,6 @@ export function useFCMNotifications(options: UseFCMNotificationsOptions = {}) {
 
       return false;
     } catch (error) {
-      console.error('[useFCMNotifications] Request permission error:', error);
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -254,7 +252,6 @@ export function useFCMNotifications(options: UseFCMNotificationsOptions = {}) {
 
       return true;
     } catch (error) {
-      console.error('[useFCMNotifications] Revoke permission error:', error);
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -299,7 +296,6 @@ export function useFCMNotifications(options: UseFCMNotificationsOptions = {}) {
 
       return token;
     } catch (error) {
-      console.error('[useFCMNotifications] Refresh token error:', error);
       setState(prev => ({
         ...prev,
         isLoading: false,
