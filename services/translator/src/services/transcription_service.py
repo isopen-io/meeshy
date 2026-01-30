@@ -224,6 +224,70 @@ class TranscriptionService:
             download_root=self.models_path
         )
 
+    def _is_whisper_hallucination(self, segment: TranscriptionSegment) -> bool:
+        """
+        Détecte les hallucinations communes de Whisper.
+
+        Whisper a tendance à halluciner des phrases de fin de vidéo YouTube:
+        - "Thanks for watching"
+        - "Subscribe"
+        - "Like and subscribe"
+        - Etc.
+
+        Ces hallucinations ont généralement:
+        - Durée nulle ou très courte (startMs == endMs)
+        - Confidence très basse (< 0.3)
+        - Texte correspondant à des phrases communes
+        """
+        # Phrases d'hallucination communes (complètes)
+        HALLUCINATION_PHRASES = {
+            'thanks for watching',
+            'thank you for watching',
+            'thanks for watching!',
+            'thank you for watching!',
+            'subscribe',
+            'subscribe!',
+            'like and subscribe',
+            'please subscribe',
+            'don\'t forget to subscribe',
+            'like comment subscribe',
+            'smash that like button',
+            'hit the bell',
+            'turn on notifications',
+        }
+
+        # Mots isolés suspects (souvent partie d'hallucinations)
+        HALLUCINATION_WORDS = {
+            'thanks', 'thank', 'watching', 'watching!',
+            'subscribe', 'subscribe!', 'subscribed',
+            'like', 'comment', 'share',
+            'bell', 'notification', 'notifications',
+            'smash', 'hit'
+        }
+
+        text_lower = segment.text.strip().lower()
+
+        # 1. Durée nulle ou quasi-nulle (< 10ms) = hallucination très probable
+        duration = segment.end_ms - segment.start_ms
+        if duration < 10:
+            # Si durée nulle/quasi-nulle ET mot suspect, c'est une hallucination
+            if text_lower in HALLUCINATION_PHRASES or text_lower in HALLUCINATION_WORDS:
+                return True
+            # Aussi: mots très courts (conjonctions) avec durée nulle = probable hallucination
+            if text_lower in {'for', 'and', 'the', 'you', 'your'}:
+                return True
+
+        # 2. Phrase exacte d'hallucination commune
+        if text_lower in HALLUCINATION_PHRASES:
+            return True
+
+        # 3. Confidence très basse (< 0.2) + texte suspect
+        if segment.confidence < 0.2:
+            if text_lower in HALLUCINATION_WORDS:
+                return True
+
+        return False
+
     async def transcribe(
         self,
         audio_path: str,
@@ -373,11 +437,36 @@ class TranscriptionService:
                             language=detected_language
                         ))
 
+                # ═══════════════════════════════════════════════════════════════
+                # FILTRAGE DES HALLUCINATIONS WHISPER
+                # ═══════════════════════════════════════════════════════════════
+                # Whisper hallucine parfois des phrases comme "Thanks for watching!"
+                # (entraîné sur beaucoup de vidéos YouTube avec ces fins)
+                original_count = len(segments)
+                filtered_segments = []
+                hallucinations_removed = []
+
+                for seg in segments:
+                    if self._is_whisper_hallucination(seg):
+                        hallucinations_removed.append(seg.text)
+                    else:
+                        filtered_segments.append(seg)
+
+                segments = filtered_segments
+
+                if hallucinations_removed:
+                    logger.info(
+                        f"[TRANSCRIPTION] 🧹 Filtré {len(hallucinations_removed)} hallucination(s) Whisper: "
+                        f"{hallucinations_removed}"
+                    )
+
+                # Recalculer full_text après filtrage
+                full_text = " ".join([seg.text for seg in segments])
+
                 # ❌ FUSION INTELLIGENTE DÉSACTIVÉE TEMPORAIREMENT pour debug multi-speakers
                 # Règles: pause < 90ms ET somme < 8 caractères
-                original_count = len(segments)
                 logger.info(
-                    f"[TRANSCRIPTION] 📊 Segments bruts Whisper: {original_count} segments "
+                    f"[TRANSCRIPTION] 📊 Segments Whisper: {original_count} bruts → {len(segments)} filtrés "
                     f"(fusion désactivée pour préserver granularité)"
                 )
                 # if original_count > 0:
