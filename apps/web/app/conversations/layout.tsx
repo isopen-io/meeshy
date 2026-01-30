@@ -35,17 +35,14 @@ export const metadata: Metadata = {
 
 interface ConversationsLayoutProps {
   children: ReactNode;
-  modal: ReactNode;
 }
 
 export default function ConversationsLayout({
-  children,
-  modal
+  children
 }: ConversationsLayoutProps) {
   return (
     <AuthGuard>
       {children}
-      {modal}
     </AuthGuard>
   );
 }
