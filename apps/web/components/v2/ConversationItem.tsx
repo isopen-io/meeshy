@@ -216,9 +216,17 @@ export function ConversationItem({
       onLongPress={onDragStart}
       className={className}
     >
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className={`w-full p-4 flex items-start gap-3 transition-colors text-left ${
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        className={`w-full p-4 flex items-start gap-3 transition-colors text-left cursor-pointer ${
           isSelected ? 'bg-[#F5EDE3]' : 'hover:bg-[#F5EDE3]/50'
         }`}
       >
@@ -366,7 +374,7 @@ export function ConversationItem({
             </div>
           )}
         </div>
-      </button>
+      </div>
     </SwipeableRow>
   );
 }
