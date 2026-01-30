@@ -258,18 +258,32 @@ export default function V2ChatsPage() {
     theme.colors.goldAccent,
   ];
 
+  // Sur mobile, on affiche soit la liste soit la conversation
+  const showMobileChat = selectedChat !== null;
+
   return (
     <div className="h-screen flex relative" style={{ background: theme.colors.warmCanvas }}>
-      {/* Sidebar */}
+      {/* Sidebar - caché sur mobile quand une conversation est sélectionnée */}
       <div
-        className="border-r flex flex-col relative"
+        className={`
+          border-r flex-col relative
+          ${showMobileChat ? 'hidden md:flex' : 'flex'}
+          w-full md:w-auto
+        `}
         style={{
-          width: `${sidebarWidth}%`,
+          '--sidebar-width': `${sidebarWidth}%`,
           minWidth: '280px',
           borderColor: theme.colors.parchment,
           background: 'white',
-        }}
+        } as React.CSSProperties}
       >
+        <style jsx>{`
+          @media (min-width: 768px) {
+            div {
+              width: var(--sidebar-width) !important;
+            }
+          }
+        `}</style>
         {/* Header */}
         <div className="p-4 border-b" style={{ borderColor: theme.colors.parchment }}>
           <div className="flex items-center justify-between mb-4">
@@ -483,9 +497,9 @@ export default function V2ChatsPage() {
         </div>
       </div>
 
-      {/* Resizer */}
+      {/* Resizer (desktop uniquement) */}
       <div
-        className="w-1 cursor-ew-resize hover:bg-terracotta/50 active:bg-terracotta transition-colors relative group"
+        className="hidden md:block w-1 cursor-ew-resize hover:bg-terracotta/50 active:bg-terracotta transition-colors relative group"
         style={{ background: theme.colors.parchment }}
         onMouseDown={(e) => {
           e.preventDefault();
@@ -517,8 +531,14 @@ export default function V2ChatsPage() {
         />
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col" style={{ width: `${100 - sidebarWidth}%` }}>
+      {/* Chat Area - plein écran sur mobile, caché si pas de conversation sélectionnée */}
+      <div
+        className={`
+          flex-1 flex-col
+          ${showMobileChat ? 'flex' : 'hidden md:flex'}
+          w-full md:flex-1
+        `}
+      >
         {selectedConversation ? (
           <>
             {/* Chat Header */}
@@ -527,16 +547,40 @@ export default function V2ChatsPage() {
               style={{ borderColor: theme.colors.parchment, background: 'white' }}
             >
               <div className="flex items-center gap-3">
-                <LanguageOrb code={selectedConversation.languageCode} size="md" pulse={false} />
+                {/* Bouton retour (mobile uniquement) */}
+                <button
+                  onClick={() => setSelectedChat(null)}
+                  className="md:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  style={{ color: theme.colors.charcoal }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                {selectedConversation.isGroup ? (
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${theme.colors.deepTeal}, ${theme.colors.royalIndigo})` }}
+                  >
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                ) : (
+                  <LanguageOrb code={selectedConversation.languageCode} size="md" pulse={false} />
+                )}
                 <div>
                   <h2 className="font-semibold" style={{ color: theme.colors.charcoal }}>
                     {selectedConversation.customName || selectedConversation.name}
                   </h2>
                   <span
                     className="text-sm"
-                    style={{ color: selectedConversation.isOnline ? theme.colors.jadeGreen : theme.colors.textMuted }}
+                    style={{ color: selectedConversation.isGroup ? theme.colors.textMuted : (selectedConversation.isOnline ? theme.colors.jadeGreen : theme.colors.textMuted) }}
                   >
-                    {selectedConversation.isOnline ? 'En ligne' : 'Hors ligne'}
+                    {selectedConversation.isGroup
+                      ? `${selectedConversation.participantCount} participants${selectedConversation.hasAnonymousParticipants ? ' · Invités' : ''}`
+                      : (selectedConversation.isOnline ? 'En ligne' : 'Hors ligne')
+                    }
                   </span>
                 </div>
               </div>
