@@ -168,7 +168,7 @@ export function useAuth() {
       '/reset-password',
       '/auth-status'
     ];
-    const isPublicRoute = publicRoutes.includes(pathname);
+    const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/v2');
 
     // Routes d'authentification publiques (patterns dynamiques)
     const isAuthRoute = pathname.startsWith('/auth/'); // /auth/verify-email, /auth/verify-phone, /auth/magic-link, /auth/verify-2fa, etc.
