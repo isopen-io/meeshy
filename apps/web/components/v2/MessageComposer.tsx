@@ -374,7 +374,7 @@ export function MessageComposer({
           }}
         >
           {/* Barre d'outils en haut: Langue + Icônes d'action */}
-          <div className="absolute top-2 left-3 right-3 z-10 flex items-center gap-1">
+          <div className="absolute top-2 left-3 right-3 z-10 flex items-center gap-0.5 md:gap-1">
             {/* Sélecteur de langue */}
             <div className="relative">
               <button
@@ -437,42 +437,46 @@ export function MessageComposer({
               <button
                 onClick={onAttachmentClick}
                 disabled={disabled || isRecording}
-                className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
                 style={{ color: theme.colors.textMuted }}
                 title="Pièce jointe"
+                aria-label="Ajouter une pièce jointe"
               >
-                <AttachmentIcon className="w-4 h-4" />
+                <AttachmentIcon className="w-5 h-5 md:w-4 md:h-4" />
               </button>
             )}
 
             <button
               disabled={disabled || isRecording}
-              className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+              className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
               style={{ color: theme.colors.textMuted }}
               title="Emoji"
+              aria-label="Ajouter un emoji"
             >
-              <EmojiIcon className="w-4 h-4" />
+              <EmojiIcon className="w-5 h-5 md:w-4 md:h-4" />
             </button>
 
             {showVoice && (
               isRecording ? (
                 <button
                   onClick={stopRecording}
-                  className="p-1.5 rounded-full transition-colors animate-pulse"
+                  className="p-2 md:p-1.5 rounded-full transition-colors animate-pulse"
                   style={{ background: '#EF4444', color: 'white' }}
                   title="Arrêter"
+                  aria-label="Arrêter l'enregistrement"
                 >
-                  <StopIcon className="w-4 h-4" />
+                  <StopIcon className="w-5 h-5 md:w-4 md:h-4" />
                 </button>
               ) : (
                 <button
                   onClick={startRecording}
                   disabled={disabled}
-                  className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                  className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
                   style={{ color: theme.colors.textMuted }}
                   title="Message vocal"
+                  aria-label="Enregistrer un message vocal"
                 >
-                  <MicIcon className="w-4 h-4" />
+                  <MicIcon className="w-5 h-5 md:w-4 md:h-4" />
                 </button>
               )
             )}
@@ -481,11 +485,12 @@ export function MessageComposer({
               <button
                 onClick={requestLocation}
                 disabled={disabled}
-                className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
                 style={{ color: theme.colors.textMuted }}
                 title="Position"
+                aria-label="Partager ma position"
               >
-                <LocationIcon className="w-4 h-4" />
+                <LocationIcon className="w-5 h-5 md:w-4 md:h-4" />
               </button>
             )}
 

@@ -86,6 +86,8 @@ export function ConversationDrawer({
     }
   }, [isOpen, conversationName]);
 
+  // Ne rien rendre si le composant n'est pas monté
+  // Cela évite les overlays fantômes qui bloquent les interactions
   if (!mounted) return null;
 
   const handleNameBlur = () => {
@@ -96,14 +98,13 @@ export function ConversationDrawer({
 
   return (
     <>
-      {/* Overlay */}
-      <div
-        className={`
-          fixed inset-0 bg-black/30 z-40 transition-opacity duration-300
-          ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-        `}
-        onClick={onClose}
-      />
+      {/* Overlay - seulement affiché quand isOpen est true */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40 transition-opacity duration-300"
+          onClick={onClose}
+        />
+      )}
 
       {/* Drawer */}
       <div
@@ -111,7 +112,7 @@ export function ConversationDrawer({
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] z-50
           flex flex-col overflow-hidden
           transition-transform duration-300 ease-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
           ${className}
         `}
         style={{ background: 'white' }}
