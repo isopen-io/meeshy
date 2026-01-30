@@ -20,7 +20,8 @@ export interface ConversationItemData {
   avatar?: string;
   languageCode: string;
   isOnline: boolean;
-  isAnonymous: boolean;
+  /** @deprecated Utiliser isGroup + hasAnonymousParticipants pour les groupes */
+  isAnonymous?: boolean;
   isPinned: boolean;
   isImportant: boolean;
   isMuted: boolean;
@@ -31,9 +32,19 @@ export interface ConversationItemData {
     type: 'text' | 'photo' | 'file' | 'voice';
     attachmentCount?: number;
     timestamp: string;
+    /** Nom de l'expéditeur (pour les groupes) */
+    senderName?: string;
   };
   draft?: string;
   isTyping: boolean;
+  /** Indique si c'est une conversation de groupe */
+  isGroup?: boolean;
+  /** Nombre de participants (groupes uniquement) */
+  participantCount?: number;
+  /** Indique si le groupe a des participants anonymes */
+  hasAnonymousParticipants?: boolean;
+  /** ID de la catégorie */
+  categoryId?: string;
 }
 
 export interface ConversationItemProps {
@@ -183,8 +194,16 @@ export function ConversationItem({
       );
     }
 
+    // Ajouter le nom de l'expéditeur pour les groupes
+    const senderPrefix = conversation.isGroup && lastMessage.senderName ? (
+      <span className="font-medium" style={{ color: theme.colors.charcoal }}>
+        {lastMessage.senderName}:{' '}
+      </span>
+    ) : null;
+
     return (
       <span className="truncate" style={{ color: theme.colors.textSecondary }}>
+        {senderPrefix}
         {lastMessage.content}
       </span>
     );
@@ -205,15 +224,24 @@ export function ConversationItem({
       >
         {/* Avatar avec indicateurs */}
         <div className="relative flex-shrink-0">
-          {/* Badge anonyme en haut à gauche */}
-          {conversation.isAnonymous && (
+          {/* Badge anonyme en haut à gauche (uniquement pour les groupes avec participants anonymes) */}
+          {conversation.isGroup && conversation.hasAnonymousParticipants && (
             <div className="absolute -top-1 -left-1 z-10">
               <GhostBadge size="sm" />
             </div>
           )}
 
-          {/* Avatar / Language Orb */}
-          {conversation.avatar ? (
+          {/* Avatar / Language Orb / Icône groupe */}
+          {conversation.isGroup ? (
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${theme.colors.deepTeal}, ${theme.colors.royalIndigo})` }}
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+          ) : conversation.avatar ? (
             <img
               src={conversation.avatar}
               alt={displayName}
@@ -223,8 +251,8 @@ export function ConversationItem({
             <LanguageOrb code={conversation.languageCode} size="md" pulse={false} />
           )}
 
-          {/* Indicateur en ligne */}
-          {conversation.isOnline && (
+          {/* Indicateur en ligne (conversations directes uniquement) */}
+          {!conversation.isGroup && conversation.isOnline && (
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white"
               style={{ background: theme.colors.jadeGreen }}
@@ -240,6 +268,16 @@ export function ConversationItem({
               <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
               </svg>
+            </div>
+          )}
+
+          {/* Badge nombre de participants (groupes) */}
+          {conversation.isGroup && conversation.participantCount && (
+            <div
+              className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-white"
+              style={{ background: theme.colors.deepTeal }}
+            >
+              {conversation.participantCount > 99 ? '99+' : conversation.participantCount}
             </div>
           )}
         </div>
