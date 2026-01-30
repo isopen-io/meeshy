@@ -222,13 +222,10 @@ export function useConversationMessages(
       } else {
         // Premier chargement : garder l'ordre du backend (récents en premier)
         // MessagesDisplay avec reverseOrder=true va inverser pour afficher anciens en haut, récents en bas
-        // Tri explicite pour garantir l'ordre DESC par createdAt
-        const sortedMessages = [...newMessages].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateB - dateA; // DESC: plus récent en premier
-        });
-        
+
+        // 🔴 OPTIMISATION: Utiliser la fonction de tri mémoïsée
+        const sortedMessages = sortMessagesByDateDesc(newMessages);
+
         setMessages(sortedMessages);
         setOffset(limit);
         offsetRef.current = limit; // Mettre à jour la ref immédiatement
@@ -248,13 +245,15 @@ export function useConversationMessages(
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [conversationId, currentUser, enabled, limit]); // Retirer offset puisqu'on utilise offsetRef
+  }, [conversationId, currentUserId, enabled, limit]); // 🔴 OPTIMISATION: currentUserId au lieu de currentUser
 
+  // 🟡 OPTIMISATION: Debounce stable avec ref
   // Version debounced de loadMessages pour éviter les appels multiples
-  // OPTIMISATION: Réduit de 300ms à 100ms pour une réponse plus rapide
   const loadMessages = useMemo(
-    () => debounce(loadMessagesInternal, 100),
-    [loadMessagesInternal]
+    () => debounce((...args: Parameters<typeof loadMessagesInternal>) => {
+      return loadMessagesInternalRef.current!(...args);
+    }, 100),
+    [] // Pas de dépendances! Debounce stable
   );
 
   // Fonction pour charger plus de messages
@@ -299,33 +298,32 @@ export function useConversationMessages(
       }
 
       wasAdded = true;
-      
+
+      // 🔴 OPTIMISATION: Utiliser la fonction de tri mémoïsée
       // Ajouter le nouveau message et GARANTIR l'ordre DESC par createdAt
-      const newMessages = [message, ...prev];
-      
-      // Tri explicite par createdAt DESC (plus récent en premier)
-      // Cela garantit que même si les messages arrivent dans le désordre via WebSocket,
-      // l'affichage final (avec reverseOrder) sera correct
-      newMessages.sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return dateB - dateA; // DESC: plus récent en premier
-      });
-      
-      return newMessages;
+      return sortMessagesByDateDesc([message, ...prev]);
     });
     
     return wasAdded;
   }, []);
 
+  // 🔴 OPTIMISATION: updateMessage O(1) avec Map au lieu de O(n) avec map
   // Fonction pour mettre à jour un message (support des callbacks)
   const updateMessage = useCallback((messageId: string, updates: Partial<Message> | ((prev: Message) => Message)) => {
-    setMessages(prev => prev.map(msg => {
-      if (msg.id === messageId) {
-        return typeof updates === 'function' ? updates(msg) : { ...msg, ...updates };
-      }
-      return msg;
-    }));
+    const index = messagesIndexMapRef.current.get(messageId);
+    if (index === undefined) {
+      console.warn(`[updateMessage] Message ${messageId} not found in index`);
+      return;
+    }
+
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const currentMessage = prev[index];
+      newMessages[index] = typeof updates === 'function'
+        ? updates(currentMessage)
+        : { ...currentMessage, ...updates };
+      return newMessages;
+    });
   }, []);
 
   // Fonction pour supprimer un message
@@ -427,10 +425,10 @@ export function useConversationMessages(
 
   // Chargement initial
   useEffect(() => {
-    if (conversationId && currentUser && enabled && !isInitialized) {
+    if (conversationId && currentUserId && enabled && !isInitialized) {
       loadMessages(false);
     }
-  }, [conversationId, currentUser, enabled, isInitialized]);
+  }, [conversationId, currentUserId, enabled, isInitialized, loadMessages]); // 🔴 OPTIMISATION: currentUserId
 
   // Marquer le scroll initial comme effectué après l'initialisation
   useEffect(() => {
@@ -468,6 +466,19 @@ export function useConversationMessages(
     const timeoutId = setTimeout(checkAndLoadMore, 500);
     return () => clearTimeout(timeoutId);
   }, [disableAutoFill, isInitialized, messages.length, isLoadingMore, hasMore, loadMore]);
+
+  // 🔴 OPTIMISATION: Mettre à jour l'index Map pour updateMessage O(1)
+  useEffect(() => {
+    messagesIndexMapRef.current.clear();
+    messages.forEach((msg, index) => {
+      messagesIndexMapRef.current.set(msg.id, index);
+    });
+  }, [messages]);
+
+  // 🟡 OPTIMISATION: Mettre à jour la ref de loadMessagesInternal pour debounce stable
+  useEffect(() => {
+    loadMessagesInternalRef.current = loadMessagesInternal;
+  }, [loadMessagesInternal]);
 
   // Nettoyage à la destruction
   useEffect(() => {

@@ -75,6 +75,10 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     onConversationStats
   } = options;
 
+  // 🟠 OPTIMISATION: Extraire uniquement l'ID et la langue pour éviter re-renders
+  const currentUserId = currentUser?.id;
+  const systemLanguage = currentUser?.systemLanguage || 'fr';
+
   // État d'envoi
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -83,7 +87,13 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
+  // 🟠 OPTIMISATION: Ref pour conversationId stable dans handleTypingEvent
+  const conversationIdRef = useRef(conversationId);
+
+  // 🟡 OPTIMISATION: Ref pour cleanup timeout
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Store pour les messages en échec
   const { addFailedMessage } = useFailedMessagesStore();
 
@@ -117,6 +127,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     onConversationStats
   });
 
+  // 🟠 OPTIMISATION: handleTypingEvent stable sans dépendances (utilise ref)
   // Gestion des indicateurs de frappe
   const handleTypingEvent = useCallback((userId: string, username: string, isTyping: boolean) => {
     setTypingUsers(prev => {
@@ -126,7 +137,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
         const newUser = {
           userId,
           username,
-          conversationId: conversationId || '',
+          conversationId: conversationIdRef.current || '',
           timestamp: Date.now()
         };
 
@@ -142,31 +153,34 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
         return prev.filter(user => user.userId !== userId);
       }
     });
-  }, [conversationId]);
+  }, []); // Pas de dépendances! Stable
 
+  // 🟠 OPTIMISATION: startTyping avec currentUserId au lieu de currentUser
   // Actions de frappe
   const startTyping = useCallback(() => {
-    if (!isTyping && conversationId && currentUser) {
+    if (!isTyping && conversationId && currentUserId) {
       setIsTyping(true);
       socketMessaging.startTyping();
-      
+
       // Note: Le timeout est géré dans le composant (ConversationLayout)
       // pour permettre un meilleur contrôle du délai de 3 secondes
     }
-  }, [isTyping, conversationId, currentUser, socketMessaging]);
+  }, [isTyping, conversationId, currentUserId, socketMessaging]);
 
+  // 🟠 OPTIMISATION: stopTyping avec currentUserId au lieu de currentUser
   const stopTyping = useCallback(() => {
-    if (isTyping && conversationId && currentUser) {
+    if (isTyping && conversationId && currentUserId) {
       setIsTyping(false);
       socketMessaging.stopTyping();
-      
+
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
     }
-  }, [isTyping, conversationId, currentUser, socketMessaging]);
+  }, [isTyping, conversationId, currentUserId, socketMessaging]);
 
+  // 🟠 OPTIMISATION: sendMessage avec currentUserId et systemLanguage
   // Envoi de message (avec ou sans attachments)
   const sendMessage = useCallback(async (
     content: string,
@@ -176,8 +190,8 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     attachmentIds?: string[],
     attachmentMimeTypes?: string[]
   ): Promise<boolean> => {
-    if (!conversationId || !currentUser) {
-      console.error('[MESSAGING] Cannot send message: missing conversationId or currentUser');
+    if (!conversationId || !currentUserId) {
+      console.error('[MESSAGING] Cannot send message: missing conversationId or currentUserId');
       return false;
     }
 
@@ -193,7 +207,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
 
     try {
       // Déterminer la langue source (originalLanguage ou langue système de l'utilisateur)
-      const sourceLanguage = originalLanguage || currentUser?.systemLanguage || 'fr';
+      const sourceLanguage = originalLanguage || systemLanguage;
 
       // Préparer les métadonnées
       const metadata = prepareMessageMetadata(content, sourceLanguage);
@@ -237,7 +251,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
         const failedMsgId = addFailedMessage({
           conversationId,
           content,
-          originalLanguage: originalLanguage || currentUser?.systemLanguage || 'fr',
+          originalLanguage: originalLanguage || systemLanguage,
           attachmentIds: attachmentIds || [],
           replyToId,
           error: errorMessage,
@@ -264,7 +278,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     } finally {
       setIsSending(false);
     }
-  }, [conversationId, currentUser, socketMessaging, onMessageSent, onMessageFailed, stopTyping, addFailedMessage]);
+  }, [conversationId, currentUserId, systemLanguage, socketMessaging, onMessageSent, onMessageFailed, stopTyping, addFailedMessage]); // 🟠 OPTIMISATION: currentUserId + systemLanguage
 
   // Édition de message
   const editMessage = useCallback(async (messageId: string, newContent: string): Promise<boolean> => {
@@ -308,6 +322,11 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     }
   }, [socketMessaging]);
 
+  // 🟠 OPTIMISATION: Mettre à jour conversationIdRef pour handleTypingEvent stable
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
   // Nettoyage des timeouts
   useEffect(() => {
     return () => {
@@ -317,17 +336,42 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     };
   }, []);
 
+  // 🟡 OPTIMISATION: Nettoyage optimisé avec setTimeout récursif (seulement si users actifs)
   // Nettoyage des utilisateurs qui tapent (après 5 secondes)
   useEffect(() => {
-    const cleanup = setInterval(() => {
-      const now = Date.now();
-      setTypingUsers(prev => 
-        prev.filter(user => now - user.timestamp < 5000)
-      );
-    }, 1000);
+    // Ne rien faire si aucun user ne tape
+    if (typingUsers.length === 0) {
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
+      }
+      return;
+    }
 
-    return () => clearInterval(cleanup);
-  }, []);
+    const cleanup = () => {
+      const now = Date.now();
+      setTypingUsers(prev => {
+        const filtered = prev.filter(user => now - user.timestamp < 5000);
+
+        // Re-scheduler seulement s'il reste des users
+        if (filtered.length > 0) {
+          cleanupTimeoutRef.current = setTimeout(cleanup, 1000);
+        }
+
+        return filtered;
+      });
+    };
+
+    // Démarrer le premier timeout
+    cleanupTimeoutRef.current = setTimeout(cleanup, 1000);
+
+    return () => {
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
+      }
+    };
+  }, [typingUsers.length]); // Dépend seulement de la longueur
 
   return {
     // État d'envoi
