@@ -8,6 +8,10 @@ import {
   LanguageOrb,
   MessageBubble,
   MessageComposer,
+  AudioPlayer,
+  VideoPlayer,
+  ImageGallery,
+  ReplyPreview,
   theme,
   useResizer,
   ConversationItem,
@@ -611,6 +615,7 @@ export default function V2ChatsPage() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4" style={{ background: '#FAFAFA' }}>
+              {/* Message texte simple */}
               <MessageBubble
                 languageCode="ja"
                 languageName="Japonais"
@@ -622,6 +627,8 @@ export default function V2ChatsPage() {
                 sender="Yuki"
                 timestamp="10:32"
               />
+
+              {/* Message envoyé avec texte */}
               <MessageBubble
                 isSent
                 languageCode="fr"
@@ -633,6 +640,91 @@ export default function V2ChatsPage() {
                 ]}
                 timestamp="10:33"
               />
+
+              {/* Message avec images */}
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 relative">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                    style={{ background: theme.colors.deepTeal }}
+                  >
+                    Y
+                  </div>
+                </div>
+                <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-white border border-[#E5E5E5] p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-[#2B2D42]">Yuki</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.colors.deepTeal}15`, color: theme.colors.deepTeal }}
+                    >
+                      🇯🇵 Japonais
+                    </span>
+                  </div>
+                  <p className="text-[0.95rem] leading-relaxed mb-3">プレゼンのスライドを送ります！</p>
+                  <ImageGallery
+                    images={[
+                      { url: 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=400&h=300&fit=crop', alt: 'Slide 1' },
+                      { url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop', alt: 'Slide 2' },
+                      { url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop', alt: 'Slide 3' },
+                    ]}
+                    className="rounded-lg overflow-hidden"
+                  />
+                  <div className="text-xs mt-2 text-[#9CA3AF]">10:34</div>
+                </div>
+              </div>
+
+              {/* Message en réponse avec ReplyPreview */}
+              <div className="flex gap-2 flex-row-reverse">
+                <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[#E76F51] text-white p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-row-reverse">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full bg-white/20"
+                    >
+                      🇫🇷 Français (Original)
+                    </span>
+                  </div>
+                  <ReplyPreview
+                    authorName="Yuki"
+                    content="プレゼンのスライドを送ります！"
+                    contentType="image"
+                    languageCode="ja"
+                    className="mb-3 bg-white/10 border-white/30"
+                  />
+                  <p className="text-[0.95rem] leading-relaxed">Super ! Les slides sont magnifiques, j'adore le design 😍</p>
+                  <div className="text-xs mt-2 text-white/60">10:35</div>
+                </div>
+              </div>
+
+              {/* Message avec audio */}
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 relative">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                    style={{ background: theme.colors.terracotta }}
+                  >
+                    C
+                  </div>
+                </div>
+                <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-white border border-[#E5E5E5] p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-[#2B2D42]">Carlos</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.colors.terracotta}15`, color: theme.colors.terracotta }}
+                    >
+                      🇪🇸 Español
+                    </span>
+                  </div>
+                  <AudioPlayer
+                    src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+                    duration={45}
+                  />
+                  <div className="text-xs mt-2 text-[#9CA3AF]">10:36</div>
+                </div>
+              </div>
+
+              {/* Message texte avec emoji */}
               <MessageBubble
                 languageCode="ja"
                 languageName="Japonais"
@@ -642,8 +734,58 @@ export default function V2ChatsPage() {
                   { languageCode: 'es', languageName: 'Español', content: "¡Genial! ¡Estoy deseando que llegue! 🎉" },
                 ]}
                 sender="Yuki"
-                timestamp="10:34"
+                timestamp="10:37"
               />
+
+              {/* Message avec vidéo */}
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 relative">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                    style={{ background: theme.colors.royalIndigo }}
+                  >
+                    E
+                  </div>
+                </div>
+                <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-white border border-[#E5E5E5] p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-[#2B2D42]">Emma</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.colors.royalIndigo}15`, color: theme.colors.royalIndigo }}
+                    >
+                      🇬🇧 English
+                    </span>
+                  </div>
+                  <p className="text-[0.95rem] leading-relaxed mb-3">Check out this demo video!</p>
+                  <VideoPlayer
+                    src="https://www.w3schools.com/html/mov_bbb.mp4"
+                    poster="https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&h=225&fit=crop"
+                    duration={10}
+                  />
+                  <div className="text-xs mt-2 text-[#9CA3AF]">10:38</div>
+                </div>
+              </div>
+
+              {/* Message envoyé avec audio */}
+              <div className="flex gap-2 flex-row-reverse">
+                <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[#E76F51] text-white p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-row-reverse">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full bg-white/20">
+                      🇫🇷 Français (Original)
+                    </span>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2">
+                    <AudioPlayer
+                      src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+                      duration={32}
+                    />
+                  </div>
+                  <div className="text-xs mt-2 text-white/60">10:39</div>
+                </div>
+              </div>
+
+              {/* Message anonyme */}
               <MessageBubble
                 languageCode="es"
                 languageName="Espagnol"
@@ -655,8 +797,63 @@ export default function V2ChatsPage() {
                 ]}
                 sender="Invité"
                 isAnonymous={true}
-                timestamp="10:35"
+                timestamp="10:40"
               />
+
+              {/* Message en réponse à un audio */}
+              <div className="flex gap-2 flex-row-reverse">
+                <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[#E76F51] text-white p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-row-reverse">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full bg-white/20">
+                      🇫🇷 Français (Original)
+                    </span>
+                  </div>
+                  <ReplyPreview
+                    authorName="Carlos"
+                    content=""
+                    contentType="audio"
+                    languageCode="es"
+                    className="mb-3 bg-white/10 border-white/30"
+                  />
+                  <p className="text-[0.95rem] leading-relaxed">Merci Carlos, ton message vocal était très clair ! 👍</p>
+                  <div className="text-xs mt-2 text-white/60">10:41</div>
+                </div>
+              </div>
+
+              {/* Message avec plusieurs images */}
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 relative">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                    style={{ background: theme.colors.jadeGreen }}
+                  >
+                    A
+                  </div>
+                </div>
+                <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-white border border-[#E5E5E5] p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-[#2B2D42]">Ahmed</span>
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.colors.jadeGreen}15`, color: theme.colors.jadeGreen }}
+                    >
+                      🇸🇦 العربية
+                    </span>
+                  </div>
+                  <p className="text-[0.95rem] leading-relaxed mb-3">صور من الاجتماع الأخير 📸</p>
+                  <ImageGallery
+                    images={[
+                      { url: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop', alt: 'Meeting 1' },
+                      { url: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=400&h=300&fit=crop', alt: 'Meeting 2' },
+                      { url: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=300&fit=crop', alt: 'Meeting 3' },
+                      { url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=400&h=300&fit=crop', alt: 'Meeting 4' },
+                      { url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=400&h=300&fit=crop', alt: 'Meeting 5' },
+                    ]}
+                    className="rounded-lg overflow-hidden"
+                  />
+                  <div className="text-xs mt-2 text-[#9CA3AF]">10:42</div>
+                </div>
+              </div>
             </div>
 
             {/* Zone de composition de message */}

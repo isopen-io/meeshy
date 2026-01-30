@@ -60,3 +60,15 @@ export type { ConversationSettingsProps, Participant, ConversationStats } from '
 
 export { MessageComposer } from './MessageComposer';
 export type { MessageComposerProps, Attachment, LanguageOption } from './MessageComposer';
+
+export { ReplyPreview } from './ReplyPreview';
+export type { ReplyPreviewProps, ContentType } from './ReplyPreview';
+
+export { ImageGallery } from './ImageGallery';
+export type { ImageGalleryProps, ImageItem } from './ImageGallery';
+
+export { AudioPlayer } from './AudioPlayer';
+export type { AudioPlayerProps } from './AudioPlayer';
+
+export { VideoPlayer } from './VideoPlayer';
+export type { VideoPlayerProps } from './VideoPlayer';
