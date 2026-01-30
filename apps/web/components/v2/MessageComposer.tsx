@@ -9,43 +9,53 @@ export interface Attachment {
   name: string;
   url?: string;
   size?: number;
-  duration?: number; // Pour les messages vocaux (en secondes)
-  coordinates?: { lat: number; lng: number }; // Pour la localisation
-  preview?: string; // URL de prévisualisation pour les images
+  duration?: number;
+  coordinates?: { lat: number; lng: number };
+  preview?: string;
+}
+
+export interface LanguageOption {
+  code: string;
+  name: string;
+  flag: string;
 }
 
 export interface MessageComposerProps {
-  /** Valeur du message */
   value?: string;
-  /** Callback quand le message change */
   onChange?: (value: string) => void;
-  /** Callback quand le message est envoyé */
-  onSend?: (message: string, attachments: Attachment[]) => void;
-  /** Placeholder du champ de texte */
+  onSend?: (message: string, attachments: Attachment[], languageCode: string) => void;
   placeholder?: string;
-  /** Désactiver l'envoi */
   disabled?: boolean;
-  /** Afficher le bouton vocal */
   showVoice?: boolean;
-  /** Afficher le bouton localisation */
   showLocation?: boolean;
-  /** Afficher le bouton pièce jointe */
   showAttachment?: boolean;
-  /** Callback pour les pièces jointes */
   onAttachmentClick?: () => void;
-  /** Callback pour l'enregistrement vocal */
   onVoiceRecord?: (blob: Blob, duration: number) => void;
-  /** Callback pour la localisation */
   onLocationRequest?: () => void;
-  /** Nombre max de caractères */
   maxLength?: number;
-  /** Langue de l'utilisateur (pour l'indicateur) */
-  userLanguage?: string;
-  /** Classe CSS additionnelle */
+  /** Langue sélectionnée */
+  selectedLanguage?: string;
+  /** Liste des langues disponibles */
+  availableLanguages?: LanguageOption[];
+  /** Callback quand la langue change */
+  onLanguageChange?: (code: string) => void;
   className?: string;
 }
 
-// Icône microphone
+const DEFAULT_LANGUAGES: LanguageOption[] = [
+  { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'es', name: 'Español', flag: '🇪🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+  { code: 'pt', name: 'Português', flag: '🇧🇷' },
+  { code: 'ja', name: '日本語', flag: '🇯🇵' },
+  { code: 'zh', name: '中文', flag: '🇨🇳' },
+  { code: 'ko', name: '한국어', flag: '🇰🇷' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+];
+
+// Icônes
 function MicIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -54,7 +64,6 @@ function MicIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône localisation
 function LocationIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,7 +73,6 @@ function LocationIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône pièce jointe
 function AttachmentIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +81,6 @@ function AttachmentIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône envoi
 function SendIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,7 +89,6 @@ function SendIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône stop
 function StopIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -91,7 +97,6 @@ function StopIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône emoji
 function EmojiIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,11 +105,18 @@ function EmojiIcon({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-// Icône fermer
 function CloseIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className = 'w-3 h-3' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
     </svg>
   );
 }
@@ -134,7 +146,9 @@ export function MessageComposer({
   onVoiceRecord,
   onLocationRequest,
   maxLength,
-  userLanguage,
+  selectedLanguage = 'fr',
+  availableLanguages = DEFAULT_LANGUAGES,
+  onLanguageChange,
   className = '',
 }: MessageComposerProps) {
   const [message, setMessage] = useState(value);
@@ -142,18 +156,24 @@ export function MessageComposer({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState(selectedLanguage);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Sync avec value externe
+  const currentLangOption = availableLanguages.find(l => l.code === currentLanguage) || availableLanguages[0];
+
   useEffect(() => {
     setMessage(value);
   }, [value]);
 
-  // Auto-resize du textarea
+  useEffect(() => {
+    setCurrentLanguage(selectedLanguage);
+  }, [selectedLanguage]);
+
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -166,29 +186,25 @@ export function MessageComposer({
     adjustTextareaHeight();
   }, [message, adjustTextareaHeight]);
 
-  // Gestion du changement de message
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = maxLength ? e.target.value.slice(0, maxLength) : e.target.value;
     setMessage(newValue);
     onChange?.(newValue);
   }, [onChange, maxLength]);
 
-  // Envoi du message
   const handleSend = useCallback(() => {
     if ((!message.trim() && attachments.length === 0) || disabled) return;
 
-    onSend?.(message.trim(), attachments);
+    onSend?.(message.trim(), attachments, currentLanguage);
     setMessage('');
     setAttachments([]);
     onChange?.('');
 
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [message, attachments, disabled, onSend, onChange]);
+  }, [message, attachments, disabled, onSend, onChange, currentLanguage]);
 
-  // Gestion des touches
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -196,7 +212,6 @@ export function MessageComposer({
     }
   }, [handleSend]);
 
-  // Démarrer l'enregistrement vocal
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -212,7 +227,6 @@ export function MessageComposer({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const duration = recordingDuration;
 
-        // Ajouter comme attachment
         const voiceAttachment: Attachment = {
           id: `voice-${Date.now()}`,
           type: 'voice',
@@ -223,8 +237,6 @@ export function MessageComposer({
         setAttachments((prev) => [...prev, voiceAttachment]);
 
         onVoiceRecord?.(audioBlob, duration);
-
-        // Arrêter les tracks
         stream.getTracks().forEach((track) => track.stop());
       };
 
@@ -232,7 +244,6 @@ export function MessageComposer({
       setIsRecording(true);
       setRecordingDuration(0);
 
-      // Timer pour la durée
       recordingIntervalRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
@@ -241,7 +252,6 @@ export function MessageComposer({
     }
   }, [recordingDuration, onVoiceRecord]);
 
-  // Arrêter l'enregistrement vocal
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -254,7 +264,6 @@ export function MessageComposer({
     }
   }, [isRecording]);
 
-  // Demander la localisation
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
       console.error('Géolocalisation non supportée');
@@ -281,19 +290,21 @@ export function MessageComposer({
     );
   }, [onLocationRequest]);
 
-  // Supprimer un attachment
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  const handleLanguageSelect = useCallback((code: string) => {
+    setCurrentLanguage(code);
+    setShowLanguageMenu(false);
+    onLanguageChange?.(code);
+  }, [onLanguageChange]);
 
   const hasContent = message.trim().length > 0 || attachments.length > 0;
 
   return (
     <div
-      className={`
-        border-t transition-all
-        ${className}
-      `}
+      className={`border-t transition-all ${className}`}
       style={{
         borderColor: theme.colors.parchment,
         background: 'white',
@@ -311,29 +322,21 @@ export function MessageComposer({
                 color: theme.colors.charcoal,
               }}
             >
-              {/* Icône selon le type */}
               {attachment.type === 'voice' && (
                 <MicIcon className="w-4 h-4" style={{ color: theme.colors.terracotta } as React.CSSProperties} />
               )}
               {attachment.type === 'location' && (
                 <LocationIcon className="w-4 h-4" style={{ color: theme.colors.jadeGreen } as React.CSSProperties} />
               )}
-              {attachment.type === 'image' && (
-                <span>🖼️</span>
-              )}
-              {attachment.type === 'file' && (
-                <AttachmentIcon className="w-4 h-4" />
-              )}
+              {attachment.type === 'image' && <span>🖼️</span>}
+              {attachment.type === 'file' && <AttachmentIcon className="w-4 h-4" />}
 
               <span className="max-w-[150px] truncate">{attachment.name}</span>
 
               {attachment.size && (
-                <span className="text-xs opacity-60">
-                  {formatFileSize(attachment.size)}
-                </span>
+                <span className="text-xs opacity-60">{formatFileSize(attachment.size)}</span>
               )}
 
-              {/* Bouton supprimer */}
               <button
                 onClick={() => removeAttachment(attachment.id)}
                 className="ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors"
@@ -347,9 +350,8 @@ export function MessageComposer({
 
       {/* Zone de saisie */}
       <div className="p-3 flex items-end gap-2">
-        {/* Boutons gauche */}
+        {/* Boutons gauche: Pièce jointe + Emoji */}
         <div className="flex items-center gap-1">
-          {/* Pièce jointe */}
           {showAttachment && (
             <button
               onClick={onAttachmentClick}
@@ -361,31 +363,80 @@ export function MessageComposer({
               <AttachmentIcon />
             </button>
           )}
+          <button
+            disabled={disabled || isRecording}
+            className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
+            style={{ color: theme.colors.textMuted }}
+            title="Ajouter un emoji"
+          >
+            <EmojiIcon />
+          </button>
         </div>
 
         {/* Zone de texte */}
         <div
           className={`
             flex-1 relative rounded-2xl border transition-all
-            ${isFocused ? 'border-terracotta ring-2 ring-terracotta/20' : ''}
+            ${isFocused ? 'ring-2 ring-terracotta/20' : ''}
           `}
           style={{
             borderColor: isFocused ? theme.colors.terracotta : theme.colors.parchment,
             background: theme.colors.warmCanvas,
           }}
         >
-          {/* Indicateur de langue */}
-          {userLanguage && (
-            <div
-              className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+          {/* Sélecteur de langue - en haut à gauche */}
+          <div className="absolute top-2 left-3 z-10">
+            <button
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all"
               style={{
                 background: `${theme.colors.deepTeal}15`,
                 color: theme.colors.deepTeal,
               }}
             >
-              {userLanguage.toUpperCase()}
-            </div>
-          )}
+              <span>{currentLangOption?.flag}</span>
+              <span>{currentLangOption?.code.toUpperCase()}</span>
+              <ChevronIcon className={`w-3 h-3 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Menu déroulant des langues */}
+            {showLanguageMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowLanguageMenu(false)}
+                />
+                <div
+                  className="absolute top-full left-0 mt-1 z-20 rounded-lg shadow-lg overflow-hidden max-h-[200px] overflow-y-auto"
+                  style={{
+                    background: 'white',
+                    border: `1px solid ${theme.colors.parchment}`,
+                    minWidth: '150px',
+                  }}
+                >
+                  {availableLanguages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => handleLanguageSelect(lang.code)}
+                      className={`
+                        w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors
+                        ${lang.code === currentLanguage ? 'bg-gray-100' : 'hover:bg-gray-50'}
+                      `}
+                      style={{ color: theme.colors.charcoal }}
+                    >
+                      <span>{lang.flag}</span>
+                      <span className="flex-1">{lang.name}</span>
+                      {lang.code === currentLanguage && (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.jadeGreen }}>
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           <textarea
             ref={textareaRef}
@@ -397,27 +448,29 @@ export function MessageComposer({
             placeholder={isRecording ? 'Enregistrement en cours...' : placeholder}
             disabled={disabled || isRecording}
             rows={1}
-            className={`
-              w-full px-4 py-3 pr-10 bg-transparent resize-none outline-none
-              text-[15px] leading-relaxed
-              placeholder:text-gray-400
-              disabled:opacity-50
-            `}
+            className="w-full pl-4 pr-12 pt-9 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-gray-400 disabled:opacity-50"
             style={{
               color: theme.colors.charcoal,
-              minHeight: '44px',
+              minHeight: '60px',
               maxHeight: '150px',
             }}
           />
 
-          {/* Bouton emoji */}
-          <button
-            className="absolute right-2 bottom-2 p-1.5 rounded-full hover:bg-black/5 transition-colors"
-            style={{ color: theme.colors.textMuted }}
-            title="Ajouter un emoji"
-          >
-            <EmojiIcon className="w-5 h-5" />
-          </button>
+          {/* Bouton envoyer - à droite dans le textarea (visible seulement s'il y a du contenu) */}
+          {hasContent && (
+            <button
+              onClick={handleSend}
+              disabled={disabled}
+              className="absolute right-2 bottom-2 p-2 rounded-full transition-all hover:scale-105 active:scale-95"
+              style={{
+                background: theme.colors.terracotta,
+                color: 'white',
+              }}
+              title="Envoyer"
+            >
+              <SendIcon className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Compteur de caractères */}
           {maxLength && message.length > maxLength * 0.8 && (
@@ -432,10 +485,9 @@ export function MessageComposer({
           )}
         </div>
 
-        {/* Boutons droite */}
+        {/* Boutons droite: Localisation + Vocal */}
         <div className="flex items-center gap-1">
-          {/* Localisation */}
-          {showLocation && !isRecording && (
+          {showLocation && !isRecording && !hasContent && (
             <button
               onClick={requestLocation}
               disabled={disabled}
@@ -447,16 +499,12 @@ export function MessageComposer({
             </button>
           )}
 
-          {/* Enregistrement vocal */}
-          {showVoice && (
+          {showVoice && !hasContent && (
             isRecording ? (
               <button
                 onClick={stopRecording}
                 className="p-2 rounded-full transition-colors animate-pulse"
-                style={{
-                  background: '#EF4444',
-                  color: 'white',
-                }}
+                style={{ background: '#EF4444', color: 'white' }}
                 title="Arrêter l'enregistrement"
               >
                 <StopIcon />
@@ -464,7 +512,7 @@ export function MessageComposer({
             ) : (
               <button
                 onClick={startRecording}
-                disabled={disabled || hasContent}
+                disabled={disabled}
                 className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
                 style={{ color: theme.colors.textMuted }}
                 title="Enregistrer un message vocal"
@@ -474,33 +522,11 @@ export function MessageComposer({
             )
           )}
 
-          {/* Durée d'enregistrement */}
           {isRecording && (
-            <span
-              className="text-sm font-medium tabular-nums min-w-[45px]"
-              style={{ color: '#EF4444' }}
-            >
+            <span className="text-sm font-medium tabular-nums min-w-[45px]" style={{ color: '#EF4444' }}>
               {formatDuration(recordingDuration)}
             </span>
           )}
-
-          {/* Bouton envoyer */}
-          <button
-            onClick={handleSend}
-            disabled={disabled || (!hasContent && !isRecording)}
-            className={`
-              p-2.5 rounded-full transition-all
-              disabled:opacity-40 disabled:cursor-not-allowed
-              ${hasContent ? 'scale-100' : 'scale-90'}
-            `}
-            style={{
-              background: hasContent ? theme.colors.terracotta : theme.colors.parchment,
-              color: hasContent ? 'white' : theme.colors.textMuted,
-            }}
-            title="Envoyer"
-          >
-            <SendIcon />
-          </button>
         </div>
       </div>
     </div>

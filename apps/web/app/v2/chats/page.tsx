@@ -615,8 +615,10 @@ export default function V2ChatsPage() {
                 languageCode="ja"
                 languageName="Japonais"
                 content="こんにちは！今日の会議の準備はできていますか？"
-                translation="Bonjour ! Es-tu prête pour la réunion d'aujourd'hui ?"
-                translationLanguage="français"
+                translations={[
+                  { languageCode: 'fr', languageName: 'Français', content: "Bonjour ! Es-tu prête pour la réunion d'aujourd'hui ?" },
+                  { languageCode: 'en', languageName: 'English', content: "Hello! Are you ready for today's meeting?" },
+                ]}
                 sender="Yuki"
                 timestamp="10:32"
               />
@@ -625,16 +627,20 @@ export default function V2ChatsPage() {
                 languageCode="fr"
                 languageName="Français"
                 content="Oui, tout est prêt ! J'ai terminé la présentation hier soir."
-                translation="はい、準備万端です！昨夜プレゼンを完成させました。"
-                translationLanguage="japonais"
+                translations={[
+                  { languageCode: 'ja', languageName: '日本語', content: 'はい、準備万端です！昨夜プレゼンを完成させました。' },
+                  { languageCode: 'en', languageName: 'English', content: "Yes, everything is ready! I finished the presentation last night." },
+                ]}
                 timestamp="10:33"
               />
               <MessageBubble
                 languageCode="ja"
                 languageName="Japonais"
                 content="素晴らしい！楽しみにしています 🎉"
-                translation="Super ! J'ai hâte d'y être 🎉"
-                translationLanguage="français"
+                translations={[
+                  { languageCode: 'fr', languageName: 'Français', content: "Super ! J'ai hâte d'y être 🎉" },
+                  { languageCode: 'es', languageName: 'Español', content: "¡Genial! ¡Estoy deseando que llegue! 🎉" },
+                ]}
                 sender="Yuki"
                 timestamp="10:34"
               />
@@ -642,8 +648,11 @@ export default function V2ChatsPage() {
                 languageCode="es"
                 languageName="Espagnol"
                 content="¡Hola! ¿Puedo unirme a la reunión también?"
-                translation="Salut ! Est-ce que je peux me joindre à la réunion aussi ?"
-                translationLanguage="français"
+                translations={[
+                  { languageCode: 'fr', languageName: 'Français', content: "Salut ! Est-ce que je peux me joindre à la réunion aussi ?" },
+                  { languageCode: 'ja', languageName: '日本語', content: 'こんにちは！私も会議に参加してもいいですか？' },
+                  { languageCode: 'en', languageName: 'English', content: 'Hi! Can I join the meeting too?' },
+                ]}
                 sender="Invité"
                 isAnonymous={true}
                 timestamp="10:35"

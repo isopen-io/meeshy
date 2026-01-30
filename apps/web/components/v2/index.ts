@@ -26,7 +26,7 @@ export { LanguageOrb } from './LanguageOrb';
 export type { LanguageOrbProps } from './LanguageOrb';
 
 export { MessageBubble } from './MessageBubble';
-export type { MessageBubbleProps } from './MessageBubble';
+export type { MessageBubbleProps, Translation } from './MessageBubble';
 
 export { TypingIndicator } from './TypingIndicator';
 export type { TypingIndicatorProps } from './TypingIndicator';
@@ -59,4 +59,4 @@ export { ConversationSettings } from './ConversationSettings';
 export type { ConversationSettingsProps, Participant, ConversationStats } from './ConversationSettings';
 
 export { MessageComposer } from './MessageComposer';
-export type { MessageComposerProps, Attachment } from './MessageComposer';
+export type { MessageComposerProps, Attachment, LanguageOption } from './MessageComposer';
