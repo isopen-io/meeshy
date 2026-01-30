@@ -158,8 +158,10 @@ export function MessageComposer({
   const [isFocused, setIsFocused] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState(selectedLanguage);
+  const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('up');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const languageButtonRef = useRef<HTMLButtonElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -300,6 +302,16 @@ export function MessageComposer({
     onLanguageChange?.(code);
   }, [onLanguageChange]);
 
+  const toggleLanguageMenu = useCallback(() => {
+    if (!showLanguageMenu && languageButtonRef.current) {
+      const rect = languageButtonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuHeight = 200; // max-h-[200px]
+      setMenuDirection(spaceBelow < menuHeight ? 'up' : 'down');
+    }
+    setShowLanguageMenu(!showLanguageMenu);
+  }, [showLanguageMenu]);
+
   const hasContent = message.trim().length > 0 || attachments.length > 0;
 
   return (
@@ -349,34 +361,11 @@ export function MessageComposer({
       )}
 
       {/* Zone de saisie */}
-      <div className="p-3 flex items-end gap-2">
-        {/* Boutons gauche: Pièce jointe + Emoji */}
-        <div className="flex items-center gap-1">
-          {showAttachment && (
-            <button
-              onClick={onAttachmentClick}
-              disabled={disabled || isRecording}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
-              style={{ color: theme.colors.textMuted }}
-              title="Ajouter une pièce jointe"
-            >
-              <AttachmentIcon />
-            </button>
-          )}
-          <button
-            disabled={disabled || isRecording}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
-            style={{ color: theme.colors.textMuted }}
-            title="Ajouter un emoji"
-          >
-            <EmojiIcon />
-          </button>
-        </div>
-
+      <div className="p-3">
         {/* Zone de texte */}
         <div
           className={`
-            flex-1 relative rounded-2xl border transition-all
+            relative rounded-2xl border transition-all
             ${isFocused ? 'ring-2 ring-terracotta/20' : ''}
           `}
           style={{
@@ -384,57 +373,126 @@ export function MessageComposer({
             background: theme.colors.warmCanvas,
           }}
         >
-          {/* Sélecteur de langue - en haut à gauche */}
-          <div className="absolute top-2 left-3 z-10">
+          {/* Barre d'outils en haut: Langue + Icônes d'action */}
+          <div className="absolute top-2 left-3 right-3 z-10 flex items-center gap-1">
+            {/* Sélecteur de langue */}
+            <div className="relative">
+              <button
+                ref={languageButtonRef}
+                onClick={toggleLanguageMenu}
+                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all"
+                style={{
+                  background: `${theme.colors.deepTeal}15`,
+                  color: theme.colors.deepTeal,
+                }}
+              >
+                <span>{currentLangOption?.flag}</span>
+                <span>{currentLangOption?.code.toUpperCase()}</span>
+                <ChevronIcon className={`w-3 h-3 transition-transform ${showLanguageMenu ? (menuDirection === 'up' ? '' : 'rotate-180') : ''}`} />
+              </button>
+
+              {/* Menu déroulant des langues */}
+              {showLanguageMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowLanguageMenu(false)}
+                  />
+                  <div
+                    className={`absolute left-0 z-20 rounded-lg shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${
+                      menuDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
+                    }`}
+                    style={{
+                      background: 'white',
+                      border: `1px solid ${theme.colors.parchment}`,
+                      minWidth: '150px',
+                    }}
+                  >
+                    {availableLanguages.map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => handleLanguageSelect(lang.code)}
+                        className={`
+                          w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors
+                          ${lang.code === currentLanguage ? 'bg-gray-100' : 'hover:bg-gray-50'}
+                        `}
+                        style={{ color: theme.colors.charcoal }}
+                      >
+                        <span>{lang.flag}</span>
+                        <span className="flex-1">{lang.name}</span>
+                        {lang.code === currentLanguage && (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.jadeGreen }}>
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Icônes d'action à droite du sélecteur de langue */}
+            {showAttachment && (
+              <button
+                onClick={onAttachmentClick}
+                disabled={disabled || isRecording}
+                className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                style={{ color: theme.colors.textMuted }}
+                title="Pièce jointe"
+              >
+                <AttachmentIcon className="w-4 h-4" />
+              </button>
+            )}
+
             <button
-              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
-              className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all"
-              style={{
-                background: `${theme.colors.deepTeal}15`,
-                color: theme.colors.deepTeal,
-              }}
+              disabled={disabled || isRecording}
+              className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+              style={{ color: theme.colors.textMuted }}
+              title="Emoji"
             >
-              <span>{currentLangOption?.flag}</span>
-              <span>{currentLangOption?.code.toUpperCase()}</span>
-              <ChevronIcon className={`w-3 h-3 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
+              <EmojiIcon className="w-4 h-4" />
             </button>
 
-            {/* Menu déroulant des langues */}
-            {showLanguageMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowLanguageMenu(false)}
-                />
-                <div
-                  className="absolute top-full left-0 mt-1 z-20 rounded-lg shadow-lg overflow-hidden max-h-[200px] overflow-y-auto"
-                  style={{
-                    background: 'white',
-                    border: `1px solid ${theme.colors.parchment}`,
-                    minWidth: '150px',
-                  }}
+            {showVoice && (
+              isRecording ? (
+                <button
+                  onClick={stopRecording}
+                  className="p-1.5 rounded-full transition-colors animate-pulse"
+                  style={{ background: '#EF4444', color: 'white' }}
+                  title="Arrêter"
                 >
-                  {availableLanguages.map((lang) => (
-                    <button
-                      key={lang.code}
-                      onClick={() => handleLanguageSelect(lang.code)}
-                      className={`
-                        w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors
-                        ${lang.code === currentLanguage ? 'bg-gray-100' : 'hover:bg-gray-50'}
-                      `}
-                      style={{ color: theme.colors.charcoal }}
-                    >
-                      <span>{lang.flag}</span>
-                      <span className="flex-1">{lang.name}</span>
-                      {lang.code === currentLanguage && (
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.jadeGreen }}>
-                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
+                  <StopIcon className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={startRecording}
+                  disabled={disabled}
+                  className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                  style={{ color: theme.colors.textMuted }}
+                  title="Message vocal"
+                >
+                  <MicIcon className="w-4 h-4" />
+                </button>
+              )
+            )}
+
+            {showLocation && !isRecording && (
+              <button
+                onClick={requestLocation}
+                disabled={disabled}
+                className="p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
+                style={{ color: theme.colors.textMuted }}
+                title="Position"
+              >
+                <LocationIcon className="w-4 h-4" />
+              </button>
+            )}
+
+            {isRecording && (
+              <span className="text-xs font-medium tabular-nums ml-1" style={{ color: '#EF4444' }}>
+                {formatDuration(recordingDuration)}
+              </span>
             )}
           </div>
 
@@ -448,10 +506,10 @@ export function MessageComposer({
             placeholder={isRecording ? 'Enregistrement en cours...' : placeholder}
             disabled={disabled || isRecording}
             rows={1}
-            className="w-full pl-4 pr-12 pt-9 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-gray-400 disabled:opacity-50"
+            className="w-full pl-4 pr-12 pt-10 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-gray-400 disabled:opacity-50"
             style={{
               color: theme.colors.charcoal,
-              minHeight: '60px',
+              minHeight: '70px',
               maxHeight: '150px',
             }}
           />
@@ -482,50 +540,6 @@ export function MessageComposer({
             >
               {message.length}/{maxLength}
             </div>
-          )}
-        </div>
-
-        {/* Boutons droite: Localisation + Vocal */}
-        <div className="flex items-center gap-1">
-          {showLocation && !isRecording && !hasContent && (
-            <button
-              onClick={requestLocation}
-              disabled={disabled}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
-              style={{ color: theme.colors.textMuted }}
-              title="Partager ma position"
-            >
-              <LocationIcon />
-            </button>
-          )}
-
-          {showVoice && !hasContent && (
-            isRecording ? (
-              <button
-                onClick={stopRecording}
-                className="p-2 rounded-full transition-colors animate-pulse"
-                style={{ background: '#EF4444', color: 'white' }}
-                title="Arrêter l'enregistrement"
-              >
-                <StopIcon />
-              </button>
-            ) : (
-              <button
-                onClick={startRecording}
-                disabled={disabled}
-                className="p-2 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
-                style={{ color: theme.colors.textMuted }}
-                title="Enregistrer un message vocal"
-              >
-                <MicIcon />
-              </button>
-            )
-          )}
-
-          {isRecording && (
-            <span className="text-sm font-medium tabular-nums min-w-[45px]" style={{ color: '#EF4444' }}>
-              {formatDuration(recordingDuration)}
-            </span>
           )}
         </div>
       </div>
