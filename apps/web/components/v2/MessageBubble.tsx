@@ -180,113 +180,77 @@ export function MessageBubble({
             : 'bg-white border border-[#E5E5E5] rounded-bl-md'
         )}
       >
-        {/* Sender name with translation language selector */}
-        {sender && !isSent && (
-          <div className="flex items-center justify-between gap-2 mb-2">
+        {/* Sender name + Language selector on same line */}
+        <div className={cn('flex items-center justify-between gap-2 mb-2', isSent && 'flex-row-reverse')}>
+          {/* Sender name (received messages only) */}
+          {sender && !isSent && (
             <span className="text-xs font-semibold text-[#2B2D42]">
               {sender}
             </span>
-            {/* Sélecteur de langue de traduction rapide */}
-            {translations.length > 0 && (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px]" style={{ color: theme.colors.textMuted }}>
-                  Traduire:
-                </span>
-                {translations.slice(0, 3).map((t) => (
+          )}
+
+          {/* Language selector */}
+          <div className="relative">
+            <button
+              onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
+              className={cn(
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all',
+                otherVersions.length > 0 && 'hover:opacity-80 cursor-pointer',
+                isSent
+                  ? 'bg-white/20 text-white'
+                  : 'text-[#264653]'
+              )}
+              style={{
+                backgroundColor: isSent ? undefined : `${langColor}15`,
+                color: isSent ? undefined : langColor,
+              }}
+              disabled={otherVersions.length === 0}
+            >
+              <span>{getFlag(displayedVersion.languageCode)}</span>
+              <span>{displayedVersion.languageName}</span>
+              {displayedVersion.isOriginal && (
+                <span className="text-[10px] opacity-70">(Original)</span>
+              )}
+              {otherVersions.length > 0 && (
+                <ChevronIcon className="w-3 h-3 ml-0.5" direction={showLanguageMenu ? 'up' : 'down'} />
+              )}
+            </button>
+
+            {/* Language menu dropdown */}
+            {showLanguageMenu && otherVersions.length > 0 && (
+              <div
+                className={cn(
+                  'absolute top-full mt-1 z-20 rounded-lg shadow-lg overflow-hidden',
+                  'min-w-[180px] max-h-[140px] overflow-y-auto',
+                  isSent ? 'right-0' : 'left-0'
+                )}
+                style={{
+                  background: isSent ? 'rgba(255,255,255,0.95)' : 'white',
+                  border: `1px solid ${theme.colors.parchment}`,
+                }}
+              >
+                {otherVersions.slice(0, 3).map((version, index) => (
                   <button
-                    key={t.languageCode}
-                    onClick={() => handleSelectVersion({ ...t, isOriginal: false })}
-                    className={cn(
-                      'text-sm px-1 py-0.5 rounded transition-all hover:scale-110',
-                      displayedVersion.languageCode === t.languageCode && !displayedVersion.isOriginal
-                        ? 'bg-gray-200'
-                        : 'hover:bg-gray-100'
-                    )}
-                    title={t.languageName}
+                    key={`${version.languageCode}-${index}`}
+                    onClick={() => handleSelectVersion(version)}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                    style={{ color: theme.colors.charcoal }}
                   >
-                    {getFlag(t.languageCode)}
+                    <span>{getFlag(version.languageCode)}</span>
+                    <span className="flex-1">{version.languageName}</span>
+                    {version.isOriginal && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full"
+                        style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}
+                      >
+                        Original
+                      </span>
+                    )}
                   </button>
                 ))}
-                {!displayedVersion.isOriginal && (
-                  <button
-                    onClick={() => handleSelectVersion({
-                      languageCode,
-                      languageName: languageName || languageCode.toUpperCase(),
-                      content,
-                      isOriginal: true,
-                    })}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full hover:bg-gray-100 transition-colors"
-                    style={{ color: theme.colors.textMuted }}
-                    title="Voir l'original"
-                  >
-                    Original
-                  </button>
-                )}
               </div>
             )}
           </div>
-        )}
-
-        {/* Language indicator - clickable */}
-        <div className="relative mb-2">
-          <button
-            onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
-            className={cn(
-              'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all',
-              otherVersions.length > 0 && 'hover:opacity-80 cursor-pointer',
-              isSent
-                ? 'bg-white/20 text-white'
-                : 'text-[#264653]'
-            )}
-            style={{
-              backgroundColor: isSent ? undefined : `${langColor}15`,
-              color: isSent ? undefined : langColor,
-            }}
-            disabled={otherVersions.length === 0}
-          >
-            <span>{getFlag(displayedVersion.languageCode)}</span>
-            <span>{displayedVersion.languageName}</span>
-            {displayedVersion.isOriginal && (
-              <span className="text-[10px] opacity-70">(Original)</span>
-            )}
-            {otherVersions.length > 0 && (
-              <ChevronIcon className="w-3 h-3 ml-0.5" direction={showLanguageMenu ? 'up' : 'down'} />
-            )}
-          </button>
-
-          {/* Language menu dropdown */}
-          {showLanguageMenu && otherVersions.length > 0 && (
-            <div
-              className={cn(
-                'absolute top-full left-0 mt-1 z-20 rounded-lg shadow-lg overflow-hidden',
-                'min-w-[180px] max-h-[140px] overflow-y-auto'
-              )}
-              style={{
-                background: isSent ? 'rgba(255,255,255,0.95)' : 'white',
-                border: `1px solid ${theme.colors.parchment}`,
-              }}
-            >
-              {otherVersions.slice(0, 3).map((version, index) => (
-                <button
-                  key={`${version.languageCode}-${index}`}
-                  onClick={() => handleSelectVersion(version)}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                  style={{ color: theme.colors.charcoal }}
-                >
-                  <span>{getFlag(version.languageCode)}</span>
-                  <span className="flex-1">{version.languageName}</span>
-                  {version.isOriginal && (
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded-full"
-                      style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}
-                    >
-                      Original
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Message content */}
