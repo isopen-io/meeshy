@@ -23,6 +23,15 @@ export class MessagesService {
   private pendingRequests: Map<string, AbortController> = new Map();
 
   /**
+   * Réponse vide pour les cas d'erreur (évite allocations répétées)
+   */
+  private static readonly EMPTY_MESSAGES_RESPONSE: GetMessagesResponse = {
+    messages: [],
+    total: 0,
+    hasMore: false,
+  };
+
+  /**
    * Obtenir les messages d'une conversation avec pagination
    */
   async getMessages(
@@ -51,11 +60,7 @@ export class MessagesService {
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
         console.warn('⚠️ Structure de réponse inattendue:', response.data);
-        return {
-          messages: [],
-          total: 0,
-          hasMore: false,
-        };
+        return MessagesService.EMPTY_MESSAGES_RESPONSE;
       }
 
       const transformedMessages = response.data.data.map(msg =>
@@ -76,11 +81,7 @@ export class MessagesService {
       }
 
       console.error('❌ Erreur lors du chargement des messages:', error);
-      return {
-        messages: [],
-        total: 0,
-        hasMore: false,
-      };
+      return MessagesService.EMPTY_MESSAGES_RESPONSE;
     }
   }
 

@@ -46,6 +46,22 @@ class ApiService {
   private refreshPromise: Promise<boolean> | null = null;
   private isRefreshing = false;
 
+  /**
+   * Cache pour la détection de connexion lente (TTL: 30s)
+   */
+  private slowConnectionCache: { value: boolean; timestamp: number } | null = null;
+  private readonly SLOW_CONNECTION_CACHE_TTL = 30000; // 30 secondes
+
+  /**
+   * Cache pour les headers de requête (évite allocations répétées)
+   */
+  private headersCache = new Map<string, Record<string, string>>();
+
+  /**
+   * Méthodes HTTP qui peuvent avoir un body optionnel
+   */
+  private static readonly METHODS_WITH_OPTIONAL_BODY = new Set(['DELETE', 'POST', 'PUT', 'PATCH']);
+
   constructor(config: Partial<ApiConfig> = {}) {
     this.config = {
       timeout: TIMEOUT_DEFAULT,
@@ -59,33 +75,35 @@ class ApiService {
   /**
    * Détecte si la connexion réseau est lente
    * Utilise Network Information API si disponible
+   * Cache le résultat pendant 30 secondes pour éviter accès répétés à navigator
    */
   private isSlowConnection(): boolean {
-    if (typeof navigator === 'undefined') return false;
+    const now = Date.now();
+
+    // Retourner le cache si valide
+    if (this.slowConnectionCache && (now - this.slowConnectionCache.timestamp) < this.SLOW_CONNECTION_CACHE_TTL) {
+      return this.slowConnectionCache.value;
+    }
+
+    if (typeof navigator === 'undefined') {
+      this.slowConnectionCache = { value: false, timestamp: now };
+      return false;
+    }
 
     const nav = navigator as NavigatorWithConnection;
     const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
 
+    let isSlow = false;
     if (connection) {
-      // Slow connection types
-      if (connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g') {
-        return true;
-      }
-      // High RTT (> 500ms)
-      if (connection.rtt && connection.rtt > 500) {
-        return true;
-      }
-      // Low downlink (< 1 Mbps)
-      if (connection.downlink && connection.downlink < 1) {
-        return true;
-      }
-      // Data saver enabled
-      if (connection.saveData) {
-        return true;
-      }
+      isSlow = connection.effectiveType === '2g'
+        || connection.effectiveType === 'slow-2g'
+        || (connection.rtt && connection.rtt > 500)
+        || (connection.downlink && connection.downlink < 1)
+        || !!connection.saveData;
     }
 
-    return false;
+    this.slowConnectionCache = { value: isSlow, timestamp: now };
+    return isSlow;
   }
 
   /**
@@ -96,6 +114,41 @@ class ApiService {
       return customTimeout;
     }
     return this.isSlowConnection() ? TIMEOUT_SLOW_CONNECTION : this.config.timeout;
+  }
+
+  /**
+   * Construit les headers HTTP avec cache pour éviter allocations répétées
+   * Cache seulement si aucun header custom n'est fourni
+   */
+  private buildHeaders(
+    method: string,
+    hasBody: boolean,
+    token: string | null,
+    customHeaders?: Record<string, string>
+  ): Record<string, string> {
+    // Si headers custom, ne pas utiliser le cache
+    if (customHeaders) {
+      return {
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...customHeaders,
+      };
+    }
+
+    // Clé de cache basée sur méthode, présence de body, et présence de token
+    const cacheKey = `${method}-${hasBody ? '1' : '0'}-${token ? 'y' : 'n'}`;
+
+    if (this.headersCache.has(cacheKey)) {
+      return this.headersCache.get(cacheKey)!;
+    }
+
+    const headers = {
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+
+    this.headersCache.set(cacheKey, headers);
+    return headers;
   }
 
   /**
@@ -197,20 +250,16 @@ class ApiService {
     // Get token from AuthManager (source unique de vérité)
     const token = authManager.getAuthToken();
 
-    // Pour les requêtes DELETE/POST/PUT/PATCH sans body, ne pas inclure Content-Type
-    const shouldExcludeContentType = (options.method === 'DELETE' || options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') && !options.body;
-    let defaultHeaders = { ...this.config.headers };
+    // Déterminer si la requête a un body pour le Content-Type
+    const shouldExcludeContentType = ApiService.METHODS_WITH_OPTIONAL_BODY.has(options.method || '') && !options.body;
 
-    // Supprimer complètement le Content-Type pour les requêtes sans body
-    if (shouldExcludeContentType) {
-      delete defaultHeaders['Content-Type'];
-    }
-
-    const headers = {
-      ...defaultHeaders,
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    };
+    // Construire les headers avec cache
+    const headers = this.buildHeaders(
+      options.method || 'GET',
+      !shouldExcludeContentType,
+      token,
+      options.headers
+    );
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
@@ -338,13 +387,16 @@ class ApiService {
   async get<T>(endpoint: string, params?: Record<string, unknown>, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<ApiResponse<T>> {
     let url = endpoint;
     if (params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-      url += `?${searchParams.toString()}`;
+      // Filtrer d'abord les valeurs valides, puis convertir en une seule passe
+      const validEntries = Object.entries(params)
+        .filter(([_, value]) => value !== undefined && value !== null);
+
+      if (validEntries.length > 0) {
+        const searchParams = new URLSearchParams(
+          validEntries.map(([key, value]) => [key, String(value)])
+        );
+        url += `?${searchParams.toString()}`;
+      }
     }
 
     return this.request<T>(url, {
