@@ -6,8 +6,15 @@ import { theme } from './theme';
 export interface CommunityItem {
   id: string;
   name: string;
+  /** URL de la bannière de fond */
+  banner?: string;
+  /** URL de l'avatar (fallback si pas de bannière) */
   avatar?: string;
+  /** Nombre total de membres */
   memberCount: number;
+  /** Nombre de conversations actives */
+  conversationCount: number;
+  /** Couleur thème de la communauté */
   color?: string;
 }
 
@@ -15,13 +22,251 @@ export interface CommunityCarouselProps {
   communities: CommunityItem[];
   isVisible: boolean;
   onCommunityClick: (communityId: string) => void;
+  /** Nombre total de conversations (pour "Toutes") */
+  totalConversations?: number;
+  /** Nombre de conversations archivées */
+  archivedConversations?: number;
+  /** ID de la communauté/filtre sélectionné */
+  selectedId?: string | null;
   className?: string;
+}
+
+// Icône pour "Toutes les conversations"
+function AllIcon({ className = 'w-6 h-6' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+      <path d="M8 9h8M8 13h6" />
+    </svg>
+  );
+}
+
+// Icône pour "Archives"
+function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 8v13H3V8" />
+      <path d="M1 3h22v5H1z" />
+      <path d="M10 12h4" />
+    </svg>
+  );
+}
+
+// Icône membres
+function MembersIcon({ className = 'w-3 h-3' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
+      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+    </svg>
+  );
+}
+
+// Icône conversations
+function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
+      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+    </svg>
+  );
+}
+
+function formatCount(count: number): string {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return count.toString();
+}
+
+interface CommunityCardProps {
+  id: string;
+  name: string;
+  banner?: string;
+  memberCount?: number;
+  conversationCount: number;
+  color?: string;
+  icon?: React.ReactNode;
+  isSpecial?: boolean;
+  isSelected?: boolean;
+  onClick: () => void;
+}
+
+function CommunityCard({
+  name,
+  banner,
+  memberCount,
+  conversationCount,
+  color = theme.colors.deepTeal,
+  icon,
+  isSpecial = false,
+  isSelected = false,
+  onClick,
+}: CommunityCardProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex-shrink-0 relative overflow-hidden rounded-xl
+        transition-all duration-200 ease-out
+        hover:scale-[1.02] hover:shadow-lg
+        active:scale-[0.98]
+        ${isSelected ? 'ring-2 ring-offset-2' : ''}
+      `}
+      style={{
+        width: isSpecial ? '100px' : '140px',
+        height: isSpecial ? '80px' : '100px',
+        ringColor: isSelected ? color : undefined,
+      }}
+    >
+      {/* Fond */}
+      {banner ? (
+        <img
+          src={banner}
+          alt={name}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: isSpecial
+              ? `linear-gradient(135deg, ${color}20 0%, ${color}40 100%)`
+              : `linear-gradient(135deg, ${color} 0%, ${color}CC 100%)`,
+          }}
+        />
+      )}
+
+      {/* Overlay gradient pour lisibilité */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: banner
+            ? 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.1) 100%)'
+            : isSpecial
+              ? 'transparent'
+              : 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 60%)',
+        }}
+      />
+
+      {/* Contenu */}
+      <div className="absolute inset-0 flex flex-col justify-between p-2.5">
+        {/* Icône spéciale en haut */}
+        {isSpecial && icon && (
+          <div
+            className="self-center mt-1"
+            style={{ color: color }}
+          >
+            {icon}
+          </div>
+        )}
+
+        {/* Spacer pour cartes normales */}
+        {!isSpecial && <div />}
+
+        {/* Info en bas */}
+        <div className={isSpecial ? 'text-center' : ''}>
+          {/* Titre */}
+          <h4
+            className={`
+              font-semibold truncate leading-tight
+              ${isSpecial ? 'text-xs' : 'text-sm'}
+            `}
+            style={{
+              color: isSpecial ? color : '#fff',
+              textShadow: !isSpecial ? '0 1px 2px rgba(0,0,0,0.3)' : undefined,
+            }}
+          >
+            {name}
+          </h4>
+
+          {/* Stats */}
+          <div
+            className={`
+              flex items-center gap-2 mt-0.5
+              ${isSpecial ? 'justify-center' : ''}
+            `}
+          >
+            {/* Membres (seulement pour les communautés) */}
+            {memberCount !== undefined && !isSpecial && (
+              <div
+                className="flex items-center gap-0.5 text-[10px]"
+                style={{
+                  color: 'rgba(255,255,255,0.85)',
+                }}
+              >
+                <MembersIcon className="w-2.5 h-2.5" />
+                <span>{formatCount(memberCount)}</span>
+              </div>
+            )}
+
+            {/* Conversations */}
+            <div
+              className="flex items-center gap-0.5 text-[10px]"
+              style={{
+                color: isSpecial ? theme.colors.textMuted : 'rgba(255,255,255,0.85)',
+              }}
+            >
+              <ChatsIcon className="w-2.5 h-2.5" />
+              <span>{formatCount(conversationCount)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Badge sélection */}
+      {isSelected && (
+        <div
+          className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
+          style={{ background: color }}
+        >
+          <svg
+            className="w-2.5 h-2.5 text-white"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      )}
+    </button>
+  );
 }
 
 export function CommunityCarousel({
   communities,
   isVisible,
   onCommunityClick,
+  totalConversations = 0,
+  archivedConversations = 0,
+  selectedId = null,
   className = '',
 }: CommunityCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -42,12 +287,13 @@ export function CommunityCarousel({
     <div
       className={`
         overflow-hidden transition-all duration-200 ease-out
-        ${isVisible ? 'max-h-24 opacity-100' : 'max-h-0 opacity-0'}
+        ${isVisible ? 'max-h-36 opacity-100' : 'max-h-0 opacity-0'}
         ${className}
       `}
     >
       <div className="py-3 px-4 border-b" style={{ borderColor: theme.colors.parchment }}>
-        <div className="flex items-center gap-2 mb-2">
+        {/* En-tête */}
+        <div className="flex items-center gap-2 mb-3">
           <svg
             className="w-4 h-4"
             fill="none"
@@ -63,68 +309,62 @@ export function CommunityCarousel({
             />
           </svg>
           <span className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
-            Communautés
+            Filtrer par communauté
           </span>
         </div>
 
+        {/* Carousel */}
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto scrollbar-hide pb-1"
+          className="flex gap-3 overflow-x-auto pb-1"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
           }}
         >
+          {/* Case "Toutes" */}
+          <CommunityCard
+            id="__all__"
+            name="Toutes"
+            conversationCount={totalConversations}
+            color={theme.colors.deepTeal}
+            icon={<AllIcon className="w-7 h-7" />}
+            isSpecial={true}
+            isSelected={selectedId === null || selectedId === '__all__'}
+            onClick={() => onCommunityClick('__all__')}
+          />
+
+          {/* Communautés */}
           {communities.map((community) => (
-            <button
+            <CommunityCard
               key={community.id}
+              id={community.id}
+              name={community.name}
+              banner={community.banner}
+              memberCount={community.memberCount}
+              conversationCount={community.conversationCount}
+              color={community.color || theme.colors.coral}
+              isSelected={selectedId === community.id}
               onClick={() => onCommunityClick(community.id)}
-              className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-full transition-colors hover:bg-gray-100"
-              style={{
-                background: (community.color || theme.colors.deepTeal) + '10',
-                border: `1px solid ${(community.color || theme.colors.deepTeal) + '30'}`,
-              }}
-            >
-              {/* Avatar ou initiale */}
-              {community.avatar ? (
-                <img
-                  src={community.avatar}
-                  alt={community.name}
-                  className="w-6 h-6 rounded-full object-cover"
-                />
-              ) : (
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white"
-                  style={{ background: community.color || theme.colors.deepTeal }}
-                >
-                  {community.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-
-              {/* Nom */}
-              <span
-                className="text-sm font-medium whitespace-nowrap"
-                style={{ color: theme.colors.charcoal }}
-              >
-                {community.name}
-              </span>
-
-              {/* Membres */}
-              <span
-                className="text-xs whitespace-nowrap"
-                style={{ color: theme.colors.textMuted }}
-              >
-                {community.memberCount > 999
-                  ? `${(community.memberCount / 1000).toFixed(1)}k`
-                  : community.memberCount}
-              </span>
-            </button>
+            />
           ))}
+
+          {/* Case "Archives" */}
+          <CommunityCard
+            id="__archives__"
+            name="Archives"
+            conversationCount={archivedConversations}
+            color={theme.colors.textMuted}
+            icon={<ArchiveIcon className="w-7 h-7" />}
+            isSpecial={true}
+            isSelected={selectedId === '__archives__'}
+            onClick={() => onCommunityClick('__archives__')}
+          />
         </div>
       </div>
 
       <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
+        div::-webkit-scrollbar {
           display: none;
         }
       `}</style>

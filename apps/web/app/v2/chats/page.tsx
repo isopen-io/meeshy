@@ -34,10 +34,38 @@ const mockTags: TagItem[] = [
 ];
 
 const mockCommunities: CommunityItem[] = [
-  { id: '1', name: 'Tech Polyglots', memberCount: 1243, color: theme.colors.deepTeal },
-  { id: '2', name: 'Language Learners', memberCount: 892, color: theme.colors.royalIndigo },
-  { id: '3', name: 'Global Travelers', memberCount: 2156, color: theme.colors.terracotta },
-  { id: '4', name: 'Manga & Anime', memberCount: 3421, color: theme.colors.sakuraPink },
+  {
+    id: '1',
+    name: 'Tech Polyglots',
+    banner: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=300&h=200&fit=crop',
+    memberCount: 1243,
+    conversationCount: 89,
+    color: theme.colors.deepTeal,
+  },
+  {
+    id: '2',
+    name: 'Language Learners',
+    banner: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&h=200&fit=crop',
+    memberCount: 892,
+    conversationCount: 156,
+    color: theme.colors.royalIndigo,
+  },
+  {
+    id: '3',
+    name: 'Global Travelers',
+    banner: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=300&h=200&fit=crop',
+    memberCount: 2156,
+    conversationCount: 234,
+    color: theme.colors.terracotta,
+  },
+  {
+    id: '4',
+    name: 'Manga & Anime',
+    banner: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=300&h=200&fit=crop',
+    memberCount: 3421,
+    conversationCount: 412,
+    color: theme.colors.sakuraPink,
+  },
 ];
 
 const mockConversations: ConversationItemData[] = [
@@ -138,6 +166,7 @@ export default function V2ChatsPage() {
   const [categories] = useState(mockCategories);
   const [tags] = useState(mockTags);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
 
   // Resizer pour desktop
   const { width: sidebarWidth, setWidth: setSidebarWidth } = useResizer(30, 10, 50);
@@ -256,7 +285,13 @@ export default function V2ChatsPage() {
         <CommunityCarousel
           communities={mockCommunities}
           isVisible={searchFocused}
-          onCommunityClick={(id) => console.log('Community clicked:', id)}
+          onCommunityClick={(id) => {
+            setSelectedCommunityId(id === '__all__' ? null : id);
+            console.log('Community clicked:', id);
+          }}
+          totalConversations={conversations.length}
+          archivedConversations={2}
+          selectedId={selectedCommunityId}
         />
 
         {/* Conversations List */}
