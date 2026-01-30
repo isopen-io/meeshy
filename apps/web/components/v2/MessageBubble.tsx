@@ -180,23 +180,49 @@ export function MessageBubble({
             : 'bg-white border border-[#E5E5E5] rounded-bl-md'
         )}
       >
-        {/* Sender name with ghost indicator */}
+        {/* Sender name with translation language selector */}
         {sender && !isSent && (
-          <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-xs font-semibold text-[#2B2D42]">
               {sender}
             </span>
-            {isAnonymous && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1"
-                style={{
-                  background: theme.colors.parchment,
-                  color: theme.colors.textMuted,
-                }}
-              >
-                <GhostIcon className="w-3 h-3" />
-                <span>Anonyme</span>
-              </span>
+            {/* Sélecteur de langue de traduction rapide */}
+            {translations.length > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px]" style={{ color: theme.colors.textMuted }}>
+                  Traduire:
+                </span>
+                {translations.slice(0, 3).map((t) => (
+                  <button
+                    key={t.languageCode}
+                    onClick={() => handleSelectVersion({ ...t, isOriginal: false })}
+                    className={cn(
+                      'text-sm px-1 py-0.5 rounded transition-all hover:scale-110',
+                      displayedVersion.languageCode === t.languageCode && !displayedVersion.isOriginal
+                        ? 'bg-gray-200'
+                        : 'hover:bg-gray-100'
+                    )}
+                    title={t.languageName}
+                  >
+                    {getFlag(t.languageCode)}
+                  </button>
+                ))}
+                {!displayedVersion.isOriginal && (
+                  <button
+                    onClick={() => handleSelectVersion({
+                      languageCode,
+                      languageName: languageName || languageCode.toUpperCase(),
+                      content,
+                      isOriginal: true,
+                    })}
+                    className="text-[10px] px-1.5 py-0.5 rounded-full hover:bg-gray-100 transition-colors"
+                    style={{ color: theme.colors.textMuted }}
+                    title="Voir l'original"
+                  >
+                    Original
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
