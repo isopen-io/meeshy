@@ -57,3 +57,6 @@ export type { ConversationDrawerProps } from './ConversationDrawer';
 
 export { ConversationSettings } from './ConversationSettings';
 export type { ConversationSettingsProps, Participant, ConversationStats } from './ConversationSettings';
+
+export { MessageComposer } from './MessageComposer';
+export type { MessageComposerProps, Attachment } from './MessageComposer';
