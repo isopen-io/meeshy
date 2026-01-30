@@ -3,7 +3,6 @@
  * Responsabilité: Convertir les données backend vers le format frontend
  */
 
-import { socketIOUserToUser } from '@/utils/user-adapter';
 import {
   UserRoleEnum,
 } from '@meeshy/shared/types';
@@ -45,86 +44,92 @@ export class TransformersService {
   };
 
   /**
+   * Cache pour les transformations de messages
+   */
+  private messageCache = new WeakMap<object, Message>();
+
+  /**
+   * Cache pour les transformations de conversations
+   */
+  private conversationCache = new WeakMap<object, Conversation>();
+
+  /**
+   * Map statique pour la conversion des rôles (O(1) lookup)
+   */
+  private static readonly ROLE_MAP = new Map<string, UserRoleEnum>([
+    ['ADMIN', UserRoleEnum.ADMIN],
+    ['MODERATOR', UserRoleEnum.MODERATOR],
+    ['BIGBOSS', UserRoleEnum.BIGBOSS],
+    ['CREATOR', UserRoleEnum.CREATOR],
+    ['AUDIT', UserRoleEnum.AUDIT],
+    ['ANALYST', UserRoleEnum.ANALYST],
+    ['USER', UserRoleEnum.USER],
+    ['MEMBER', UserRoleEnum.MEMBER],
+  ]);
+
+  /**
+   * Map statique pour la conversion des rôles en string
+   */
+  private static readonly ROLE_TO_STRING_MAP = new Map<string, 'admin' | 'moderator' | 'member'>([
+    ['ADMIN', 'admin'],
+    ['BIGBOSS', 'admin'],
+    ['CREATOR', 'admin'],
+    ['MODERATOR', 'moderator'],
+    ['AUDIT', 'moderator'],
+    ['ANALYST', 'moderator'],
+    ['USER', 'member'],
+    ['MEMBER', 'member'],
+  ]);
+
+  /**
+   * Map statique pour la conversion des types de conversation
+   */
+  private static readonly CONVERSATION_TYPE_MAP = new Map<string, ConversationType>([
+    ['group', 'group'],
+    ['public', 'broadcast'],
+    ['global', 'broadcast'],
+    ['direct', 'direct'],
+    ['anonymous', 'direct'],
+    ['broadcast', 'broadcast'],
+  ]);
+
+  /**
+   * Map statique pour la visibilité des conversations
+   */
+  private static readonly CONVERSATION_VISIBILITY_MAP = new Map<string, 'public' | 'private' | 'restricted'>([
+    ['public', 'public'],
+    ['global', 'public'],
+    ['direct', 'private'],
+    ['group', 'private'],
+    ['anonymous', 'private'],
+  ]);
+
+  /**
    * Convertir un rôle string en UserRoleEnum
    */
   stringToUserRole(role: string): UserRoleEnum {
-    switch (role.toUpperCase()) {
-      case 'ADMIN':
-        return UserRoleEnum.ADMIN;
-      case 'MODERATOR':
-        return UserRoleEnum.MODERATOR;
-      case 'BIGBOSS':
-        return UserRoleEnum.BIGBOSS;
-      case 'CREATOR':
-        return UserRoleEnum.CREATOR;
-      case 'AUDIT':
-        return UserRoleEnum.AUDIT;
-      case 'ANALYST':
-        return UserRoleEnum.ANALYST;
-      case 'USER':
-        return UserRoleEnum.USER;
-      case 'MEMBER':
-      default:
-        return UserRoleEnum.MEMBER;
-    }
+    return TransformersService.ROLE_MAP.get(role.toUpperCase()) ?? UserRoleEnum.MEMBER;
   }
 
   /**
    * Convertir un rôle UserRoleEnum en string pour ConversationParticipant
    */
   mapUserRoleToString(role: string): 'admin' | 'moderator' | 'member' {
-    switch (role.toUpperCase()) {
-      case 'ADMIN':
-      case 'BIGBOSS':
-      case 'CREATOR':
-        return 'admin';
-      case 'MODERATOR':
-      case 'AUDIT':
-      case 'ANALYST':
-        return 'moderator';
-      case 'USER':
-      case 'MEMBER':
-      default:
-        return 'member';
-    }
+    return TransformersService.ROLE_TO_STRING_MAP.get(role.toUpperCase()) ?? 'member';
   }
 
   /**
    * Convertir un type de conversation en format valide
    */
   mapConversationType(type: string): ConversationType {
-    switch (type.toLowerCase()) {
-      case 'group':
-        return 'group';
-      case 'public':
-        return 'broadcast';
-      case 'global':
-        return 'broadcast';
-      case 'direct':
-        return 'direct';
-      case 'anonymous':
-        return 'direct'; // Map anonymous to direct
-      case 'broadcast':
-        return 'broadcast';
-      default:
-        return 'direct';
-    }
+    return TransformersService.CONVERSATION_TYPE_MAP.get(type.toLowerCase()) ?? 'direct';
   }
 
   /**
    * Convertir un type de conversation en visibility
    */
   mapConversationVisibility(type: string): 'public' | 'private' | 'restricted' {
-    switch (type.toLowerCase()) {
-      case 'public':
-      case 'global':
-        return 'public';
-      case 'direct':
-      case 'group':
-      case 'anonymous':
-      default:
-        return 'private';
-    }
+    return TransformersService.CONVERSATION_VISIBILITY_MAP.get(type.toLowerCase()) ?? 'private';
   }
 
   /**
@@ -162,42 +167,66 @@ export class TransformersService {
    */
   private transformSender(sender: any, anonymousSender: any, defaultId: string): User {
     if (sender) {
+      const {
+        id = defaultId,
+        username = 'Unknown',
+        firstName = '',
+        lastName = '',
+        displayName = username || 'Unknown',
+        email = 'unknown@example.com',
+        phoneNumber = '',
+        role = 'USER',
+        systemLanguage = 'fr',
+        regionalLanguage = 'fr',
+        autoTranslateEnabled = false,
+        translateToSystemLanguage = false,
+        translateToRegionalLanguage = false,
+        useCustomDestination = false,
+        isOnline = false,
+        avatar,
+        createdAt = Date.now(),
+        lastActiveAt = Date.now(),
+        isActive = true,
+        updatedAt = Date.now(),
+      } = sender;
+
       return {
-        id: String(sender.id || defaultId),
-        username: String(sender.username || 'Unknown'),
-        firstName: String(sender.firstName || ''),
-        lastName: String(sender.lastName || ''),
-        displayName: String(sender.displayName || sender.username || 'Unknown'),
-        email: String(sender.email || 'unknown@example.com'),
-        phoneNumber: String(sender.phoneNumber || ''),
-        role: (sender.role as any) || 'USER',
+        id: String(id),
+        username: String(username),
+        firstName: String(firstName),
+        lastName: String(lastName),
+        displayName: String(displayName),
+        email: String(email),
+        phoneNumber: String(phoneNumber),
+        role: role as any,
         permissions: this.DEFAULT_PERMISSIONS,
-        systemLanguage: String(sender.systemLanguage || 'fr'),
-        regionalLanguage: String(sender.regionalLanguage || 'fr'),
+        systemLanguage: String(systemLanguage),
+        regionalLanguage: String(regionalLanguage),
         customDestinationLanguage: undefined,
-        autoTranslateEnabled: Boolean(sender.autoTranslateEnabled ?? false),
-        translateToSystemLanguage: Boolean(sender.translateToSystemLanguage ?? false),
-        translateToRegionalLanguage: Boolean(sender.translateToRegionalLanguage ?? false),
-        useCustomDestination: Boolean(sender.useCustomDestination ?? false),
-        isOnline: Boolean(sender.isOnline ?? false),
-        avatar: sender.avatar as string | undefined,
-        createdAt: new Date(sender.createdAt as any || Date.now()),
-        lastActiveAt: new Date(sender.lastActiveAt as any || Date.now()),
-        isActive: Boolean(sender.isActive ?? true),
-        updatedAt: new Date(sender.updatedAt as any || Date.now()),
+        autoTranslateEnabled: Boolean(autoTranslateEnabled),
+        translateToSystemLanguage: Boolean(translateToSystemLanguage),
+        translateToRegionalLanguage: Boolean(translateToRegionalLanguage),
+        useCustomDestination: Boolean(useCustomDestination),
+        isOnline: Boolean(isOnline),
+        avatar: avatar as string | undefined,
+        createdAt: new Date(createdAt),
+        lastActiveAt: new Date(lastActiveAt),
+        isActive: Boolean(isActive),
+        updatedAt: new Date(updatedAt),
       };
     }
 
     if (anonymousSender) {
-      const displayName = `${String(anonymousSender.firstName || '')} ${String(anonymousSender.lastName || '')}`.trim() ||
-                         String(anonymousSender.username) ||
-                         'Utilisateur anonyme';
+      const firstName = anonymousSender.firstName || '';
+      const lastName = anonymousSender.lastName || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      const displayName = fullName || anonymousSender.username || 'Utilisateur anonyme';
 
       return {
         id: String(anonymousSender.id || defaultId),
         username: String(anonymousSender.username || 'Anonymous'),
-        firstName: String(anonymousSender.firstName || ''),
-        lastName: String(anonymousSender.lastName || ''),
+        firstName: String(firstName),
+        lastName: String(lastName),
         displayName,
         email: '',
         phoneNumber: '',
@@ -298,6 +327,12 @@ export class TransformersService {
    */
   transformMessageData(backendMessage: unknown): Message {
     const msg = backendMessage as Record<string, unknown>;
+
+    // Vérifier le cache
+    if (typeof msg === 'object' && msg !== null && this.messageCache.has(msg)) {
+      return this.messageCache.get(msg)!;
+    }
+
     const messageId = String(msg.id);
     const senderId = String(msg.senderId || msg.anonymousSenderId || 'unknown');
 
@@ -356,7 +391,12 @@ export class TransformersService {
 
     const createdAt = new Date(String(msg.createdAt));
 
-    return {
+    // Transformer validatedMentions en array readonly string[] selon l'interface Message
+    const validatedMentions = Array.isArray(msg.validatedMentions)
+      ? msg.validatedMentions.map(m => String(m))
+      : undefined;
+
+    const transformedMessage: Message = {
       id: messageId,
       content: String(msg.content),
       senderId,
@@ -383,8 +423,16 @@ export class TransformersService {
       translations,
       replyTo,
       attachments,
+      validatedMentions,
       timestamp: createdAt,
     };
+
+    // Mettre en cache
+    if (typeof msg === 'object' && msg !== null) {
+      this.messageCache.set(msg, transformedMessage);
+    }
+
+    return transformedMessage;
   }
 
   /**
@@ -392,6 +440,11 @@ export class TransformersService {
    */
   transformConversationData(backendConversation: unknown): Conversation {
     const conv = backendConversation as Record<string, unknown>;
+
+    // Vérifier le cache
+    if (typeof conv === 'object' && conv !== null && this.conversationCache.has(conv)) {
+      return this.conversationCache.get(conv)!;
+    }
 
     // Extract members with user data merged
     const members = Array.isArray(conv.members)
@@ -420,7 +473,7 @@ export class TransformersService {
       members.map(m => [String((m as any).userId), (m as any).user])
     );
 
-    return {
+    const transformedConversation: Conversation = {
       id: String(conv.id),
       identifier: conv.identifier as string | undefined,
       type: this.mapConversationType(String(conv.type) || 'direct'),
@@ -464,6 +517,13 @@ export class TransformersService {
         ? conv.userPreferences[0] as any
         : undefined,
     };
+
+    // Mettre en cache
+    if (typeof conv === 'object' && conv !== null) {
+      this.conversationCache.set(conv, transformedConversation);
+    }
+
+    return transformedConversation;
   }
 }
 
