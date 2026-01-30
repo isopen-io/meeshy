@@ -31,7 +31,7 @@ export type { MessageBubbleProps } from './MessageBubble';
 export { TypingIndicator } from './TypingIndicator';
 export type { TypingIndicatorProps } from './TypingIndicator';
 
-export { GhostBadge } from './GhostBadge';
+export { GhostBadge, GhostIcon } from './GhostBadge';
 export type { GhostBadgeProps } from './GhostBadge';
 
 export { TagInput } from './TagInput';

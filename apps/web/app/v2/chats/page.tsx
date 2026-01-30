@@ -527,6 +527,16 @@ export default function V2ChatsPage() {
                 sender="Yuki"
                 timestamp="10:34"
               />
+              <MessageBubble
+                languageCode="es"
+                languageName="Espagnol"
+                content="¡Hola! ¿Puedo unirme a la reunión también?"
+                translation="Salut ! Est-ce que je peux me joindre à la réunion aussi ?"
+                translationLanguage="français"
+                sender="Invité"
+                isAnonymous={true}
+                timestamp="10:35"
+              />
             </div>
 
             {/* Input */}
