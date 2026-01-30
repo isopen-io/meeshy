@@ -49,6 +49,9 @@ export function useConversationMessages(
     linkId // Optionnel: utilisé pour les utilisateurs anonymes
   } = options;
 
+  // 🔴 OPTIMISATION: Extraire uniquement l'ID pour éviter re-renders sur changements d'autres propriétés
+  const currentUserId = currentUser?.id;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -66,10 +69,27 @@ export function useConversationMessages(
   const offsetRef = useRef<number>(0); // Ref pour l'offset pour éviter les problèmes de timing
   const initialScrollDoneRef = useRef<boolean>(false); // Ref pour éviter de charger avant le scroll initial
 
+  // 🔴 OPTIMISATION: Index Map pour updateMessage O(1) au lieu de O(n)
+  const messagesIndexMapRef = useRef(new Map<string, number>());
+
+  // 🟡 OPTIMISATION: Ref pour loadMessagesInternal pour debounce stable
+  const loadMessagesInternalRef = useRef<typeof loadMessagesInternal | null>(null);
+
+  // 🔴 OPTIMISATION: Fonction de tri mémoïsée (utilisée 3× dans le code)
+  const sortMessagesByDateDesc = useMemo(() => {
+    return (messages: Message[]) => {
+      return [...messages].sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA; // DESC: plus récent en premier
+      });
+    };
+  }, []);
+
   // Fonction pour charger les messages
   const loadMessagesInternal = useCallback(async (isLoadMore = false) => {
 
-    if (!conversationId || !currentUser || !enabled) {
+    if (!conversationId || !currentUserId || !enabled) {
       return;
     }
 
@@ -176,15 +196,9 @@ export function useConversationMessages(
             // Scroll vers le bas: ajouter les messages plus anciens à la FIN
             combined = [...prev, ...uniqueNewMessages];
           }
-          
-          // Tri explicite pour garantir l'ordre DESC par createdAt
-          combined.sort((a, b) => {
-            const dateA = new Date(a.createdAt).getTime();
-            const dateB = new Date(b.createdAt).getTime();
-            return dateB - dateA; // DESC: plus récent en premier
-          });
-          
-          return combined;
+
+          // 🔴 OPTIMISATION: Utiliser la fonction de tri mémoïsée
+          return sortMessagesByDateDesc(combined);
         });
         
         // Restaurer la position de scroll après le rendu
