@@ -2,15 +2,16 @@
 # MEESHY - Docker Build & Push Pipeline
 # =============================================================================
 # Multi-architecture builds: AMD64 by default (linux/amd64)
-# ARM64 builds available via manual trigger but may fail with Prisma (QEMU limitations)
+# ARM64 builds available via manual trigger for web/gateway (may fail with Prisma)
+# Translator service: AMD64 ONLY (sentencepiece fails with QEMU emulation)
 # Registry: Docker Hub (isopen/meeshy-*)
 # Package managers: bun (default) or pnpm
 # GPU support: translator service supports cpu and gpu (CUDA 12.4) variants
 #
 # IMPORTANT: GitHub Actions ARM64 runners (ubuntu-24.04-arm64) are not available
 # on free tier. ARM64 builds use QEMU emulation which has known issues with
-# native binaries like Prisma (SIGILL errors). For production ARM64 images,
-# use self-hosted ARM64 runners or build locally.
+# native binaries compilation (Prisma SIGILL, sentencepiece linking errors).
+# For production ARM64 images, use self-hosted ARM64 runners or build locally.
 # =============================================================================
 
 name: Docker
@@ -260,13 +261,25 @@ jobs:
             type=ref,event=branch,suffix=${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
             type=sha,prefix=sha-,format=short,suffix=${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}
 
+      - name: Determine build platforms
+        id: platforms
+        run: |
+          # Translator service: AMD64 only due to QEMU limitations with sentencepiece compilation
+          # Other services: use workflow input or default platforms
+          if [[ "${{ matrix.service }}" == "translator" ]] || [[ "${{ matrix.service }}" == "translator-gpu" ]]; then
+            echo "value=linux/amd64" >> $GITHUB_OUTPUT
+            echo "⚠️ Translator: Building AMD64 only (ARM64 requires native runner due to QEMU limitations with sentencepiece)"
+          else
+            echo "value=${{ github.event.inputs.platforms || env.PLATFORMS }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ github.event.inputs.platforms || env.PLATFORMS }}
+          platforms: ${{ steps.platforms.outputs.value }}
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_to_registry != 'false') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -290,7 +303,7 @@ jobs:
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Version | \`${{ matrix.version }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Platforms | \`${{ github.event.inputs.platforms || env.PLATFORMS }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | \`${{ steps.platforms.outputs.value }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tags created:**" >> $GITHUB_STEP_SUMMARY
