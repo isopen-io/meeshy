@@ -156,7 +156,6 @@ export function useAuth() {
     const publicRoutes = [
       '/',
       '/login',
-      '/signin',
       '/signup',
       '/register',
       '/partners',
@@ -177,8 +176,8 @@ export function useAuth() {
     // Routes de tracking (/l/[token]) - PUBLIQUES, accessibles à tous
     const isTrackingRoute = pathname.startsWith('/l/') || pathname.startsWith('/links/tracked/');
 
-    // Routes d'affiliation (/signin/affiliate/[token]) - PUBLIQUES
-    const isAffiliateRoute = pathname.startsWith('/signin/affiliate/');
+    // Routes d'affiliation (/signup/affiliate/[token]) - PUBLIQUES
+    const isAffiliateRoute = pathname.startsWith('/signup/affiliate/');
 
     // Routes de jointure (accessibles sans authentification)
     const isJoinRoute = pathname.startsWith('/join/');

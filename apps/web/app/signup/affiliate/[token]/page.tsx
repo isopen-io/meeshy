@@ -8,7 +8,7 @@ import { MessageSquare, Globe, Shield, ArrowRight, FileText, Info, Home } from '
 import { LargeLogo } from '@/components/branding';
 import Link from 'next/link';
 
-interface AffiliateSigninPageProps {
+interface AffiliateSignupPageProps {
   params: Promise<{ token: string }>;
 }
 
@@ -16,21 +16,18 @@ interface AffiliateSigninPageProps {
  * Page d'information pour les liens d'affiliation
  * Sauvegarde le token en arrière-plan et affiche des informations sur Meeshy
  */
-export default function AffiliateSigninPage({ params }: AffiliateSigninPageProps) {
+export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps) {
   const router = useRouter();
-  
+
   useEffect(() => {
     // Récupérer et sauvegarder le token d'affiliation
     params.then(({ token }) => {
       if (token) {
         // Sauvegarder dans localStorage
         localStorage.setItem('meeshy_affiliate_token', token);
-        
-        // Sauvegarder dans un cookie
+
+        // Sauvegarder dans un cookie (30 jours)
         document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
-        
-        if (process.env.NODE_ENV === 'development') {
-        }
       }
     });
   }, [params]);
@@ -159,17 +156,17 @@ export default function AffiliateSigninPage({ params }: AffiliateSigninPageProps
                 Créez votre compte gratuitement et commencez à discuter avec le monde entier dans votre langue.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   className="bg-white text-blue-600 hover:bg-gray-100 font-semibold"
-                  onClick={() => router.push('/signin')}
+                  onClick={() => router.push('/signup')}
                 >
                   Créer un compte
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
+                <Button
+                  size="lg"
+                  variant="outline"
                   className="border-2 border-white text-white hover:bg-white/10"
                   onClick={() => router.push('/login')}
                 >

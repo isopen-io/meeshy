@@ -274,7 +274,7 @@ export function Header({
               </>
             )}
             
-            {/* Mode Default - affiche les boutons login/signin */}
+            {/* Mode Default - affiche les boutons login/signup */}
             {mode === 'default' && !user && (
               <>
                 {/* Sélecteur de langue pour les utilisateurs non connectés */}
@@ -533,7 +533,7 @@ export function Header({
                       {t('login')}
                     </Button>
                   </Link>
-                  <Link href="/signin" onClick={() => setIsMobileMenuOpen(false)}>
+                  <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
                     <Button className="w-full justify-start">
                       <UserPlus className="h-4 w-4 mr-2" />
                       {t('signUp')}
@@ -541,8 +541,8 @@ export function Header({
                   </Link>
                 </>
               )}
-              
-              {/* Mode Default - affiche les boutons login/signin en mobile */}
+
+              {/* Mode Default - affiche les boutons login/signup en mobile */}
               {mode === 'default' && !user && (
                 <>
                   {/* Sélecteur de langue en mobile pour default */}
@@ -589,7 +589,7 @@ export function Header({
                       {t('login')}
                     </Button>
                   </Link>
-                  <Link href="/signin" onClick={() => setIsMobileMenuOpen(false)}>
+                  <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
                     <Button className="w-full justify-start">
                       <UserPlus className="h-4 w-4 mr-2" />
                       {t('signUp')}

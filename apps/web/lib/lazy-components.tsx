@@ -277,7 +277,7 @@ export const lazyRoutes = {
   groups: () => import('@/app/groups/page'),
   search: () => import('@/app/search/page'),
   login: () => import('@/app/login/page'),
-  signin: () => import('@/app/signin/page'),
+  signup: () => import('@/app/signup/page'),
 } as const;
 
 // Preload des routes selon la navigation

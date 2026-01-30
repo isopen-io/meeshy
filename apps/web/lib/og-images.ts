@@ -71,11 +71,11 @@ export function getOgImageConfig(
 /**
  * Détermine le type d'image OG basé sur le contexte de la page
  * Logique de détection:
- * - /signin avec paramètre affiliate → affiliate
- * - /signin/affiliate/[token] → affiliate
- * - /signin ou /join sans affiliation → signin
+ * - /signup avec paramètre affiliate → affiliate
+ * - /signup/affiliate/[token] → affiliate
+ * - /signup ou /join sans affiliation → signin
  * - Autres pages → default
- * 
+ *
  * @param path Chemin de la page
  * @param searchParams Paramètres de recherche (pour détecter ?affiliate=xxx)
  * @returns Type d'image approprié
@@ -85,23 +85,23 @@ export function getOgImageTypeFromContext(
   searchParams?: URLSearchParams | Record<string, string>
 ): OgImageType {
   // Vérifier si c'est un lien d'affiliation
-  const hasAffiliateParam = searchParams 
-    ? (searchParams instanceof URLSearchParams 
+  const hasAffiliateParam = searchParams
+    ? (searchParams instanceof URLSearchParams
         ? searchParams.has('affiliate')
         : 'affiliate' in searchParams)
     : false;
-    
+
   const isAffiliatePath = path.includes('/affiliate');
-  
+
   if (hasAffiliateParam || isAffiliatePath) {
     return 'affiliate';
   }
-  
+
   // Vérifier si c'est une page de connexion/inscription
-  if (path.includes('/signin') || path.includes('/join')) {
+  if (path.includes('/signup') || path.includes('/join')) {
     return 'signin';
   }
-  
+
   // Par défaut
   return 'default';
 }
