@@ -56,9 +56,78 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* V2 Global Pulse Design System - Light Mode */
+    --gp-warm-canvas: #FFF8F3;
+    --gp-deep-ink: #16161A;
+    --gp-parchment: #F5EDE3;
+    --gp-charcoal: #2B2D42;
+    --gp-background: #FFF8F3;
+    --gp-surface: #FFFFFF;
+    --gp-surface-elevated: #FFFFFF;
+    --gp-border: #E5E5E5;
+    --gp-border-subtle: #F0F0F0;
+    --gp-terracotta: #E76F51;
+    --gp-terracotta-light: #F4A261;
+    --gp-deep-teal: #264653;
+    --gp-gold-accent: #E9C46A;
+    --gp-asian-ruby: #C1292E;
+    --gp-saffron: #F4A261;
+    --gp-jade-green: #2A9D8F;
+    --gp-royal-indigo: #5E60CE;
+    --gp-sakura-pink: #F28482;
+    --gp-text-primary: #2B2D42;
+    --gp-text-secondary: #6B7280;
+    --gp-text-muted: #9CA3AF;
+    --gp-text-inverse: #FFFFFF;
+    --gp-success: #2A9D8F;
+    --gp-warning: #F4A261;
+    --gp-error: #E76F51;
+    --gp-info: #5E60CE;
+    --gp-hover: rgba(0, 0, 0, 0.04);
+    --gp-active: rgba(0, 0, 0, 0.08);
+    --gp-focus: rgba(231, 111, 81, 0.3);
+    --gp-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+    --gp-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --gp-shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
+    --gp-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.15);
   }
 
   .dark {
+    /* V2 Global Pulse Design System - Dark Mode */
+    --gp-warm-canvas: #0D0D0F;
+    --gp-deep-ink: #FAFAFA;
+    --gp-parchment: #1A1A1E;
+    --gp-charcoal: #E5E5E7;
+    --gp-background: #0D0D0F;
+    --gp-surface: #1A1A1E;
+    --gp-surface-elevated: #242428;
+    --gp-border: #2E2E32;
+    --gp-border-subtle: #232327;
+    --gp-terracotta: #F08A70;
+    --gp-terracotta-light: #F5B080;
+    --gp-deep-teal: #3A8A9A;
+    --gp-gold-accent: #F0D080;
+    --gp-asian-ruby: #E54B50;
+    --gp-saffron: #F5B080;
+    --gp-jade-green: #40C4B0;
+    --gp-royal-indigo: #8082E8;
+    --gp-sakura-pink: #F5A09E;
+    --gp-text-primary: #F5F5F5;
+    --gp-text-secondary: #A0A0A8;
+    --gp-text-muted: #707078;
+    --gp-text-inverse: #16161A;
+    --gp-success: #40C4B0;
+    --gp-warning: #F5B080;
+    --gp-error: #F08A70;
+    --gp-info: #8082E8;
+    --gp-hover: rgba(255, 255, 255, 0.06);
+    --gp-active: rgba(255, 255, 255, 0.12);
+    --gp-focus: rgba(240, 138, 112, 0.4);
+    --gp-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --gp-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --gp-shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
+    --gp-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
     --background: 224 71.4% 4.1%;
     --foreground: 210 20% 98%;
     --card: 224 71.4% 4.1%;
