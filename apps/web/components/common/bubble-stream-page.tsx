@@ -84,6 +84,7 @@ export function BubbleStreamPage({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitialized = useRef(false);
   const conversationObjectIdRef = useRef<string | null>(null);
+  const currentFocusedConversationRef = useRef<string | null>(null);
 
   // Limite de caractères
   const maxMessageLength = getMaxMessageLength(user?.role);
@@ -125,6 +126,24 @@ export function BubbleStreamPage({
       console.log('🔍 [BubbleStreamPage] Conversation ObjectId updated:', messages[0].conversationId);
     }
   }, [messages]);
+
+  // Auto-focus sur le composer lors de l'ouverture de la conversation
+  useEffect(() => {
+    if (!conversationId || isAnonymousMode) return;
+
+    // Ne pas focus si on a déjà focusé cette conversation
+    if (conversationId === currentFocusedConversationRef.current) return;
+
+    // Délai plus long pour BubbleStreamPage car il charge plus de composants
+    const focusTimeout = setTimeout(() => {
+      if (messageComposerRef.current?.focus) {
+        messageComposerRef.current.focus();
+        currentFocusedConversationRef.current = conversationId;
+      }
+    }, 1000);
+
+    return () => clearTimeout(focusTimeout);
+  }, [conversationId, isAnonymousMode]);
 
   // Hook pour les préférences de traduction
   const {

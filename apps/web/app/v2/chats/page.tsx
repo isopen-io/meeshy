@@ -24,6 +24,8 @@ import {
   getLanguageColor,
   ImageGallery,
   ImageItem,
+  ThemeToggle,
+  useTheme,
 } from '@/components/v2';
 
 // ============================================================================
@@ -204,6 +206,228 @@ function SpeedMenuDropdown({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Composant MediaControlBar - Barre de contrôles [vitesse] [transcription] [langue]
+// ============================================================================
+
+interface MediaControlBarProps {
+  // Vitesse
+  currentSpeed: number;
+  onSpeedChange: (speed: number) => void;
+  speeds?: number[];
+  // Transcription
+  hasTranscription: boolean;
+  showTranscription: boolean;
+  onToggleTranscription: () => void;
+  onRequestTranscription?: () => void;
+  // Langue
+  currentFlag: string;
+  currentLangColor: string;
+  otherVersions: LanguageVersion[];
+  onSelectVersion: (version: LanguageVersion) => void;
+  // Style
+  variant?: 'light' | 'dark';
+}
+
+function MediaControlBar({
+  currentSpeed,
+  onSpeedChange,
+  speeds = [1, 1.5, 2],
+  hasTranscription,
+  showTranscription,
+  onToggleTranscription,
+  onRequestTranscription,
+  currentFlag,
+  currentLangColor,
+  otherVersions,
+  onSelectVersion,
+  variant = 'dark',
+}: MediaControlBarProps) {
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [speedMenuDirection, setSpeedMenuDirection] = useState<'up' | 'down'>('up');
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [langMenuDirection, setLangMenuDirection] = useState<'up' | 'down'>('up');
+  const speedBtnRef = useRef<HTMLButtonElement>(null);
+  const langBtnRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const isDark = variant === 'dark';
+
+  // Calculer direction menu vitesse
+  const calculateSpeedDirection = useCallback(() => {
+    if (!speedBtnRef.current) return;
+    const rect = speedBtnRef.current.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const menuHeight = speeds.length * 36 + 8;
+    setSpeedMenuDirection(spaceAbove > spaceBelow && spaceAbove >= menuHeight ? 'up' : 'down');
+  }, [speeds.length]);
+
+  // Calculer direction menu langue
+  const calculateLangDirection = useCallback(() => {
+    if (!langBtnRef.current) return;
+    const rect = langBtnRef.current.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const menuHeight = Math.min(otherVersions.length, 4) * 40 + 8;
+    setLangMenuDirection(spaceAbove > spaceBelow && spaceAbove >= menuHeight ? 'up' : 'down');
+  }, [otherVersions.length]);
+
+  // Fermer menus au clic extérieur
+  useEffect(() => {
+    if (!showSpeedMenu && !showLangMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSpeedMenu(false);
+        setShowLangMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSpeedMenu, showLangMenu]);
+
+  const buttonClass = `
+    flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all
+    ${isDark
+      ? 'bg-black/50 backdrop-blur-sm text-white hover:bg-black/60'
+      : 'bg-white/80 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200'
+    }
+  `;
+
+  const handleTranscriptionClick = () => {
+    if (hasTranscription) {
+      onToggleTranscription();
+    } else if (onRequestTranscription) {
+      onRequestTranscription();
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="flex items-center gap-1">
+      {/* Bouton Vitesse */}
+      <div className="relative">
+        <button
+          ref={speedBtnRef}
+          onClick={() => {
+            if (!showSpeedMenu) calculateSpeedDirection();
+            setShowSpeedMenu(!showSpeedMenu);
+            setShowLangMenu(false);
+          }}
+          className={buttonClass}
+          title="Vitesse de lecture"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>{currentSpeed}x</span>
+        </button>
+
+        {showSpeedMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowSpeedMenu(false)} />
+            <div
+              className={`
+                absolute z-50 min-w-[70px] rounded-lg overflow-hidden
+                ${isDark ? 'bg-black/80 backdrop-blur-md border border-white/10' : 'bg-white border border-gray-200 shadow-lg'}
+                ${speedMenuDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}
+                left-0
+              `}
+            >
+              {speeds.map((speed) => (
+                <button
+                  key={speed}
+                  onClick={() => { onSpeedChange(speed); setShowSpeedMenu(false); }}
+                  className={`
+                    w-full px-3 py-2 text-xs font-medium text-left transition-colors
+                    ${currentSpeed === speed
+                      ? isDark ? 'bg-white/20 text-white' : 'bg-terracotta/10 text-[#E76F51]'
+                      : isDark ? 'text-white/80 hover:bg-white/10' : 'text-gray-600 hover:bg-gray-50'
+                    }
+                  `}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Bouton Transcription */}
+      <button
+        onClick={handleTranscriptionClick}
+        className={`${buttonClass} ${hasTranscription && showTranscription ? (isDark ? 'bg-white/20' : 'bg-[#E76F51]/10') : ''}`}
+        title={hasTranscription ? (showTranscription ? 'Masquer transcription' : 'Afficher transcription') : 'Demander transcription'}
+      >
+        {hasTranscription ? (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9" />
+          </svg>
+        )}
+      </button>
+
+      {/* Bouton Langue */}
+      <div className="relative">
+        <button
+          ref={langBtnRef}
+          onClick={() => {
+            if (otherVersions.length > 0) {
+              if (!showLangMenu) calculateLangDirection();
+              setShowLangMenu(!showLangMenu);
+              setShowSpeedMenu(false);
+            }
+          }}
+          className={`${buttonClass} ${otherVersions.length === 0 ? 'cursor-default' : ''}`}
+          title="Changer de langue"
+        >
+          <span className="text-sm leading-none">{currentFlag}</span>
+          {otherVersions.length > 0 && (
+            <ChevronIcon className="w-3 h-3" direction={showLangMenu ? 'up' : 'down'} />
+          )}
+        </button>
+
+        {showLangMenu && otherVersions.length > 0 && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+            <div
+              className={`
+                absolute z-50 min-w-[140px] max-h-[180px] overflow-y-auto rounded-lg
+                ${isDark ? 'bg-black/80 backdrop-blur-md border border-white/10' : 'bg-white border border-gray-200 shadow-lg'}
+                ${langMenuDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}
+                right-0
+              `}
+            >
+              {otherVersions.slice(0, 4).map((version, idx) => (
+                <button
+                  key={`${version.languageCode}-${idx}`}
+                  onClick={() => { onSelectVersion(version); setShowLangMenu(false); }}
+                  className={`
+                    w-full px-3 py-2 text-left flex items-center gap-2 transition-colors
+                    ${isDark ? 'text-white/90 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-50'}
+                  `}
+                >
+                  <span className="text-base">{getFlag(version.languageCode)}</span>
+                  <span className="text-xs font-medium flex-1">{version.languageName}</span>
+                  {version.isOriginal && (
+                    <span className={`text-[9px] px-1 py-0.5 rounded ${isDark ? 'bg-white/20' : 'bg-gray-100'}`}>
+                      Original
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -574,67 +798,14 @@ function StandaloneVideoMessage({
 
       {/* Video Card Standalone */}
       <div className="flex-1 min-w-0" ref={containerRef}>
-        {/* Header avec nom et sélecteur de langue */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold" style={{ color: theme.colors.charcoal }}>
-              {senderName}
-            </span>
-            <span className="text-xs" style={{ color: theme.colors.textMuted }}>
-              {timestamp}
-            </span>
-          </div>
-          {/* Icône de langue en haut à droite */}
-          <div className="relative">
-            <button
-              onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
-              className={`
-                flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all
-                ${otherVersions.length > 0 ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'}
-                bg-white/80 backdrop-blur-sm border border-[#E5E5E5]
-              `}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: langColor }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-              <span className="text-sm">{getFlag(displayedVersion.languageCode)}</span>
-              {otherVersions.length > 0 && (
-                <ChevronIcon className="w-3 h-3" direction={showLanguageMenu ? 'up' : 'down'} />
-              )}
-            </button>
-
-            {/* Dropdown */}
-            {showLanguageMenu && otherVersions.length > 0 && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowLanguageMenu(false)} />
-                <div
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[180px] max-h-[200px] overflow-y-auto rounded-xl bg-white border border-[#E5E5E5]"
-                  style={{ boxShadow: theme.shadows.lg }}
-                >
-                  {otherVersions.slice(0, 4).map((version, idx) => (
-                    <button
-                      key={`${version.languageCode}-${idx}`}
-                      onClick={() => handleSelectVersion(version)}
-                      className="w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-gray-50 transition-colors"
-                    >
-                      <span className="text-base">{getFlag(version.languageCode)}</span>
-                      <span className="text-sm font-medium flex-1" style={{ color: theme.colors.charcoal }}>
-                        {version.languageName}
-                      </span>
-                      {version.isOriginal && (
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded-full"
-                          style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}
-                        >
-                          Original
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+        {/* Header simple - nom et timestamp */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-semibold" style={{ color: theme.colors.charcoal }}>
+            {senderName}
+          </span>
+          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+            {timestamp}
+          </span>
         </div>
 
         {/* Lecteur Vidéo */}
@@ -685,12 +856,19 @@ function StandaloneVideoMessage({
                 </div>
               )}
 
-              {/* Speed control en haut à droite */}
+              {/* Contrôles en haut à droite: [vitesse] [transcription] [langue] */}
               <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
-                <SpeedMenuDropdown
+                <MediaControlBar
                   currentSpeed={playbackSpeed}
                   onSpeedChange={handleSpeedChange}
                   speeds={PLAYBACK_SPEEDS}
+                  hasTranscription={hasTranscription}
+                  showTranscription={showTranscription}
+                  onToggleTranscription={() => setShowTranscription(!showTranscription)}
+                  currentFlag={getFlag(displayedVersion.languageCode)}
+                  currentLangColor={langColor}
+                  otherVersions={otherVersions}
+                  onSelectVersion={handleSelectVersion}
                   variant="dark"
                 />
               </div>
@@ -707,12 +885,19 @@ function StandaloneVideoMessage({
                 ${isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'}
               `}
             >
-              {/* Top Controls */}
+              {/* Top Controls: [vitesse] [transcription] [langue] */}
               <div className="p-3 flex items-center justify-end">
-                <SpeedMenuDropdown
+                <MediaControlBar
                   currentSpeed={playbackSpeed}
                   onSpeedChange={handleSpeedChange}
                   speeds={PLAYBACK_SPEEDS}
+                  hasTranscription={hasTranscription}
+                  showTranscription={showTranscription}
+                  onToggleTranscription={() => setShowTranscription(!showTranscription)}
+                  currentFlag={getFlag(displayedVersion.languageCode)}
+                  currentLangColor={langColor}
+                  otherVersions={otherVersions}
+                  onSelectVersion={handleSelectVersion}
                   variant="dark"
                 />
               </div>
@@ -1047,9 +1232,9 @@ function StandaloneAudioMessage({
 
       {/* Audio Card Standalone */}
       <div className="flex-1 min-w-0">
-        {/* Header avec nom et sélecteur de langue */}
-        <div className={`flex items-center justify-between mb-2 ${isSent ? 'flex-row-reverse' : ''}`}>
-          <div className={`flex items-center gap-2 ${isSent ? 'flex-row-reverse' : ''}`}>
+        {/* Header simple - nom et timestamp */}
+        {(senderName || timestamp) && (
+          <div className={`flex items-center gap-2 mb-2 ${isSent ? 'flex-row-reverse' : ''}`}>
             {senderName && (
               <span className="text-xs font-semibold" style={{ color: isSent ? theme.colors.terracotta : theme.colors.charcoal }}>
                 {senderName}
@@ -1059,55 +1244,7 @@ function StandaloneAudioMessage({
               {timestamp}
             </span>
           </div>
-          {/* Icône de langue */}
-          <div className="relative">
-            <button
-              onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
-              className={`
-                flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all
-                ${otherVersions.length > 0 ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'}
-                ${isSent ? 'bg-[#E76F51]/10' : 'bg-white/80 backdrop-blur-sm border border-[#E5E5E5]'}
-              `}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: langColor }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-              <span className="text-sm">{getFlag(displayedVersion.languageCode)}</span>
-              {otherVersions.length > 0 && (
-                <ChevronIcon className="w-3 h-3" direction={showLanguageMenu ? 'up' : 'down'} />
-              )}
-            </button>
-
-            {/* Dropdown */}
-            {showLanguageMenu && otherVersions.length > 0 && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowLanguageMenu(false)} />
-                <div
-                  className="absolute top-full mt-1 z-50 min-w-[180px] max-h-[200px] overflow-y-auto rounded-xl bg-white border border-[#E5E5E5]"
-                  style={{ boxShadow: theme.shadows.lg, right: isSent ? 'auto' : 0, left: isSent ? 0 : 'auto' }}
-                >
-                  {otherVersions.slice(0, 4).map((version, idx) => (
-                    <button
-                      key={`${version.languageCode}-${idx}`}
-                      onClick={() => handleSelectVersion(version)}
-                      className="w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-gray-50 transition-colors"
-                    >
-                      <span className="text-base">{getFlag(version.languageCode)}</span>
-                      <span className="text-sm font-medium flex-1" style={{ color: theme.colors.charcoal }}>
-                        {version.languageName}
-                      </span>
-                      {version.isOriginal && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}>
-                          Original
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Lecteur Audio */}
         <div
@@ -1183,17 +1320,24 @@ function StandaloneAudioMessage({
                 </div>
               </div>
 
-              {/* Temps et vitesse */}
+              {/* Temps et contrôles: [vitesse] [transcription] [langue] */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium" style={{ color: isSent ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }}>
                   {formatAudioTime(currentTime)} / {formatAudioTime(duration)}
                 </span>
 
-                {/* Speed control */}
-                <SpeedMenuDropdown
+                {/* Contrôles: [vitesse] [transcription] [langue] */}
+                <MediaControlBar
                   currentSpeed={playbackSpeed}
                   onSpeedChange={handleSpeedChange}
                   speeds={AUDIO_PLAYBACK_SPEEDS}
+                  hasTranscription={hasTranscription}
+                  showTranscription={showTranscription}
+                  onToggleTranscription={() => setShowTranscription(!showTranscription)}
+                  currentFlag={getFlag(displayedVersion.languageCode)}
+                  currentLangColor={langColor}
+                  otherVersions={otherVersions}
+                  onSelectVersion={handleSelectVersion}
                   variant={isSent ? 'dark' : 'light'}
                 />
               </div>
@@ -1591,18 +1735,18 @@ export default function V2ChatsPage() {
   const showMobileChat = selectedChat !== null;
 
   return (
-    <div className="h-screen flex relative" style={{ background: theme.colors.warmCanvas }}>
+    <div className="h-screen flex relative bg-[var(--gp-background)] text-[var(--gp-text-primary)] transition-colors duration-300">
       {/* Sidebar - caché sur mobile quand une conversation est sélectionnée */}
       <div
         className={`
           sidebar-container border-r flex-col relative
           ${showMobileChat ? 'hidden md:flex' : 'flex'}
           w-full
+          bg-[var(--gp-surface)] border-[var(--gp-border)]
+          transition-colors duration-300
         `}
         style={{
           '--sidebar-width': `${sidebarWidth}%`,
-          borderColor: theme.colors.parchment,
-          background: 'white',
         } as React.CSSProperties}
       >
         <style>{`
@@ -1615,7 +1759,7 @@ export default function V2ChatsPage() {
           }
         `}</style>
         {/* Header */}
-        <div className="p-4 border-b" style={{ borderColor: theme.colors.parchment }}>
+        <div className="p-4 border-b border-[var(--gp-border)] transition-colors duration-300">
           <div className="flex items-center justify-between mb-4">
             <Link href="/v2/landing" className="flex items-center gap-2">
               <div
@@ -1624,11 +1768,13 @@ export default function V2ChatsPage() {
               >
                 M
               </div>
-              <span className="font-semibold" style={{ color: theme.colors.charcoal }}>
+              <span className="font-semibold text-[var(--gp-text-primary)]">
                 Messages
               </span>
             </Link>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
+              {/* Theme Toggle */}
+              <ThemeToggle size="sm" showModeSelector />
               <Button variant="ghost" size="sm">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1872,16 +2018,12 @@ export default function V2ChatsPage() {
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div
-              className="p-4 border-b flex items-center justify-between"
-              style={{ borderColor: theme.colors.parchment, background: 'white' }}
-            >
+            <div className="p-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)] flex items-center justify-between transition-colors duration-300">
               <div className="flex items-center gap-3">
                 {/* Bouton retour (mobile uniquement) */}
                 <button
                   onClick={() => setSelectedChat(null)}
-                  className="md:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  style={{ color: theme.colors.charcoal }}
+                  className="md:hidden p-2 -ml-2 rounded-lg hover:bg-[var(--gp-hover)] text-[var(--gp-text-primary)] transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1900,7 +2042,7 @@ export default function V2ChatsPage() {
                   <LanguageOrb code={selectedConversation.languageCode} size="md" pulse={false} />
                 )}
                 <div>
-                  <h2 className="font-semibold" style={{ color: theme.colors.charcoal }}>
+                  <h2 className="font-semibold text-[var(--gp-text-primary)]">
                     {selectedConversation.customName || selectedConversation.name}
                   </h2>
                   <span
@@ -1939,7 +2081,7 @@ export default function V2ChatsPage() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4" style={{ background: '#FAFAFA' }}>
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-[var(--gp-background)] transition-colors duration-300">
               {/* Timestamp séparateur de date */}
               <MessageTimestamp timestamp="2025-01-30T10:30:00" format="datetime" showSeparators />
 
