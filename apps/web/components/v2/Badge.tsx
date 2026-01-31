@@ -14,7 +14,7 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       <span
         ref={ref}
         className={cn(
-          'inline-flex items-center gap-1.5 font-medium rounded-full',
+          'inline-flex items-center gap-1.5 font-medium rounded-full transition-colors duration-300',
           {
             // Sizes
             'px-2 py-0.5 text-xs': size === 'sm',
@@ -22,10 +22,10 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             'px-4 py-1.5 text-base': size === 'lg',
           },
           {
-            // Variants
-            'bg-[#F5EDE3] text-[#2B2D42]': variant === 'default',
-            'bg-[#E76F51]/10 text-[#E76F51]': variant === 'terracotta',
-            'bg-[#264653]/10 text-[#264653]': variant === 'teal',
+            // Variants with CSS variables
+            'bg-[var(--gp-hover)] text-[var(--gp-text-primary)]': variant === 'default',
+            'bg-[var(--gp-terracotta-light)] text-[var(--gp-terracotta)]': variant === 'terracotta',
+            'bg-[var(--gp-deep-teal)]/10 text-[var(--gp-deep-teal)]': variant === 'teal',
             'bg-[#E9C46A]/20 text-[#B8860B]': variant === 'gold',
             'bg-[#2A9D8F]/10 text-[#2A9D8F]': variant === 'success',
             'bg-[#F4A261]/20 text-[#D68A3A]': variant === 'warning',

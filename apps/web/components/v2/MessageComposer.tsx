@@ -342,10 +342,10 @@ export const MessageComposer = forwardRef<
 
   return (
     <div
-      className={`border-t transition-all ${className}`}
+      className={`border-t transition-all duration-300 ${className}`}
       style={{
-        borderColor: theme.colors.parchment,
-        background: 'white',
+        borderColor: 'var(--gp-parchment)',
+        background: 'var(--gp-surface)',
       }}
     >
       {/* Attachments preview */}
@@ -354,17 +354,17 @@ export const MessageComposer = forwardRef<
           {attachments.map((attachment) => (
             <div
               key={attachment.id}
-              className="relative group flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+              className="relative group flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors duration-300"
               style={{
-                background: theme.colors.parchment,
-                color: theme.colors.charcoal,
+                background: 'var(--gp-parchment)',
+                color: 'var(--gp-text-primary)',
               }}
             >
               {attachment.type === 'voice' && (
-                <MicIcon className="w-4 h-4" style={{ color: theme.colors.terracotta } as React.CSSProperties} />
+                <MicIcon className="w-4 h-4" style={{ color: 'var(--gp-terracotta)' } as React.CSSProperties} />
               )}
               {attachment.type === 'location' && (
-                <LocationIcon className="w-4 h-4" style={{ color: theme.colors.jadeGreen } as React.CSSProperties} />
+                <LocationIcon className="w-4 h-4" style={{ color: 'var(--gp-deep-teal)' } as React.CSSProperties} />
               )}
               {attachment.type === 'image' && <span>🖼️</span>}
               {attachment.type === 'file' && <AttachmentIcon className="w-4 h-4" />}
@@ -391,12 +391,12 @@ export const MessageComposer = forwardRef<
         {/* Zone de texte */}
         <div
           className={`
-            relative rounded-2xl border transition-all
-            ${isFocused ? 'ring-2 ring-terracotta/20' : ''}
+            relative rounded-2xl border transition-all duration-300
+            ${isFocused ? 'ring-2 ring-[var(--gp-terracotta)]/20' : ''}
           `}
           style={{
-            borderColor: isFocused ? theme.colors.terracotta : theme.colors.parchment,
-            background: theme.colors.warmCanvas,
+            borderColor: isFocused ? 'var(--gp-terracotta)' : 'var(--gp-parchment)',
+            background: 'var(--gp-surface-elevated)',
           }}
         >
           {/* Barre d'outils en haut: Langue + Icônes d'action */}
@@ -406,10 +406,10 @@ export const MessageComposer = forwardRef<
               <button
                 ref={languageButtonRef}
                 onClick={toggleLanguageMenu}
-                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all"
+                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all duration-300"
                 style={{
-                  background: `${theme.colors.deepTeal}15`,
-                  color: theme.colors.deepTeal,
+                  background: 'color-mix(in srgb, var(--gp-deep-teal) 15%, transparent)',
+                  color: 'var(--gp-deep-teal)',
                 }}
               >
                 <span>{currentLangOption?.flag}</span>
@@ -425,12 +425,13 @@ export const MessageComposer = forwardRef<
                     onClick={() => setShowLanguageMenu(false)}
                   />
                   <div
-                    className={`absolute left-0 z-20 rounded-lg shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${
+                    className={`absolute left-0 z-20 rounded-lg overflow-hidden max-h-[200px] overflow-y-auto transition-colors duration-300 ${
                       menuDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
                     }`}
                     style={{
-                      background: 'white',
-                      border: `1px solid ${theme.colors.parchment}`,
+                      background: 'var(--gp-surface)',
+                      border: '1px solid var(--gp-parchment)',
+                      boxShadow: 'var(--gp-shadow-lg)',
                       minWidth: '150px',
                     }}
                   >
@@ -439,15 +440,15 @@ export const MessageComposer = forwardRef<
                         key={lang.code}
                         onClick={() => handleLanguageSelect(lang.code)}
                         className={`
-                          w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors
-                          ${lang.code === currentLanguage ? 'bg-gray-100' : 'hover:bg-gray-50'}
+                          w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors duration-300
+                          ${lang.code === currentLanguage ? 'bg-[var(--gp-active)]' : 'hover:bg-[var(--gp-hover)]'}
                         `}
-                        style={{ color: theme.colors.charcoal }}
+                        style={{ color: 'var(--gp-text-primary)' }}
                       >
                         <span>{lang.flag}</span>
                         <span className="flex-1">{lang.name}</span>
                         {lang.code === currentLanguage && (
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.jadeGreen }}>
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--gp-deep-teal)' }}>
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                           </svg>
                         )}
@@ -463,8 +464,8 @@ export const MessageComposer = forwardRef<
               <button
                 onClick={onAttachmentClick}
                 disabled={disabled || isRecording}
-                className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
-                style={{ color: theme.colors.textMuted }}
+                className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                style={{ color: 'var(--gp-text-muted)' }}
                 title="Pièce jointe"
                 aria-label="Ajouter une pièce jointe"
               >
@@ -474,8 +475,8 @@ export const MessageComposer = forwardRef<
 
             <button
               disabled={disabled || isRecording}
-              className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
-              style={{ color: theme.colors.textMuted }}
+              className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+              style={{ color: 'var(--gp-text-muted)' }}
               title="Emoji"
               aria-label="Ajouter un emoji"
             >
@@ -486,7 +487,7 @@ export const MessageComposer = forwardRef<
               isRecording ? (
                 <button
                   onClick={stopRecording}
-                  className="p-2 md:p-1.5 rounded-full transition-colors animate-pulse"
+                  className="p-2 md:p-1.5 rounded-full transition-colors duration-300 animate-pulse"
                   style={{ background: '#EF4444', color: 'white' }}
                   title="Arrêter"
                   aria-label="Arrêter l'enregistrement"
@@ -497,8 +498,8 @@ export const MessageComposer = forwardRef<
                 <button
                   onClick={startRecording}
                   disabled={disabled}
-                  className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
-                  style={{ color: theme.colors.textMuted }}
+                  className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                  style={{ color: 'var(--gp-text-muted)' }}
                   title="Message vocal"
                   aria-label="Enregistrer un message vocal"
                 >
@@ -511,8 +512,8 @@ export const MessageComposer = forwardRef<
               <button
                 onClick={requestLocation}
                 disabled={disabled}
-                className="p-2 md:p-1.5 rounded-full hover:bg-gray-200/50 transition-colors disabled:opacity-40"
-                style={{ color: theme.colors.textMuted }}
+                className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                style={{ color: 'var(--gp-text-muted)' }}
                 title="Position"
                 aria-label="Partager ma position"
               >
@@ -537,9 +538,9 @@ export const MessageComposer = forwardRef<
             placeholder={isRecording ? 'Enregistrement en cours...' : placeholder}
             disabled={disabled || isRecording}
             rows={1}
-            className="w-full pl-4 pr-12 pt-10 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-gray-400 disabled:opacity-50"
+            className="w-full pl-4 pr-12 pt-10 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-[var(--gp-text-muted)] disabled:opacity-50 transition-colors duration-300"
             style={{
-              color: theme.colors.charcoal,
+              color: 'var(--gp-text-primary)',
               minHeight: '70px',
               maxHeight: '150px',
             }}
@@ -550,9 +551,9 @@ export const MessageComposer = forwardRef<
             <button
               onClick={handleSend}
               disabled={disabled}
-              className="absolute right-2 bottom-2 p-2 rounded-full transition-all hover:scale-105 active:scale-95"
+              className="absolute right-2 bottom-2 p-2 rounded-full transition-all duration-300 hover:scale-105 active:scale-95"
               style={{
-                background: theme.colors.terracotta,
+                background: 'var(--gp-terracotta)',
                 color: 'white',
               }}
               title="Envoyer"
@@ -564,9 +565,9 @@ export const MessageComposer = forwardRef<
           {/* Compteur de caractères */}
           {maxLength && message.length > maxLength * 0.8 && (
             <div
-              className="absolute bottom-1 left-3 text-[10px]"
+              className="absolute bottom-1 left-3 text-[10px] transition-colors duration-300"
               style={{
-                color: message.length >= maxLength ? '#EF4444' : theme.colors.textMuted,
+                color: message.length >= maxLength ? '#EF4444' : 'var(--gp-text-muted)',
               }}
             >
               {message.length}/{maxLength}

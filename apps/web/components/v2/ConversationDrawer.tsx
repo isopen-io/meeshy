@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { theme } from './theme';
 import { Button } from './Button';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
@@ -115,29 +114,27 @@ export function ConversationDrawer({
           ${isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
           ${className}
         `}
-        style={{ background: 'white' }}
+        style={{ background: 'var(--gp-surface-elevated)' }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between p-4 border-b"
-          style={{ borderColor: theme.colors.parchment }}
+          className="flex items-center justify-between p-4 border-b border-[var(--gp-border)] transition-colors duration-300"
         >
           <h2
-            className="text-lg font-semibold"
-            style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+            className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
+            style={{ fontFamily: 'var(--font-display, inherit)' }}
           >
             Options
           </h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
           >
             <svg
-              className="w-5 h-5"
+              className="w-5 h-5 text-[var(--gp-text-muted)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
-              style={{ color: theme.colors.textMuted }}
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -149,8 +146,7 @@ export function ConversationDrawer({
           {/* Nom personnalisé */}
           <div>
             <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: theme.colors.textMuted }}
+              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
             >
               Nom affiché (pour vous)
             </label>
@@ -170,8 +166,7 @@ export function ConversationDrawer({
           {/* Notifications */}
           <div>
             <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: theme.colors.textMuted }}
+              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
             >
               Notifications
             </label>
@@ -181,13 +176,13 @@ export function ConversationDrawer({
                   key={level}
                   onClick={() => onNotificationChange(level)}
                   className={`
-                    flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors
-                    ${notificationLevel === level ? 'text-white' : 'hover:bg-gray-100'}
+                    flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-300
+                    ${notificationLevel === level ? 'text-white' : 'hover:bg-[var(--gp-hover)]'}
                   `}
                   style={{
-                    background: notificationLevel === level ? theme.colors.terracotta : 'transparent',
-                    border: `1px solid ${notificationLevel === level ? theme.colors.terracotta : theme.colors.parchment}`,
-                    color: notificationLevel === level ? 'white' : theme.colors.textSecondary,
+                    background: notificationLevel === level ? 'var(--gp-terracotta)' : 'transparent',
+                    border: `1px solid ${notificationLevel === level ? 'var(--gp-terracotta)' : 'var(--gp-border)'}`,
+                    color: notificationLevel === level ? 'white' : 'var(--gp-text-secondary)',
                   }}
                 >
                   {level === 'all' && 'Tous'}
@@ -201,8 +196,7 @@ export function ConversationDrawer({
           {/* Thème */}
           <div>
             <label
-              className="block text-sm font-medium mb-2"
-              style={{ color: theme.colors.textMuted }}
+              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
             >
               Thème
             </label>
@@ -231,7 +225,7 @@ export function ConversationDrawer({
           </div>
 
           {/* Séparateur */}
-          <div className="border-t" style={{ borderColor: theme.colors.parchment }} />
+          <div className="border-t border-[var(--gp-border)] transition-colors duration-300" />
 
           {/* Actions rapides */}
           <div className="space-y-1">
@@ -268,7 +262,7 @@ export function ConversationDrawer({
           </div>
 
           {/* Séparateur */}
-          <div className="border-t" style={{ borderColor: theme.colors.parchment }} />
+          <div className="border-t border-[var(--gp-border)] transition-colors duration-300" />
 
           {/* Catégorie */}
           <TagInput
@@ -297,13 +291,11 @@ export function ConversationDrawer({
 
         {/* Footer */}
         <div
-          className="p-4 border-t space-y-2"
-          style={{ borderColor: theme.colors.parchment }}
+          className="p-4 border-t border-[var(--gp-border)] space-y-2 transition-colors duration-300"
         >
           <button
             onClick={onBlockClick}
-            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 transition-colors"
-            style={{ color: '#EF4444' }}
+            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-red-500/10 transition-colors duration-300 text-red-500"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -312,8 +304,7 @@ export function ConversationDrawer({
           </button>
           <button
             onClick={onReportClick}
-            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-orange-50 transition-colors"
-            style={{ color: theme.colors.terracotta }}
+            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--gp-terracotta-light)]/10 transition-colors duration-300 text-[var(--gp-terracotta)]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -339,20 +330,19 @@ function DrawerMenuItem({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
+      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
     >
       <div className="flex items-center gap-3">
-        <span style={{ color: theme.colors.textMuted }}>{icon}</span>
-        <span className="text-sm font-medium" style={{ color: theme.colors.charcoal }}>
+        <span className="text-[var(--gp-text-muted)]">{icon}</span>
+        <span className="text-sm font-medium text-[var(--gp-text-primary)]">
           {label}
         </span>
       </div>
       <svg
-        className="w-5 h-5"
+        className="w-5 h-5 text-[var(--gp-text-muted)]"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
-        style={{ color: theme.colors.textMuted }}
       >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
       </svg>

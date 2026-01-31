@@ -9,9 +9,9 @@
 export { theme, cssVariables, getLanguageColor, getThemeColors } from './theme';
 export type { Theme, ThemeColor, LanguageCode } from './theme';
 
-// Theme Hook & Toggle
-export { useTheme } from './useTheme';
-export type { ThemeMode } from './useTheme';
+// Theme Provider, Hook & Toggle
+export { V2ThemeProvider, ThemeScript, useTheme, useThemeContext } from './ThemeProvider';
+export type { ThemeMode } from './ThemeProvider';
 export { ThemeToggle } from './ThemeToggle';
 export type { ThemeToggleProps } from './ThemeToggle';
 

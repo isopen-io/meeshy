@@ -48,10 +48,10 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
         ref={ref}
         onClick={onClick}
         className={cn(
-          'flex items-stretch gap-2 px-3 py-2 rounded-lg',
-          'bg-[#F5EDE3]/60 backdrop-blur-sm',
+          'flex items-stretch gap-2 px-3 py-2 rounded-lg transition-colors duration-300',
+          'bg-[var(--gp-parchment)]/60 backdrop-blur-sm',
           'max-w-full overflow-hidden',
-          onClick && 'cursor-pointer hover:bg-[#F5EDE3]/80 transition-colors duration-150',
+          onClick && 'cursor-pointer hover:bg-[var(--gp-parchment)]/80',
           className
         )}
         role={onClick ? 'button' : undefined}
@@ -66,7 +66,7 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
       >
         {/* Colored accent bar */}
         <div
-          className="w-[3px] rounded-full shrink-0 self-stretch"
+          className="w-[3px] rounded-full shrink-0 self-stretch transition-colors duration-300"
           style={{ backgroundColor: accentColor }}
           aria-hidden="true"
         />
@@ -75,7 +75,7 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
           {/* Author name */}
           <span
-            className="text-xs font-semibold truncate"
+            className="text-xs font-semibold truncate transition-colors duration-300"
             style={{ color: accentColor }}
           >
             {authorName}
@@ -84,8 +84,8 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
           {/* Message preview - truncated to 2 lines */}
           <p
             className={cn(
-              'text-xs leading-snug',
-              'text-[#6B7280]',
+              'text-xs leading-snug transition-colors duration-300',
+              'text-[var(--gp-text-secondary)]',
               'line-clamp-2',
               contentType !== 'text' && 'italic'
             )}

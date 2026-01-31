@@ -2,7 +2,6 @@
 
 import { forwardRef, useRef, useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { theme } from './theme';
 
 export interface VideoPlayerProps {
   /** Video source URL */
@@ -146,7 +145,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
       <div
         ref={containerRef}
         className={cn(
-          'relative overflow-hidden bg-[#16161A]',
+          'relative overflow-hidden bg-[var(--gp-background)] transition-colors duration-300',
           'rounded-xl',
           isFullscreen ? 'w-full h-full' : 'aspect-video',
           className
@@ -188,15 +187,14 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             <div
               className={cn(
                 'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
-                'bg-white/90 backdrop-blur-sm',
-                'shadow-lg',
+                'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
+                'shadow-[var(--gp-shadow-lg)]',
                 'transition-all duration-300 ease-out',
-                'group-hover:scale-110 group-hover:bg-white',
-                'group-hover:shadow-[0_8px_30px_rgba(231,111,81,0.4)]'
+                'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
               )}
             >
               <svg
-                className="w-7 h-7 text-[#E76F51] ml-1"
+                className="w-7 h-7 text-[var(--gp-terracotta)] ml-1"
                 fill="currentColor"
                 viewBox="0 0 24 24"
               >
@@ -240,14 +238,14 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                 <div
                   className={cn(
                     'w-16 h-16 rounded-full flex items-center justify-center',
-                    'bg-white/90 backdrop-blur-sm',
-                    'shadow-lg',
+                    'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
+                    'shadow-[var(--gp-shadow-lg)]',
                     'transition-all duration-300 ease-out',
-                    'hover:scale-110 hover:bg-white'
+                    'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
                   )}
                 >
                   <svg
-                    className="w-7 h-7 text-[#E76F51] ml-1"
+                    className="w-7 h-7 text-[var(--gp-terracotta)] ml-1"
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
@@ -261,7 +259,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             <div className="relative z-10 p-3 space-y-2">
               {/* Progress Bar */}
               <div
-                className="relative h-1 bg-white/30 rounded-full cursor-pointer group/progress"
+                className="relative h-1 bg-[var(--gp-surface)]/30 rounded-full cursor-pointer group/progress"
                 onClick={handleProgressClick}
                 onMouseDown={() => setIsSeeking(true)}
                 onMouseUp={() => setIsSeeking(false)}
@@ -269,14 +267,14 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               >
                 {/* Progress Fill */}
                 <div
-                  className="absolute inset-y-0 left-0 bg-[#E76F51] rounded-full transition-all"
+                  className="absolute inset-y-0 left-0 bg-[var(--gp-terracotta)] rounded-full transition-all"
                   style={{ width: `${progress}%` }}
                 />
                 {/* Progress Handle */}
                 <div
                   className={cn(
                     'absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full',
-                    'bg-white shadow-md',
+                    'bg-[var(--gp-surface-elevated)] shadow-[var(--gp-shadow-md)]',
                     'transition-transform duration-150',
                     'opacity-0 group-hover/progress:opacity-100',
                     'scale-0 group-hover/progress:scale-100'

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { theme } from './theme';
 
 export interface CategoryHeaderProps {
   id: string;
@@ -27,44 +26,48 @@ export function CategoryHeader({
   onToggle,
   onDrop,
   className = '',
-}: CategoryHeaderProps) {
+}: CategoryHeaderProps): JSX.Element {
   const [internalDragOver, setInternalDragOver] = useState(false);
 
   const isHighlighted = isDragOver || internalDragOver;
 
-  const handleDragOver = (e: React.DragEvent) => {
+  function handleDragOver(e: React.DragEvent): void {
     e.preventDefault();
     setInternalDragOver(true);
-  };
+  }
 
-  const handleDragLeave = () => {
+  function handleDragLeave(): void {
     setInternalDragOver(false);
-  };
+  }
 
-  const handleDrop = (e: React.DragEvent) => {
+  function handleDrop(e: React.DragEvent): void {
     e.preventDefault();
     setInternalDragOver(false);
     const conversationId = e.dataTransfer.getData('conversationId');
     if (conversationId && onDrop) {
       onDrop(conversationId);
     }
-  };
+  }
+
+  // Use CSS variable with fallback to color prop, or default terracotta
+  const accentColor = color || 'var(--gp-terracotta)';
 
   return (
     <div
       className={`
         px-4 py-2 flex items-center justify-between cursor-pointer
-        transition-all duration-200
-        ${isHighlighted ? 'scale-[1.02] shadow-md rounded-lg' : ''}
+        transition-all duration-300
+        ${isHighlighted ? 'scale-[1.02] rounded-lg' : ''}
         ${className}
       `}
       style={{
         background: isHighlighted
-          ? (color || theme.colors.terracotta) + '20'
+          ? `color-mix(in srgb, ${accentColor} 12%, transparent)`
           : 'transparent',
         borderLeft: isHighlighted
-          ? `3px solid ${color || theme.colors.terracotta}`
+          ? `3px solid ${accentColor}`
           : '3px solid transparent',
+        boxShadow: isHighlighted ? 'var(--gp-shadow-md)' : undefined,
       }}
       onClick={onToggle}
       onDragOver={handleDragOver}
@@ -72,29 +75,29 @@ export function CategoryHeader({
       onDrop={handleDrop}
     >
       <div className="flex items-center gap-2">
-        {/* Icône de catégorie */}
+        {/* Icone de categorie */}
         {icon && <span className="text-sm">{icon}</span>}
 
         {/* Indicateur de couleur */}
         {color && !icon && (
           <div
-            className="w-2.5 h-2.5 rounded-full"
+            className="w-2.5 h-2.5 rounded-full transition-colors duration-300"
             style={{ background: color }}
           />
         )}
 
-        {/* Nom de la catégorie */}
+        {/* Nom de la categorie */}
         <span
-          className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: color || theme.colors.textMuted }}
+          className="text-xs font-semibold uppercase tracking-wide transition-colors duration-300"
+          style={{ color: color || 'var(--gp-text-muted)' }}
         >
           {name}
         </span>
 
         {/* Compteur */}
         <span
-          className="text-xs"
-          style={{ color: theme.colors.textMuted }}
+          className="text-xs transition-colors duration-300"
+          style={{ color: 'var(--gp-text-muted)' }}
         >
           ({count})
         </span>
@@ -103,11 +106,11 @@ export function CategoryHeader({
       {/* Chevron */}
       {onToggle && (
         <svg
-          className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+          className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          style={{ color: theme.colors.textMuted }}
+          style={{ color: 'var(--gp-text-muted)' }}
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -116,13 +119,13 @@ export function CategoryHeader({
   );
 }
 
-// Icônes par défaut pour les catégories système
+// Icones par defaut pour les categories systeme
 export const CategoryIcons = {
-  pinned: '📌',
-  uncategorized: '📁',
-  archived: '📥',
-  work: '💼',
-  personal: '👤',
-  family: '👨‍👩‍👧‍👦',
-  friends: '👥',
+  pinned: '\u{1F4CC}',
+  uncategorized: '\u{1F4C1}',
+  archived: '\u{1F4E5}',
+  work: '\u{1F4BC}',
+  personal: '\u{1F464}',
+  family: '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}',
+  friends: '\u{1F465}',
 };

@@ -14,21 +14,21 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-2xl transition-all duration-300',
+          'rounded-2xl transition-colors duration-300',
           {
             // Default
-            'bg-white shadow-[0_4px_20px_rgba(0,0,0,0.05)]': variant === 'default',
+            'bg-[var(--gp-surface)] shadow-[var(--gp-shadow-sm)]': variant === 'default',
 
             // Elevated
-            'bg-white shadow-[0_10px_40px_rgba(0,0,0,0.1)]': variant === 'elevated',
+            'bg-[var(--gp-surface-elevated)] shadow-[var(--gp-shadow-lg)]': variant === 'elevated',
 
             // Outlined
-            'bg-white border border-[#F5EDE3]': variant === 'outlined',
+            'bg-[var(--gp-surface)] border border-[var(--gp-border)]': variant === 'outlined',
 
             // Gradient
-            'bg-gradient-to-br from-[#FFF8F3] to-[#F5EDE3]': variant === 'gradient',
+            'bg-gradient-to-br from-[var(--gp-surface)] to-[var(--gp-hover)]': variant === 'gradient',
           },
-          hover && 'hover:-translate-y-1 hover:shadow-[0_10px_40px_rgba(0,0,0,0.1)]',
+          hover && 'hover:-translate-y-1 hover:shadow-[var(--gp-shadow-lg)]',
           className
         )}
         {...props}
@@ -70,7 +70,7 @@ const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingEleme
     <h3
       ref={ref}
       className={cn(
-        'text-xl font-semibold text-[#2B2D42]',
+        'text-xl font-semibold text-[var(--gp-text-primary)] transition-colors duration-300',
         'font-[Playfair_Display,Georgia,serif]',
         className
       )}
@@ -85,7 +85,7 @@ const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLPara
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn('text-[#6B7280] text-sm mt-2', className)}
+      className={cn('text-[var(--gp-text-secondary)] text-sm mt-2 transition-colors duration-300', className)}
       {...props}
     />
   )

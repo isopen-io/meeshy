@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, ReactNode } from 'react';
-import { theme } from './theme';
 
 export interface SwipeAction {
   id: string;
@@ -26,7 +25,7 @@ export function SwipeableRow({
   rightActions,
   onLongPress,
   className = '',
-}: SwipeableRowProps) {
+}: SwipeableRowProps): JSX.Element {
   const [offsetX, setOffsetX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef(0);
@@ -37,7 +36,7 @@ export function SwipeableRow({
   const leftWidth = leftActions.length * 70;
   const rightWidth = rightActions.length * 70;
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  function handleTouchStart(e: React.TouchEvent): void {
     startXRef.current = e.touches[0].clientX;
     startOffsetRef.current = offsetX;
     setIsDragging(true);
@@ -48,9 +47,9 @@ export function SwipeableRow({
         setIsDragging(false);
       }, 500);
     }
-  };
+  }
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  function handleMouseDown(e: React.MouseEvent): void {
     startXRef.current = e.clientX;
     startOffsetRef.current = offsetX;
     setIsDragging(true);
@@ -61,9 +60,9 @@ export function SwipeableRow({
         setIsDragging(false);
       }, 500);
     }
-  };
+  }
 
-  const handleMove = (clientX: number) => {
+  function handleMove(clientX: number): void {
     if (!isDragging) return;
 
     const diff = clientX - startXRef.current;
@@ -78,17 +77,17 @@ export function SwipeableRow({
     newOffset = Math.max(-rightWidth, Math.min(leftWidth, newOffset));
 
     setOffsetX(newOffset);
-  };
+  }
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  function handleTouchMove(e: React.TouchEvent): void {
     handleMove(e.touches[0].clientX);
-  };
+  }
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  function handleMouseMove(e: React.MouseEvent): void {
     handleMove(e.clientX);
-  };
+  }
 
-  const handleEnd = () => {
+  function handleEnd(): void {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
@@ -104,14 +103,16 @@ export function SwipeableRow({
     } else {
       setOffsetX(0);
     }
-  };
+  }
 
-  const handleActionClick = (action: SwipeAction) => {
+  function handleActionClick(action: SwipeAction): void {
     action.onClick();
     setOffsetX(0);
-  };
+  }
 
-  const reset = () => setOffsetX(0);
+  function reset(): void {
+    setOffsetX(0);
+  }
 
   return (
     <div
@@ -124,11 +125,11 @@ export function SwipeableRow({
         className="absolute left-0 top-0 bottom-0 flex"
         style={{ width: leftWidth }}
       >
-        {leftActions.map((action, index) => (
+        {leftActions.map((action) => (
           <button
             key={action.id}
             onClick={() => handleActionClick(action)}
-            className="flex flex-col items-center justify-center gap-1 transition-transform"
+            className="flex flex-col items-center justify-center gap-1 transition-transform duration-300"
             style={{
               width: 70,
               background: action.bgColor,
@@ -151,7 +152,7 @@ export function SwipeableRow({
           <button
             key={action.id}
             onClick={() => handleActionClick(action)}
-            className="flex flex-col items-center justify-center gap-1 transition-transform"
+            className="flex flex-col items-center justify-center gap-1 transition-transform duration-300"
             style={{
               width: 70,
               background: action.bgColor,
@@ -167,10 +168,11 @@ export function SwipeableRow({
 
       {/* Main content */}
       <div
-        className="relative bg-white"
+        className="relative transition-colors duration-300"
         style={{
+          background: 'var(--gp-surface)',
           transform: `translateX(${offsetX}px)`,
-          transition: isDragging ? 'none' : 'transform 200ms ease-out',
+          transition: isDragging ? 'none' : 'transform 200ms ease-out, background-color 300ms',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -194,7 +196,7 @@ export function SwipeableRow({
   );
 }
 
-// Icônes prédéfinies pour les actions
+// Icones predefinies pour les actions
 export const SwipeIcons = {
   archive: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,14 +241,14 @@ export const SwipeIcons = {
   ),
 };
 
-// Couleurs prédéfinies
+// Couleurs predefinies - utilisant CSS variables pour le dark mode
 export const SwipeColors = {
-  archive: { color: 'white', bgColor: theme.colors.deepTeal },
-  delete: { color: 'white', bgColor: '#EF4444' },
-  read: { color: 'white', bgColor: theme.colors.jadeGreen },
-  mute: { color: 'white', bgColor: '#6B7280' },
-  pin: { color: 'white', bgColor: theme.colors.terracotta },
-  important: { color: 'white', bgColor: theme.colors.goldAccent },
-  tag: { color: 'white', bgColor: theme.colors.royalIndigo },
-  call: { color: 'white', bgColor: theme.colors.jadeGreen },
+  archive: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-deep-teal)' },
+  delete: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-error)' },
+  read: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-jade-green)' },
+  mute: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-text-muted)' },
+  pin: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-terracotta)' },
+  important: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-gold-accent)' },
+  tag: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-royal-indigo)' },
+  call: { color: 'var(--gp-text-inverse)', bgColor: 'var(--gp-jade-green)' },
 };

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { theme } from './theme';
 
 export interface ResizerProps {
   defaultWidth?: number; // Pourcentage (0-100)
@@ -127,13 +126,13 @@ export function Resizer({
       {/* Ligne visible */}
       <div
         className={`
-          h-full w-px transition-all duration-150
-          ${isDragging ? 'w-1 bg-terracotta' : 'group-hover:w-1 group-hover:bg-terracotta/50'}
+          h-full w-px transition-all duration-300
+          ${isDragging ? 'w-1' : 'group-hover:w-1'}
         `}
         style={{
           background: isDragging
-            ? theme.colors.terracotta
-            : theme.colors.parchment,
+            ? 'var(--gp-terracotta)'
+            : 'var(--gp-border)',
         }}
       />
 
@@ -143,12 +142,9 @@ export function Resizer({
           absolute top-1/2 -translate-y-1/2
           w-4 h-8 rounded-full
           flex items-center justify-center
-          transition-all duration-150
+          transition-all duration-300 bg-[var(--gp-terracotta)]
           ${isDragging ? 'opacity-100 scale-100' : 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100'}
         `}
-        style={{
-          background: theme.colors.terracotta,
-        }}
       >
         <svg
           className="w-3 h-3 text-white"

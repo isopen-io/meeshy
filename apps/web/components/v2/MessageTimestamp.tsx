@@ -157,7 +157,7 @@ export function MessageTimestamp({
   return (
     <div
       className={cn(
-        'flex items-center justify-center gap-3 py-3 select-none',
+        'flex items-center justify-center gap-3 py-3 select-none transition-colors duration-300',
         className
       )}
       role="separator"
@@ -166,16 +166,16 @@ export function MessageTimestamp({
       {/* Left separator line */}
       {showSeparators && (
         <div
-          className="flex-1 max-w-12 h-px"
-          style={{ backgroundColor: theme.colors.textMuted, opacity: 0.3 }}
+          className="flex-1 max-w-12 h-px transition-colors duration-300"
+          style={{ backgroundColor: 'var(--gp-text-muted)', opacity: 0.3 }}
         />
       )}
 
       {/* Timestamp text */}
       <span
-        className="text-xs font-medium whitespace-nowrap"
+        className="text-xs font-medium whitespace-nowrap transition-colors duration-300"
         style={{
-          color: theme.colors.textMuted,
+          color: 'var(--gp-text-muted)',
           fontFamily: theme.fonts.body,
         }}
       >
@@ -185,8 +185,8 @@ export function MessageTimestamp({
       {/* Right separator line */}
       {showSeparators && (
         <div
-          className="flex-1 max-w-12 h-px"
-          style={{ backgroundColor: theme.colors.textMuted, opacity: 0.3 }}
+          className="flex-1 max-w-12 h-px transition-colors duration-300"
+          style={{ backgroundColor: 'var(--gp-text-muted)', opacity: 0.3 }}
         />
       )}
     </div>

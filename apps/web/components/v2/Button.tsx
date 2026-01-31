@@ -2,7 +2,6 @@
 
 import { forwardRef, ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
-import { theme } from './theme';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
@@ -18,7 +17,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || isLoading}
         className={cn(
           // Base styles
-          'inline-flex items-center justify-center gap-2 font-semibold transition-all duration-300 ease-out',
+          'inline-flex items-center justify-center gap-2 font-semibold transition-colors duration-300 ease-out',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed',
 
@@ -32,26 +31,26 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             'px-8 py-3 text-lg': size === 'lg',
           },
 
-          // Color variants
+          // Color variants with CSS variables
           {
             // Primary - Terracotta
-            'bg-[#E76F51] text-white hover:bg-[#D65A3E] active:bg-[#C54A2E] shadow-[0_4px_14px_rgba(231,111,81,0.4)] hover:shadow-[0_6px_20px_rgba(231,111,81,0.5)] hover:-translate-y-0.5 focus-visible:ring-[#E76F51]':
+            'bg-[var(--gp-terracotta)] text-white hover:opacity-90 active:opacity-80 shadow-[var(--gp-shadow-md)] hover:shadow-[var(--gp-shadow-lg)] hover:-translate-y-0.5 focus-visible:ring-[var(--gp-terracotta)]':
               variant === 'primary',
 
             // Secondary - Deep Teal
-            'bg-[#264653] text-white hover:bg-[#1D3640] active:bg-[#152A32] shadow-[0_4px_14px_rgba(38,70,83,0.3)] hover:shadow-[0_6px_20px_rgba(38,70,83,0.4)] hover:-translate-y-0.5 focus-visible:ring-[#264653]':
+            'bg-[var(--gp-deep-teal)] text-white hover:opacity-90 active:opacity-80 shadow-[var(--gp-shadow-md)] hover:shadow-[var(--gp-shadow-lg)] hover:-translate-y-0.5 focus-visible:ring-[var(--gp-deep-teal)]':
               variant === 'secondary',
 
             // Outline
-            'border-2 border-[#264653] text-[#264653] bg-transparent hover:bg-[#264653] hover:text-white focus-visible:ring-[#264653]':
+            'border-2 border-[var(--gp-deep-teal)] text-[var(--gp-deep-teal)] bg-transparent hover:bg-[var(--gp-deep-teal)] hover:text-white focus-visible:ring-[var(--gp-deep-teal)]':
               variant === 'outline',
 
             // Ghost
-            'text-[#2B2D42] bg-transparent hover:bg-[#F5EDE3] focus-visible:ring-[#2B2D42]':
+            'text-[var(--gp-text-primary)] bg-transparent hover:bg-[var(--gp-hover)] focus-visible:ring-[var(--gp-text-primary)]':
               variant === 'ghost',
 
             // Destructive
-            'bg-[#C1292E] text-white hover:bg-[#A82328] active:bg-[#8F1E22] shadow-[0_4px_14px_rgba(193,41,46,0.4)] focus-visible:ring-[#C1292E]':
+            'bg-[#C1292E] text-white hover:opacity-90 active:opacity-80 shadow-[var(--gp-shadow-md)] focus-visible:ring-[#C1292E]':
               variant === 'destructive',
           },
 

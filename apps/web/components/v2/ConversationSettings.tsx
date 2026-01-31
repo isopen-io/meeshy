@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { theme } from './theme';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Badge } from './Badge';
@@ -84,9 +83,9 @@ export function ConversationSettings({
   const [localDescription, setLocalDescription] = useState(description);
 
   const roleLabels = {
-    admin: { label: 'Admin', icon: '👑', color: theme.colors.goldAccent },
-    moderator: { label: 'Modo', icon: '🛡️', color: theme.colors.deepTeal },
-    member: { label: 'Membre', icon: '👤', color: theme.colors.textMuted },
+    admin: { label: 'Admin', icon: '👑', color: 'var(--gp-terracotta)' },
+    moderator: { label: 'Modo', icon: '🛡️', color: 'var(--gp-deep-teal)' },
+    member: { label: 'Membre', icon: '👤', color: 'var(--gp-text-muted)' },
   };
 
   const typeOptions = [
@@ -98,30 +97,28 @@ export function ConversationSettings({
 
   return (
     <div
-      className={`h-full flex flex-col bg-white ${className}`}
+      className={`h-full flex flex-col bg-[var(--gp-surface-elevated)] transition-colors duration-300 ${className}`}
     >
       {/* Header */}
       <div
-        className="flex items-center gap-3 p-4 border-b"
-        style={{ borderColor: theme.colors.parchment }}
+        className="flex items-center gap-3 p-4 border-b border-[var(--gp-border)] transition-colors duration-300"
       >
         <button
           onClick={onBack}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
         >
           <svg
-            className="w-5 h-5"
+            className="w-5 h-5 text-[var(--gp-text-primary)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            style={{ color: theme.colors.charcoal }}
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <h2
-          className="text-lg font-semibold"
-          style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+          className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
+          style={{ fontFamily: 'var(--font-display, inherit)' }}
         >
           Paramètres
         </h2>
@@ -133,8 +130,8 @@ export function ConversationSettings({
         <div className="relative">
           {/* Banner */}
           <div
-            className="h-32 relative cursor-pointer group"
-            style={{ background: banner ? `url(${banner}) center/cover` : theme.colors.parchment }}
+            className="h-32 relative cursor-pointer group transition-colors duration-300"
+            style={{ background: banner ? `url(${banner}) center/cover` : 'var(--gp-surface)' }}
             onClick={() => document.getElementById('banner-input')?.click()}
           >
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
@@ -159,8 +156,8 @@ export function ConversationSettings({
 
           {/* Avatar */}
           <div
-            className="absolute -bottom-10 left-4 w-20 h-20 rounded-2xl border-4 border-white cursor-pointer group overflow-hidden"
-            style={{ background: avatar ? `url(${avatar}) center/cover` : theme.colors.deepTeal }}
+            className="absolute -bottom-10 left-4 w-20 h-20 rounded-2xl border-4 border-[var(--gp-surface-elevated)] cursor-pointer group overflow-hidden transition-colors duration-300"
+            style={{ background: avatar ? `url(${avatar}) center/cover` : 'var(--gp-deep-teal)' }}
             onClick={() => document.getElementById('avatar-input')?.click()}
           >
             {!avatar && (
@@ -193,7 +190,7 @@ export function ConversationSettings({
           {/* Titre et Description */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textMuted }}>
+              <label className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300">
                 Titre officiel
               </label>
               <Input
@@ -204,7 +201,7 @@ export function ConversationSettings({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textMuted }}>
+              <label className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300">
                 Description
               </label>
               <textarea
@@ -212,19 +209,14 @@ export function ConversationSettings({
                 onChange={(e) => setLocalDescription(e.target.value)}
                 onBlur={() => localDescription !== description && onDescriptionChange(localDescription)}
                 placeholder="Description de la conversation..."
-                className="w-full px-3 py-2 text-sm rounded-lg border outline-none resize-none h-20"
-                style={{
-                  background: theme.colors.warmCanvas,
-                  borderColor: theme.colors.parchment,
-                  color: theme.colors.textPrimary,
-                }}
+                className="w-full px-3 py-2 text-sm rounded-lg border outline-none resize-none h-20 bg-[var(--gp-surface)] border-[var(--gp-border)] text-[var(--gp-text-primary)] transition-colors duration-300"
               />
             </div>
           </div>
 
           {/* Type de conversation */}
           <div>
-            <label className="block text-sm font-medium mb-3" style={{ color: theme.colors.textMuted }}>
+            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
               Type de conversation
             </label>
             <div className="space-y-2">
@@ -232,32 +224,31 @@ export function ConversationSettings({
                 <button
                   key={option.value}
                   onClick={() => onTypeChange(option.value)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                    conversationType === option.value ? 'border-terracotta' : 'hover:bg-gray-50'
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 ${
+                    conversationType === option.value ? '' : 'hover:bg-[var(--gp-hover)]'
                   }`}
                   style={{
-                    borderColor: conversationType === option.value ? theme.colors.terracotta : theme.colors.parchment,
-                    background: conversationType === option.value ? theme.colors.terracotta + '10' : 'transparent',
+                    borderColor: conversationType === option.value ? 'var(--gp-terracotta)' : 'var(--gp-border)',
+                    background: conversationType === option.value ? 'var(--gp-terracotta-light)' : 'transparent',
                   }}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center`}
+                    className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors duration-300"
                     style={{
-                      borderColor: conversationType === option.value ? theme.colors.terracotta : theme.colors.textMuted,
+                      borderColor: conversationType === option.value ? 'var(--gp-terracotta)' : 'var(--gp-text-muted)',
                     }}
                   >
                     {conversationType === option.value && (
                       <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: theme.colors.terracotta }}
+                        className="w-2 h-2 rounded-full bg-[var(--gp-terracotta)]"
                       />
                     )}
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-medium" style={{ color: theme.colors.charcoal }}>
+                    <p className="text-sm font-medium text-[var(--gp-text-primary)] transition-colors duration-300">
                       {option.label}
                     </p>
-                    <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                    <p className="text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
                       {option.description}
                     </p>
                   </div>
@@ -268,43 +259,40 @@ export function ConversationSettings({
 
           {/* Options */}
           <div>
-            <label className="block text-sm font-medium mb-3" style={{ color: theme.colors.textMuted }}>
+            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
               Options
             </label>
             <div className="space-y-3">
               <button
                 onClick={() => onCommunityChange(communityId ? undefined : 'select')}
-                className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50"
-                style={{ borderColor: theme.colors.parchment }}
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] hover:bg-[var(--gp-hover)] transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
-                  <span style={{ color: theme.colors.textMuted }}>🏘️</span>
-                  <span className="text-sm" style={{ color: theme.colors.charcoal }}>
+                  <span className="text-[var(--gp-text-muted)]">🏘️</span>
+                  <span className="text-sm text-[var(--gp-text-primary)]">
                     Associer à une communauté
                   </span>
                 </div>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.textMuted }}>
+                <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
 
               <button
                 onClick={() => onAllowAnonymousChange(!allowAnonymous)}
-                className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50"
-                style={{ borderColor: theme.colors.parchment }}
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] hover:bg-[var(--gp-hover)] transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
-                  <span style={{ color: theme.colors.textMuted }}>👻</span>
-                  <span className="text-sm" style={{ color: theme.colors.charcoal }}>
+                  <span className="text-[var(--gp-text-muted)]">👻</span>
+                  <span className="text-sm text-[var(--gp-text-primary)]">
                     Autoriser les anonymes
                   </span>
                 </div>
                 <div
-                  className={`w-10 h-6 rounded-full p-1 transition-colors ${allowAnonymous ? '' : 'bg-gray-200'}`}
-                  style={{ background: allowAnonymous ? theme.colors.jadeGreen : undefined }}
+                  className={`w-10 h-6 rounded-full p-1 transition-colors duration-300 ${allowAnonymous ? 'bg-[var(--gp-deep-teal)]' : 'bg-[var(--gp-border)]'}`}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform ${allowAnonymous ? 'translate-x-4' : ''}`}
+                    className={`w-4 h-4 rounded-full bg-white transition-transform duration-300 ${allowAnonymous ? 'translate-x-4' : ''}`}
                   />
                 </div>
               </button>
@@ -314,7 +302,7 @@ export function ConversationSettings({
           {/* Participants */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium" style={{ color: theme.colors.textMuted }}>
+              <label className="text-sm font-medium text-[var(--gp-text-muted)] transition-colors duration-300">
                 Participants ({participants.length})
               </label>
               <Button variant="ghost" size="sm" onClick={onInvite}>
@@ -330,8 +318,7 @@ export function ConversationSettings({
                 return (
                   <div
                     key={participant.id}
-                    className="flex items-center gap-3 p-3 rounded-lg"
-                    style={{ background: theme.colors.warmCanvas }}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300"
                   >
                     <div className="relative">
                       {participant.avatar ? (
@@ -342,28 +329,26 @@ export function ConversationSettings({
                         />
                       ) : (
                         <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium"
-                          style={{ background: theme.colors.deepTeal }}
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium bg-[var(--gp-deep-teal)]"
                         >
                           {participant.name.charAt(0).toUpperCase()}
                         </div>
                       )}
                       {participant.isOnline && (
                         <div
-                          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
-                          style={{ background: theme.colors.jadeGreen }}
+                          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--gp-surface-elevated)] bg-[var(--gp-deep-teal)]"
                         />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: theme.colors.charcoal }}>
+                      <p className="text-sm font-medium truncate text-[var(--gp-text-primary)] transition-colors duration-300">
                         {participant.name}
                       </p>
                       <p className="text-xs" style={{ color: roleInfo.color }}>
                         {roleInfo.icon} {roleInfo.label}
                       </p>
                     </div>
-                    <button className="p-2 rounded hover:bg-gray-100" style={{ color: theme.colors.textMuted }}>
+                    <button className="p-2 rounded hover:bg-[var(--gp-hover)] text-[var(--gp-text-muted)] transition-colors duration-300">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                       </svg>
@@ -376,21 +361,21 @@ export function ConversationSettings({
 
           {/* Statistiques */}
           <div>
-            <label className="block text-sm font-medium mb-3" style={{ color: theme.colors.textMuted }}>
+            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
               Statistiques
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg" style={{ background: theme.colors.warmCanvas }}>
-                <p className="text-lg font-bold" style={{ color: theme.colors.charcoal }}>
+              <div className="p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300">
+                <p className="text-lg font-bold text-[var(--gp-text-primary)]">
                   {stats.messageCount.toLocaleString()}
                 </p>
-                <p className="text-xs" style={{ color: theme.colors.textMuted }}>Messages</p>
+                <p className="text-xs text-[var(--gp-text-muted)]">Messages</p>
               </div>
-              <div className="p-3 rounded-lg" style={{ background: theme.colors.warmCanvas }}>
-                <p className="text-lg font-bold" style={{ color: theme.colors.charcoal }}>
+              <div className="p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300">
+                <p className="text-lg font-bold text-[var(--gp-text-primary)]">
                   {stats.languages.length}
                 </p>
-                <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                <p className="text-xs text-[var(--gp-text-muted)]">
                   Langues: {stats.languages.join(' ')}
                 </p>
               </div>
@@ -399,42 +384,40 @@ export function ConversationSettings({
 
           {/* Contenus */}
           <div>
-            <label className="block text-sm font-medium mb-3" style={{ color: theme.colors.textMuted }}>
+            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
               Contenus
             </label>
             <div className="space-y-2">
               <button
                 onClick={onMediaClick}
-                className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50"
-                style={{ borderColor: theme.colors.parchment }}
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] hover:bg-[var(--gp-hover)] transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
-                  <span style={{ color: theme.colors.textMuted }}>🖼️</span>
-                  <span className="text-sm" style={{ color: theme.colors.charcoal }}>
+                  <span className="text-[var(--gp-text-muted)]">🖼️</span>
+                  <span className="text-sm text-[var(--gp-text-primary)]">
                     Médias partagés
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="default" size="sm">{stats.mediaCount}</Badge>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.textMuted }}>
+                  <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               </button>
               <button
                 onClick={onLinksClick}
-                className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50"
-                style={{ borderColor: theme.colors.parchment }}
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] hover:bg-[var(--gp-hover)] transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
-                  <span style={{ color: theme.colors.textMuted }}>🔗</span>
-                  <span className="text-sm" style={{ color: theme.colors.charcoal }}>
+                  <span className="text-[var(--gp-text-muted)]">🔗</span>
+                  <span className="text-sm text-[var(--gp-text-primary)]">
                     Liens partagés
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="default" size="sm">{stats.linkCount}</Badge>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: theme.colors.textMuted }}>
+                  <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -444,7 +427,7 @@ export function ConversationSettings({
         </div>
 
         {/* Danger zone */}
-        <div className="px-4 py-6 border-t" style={{ borderColor: theme.colors.parchment }}>
+        <div className="px-4 py-6 border-t border-[var(--gp-border)] transition-colors duration-300">
           <Button
             variant="destructive"
             className="w-full"

@@ -2,7 +2,6 @@
 
 import { HTMLAttributes, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { theme } from './theme';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
   /** Audio source URL */
@@ -237,14 +236,13 @@ export function AudioPlayer({
     <div
       className={cn(
         'flex items-center gap-3 p-3 rounded-xl',
-        'bg-gradient-to-r from-[#F5EDE3] to-[#FFF8F3]',
-        'border border-[#E5E5E5]',
+        'bg-gradient-to-r from-[var(--gp-parchment)] to-[var(--gp-surface)]',
+        'border border-[var(--gp-border)]',
+        'shadow-[var(--gp-shadow-sm)]',
         'min-w-[240px] max-w-[320px]',
+        'transition-colors duration-300',
         className
       )}
-      style={{
-        boxShadow: theme.shadows.sm,
-      }}
       {...props}
     >
       {/* Hidden audio element */}
@@ -257,14 +255,12 @@ export function AudioPlayer({
         className={cn(
           'flex-shrink-0 w-10 h-10 rounded-full',
           'flex items-center justify-center',
+          'bg-[var(--gp-terracotta)]',
+          'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
           'transition-all duration-200',
           'hover:scale-105 active:scale-95',
           isLoading && 'opacity-50 cursor-wait'
         )}
-        style={{
-          background: theme.colors.terracotta,
-          boxShadow: theme.shadows.terracotta,
-        }}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {isLoading ? (
@@ -317,15 +313,15 @@ export function AudioPlayer({
               return (
                 <div
                   key={index}
-                  className="flex-1 transition-colors duration-150"
+                  className={cn(
+                    'flex-1 transition-colors duration-150',
+                    isPlayed ? 'bg-[var(--gp-terracotta)]' : 'bg-[var(--gp-text-muted)]'
+                  )}
                   style={{
                     height: `${height * 100}%`,
                     minWidth: `${BAR_WIDTH}px`,
                     maxWidth: `${BAR_WIDTH + 1}px`,
                     borderRadius: '2px',
-                    backgroundColor: isPlayed
-                      ? theme.colors.terracotta
-                      : theme.colors.textMuted,
                     opacity: isPlayed ? 1 : 0.4,
                   }}
                 />
@@ -339,10 +335,10 @@ export function AudioPlayer({
 
         {/* Time display */}
         <div className="flex items-center justify-between text-xs font-medium">
-          <span style={{ color: theme.colors.textSecondary }}>
+          <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
             {formatTime(currentTime)}
           </span>
-          <span style={{ color: theme.colors.textMuted }}>
+          <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
             {formatTime(duration)}
           </span>
         </div>

@@ -1,20 +1,19 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import { theme } from './theme';
 
 export interface CommunityItem {
   id: string;
   name: string;
-  /** URL de la bannière de fond */
+  /** URL de la banniere de fond */
   banner?: string;
-  /** URL de l'avatar (fallback si pas de bannière) */
+  /** URL de l'avatar (fallback si pas de banniere) */
   avatar?: string;
   /** Nombre total de membres */
   memberCount: number;
   /** Nombre de conversations actives */
   conversationCount: number;
-  /** Couleur thème de la communauté */
+  /** Couleur theme de la communaute */
   color?: string;
 }
 
@@ -24,15 +23,15 @@ export interface CommunityCarouselProps {
   onCommunityClick: (communityId: string) => void;
   /** Nombre total de conversations (pour "Toutes") */
   totalConversations?: number;
-  /** Nombre de conversations archivées */
+  /** Nombre de conversations archivees */
   archivedConversations?: number;
-  /** ID de la communauté/filtre sélectionné */
+  /** ID de la communaute/filtre selectionne */
   selectedId?: string | null;
   className?: string;
 }
 
-// Icône pour "Toutes les conversations"
-function AllIcon({ className = 'w-6 h-6' }: { className?: string }) {
+// Icone pour "Toutes les conversations"
+function AllIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Element {
   return (
     <svg
       className={className}
@@ -49,8 +48,8 @@ function AllIcon({ className = 'w-6 h-6' }: { className?: string }) {
   );
 }
 
-// Icône pour "Archives"
-function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }) {
+// Icone pour "Archives"
+function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Element {
   return (
     <svg
       className={className}
@@ -68,8 +67,8 @@ function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }) {
   );
 }
 
-// Icône membres
-function MembersIcon({ className = 'w-3 h-3' }: { className?: string }) {
+// Icone membres
+function MembersIcon({ className = 'w-3 h-3' }: { className?: string }): JSX.Element {
   return (
     <svg
       className={className}
@@ -81,8 +80,8 @@ function MembersIcon({ className = 'w-3 h-3' }: { className?: string }) {
   );
 }
 
-// Icône conversations
-function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }) {
+// Icone conversations
+function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }): JSX.Element {
   return (
     <svg
       className={className}
@@ -122,19 +121,19 @@ function CommunityCard({
   banner,
   memberCount,
   conversationCount,
-  color = theme.colors.deepTeal,
+  color = 'var(--gp-deep-teal)',
   icon,
   isSpecial = false,
   isSelected = false,
   onClick,
-}: CommunityCardProps) {
+}: CommunityCardProps): JSX.Element {
   return (
     <button
       onClick={onClick}
       className={`
         flex-shrink-0 relative overflow-hidden rounded-xl
-        transition-all duration-200 ease-out
-        hover:scale-[1.02] hover:shadow-lg
+        transition-all duration-300 ease-out
+        hover:scale-[1.02]
         active:scale-[0.98]
         ${isSelected ? 'ring-2 ring-offset-2' : ''}
       `}
@@ -142,6 +141,7 @@ function CommunityCard({
         width: isSpecial ? '100px' : '140px',
         height: isSpecial ? '80px' : '100px',
         ringColor: isSelected ? color : undefined,
+        boxShadow: 'var(--gp-shadow-sm)',
       }}
     >
       {/* Fond */}
@@ -153,16 +153,16 @@ function CommunityCard({
         />
       ) : (
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 transition-colors duration-300"
           style={{
             background: isSpecial
-              ? `linear-gradient(135deg, ${color}20 0%, ${color}40 100%)`
-              : `linear-gradient(135deg, ${color} 0%, ${color}CC 100%)`,
+              ? `linear-gradient(135deg, color-mix(in srgb, ${color} 12%, transparent) 0%, color-mix(in srgb, ${color} 25%, transparent) 100%)`
+              : `linear-gradient(135deg, ${color} 0%, color-mix(in srgb, ${color} 80%, black) 100%)`,
           }}
         />
       )}
 
-      {/* Overlay gradient pour lisibilité */}
+      {/* Overlay gradient pour lisibilite */}
       <div
         className="absolute inset-0"
         style={{
@@ -176,10 +176,10 @@ function CommunityCard({
 
       {/* Contenu */}
       <div className="absolute inset-0 flex flex-col justify-between p-2.5">
-        {/* Icône spéciale en haut */}
+        {/* Icone speciale en haut */}
         {isSpecial && icon && (
           <div
-            className="self-center mt-1"
+            className="self-center mt-1 transition-colors duration-300"
             style={{ color: color }}
           >
             {icon}
@@ -194,11 +194,11 @@ function CommunityCard({
           {/* Titre */}
           <h4
             className={`
-              font-semibold truncate leading-tight
+              font-semibold truncate leading-tight transition-colors duration-300
               ${isSpecial ? 'text-xs' : 'text-sm'}
             `}
             style={{
-              color: isSpecial ? color : '#fff',
+              color: isSpecial ? color : 'var(--gp-text-inverse)',
               textShadow: !isSpecial ? '0 1px 2px rgba(0,0,0,0.3)' : undefined,
             }}
           >
@@ -212,7 +212,7 @@ function CommunityCard({
               ${isSpecial ? 'justify-center' : ''}
             `}
           >
-            {/* Membres (seulement pour les communautés) */}
+            {/* Membres (seulement pour les communautes) */}
             {memberCount !== undefined && !isSpecial && (
               <div
                 className="flex items-center gap-0.5 text-[10px]"
@@ -227,9 +227,9 @@ function CommunityCard({
 
             {/* Conversations */}
             <div
-              className="flex items-center gap-0.5 text-[10px]"
+              className="flex items-center gap-0.5 text-[10px] transition-colors duration-300"
               style={{
-                color: isSpecial ? theme.colors.textMuted : 'rgba(255,255,255,0.85)',
+                color: isSpecial ? 'var(--gp-text-muted)' : 'rgba(255,255,255,0.85)',
               }}
             >
               <ChatsIcon className="w-2.5 h-2.5" />
@@ -239,18 +239,19 @@ function CommunityCard({
         </div>
       </div>
 
-      {/* Badge sélection */}
+      {/* Badge selection */}
       {isSelected && (
         <div
-          className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
+          className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center transition-colors duration-300"
           style={{ background: color }}
         >
           <svg
-            className="w-2.5 h-2.5 text-white"
+            className="w-2.5 h-2.5"
             fill="none"
             stroke="currentColor"
             strokeWidth={3}
             viewBox="0 0 24 24"
+            style={{ color: 'var(--gp-text-inverse)' }}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
@@ -268,7 +269,7 @@ export function CommunityCarousel({
   archivedConversations = 0,
   selectedId = null,
   className = '',
-}: CommunityCarouselProps) {
+}: CommunityCarouselProps): JSX.Element | null {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -286,20 +287,23 @@ export function CommunityCarousel({
   return (
     <div
       className={`
-        overflow-hidden transition-all duration-200 ease-out
+        overflow-hidden transition-all duration-300 ease-out
         ${isVisible ? 'max-h-36 opacity-100' : 'max-h-0 opacity-0'}
         ${className}
       `}
     >
-      <div className="py-3 px-4 border-b" style={{ borderColor: theme.colors.parchment }}>
-        {/* En-tête */}
+      <div
+        className="py-3 px-4 border-b transition-colors duration-300"
+        style={{ borderColor: 'var(--gp-border-subtle)' }}
+      >
+        {/* En-tete */}
         <div className="flex items-center gap-2 mb-3">
           <svg
-            className="w-4 h-4"
+            className="w-4 h-4 transition-colors duration-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            style={{ color: theme.colors.textMuted }}
+            style={{ color: 'var(--gp-text-muted)' }}
           >
             <path
               strokeLinecap="round"
@@ -308,8 +312,8 @@ export function CommunityCarousel({
               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
             />
           </svg>
-          <span className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
-            Filtrer par communauté
+          <span className="text-xs font-medium transition-colors duration-300" style={{ color: 'var(--gp-text-muted)' }}>
+            Filtrer par communaute
           </span>
         </div>
 
@@ -327,14 +331,14 @@ export function CommunityCarousel({
             id="__all__"
             name="Toutes"
             conversationCount={totalConversations}
-            color={theme.colors.deepTeal}
+            color="var(--gp-deep-teal)"
             icon={<AllIcon className="w-7 h-7" />}
             isSpecial={true}
             isSelected={selectedId === null || selectedId === '__all__'}
             onClick={() => onCommunityClick('__all__')}
           />
 
-          {/* Communautés */}
+          {/* Communautes */}
           {communities.map((community) => (
             <CommunityCard
               key={community.id}
@@ -343,7 +347,7 @@ export function CommunityCarousel({
               banner={community.banner}
               memberCount={community.memberCount}
               conversationCount={community.conversationCount}
-              color={community.color || theme.colors.coral}
+              color={community.color || 'var(--gp-terracotta-light)'}
               isSelected={selectedId === community.id}
               onClick={() => onCommunityClick(community.id)}
             />
@@ -354,7 +358,7 @@ export function CommunityCarousel({
             id="__archives__"
             name="Archives"
             conversationCount={archivedConversations}
-            color={theme.colors.textMuted}
+            color="var(--gp-text-muted)"
             icon={<ArchiveIcon className="w-7 h-7" />}
             isSpecial={true}
             isSelected={selectedId === '__archives__'}

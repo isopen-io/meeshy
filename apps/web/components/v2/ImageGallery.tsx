@@ -2,7 +2,6 @@
 
 import { HTMLAttributes, useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { theme } from './theme';
 
 export interface ImageItem {
   /** Image URL */
@@ -126,14 +125,12 @@ export function ImageGallery({
     <button
       type="button"
       onClick={() => handleImageClick(0)}
-      className="w-full overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 transition-transform hover:scale-[1.02]"
-      style={{ borderRadius: theme.radii.lg, focusRingColor: theme.colors.terracotta }}
+      className="w-full overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--gp-terracotta)] focus:ring-offset-2 transition-transform duration-300 hover:scale-[1.02] rounded-lg"
     >
       <img
         src={images[0].url}
         alt={images[0].alt || 'Image'}
-        className="w-full h-auto object-cover"
-        style={{ borderRadius: theme.radii.lg, maxHeight: '400px' }}
+        className="w-full h-auto object-cover rounded-lg max-h-[400px]"
         loading="lazy"
       />
     </button>
@@ -141,14 +138,13 @@ export function ImageGallery({
 
   // Two images layout (side by side)
   const renderTwoImages = () => (
-    <div className="grid grid-cols-2 gap-1" style={{ borderRadius: theme.radii.lg, overflow: 'hidden' }}>
+    <div className="grid grid-cols-2 gap-1 rounded-lg overflow-hidden">
       {visibleImages.map((image, index) => (
         <button
           key={`${image.url}-${index}`}
           type="button"
           onClick={() => handleImageClick(index)}
-          className="aspect-square overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset transition-transform hover:scale-[1.02]"
-          style={{ focusRingColor: theme.colors.terracotta }}
+          className="aspect-square overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--gp-terracotta)] transition-transform duration-300 hover:scale-[1.02]"
         >
           <img
             src={image.url}
@@ -163,19 +159,17 @@ export function ImageGallery({
 
   // Three images layout (1 large + 2 small)
   const renderThreeImages = () => (
-    <div className="grid grid-cols-2 gap-1" style={{ borderRadius: theme.radii.lg, overflow: 'hidden' }}>
+    <div className="grid grid-cols-2 gap-1 rounded-lg overflow-hidden">
       {/* Large image on the left */}
       <button
         type="button"
         onClick={() => handleImageClick(0)}
-        className="row-span-2 overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset transition-transform hover:scale-[1.02]"
-        style={{ focusRingColor: theme.colors.terracotta }}
+        className="row-span-2 overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--gp-terracotta)] transition-transform duration-300 hover:scale-[1.02]"
       >
         <img
           src={visibleImages[0].url}
           alt={visibleImages[0].alt || 'Image 1'}
-          className="w-full h-full object-cover"
-          style={{ minHeight: '200px' }}
+          className="w-full h-full object-cover min-h-[200px]"
           loading="lazy"
         />
       </button>
@@ -185,8 +179,7 @@ export function ImageGallery({
           key={`${image.url}-${index + 1}`}
           type="button"
           onClick={() => handleImageClick(index + 1)}
-          className="aspect-square overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset transition-transform hover:scale-[1.02]"
-          style={{ focusRingColor: theme.colors.terracotta }}
+          className="aspect-square overflow-hidden focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--gp-terracotta)] transition-transform duration-300 hover:scale-[1.02]"
         >
           <img
             src={image.url}
@@ -201,7 +194,7 @@ export function ImageGallery({
 
   // Four or more images layout (2x2 grid with counter)
   const renderGridImages = () => (
-    <div className="grid grid-cols-2 gap-1" style={{ borderRadius: theme.radii.lg, overflow: 'hidden' }}>
+    <div className="grid grid-cols-2 gap-1 rounded-lg overflow-hidden">
       {visibleImages.map((image, index) => {
         const isLastVisible = index === maxVisible - 1;
         const showCounter = isLastVisible && hasMore;
@@ -211,8 +204,7 @@ export function ImageGallery({
             key={`${image.url}-${index}`}
             type="button"
             onClick={() => handleImageClick(index)}
-            className="aspect-square overflow-hidden relative focus:outline-none focus:ring-2 focus:ring-inset transition-transform hover:scale-[1.02]"
-            style={{ focusRingColor: theme.colors.terracotta }}
+            className="aspect-square overflow-hidden relative focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--gp-terracotta)] transition-transform duration-300 hover:scale-[1.02]"
           >
             <img
               src={image.url}
@@ -222,14 +214,8 @@ export function ImageGallery({
             />
             {/* Counter overlay for remaining images */}
             {showCounter && (
-              <div
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-              >
-                <span
-                  className="text-2xl font-semibold text-white"
-                  style={{ fontFamily: theme.fonts.display }}
-                >
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <span className="text-2xl font-semibold text-white font-[var(--gp-font-display)]">
                   +{remainingCount}
                 </span>
               </div>
@@ -269,17 +255,14 @@ export function ImageGallery({
           <button
             type="button"
             onClick={closeLightbox}
-            className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white rounded-full"
+            className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-white rounded-full"
             aria-label="Close lightbox"
           >
             <CloseIcon className="w-8 h-8" />
           </button>
 
           {/* Image counter */}
-          <div
-            className="absolute top-4 left-4 px-3 py-1 rounded-full text-white/80 text-sm"
-            style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-          >
+          <div className="absolute top-4 left-4 px-3 py-1 rounded-full text-white/80 text-sm bg-white/10">
             {lightboxIndex + 1} / {images.length}
           </div>
 
@@ -291,8 +274,7 @@ export function ImageGallery({
                 e.stopPropagation();
                 goToPrevious();
               }}
-              className="absolute left-4 p-2 text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white rounded-full"
-              style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+              className="absolute left-4 p-2 text-white/80 hover:text-white transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-white rounded-full bg-white/10"
               aria-label="Previous image"
             >
               <ChevronLeftIcon />
@@ -303,9 +285,8 @@ export function ImageGallery({
           <img
             src={images[lightboxIndex].url}
             alt={images[lightboxIndex].alt || `Image ${lightboxIndex + 1}`}
-            className="max-w-[90vw] max-h-[85vh] object-contain"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-md"
             onClick={(e) => e.stopPropagation()}
-            style={{ borderRadius: theme.radii.md }}
           />
 
           {/* Next button */}
@@ -316,8 +297,7 @@ export function ImageGallery({
                 e.stopPropagation();
                 goToNext();
               }}
-              className="absolute right-4 p-2 text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white rounded-full"
-              style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+              className="absolute right-4 p-2 text-white/80 hover:text-white transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-white rounded-full bg-white/10"
               aria-label="Next image"
             >
               <ChevronRightIcon />
@@ -326,10 +306,7 @@ export function ImageGallery({
 
           {/* Thumbnail strip at bottom */}
           {images.length > 1 && (
-            <div
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 px-4 py-2 rounded-full"
-              style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-            >
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 px-4 py-2 rounded-full bg-white/10">
               {images.map((image, index) => (
                 <button
                   key={`thumb-${image.url}-${index}`}
@@ -339,7 +316,7 @@ export function ImageGallery({
                     setLightboxIndex(index);
                   }}
                   className={cn(
-                    'w-12 h-12 rounded-md overflow-hidden transition-all focus:outline-none focus:ring-2 focus:ring-white',
+                    'w-12 h-12 rounded-md overflow-hidden transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white',
                     index === lightboxIndex
                       ? 'ring-2 ring-white scale-110'
                       : 'opacity-60 hover:opacity-100'

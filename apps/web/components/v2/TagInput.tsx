@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { theme } from './theme';
 import { Badge } from './Badge';
 
 export interface TagItem {
@@ -61,8 +60,7 @@ export function TagInput({
   return (
     <div className={className} ref={containerRef}>
       <label
-        className="block text-sm font-medium mb-2"
-        style={{ color: theme.colors.textMuted }}
+        className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
       >
         {label}
       </label>
@@ -95,21 +93,18 @@ export function TagInput({
           onChange={(e) => setSearch(e.target.value)}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
-          className="w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors"
+          className="w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors duration-300 bg-[var(--gp-surface)] text-[var(--gp-text-primary)]"
           style={{
-            background: theme.colors.warmCanvas,
-            borderColor: isOpen ? theme.colors.terracotta : theme.colors.parchment,
-            color: theme.colors.textPrimary,
+            borderColor: isOpen ? 'var(--gp-terracotta)' : 'var(--gp-border)',
           }}
         />
 
         {/* Dropdown */}
         {isOpen && (
           <div
-            className="absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-10 max-h-48 overflow-y-auto"
+            className="absolute top-full left-0 right-0 mt-1 rounded-lg border z-10 max-h-48 overflow-y-auto bg-[var(--gp-surface-elevated)] border-[var(--gp-border)] transition-colors duration-300"
             style={{
-              background: 'white',
-              borderColor: theme.colors.parchment,
+              boxShadow: 'var(--gp-shadow-lg)',
             }}
           >
             {filteredItems.map((item) => {
@@ -117,7 +112,7 @@ export function TagInput({
               return (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center justify-between px-3 py-2 hover:bg-[var(--gp-hover)] cursor-pointer transition-colors duration-300"
                   onClick={() => (isSelected ? onDeselect(item.id) : onSelect(item.id))}
                 >
                   <div className="flex items-center gap-2">
@@ -125,14 +120,11 @@ export function TagInput({
                       className="w-3 h-3 rounded-full"
                       style={{ background: item.color }}
                     />
-                    <span
-                      className="text-sm"
-                      style={{ color: theme.colors.textPrimary }}
-                    >
+                    <span className="text-sm text-[var(--gp-text-primary)] transition-colors duration-300">
                       {item.name}
                     </span>
                     {isSelected && (
-                      <span style={{ color: theme.colors.jadeGreen }}>✓</span>
+                      <span className="text-[var(--gp-deep-teal)]">✓</span>
                     )}
                   </div>
                   <button
@@ -140,14 +132,13 @@ export function TagInput({
                       e.stopPropagation();
                       onDelete(item.id);
                     }}
-                    className="p-1 rounded hover:bg-gray-100 opacity-50 hover:opacity-100"
+                    className="p-1 rounded hover:bg-[var(--gp-hover)] opacity-50 hover:opacity-100 transition-colors duration-300"
                   >
                     <svg
-                      className="w-4 h-4"
+                      className="w-4 h-4 text-[var(--gp-text-muted)]"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ color: theme.colors.textMuted }}
                     >
                       <path
                         strokeLinecap="round"
@@ -167,8 +158,7 @@ export function TagInput({
                   onCreate(search.trim());
                   setSearch('');
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left"
-                style={{ color: theme.colors.terracotta }}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--gp-hover)] text-left text-[var(--gp-terracotta)] transition-colors duration-300"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -178,10 +168,7 @@ export function TagInput({
             )}
 
             {filteredItems.length === 0 && !showCreateButton && (
-              <div
-                className="px-3 py-2 text-sm"
-                style={{ color: theme.colors.textMuted }}
-              >
+              <div className="px-3 py-2 text-sm text-[var(--gp-text-muted)] transition-colors duration-300">
                 Aucun résultat
               </div>
             )}

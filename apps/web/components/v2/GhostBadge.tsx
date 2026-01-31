@@ -1,7 +1,5 @@
 'use client';
 
-import { theme } from './theme';
-
 export interface GhostBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -21,12 +19,12 @@ export function GhostBadge({ size = 'sm', className = '', showBackground = true 
     <div
       className={`
         ${config.container}
-        rounded-full flex items-center justify-center
+        rounded-full flex items-center justify-center transition-colors duration-300
         ${className}
       `}
       style={{
-        background: showBackground ? theme.colors.parchment : 'transparent',
-        border: showBackground ? `1.5px solid ${theme.colors.textMuted}` : 'none',
+        background: showBackground ? 'var(--gp-surface)' : 'transparent',
+        border: showBackground ? '1.5px solid var(--gp-text-muted)' : 'none',
       }}
       title="Utilisateur anonyme"
     >
@@ -39,14 +37,13 @@ export function GhostBadge({ size = 'sm', className = '', showBackground = true 
 export function GhostIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg
-      className={className}
+      className={`${className} text-[var(--gp-text-muted)] transition-colors duration-300`}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ color: theme.colors.textMuted }}
     >
       {/* Corps du fantôme */}
       <path d="M12 2C7.58 2 4 5.58 4 10v9c0 .55.45 1 1 1h.5c.28 0 .5-.22.5-.5v-1c0-.28.22-.5.5-.5s.5.22.5.5v1c0 .28.22.5.5.5h1c.28 0 .5-.22.5-.5v-1c0-.28.22-.5.5-.5s.5.22.5.5v1c0 .28.22.5.5.5h1c.28 0 .5-.22.5-.5v-1c0-.28.22-.5.5-.5s.5.22.5.5v1c0 .28.22.5.5.5h1c.28 0 .5-.22.5-.5v-1c0-.28.22-.5.5-.5s.5.22.5.5v1c0 .28.22.5.5.5h.5c.55 0 1-.45 1-1v-9c0-4.42-3.58-8-8-8z" />

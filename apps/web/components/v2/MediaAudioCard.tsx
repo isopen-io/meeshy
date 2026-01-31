@@ -9,7 +9,7 @@ import {
   useMemo,
 } from 'react';
 import { cn } from '@/lib/utils';
-import { theme, getLanguageColor } from './theme';
+import { getLanguageColor } from './theme';
 
 // ============================================================================
 // Types
@@ -409,12 +409,11 @@ export function MediaAudioCard({
       <div
         className={cn(
           'relative rounded-2xl overflow-hidden',
-          'bg-gradient-to-br from-[#F5EDE3] to-[#FFF8F3]',
-          'border border-[#E5E5E5]'
+          'bg-gradient-to-br from-[var(--gp-parchment)] to-[var(--gp-surface)]',
+          'border border-[var(--gp-border)]',
+          'shadow-[var(--gp-shadow-md)]',
+          'transition-colors duration-300'
         )}
-        style={{
-          boxShadow: theme.shadows.md,
-        }}
       >
         {/* Header with sender info and language selector */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -430,17 +429,11 @@ export function MediaAudioCard({
             )}
             <div className="flex flex-col">
               {senderName && (
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: theme.colors.charcoal, fontFamily: theme.fonts.body }}
-                >
+                <span className="text-sm font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
                   {senderName}
                 </span>
               )}
-              <span
-                className="text-xs"
-                style={{ color: theme.colors.textMuted }}
-              >
+              <span className="text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
                 {timestamp}
               </span>
             </div>
@@ -464,10 +457,7 @@ export function MediaAudioCard({
               <span className="text-base">{getFlag(selectedTranslation.languageCode)}</span>
               <span className="text-sm font-medium">{selectedTranslation.languageName}</span>
               {selectedTranslation.isOriginal && (
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded-full"
-                  style={{ background: theme.colors.parchment }}
-                >
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--gp-parchment)] transition-colors duration-300">
                   Original
                 </span>
               )}
@@ -485,12 +475,10 @@ export function MediaAudioCard({
                 className={cn(
                   'absolute top-full right-0 mt-2 z-30',
                   'min-w-[200px] max-h-[200px] overflow-y-auto',
-                  'rounded-xl shadow-lg',
-                  'bg-white border border-[#E5E5E5]'
+                  'rounded-xl shadow-[var(--gp-shadow-lg)]',
+                  'bg-[var(--gp-surface)] border border-[var(--gp-border)]',
+                  'transition-colors duration-300'
                 )}
-                style={{
-                  boxShadow: theme.shadows.lg,
-                }}
               >
                 {translations.map((translation, index) => {
                   const isSelected = translation.languageCode === selectedTranslation.languageCode;
@@ -501,25 +489,18 @@ export function MediaAudioCard({
                       key={`${translation.languageCode}-${index}`}
                       onClick={() => handleSelectLanguage(translation)}
                       className={cn(
-                        'w-full px-4 py-3 text-left flex items-center gap-3 transition-colors',
-                        'hover:bg-gray-50',
-                        isSelected && 'bg-gray-50'
+                        'w-full px-4 py-3 text-left flex items-center gap-3 transition-colors duration-300',
+                        isSelected ? 'bg-[var(--gp-hover)]' : 'hover:bg-[var(--gp-hover)]'
                       )}
                     >
                       <span className="text-lg">{getFlag(translation.languageCode)}</span>
                       <div className="flex-1">
-                        <span
-                          className="text-sm font-medium block"
-                          style={{ color: theme.colors.charcoal }}
-                        >
+                        <span className="text-sm font-medium block text-[var(--gp-text-primary)] transition-colors duration-300">
                           {translation.languageName}
                         </span>
                       </div>
                       {translation.isOriginal && (
-                        <span
-                          className="text-[10px] px-2 py-0.5 rounded-full"
-                          style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}
-                        >
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--gp-parchment)] text-[var(--gp-text-muted)] transition-colors duration-300">
                           Original
                         </span>
                       )}
@@ -550,14 +531,12 @@ export function MediaAudioCard({
               className={cn(
                 'flex-shrink-0 w-12 h-12 rounded-full',
                 'flex items-center justify-center',
+                'bg-[var(--gp-terracotta)]',
+                'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
                 'transition-all duration-200',
                 'hover:scale-105 active:scale-95',
                 isLoading && 'opacity-50 cursor-wait'
               )}
-              style={{
-                background: theme.colors.terracotta,
-                boxShadow: theme.shadows.terracotta,
-              }}
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isLoading ? (
@@ -607,14 +586,14 @@ export function MediaAudioCard({
                     return (
                       <div
                         key={index}
-                        className="flex-1 transition-colors duration-100"
+                        className={cn(
+                          'flex-1 transition-colors duration-100',
+                          isPlayed ? 'bg-[var(--gp-terracotta)]' : 'bg-[var(--gp-text-muted)]'
+                        )}
                         style={{
                           height: `${height * 100}%`,
                           minWidth: '2px',
                           borderRadius: '1px',
-                          backgroundColor: isPlayed
-                            ? theme.colors.terracotta
-                            : theme.colors.textMuted,
                           opacity: isPlayed ? 1 : 0.35,
                         }}
                       />
@@ -626,11 +605,11 @@ export function MediaAudioCard({
               {/* Time and Speed Controls */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-medium">
-                  <span style={{ color: theme.colors.textSecondary }}>
+                  <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
                     {formatTime(currentTime)}
                   </span>
-                  <span style={{ color: theme.colors.textMuted }}>/</span>
-                  <span style={{ color: theme.colors.textMuted }}>
+                  <span className="text-[var(--gp-text-muted)] transition-colors duration-300">/</span>
+                  <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
                     {formatTime(duration)}
                   </span>
                 </div>
@@ -642,15 +621,11 @@ export function MediaAudioCard({
                       key={speed}
                       onClick={() => setPlaybackSpeed(speed)}
                       className={cn(
-                        'px-2 py-0.5 rounded-md text-xs font-semibold transition-all',
+                        'px-2 py-0.5 rounded-md text-xs font-semibold transition-all duration-300',
                         playbackSpeed === speed
-                          ? 'text-white'
-                          : 'hover:opacity-80'
+                          ? 'bg-[var(--gp-terracotta)] text-white'
+                          : 'bg-[var(--gp-terracotta-light)] text-[var(--gp-terracotta)] hover:opacity-80'
                       )}
-                      style={{
-                        background: playbackSpeed === speed ? theme.colors.terracotta : `${theme.colors.terracotta}15`,
-                        color: playbackSpeed === speed ? 'white' : theme.colors.terracotta,
-                      }}
                     >
                       {speed}x
                     </button>
@@ -664,29 +639,20 @@ export function MediaAudioCard({
         {/* Transcription Preview */}
         {selectedTranslation.transcription && (
           <div
-            className="mx-4 mb-4 p-3 rounded-xl cursor-pointer transition-all hover:opacity-90"
-            style={{
-              background: 'rgba(255, 255, 255, 0.6)',
-              border: `1px solid ${theme.colors.parchment}`,
-            }}
+            className="mx-4 mb-4 p-3 rounded-xl cursor-pointer transition-all duration-300 hover:opacity-90 bg-[var(--gp-surface-elevated)]/60 border border-[var(--gp-border)]"
             onClick={onTranscriptionClick}
           >
             <div className="flex items-start gap-2">
               <TranscriptIcon
-                className="w-4 h-4 flex-shrink-0 mt-0.5"
-                style={{ color: theme.colors.textMuted } as React.CSSProperties}
+                className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--gp-text-muted)]"
               />
               <div className="flex-1 min-w-0">
-                <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: theme.colors.textSecondary }}
-                >
+                <p className="text-sm leading-relaxed text-[var(--gp-text-secondary)] transition-colors duration-300">
                   {truncatedTranscription}
                 </p>
                 {isTruncated && (
                   <button
-                    className="text-xs font-medium mt-1 hover:underline"
-                    style={{ color: theme.colors.terracotta }}
+                    className="text-xs font-medium mt-1 hover:underline text-[var(--gp-terracotta)] transition-colors duration-300"
                     onClick={(e) => {
                       e.stopPropagation();
                       onTranscriptionClick?.();
@@ -709,13 +675,7 @@ export function MediaAudioCard({
             isSent ? 'text-right' : 'text-left'
           )}
         >
-          <p
-            className="text-sm leading-relaxed"
-            style={{
-              color: theme.colors.textSecondary,
-              fontFamily: theme.fonts.body,
-            }}
-          >
+          <p className="text-sm leading-relaxed text-[var(--gp-text-secondary)] transition-colors duration-300">
             {caption}
           </p>
         </div>

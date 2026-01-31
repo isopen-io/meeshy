@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, memo, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
-import { theme, getLanguageColor } from './theme';
+import { getLanguageColor } from './theme';
 
 // ============================================================================
 // Types
@@ -225,13 +225,12 @@ const LanguageSelector = memo(function LanguageSelector({
         onClick={onToggle}
         className={cn(
           'flex items-center gap-2 px-3 py-2 rounded-lg',
-          'bg-white/90 backdrop-blur-sm',
-          'border border-[#E5E5E5]',
-          'hover:bg-white hover:border-[#D0D0D0]',
-          'transition-all duration-200',
-          'text-sm font-medium'
+          'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
+          'border border-[var(--gp-border)]',
+          'hover:bg-[var(--gp-surface-elevated)] hover:border-[var(--gp-border-subtle)]',
+          'transition-all duration-300',
+          'text-sm font-medium text-[var(--gp-text-primary)]'
         )}
-        style={{ color: theme.colors.charcoal }}
       >
         <LanguageIcon className="w-4 h-4" />
         <span>{getFlag(selectedLanguage)}</span>
@@ -250,11 +249,11 @@ const LanguageSelector = memo(function LanguageSelector({
             className={cn(
               'absolute right-0 top-full mt-2 z-50',
               'min-w-[200px] max-h-[280px] overflow-y-auto',
-              'bg-white rounded-xl',
-              'border border-[#E5E5E5]',
-              'shadow-lg'
+              'bg-[var(--gp-surface)] rounded-xl',
+              'border border-[var(--gp-border)]',
+              'shadow-[var(--gp-shadow-lg)]',
+              'transition-colors duration-300'
             )}
-            style={{ boxShadow: theme.shadows.lg }}
           >
             <div className="py-2">
               {translations.map((translation) => {
@@ -267,9 +266,9 @@ const LanguageSelector = memo(function LanguageSelector({
                     onClick={() => onSelect(translation)}
                     className={cn(
                       'w-full px-4 py-2.5 flex items-center gap-3',
-                      'hover:bg-gray-50 transition-colors duration-150',
+                      'transition-colors duration-300',
                       'text-left',
-                      isSelected && 'bg-gray-50'
+                      isSelected ? 'bg-[var(--gp-hover)]' : 'hover:bg-[var(--gp-hover)]'
                     )}
                   >
                     {/* Flag */}
@@ -279,15 +278,12 @@ const LanguageSelector = memo(function LanguageSelector({
                     <div className="flex-1 min-w-0">
                       <span
                         className="font-medium text-sm"
-                        style={{ color: isSelected ? itemColor : theme.colors.charcoal }}
+                        style={{ color: isSelected ? itemColor : 'var(--gp-text-primary)' }}
                       >
                         {translation.languageName}
                       </span>
                       {translation.isOriginal && (
-                        <span
-                          className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full"
-                          style={{ background: theme.colors.parchment, color: theme.colors.textMuted }}
-                        >
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--gp-parchment)] text-[var(--gp-text-muted)] transition-colors duration-300">
                           Original
                         </span>
                       )}
@@ -328,9 +324,9 @@ const SpeedControl = memo(function SpeedControl({ currentSpeed, onSpeedChange }:
           key={speed}
           onClick={() => onSpeedChange(speed)}
           className={cn(
-            'px-2 py-1 rounded-md text-xs font-medium transition-all duration-200',
+            'px-2 py-1 rounded-md text-xs font-medium transition-all duration-300',
             currentSpeed === speed
-              ? 'bg-white text-[#2B2D42]'
+              ? 'bg-[var(--gp-surface-elevated)] text-[var(--gp-text-primary)]'
               : 'text-white/80 hover:text-white hover:bg-white/10'
           )}
         >
@@ -365,32 +361,29 @@ const TranscriptionPreview = memo(function TranscriptionPreview({
     <div
       className={cn(
         'p-3 rounded-xl',
-        'bg-gradient-to-r from-gray-50 to-white',
-        'border border-[#E5E5E5]'
+        'bg-gradient-to-r from-[var(--gp-hover)] to-[var(--gp-surface)]',
+        'border border-[var(--gp-border)]',
+        'transition-colors duration-300'
       )}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
         <TranscriptionIcon className="w-4 h-4" style={{ color: langColor }} />
-        <span className="text-xs font-semibold" style={{ color: theme.colors.charcoal }}>
+        <span className="text-xs font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
           Transcription
         </span>
-        <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+        <span className="text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
           ({languageName})
         </span>
       </div>
 
       {/* Content */}
-      <p
-        className="text-sm leading-relaxed"
-        style={{ color: theme.colors.textSecondary }}
-      >
+      <p className="text-sm leading-relaxed text-[var(--gp-text-secondary)] transition-colors duration-300">
         {truncated}
         {isTruncated && onViewMore && (
           <button
             onClick={onViewMore}
-            className="ml-1 font-medium hover:underline transition-all"
-            style={{ color: theme.colors.terracotta }}
+            className="ml-1 font-medium hover:underline transition-all duration-300 text-[var(--gp-terracotta)]"
           >
             voir plus...
           </button>
@@ -570,13 +563,14 @@ export const MediaVideoCard = memo(function MediaVideoCard({
       <div
         className={cn(
           'rounded-2xl overflow-hidden',
-          'bg-white',
-          'border border-[#E5E5E5]'
+          'bg-[var(--gp-surface)]',
+          'border border-[var(--gp-border)]',
+          'shadow-[var(--gp-shadow-sm)]',
+          'transition-colors duration-300'
         )}
-        style={{ boxShadow: theme.shadows.sm }}
       >
         {/* Header: Sender + Language Selector */}
-        <div className="px-4 py-3 flex items-center justify-between border-b border-[#F0F0F0]">
+        <div className="px-4 py-3 flex items-center justify-between border-b border-[var(--gp-border)] transition-colors duration-300">
           {/* Sender Info */}
           <div className="flex items-center gap-2">
             {senderName && (
@@ -588,26 +582,17 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                   {senderName.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <span
-                    className="text-sm font-semibold"
-                    style={{ color: theme.colors.charcoal }}
-                  >
+                  <span className="text-sm font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
                     {senderName}
                   </span>
-                  <span
-                    className="text-xs ml-2"
-                    style={{ color: theme.colors.textMuted }}
-                  >
+                  <span className="text-xs ml-2 text-[var(--gp-text-muted)] transition-colors duration-300">
                     {timestamp}
                   </span>
                 </div>
               </>
             )}
             {!senderName && (
-              <span
-                className="text-xs"
-                style={{ color: theme.colors.textMuted }}
-              >
+              <span className="text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
                 {timestamp}
               </span>
             )}
@@ -630,8 +615,9 @@ export const MediaVideoCard = memo(function MediaVideoCard({
         <div
           ref={containerRef}
           className={cn(
-            'relative bg-[#16161A]',
-            isFullscreen ? 'w-full h-full' : 'aspect-video'
+            'relative bg-[var(--gp-background)]',
+            isFullscreen ? 'w-full h-full' : 'aspect-video',
+            'transition-colors duration-300'
           )}
         >
           {/* Video Element */}
@@ -670,14 +656,13 @@ export const MediaVideoCard = memo(function MediaVideoCard({
               <div
                 className={cn(
                   'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
-                  'bg-white/90 backdrop-blur-sm',
-                  'shadow-lg',
+                  'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
+                  'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
                   'transition-all duration-300 ease-out',
-                  'group-hover:scale-110 group-hover:bg-white'
+                  'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
                 )}
-                style={{ boxShadow: theme.shadows.terracotta }}
               >
-                <PlayIcon className="w-7 h-7 ml-1" style={{ color: theme.colors.terracotta }} />
+                <PlayIcon className="w-7 h-7 ml-1 text-[var(--gp-terracotta)]" />
               </div>
 
               {/* Duration Badge */}
@@ -725,13 +710,13 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                   <div
                     className={cn(
                       'w-16 h-16 rounded-full flex items-center justify-center',
-                      'bg-white/90 backdrop-blur-sm',
-                      'shadow-lg',
+                      'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
+                      'shadow-[var(--gp-shadow-lg)]',
                       'transition-all duration-300 ease-out',
-                      'hover:scale-110 hover:bg-white'
+                      'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
                     )}
                   >
-                    <PlayIcon className="w-7 h-7 ml-1" style={{ color: theme.colors.terracotta }} />
+                    <PlayIcon className="w-7 h-7 ml-1 text-[var(--gp-terracotta)]" />
                   </div>
                 )}
               </div>
@@ -740,7 +725,7 @@ export const MediaVideoCard = memo(function MediaVideoCard({
               <div className="relative z-10 p-3 space-y-2">
                 {/* Progress Bar */}
                 <div
-                  className="relative h-1.5 bg-white/30 rounded-full cursor-pointer group/progress"
+                  className="relative h-1.5 bg-[var(--gp-surface)]/30 rounded-full cursor-pointer group/progress"
                   onClick={handleProgressClick}
                   onMouseDown={() => setIsSeeking(true)}
                   onMouseUp={() => setIsSeeking(false)}
@@ -748,14 +733,14 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                 >
                   {/* Progress Fill */}
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full transition-all"
-                    style={{ width: `${progress}%`, background: theme.colors.terracotta }}
+                    className="absolute inset-y-0 left-0 rounded-full transition-all bg-[var(--gp-terracotta)]"
+                    style={{ width: `${progress}%` }}
                   />
                   {/* Progress Handle */}
                   <div
                     className={cn(
                       'absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full',
-                      'bg-white shadow-md',
+                      'bg-[var(--gp-surface-elevated)] shadow-[var(--gp-shadow-md)]',
                       'transition-transform duration-150',
                       'opacity-0 group-hover/progress:opacity-100',
                       'scale-0 group-hover/progress:scale-100'
@@ -806,7 +791,7 @@ export const MediaVideoCard = memo(function MediaVideoCard({
 
         {/* Transcription Preview */}
         {selectedTranslation.transcription && (
-          <div className="px-4 py-3 border-t border-[#F0F0F0]">
+          <div className="px-4 py-3 border-t border-[var(--gp-border)] transition-colors duration-300">
             <TranscriptionPreview
               transcription={selectedTranslation.transcription}
               languageCode={selectedTranslation.languageCode}
@@ -818,11 +803,8 @@ export const MediaVideoCard = memo(function MediaVideoCard({
 
         {/* Caption */}
         {caption && (
-          <div className="px-4 py-3 border-t border-[#F0F0F0]">
-            <p
-              className="text-sm leading-relaxed"
-              style={{ color: theme.colors.textPrimary }}
-            >
+          <div className="px-4 py-3 border-t border-[var(--gp-border)] transition-colors duration-300">
+            <p className="text-sm leading-relaxed text-[var(--gp-text-primary)] transition-colors duration-300">
               {caption}
             </p>
           </div>
