@@ -26,6 +26,7 @@ import type {
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 
 export interface MessageHandlerDependencies {
   io: SocketIOServer;
@@ -134,6 +135,10 @@ export class MessageHandler {
         if (message) {
           await this.broadcastNewMessage(message, message.conversationId, socket);
           await this._createMessageNotifications(message, userId);
+
+          // Invalider le cache des conversations pour tous les membres
+          // Permet aux autres clients de voir la liste mise à jour lors du prochain fetch
+          invalidateConversationCacheAsync(message.conversationId, this.prisma);
         }
       }
 
@@ -229,6 +234,9 @@ export class MessageHandler {
         const message = await this._fetchMessageForBroadcast(response.data.id);
         if (message) {
           await this.broadcastNewMessage(message, message.conversationId, socket);
+
+          // Invalider le cache des conversations pour tous les membres
+          invalidateConversationCacheAsync(message.conversationId, this.prisma);
         }
       }
 
