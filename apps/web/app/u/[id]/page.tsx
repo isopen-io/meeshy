@@ -96,8 +96,6 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       setStats(response.data);
     } catch (error) {
       console.error('Error loading stats:', error);
-    } finally {
-      setLoading(false);
     }
   }, [userId]);
 
@@ -130,14 +128,19 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([
-        loadUserProfile(),
-        loadUserStats(),
-        loadFriendRequests(),
-      ]);
+      try {
+        await Promise.all([
+          loadUserProfile(),
+          loadUserStats(),
+          loadFriendRequests(),
+        ]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     if (userId) {
+      setLoading(true);
       loadData();
     }
   }, [userId, loadUserProfile, loadUserStats, loadFriendRequests]);

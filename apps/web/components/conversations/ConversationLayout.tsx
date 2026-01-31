@@ -194,7 +194,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const hasAttemptedReconnect = useRef(false);
   const previousConversationIdRef = useRef<string | null>(null);
   const hasLoadedInitialConversations = useRef(false);
-  const hasFocusedComposerRef = useRef(false);
+  const currentFocusedConversationRef = useRef<string | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
 
   // Activer les mises à jour de statut utilisateur en temps réel
@@ -329,6 +329,27 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     }
   }, [user?.id, refreshConversations]);
 
+  // Auto-focus sur le composer lors de l'ouverture d'une conversation
+  // DOIT être défini AVANT le useEffect de chargement pour s'exécuter en premier
+  useEffect(() => {
+    const targetId = effectiveSelectedId;
+
+    if (!targetId || isMobile) return;
+
+    // Ne pas focus si on a déjà focusé cette conversation
+    if (targetId === currentFocusedConversationRef.current) return;
+
+    // Délai pour s'assurer que le MessageComposer est complètement monté
+    const focusTimeout = setTimeout(() => {
+      if (messageComposerRef.current?.focus) {
+        messageComposerRef.current.focus();
+        currentFocusedConversationRef.current = targetId;
+      }
+    }, 500);
+
+    return () => clearTimeout(focusTimeout);
+  }, [effectiveSelectedId, isMobile]);
+
   // Chargement parallèle conversation + participants (async-parallel)
   useEffect(() => {
     const targetId = selectedConversationId || selectedConversation?.id;
@@ -357,29 +378,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     clearMessages,
     instanceId,
   ]);
-
-  // Auto-focus sur le composer lors de l'ouverture d'une conversation
-  useEffect(() => {
-    const targetId = selectedConversationId || selectedConversation?.id;
-    if (!targetId) return;
-
-    // Ne pas focus au premier chargement (mount initial)
-    if (previousConversationIdRef.current === null) return;
-
-    // Ne pas focus si on change pour la même conversation
-    if (targetId === previousConversationIdRef.current) return;
-
-    // Sur desktop, focus automatiquement
-    // Sur mobile, ne pas forcer le focus pour éviter l'ouverture intempestive du clavier
-    if (!isMobile) {
-      // Petit délai pour laisser le DOM se monter et les drafts se restaurer
-      const focusTimeout = setTimeout(() => {
-        messageComposerRef.current?.focus();
-      }, 100);
-
-      return () => clearTimeout(focusTimeout);
-    }
-  }, [selectedConversationId, selectedConversation?.id, isMobile]);
 
   // Synchroniser l'ID de conversation active pour filtrer les notifications
   // Cela permet d'éviter d'afficher des notifications pour la conversation déjà ouverte

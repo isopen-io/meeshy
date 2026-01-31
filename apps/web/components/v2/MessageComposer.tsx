@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { theme } from './theme';
 
 export interface Attachment {
@@ -133,7 +133,16 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function MessageComposer({
+export const MessageComposer = forwardRef<
+  {
+    focus: () => void;
+    blur: () => void;
+    getMentionedUserIds?: () => string[];
+    clearAttachments?: () => void;
+    clearMentionedUserIds?: () => void;
+  },
+  MessageComposerProps
+>(function MessageComposerForward({
   value = '',
   onChange,
   onSend,
@@ -150,7 +159,7 @@ export function MessageComposer({
   availableLanguages = DEFAULT_LANGUAGES,
   onLanguageChange,
   className = '',
-}: MessageComposerProps) {
+}: MessageComposerProps, ref) {
   const [message, setMessage] = useState(value);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -167,6 +176,23 @@ export function MessageComposer({
   const audioChunksRef = useRef<Blob[]>([]);
 
   const currentLangOption = availableLanguages.find(l => l.code === currentLanguage) || availableLanguages[0];
+
+  // Exposer les méthodes publiques au parent via useImperativeHandle
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      textareaRef.current?.focus();
+    },
+    blur: () => {
+      textareaRef.current?.blur();
+    },
+    getMentionedUserIds: () => [],
+    clearAttachments: () => {
+      setAttachments([]);
+    },
+    clearMentionedUserIds: () => {
+      // À implémenter si les mentions sont supportées
+    }
+  }), []);
 
   useEffect(() => {
     setMessage(value);
@@ -550,4 +576,6 @@ export function MessageComposer({
       </div>
     </div>
   );
-}
+});
+
+MessageComposer.displayName = 'MessageComposer';

@@ -258,7 +258,7 @@ export function ImageGallery({
       {/* Lightbox Modal */}
       {isLightboxOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.9)' }}
           onClick={closeLightbox}
           role="dialog"

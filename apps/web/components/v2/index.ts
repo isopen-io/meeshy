@@ -72,3 +72,15 @@ export type { AudioPlayerProps } from './AudioPlayer';
 
 export { VideoPlayer } from './VideoPlayer';
 export type { VideoPlayerProps } from './VideoPlayer';
+
+export { MediaImageCard } from './MediaImageCard';
+export type { MediaImageCardProps, ImageTranslation } from './MediaImageCard';
+
+export { MediaAudioCard } from './MediaAudioCard';
+export type { MediaAudioCardProps, AudioTranslation } from './MediaAudioCard';
+
+export { MediaVideoCard } from './MediaVideoCard';
+export type { MediaVideoCardProps, VideoTranslation } from './MediaVideoCard';
+
+export { MessageTimestamp, useShowTimestamp, useShowDateSeparator } from './MessageTimestamp';
+export type { MessageTimestampProps } from './MessageTimestamp';
