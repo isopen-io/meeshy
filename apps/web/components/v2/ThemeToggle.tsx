@@ -2,7 +2,7 @@
 
 import { HTMLAttributes, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useTheme, ThemeMode } from './useTheme';
+import { useTheme, ThemeMode } from './ThemeProvider';
 
 export interface ThemeToggleProps extends Omit<HTMLAttributes<HTMLButtonElement>, 'children'> {
   /** Show mode selector dropdown instead of simple toggle */

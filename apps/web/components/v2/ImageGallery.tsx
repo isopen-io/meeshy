@@ -130,6 +130,8 @@ export function ImageGallery({
       <img
         src={images[0].url}
         alt={images[0].alt || 'Image'}
+        width={images[0].width || 400}
+        height={images[0].height || 300}
         className="w-full h-auto object-cover rounded-lg max-h-[400px]"
         loading="lazy"
       />
@@ -149,6 +151,8 @@ export function ImageGallery({
           <img
             src={image.url}
             alt={image.alt || `Image ${index + 1}`}
+            width={image.width || 200}
+            height={image.height || 200}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -169,6 +173,8 @@ export function ImageGallery({
         <img
           src={visibleImages[0].url}
           alt={visibleImages[0].alt || 'Image 1'}
+          width={visibleImages[0].width || 200}
+          height={visibleImages[0].height || 400}
           className="w-full h-full object-cover min-h-[200px]"
           loading="lazy"
         />
@@ -184,6 +190,8 @@ export function ImageGallery({
           <img
             src={image.url}
             alt={image.alt || `Image ${index + 2}`}
+            width={image.width || 200}
+            height={image.height || 200}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -209,6 +217,8 @@ export function ImageGallery({
             <img
               src={image.url}
               alt={image.alt || `Image ${index + 1}`}
+              width={image.width || 200}
+              height={image.height || 200}
               className="w-full h-full object-cover"
               loading="lazy"
             />
@@ -285,6 +295,8 @@ export function ImageGallery({
           <img
             src={images[lightboxIndex].url}
             alt={images[lightboxIndex].alt || `Image ${lightboxIndex + 1}`}
+            width={images[lightboxIndex].width || 1200}
+            height={images[lightboxIndex].height || 900}
             className="max-w-[90vw] max-h-[85vh] object-contain rounded-md"
             onClick={(e) => e.stopPropagation()}
           />
@@ -326,6 +338,8 @@ export function ImageGallery({
                   <img
                     src={image.url}
                     alt={image.alt || `Thumbnail ${index + 1}`}
+                    width={image.width || 100}
+                    height={image.height || 100}
                     className="w-full h-full object-cover"
                   />
                 </button>

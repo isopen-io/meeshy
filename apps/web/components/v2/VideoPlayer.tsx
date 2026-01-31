@@ -176,6 +176,9 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               <img
                 src={poster}
                 alt="Video thumbnail"
+                width={1280}
+                height={720}
+                loading="eager"
                 className="absolute inset-0 w-full h-full object-cover"
               />
             )}

@@ -106,6 +106,11 @@ export function LanguageOrb({
         .animate-pulse-gentle {
           animation: pulse-gentle 3s ease-in-out infinite;
         }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-pulse-gentle {
+            animation: none;
+          }
+        }
       `}</style>
     </div>
   );

@@ -223,6 +223,8 @@ export function MediaImageCard({
       <img
         src={images[0].src}
         alt={images[0].alt || 'Image'}
+        width={400}
+        height={300}
         className="w-full h-auto object-cover rounded-lg max-h-[400px]"
         loading="lazy"
       />
@@ -241,6 +243,8 @@ export function MediaImageCard({
           <img
             src={image.src}
             alt={image.alt || `Image ${index + 1}`}
+            width={200}
+            height={200}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -259,6 +263,8 @@ export function MediaImageCard({
         <img
           src={visibleImages[0].src}
           alt={visibleImages[0].alt || 'Image 1'}
+          width={200}
+          height={400}
           className="w-full h-full object-cover min-h-[200px]"
           loading="lazy"
         />
@@ -273,6 +279,8 @@ export function MediaImageCard({
           <img
             src={image.src}
             alt={image.alt || `Image ${index + 2}`}
+            width={200}
+            height={200}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -297,6 +305,8 @@ export function MediaImageCard({
             <img
               src={image.src}
               alt={image.alt || `Image ${index + 1}`}
+              width={200}
+              height={200}
               className="w-full h-full object-cover"
               loading="lazy"
             />
@@ -518,6 +528,8 @@ export function MediaImageCard({
           <img
             src={images[lightboxIndex].src}
             alt={images[lightboxIndex].alt || `Image ${lightboxIndex + 1}`}
+            width={1200}
+            height={900}
             className="max-w-[90vw] max-h-[85vh] object-contain rounded-md"
             onClick={(e) => e.stopPropagation()}
           />
@@ -570,6 +582,8 @@ export function MediaImageCard({
                   <img
                     src={image.src}
                     alt={image.alt || `Thumbnail ${index + 1}`}
+                    width={100}
+                    height={100}
                     className="w-full h-full object-cover"
                   />
                 </button>

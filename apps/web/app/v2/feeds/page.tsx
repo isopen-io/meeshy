@@ -1,9 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, Badge, LanguageOrb, theme } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, theme, useToast } from '@/components/v2';
 
-const posts = [
+interface Post {
+  id: number;
+  author: string;
+  avatar: string;
+  lang: string;
+  content: string;
+  translation: string;
+  likes: number;
+  comments: number;
+  time: string;
+}
+
+const initialPosts: Post[] = [
   {
     id: 1,
     author: 'Marie Dubois',
@@ -40,6 +53,97 @@ const posts = [
 ];
 
 export default function V2FeedsPage() {
+  const { toast } = useToast();
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
+
+  const handlePublish = () => {
+    if (!newPostContent.trim()) {
+      toast({
+        title: 'Contenu vide',
+        description: 'Veuillez écrire quelque chose avant de publier.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const newPost: Post = {
+      id: Date.now(),
+      author: 'Vous',
+      avatar: '👤',
+      lang: 'fr',
+      content: newPostContent.trim(),
+      translation: newPostContent.trim(),
+      likes: 0,
+      comments: 0,
+      time: "À l'instant",
+    };
+
+    setPosts([newPost, ...posts]);
+    setNewPostContent('');
+    toast({
+      title: 'Publié !',
+      description: 'Votre post a été partagé avec la communauté.',
+      type: 'success',
+    });
+  };
+
+  const handleLike = (postId: number) => {
+    const isLiked = likedPosts.has(postId);
+
+    setLikedPosts((prev) => {
+      const newSet = new Set(prev);
+      if (isLiked) {
+        newSet.delete(postId);
+      } else {
+        newSet.add(postId);
+      }
+      return newSet;
+    });
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? { ...post, likes: isLiked ? post.likes - 1 : post.likes + 1 }
+          : post
+      )
+    );
+
+    toast({
+      title: isLiked ? 'Like retiré' : 'Aimé !',
+      description: isLiked ? 'Vous avez retiré votre like.' : 'Vous avez aimé ce post.',
+      type: 'info',
+    });
+  };
+
+  const handleComment = () => {
+    toast({
+      title: 'Fonctionnalité à venir',
+      description: 'Les commentaires seront bientôt disponibles.',
+      type: 'info',
+    });
+  };
+
+  const handleShare = async (postId: number) => {
+    const postUrl = `${window.location.origin}/v2/feeds/post/${postId}`;
+
+    try {
+      await navigator.clipboard.writeText(postUrl);
+      toast({
+        title: 'Lien copié !',
+        description: 'Le lien du post a été copié dans le presse-papiers.',
+        type: 'success',
+      });
+    } catch {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de copier le lien.',
+        type: 'error',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ background: theme.colors.warmCanvas }}>
       {/* Header */}
@@ -67,7 +171,7 @@ export default function V2FeedsPage() {
                 </svg>
               </Button>
             </Link>
-            <Link href="/v2/u">
+            <Link href="/v2/me">
               <Button variant="ghost" size="sm">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -95,6 +199,8 @@ export default function V2FeedsPage() {
                 className="w-full resize-none border-0 bg-transparent text-base outline-none"
                 rows={2}
                 style={{ color: theme.colors.textPrimary }}
+                value={newPostContent}
+                onChange={(e) => setNewPostContent(e.target.value)}
               />
               <div className="flex items-center justify-between mt-2">
                 <div className="flex gap-2">
@@ -102,7 +208,7 @@ export default function V2FeedsPage() {
                   <Button variant="ghost" size="sm">🎥</Button>
                   <Button variant="ghost" size="sm">📎</Button>
                 </div>
-                <Button variant="primary" size="sm">Publier</Button>
+                <Button variant="primary" size="sm" onClick={handlePublish}>Publier</Button>
               </div>
             </div>
           </div>
@@ -153,19 +259,36 @@ export default function V2FeedsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-6">
-                  <button className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textSecondary }}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <button
+                    className="flex items-center gap-2 text-sm transition-colors"
+                    style={{ color: likedPosts.has(post.id) ? theme.colors.terracotta : theme.colors.textSecondary }}
+                    onClick={() => handleLike(post.id)}
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill={likedPosts.has(post.id) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                     {post.likes}
                   </button>
-                  <button className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textSecondary }}>
+                  <button
+                    className="flex items-center gap-2 text-sm"
+                    style={{ color: theme.colors.textSecondary }}
+                    onClick={handleComment}
+                  >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                     {post.comments}
                   </button>
-                  <button className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textSecondary }}>
+                  <button
+                    className="flex items-center gap-2 text-sm"
+                    style={{ color: theme.colors.textSecondary }}
+                    onClick={() => handleShare(post.id)}
+                  >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                     </svg>
@@ -205,7 +328,7 @@ export default function V2FeedsPage() {
               </svg>
             </Button>
           </Link>
-          <Link href="/v2/u">
+          <Link href="/v2/me">
             <Button variant="ghost" size="sm">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

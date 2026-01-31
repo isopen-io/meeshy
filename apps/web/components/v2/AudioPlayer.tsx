@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
   /** Audio source URL */
-  src: string;
+  src?: string;
   /** Optional pre-known duration in seconds (avoids loading delay) */
   duration?: number;
   /** Callback when playback starts */
@@ -30,7 +30,12 @@ function formatTime(seconds: number): string {
  * Generate pseudo-random waveform bar heights
  * Uses a seed based on src to ensure consistent waveform per audio
  */
-function generateWaveform(src: string, barCount: number): number[] {
+function generateWaveform(src: string | undefined, barCount: number): number[] {
+  // Safety check: return default waveform if src is undefined
+  if (!src || typeof src !== 'string') {
+    return Array.from({ length: barCount }, () => 0.5);
+  }
+
   // Simple hash function for consistent pseudo-random values
   let hash = 0;
   for (let i = 0; i < src.length; i++) {
@@ -80,6 +85,15 @@ export function AudioPlayer({
   className,
   ...props
 }: AudioPlayerProps) {
+  // Safety check: return empty div if src is missing
+  if (!src) {
+    return (
+      <div className="px-3 py-2 text-sm text-[var(--gp-text-muted)]">
+        Audio URL non disponible
+      </div>
+    );
+  }
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 

@@ -297,9 +297,9 @@ export default function V2LandingPage() {
               <Link href="/v2/terms" className="text-white/60 hover:text-white text-sm">
                 Conditions
               </Link>
-              <Link href="/v2/contacts" className="text-white/60 hover:text-white text-sm">
+              <a href="mailto:contact@meeshy.me" className="text-white/60 hover:text-white text-sm">
                 Contact
-              </Link>
+              </a>
               <Link href="/v2/communities" className="text-white/60 hover:text-white text-sm">
                 Communautés
               </Link>

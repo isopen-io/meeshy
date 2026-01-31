@@ -57,7 +57,8 @@ const FLAG_MAP: Record<string, string> = {
   uk: '\u{1F1FA}\u{1F1E6}',
 };
 
-function getFlag(code: string): string {
+function getFlag(code: string | undefined | null): string {
+  if (!code) return '\u{1F310}'; // Return globe emoji if no code
   const normalized = code.toLowerCase().slice(0, 2);
   return FLAG_MAP[normalized] || '\u{1F310}';
 }
@@ -149,6 +150,9 @@ export function MessageBubble({
             <img
               src={senderAvatar}
               alt={sender}
+              width={32}
+              height={32}
+              loading="eager"
               className="w-8 h-8 rounded-full object-cover"
             />
           ) : (

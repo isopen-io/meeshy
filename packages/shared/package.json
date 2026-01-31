@@ -103,7 +103,7 @@
   "author": "Meeshy Team",
   "license": "UNLICENSED",
   "dependencies": {
-    "@prisma/client": "^6.19.2",
+    "@prisma/client": "^6.15.0",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
@@ -112,7 +112,7 @@
   "devDependencies": {
     "@types/node": "^22.19.7",
     "@vitest/coverage-v8": "^3.2.4",
-    "prisma": "^6.19.2",
+    "prisma": "^6.15.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },

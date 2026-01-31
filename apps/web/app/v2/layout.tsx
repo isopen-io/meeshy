@@ -1,11 +1,11 @@
 'use client';
 
-import { V2ThemeProvider, ThemeScript } from '@/components/v2';
+import { V2ThemeProvider, ThemeScript, ToastProvider } from '@/components/v2';
 
 /**
  * V2 Layout - Global Pulse Design System
  *
- * Wraps all V2 pages with the theme provider and injects
+ * Wraps all V2 pages with the theme provider, toast provider, and injects
  * the theme script to prevent flash on load.
  */
 export default function V2Layout({
@@ -16,7 +16,9 @@ export default function V2Layout({
   return (
     <V2ThemeProvider defaultTheme="system">
       <ThemeScript />
-      {children}
+      <ToastProvider>
+        {children}
+      </ToastProvider>
     </V2ThemeProvider>
   );
 }

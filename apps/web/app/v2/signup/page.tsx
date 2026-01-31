@@ -1,51 +1,45 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, Input, Badge, LanguageOrb, theme } from '@/components/v2';
+import { Button, Card, Input, LanguageOrb, theme } from '@/components/v2';
+import { useSignupV2 } from '@/hooks/v2/use-signup-v2';
 
 export default function V2SignupPage() {
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('fr');
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    state,
+    setName,
+    setEmail,
+    setPassword,
+    setSelectedLanguage,
+    handleSubmit,
+    goBack,
+  } = useSignupV2();
 
   const languages = [
-    { code: 'fr', name: 'Français' },
+    { code: 'fr', name: 'Francais' },
     { code: 'en', name: 'English' },
-    { code: 'es', name: 'Español' },
+    { code: 'es', name: 'Espanol' },
     { code: 'zh', name: '中文' },
     { code: 'ar', name: 'العربية' },
     { code: 'ja', name: '日本語' },
     { code: 'de', name: 'Deutsch' },
-    { code: 'pt', name: 'Português' },
+    { code: 'pt', name: 'Portugues' },
   ];
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (step === 1) {
-      setStep(2);
-    } else {
-      setIsLoading(true);
-      setTimeout(() => setIsLoading(false), 2000);
-    }
-  };
 
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: theme.colors.warmCanvas }}
+      style={{ background: 'var(--gp-warm-canvas)' }}
     >
       {/* Background */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
           backgroundImage: `
-            radial-gradient(circle at 100% 100%, ${theme.colors.terracotta}20 0%, transparent 50%),
-            radial-gradient(circle at 0% 0%, ${theme.colors.deepTeal}20 0%, transparent 50%)
+            radial-gradient(circle at 100% 100%, var(--gp-terracotta) 0%, transparent 50%),
+            radial-gradient(circle at 0% 0%, var(--gp-deep-teal) 0%, transparent 50%)
           `,
+          opacity: 0.2,
         }}
       />
 
@@ -54,13 +48,13 @@ export default function V2SignupPage() {
         <Link href="/v2/landing" className="flex items-center justify-center gap-3 mb-8">
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl"
-            style={{ background: `linear-gradient(135deg, ${theme.colors.terracotta}, ${theme.colors.deepTeal})` }}
+            style={{ background: `linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))` }}
           >
             M
           </div>
           <span
             className="text-2xl font-semibold"
-            style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+            style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
           >
             Meeshy
           </span>
@@ -70,42 +64,58 @@ export default function V2SignupPage() {
         <div className="flex items-center justify-center gap-2 mb-8">
           <div
             className="w-3 h-3 rounded-full transition-colors"
-            style={{ background: theme.colors.terracotta }}
+            style={{ background: 'var(--gp-terracotta)' }}
           />
           <div
             className="w-12 h-1 rounded-full transition-colors"
-            style={{ background: step >= 2 ? theme.colors.terracotta : theme.colors.parchment }}
+            style={{ background: state.step >= 2 ? 'var(--gp-terracotta)' : 'var(--gp-border)' }}
           />
           <div
             className="w-3 h-3 rounded-full transition-colors"
-            style={{ background: step >= 2 ? theme.colors.terracotta : theme.colors.parchment }}
+            style={{ background: state.step >= 2 ? 'var(--gp-terracotta)' : 'var(--gp-border)' }}
           />
         </div>
 
         <Card variant="elevated" hover={false} className="p-8">
-          {step === 1 ? (
+          {/* Error message */}
+          {state.error && (
+            <div
+              className="p-4 rounded-xl mb-4 flex items-center gap-3"
+              style={{
+                background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--gp-error) 30%, transparent)'
+              }}
+            >
+              <svg className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--gp-error)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span style={{ color: 'var(--gp-error)' }}>{state.error}</span>
+            </div>
+          )}
+
+          {state.step === 1 ? (
             <>
               <div className="text-center mb-8">
                 <h1
                   className="text-2xl font-bold mb-2"
-                  style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+                  style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
                 >
-                  Créez votre compte
+                  Creez votre compte
                 </h1>
-                <p style={{ color: theme.colors.textSecondary }}>
-                  Rejoignez la communauté Meeshy en quelques secondes
+                <p style={{ color: 'var(--gp-text-secondary)' }}>
+                  Rejoignez la communaute Meeshy en quelques secondes
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textPrimary }}>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--gp-text-primary)' }}>
                     Nom complet
                   </label>
                   <Input
                     type="text"
                     placeholder="Jean Dupont"
-                    value={name}
+                    value={state.name}
                     onChange={(e) => setName(e.target.value)}
                     icon={
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,13 +126,13 @@ export default function V2SignupPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textPrimary }}>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--gp-text-primary)' }}>
                     Email
                   </label>
                   <Input
                     type="email"
                     placeholder="vous@exemple.com"
-                    value={email}
+                    value={state.email}
                     onChange={(e) => setEmail(e.target.value)}
                     icon={
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,13 +143,13 @@ export default function V2SignupPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textPrimary }}>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--gp-text-primary)' }}>
                     Mot de passe
                   </label>
                   <Input
                     type="password"
-                    placeholder="Minimum 8 caractères"
-                    value={password}
+                    placeholder="Minimum 8 caracteres"
+                    value={state.password}
                     onChange={(e) => setPassword(e.target.value)}
                     icon={
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,11 +169,11 @@ export default function V2SignupPage() {
               <div className="text-center mb-8">
                 <h1
                   className="text-2xl font-bold mb-2"
-                  style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+                  style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
                 >
                   Choisissez votre langue
                 </h1>
-                <p style={{ color: theme.colors.textSecondary }}>
+                <p style={{ color: 'var(--gp-text-secondary)' }}>
                   C'est la langue dans laquelle vous verrez les messages traduits
                 </p>
               </div>
@@ -175,14 +185,16 @@ export default function V2SignupPage() {
                       key={lang.code}
                       type="button"
                       onClick={() => setSelectedLanguage(lang.code)}
-                      className={`p-3 rounded-xl border-2 transition-all ${
-                        selectedLanguage === lang.code
-                          ? 'border-[#E76F51] bg-[#E76F51]/5'
-                          : 'border-transparent bg-[#F5EDE3]/50 hover:bg-[#F5EDE3]'
-                      }`}
+                      className="p-3 rounded-xl border-2 transition-all"
+                      style={{
+                        borderColor: state.selectedLanguage === lang.code ? 'var(--gp-terracotta)' : 'transparent',
+                        background: state.selectedLanguage === lang.code
+                          ? 'color-mix(in srgb, var(--gp-terracotta) 5%, transparent)'
+                          : 'color-mix(in srgb, var(--gp-parchment) 50%, transparent)',
+                      }}
                     >
                       <LanguageOrb code={lang.code} size="sm" pulse={false} className="mx-auto mb-2" />
-                      <span className="text-xs font-medium" style={{ color: theme.colors.textPrimary }}>
+                      <span className="text-xs font-medium" style={{ color: 'var(--gp-text-primary)' }}>
                         {lang.name}
                       </span>
                     </button>
@@ -195,7 +207,7 @@ export default function V2SignupPage() {
                     variant="ghost"
                     size="lg"
                     className="flex-1"
-                    onClick={() => setStep(1)}
+                    onClick={goBack}
                   >
                     Retour
                   </Button>
@@ -204,26 +216,26 @@ export default function V2SignupPage() {
                     variant="primary"
                     size="lg"
                     className="flex-1"
-                    isLoading={isLoading}
+                    isLoading={state.isLoading}
                   >
-                    Créer mon compte
+                    Creer mon compte
                   </Button>
                 </div>
               </form>
             </>
           )}
 
-          <p className="text-xs text-center mt-6" style={{ color: theme.colors.textMuted }}>
-            En créant un compte, vous acceptez nos{' '}
-            <Link href="/v2/terms" style={{ color: theme.colors.terracotta }}>
+          <p className="text-xs text-center mt-6" style={{ color: 'var(--gp-text-muted)' }}>
+            En creant un compte, vous acceptez nos{' '}
+            <Link href="/v2/terms" style={{ color: 'var(--gp-terracotta)' }}>
               Conditions d'utilisation
             </Link>
           </p>
         </Card>
 
-        <p className="text-center mt-6" style={{ color: theme.colors.textSecondary }}>
-          Déjà un compte ?{' '}
-          <Link href="/v2/login" className="font-medium" style={{ color: theme.colors.terracotta }}>
+        <p className="text-center mt-6" style={{ color: 'var(--gp-text-secondary)' }}>
+          Deja un compte ?{' '}
+          <Link href="/v2/login" className="font-medium" style={{ color: 'var(--gp-terracotta)' }}>
             Se connecter
           </Link>
         </p>

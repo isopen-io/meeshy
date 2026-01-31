@@ -253,6 +253,9 @@ export function ConversationItem({
             <img
               src={conversation.avatar}
               alt={displayName}
+              width={48}
+              height={48}
+              loading="eager"
               className="w-12 h-12 rounded-full object-cover"
             />
           ) : (

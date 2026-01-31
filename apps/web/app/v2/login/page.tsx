@@ -1,33 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
-import { Button, Card, CardHeader, CardContent, Input, Badge, theme } from '@/components/v2';
+import { Button, Card, Input, theme } from '@/components/v2';
+import { useLoginV2 } from '@/hooks/v2/use-login-v2';
 
-export default function V2LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 2000);
-  };
+function LoginForm() {
+  const {
+    state,
+    setEmail,
+    setPassword,
+    setRememberMe,
+    handleSubmit,
+  } = useLoginV2();
 
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: theme.colors.warmCanvas }}
+      style={{ background: 'var(--gp-warm-canvas)' }}
     >
       {/* Background */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
           backgroundImage: `
-            radial-gradient(circle at 0% 100%, ${theme.colors.terracotta}20 0%, transparent 50%),
-            radial-gradient(circle at 100% 0%, ${theme.colors.deepTeal}20 0%, transparent 50%)
+            radial-gradient(circle at 0% 100%, var(--gp-terracotta) 0%, transparent 50%),
+            radial-gradient(circle at 100% 0%, var(--gp-deep-teal) 0%, transparent 50%)
           `,
+          opacity: 0.2,
         }}
       />
 
@@ -36,13 +36,13 @@ export default function V2LoginPage() {
         <Link href="/v2/landing" className="flex items-center justify-center gap-3 mb-8">
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl"
-            style={{ background: `linear-gradient(135deg, ${theme.colors.terracotta}, ${theme.colors.deepTeal})` }}
+            style={{ background: `linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))` }}
           >
             M
           </div>
           <span
             className="text-2xl font-semibold"
-            style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+            style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
           >
             Meeshy
           </span>
@@ -52,27 +52,43 @@ export default function V2LoginPage() {
           <div className="text-center mb-8">
             <h1
               className="text-2xl font-bold mb-2"
-              style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
+              style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
             >
               Bon retour !
             </h1>
-            <p style={{ color: theme.colors.textSecondary }}>
+            <p style={{ color: 'var(--gp-text-secondary)' }}>
               Connectez-vous pour continuer vos conversations
             </p>
           </div>
+
+          {/* Error message */}
+          {state.error && (
+            <div
+              className="p-4 rounded-xl mb-4 flex items-center gap-3"
+              style={{
+                background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--gp-error) 30%, transparent)'
+              }}
+            >
+              <svg className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--gp-error)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span style={{ color: 'var(--gp-error)' }}>{state.error}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
                 className="block text-sm font-medium mb-2"
-                style={{ color: theme.colors.textPrimary }}
+                style={{ color: 'var(--gp-text-primary)' }}
               >
                 Email
               </label>
               <Input
                 type="email"
                 placeholder="vous@exemple.com"
-                value={email}
+                value={state.email}
                 onChange={(e) => setEmail(e.target.value)}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,14 +101,14 @@ export default function V2LoginPage() {
             <div>
               <label
                 className="block text-sm font-medium mb-2"
-                style={{ color: theme.colors.textPrimary }}
+                style={{ color: 'var(--gp-text-primary)' }}
               >
                 Mot de passe
               </label>
               <Input
                 type="password"
-                placeholder="••••••••"
-                value={password}
+                placeholder="********"
+                value={state.password}
                 onChange={(e) => setPassword(e.target.value)}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,15 +120,20 @@ export default function V2LoginPage() {
 
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="rounded" />
-                <span style={{ color: theme.colors.textSecondary }}>Se souvenir de moi</span>
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={state.rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span style={{ color: 'var(--gp-text-secondary)' }}>Se souvenir de moi</span>
               </label>
               <Link
-                href="/v2/login"
-                className="font-medium"
-                style={{ color: theme.colors.terracotta }}
+                href="/v2/forgot-password"
+                className="font-medium hover:underline"
+                style={{ color: 'var(--gp-terracotta)' }}
               >
-                Mot de passe oublié ?
+                Mot de passe oublie ?
               </Link>
             </div>
 
@@ -121,7 +142,7 @@ export default function V2LoginPage() {
               variant="primary"
               size="lg"
               className="w-full"
-              isLoading={isLoading}
+              isLoading={state.isLoading}
             >
               Se connecter
             </Button>
@@ -129,12 +150,12 @@ export default function V2LoginPage() {
 
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t" style={{ borderColor: theme.colors.parchment }} />
+              <div className="w-full border-t" style={{ borderColor: 'var(--gp-border)' }} />
             </div>
             <div className="relative flex justify-center">
               <span
                 className="px-4 text-sm"
-                style={{ background: 'white', color: theme.colors.textMuted }}
+                style={{ background: 'var(--gp-surface)', color: 'var(--gp-text-muted)' }}
               >
                 ou continuer avec
               </span>
@@ -160,14 +181,14 @@ export default function V2LoginPage() {
           </div>
         </Card>
 
-        <p className="text-center mt-6" style={{ color: theme.colors.textSecondary }}>
+        <p className="text-center mt-6" style={{ color: 'var(--gp-text-secondary)' }}>
           Pas encore de compte ?{' '}
           <Link
             href="/v2/signup"
             className="font-medium"
-            style={{ color: theme.colors.terracotta }}
+            style={{ color: 'var(--gp-terracotta)' }}
           >
-            Créer un compte
+            Creer un compte
           </Link>
         </p>
       </div>
@@ -180,5 +201,30 @@ export default function V2LoginPage() {
         rel="stylesheet"
       />
     </div>
+  );
+}
+
+export default function V2LoginPage() {
+  return (
+    <Suspense fallback={
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--gp-warm-canvas)' }}
+      >
+        <div className="text-center space-y-4">
+          <div
+            className="w-12 h-12 rounded-xl mx-auto animate-pulse"
+            style={{
+              background: 'linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))'
+            }}
+          />
+          <p style={{ color: 'var(--gp-text-muted)' }}>
+            Chargement...
+          </p>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

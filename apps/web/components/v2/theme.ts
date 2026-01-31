@@ -314,6 +314,15 @@ export const cssVariables = `
       --gp-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
     }
   }
+
+  /* Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 `;
 
 /**

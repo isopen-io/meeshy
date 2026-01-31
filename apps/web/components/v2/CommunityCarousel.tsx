@@ -149,6 +149,9 @@ function CommunityCard({
         <img
           src={banner}
           alt={name}
+          width={400}
+          height={300}
+          loading="eager"
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
