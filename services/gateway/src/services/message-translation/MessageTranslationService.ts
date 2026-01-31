@@ -2152,11 +2152,22 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       logger.info(`🔍 [GATEWAY-TRACE] Étape 2: Construction du chemin audio absolu...`);
+      logger.info(`🔍 [GATEWAY-TRACE] fileUrl brut: ${attachment.fileUrl}`);
 
       // 2. Construire le chemin ABSOLU du fichier audio
-      // Le fileUrl est de la forme /api/v1/attachments/file/2026%2F01%2F.../audio.m4a (URL-encoded)
-      // On doit extraire le chemin relatif, le décoder, et le convertir en chemin absolu
-      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
+      // Le fileUrl peut avoir plusieurs formats:
+      // - /api/v1/attachments/file/2025/01/.../audio.m4a (URL-encoded ou non)
+      // - 2025/01/.../audio.m4a (chemin relatif direct)
+      // On normalise pour obtenir le chemin relatif à uploads/attachments/
+      let cleanedPath = decodeURIComponent(attachment.fileUrl);
+
+      // Retirer les préfixes API connus
+      cleanedPath = cleanedPath
+        .replace('/api/v1/attachments/file/', '')
+        .replace('/api/v1/attachments/file', '')
+        .replace(/^\/+/, ''); // Retirer les slashes en début
+
+      const relativePath = `uploads/attachments/${cleanedPath}`;
       const audioPath = path.resolve(process.cwd(), relativePath);
 
       const fileExists = require('fs').existsSync(audioPath);
