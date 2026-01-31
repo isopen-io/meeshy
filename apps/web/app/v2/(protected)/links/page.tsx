@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, Badge, Input, theme, useToast } from '@/components/v2';
+import { Button, Card, Badge, Input, theme, useToast, useSplitView } from '@/components/v2';
 
 interface LinkItem {
   id: number;
@@ -81,19 +81,22 @@ export default function V2LinksPage() {
   const totalClicks = links.reduce((sum, link) => sum + link.clicks, 0);
   const activeLinksCount = links.filter((link) => link.active).length;
 
+  // Split view context for mobile back button
+  const { goBackToList, isMobile, showRightPanel } = useSplitView();
+
   return (
-    <div className="min-h-screen pb-8 bg-[var(--gp-background)] transition-colors duration-300">
+    <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
       {/* Header */}
       <header className="sticky top-0 z-50 px-6 py-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]/95 backdrop-blur-xl transition-colors duration-300">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/v2/me">
-              <Button variant="ghost" size="sm">
+            {isMobile && showRightPanel && (
+              <Button variant="ghost" size="sm" onClick={goBackToList}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Button>
-            </Link>
+            )}
             <h1 className="text-xl font-semibold text-[var(--gp-text-primary)]" style={{ fontFamily: theme.fonts.display }}>
               Liens de partage
             </h1>

@@ -3,13 +3,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Card, Badge, LanguageOrb, theme, Input, useToast } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, useSplitView } from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 
 function ProfileSkeleton() {
   return (
-    <div className="min-h-screen pb-20 bg-[var(--gp-background)] transition-colors duration-300">
+    <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
       {/* Header Banner */}
       <div className="h-40 relative animate-pulse bg-[var(--gp-parchment)]" />
 
@@ -43,6 +43,25 @@ function formatNumber(num: number): string {
     return (num / 1000).toFixed(1) + 'k';
   }
   return num.toString();
+}
+
+// Mobile back button using split view context
+function MobileBackButton() {
+  const { goBackToList, isMobile, showRightPanel } = useSplitView();
+
+  if (!isMobile || !showRightPanel) return null;
+
+  return (
+    <button
+      onClick={goBackToList}
+      className="absolute top-4 left-4 p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors z-10"
+      aria-label="Retour"
+    >
+      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+  );
 }
 
 // Edit Profile Modal Component
@@ -269,7 +288,7 @@ export default function V2ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-[var(--gp-background)] transition-colors duration-300">
+    <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
       {/* Header Banner */}
       <div
         className="h-40 relative bg-cover bg-center"
@@ -281,15 +300,8 @@ export default function V2ProfilePage() {
           backgroundPosition: 'center',
         }}
       >
-        {/* Back button */}
-        <Link
-          href="/v2/chats"
-          className="absolute top-4 left-4 p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors"
-        >
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </Link>
+        {/* Back button (mobile only) */}
+        <MobileBackButton />
         {isCurrentUser && (
           <Link
             href="/v2/settings"
@@ -480,16 +492,6 @@ export default function V2ProfilePage() {
           </Link>
         )}
       </div>
-
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-[var(--gp-border)] py-2 px-6 bg-[var(--gp-surface)] transition-colors duration-300">
-        <div className="max-w-2xl mx-auto flex justify-around">
-          <Link href="/v2/feeds"><Button variant="ghost" size="sm"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg></Button></Link>
-          <Link href="/v2/chats"><Button variant="ghost" size="sm"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></Button></Link>
-          <Link href="/v2/communities"><Button variant="ghost" size="sm"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg></Button></Link>
-          <Link href="/v2/me"><Button variant="ghost" size="sm" className="text-[var(--gp-terracotta)]"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></Button></Link>
-        </div>
-      </nav>
 
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

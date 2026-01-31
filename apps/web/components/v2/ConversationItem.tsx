@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
@@ -49,21 +50,22 @@ export interface ConversationItemData {
 export interface ConversationItemProps {
   conversation: ConversationItemData;
   isSelected?: boolean;
-  onClick: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-  onMarkRead: () => void;
-  onMute: () => void;
-  onPin: () => void;
-  onMarkImportant: () => void;
-  onAddTag: () => void;
-  onCall: () => void;
-  onOptionsClick: () => void;
+  /** Click handler - receives conversation id for optimization with memo */
+  onClick: (id: string) => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
+  onMarkRead?: () => void;
+  onMute?: () => void;
+  onPin?: () => void;
+  onMarkImportant?: () => void;
+  onAddTag?: () => void;
+  onCall?: () => void;
+  onOptionsClick?: () => void;
   onDragStart?: () => void;
   className?: string;
 }
 
-export function ConversationItem({
+export const ConversationItem = memo(function ConversationItem({
   conversation,
   isSelected = false,
   onClick,
@@ -218,11 +220,11 @@ export function ConversationItem({
       <div
         role="button"
         tabIndex={0}
-        onClick={onClick}
+        onClick={() => onClick(conversation.id)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            onClick();
+            onClick(conversation.id);
           }
         }}
         className={`w-full p-4 flex items-start gap-3 transition-colors duration-300 text-left cursor-pointer ${
@@ -380,4 +382,4 @@ export function ConversationItem({
       </div>
     </SwipeableRow>
   );
-}
+});
