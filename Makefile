@@ -661,14 +661,31 @@ endif
 	@echo "$(BLUE)📦 Installation des dépendances Python (via pyenv Python 3.11)...$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -f .python-version ]; then \
-			PYENV_VERSION=$$(cat .python-version) && \
-			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)" && \
-			~/.pyenv/versions/$$PYENV_VERSION/bin/python -m venv .venv 2>/dev/null || python3 -m venv .venv; \
+			PYENV_VERSION=$$(cat .python-version); \
+			PYENV_BIN=~/.pyenv/versions/$$PYENV_VERSION/bin/python; \
+			if [ ! -f "$$PYENV_BIN" ]; then \
+				echo "  $(RED)❌ Python $$PYENV_VERSION non trouvé. Exécutez: make setup-python$(NC)"; \
+				exit 1; \
+			fi; \
+			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)"; \
+			if [ -d .venv ]; then \
+				VENV_PY_VERSION=$$(.venv/bin/python --version 2>/dev/null | cut -d' ' -f2 | cut -d'.' -f1,2); \
+				REQUIRED_PY_VERSION=$$(echo $$PYENV_VERSION | cut -d'.' -f1,2); \
+				if [ "$$VENV_PY_VERSION" != "$$REQUIRED_PY_VERSION" ]; then \
+					echo "  $(YELLOW)⚠️  venv utilise Python $$VENV_PY_VERSION, requis: $$REQUIRED_PY_VERSION$(NC)"; \
+					echo "  $(YELLOW)   Recréation du venv...$(NC)"; \
+					rm -rf .venv; \
+				fi; \
+			fi; \
+			if [ ! -d .venv ]; then \
+				$$PYENV_BIN -m venv .venv; \
+			fi; \
 		else \
+			echo "  $(YELLOW)⚠️  Pas de .python-version, utilisation de python3 système$(NC)"; \
 			python3 -m venv .venv; \
 		fi && \
 		. .venv/bin/activate && \
-		pip install -q --upgrade pip && \
+		pip install -q --upgrade pip setuptools wheel && \
 		echo "  $(BLUE)📦 Installation des dépendances (incluant pyannote.audio + scikit-learn)...$(NC)" && \
 		pip install -r requirements.txt && \
 		echo "  $(GREEN)✅ Toutes les dépendances installées (diarisation incluse)$(NC)"
@@ -719,14 +736,31 @@ else
 	@echo "$(YELLOW)💡 Conseil: Installez uv pour des installations 10-100x plus rapides: curl -LsSf https://astral.sh/uv/install.sh | sh$(NC)"
 	@cd $(TRANSLATOR_DIR) && \
 		if [ -f .python-version ]; then \
-			PYENV_VERSION=$$(cat .python-version) && \
-			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)" && \
-			~/.pyenv/versions/$$PYENV_VERSION/bin/python -m venv .venv 2>/dev/null || python3 -m venv .venv; \
+			PYENV_VERSION=$$(cat .python-version); \
+			PYENV_BIN=~/.pyenv/versions/$$PYENV_VERSION/bin/python; \
+			if [ ! -f "$$PYENV_BIN" ]; then \
+				echo "  $(RED)❌ Python $$PYENV_VERSION non trouvé. Exécutez: make setup-python$(NC)"; \
+				exit 1; \
+			fi; \
+			echo "  Utilisation de Python $$PYENV_VERSION (pyenv)"; \
+			if [ -d .venv ]; then \
+				VENV_PY_VERSION=$$(.venv/bin/python --version 2>/dev/null | cut -d' ' -f2 | cut -d'.' -f1,2); \
+				REQUIRED_PY_VERSION=$$(echo $$PYENV_VERSION | cut -d'.' -f1,2); \
+				if [ "$$VENV_PY_VERSION" != "$$REQUIRED_PY_VERSION" ]; then \
+					echo "  $(YELLOW)⚠️  venv utilise Python $$VENV_PY_VERSION, requis: $$REQUIRED_PY_VERSION$(NC)"; \
+					echo "  $(YELLOW)   Recréation du venv...$(NC)"; \
+					rm -rf .venv; \
+				fi; \
+			fi; \
+			if [ ! -d .venv ]; then \
+				$$PYENV_BIN -m venv .venv; \
+			fi; \
 		else \
+			echo "  $(YELLOW)⚠️  Pas de .python-version, utilisation de python3 système$(NC)"; \
 			python3 -m venv .venv; \
 		fi && \
 		. .venv/bin/activate && \
-		pip install -q --upgrade pip && \
+		pip install -q --upgrade pip setuptools wheel && \
 		pip install -q -r requirements.txt
 	@echo "$(GREEN)✅ Dépendances Python installées$(NC)"
 endif
