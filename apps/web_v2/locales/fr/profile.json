@@ -1,0 +1,49 @@
+{
+  "profile": {
+    "title": "Profil",
+    "userProfile": "Profil utilisateur",
+    "userStats": "Statistiques",
+    "messagesSent": "Messages envoyés",
+    "messagesReceived": "Messages reçus",
+    "conversations": "Mes conversations",
+    "groups": "Mes groupes",
+    "memberSince": "Membre depuis",
+    "sendMessage": "Envoyer un message",
+    "addFriend": "Ajouter",
+    "cancelFriendRequest": "Annuler la demande",
+    "userNotFound": "Utilisateur introuvable",
+    "userNotFoundDescription": "Cet utilisateur n'existe pas ou n'est plus disponible",
+    "loading": "Chargement du profil...",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "edit": "Modifier",
+    "editProfile": "Modifier le profil",
+    "personalInfo": "Informations personnelles",
+    "languages": "Langues",
+    "quickActions": "Actions rapides",
+    "systemLanguage": "Langue du système",
+    "regionalLanguage": "Langue régionale",
+    "customDestinationLanguage": "Langue de destination personnalisée",
+    "autoTranslateEnabled": "Traduction automatique activée",
+    "autoTranslateDisabled": "Traduction automatique désactivée",
+    "dateUnavailable": "Date non disponible",
+    "phone": "Téléphone",
+    "email": "Email",
+    "errors": {
+      "cannotMessageYourself": "Vous ne pouvez pas créer une conversation avec vous-même",
+      "invalidUser": "Impossible de créer la conversation: utilisateur invalide",
+      "conversationCreationFailed": "Impossible de créer la conversation",
+      "sessionExpired": "Session expirée",
+      "sendFriendRequestFailed": "Erreur lors de l'envoi de la demande",
+      "cancelFriendRequestFailed": "Erreur lors de l'annulation de la demande",
+      "notAuthenticated": "Non authentifié",
+      "loadProfileError": "Erreur lors du chargement du profil"
+    },
+    "success": {
+      "conversationCreated": "Conversation créée",
+      "friendRequestSent": "Demande d'ami envoyée",
+      "friendRequestCancelled": "Demande d'ami annulée"
+    }
+  }
+}
+

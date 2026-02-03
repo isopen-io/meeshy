@@ -1,0 +1,17 @@
+{
+  "profile": {
+    "title": "Profil utilisateur",
+    "userProfile": "Profil utilisateur",
+    "userStats": "Statistiques",
+    "messagesSent": "Messages envoyés",
+    "messagesReceived": "Messages reçus",
+    "conversations": "Conversations",
+    "groups": "Groupes",
+    "memberSince": "Membre depuis",
+    "sendMessage": "Envoyer un message",
+    "userNotFound": "Utilisateur introuvable",
+    "userNotFoundDescription": "Cet utilisateur n'existe pas ou n'est plus disponible",
+    "loading": "Chargement du profil..."
+  }
+}
+

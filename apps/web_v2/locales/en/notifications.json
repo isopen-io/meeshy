@@ -1,0 +1,140 @@
+{
+  "notifications": {
+    "pageTitle": "Notifications",
+    "title": "Notifications",
+    "empty": {
+      "title": "No notifications",
+      "description": "You have no notifications at the moment",
+      "tryDifferentSearch": "Try a different search"
+    },
+    "noResults": "No notifications found",
+    "search": "Search notifications...",
+    "emptyUnread": "All caught up! No unread notifications.",
+    "emptyMentions": "No mentions yet",
+    "markAllAsRead": "Mark all as read",
+    "markAsRead": "Mark as read",
+    "delete": "Delete",
+    "viewAll": "View all notifications",
+    "loadMore": "Load more",
+    "loading": "Loading notifications...",
+    "reachedEnd": "You've reached the end",
+    "tabs": {
+      "all": "All",
+      "unread": "Unread",
+      "mentions": "Mentions"
+    },
+    "filters": {
+      "title": "Filters",
+      "type": "Type",
+      "status": "Status",
+      "clearAll": "Clear all",
+      "all": "All",
+      "read": "Read",
+      "unread": "Unread",
+      "messages": "Messages",
+      "messagesShort": "Msg",
+      "mentions": "Mentions",
+      "mentionsShort": "@",
+      "conversations": "Conversations",
+      "conversationsShort": "Conv",
+      "calls": "Missed calls",
+      "callsShort": "📞",
+      "friendRequests": "Friend requests",
+      "friendRequestsShort": "Friends",
+      "new_message": "Messages",
+      "friend_request": "Friend requests",
+      "missed_call": "Missed calls",
+      "system": "System",
+      "conversation": "Conversations"
+    },
+    "types": {
+      "new_message": "New message",
+      "message": "Message",
+      "message_reply": "Reply",
+      "user_mentioned": "Mention",
+      "message_reaction": "Reaction",
+      "contact_request": "Contact request",
+      "contact_accepted": "Contact accepted",
+      "new_conversation_direct": "New conversation",
+      "new_conversation_group": "Group invitation",
+      "member_joined": "Member joined",
+      "missed_call": "Missed call",
+      "system": "System notification"
+    },
+    "priorities": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "Important",
+      "urgent": "Urgent"
+    },
+    "titles": {
+      "newMessage": "Message from @{sender}",
+      "reply": "Reply from @{sender}",
+      "mentioned": "@{sender} mentioned you",
+      "reaction": "@{sender} reacted {emoji}",
+      "contactRequest": "@{sender} wants to connect",
+      "contactAccepted": "@{sender} accepted your invitation",
+      "newConversationDirect": "New conversation with @{sender}",
+      "newConversationGroup": "Invitation to \"{title}\"",
+      "memberJoined": "New member in \"{title}\"",
+      "missedCall": "Missed {type} call",
+      "system": "System notification",
+      "default": "New notification"
+    },
+    "content": {
+      "memberJoinedMessage": "{sender} joined the group",
+      "contactAcceptedMessage": "{sender} accepted your invitation. You can now chat together.",
+      "contactRequestMessage": "{sender} sent you an invitation",
+      "notMemberHint": "You are not a member of this conversation. Click to join."
+    },
+    "conversationTypes": {
+      "private": "Private",
+      "direct": "Private",
+      "group": "Group"
+    },
+    "timeAgo": {
+      "now": "just now",
+      "minute": "{count} min ago",
+      "hour": "{count}h ago",
+      "day": "{count}d ago"
+    },
+    "actions": {
+      "accept": "Accept",
+      "decline": "Decline",
+      "join": "Join",
+      "callBack": "Call Back",
+      "view": "View",
+      "reply": "Reply",
+      "select": "Select",
+      "markAsRead": "Mark as read",
+      "delete": "Delete",
+      "clearSearch": "Clear search"
+    },
+    "unreadCount": {
+      "single": "{count} unread of {total}",
+      "plural": "{count} unread of {total}",
+      "allRead": "All your {total} notification{plural} are read",
+      "empty": "You have no notifications"
+    },
+    "timestamps": {
+      "justNow": "just now",
+      "secondsAgo": "{count} second ago",
+      "secondsAgo_plural": "{count} seconds ago",
+      "minutesAgo": "{count} minute ago",
+      "minutesAgo_plural": "{count} minutes ago",
+      "hoursAgo": "{count} hour ago",
+      "hoursAgo_plural": "{count} hours ago",
+      "daysAgo": "{count} day ago",
+      "daysAgo_plural": "{count} days ago",
+      "in": "in"
+    },
+    "attachments": {
+      "photo": "Photo",
+      "video": "Video",
+      "audio": "Audio",
+      "pdf": "PDF",
+      "document": "Document",
+      "file": "File"
+    }
+  }
+}

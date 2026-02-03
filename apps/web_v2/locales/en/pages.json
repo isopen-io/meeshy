@@ -1,0 +1,131 @@
+{
+  "pages": {
+    "about": {
+      "title": "About Meeshy",
+      "subtitle": "We believe that language barriers should never stand in the way of meaningful connections.",
+      "backHome": "Back to home",
+      "mission": {
+        "title": "Our Mission",
+        "description": "Connect the world, one translation at a time. Our platform empowers people from all corners of the globe to communicate freely, breaking down the walls that separate us and building bridges of understanding."
+      },
+      "values": {
+        "globalAccess": {
+          "title": "Global Accessibility",
+          "description": "Making multilingual communication accessible to everyone, everywhere in the world."
+        },
+        "innovation": {
+          "title": "Innovation",
+          "description": "Using the latest AI technologies for accurate and fast translations."
+        },
+        "privacy": {
+          "title": "Privacy Respect",
+          "description": "Your conversations remain private and secure with server-side translation powered by advanced AI models."
+        }
+      },
+      "team": {
+        "title": "Our Team",
+        "description": "Made with ❤️ by developers who believe communication should have no boundaries.",
+        "details": "Meeshy is developed by a passionate team of developers, linguists and designers who share a common vision: a world where language is no longer an obstacle to human communication."
+      },
+      "cta": {
+        "title": "Want to know more?",
+        "contact": "Contact us"
+      }
+    },
+    "contact": {
+      "title": "Contact us",
+      "subtitle": "We are located in the heart of La Défense, Paris",
+      "address": {
+        "title": "Our Address",
+        "company": "Meeshy SAS",
+        "building": "9 - 11 Avenue de l'Arche",
+        "street": "Courbevoie 92400",
+        "country": "France"
+      },
+      "info": {
+        "title": "Contact",
+        "email": {
+          "label": "Email",
+          "value": "contact@meeshy.me"
+        }
+      },
+      "availability": {
+        "title": "Availability",
+        "description": "We are available 24/7 to support you"
+      },
+      "transport": {
+        "title": "How to reach us",
+        "train": {
+          "title": "By Train",
+          "rer": "RER A: \"La Défense - Grande Arche\" station",
+          "transilien": "Transilien L: \"La Défense\" station",
+          "time": "From Paris: 10-15 minutes from Châtelet-Les Halles"
+        },
+        "metro": {
+          "title": "By Metro",
+          "line1": "Line 1: \"La Défense - Grande Arche\" station",
+          "time": "From central Paris: 20-25 minutes"
+        },
+        "bus": {
+          "title": "By Bus",
+          "stop": "\"La Défense - Grande Arche\" stop",
+          "lines": "Lines 73, 141, 144, 161, 174, 178, 258, 262, 272, 275, 276, 278"
+        },
+        "car": {
+          "title": "By Car",
+          "highway": "Highway A14: \"La Défense\" exit",
+          "parking": "Parking: Several parking lots available in the area",
+          "rates": "Rates: €2-4/hour depending on parking"
+        }
+      },
+      "cta": {
+        "learnMore": "Learn more",
+        "collaborate": "Collaborate with us"
+      }
+    },
+    "partners": {
+      "title": "Partners",
+      "subtitle": "Join our partner ecosystem and help connect the world through breaking language barriers.",
+      "backHome": "Back to home",
+      "enterprise": {
+        "title": "Enterprise Teams",
+        "description": "Deploy Meeshy in your company to enable seamless multilingual communication across global teams.",
+        "features": {
+          "deployment": "On-premise or cloud deployment",
+          "sso": "SSO and Active Directory integration",
+          "analytics": "Team communication analytics",
+          "support": "24/7 enterprise support",
+          "customization": "Custom branding and features"
+        },
+        "pricing": "Contact us for enterprise pricing"
+      },
+      "education": {
+        "title": "Educational Institutions",
+        "description": "Enable international collaboration in schools and universities with multilingual communication tools.",
+        "features": {
+          "classrooms": "Multilingual virtual classrooms",
+          "exchange": "Student exchange programs support",
+          "learning": "Language learning integration",
+          "admin": "Administrative dashboard",
+          "curriculum": "Curriculum-based language support"
+        },
+        "pricing": "Special pricing for educational institutions"
+      },
+      "become": {
+        "title": "Become a Partner",
+        "description": "Ready to transform communication in your organization? Contact us to discuss a customized partnership.",
+        "contact": "Contact us"
+      }
+    },
+    "notFound": {
+      "title": "Page not found",
+      "description": "The page you are looking for does not exist.",
+      "actions": {
+        "backHome": "Return to home",
+        "backDashboard": "Return to dashboard",
+        "viewCommunities": "View your communities"
+      },
+      "backToDashboard": "Back to dashboard"
+    }
+  }
+}

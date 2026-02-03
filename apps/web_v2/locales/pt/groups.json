@@ -1,0 +1,86 @@
+{
+  "groups": {
+    "title": "Comunidades",
+    "description": "Descubra e entre em comunidades",
+    "createGroup": "Criar uma comunidade",
+    "joinGroup": "Entrar",
+    "searchPlaceholder": "Pesquisar comunidades...",
+    "noGroups": "Nenhuma comunidade",
+    "noGroupsDescription": "Crie ou entre em uma comunidade para começar",
+    "member": "membro",
+    "members": "membros",
+    "admin": "Administrador",
+    "pending": "Pendente",
+    "authChecking": "Verificando autenticação...",
+    "visibility": {
+      "public": "Público",
+      "private": "Privado"
+    },
+    "tabs": {
+      "discover": "Descobrir",
+      "myGroups": "Minhas Comunidades",
+      "invitations": "Convites"
+    },
+    "list": {
+      "communities": "Comunidades",
+      "loading": "Carregando...",
+      "loadingInProgress": "Carregamento em andamento...",
+      "selectCommunity": "Selecione uma comunidade",
+      "selectCommunityDescription": "Escolha uma comunidade para ver seus detalhes",
+      "newCommunity": "Nova comunidade",
+      "filterLabel": "Filtrar",
+      "filterPlaceholder": "Filtrar comunidades...",
+      "noCommunityFound": "Nenhuma comunidade encontrada",
+      "noCommunityForSearch": "Nenhuma comunidade corresponde à sua pesquisa"
+    },
+    "createModal": {
+      "title": "Criar uma nova comunidade",
+      "nameLabel": "Nome da comunidade",
+      "namePlaceholder": "Ex: Entusiastas de tecnologia",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Descreva sua comunidade...",
+      "identifierLabel": "Identificador único",
+      "identifierPlaceholder": "tech-enthusiasts",
+      "identifierHelp": "Usado na URL. Apenas letras minúsculas, números e hífens.",
+      "identifierAvailable": "Identificador disponível",
+      "identifierTaken": "Identificador já em uso",
+      "privateLabel": "Comunidade privada",
+      "privateHelp": "Comunidades privadas requerem convite para entrar",
+      "create": "Criar",
+      "cancel": "Cancelar"
+    },
+    "details": {
+      "about": "Sobre",
+      "conversations": "Conversas",
+      "noDescription": "Sem descrição",
+      "createdOn": "Criada em",
+      "lastActivity": "Última atividade",
+      "loadingConversations": "Carregando conversas...",
+      "noConversations": "Nenhuma conversa",
+      "noConversationsDescription": "Seja o primeiro a iniciar uma conversa"
+    },
+    "actions": {
+      "join": "Entrar",
+      "leave": "Sair",
+      "settings": "Configurações",
+      "invite": "Convidar",
+      "view": "Ver"
+    },
+    "success": {
+      "groupCreated": "Comunidade criada com sucesso",
+      "groupJoined": "Você entrou na comunidade",
+      "groupLeft": "Você saiu da comunidade",
+      "identifierCopied": "Identificador copiado"
+    },
+    "errors": {
+      "createError": "Erro ao criar",
+      "joinError": "Erro ao tentar entrar",
+      "leaveError": "Erro ao tentar sair",
+      "loadError": "Erro ao carregar",
+      "loadingGroupError": "Erro ao carregar comunidade",
+      "identifierTaken": "Este identificador já está em uso",
+      "connectionError": "Erro de conexão",
+      "copyError": "Erro ao copiar"
+    }
+  }
+}

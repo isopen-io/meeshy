@@ -1,0 +1,43 @@
+{
+  "upload": {
+    "dragDrop": "Arraste e solte arquivos aqui",
+    "orClick": "ou clique no ícone para selecionar",
+    "maxSize": "Tamanho máx: {size}",
+    "uploading": "Enviando...",
+    "complete": "Envio concluído",
+    "error": "Erro ao enviar",
+    "filesAttached": "{count} arquivo(s) anexado(s)"
+  },
+  "types": {
+    "image": "Imagem",
+    "document": "Documento",
+    "audio": "Áudio",
+    "video": "Vídeo",
+    "text": "Texto"
+  },
+  "gallery": {
+    "title": "Galeria de imagens",
+    "titleWithCounter": "Galeria de imagens - {current} de {total}",
+    "goToMessage": "Ir para mensagem",
+    "download": "Baixar",
+    "fullscreen": "Abrir em tela cheia",
+    "previous": "Imagem anterior",
+    "next": "Próxima imagem",
+    "close": "Fechar",
+    "loading": "Carregando...",
+    "noImage": "Nenhuma imagem",
+    "by": "por",
+    "of": "de"
+  },
+  "textDetection": {
+    "title": "Texto longo detectado",
+    "message": "Deseja criar um anexo para este texto de {length} caracteres?",
+    "create": "Criar anexo",
+    "keepInline": "Não, obrigado"
+  },
+  "errors": {
+    "fileTooBig": "Arquivo muito grande (máx {size})",
+    "invalidType": "Tipo de arquivo inválido",
+    "uploadFailed": "Falha no envio"
+  }
+}

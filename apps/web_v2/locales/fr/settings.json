@@ -1,0 +1,788 @@
+{
+  "settings": {
+    "title": "Paramètres",
+    "pageTitle": "Paramètres pour {username}",
+    "subtitle": "Gérez vos préférences de compte, de langue et de confidentialité",
+    "loadingSettings": "Chargement des paramètres...",
+    "settingsError": "Erreur lors du chargement des paramètres",
+    "settingsSaved": "Paramètres enregistrés avec succès",
+    "settingsSaveError": "Erreur lors de l'enregistrement des paramètres",
+    "errors": {
+      "loadProfile": "Erreur lors du chargement du profil",
+      "loadSettings": "Erreur lors du chargement des paramètres",
+      "updateSettings": "Erreur lors de la mise à jour"
+    },
+    "register": {
+      "errors": {
+        "usernameExists": "Ce nom d'utilisateur est déjà pris",
+        "emailExists": "Cet email est déjà utilisé",
+        "phoneExists": "Ce numéro de téléphone est déjà utilisé"
+      }
+    },
+    "success": {
+      "settingsUpdated": "Paramètres mis à jour avec succès"
+    },
+    "tabs": {
+      "profile": "Profil",
+      "notifications": "Notifications",
+      "privacy": "Confidentialité",
+      "encryption": "Chiffrement",
+      "audio": "Audio",
+      "translation": "Traduction",
+      "security": "Sécurité",
+      "theme": "Thème",
+      "fonts": "Polices",
+      "stats": "Statistiques",
+      "message": "Messages",
+      "video": "Vidéo",
+      "document": "Documents",
+      "media": "Médias",
+      "application": "Application",
+      "beta": "Beta"
+    },
+    "profile": {
+      "title": "Profil",
+      "description": "Informations personnelles",
+      "settingsTitle": "Paramètres du profil",
+      "settingsDescription": "Paramètres pour {username}",
+      "photo": {
+        "title": "Photo de profil",
+        "description": "Personnalisez votre photo de profil visible par les autres utilisateurs",
+        "uploadImage": "Télécharger une image",
+        "takePhoto": "Prendre une photo",
+        "removePhoto": "Supprimer la photo",
+        "photoUpdated": "Photo de profil mise à jour",
+        "previewTitle": "Aperçu de la photo"
+      },
+      "cropAvatar": {
+        "cropAvatarTitle": "Recadrer votre photo de profil",
+        "zoom": "Zoom",
+        "rotation": "Rotation",
+        "reset": "Réinitialiser",
+        "cancel": "Annuler",
+        "saveAvatar": "Enregistrer",
+        "uploading": "Téléchargement...",
+        "processing": "Traitement...",
+        "cropInstructions": "Utilisez la souris pour déplacer l'image, les curseurs pour zoomer et tourner. L'image sera recadrée en carré."
+      },
+      "personalInfo": {
+        "title": "Informations personnelles",
+        "description": "Modifiez vos informations de profil",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "displayName": "Nom d'affichage",
+        "displayNamePlaceholder": "Comment vous souhaitez apparaître dans les conversations",
+        "email": "Email",
+        "emailPlaceholder": "votre.email@exemple.com",
+        "phoneNumber": "Numéro de téléphone",
+        "phoneNumberPlaceholder": "+33 1 23 45 67 89",
+        "username": "Nom d'utilisateur",
+        "usernameCannotChange": "Le nom d'utilisateur ne peut pas être modifié",
+        "bio": "Biographie",
+        "bioPlaceholder": "Parlez-nous de vous..."
+      },
+      "actions": {
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement...",
+        "profileUpdated": "Profil mis à jour avec succès",
+        "updateError": "Erreur lors de la mise à jour du profil",
+        "confirm": "Confirmer",
+        "uploading": "Téléchargement...",
+        "edit": "Modifier",
+        "languageUpdated": "Langue mise à jour"
+      },
+      "verification": {
+        "email": {
+          "verified": "Email vérifié",
+          "notVerified": "Email non vérifié"
+        },
+        "phone": {
+          "verified": "Téléphone vérifié",
+          "notVerified": "Téléphone non vérifié",
+          "start": "Vérifier par SMS",
+          "sendCode": "Envoyer le code",
+          "enterCode": "Code reçu par SMS"
+        },
+        "resend": "Renvoyer",
+        "sending": "Envoi..."
+      },
+      "email": {
+        "available": "Email disponible",
+        "alreadyUsed": "Cet email est déjà utilisé",
+        "invalidOrTaken": "Email invalide ou déjà utilisé",
+        "verificationSent": "Email de vérification envoyé à la nouvelle adresse",
+        "error": "Erreur lors du changement",
+        "pending": "Changement d'email en attente",
+        "pendingMessage": "Code envoyé à {email}"
+      },
+      "phone": {
+        "available": "Numéro disponible",
+        "alreadyUsed": "Ce numéro est déjà utilisé",
+        "invalidOrTaken": "Numéro invalide ou déjà utilisé",
+        "verificationSent": "Code de vérification envoyé par SMS",
+        "error": "Erreur lors du changement",
+        "pending": "Changement en attente",
+        "pendingMessage": "Code envoyé à {phone}"
+      },
+      "username": {
+        "available": "Nom d'utilisateur disponible",
+        "alreadyUsed": "Ce nom d'utilisateur est déjà pris",
+        "error": "Erreur lors du changement"
+      },
+      "account": {
+        "email": {
+          "title": "Changer l'email",
+          "description": "Mettez à jour votre adresse email avec vérification",
+          "currentEmail": "Email actuel",
+          "newEmail": "Nouvel email",
+          "newEmailPlaceholder": "votre.nouvel.email@exemple.com",
+          "verificationCode": "Code de vérification",
+          "verificationCodePlaceholder": "Entrez le code à 6 chiffres",
+          "verificationHelp": "Consultez votre nouvel email pour le code de vérification",
+          "sendCode": "Envoyer le code de vérification",
+          "verify": "Vérifier l'email",
+          "codeSent": "Code de vérification envoyé à votre nouvel email",
+          "updateSuccess": "Email mis à jour avec succès",
+          "sending": "Envoi...",
+          "verifying": "Vérification...",
+          "errors": {
+            "emailRequired": "L'email est requis",
+            "invalidEmail": "Format d'email invalide",
+            "requestFailed": "Échec de la demande de changement d'email",
+            "codeRequired": "Le code de vérification est requis",
+            "verifyFailed": "Échec de la vérification de l'email"
+          }
+        },
+        "username": {
+          "title": "Changer le nom d'utilisateur",
+          "description": "Mettez à jour votre nom d'utilisateur unique",
+          "currentUsername": "Nom d'utilisateur actuel",
+          "newUsername": "Nouveau nom d'utilisateur",
+          "newUsernamePlaceholder": "Entrez votre nouveau nom d'utilisateur",
+          "available": "Nom d'utilisateur disponible",
+          "notAvailable": "Nom d'utilisateur déjà pris",
+          "update": "Mettre à jour le nom d'utilisateur",
+          "updateSuccess": "Nom d'utilisateur mis à jour avec succès",
+          "updating": "Mise à jour...",
+          "errors": {
+            "usernameRequired": "Le nom d'utilisateur est requis",
+            "usernameNotAvailable": "Le nom d'utilisateur n'est pas disponible",
+            "updateFailed": "Échec de la mise à jour du nom d'utilisateur"
+          }
+        },
+        "delete": {
+          "title": "Supprimer le compte",
+          "description": "Supprimez définitivement votre compte et toutes les données associées",
+          "warning": "Attention : Cette action ne peut pas être annulée",
+          "consequence1": "Tous vos messages seront définitivement supprimés",
+          "consequence2": "Votre profil et vos paramètres seront supprimés",
+          "consequence3": "Vous serez déconnecté immédiatement",
+          "consequence4": "Cette action est irréversible",
+          "deleteButton": "Supprimer mon compte",
+          "confirmTitle": "Confirmer la suppression du compte",
+          "confirmDescription": "Veuillez entrer votre mot de passe pour continuer la suppression du compte.",
+          "passwordLabel": "Votre mot de passe",
+          "passwordPlaceholder": "Entrez votre mot de passe",
+          "continue": "Continuer",
+          "finalConfirmTitle": "Confirmation finale",
+          "finalWarning": "C'est votre dernière chance. Cette action est permanente et irréversible.",
+          "confirmTextLabel": "Tapez \"DELETE\" pour confirmer",
+          "finalConfirm": "Supprimer définitivement",
+          "deleteSuccess": "Compte supprimé avec succès",
+          "deleting": "Suppression...",
+          "errors": {
+            "passwordRequired": "Le mot de passe est requis",
+            "confirmTextMismatch": "Veuillez taper \"DELETE\" pour confirmer",
+            "deleteFailed": "Échec de la suppression du compte"
+          }
+        }
+      }
+    },
+    "translation": {
+      "title": "Configuration de la langue et de la traduction",
+      "description": "Définissez vos langues et paramètres de traduction",
+      "mainLanguages": {
+        "title": "Langues principales",
+        "description": "Configurez vos langues préférées pour la communication",
+        "systemLanguage": "Langue du système",
+        "systemLanguageDescription": "Langue principale de votre interface et de vos messages",
+        "regionalLanguage": "Langue régionale",
+        "regionalLanguageDescription": "Langue de votre région ou langue secondaire préférée",
+        "customDestinationLanguage": "Langue de destination personnalisée",
+        "customDestinationLanguageDescription": "Langue spécifique pour la traduction automatique (optionnel)",
+        "selectLanguage": "Sélectionner une langue",
+        "none": "Aucune"
+      },
+      "autoTranslation": {
+        "title": "Options de traduction automatique",
+        "description": "Configurez comment les messages sont automatiquement traduits",
+        "enabled": "Traduction automatique",
+        "enabledDescription": "Active la traduction automatique des messages entrants",
+        "exclusiveMode": "Mode exclusif : Activez une seule option de traduction à la fois.",
+        "translateToSystem": "Traduire vers la langue du système uniquement",
+        "translateToSystemDescription": "Traduit les messages vers {flag} {language} uniquement",
+        "translateToRegional": "Traduire vers la langue régionale uniquement",
+        "translateToRegionalDescription": "Traduit les messages vers {flag} {language} uniquement",
+        "translateToCustom": "Traduire vers la langue personnalisée uniquement",
+        "translateToCustomDescription": "Traduit les messages vers {flag} {language} uniquement",
+        "noCustomLanguage": "Aucune langue personnalisée définie - définissez-en une ci-dessus",
+        "tip": "Astuce :",
+        "tipDescription": "Si aucune option n'est sélectionnée, les messages seront traduits dans toutes vos langues configurées (système + régionale + personnalisée)."
+      },
+      "preview": {
+        "title": "Aperçu de la configuration",
+        "systemLanguage": "Langue du système",
+        "regionalLanguage": "Langue régionale",
+        "customLanguage": "Langue personnalisée",
+        "autoTranslation": "Traduction automatique",
+        "enabled": "Activée",
+        "disabled": "Désactivée"
+      },
+      "actions": {
+        "save": "Enregistrer",
+        "saving": "Enregistrement...",
+        "cancel": "Annuler",
+        "settingsUpdated": "Paramètres de langue mis à jour",
+        "updateError": "Erreur lors de la mise à jour des paramètres de langue"
+      },
+      "systemLanguage": "Langue du système",
+      "regionalLanguage": "Langue régionale",
+      "customDestinationLanguage": "Langue de destination personnalisée",
+      "autoTranslateEnabled": "Traduction automatique activée",
+      "translateToSystemLanguage": "Traduire vers la langue du système",
+      "translateToRegionalLanguage": "Traduire vers la langue régionale",
+      "useCustomDestination": "Utiliser la destination personnalisée",
+      "customDestinationPlaceholder": "Sélectionner une langue"
+    },
+    "security": {
+      "title": "Paramètres de sécurité",
+      "description": "Gérez la sécurité de votre compte et votre mot de passe",
+      "password": {
+        "title": "Changer le mot de passe",
+        "description": "Mettez à jour votre mot de passe pour sécuriser votre compte",
+        "currentPassword": "Mot de passe actuel",
+        "currentPasswordPlaceholder": "Entrez votre mot de passe actuel",
+        "newPassword": "Nouveau mot de passe",
+        "newPasswordPlaceholder": "Entrez votre nouveau mot de passe",
+        "confirmPassword": "Confirmer le nouveau mot de passe",
+        "confirmPasswordPlaceholder": "Entrez à nouveau votre nouveau mot de passe",
+        "requirements": "Le mot de passe doit contenir au moins 6 caractères",
+        "update": "Mettre à jour le mot de passe",
+        "updating": "Mise à jour...",
+        "cancel": "Annuler",
+        "updateSuccess": "Mot de passe mis à jour avec succès",
+        "errors": {
+          "currentRequired": "Le mot de passe actuel est requis",
+          "newRequired": "Le nouveau mot de passe est requis",
+          "tooShort": "Le mot de passe doit contenir au moins 6 caractères",
+          "mismatch": "Les mots de passe ne correspondent pas",
+          "samePassword": "Le nouveau mot de passe doit être différent de l'actuel",
+          "updateFailed": "Échec de la mise à jour du mot de passe"
+        }
+      }
+    },
+    "theme": {
+      "title": "Thème et interface",
+      "description": "Personnalisez l'apparence, la langue et les polices de l'application",
+      "settingsUpdated": "Paramètres mis à jour avec succès",
+      "interfaceLanguageUpdated": "Langue de l'interface mise à jour",
+      "displayMode": {
+        "title": "Mode d'affichage",
+        "light": "Clair",
+        "dark": "Sombre",
+        "system": "Système"
+      },
+      "accentColor": {
+        "title": "Couleur d'accentuation",
+        "blue": "Bleu",
+        "green": "Vert",
+        "purple": "Violet",
+        "red": "Rouge",
+        "orange": "Orange",
+        "pink": "Rose"
+      },
+      "interfaceLanguage": {
+        "title": "Langue de l'interface",
+        "description": "Définit la langue de l'interface utilisateur"
+      },
+      "ui": {
+        "title": "Interface utilisateur",
+        "description": "Options d'affichage et de comportement",
+        "fontSize": {
+          "title": "Taille de police",
+          "small": "Petite",
+          "medium": "Moyenne",
+          "large": "Grande"
+        },
+        "fontFamily": {
+          "title": "Famille de polices",
+          "description": "Choisissez le style de police pour l'interface"
+        },
+        "lineHeight": {
+          "title": "Hauteur de ligne",
+          "description": "Ajustez l'espacement entre les lignes de texte",
+          "tight": "Serré",
+          "normal": "Normal",
+          "relaxed": "Relâché",
+          "loose": "Large"
+        },
+        "interfaceLanguage": {
+          "title": "Langue de l'interface",
+          "description": "Langue pour les menus et boutons"
+        },
+        "compactMode": {
+          "title": "Mode compact",
+          "description": "Réduit l'espacement pour afficher plus de contenu"
+        },
+        "animations": {
+          "title": "Animations",
+          "description": "Active les transitions et animations de l'interface"
+        }
+      },
+      "preview": {
+        "title": "Aperçu",
+        "description": "Voyez à quoi ressemblent vos paramètres",
+        "exampleMessage": "Ceci est un exemple de message",
+        "exampleText": "Ceci est un exemple de texte avec vos paramètres de police et de hauteur de ligne sélectionnés"
+      }
+    },
+    "language": {
+      "title": "Paramètres de langue",
+      "description": "Configurez vos préférences linguistiques"
+    },
+    "notifications": {
+      "title": "Paramètres de notification",
+      "description": "Gérez vos préférences de notification"
+    },
+    "privacy": {
+      "title": "Paramètres de confidentialité",
+      "description": "Contrôlez vos paramètres de confidentialité et de données"
+    },
+    "encryption": {
+      "title": "Paramètres de chiffrement",
+      "description": "Gérez vos paramètres de chiffrement de bout en bout",
+      "status": {
+        "title": "État du chiffrement",
+        "description": "Statut de vos clés de chiffrement de bout en bout",
+        "keysActive": "Clés de chiffrement actives",
+        "keysNotGenerated": "Clés non générées",
+        "registrationId": "ID d'enregistrement",
+        "generateKeys": "Générez vos clés pour activer le chiffrement E2EE",
+        "generateButton": "Générer les clés de chiffrement",
+        "generating": "Génération en cours...",
+        "active": "Actif",
+        "inactive": "Inactif",
+        "lastRotation": "Dernière rotation des clés",
+        "keysGenerated": "Clés de chiffrement générées avec succès"
+      },
+      "newConversations": {
+        "title": "Nouvelles conversations",
+        "description": "Paramètres de chiffrement par défaut pour les nouvelles conversations",
+        "defaultEnabled": "Chiffrer par défaut",
+        "defaultEnabledDescription": "Activer le chiffrement E2EE automatiquement pour les nouvelles conversations",
+        "showIndicator": "Afficher l'indicateur",
+        "showIndicatorDescription": "Afficher l'icône de chiffrement dans les conversations sécurisées",
+        "encryptMedia": "Chiffrer les médias",
+        "encryptMediaDescription": "Exiger le chiffrement pour les photos, vidéos et fichiers"
+      },
+      "level": {
+        "title": "Niveau de chiffrement",
+        "description": "Choisissez votre niveau de protection pour les messages",
+        "disabled": {
+          "label": "Désactivé",
+          "description": "Aucun chiffrement de bout en bout. Les messages transitent en clair sur le serveur."
+        },
+        "optional": {
+          "label": "Optionnel",
+          "description": "Le chiffrement E2EE est utilisé si le destinataire le supporte. Recommandé pour la compatibilité."
+        },
+        "always": {
+          "label": "Toujours",
+          "description": "Force le chiffrement E2EE pour tous les messages. Les utilisateurs sans clés ne pourront pas vous contacter."
+        }
+      },
+      "about": {
+        "title": "À propos du chiffrement E2EE",
+        "description": "Le chiffrement de bout en bout (E2EE) garantit que seuls vous et votre correspondant pouvez lire vos messages. Même les serveurs Meeshy ne peuvent pas déchiffrer vos conversations.",
+        "protocol": "Meeshy utilise le protocole Signal, reconnu comme l'un des plus sécurisés au monde.",
+        "features": {
+          "privateKeys": "Vos clés privées ne quittent jamais votre appareil",
+          "uniqueKeys": "Chaque message utilise une clé unique",
+          "autoRotation": "La rotation automatique des clés renforce la sécurité"
+        }
+      },
+      "actions": {
+        "save": "Enregistrer",
+        "saving": "Enregistrement...",
+        "preferencesUpdated": "Préférences de chiffrement mises à jour"
+      },
+      "errors": {
+        "notAuthenticated": "Non authentifié",
+        "updateFailed": "Erreur lors de la mise à jour",
+        "generateFailed": "Erreur lors de la génération des clés",
+        "networkError": "Erreur réseau"
+      }
+    },
+    "languageSelector": {
+      "placeholder": "Sélectionner une langue...",
+      "searchPlaceholder": "Rechercher une langue...",
+      "noLanguageFound": "Aucune langue trouvée."
+    },
+    "audio": {
+      "consents": {
+        "title": "Consentements audio",
+        "description": "Autorisations nécessaires pour les fonctionnalités audio",
+        "voiceData": "Traitement des données vocales",
+        "voiceDataDesc": "Autorise le traitement de vos messages audio pour la transcription",
+        "dataProcessing": "Traitement général des données",
+        "dataProcessingDesc": "Autorise le traitement de vos données pour les traductions"
+      },
+      "transcription": {
+        "title": "Transcription audio",
+        "description": "Convertir vos messages audio en texte",
+        "enable": "Activer la transcription",
+        "enableDesc": "Permet de transcrire les messages audio en texte",
+        "source": "Source de transcription",
+        "sourceAuto": "Automatique (recommandé)",
+        "sourceServer": "Serveur (meilleure qualité)",
+        "sourceMobile": "Appareil (plus rapide)"
+      },
+      "translation": {
+        "title": "Traduction audio",
+        "description": "Traduire automatiquement les messages audio",
+        "text": "Traduction du texte",
+        "textDesc": "Traduire les messages texte dans votre langue",
+        "audio": "Traduction des audios",
+        "audioDesc": "Transcrire et traduire les messages audio",
+        "generateAudio": "Générer audio traduit",
+        "generateAudioDesc": "Créer une version audio de la traduction",
+        "format": "Format audio"
+      },
+      "gdpr": {
+        "title": "Informations sur vos données",
+        "info": "Vos données audio sont traitées conformément au RGPD. La transcription est effectuée sur nos serveurs sécurisés et les données sont supprimées selon vos préférences de rétention."
+      },
+      "voiceProfile": {
+        "title": "Profil vocal",
+        "description": "Créez votre profil vocal pour cloner votre voix dans différentes langues"
+      }
+    },
+    "voiceProfile": {
+      "consents": {
+        "title": "Consentements vocaux",
+        "description": "Autorisations requises pour créer et utiliser votre profil vocal",
+        "recording": "Enregistrement vocal",
+        "recordingDesc": "Permet de créer un profil vocal à partir de votre voix",
+        "cloning": "Clonage vocal",
+        "cloningDesc": "Permet de cloner votre voix dans d'autres langues"
+      },
+      "existing": {
+        "title": "Profil vocal actif",
+        "quality": "Qualité",
+        "duration": "Durée audio",
+        "version": "Version",
+        "expires": "Expire",
+        "noExpiry": "Pas d'expiration",
+        "needsCalibration": "Votre profil nécessite une mise à jour pour maintenir sa qualité.",
+        "delete": "Supprimer le profil vocal"
+      },
+      "create": {
+        "title": "Créer votre profil vocal",
+        "description": "Lisez le texte ci-dessous à haute voix pour créer votre profil vocal",
+        "readThis": "Lisez ce texte à haute voix",
+        "minDuration": "Minimum {seconds} secondes",
+        "canStop": "Vous pouvez arrêter maintenant",
+        "keepGoing": "Continuez encore un peu...",
+        "startRecording": "Commencer",
+        "stopRecording": "Arrêter",
+        "retry": "Recommencer",
+        "transcribe": "Transcrire",
+        "transcribing": "Transcription...",
+        "creating": "Création...",
+        "createProfile": "Créer le profil",
+        "validate": "Valider et créer le profil",
+        "transcription": "Transcription"
+      },
+      "clonePreviews": {
+        "title": "Votre voix dans d'autres langues",
+        "description": "Écoutez un aperçu de votre voix clonée dans différentes langues"
+      },
+      "errors": {
+        "microphoneAccess": "Impossible d'accéder au microphone",
+        "tooShort": "L'enregistrement doit durer au moins {seconds} secondes",
+        "transcription": "Erreur de transcription",
+        "creation": "Erreur lors de la création du profil",
+        "consent": "Erreur lors de la mise à jour du consentement",
+        "delete": "Erreur lors de la suppression"
+      },
+      "consentUpdated": "Consentement mis à jour",
+      "transcriptionComplete": "Transcription terminée",
+      "profileCreated": "Profil vocal créé avec succès !",
+      "profileDeleted": "Profil vocal supprimé",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer votre profil vocal ?",
+      "noConsent": "Activez le consentement d'enregistrement vocal ci-dessus pour créer votre profil."
+    },
+    "betaPlayground": {
+      "title": "Beta Playground - Modèles IA Edge",
+      "description": "Testez et expérimentez avec des modèles IA fonctionnant directement dans votre navigateur",
+      "enableEdgeModels": "Activer les modèles Edge",
+      "enableToTest": "Activez les modèles Edge pour commencer à tester les fonctionnalités IA du navigateur",
+      "tabs": {
+        "llm": "LLM Edge",
+        "llmShort": "LLM",
+        "translation": "Traduction",
+        "translationShort": "Trad.",
+        "transcription": "Transcription",
+        "transcriptionShort": "Audio",
+        "tts": "Synthèse vocale",
+        "ttsShort": "TTS"
+      },
+      "llm": {
+        "title": "LLM Edge - Génération de texte dans le navigateur",
+        "description": "Testez la génération de texte avec le modèle IA intégré de Chrome fonctionnant entièrement dans votre navigateur",
+        "inputLabel": "Votre prompt",
+        "inputPlaceholder": "Posez une question ou donnez une instruction...",
+        "outputLabel": "Réponse générée",
+        "notAvailableTitle": "LLM Edge non disponible",
+        "notAvailableMessage": "Cette fonctionnalité nécessite Chrome Canary avec le flag Built-in AI activé. Visitez chrome://flags/#optimization-guide-on-device-model pour l'activer."
+      },
+      "translation": {
+        "title": "Traduction navigateur",
+        "description": "Traduisez du texte en utilisant l'API de traduction native du navigateur",
+        "sourceLanguage": "Langue source",
+        "targetLanguage": "Langue cible",
+        "inputLabel": "Texte à traduire",
+        "inputPlaceholder": "Entrez le texte à traduire...",
+        "outputLabel": "Traduction",
+        "notAvailableTitle": "API de traduction non disponible",
+        "notAvailableMessage": "Cette fonctionnalité nécessite Chrome 125+ avec l'API de traduction activée. Elle peut encore être en développement."
+      },
+      "transcription": {
+        "title": "Reconnaissance vocale",
+        "description": "Convertissez la parole en texte en utilisant l'API Web Speech",
+        "recording": "Enregistrement en cours...",
+        "outputLabel": "Transcription",
+        "notAvailableTitle": "Reconnaissance vocale non disponible",
+        "notAvailableMessage": "Votre navigateur ne supporte pas l'API Web Speech. Essayez d'utiliser Chrome ou Edge."
+      },
+      "tts": {
+        "title": "Synthèse vocale",
+        "description": "Convertissez du texte en parole en utilisant la synthèse vocale du navigateur",
+        "voiceLabel": "Voix",
+        "selectVoice": "Sélectionner une voix",
+        "inputLabel": "Texte à prononcer",
+        "inputPlaceholder": "Entrez le texte à convertir en parole...",
+        "speaking": "En cours de lecture...",
+        "notAvailableTitle": "Synthèse vocale non disponible",
+        "notAvailableMessage": "Votre navigateur ne supporte pas l'API Speech Synthesis."
+      },
+      "actions": {
+        "test": "Tester",
+        "generating": "Génération...",
+        "translating": "Traduction...",
+        "startRecording": "Démarrer l'enregistrement",
+        "stopRecording": "Arrêter l'enregistrement",
+        "speak": "Lire",
+        "stopSpeaking": "Arrêter"
+      },
+      "metrics": {
+        "status": "État",
+        "statusValues": {
+          "idle": "Inactif",
+          "loading": "Chargement...",
+          "running": "En cours...",
+          "success": "Succès",
+          "error": "Erreur"
+        },
+        "latency": "Latence",
+        "tokensPerSecond": "Tokens/sec",
+        "charactersProcessed": "Caractères",
+        "error": "Erreur"
+      },
+      "capabilities": {
+        "available": "Disponible",
+        "notAvailable": "Non disponible"
+      },
+      "compatibility": {
+        "title": "Compatibilité navigateur",
+        "description": "Vérifiez quelles fonctionnalités IA Edge sont supportées par votre navigateur",
+        "webLLM": "Web LLM (IA intégrée Chrome)",
+        "translation": "API de traduction",
+        "speechRecognition": "Reconnaissance vocale",
+        "speechSynthesis": "Synthèse vocale",
+        "note": "Note : Certaines fonctionnalités peuvent nécessiter des versions spécifiques du navigateur ou des flags expérimentaux. Les modèles IA Edge fonctionnent entièrement dans votre navigateur pour une confidentialité et une vitesse maximales."
+      },
+      "errors": {
+        "emptyInput": "Veuillez d'abord saisir du texte",
+        "llmNotAvailable": "L'API Web LLM n'est pas disponible dans votre navigateur",
+        "llmFailed": "Échec de la génération de texte",
+        "translationNotAvailable": "L'API de traduction n'est pas disponible dans votre navigateur",
+        "translationFailed": "Échec de la traduction",
+        "transcriptionNotAvailable": "La reconnaissance vocale n'est pas disponible dans votre navigateur",
+        "transcriptionFailed": "Échec de la transcription audio",
+        "ttsNotAvailable": "La synthèse vocale n'est pas disponible dans votre navigateur",
+        "ttsFailed": "Échec de la lecture du texte"
+      },
+      "success": {
+        "llm": "Texte généré avec succès",
+        "translation": "Texte traduit avec succès",
+        "transcriptionStarted": "Enregistrement démarré",
+        "tts": "Lecture terminée"
+      }
+    },
+    "noUserConnected": "Aucun utilisateur connecté",
+    "application": {
+      "appearance": {
+        "title": "Apparence",
+        "description": "Personnalisez l'apparence visuelle de l'application",
+        "theme": {
+          "label": "Thème",
+          "description": "Choisir entre mode clair, sombre ou automatique"
+        },
+        "accentColor": {
+          "label": "Couleur d'accentuation",
+          "description": "Choisissez la couleur primaire pour les éléments mis en valeur"
+        },
+        "fontSize": {
+          "label": "Taille de police",
+          "description": "Ajuster la taille du texte dans toute l'application"
+        },
+        "fontFamily": {
+          "label": "Famille de polices",
+          "description": "Choisir la police de caractères de l'interface"
+        }
+      },
+      "languages": {
+        "title": "Langues",
+        "description": "Configurez vos préférences linguistiques",
+        "interface": {
+          "label": "Langue de l'interface",
+          "description": "Langue pour les menus et boutons"
+        },
+        "system": {
+          "label": "Langue du système",
+          "description": "Langue principale pour vos messages"
+        },
+        "regional": {
+          "label": "Langue régionale",
+          "description": "Langue secondaire (optionnel)"
+        },
+        "custom": {
+          "label": "Langue personnalisée",
+          "description": "Cible de traduction spécifique (optionnel)"
+        }
+      },
+      "layout": {
+        "title": "Disposition",
+        "description": "Personnalisez la disposition et le comportement de l'interface",
+        "compact": {
+          "label": "Mode compact",
+          "description": "Réduire l'espacement pour afficher plus de contenu"
+        },
+        "sidebar": {
+          "label": "Position de la barre latérale",
+          "description": "Choisir où la barre latérale apparaît",
+          "left": "Gauche",
+          "right": "Droite"
+        },
+        "avatars": {
+          "label": "Afficher les avatars",
+          "description": "Afficher les photos de profil dans les messages"
+        },
+        "animations": {
+          "label": "Animations",
+          "description": "Activer les transitions et effets de l'interface"
+        }
+      },
+      "accessibility": {
+        "title": "Accessibilité",
+        "description": "Améliorer l'accessibilité et l'utilisabilité",
+        "reducedMotion": {
+          "label": "Mouvement réduit",
+          "description": "Minimiser les animations et effets de mouvement"
+        },
+        "highContrast": {
+          "label": "Contraste élevé",
+          "description": "Augmenter le contraste pour une meilleure visibilité"
+        },
+        "screenReader": {
+          "label": "Optimisé pour lecteur d'écran",
+          "description": "Optimiser l'interface pour les lecteurs d'écran"
+        }
+      },
+      "advanced": {
+        "title": "Avancé",
+        "description": "Fonctionnalités et préférences avancées",
+        "keyboard": {
+          "label": "Raccourcis clavier",
+          "description": "Activer les raccourcis clavier pour une navigation plus rapide"
+        },
+        "tutorials": {
+          "label": "Afficher les tutoriels",
+          "description": "Afficher les messages de tutoriel et guides d'intégration",
+          "reset": "Tutoriels réinitialisés",
+          "resetButton": "Réinitialiser"
+        },
+        "beta": {
+          "label": "Fonctionnalités bêta",
+          "description": "Accéder aux fonctionnalités expérimentales (peuvent être instables)"
+        },
+        "telemetry": {
+          "label": "Télémétrie",
+          "description": "Partager des données d'utilisation anonymes pour améliorer l'application"
+        }
+      }
+    },
+    "media": {
+      "title": "Médias & Fichiers",
+      "description": "Configurez les paramètres audio, vidéo et documents",
+      "sections": {
+        "audio": {
+          "title": "Audio & Transcription",
+          "description": "Messages vocaux, transcription, TTS et clonage vocal"
+        },
+        "video": {
+          "title": "Vidéo & Appels",
+          "description": "Qualité vidéo, effets et paramètres d'appel"
+        },
+        "document": {
+          "title": "Documents & Fichiers",
+          "description": "Téléchargement, prévisualisation et stockage"
+        }
+      }
+    },
+    "consentDialog": {
+      "title": "Consentement Requis",
+      "description": "Certaines fonctionnalités nécessitent votre consentement explicite pour traiter des données sensibles. Veuillez examiner et accepter les permissions requises ci-dessous.",
+      "violationsTitle": "Les actions suivantes nécessitent un consentement supplémentaire :",
+      "labels": {
+        "voiceDataConsent": "Traitement des Données Vocales",
+        "audioTranscription": "Transcription Audio",
+        "videoRecording": "Enregistrement Vidéo",
+        "biometricData": "Traitement des Données Biométriques",
+        "locationSharing": "Partage de Localisation",
+        "analytics": "Données d'Analyse et d'Utilisation"
+      },
+      "descriptions": {
+        "voiceDataConsent": "Permet le traitement de vos enregistrements vocaux pour les services de transcription et de traduction. Vos données vocales sont traitées de manière sécurisée et utilisées uniquement pour les fonctionnalités que vous activez.",
+        "audioTranscription": "Active la transcription automatique des messages audio. Les transcriptions sont générées sur des serveurs sécurisés et stockées uniquement selon vos préférences de conservation.",
+        "videoRecording": "Permet l'enregistrement et le traitement des appels vidéo. Les données vidéo sont chiffrées et accessibles uniquement aux participants autorisés.",
+        "biometricData": "Active l'utilisation de l'authentification biométrique (empreinte digitale, reconnaissance faciale) pour une sécurité renforcée.",
+        "locationSharing": "Permet de partager votre localisation avec les participants de la conversation. Les données de localisation ne sont jamais stockées de manière permanente et partagées uniquement lorsque vous le choisissez explicitement.",
+        "analytics": "Nous aide à améliorer Meeshy en collectant des statistiques d'utilisation anonymes. Aucune donnée personnelle ni contenu de message n'est inclus.",
+        "default": "Cette fonctionnalité nécessite votre consentement pour traiter des données sensibles conformément au RGPD."
+      },
+      "legalNote": "Vous pouvez révoquer ces consentements à tout moment dans vos paramètres de confidentialité. En savoir plus dans notre Politique de Confidentialité.",
+      "buttons": {
+        "accept": "Accepter et Continuer",
+        "cancel": "Annuler",
+        "submitting": "Traitement..."
+      },
+      "errors": {
+        "allRequired": "Tous les consentements requis doivent être acceptés pour continuer",
+        "submitFailed": "Échec de l'enregistrement des préférences de consentement. Veuillez réessayer."
+      }
+    }
+  }
+}

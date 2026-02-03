@@ -1,0 +1,96 @@
+/**
+ * Styles personnalisés pour les notifications toast
+ * Position adaptative : top sur mobile, top-right sur desktop
+ * Deux styles distincts : notifications métier (riches) vs fonctionnelles (simples)
+ */
+
+/* Container des toasts */
+[data-sonner-toaster] {
+  /* Mobile : centré en haut */
+  top: 1rem !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%);
+  width: calc(100% - 2rem);
+  max-width: 420px;
+}
+
+/* Desktop : en haut à droite */
+@media (min-width: 640px) {
+  [data-sonner-toaster] {
+    top: 1rem !important;
+    right: 1rem !important;
+    left: auto !important;
+    transform: none;
+    width: auto;
+    max-width: 420px;
+  }
+}
+
+/* Chaque toast */
+[data-sonner-toast] {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Notifications métier (riches avec avatars) */
+[data-sonner-toast] > div:has(.border-l-4) {
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.dark [data-sonner-toast] > div:has(.border-l-4) {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+}
+
+/* Notifications fonctionnelles (simples et épurées) */
+[data-sonner-toast] > div:has(.bg-green-500),
+[data-sonner-toast] > div:has(.bg-red-500),
+[data-sonner-toast] > div:has(.bg-blue-500) {
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Animation d'entrée depuis le haut */
+[data-sonner-toast][data-mounted="true"] {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+/* Animation de sortie vers le haut */
+[data-sonner-toast][data-removed="true"] {
+  animation: slideOutToTop 0.2s ease-in;
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToTop {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+/* Espacement entre les toasts */
+[data-sonner-toast] + [data-sonner-toast] {
+  margin-top: 0.75rem;
+}
+
+/* Hover effect - uniquement pour les notifications métier */
+[data-sonner-toast]:hover > div:has(.border-l-4) {
+  transform: scale(1.02);
+  transition: transform 0.2s ease;
+}

@@ -1,0 +1,118 @@
+{
+  "partners": {
+    "title": "Conviértase en Socio",
+    "subtitle": "Únase a nuestro ecosistema y desarrolle su actividad con Meeshy",
+    "backHome": "Volver al inicio",
+    "enterprise": {
+      "title": "Soluciones Empresariales",
+      "description": "Soluciones a medida para grandes organizaciones con necesidades específicas",
+      "pricing": "Precios personalizados",
+      "features": {
+        "sso": "Autenticación SSO (SAML, OAuth)",
+        "customization": "Personalización completa de la interfaz",
+        "deployment": "Implementación en sitio o nube privada",
+        "support": "Soporte prioritario 24/7",
+        "analytics": "Analíticas e informes avanzados"
+      }
+    },
+    "education": {
+      "title": "Soluciones de Educación",
+      "description": "Facilite el aprendizaje multilingüe y la colaboración internacional",
+      "pricing": "Tarifas preferenciales para educación",
+      "features": {
+        "classrooms": "Aulas virtuales multilingües",
+        "admin": "Gestión centralizada de cuentas",
+        "learning": "Herramientas de aprendizaje integradas",
+        "exchange": "Soporte para programas de intercambio",
+        "curriculum": "Integración con plataformas LMS"
+      }
+    },
+    "deployment": {
+      "title": "Opciones de Implementación",
+      "cloud": {
+        "title": "Nube",
+        "description": "Implementación rápida y escalable en nuestra infraestructura segura",
+        "features": {
+          "quick": "Configuración en pocos minutos",
+          "scalable": "Escalabilidad automática",
+          "maintenance": "Mantenimiento incluido",
+          "updates": "Actualizaciones automáticas"
+        }
+      },
+      "onPremise": {
+        "title": "En Sitio",
+        "description": "Control total con una implementación en su infraestructura",
+        "features": {
+          "security": "Seguridad máxima",
+          "compliance": "Cumplimiento normativo",
+          "customization": "Personalización completa",
+          "performance": "Rendimiento optimizado"
+        }
+      }
+    },
+    "useCases": {
+      "title": "Casos de Uso",
+      "business": {
+        "title": "Empresas",
+        "items": {
+          "collaboration": "Colaboración de equipos internacionales",
+          "support": "Soporte al cliente multilingüe",
+          "meetings": "Reuniones multilingües",
+          "training": "Formación global"
+        }
+      },
+      "education": {
+        "title": "Educación",
+        "items": {
+          "international": "Programas internacionales",
+          "language": "Aprendizaje de idiomas",
+          "research": "Investigación colaborativa",
+          "cultural": "Intercambios culturales"
+        }
+      },
+      "community": {
+        "title": "Comunidades",
+        "items": {
+          "nonprofits": "Organizaciones sin fines de lucro",
+          "events": "Eventos internacionales",
+          "volunteer": "Programas de voluntariado",
+          "healthcare": "Servicios de salud multilingües"
+        }
+      }
+    },
+    "benefits": {
+      "title": "Beneficios para Socios",
+      "support": {
+        "title": "Soporte Prioritario",
+        "description": "Acceso a nuestro equipo de soporte dedicado 24/7"
+      },
+      "visibility": {
+        "title": "Visibilidad",
+        "description": "Destacado en nuestro sitio y en nuestras comunicaciones"
+      },
+      "priority": {
+        "title": "Acceso Prioritario",
+        "description": "Acceso anticipado a las nuevas funcionalidades"
+      }
+    },
+    "types": {
+      "tech": {
+        "title": "Socios Tecnológicos",
+        "description": "Integre Meeshy en sus soluciones",
+        "features": [
+          "API REST completa y documentada",
+          "SDK disponibles (JavaScript, Python, Go)",
+          "Webhooks para integración en tiempo real",
+          "Documentación técnica detallada y ejemplos"
+        ]
+      }
+    },
+    "become": {
+      "title": "Convertirse en Socio",
+      "description": "Únase a nuestro programa de socios y desarrolle su actividad",
+      "contact": "Contáctenos",
+      "api": "Documentación API",
+      "about": "Saber más"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "deleteMessage": {
+    "deleteMessage": "Delete message",
+    "close": "Close",
+    "confirmDelete": "Confirm deletion",
+    "cancel": "Cancel",
+    "deleting": "Deleting...",
+    "deleteWarning": "Are you sure you want to delete this message?",
+    "actionIrreversible": "This action is irreversible",
+    "willAlsoDelete": "Will also be deleted:",
+    "reactions": "reaction(s)",
+    "translations": "translation(s)",
+    "attachments": "attachment(s)",
+    "messagePreview": "Message preview",
+    "shiftEnterToConfirm": "⇧↵ Confirm",
+    "escToCancel": "Esc to cancel",
+    "messageAndContent": "Message and content",
+    "allTranslations": "All translations",
+    "allAttachments": "All attachments",
+    "allReactions": "All reactions",
+    "deleteForever": "Delete forever",
+    "irreversibleAction": "Irreversible action",
+    "deleteMessageWarning": "Warning: permanent message deletion",
+    "itemsToDelete": "Items to delete",
+    "shortcutConfirm": "Shift+Enter",
+    "emptyMessage": "Empty message"
+  }
+}

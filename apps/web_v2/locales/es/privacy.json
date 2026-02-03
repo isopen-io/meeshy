@@ -1,0 +1,199 @@
+{
+  "privacy": {
+    "title": "Política de Privacidad",
+    "lastUpdated": "Última actualización: 29 de enero de 2026",
+    "backHome": "Volver al inicio",
+    "print": "Imprimir",
+    "introduction": {
+      "title": "Introducción",
+      "content": "En Meeshy, tomamos su privacidad muy en serio. Esta política de privacidad detallada explica cómo recopilamos, usamos y protegemos su información en cumplimiento con el RGPD y las regulaciones internacionales de protección de datos."
+    },
+    "dataCollection": {
+      "title": "Información Recopilada",
+      "personal": {
+        "title": "Información de Perfil",
+        "items": [
+          "Nombre, apellido y nombre de usuario",
+          "Dirección de email",
+          "Número de teléfono (opcional)",
+          "Fecha de nacimiento (opcional, requerida para ciertas funcionalidades)",
+          "Foto de perfil y banner (opcionales)"
+        ]
+      },
+      "language": {
+        "title": "Preferencias de Idioma",
+        "items": [
+          "Idioma del sistema principal",
+          "Idiomas adicionales (opcionales)",
+          "Preferencias de traducción automática"
+        ]
+      },
+      "security": {
+        "title": "Seguridad de Su Cuenta",
+        "items": [
+          "Contraseña cifrada de forma segura",
+          "Autenticación de dos factores (si está activada)",
+          "Claves de cifrado para proteger sus conversaciones privadas",
+          "Sesiones activas en sus dispositivos",
+          "Historial de inicios de sesión para su seguridad"
+        ]
+      },
+      "location": {
+        "title": "Información Técnica",
+        "items": [
+          "Dirección IP en inicios de sesión",
+          "Ubicación aproximada (ciudad, país)",
+          "Tipo de dispositivo y navegador",
+          "Zona horaria"
+        ]
+      },
+      "voice": {
+        "title": "Datos de Voz y Consentimientos",
+        "items": [
+          "Consentimiento para crear perfil de voz (DateTime o null)",
+          "Consentimiento para el procesamiento de datos de voz",
+          "Consentimiento para el procesamiento general de datos",
+          "Estado de clonación de voz (activado/desactivado)",
+          "Verificación de edad (requerido para perfil de voz)"
+        ]
+      },
+      "translation": {
+        "title": "Mensajería y Traducción",
+        "items": [
+          "Sus mensajes y sus traducciones",
+          "Idiomas usados en sus conversaciones",
+          "Transcripciones de audio (si están activadas)",
+          "Historial de sus conversaciones"
+        ]
+      },
+      "preferences": {
+        "title": "Sus Preferencias",
+        "items": [
+          "Configuración de privacidad",
+          "Configuración de audio y video",
+          "Preferencias de notificaciones",
+          "Configuración de visualización (tema, idioma)"
+        ]
+      },
+      "activity": {
+        "title": "Actividad",
+        "items": [
+          "Estado en línea y última actividad",
+          "Lista de usuarios bloqueados",
+          "Sus conversaciones y comunidades",
+          "Menciones y reacciones"
+        ]
+      }
+    },
+    "usage": {
+      "title": "Uso de los Datos",
+      "items": [
+        {
+          "title": "Provisión del servicio:",
+          "description": "Traducción en tiempo real de sus mensajes"
+        },
+        {
+          "title": "Mejora del servicio:",
+          "description": "Desarrollo de nuevas funcionalidades"
+        },
+        {
+          "title": "Soporte al cliente:",
+          "description": "Responder a sus preguntas y resolver problemas"
+        },
+        {
+          "title": "Seguridad:",
+          "description": "Protección contra abusos y fraude"
+        },
+        {
+          "title": "Comunicación:",
+          "description": "Información importante sobre el servicio"
+        }
+      ]
+    },
+    "protection": {
+      "title": "Protección de Sus Datos",
+      "encryption": {
+        "title": "Cifrado de Sus Conversaciones",
+        "content": "Meeshy ofrece varios niveles de protección según sus necesidades: cifrado de extremo a extremo (nadie, ni siquiera nosotros, puede leer sus mensajes), cifrado en el servidor (sus mensajes están protegidos en nuestros servidores), o conversaciones públicas. Todas las comunicaciones están aseguradas durante su transmisión por Internet."
+      },
+      "anonymous": {
+        "title": "Usuarios Sin Cuenta",
+        "content": "Si usa Meeshy sin crear una cuenta, sus mensajes solo pueden beneficiarse del cifrado en el servidor. Para máxima protección, cree una cuenta y active el cifrado de extremo a extremo."
+      },
+      "storage": {
+        "title": "Almacenamiento Seguro",
+        "content": "Sus datos se almacenan en servidores seguros en Europa con copias de seguridad regulares. Su contraseña está cifrada y nunca puede leerse en texto plano. Sus claves de cifrado privadas están protegidas."
+      },
+      "local": {
+        "title": "Procesamiento Interno",
+        "content": "Las traducciones se realizan directamente en nuestros servidores seguros. No se envían datos a servicios de terceros como Google o Microsoft para la traducción. Controlamos todo el proceso."
+      },
+      "audit": {
+        "title": "Registro de Seguridad",
+        "content": "Conservamos un historial de todos los eventos de seguridad de su cuenta: inicios de sesión, cambios de contraseña, activación de autenticación de dos factores. Puede consultar este historial en cualquier momento en su configuración."
+      }
+    },
+    "sharing": {
+      "title": "Compartir Datos",
+      "intro": "NUNCA vendemos sus datos personales a terceros. Solo compartimos sus datos en los siguientes casos:",
+      "cases": [
+        "Con otros participantes en sus conversaciones (sus mensajes y traducciones)",
+        "Con su consentimiento explícito (exportación de datos, compartir perfil)",
+        "Para cumplir con obligaciones legales (órdenes judiciales)",
+        "Con socios técnicos de confianza (alojamiento de servidores) bajo estrictos acuerdos de confidencialidad",
+        "En caso de fusión o adquisición (será notificado con anticipación)"
+      ],
+      "thirdParty": "No se comparten datos con servicios de terceros para traducción o análisis. Todo el procesamiento se realiza internamente."
+    },
+    "rights": {
+      "title": "Sus Derechos RGPD",
+      "intro": "De acuerdo con el RGPD, tiene los siguientes derechos:",
+      "list": [
+        "Consultar todos sus datos personales",
+        "Corregir información inexacta",
+        "Eliminar su cuenta y todos sus datos (con un período de gracia de 30 días)",
+        "Exportar sus datos en un formato estándar",
+        "Oponerse al procesamiento de sus datos",
+        "Limitar el procesamiento en ciertos casos",
+        "Retirar su consentimiento en cualquier momento"
+      ],
+      "contact": "Para ejercer estos derechos, vaya a Configuración > Privacidad o contáctenos en privacy@meeshy.me. Responderemos en 30 días."
+    },
+    "retention": {
+      "title": "Conservación de Sus Datos",
+      "content": "Conservamos sus datos mientras su cuenta esté activa. Si elimina su cuenta: (1) Período de gracia de 30 días permitiendo la recuperación; (2) Después de 30 días, eliminación definitiva de todos sus datos personales; (3) Los mensajes en conversaciones compartidas se anonimizan; (4) Los registros de seguridad se conservan 90 días; (5) Los datos de facturación según las obligaciones legales.",
+      "voiceData": "Los perfiles de voz expiran automáticamente según su edad: 18-25 años = 5 años, 26-40 años = 10 años, 41-60 años = 15 años, 60+ años = 20 años."
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "content": "Puede configurar individualmente las notificaciones para mensajes, llamadas, menciones, reacciones, solicitudes de amistad, eventos de seguridad, etc. El modo No Molestar le permite definir horarios sin notificaciones (excepto alertas de seguridad críticas)."
+    },
+    "cookies": {
+      "title": "Cookies",
+      "content": "Solo utilizamos cookies esenciales para el funcionamiento del servicio (autenticación, sesiones, preferencias). No hay cookies publicitarias ni de seguimiento. Puede gestionar sus preferencias en la configuración de su navegador."
+    },
+    "international": {
+      "title": "Transferencias Internacionales",
+      "content": "Sus datos se alojan en servidores ubicados en Francia y la Unión Europea. Si accede a Meeshy desde fuera de la UE, sus datos pueden ser transferidos a la UE. Estas transferencias están protegidas por las cláusulas contractuales tipo de la Comisión Europea y cumplen con el RGPD."
+    },
+    "updates": {
+      "title": "Actualizaciones de la Política",
+      "content": "Podemos actualizar esta política periódicamente. Los cambios importantes se le notificarán por correo electrónico y mediante una notificación en la aplicación. La fecha de última actualización se indica en la parte superior de esta página. Continuar usando Meeshy después de una actualización significa que acepta la nueva política."
+    },
+    "contact": {
+      "title": "Contáctenos",
+      "intro": "Para cualquier pregunta sobre esta política de privacidad, sus datos personales o para ejercer sus derechos RGPD:",
+      "email": "Email DPO: privacy@meeshy.me",
+      "response": "Tiempo de respuesta: Máximo 30 días",
+      "address": "Dirección postal: 12 Rue de la Paix, 75002 París, Francia",
+      "dpa": "En caso de disputa no resuelta, tiene derecho a presentar una queja ante la CNIL (Autoridad Francesa de Protección de Datos) en: www.cnil.fr"
+    },
+    "footer": {
+      "title": "Enlaces Útiles",
+      "home": "Inicio",
+      "about": "Acerca de",
+      "contact": "Contacto",
+      "partners": "Socios"
+    }
+  }
+}

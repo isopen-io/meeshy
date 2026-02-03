@@ -1,0 +1,88 @@
+{
+  "groups": {
+    "title": "Groups",
+    "description": "Manage your groups and communities",
+    "authChecking": "Checking authentication...",
+    "createGroup": "Create a group",
+    "joinGroup": "Join a group",
+    "searchPlaceholder": "Search groups...",
+    "noGroups": "No groups",
+    "noGroupsDescription": "Create or join a group to start collaborating",
+    "members": "members",
+    "admin": "Admin",
+    "member": "Member",
+    "pending": "Pending",
+    "tabs": {
+      "myGroups": "My groups",
+      "discover": "Discover",
+      "invitations": "Invitations"
+    },
+    "visibility": {
+      "public": "Public",
+      "private": "Private"
+    },
+    "actions": {
+      "view": "View",
+      "join": "Join",
+      "leave": "Leave",
+      "invite": "Invite",
+      "settings": "Settings"
+    },
+    "createModal": {
+      "title": "Create a community",
+      "nameLabel": "Name",
+      "namePlaceholder": "Community name",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Community description",
+      "identifierLabel": "Identifier",
+      "identifierPlaceholder": "my-identifier-a1b2c3",
+      "identifierHelp": "Automatically generated from title (editable)",
+      "identifierAvailable": "Identifier available",
+      "identifierTaken": "This identifier is already taken",
+      "privateLabel": "Private community",
+      "privateHelp": "Only invited members can join",
+      "cancel": "Cancel",
+      "create": "Create"
+    },
+    "list": {
+      "communities": "Communities",
+      "newCommunity": "New community",
+      "filterPlaceholder": "Filter communities",
+      "filterLabel": "Filter by name, description...",
+      "loading": "Loading communities",
+      "loadingInProgress": "Loading communities...",
+      "noCommunityFound": "No community found",
+      "noCommunityForSearch": "No community found for this search",
+      "selectCommunity": "Select a community",
+      "selectCommunityDescription": "Choose a community from the list to see its details"
+    },
+    "details": {
+      "about": "About",
+      "noDescription": "No description available for this community.",
+      "createdOn": "Created on",
+      "conversations": "Conversations",
+      "loadingConversations": "Loading conversations...",
+      "noConversations": "No conversations",
+      "noConversationsDescription": "This community doesn't have any conversations yet.",
+      "lastActivity": "Last activity:"
+    },
+    "success": {
+      "groupCreated": "Community created successfully!",
+      "groupJoined": "You joined the group",
+      "groupLeft": "You left the group",
+      "identifierCopied": "Identifier copied!"
+    },
+    "errors": {
+      "loadError": "Error loading communities",
+      "createError": "Error creating community",
+      "joinError": "Error joining group",
+      "leaveError": "Error leaving group",
+      "identifierTaken": "This identifier is already used. Please choose another one.",
+      "loadingGroupError": "Error loading community",
+      "connectionError": "Connection error while loading community",
+      "copyError": "Error copying"
+    }
+  }
+}
+
+

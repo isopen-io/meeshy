@@ -1,0 +1,90 @@
+{
+  "landing": {
+    "navigation": {
+      "home": "Home",
+      "features": "Features",
+      "about": "About",
+      "contact": "Contact"
+    },
+    "hero": {
+      "badge": "Real-time translation",
+      "title": "Communicate without",
+      "titleHighlight": "language barriers",
+      "subtitle": "Meeshy automatically translates your messages in real-time using AI. Fast, accurate, and reliable translation.",
+      "login": "Login",
+      "startFree": "Create your account now",
+      "joinConversation": "Join a conversation",
+      "resumeOrJoin": "Resume or join a conversation"
+    },
+    "mission": {
+      "title": "Our Mission",
+      "slogan": "Meet without shyness! 🌍✨",
+      "tagline": "Connect the world, one translation at a time",
+      "description": "We believe that language barriers should never stand in the way of meaningful connections. Our platform empowers people from all corners of the globe to communicate freely, breaking down the walls that separate us and building bridges of understanding.",
+      "signature": {
+        "line1": "❤️ Made with ❤️",
+        "line2": "by developers who believe communication should have no boundaries."
+      }
+    },
+    "features": {
+      "title": "Why choose Meeshy?",
+      "subtitle": "A modern messaging platform that breaks language barriers",
+      "universalTranslation": {
+        "title": "Universal Translation",
+        "description": "Support for over 200 languages with advanced AI models (NLLB)"
+      },
+      "autoDetection": {
+        "title": "Automatic Detection",
+        "description": "Automatically detects message language for more accurate translation."
+      },
+      "privacy": {
+        "title": "100% Private",
+        "description": "Server-side translation with enterprise-grade security. Your data is protected with encryption."
+      },
+      "realtime": {
+        "title": "Real-time",
+        "description": "Messages translated instantly with typing indicators and presence."
+      },
+      "groupChats": {
+        "title": "Group Conversations",
+        "description": "Create multilingual communities and manage permissions easily."
+      },
+      "multiLanguage": {
+        "title": "Custom Multi-Language",
+        "description": "Configure your system and regional languages for a tailored experience."
+      },
+      "modernInterface": {
+        "title": "Modern Interface",
+        "description": "Responsive and intuitive design for an optimal user experience."
+      },
+      "internationalColleagues": {
+        "title": "International Colleagues",
+        "description": "Communicate with your foreign colleagues without worrying about language barriers."
+      },
+      "multilingualClassrooms": {
+        "title": "Multilingual Classrooms",
+        "description": "Exchange with your classmates in their native language, no matter where they come from."
+      }
+    },
+    "cta": {
+      "title": "Ready to communicate without limits?",
+      "subtitle": "Join thousands of users who already use Meeshy to break language barriers.",
+      "createAccount": "Create my account"
+    },
+    "footer": {
+      "copyright": "© 2026 Meeshy",
+      "tagline": "Meet without shyness",
+      "links": {
+        "about": "About",
+        "policy": "Policy",
+        "terms": "Terms",
+        "contact": "Contact",
+        "partners": "Partners"
+      },
+      "social": {
+        "followUs": "Follow us"
+      },
+      "usefulLinks": "Useful Links"
+    }
+  }
+}

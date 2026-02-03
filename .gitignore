@@ -283,3 +283,12 @@ services/gateway/src/services/notifications/__tests__/
 
 # User uploaded files (avatars, images, etc.)
 apps/web/public/u/
+
+# Old iOS app
+apps/old_ios/
+
+# JINU asset files
+JINU_*/
+Jinu_*/
+*_webp/
+*_webp.zip

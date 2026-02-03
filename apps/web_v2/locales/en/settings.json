@@ -1,0 +1,633 @@
+{
+  "settings": {
+    "title": "Settings",
+    "pageTitle": "Settings for {username}",
+    "subtitle": "Manage your account preferences, language settings, and privacy options",
+    "loadingSettings": "Loading settings...",
+    "settingsError": "Error loading settings",
+    "settingsSaved": "Settings saved successfully",
+    "settingsSaveError": "Error saving settings",
+    "errors": {
+      "loadProfile": "Error loading profile",
+      "loadSettings": "Error loading settings",
+      "updateSettings": "Error updating settings"
+    },
+    "success": {
+      "settingsUpdated": "Settings updated successfully"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "notifications": "Notifications",
+      "privacy": "Privacy",
+      "encryption": "Encryption",
+      "audio": "Audio",
+      "message": "Messages",
+      "video": "Video",
+      "document": "Documents",
+      "media": "Media",
+      "application": "Application",
+      "beta": "Beta",
+      "translation": "Translation",
+      "security": "Security",
+      "theme": "Theme",
+      "fonts": "Fonts",
+      "stats": "Stats"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Personal information",
+      "settingsTitle": "Profile Settings",
+      "settingsDescription": "Settings for {username}",
+      "photo": {
+        "title": "Profile Photo",
+        "description": "Customize your profile photo visible to other users",
+        "uploadImage": "Upload an image",
+        "takePhoto": "Take a photo",
+        "removePhoto": "Remove photo",
+        "photoUpdated": "Profile photo updated",
+        "previewTitle": "Photo Preview"
+      },
+      "cropAvatar": {
+        "cropAvatarTitle": "Crop your profile photo",
+        "zoom": "Zoom",
+        "rotation": "Rotation",
+        "reset": "Reset",
+        "cancel": "Cancel",
+        "saveAvatar": "Save",
+        "uploading": "Uploading...",
+        "processing": "Processing...",
+        "cropInstructions": "Use your mouse to move the image, sliders to zoom and rotate. The image will be cropped to a square."
+      },
+      "personalInfo": {
+        "title": "Personal Information",
+        "description": "Modify your profile information",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "displayName": "Display name",
+        "displayNamePlaceholder": "How you want to appear in conversations",
+        "email": "Email",
+        "emailPlaceholder": "your.email@example.com",
+        "phoneNumber": "Phone number",
+        "phoneNumberPlaceholder": "+33 1 23 45 67 89",
+        "username": "Username",
+        "usernameCannotChange": "Username cannot be modified",
+        "bio": "Bio",
+        "bioPlaceholder": "Tell us about yourself..."
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving...",
+        "profileUpdated": "Profile updated successfully",
+        "updateError": "Error updating profile",
+        "confirm": "Confirm",
+        "uploading": "Uploading..."
+      },
+      "account": {
+        "email": {
+          "title": "Change Email",
+          "description": "Update your email address with verification",
+          "currentEmail": "Current Email",
+          "newEmail": "New Email",
+          "newEmailPlaceholder": "your.new.email@example.com",
+          "verificationCode": "Verification Code",
+          "verificationCodePlaceholder": "Enter the 6-digit code",
+          "verificationHelp": "Check your new email for the verification code",
+          "sendCode": "Send Verification Code",
+          "verify": "Verify Email",
+          "codeSent": "Verification code sent to your new email",
+          "updateSuccess": "Email updated successfully",
+          "sending": "Sending...",
+          "verifying": "Verifying...",
+          "errors": {
+            "emailRequired": "Email is required",
+            "invalidEmail": "Invalid email format",
+            "requestFailed": "Failed to request email change",
+            "codeRequired": "Verification code is required",
+            "verifyFailed": "Failed to verify email"
+          }
+        },
+        "username": {
+          "title": "Change Username",
+          "description": "Update your unique username",
+          "currentUsername": "Current Username",
+          "newUsername": "New Username",
+          "newUsernamePlaceholder": "Enter your new username",
+          "available": "Username is available",
+          "notAvailable": "Username is already taken",
+          "update": "Update Username",
+          "updateSuccess": "Username updated successfully",
+          "updating": "Updating...",
+          "errors": {
+            "usernameRequired": "Username is required",
+            "usernameNotAvailable": "Username is not available",
+            "updateFailed": "Failed to update username"
+          }
+        },
+        "delete": {
+          "title": "Delete Account",
+          "description": "Permanently delete your account and all associated data",
+          "warning": "Warning: This action cannot be undone",
+          "consequence1": "All your messages will be permanently deleted",
+          "consequence2": "Your profile and settings will be removed",
+          "consequence3": "You will be logged out immediately",
+          "consequence4": "This action is irreversible",
+          "deleteButton": "Delete My Account",
+          "confirmTitle": "Confirm Account Deletion",
+          "confirmDescription": "Please enter your password to continue with account deletion.",
+          "passwordLabel": "Your Password",
+          "passwordPlaceholder": "Enter your password",
+          "continue": "Continue",
+          "finalConfirmTitle": "Final Confirmation",
+          "finalWarning": "This is your last chance. This action is permanent and irreversible.",
+          "confirmTextLabel": "Type \"DELETE\" to confirm",
+          "finalConfirm": "Delete Permanently",
+          "deleteSuccess": "Account deleted successfully",
+          "deleting": "Deleting...",
+          "errors": {
+            "passwordRequired": "Password is required",
+            "confirmTextMismatch": "Please type \"DELETE\" to confirm",
+            "deleteFailed": "Failed to delete account"
+          }
+        }
+      }
+    },
+    "translation": {
+      "title": "Language and Translation Configuration",
+      "description": "Define your languages and translation settings",
+      "mainLanguages": {
+        "title": "Main Languages",
+        "description": "Configure your preferred languages for communication",
+        "systemLanguage": "System language",
+        "systemLanguageDescription": "Main language of your interface and messages",
+        "regionalLanguage": "Regional language",
+        "regionalLanguageDescription": "Language of your region or preferred secondary language",
+        "customDestinationLanguage": "Custom destination language",
+        "customDestinationLanguageDescription": "Specific language for automatic translation (optional)",
+        "selectLanguage": "Select a language",
+        "none": "None"
+      },
+      "autoTranslation": {
+        "title": "Automatic Translation Options",
+        "description": "Configure how messages are automatically translated",
+        "enabled": "Automatic translation",
+        "enabledDescription": "Enables automatic translation of incoming messages",
+        "exclusiveMode": "Exclusive mode: Enable only one translation option at a time.",
+        "translateToSystem": "Translate to system language only",
+        "translateToSystemDescription": "Translates messages to {flag} {language} only",
+        "translateToRegional": "Translate to regional language only",
+        "translateToRegionalDescription": "Translates messages to {flag} {language} only",
+        "translateToCustom": "Translate to custom language only",
+        "translateToCustomDescription": "Translates messages to {flag} {language} only",
+        "noCustomLanguage": "No custom language defined - set one above",
+        "tip": "Tip:",
+        "tipDescription": "If no option is selected, messages will be translated to all your configured languages (system + regional + custom)."
+      },
+      "preview": {
+        "title": "Configuration Preview",
+        "systemLanguage": "System language",
+        "regionalLanguage": "Regional language",
+        "customLanguage": "Custom language",
+        "autoTranslation": "Automatic translation",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "actions": {
+        "save": "Save",
+        "saving": "Saving...",
+        "cancel": "Cancel",
+        "settingsUpdated": "Language settings updated",
+        "updateError": "Error updating language settings"
+      },
+      "systemLanguage": "System language",
+      "regionalLanguage": "Regional language",
+      "customDestinationLanguage": "Custom destination language",
+      "autoTranslateEnabled": "Auto-translation enabled",
+      "translateToSystemLanguage": "Translate to system language",
+      "translateToRegionalLanguage": "Translate to regional language",
+      "useCustomDestination": "Use custom destination",
+      "customDestinationPlaceholder": "Select a language"
+    },
+    "security": {
+      "title": "Security Settings",
+      "description": "Manage your account security and password",
+      "password": {
+        "title": "Change Password",
+        "description": "Update your account password to keep your account secure",
+        "currentPassword": "Current password",
+        "currentPasswordPlaceholder": "Enter your current password",
+        "newPassword": "New password",
+        "newPasswordPlaceholder": "Enter your new password",
+        "confirmPassword": "Confirm new password",
+        "confirmPasswordPlaceholder": "Re-enter your new password",
+        "requirements": "Password must be at least 6 characters long",
+        "update": "Update Password",
+        "updating": "Updating...",
+        "cancel": "Cancel",
+        "updateSuccess": "Password updated successfully",
+        "errors": {
+          "currentRequired": "Current password is required",
+          "newRequired": "New password is required",
+          "tooShort": "Password must be at least 6 characters long",
+          "mismatch": "Passwords do not match",
+          "samePassword": "New password must be different from current password",
+          "updateFailed": "Failed to update password"
+        }
+      }
+    },
+    "theme": {
+      "title": "Theme and interface",
+      "description": "Customize the appearance, language and fonts of the application",
+      "settingsUpdated": "Settings updated successfully",
+      "interfaceLanguageUpdated": "Interface language updated",
+      "displayMode": {
+        "title": "Display mode",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "accentColor": {
+        "title": "Accent color",
+        "blue": "Blue",
+        "green": "Green",
+        "purple": "Purple",
+        "red": "Red",
+        "orange": "Orange",
+        "pink": "Pink"
+      },
+      "interfaceLanguage": {
+        "title": "Interface language",
+        "description": "Sets the user interface language"
+      },
+      "ui": {
+        "title": "User interface",
+        "description": "Display and behavior options",
+        "fontSize": {
+          "title": "Font size",
+          "small": "Small",
+          "medium": "Medium",
+          "large": "Large"
+        },
+        "fontFamily": {
+          "title": "Font family",
+          "description": "Choose the font style for the interface"
+        },
+        "lineHeight": {
+          "title": "Line height",
+          "description": "Adjust spacing between lines of text",
+          "tight": "Tight",
+          "normal": "Normal",
+          "relaxed": "Relaxed",
+          "loose": "Loose"
+        },
+        "interfaceLanguage": {
+          "title": "Interface language",
+          "description": "Language for menus and buttons"
+        },
+        "compactMode": {
+          "title": "Compact mode",
+          "description": "Reduces spacing to display more content"
+        },
+        "animations": {
+          "title": "Animations",
+          "description": "Enables interface transitions and animations"
+        }
+      },
+      "preview": {
+        "title": "Preview",
+        "description": "See how your settings look",
+        "exampleMessage": "This is an example message",
+        "exampleText": "This is example text with your selected font and line height settings"
+      }
+    },
+    "language": {
+      "title": "Language Settings",
+      "description": "Configure your language preferences"
+    },
+    "notifications": {
+      "title": "Notification Settings",
+      "description": "Manage your notification preferences"
+    },
+    "privacy": {
+      "title": "Privacy Settings",
+      "description": "Control your privacy and data settings"
+    },
+    "encryption": {
+      "title": "Encryption Settings",
+      "description": "Manage your end-to-end encryption settings",
+      "status": {
+        "title": "Encryption Status",
+        "description": "Status of your end-to-end encryption keys",
+        "keysActive": "Encryption keys active",
+        "keysNotGenerated": "Keys not generated",
+        "registrationId": "Registration ID",
+        "generateKeys": "Generate your keys to enable E2EE encryption",
+        "generateButton": "Generate encryption keys",
+        "generating": "Generating...",
+        "active": "Active",
+        "inactive": "Inactive",
+        "lastRotation": "Last key rotation",
+        "keysGenerated": "Encryption keys generated successfully"
+      },
+      "newConversations": {
+        "title": "New conversations",
+        "description": "Default encryption settings for new conversations",
+        "defaultEnabled": "Encrypt by default",
+        "defaultEnabledDescription": "Automatically enable E2EE encryption for new conversations",
+        "showIndicator": "Show indicator",
+        "showIndicatorDescription": "Display encryption icon in secure conversations",
+        "encryptMedia": "Encrypt media",
+        "encryptMediaDescription": "Require encryption for photos, videos and files"
+      },
+      "level": {
+        "title": "Encryption level",
+        "description": "Choose your protection level for messages",
+        "disabled": {
+          "label": "Disabled",
+          "description": "No end-to-end encryption. Messages are transmitted in plain text on the server."
+        },
+        "optional": {
+          "label": "Optional",
+          "description": "E2EE encryption is used if the recipient supports it. Recommended for compatibility."
+        },
+        "always": {
+          "label": "Always",
+          "description": "Forces E2EE encryption for all messages. Users without keys will not be able to contact you."
+        }
+      },
+      "about": {
+        "title": "About E2EE encryption",
+        "description": "End-to-end encryption (E2EE) ensures that only you and your recipient can read your messages. Even Meeshy servers cannot decrypt your conversations.",
+        "protocol": "Meeshy uses the Signal protocol, recognized as one of the most secure in the world.",
+        "features": {
+          "privateKeys": "Your private keys never leave your device",
+          "uniqueKeys": "Each message uses a unique key",
+          "autoRotation": "Automatic key rotation enhances security"
+        }
+      },
+      "actions": {
+        "save": "Save",
+        "saving": "Saving...",
+        "preferencesUpdated": "Encryption preferences updated"
+      },
+      "errors": {
+        "notAuthenticated": "Not authenticated",
+        "updateFailed": "Error updating",
+        "generateFailed": "Error generating keys",
+        "networkError": "Network error"
+      }
+    },
+    "languageSelector": {
+      "placeholder": "Select a language...",
+      "searchPlaceholder": "Search for a language...",
+      "noLanguageFound": "No language found."
+    },
+    "audio": {
+      "consents": {
+        "title": "Audio consents",
+        "description": "Required permissions for audio features",
+        "voiceData": "Voice data processing",
+        "voiceDataDesc": "Allows processing of your audio messages for transcription",
+        "dataProcessing": "General data processing",
+        "dataProcessingDesc": "Allows data processing for translations"
+      },
+      "transcription": {
+        "title": "Audio transcription",
+        "description": "Convert your audio messages to text",
+        "enable": "Enable transcription",
+        "enableDesc": "Allows transcribing audio messages to text",
+        "source": "Transcription source",
+        "sourceAuto": "Automatic (recommended)",
+        "sourceServer": "Server (better quality)",
+        "sourceMobile": "Device (faster)"
+      },
+      "translation": {
+        "title": "Audio translation",
+        "description": "Automatically translate audio messages",
+        "text": "Text translation",
+        "textDesc": "Translate text messages to your language",
+        "audio": "Audio translation",
+        "audioDesc": "Transcribe and translate audio messages",
+        "generateAudio": "Generate translated audio",
+        "generateAudioDesc": "Create an audio version of the translation",
+        "format": "Audio format"
+      },
+      "gdpr": {
+        "title": "About your data",
+        "info": "Your audio data is processed in compliance with GDPR. Transcription is performed on our secure servers and data is deleted according to your retention preferences."
+      },
+      "voiceProfile": {
+        "title": "Voice Profile",
+        "description": "Create your voice profile to clone your voice in different languages"
+      }
+    },
+    "voiceProfile": {
+      "consents": {
+        "title": "Voice consents",
+        "description": "Required permissions to create and use your voice profile",
+        "recording": "Voice recording",
+        "recordingDesc": "Allows creating a voice profile from your voice",
+        "cloning": "Voice cloning",
+        "cloningDesc": "Allows cloning your voice in other languages"
+      },
+      "existing": {
+        "title": "Active voice profile",
+        "quality": "Quality",
+        "duration": "Audio duration",
+        "version": "Version",
+        "expires": "Expires",
+        "noExpiry": "No expiration",
+        "needsCalibration": "Your profile needs an update to maintain its quality.",
+        "delete": "Delete voice profile"
+      },
+      "create": {
+        "title": "Create your voice profile",
+        "description": "Read the text below out loud to create your voice profile",
+        "readThis": "Read this text out loud",
+        "minDuration": "Minimum {seconds} seconds",
+        "canStop": "You can stop now",
+        "keepGoing": "Keep going a bit more...",
+        "startRecording": "Start",
+        "stopRecording": "Stop",
+        "retry": "Try again",
+        "transcribe": "Transcribe",
+        "transcribing": "Transcribing...",
+        "creating": "Creating...",
+        "createProfile": "Create profile",
+        "validate": "Validate and create profile",
+        "transcription": "Transcription"
+      },
+      "clonePreviews": {
+        "title": "Your voice in other languages",
+        "description": "Listen to a preview of your cloned voice in different languages"
+      },
+      "errors": {
+        "microphoneAccess": "Cannot access microphone",
+        "tooShort": "Recording must be at least {seconds} seconds",
+        "transcription": "Transcription error",
+        "creation": "Error creating profile",
+        "consent": "Error updating consent",
+        "delete": "Error deleting profile"
+      },
+      "consentUpdated": "Consent updated",
+      "transcriptionComplete": "Transcription complete",
+      "profileCreated": "Voice profile created successfully!",
+      "profileDeleted": "Voice profile deleted",
+      "confirmDelete": "Are you sure you want to delete your voice profile?",
+      "noConsent": "Enable voice recording consent above to create your profile."
+    },
+    "noUserConnected": "No user connected",
+    "application": {
+      "appearance": {
+        "title": "Appearance",
+        "description": "Customize the visual appearance of the application",
+        "theme": {
+          "label": "Theme",
+          "description": "Choose between light, dark, or auto mode"
+        },
+        "accentColor": {
+          "label": "Accent Color",
+          "description": "Choose the primary color for highlights and buttons"
+        },
+        "fontSize": {
+          "label": "Font Size",
+          "description": "Adjust the size of text throughout the app"
+        },
+        "fontFamily": {
+          "label": "Font Family",
+          "description": "Choose the typeface for the interface"
+        }
+      },
+      "languages": {
+        "title": "Languages",
+        "description": "Configure your language preferences",
+        "interface": {
+          "label": "Interface Language",
+          "description": "Language for menus and buttons"
+        },
+        "system": {
+          "label": "System Language",
+          "description": "Main language for your messages"
+        },
+        "regional": {
+          "label": "Regional Language",
+          "description": "Secondary language (optional)"
+        },
+        "custom": {
+          "label": "Custom Language",
+          "description": "Specific translation target (optional)"
+        }
+      },
+      "layout": {
+        "title": "Layout",
+        "description": "Customize the interface layout and behavior",
+        "compact": {
+          "label": "Compact Mode",
+          "description": "Reduce spacing to show more content"
+        },
+        "sidebar": {
+          "label": "Sidebar Position",
+          "description": "Choose where the sidebar appears",
+          "left": "Left",
+          "right": "Right"
+        },
+        "avatars": {
+          "label": "Show Avatars",
+          "description": "Display profile pictures in messages"
+        },
+        "animations": {
+          "label": "Animations",
+          "description": "Enable interface transitions and effects"
+        }
+      },
+      "accessibility": {
+        "title": "Accessibility",
+        "description": "Improve accessibility and usability",
+        "reducedMotion": {
+          "label": "Reduced Motion",
+          "description": "Minimize animations and motion effects"
+        },
+        "highContrast": {
+          "label": "High Contrast",
+          "description": "Increase contrast for better visibility"
+        },
+        "screenReader": {
+          "label": "Screen Reader Optimized",
+          "description": "Optimize interface for screen readers"
+        }
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Advanced features and preferences",
+        "keyboard": {
+          "label": "Keyboard Shortcuts",
+          "description": "Enable keyboard shortcuts for faster navigation"
+        },
+        "tutorials": {
+          "label": "Show Tutorials",
+          "description": "Display tutorial messages and onboarding guides",
+          "reset": "Tutorials reset",
+          "resetButton": "Reset"
+        },
+        "beta": {
+          "label": "Beta Features",
+          "description": "Access experimental features (may be unstable)"
+        },
+        "telemetry": {
+          "label": "Telemetry",
+          "description": "Share anonymous usage data to improve the app"
+        }
+      }
+    },
+    "media": {
+      "title": "Media & Files",
+      "description": "Configure audio, video and document settings",
+      "sections": {
+        "audio": {
+          "title": "Audio & Transcription",
+          "description": "Voice messages, transcription, TTS and voice cloning"
+        },
+        "video": {
+          "title": "Video & Calls",
+          "description": "Video quality, effects and call settings"
+        },
+        "document": {
+          "title": "Documents & Files",
+          "description": "Download, preview and storage settings"
+        }
+      }
+    }
+  },
+  "consentDialog": {
+    "title": "Consent Required",
+    "description": "Some features require your explicit consent to process sensitive data. Please review and accept the required permissions below.",
+    "violationsTitle": "The following actions require additional consent:",
+    "labels": {
+      "voiceDataConsent": "Voice Data Processing",
+      "audioTranscription": "Audio Transcription",
+      "videoRecording": "Video Recording",
+      "biometricData": "Biometric Data Processing",
+      "locationSharing": "Location Sharing",
+      "analytics": "Analytics & Usage Data"
+    },
+    "descriptions": {
+      "voiceDataConsent": "Allows processing of your voice recordings for transcription and translation services. Your voice data is processed securely and used only for the features you enable.",
+      "audioTranscription": "Enables automatic transcription of audio messages. Transcripts are generated on secure servers and only stored according to your retention preferences.",
+      "videoRecording": "Allows recording and processing of video calls. Video data is encrypted and only accessible to authorized participants.",
+      "biometricData": "Enables use of biometric authentication (fingerprint, face recognition) for enhanced security.",
+      "locationSharing": "Allows sharing your location with conversation participants. Location data is never stored permanently and only shared when you explicitly choose to.",
+      "analytics": "Helps us improve Meeshy by collecting anonymous usage statistics. No personal data or message content is included.",
+      "default": "This feature requires your consent to process sensitive data in compliance with GDPR regulations."
+    },
+    "legalNote": "You can revoke these consents at any time in your privacy settings. Learn more in our Privacy Policy.",
+    "buttons": {
+      "accept": "Accept & Continue",
+      "cancel": "Cancel",
+      "submitting": "Processing..."
+    },
+    "errors": {
+      "allRequired": "All required consents must be accepted to continue",
+      "submitFailed": "Failed to save consent preferences. Please try again."
+    }
+  }
+}

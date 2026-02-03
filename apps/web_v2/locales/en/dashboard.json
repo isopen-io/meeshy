@@ -1,0 +1,90 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "greeting": "Hello, {name}! 👋",
+    "greetingFallback": "Hello, User! 👋",
+    "overview": "Here's an overview of your messaging activity today.",
+    "loading": "Loading dashboard...",
+    "errorLoading": "❌ Loading error: {message}",
+    "retry": "Retry",
+    "stats": {
+      "totalConversations": "Total Conversations",
+      "totalCommunities": "Total Communities",
+      "totalGroups": "Total Communities",
+      "totalMessages": "Total Messages",
+      "activeConversations": "Active Conversations",
+      "translationsToday": "Translations Today",
+      "totalLinks": "Total Links",
+      "conversations": "Conversations",
+      "communities": "Communities",
+      "groups": "Communities",
+      "messages": "Messages",
+      "activeConversationsTitle": "Active Conversations",
+      "translations": "Translations",
+      "links": "Links",
+      "total": "Total",
+      "active": "Active",
+      "thisWeek": "This week",
+      "inProgress": "In progress",
+      "today": "Today",
+      "created": "Created"
+    },
+    "recentConversations": "Recent Conversations",
+    "recentCommunities": "Recent Communities",
+    "recentGroups": "Recent Communities",
+    "createLink": "Create Link",
+    "createConversation": "Create Conv.",
+    "shareApp": "Affiliate Link",
+    "newConversation": "New Conv.",
+    "createCommunity": "Create Comm.",
+    "refresh": "Refresh",
+    "loadingError": "Loading error",
+    "noData": "No data available",
+    "errorUnknown": "Unknown error",
+    "dataLoadingError": "Error loading data",
+    "actions": {
+      "createLink": "Create a link",
+      "newConversation": "New conversation",
+      "createConversation": "Create conversation",
+      "createCommunity": "Create a community",
+      "createGroup": "Create a community",
+      "viewAll": "View all",
+      "startConversation": "Start a conversation",
+      "createCommunityButton": "Create a community",
+      "createGroupButton": "Create a community",
+      "settings": "Settings",
+      "shareApp": "Create Affiliate Link"
+    },
+    "quickActions": {
+      "title": "Quick Actions",
+      "description": "Quickly access main features",
+      "newConversation": "New conversation",
+      "createLink": "Create a link",
+      "createCommunity": "Create a community",
+      "createGroup": "Create a community",
+      "shareApp": "Create Affiliate Link",
+      "settings": "Settings"
+    },
+    "emptyStates": {
+      "noRecentConversations": "No recent conversations",
+      "noRecentCommunities": "No recent communities",
+      "noRecentGroups": "No recent communities"
+    },
+    "success": {
+      "linkCreated": "Conversation link created successfully!",
+      "conversationCreated": "Conversation created successfully!",
+      "groupCreated": "Community created successfully!"
+    },
+    "time": {
+      "format": "en-US"
+    },
+    "communities": {
+      "private": "Private",
+      "members": "members",
+      "member": "member",
+      "membersCount": "{count} members"
+    },
+    "anonymous": "Anonymous"
+  }
+}

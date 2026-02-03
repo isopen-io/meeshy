@@ -1,0 +1,56 @@
+{
+  "affiliate": {
+    "shareApp": "Share Meeshy",
+    "shareTitle": "Share Meeshy",
+    "modalTitle": "Share Meeshy",
+    "modalDescription": "Choose an affiliate link to share Meeshy with others",
+    "selectToken": "Select an affiliate link",
+    "existingTokens": "Existing affiliate links",
+    "createNewToken": "Create new affiliate link",
+    "newToken": "New affiliate link",
+    "tokenName": "Affiliate link name",
+    "tokenNamePlaceholder": "My referral link",
+    "shareMessage": "Share message",
+    "shareMessagePlaceholder": "Add a personal message...",
+    "share": "Share",
+    "shareLink": "Share link",
+    "copy": "Copy",
+    "copyLink": "Copy link",
+    "uses": "uses",
+    "linkCopied": "Link copied to clipboard!",
+    "tokenCreated": "Affiliate link created successfully!",
+    "enterTokenName": "Please enter an affiliate link name",
+    "errorLoadingTokens": "Error loading affiliate links",
+    "errorCreatingToken": "Error creating affiliate link",
+    "errorCopying": "Error copying to clipboard",
+    "errorSharing": "Error sharing link",
+    "tokenStatus": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "expired": "Expired",
+      "limitReached": "Limit reached"
+    },
+    "shareVia": {
+      "title": "Share via",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram",
+      "twitter": "Twitter",
+      "facebook": "Facebook",
+      "email": "Email",
+      "sms": "SMS"
+    },
+    "tokenDetails": {
+      "created": "Created",
+      "expires": "Expires",
+      "maxUses": "Max uses",
+      "currentUses": "Current uses",
+      "unlimited": "Unlimited"
+    },
+    "actions": {
+      "close": "Close",
+      "create": "Create",
+      "creating": "Creating...",
+      "cancel": "Cancel"
+    }
+  }
+}

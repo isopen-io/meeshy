@@ -1,0 +1,358 @@
+{
+  "links": {
+    "title": "Sharing links",
+    "subtitle": "Create and manage your sharing links to easily invite participants to your conversations",
+    "createLink": "Create a link",
+    "unnamedLink": "Unnamed link",
+    "conversation": "Conversation",
+    "linksFound": "{count} link found",
+    "linksFound_plural": "{count} links found",
+    "loadingLinks": "Loading your links...",
+    "loadingTrackingLinks": "Loading your tracking links...",
+    "noLinksFound": "No links found",
+    "noLinksFoundTryAnother": "Try modifying your search or create a new link",
+    "noLinksFoundCreateFirst": "Create your first link to start inviting participants to your conversations",
+    "activationNotImplemented": "Activation not yet implemented",
+    "linkNameTemplate": {
+      "default": "{participantLimit} link for conversation '{conversationTitle}' valid for {duration}",
+      "openToAll": "open to all",
+      "limitedToParticipants": "limited to {count} participant(s)",
+      "limitedToUses": "limited to {count} use(s)",
+      "days": "{count} day(s)",
+      "indefinitely": "indefinitely"
+    },
+    "searchPlaceholder": "Search links...",
+    "filters": {
+      "status": "Status",
+      "all": "All",
+      "active": "Active",
+      "inactive": "Inactive",
+      "expired": "Expired"
+    },
+    "tabs": {
+      "shareLinks": "Share Links",
+      "trackingLinks": "Tracked Links",
+      "active": "Active",
+      "disabled": "Disabled",
+      "expired": "Expired"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "expired": "Expired",
+      "expires": "Expires",
+      "never": "Never",
+      "daysRemaining": "{days} day(s) remaining",
+      "hoursRemaining": "{hours} hour(s) remaining"
+    },
+    "stats": {
+      "created": "Created",
+      "expires": "Expires",
+      "uses": "Uses",
+      "active": "Active",
+      "totalLinks": "Total links",
+      "totalClicks": "Total clicks",
+      "uniqueClicks": "Unique clicks",
+      "lastClicked": "Last clicked",
+      "never": "Never",
+      "avgTotal": "Avg. total clicks",
+      "avgUnique": "Avg. unique clicks"
+    },
+    "actions": {
+      "menu": "Menu",
+      "view": "View",
+      "viewDetails": "View details",
+      "copy": "Copy link",
+      "edit": "Edit",
+      "delete": "Delete",
+      "enable": "Enable",
+      "disable": "Disable",
+      "extend7Days": "Extend 7 days",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "details": {
+      "title": "Link Details",
+      "linkName": "Link name",
+      "linkUrl": "Link URL",
+      "description": "Description",
+      "invitationMessage": "Invitation message",
+      "conversation": "Conversation",
+      "creator": "Created by",
+      "created": "Created",
+      "createdAt": "Created on",
+      "expiresAt": "Expires on",
+      "lastUpdated": "Last updated",
+      "expires": "Expires",
+      "dates": "Dates",
+      "usage": "Usage",
+      "totalUses": "Total uses",
+      "totalParticipants": "Total participants",
+      "activeUsers": "Active users",
+      "permissions": "Permissions",
+      "languages": "Allowed languages",
+      "viewMore": "View more details",
+      "requirements": "Requirements"
+    },
+    "edit": {
+      "title": "Edit Link",
+      "linkName": "Link name",
+      "linkNamePlaceholder": "Enter link name",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter description",
+      "expiresAt": "Expiration date",
+      "expiresAtDescription": "When this link will expire",
+      "selectDate": "Select a date",
+      "maxUses": "Maximum uses",
+      "maxUsesDescription": "Maximum number of times this link can be used",
+      "permissions": "Permissions",
+      "requirements": "Requirements"
+    },
+    "permissions": {
+      "allowed": "Allowed",
+      "denied": "Denied",
+      "messages": "Messages",
+      "messagesDescription": "Allow sending messages",
+      "images": "Images",
+      "imagesDescription": "Allow sharing images",
+      "files": "Files",
+      "filesDescription": "Allow sharing files",
+      "viewHistory": "View history",
+      "viewHistoryDescription": "Allow viewing conversation history"
+    },
+    "requirements": {
+      "account": "Account Required",
+      "accountDescription": "Visitors must sign in with a verified account. Automatically enables all permissions and requirements.",
+      "noAnonymous": "No Anonymous",
+      "nickname": "Nickname",
+      "nicknameDescription": "Require a nickname to join",
+      "name": "Name required",
+      "email": "Email",
+      "emailDescription": "Require an email to join",
+      "birthday": "Birthday",
+      "birthdayDescription": "Require a birthday to join"
+    },
+    "confirm": {
+      "delete": "Are you sure you want to delete this link?"
+    },
+    "success": {
+      "linkCreated": "Link created successfully",
+      "linkCopied": "Link copied to clipboard",
+      "linkDeleted": "Link deleted successfully",
+      "linkEnabled": "Link enabled successfully",
+      "linkDisabled": "Link disabled successfully",
+      "linkUpdated": "Link updated successfully"
+    },
+    "errors": {
+      "loadFailed": "Error loading links",
+      "deleteFailed": "Error deleting link",
+      "toggleFailed": "Error updating link status",
+      "extendFailed": "Error extending link",
+      "updateFailed": "Error updating link"
+    },
+    "durationOptions": {
+      "1": {
+        "label": "1 day",
+        "description": "Link expires in 1 day"
+      },
+      "3": {
+        "label": "3 days",
+        "description": "Link expires in 3 days"
+      },
+      "7": {
+        "label": "7 days",
+        "description": "Link expires in 1 week"
+      },
+      "14": {
+        "label": "14 days",
+        "description": "Link expires in 2 weeks"
+      },
+      "30": {
+        "label": "30 days",
+        "description": "Link expires in 1 month"
+      },
+      "60": {
+        "label": "60 days",
+        "description": "Link expires in 2 months"
+      },
+      "90": {
+        "label": "90 days",
+        "description": "Link expires in 3 months"
+      },
+      "180": {
+        "label": "180 days",
+        "description": "Link expires in 6 months"
+      },
+      "365": {
+        "label": "365 days",
+        "description": "Link expires in 1 year"
+      },
+      "730": {
+        "label": "730 days",
+        "description": "Link expires in 2 years"
+      }
+    },
+    "limitOptions": {
+      "unlimited": {
+        "label": "Unlimited",
+        "description": "No limit on number of uses"
+      },
+      "5": {
+        "label": "5 uses",
+        "description": "Link can be used 5 times"
+      },
+      "10": {
+        "label": "10 uses",
+        "description": "Link can be used 10 times"
+      },
+      "25": {
+        "label": "25 uses",
+        "description": "Link can be used 25 times"
+      },
+      "50": {
+        "label": "50 uses",
+        "description": "Link can be used 50 times"
+      },
+      "100": {
+        "label": "100 uses",
+        "description": "Link can be used 100 times"
+      },
+      "250": {
+        "label": "250 uses",
+        "description": "Link can be used 250 times"
+      },
+      "500": {
+        "label": "500 uses",
+        "description": "Link can be used 500 times"
+      },
+      "1000": {
+        "label": "1000 uses",
+        "description": "Link can be used 1000 times"
+      },
+      "5000": {
+        "label": "5000 uses",
+        "description": "Link can be used 5000 times"
+      }
+    },
+    "tracking": {
+      "title": "Tracked Links",
+      "createLink": "Create tracked link",
+      "createLinkDescription": "Create a short tracking link to monitor clicks and engagement",
+      "originalUrl": "Original URL",
+      "shortUrl": "Short URL",
+      "trackingUrl": "Tracking URL",
+      "noLinks": "No tracked links",
+      "noLinksDescription": "Create your first tracked link to monitor clicks and engagement",
+      "shareThisLink": "Share this short link to track clicks",
+      "enterUrlToShorten": "Enter the URL you want to shorten and track",
+      "urlLabel": "URL to track",
+      "advancedOptions": "Advanced Options",
+      "optionalSettings": "Optional settings for your tracking link",
+      "expirationLabel": "Link expiration",
+      "associateConversation": "Associate with conversation",
+      "associateConversationDescription": "Optionally link this to a conversation for better tracking",
+      "creating": "Creating...",
+      "createButton": "Create tracking link",
+      "expirationOptions": {
+        "never": "Never expires",
+        "1day": "1 day",
+        "7days": "7 days",
+        "30days": "30 days",
+        "90days": "90 days",
+        "1year": "1 year"
+      },
+      "stats": {
+        "stats": "Stats",
+        "totalLinks": "Total links",
+        "totalClicks": "Total clicks",
+        "uniqueClicks": "Unique visitors",
+        "activeLinks": "Active links",
+        "conversionRate": "Conversion rate",
+        "lastClick": "Last click",
+        "never": "Never"
+      },
+      "details": {
+        "title": "Tracking Link Statistics",
+        "linkNotFound": "Link not found",
+        "linkNotFoundDescription": "This tracking link does not exist or has been deleted",
+        "backToLinks": "Back to links",
+        "linkInformation": "Link Information",
+        "token": "Token",
+        "createdOn": "Created on",
+        "shortUrl": "Short URL",
+        "originalUrl": "Original URL",
+        "evolutionOverTime": "Evolution over time",
+        "overview": "Overview",
+        "performance": "Performance",
+        "geography": "Geography",
+        "devices": "Devices",
+        "browsers": "Browsers",
+        "timeline": "Timeline",
+        "clicksByCountry": "Clicks by country",
+        "clicksByDevice": "Clicks by device",
+        "clicksByBrowser": "Clicks by browser",
+        "clicksByDate": "Clicks over time",
+        "topReferrers": "Top referrers",
+        "referrer": "Referrer",
+        "clicks": "Clicks",
+        "clicksCount": "{count} clicks",
+        "uniqueCount": "{count} unique",
+        "unknown": "Unknown",
+        "direct": "Direct",
+        "copy": "Copy"
+      },
+      "actions": {
+        "viewStats": "View statistics",
+        "copyShortUrl": "Copy short URL",
+        "deactivate": "Deactivate",
+        "activate": "Activate",
+        "edit": "Edit"
+      },
+      "edit": {
+        "title": "Edit tracking link",
+        "description": "Modify the redirect URL, token, or link settings",
+        "originalUrl": "Redirect URL",
+        "originalUrlDescription": "The URL visitors will be redirected to",
+        "token": "Short link token",
+        "tokenDescription": "6 alphanumeric characters. Leave unchanged to keep current token.",
+        "tokenTaken": "This token already exists",
+        "tokenAvailable": "This token is available",
+        "expiresAt": "Expiration date (optional)",
+        "expiresAtDescription": "Leave empty for a link with no expiration",
+        "isActive": "Link is active",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving...",
+        "errors": {
+          "urlRequired": "Redirect URL is required",
+          "invalidUrl": "URL must start with http:// or https://",
+          "invalidToken": "Token must contain exactly 6 alphanumeric characters",
+          "updateFailed": "Error updating link"
+        },
+        "success": {
+          "updated": "Tracking link updated successfully"
+        }
+      },
+      "success": {
+        "created": "Tracking link created successfully and copied to clipboard",
+        "createdNoCopy": "Tracking link created successfully",
+        "linkCreated": "Link created successfully!",
+        "linkCreatedDescription": "Your tracking link is ready to use",
+        "copied": "Link copied to clipboard",
+        "deactivated": "Link deactivated successfully",
+        "activated": "Link activated successfully",
+        "deleted": "Link deleted successfully"
+      },
+      "errors": {
+        "loadFailed": "Error loading tracking links",
+        "createFailed": "Error creating tracking link",
+        "statsFailed": "Error loading statistics",
+        "deactivateFailed": "Error deactivating link",
+        "deleteFailed": "Error deleting link",
+        "urlRequired": "Please enter a URL",
+        "invalidUrl": "Please enter a valid URL"
+      }
+    }
+  }
+}

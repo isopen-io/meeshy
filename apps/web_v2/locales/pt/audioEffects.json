@@ -1,0 +1,308 @@
+{
+  "audioEffects": {
+    "title": "Efeitos de Áudio",
+    "subtitle": "Transforme sua voz",
+    "noEffectsActive": "Nenhum efeito ativo",
+    "selectEffect": "Selecionar um efeito",
+    "selectEffectPrompt": "Clique em um efeito para configurá-lo",
+    "toggleEffect": "Ativar/Desativar",
+    "configure": "Configurar",
+    "close": "Fechar",
+    "apply": "Aplicar",
+    "reset": "Redefinir",
+    "resetAll": "Redefinir Tudo",
+    "disableAll": "Desativar todos os efeitos",
+
+    "recorder": {
+      "initializing": "Inicializando...",
+      "audioEffects": "Efeitos de áudio",
+      "maxDuration": "Max {duration}min",
+      "startRecording": "Iniciar gravação",
+      "stopRecording": "Parar gravação",
+      "errors": {
+        "httpsRequired": "A gravação de áudio requer HTTPS.",
+        "browserNotSupported": "Seu navegador não suporta gravação de áudio.",
+        "effectsNotAvailable": "Efeitos de áudio não disponíveis - usando microfone direto",
+        "microphoneAccessDenied": "Acesso ao microfone negado.",
+        "noMicrophoneFound": "Nenhum microfone encontrado.",
+        "microphoneError": "Erro no microfone.",
+        "cannotAccessMicrophone": "Não é possível acessar o microfone."
+      }
+    },
+
+    "voiceCoder": {
+      "title": "Perfect Voice",
+      "description": "Correção automática da afinação da sua voz para cantar afinado",
+      "quickConfig": {
+        "label": "Configuração rápida",
+        "tooltip": "Escolha um estilo predefinido adaptado ao seu uso, ou personalize suas próprias configurações"
+      },
+      "retuneSpeed": {
+        "label": "Rapidez",
+        "tooltip": "Velocidade de correção da afinação. Lento (0-30%) = muito natural e suave. Médio (30-70%) = equilibrado. Rápido (70-100%) = efeito robótico"
+      },
+      "strength": {
+        "label": "Força",
+        "tooltip": "Intensidade do auto-tune. Mais alto = voz mais perfeita mas menos natural. Recomendado: 30-50% para um efeito sutil"
+      },
+      "naturalVibrato": {
+        "label": "Expressão",
+        "tooltip": "Preserva as variações e o vibrato natural da sua voz. Mais alto = mais expressão e emoção preservadas"
+      },
+      "pitch": {
+        "label": "Altura",
+        "tooltip": "Transpõe sua voz para o agudo (+) ou grave (-). Exemplo: +3 = 3 semitons mais agudo"
+      },
+      "scale": {
+        "label": "Escala",
+        "chromatic": "Todas as notas",
+        "major": "Maior (alegre)",
+        "minor": "Menor (triste)",
+        "pentatonic": "Pentatônica"
+      },
+      "key": {
+        "label": "Tonalidade"
+      },
+      "harmonization": {
+        "label": "Harmonias vocais",
+        "tooltip": "Adiciona vozes de acompanhamento harmônicas à sua voz principal para um efeito coral"
+      }
+    },
+
+    "babyVoice": {
+      "title": "Voz de Criança",
+      "pitch": {
+        "label": "Altura de voz",
+        "tooltip": "Mais alto = voz mais aguda e infantil. Recomendado: 8-12 para um efeito bebê"
+      },
+      "formant": {
+        "label": "Timbre",
+        "tooltip": "Muda a cor e o timbre da voz para simular cordas vocais mais curtas"
+      },
+      "breathiness": {
+        "label": "Sopro",
+        "tooltip": "Adiciona um efeito de sopro suave e aéreo característico de uma voz infantil"
+      }
+    },
+
+    "demonVoice": {
+      "title": "Voz de Demônio",
+      "pitch": {
+        "label": "Altura de voz",
+        "tooltip": "Mais baixo = voz mais grave e assustadora. -10 a -12 para um efeito demoníaco intenso"
+      },
+      "distortion": {
+        "label": "Distorção",
+        "tooltip": "Adiciona uma textura agressiva e áspera à voz"
+      },
+      "reverb": {
+        "label": "Eco",
+        "tooltip": "Efeito de reverberação como em uma catedral escura e profunda"
+      }
+    },
+
+    "backSound": {
+      "title": "Ambiente de Fundo",
+      "uploadLabel": "Carregar um arquivo de áudio",
+      "uploadDescription": "Os sons predefinidos ainda não estão disponíveis. Carregue seu próprio arquivo MP3/WAV",
+      "uploadButton": "Carregar áudio",
+      "volume": {
+        "label": "Volume",
+        "tooltip": "Ajusta o volume da música de fundo mixada com sua voz"
+      },
+      "loopMode": {
+        "label": "Modo de reprodução",
+        "tooltip": "Escolha como repetir o áudio: um número específico de vezes ou por uma duração em minutos",
+        "nTimes": "Número de vezes",
+        "nMinutes": "Duração em minutos"
+      },
+      "loopValue": {
+        "labelTimes": "Repetições",
+        "labelMinutes": "Minutos"
+      }
+    },
+
+    "effects": {
+      "voice-coder": {
+        "name": "Voz Perfeita",
+        "shortName": "Perfeita",
+        "description": "Correção automática de afinação (auto-tune)",
+        "icon": "🎵",
+        "params": {
+          "pitch": {
+            "label": "Altura",
+            "unit": "semitons",
+            "description": "Transpõe a voz para cima ou para baixo"
+          },
+          "harmonization": {
+            "label": "Harmonização",
+            "description": "Adiciona harmonias à sua voz"
+          },
+          "strength": {
+            "label": "Intensidade",
+            "unit": "%",
+            "description": "Força da correção automática"
+          },
+          "retuneSpeed": {
+            "label": "Velocidade de correção",
+            "unit": "%",
+            "description": "Rapidez da correção (0=natural, 100=robótico)"
+          },
+          "scale": {
+            "label": "Escala musical",
+            "description": "Notas permitidas para correção",
+            "options": {
+              "chromatic": "Cromática (todas as notas)",
+              "major": "Maior",
+              "minor": "Menor",
+              "pentatonic": "Pentatônica"
+            }
+          },
+          "key": {
+            "label": "Tonalidade",
+            "description": "Tonalidade de referência"
+          },
+          "naturalVibrato": {
+            "label": "Vibrato natural",
+            "unit": "%",
+            "description": "Preservação do vibrato natural"
+          }
+        },
+        "presets": {
+          "title": "Predefinições",
+          "voix-naturelle": {
+            "name": "Voz Natural",
+            "description": "Correção muito sutil para um som natural"
+          },
+          "pop-star": {
+            "name": "Pop Star",
+            "description": "Efeito moderno para voz pop perfeita"
+          },
+          "effet-robot": {
+            "name": "Efeito Robô",
+            "description": "Correção instantânea estilo T-Pain"
+          },
+          "correction-subtile": {
+            "name": "Correção Sutil",
+            "description": "Melhoria discreta e agradável"
+          },
+          "custom": "Personalizado"
+        }
+      },
+
+      "baby-voice": {
+        "name": "Voz Infantil",
+        "shortName": "Infantil",
+        "description": "Transforma sua voz em voz de criança",
+        "icon": "👶",
+        "params": {
+          "pitch": {
+            "label": "Altura",
+            "unit": "semitons",
+            "description": "Altura da voz infantil"
+          },
+          "formant": {
+            "label": "Timbre",
+            "unit": "×",
+            "description": "Modificação do timbre vocal"
+          },
+          "breathiness": {
+            "label": "Sopro",
+            "unit": "%",
+            "description": "Adição de sopro à voz"
+          }
+        }
+      },
+
+      "demon-voice": {
+        "name": "Voz Demoníaca",
+        "shortName": "Demoníaca",
+        "description": "Voz grave e ameaçadora com distorção",
+        "icon": "😈",
+        "params": {
+          "pitch": {
+            "label": "Altura",
+            "unit": "semitons",
+            "description": "Altura da voz (negativo = mais grave)"
+          },
+          "distortion": {
+            "label": "Distorção",
+            "unit": "%",
+            "description": "Saturação e grão da voz"
+          },
+          "reverb": {
+            "label": "Reverberação",
+            "unit": "%",
+            "description": "Eco de catedral"
+          }
+        }
+      },
+
+      "back-sound": {
+        "name": "Som de Fundo",
+        "shortName": "Fundo",
+        "description": "Adiciona uma música ou ambiente de fundo",
+        "icon": "🎼",
+        "params": {
+          "soundFile": {
+            "label": "Arquivo de áudio",
+            "description": "Escolha um arquivo de áudio",
+            "placeholder": "Nenhum arquivo selecionado"
+          },
+          "volume": {
+            "label": "Volume",
+            "unit": "%",
+            "description": "Volume do som de fundo"
+          },
+          "loopMode": {
+            "label": "Modo de repetição",
+            "description": "Como repetir o som",
+            "options": {
+              "N_TIMES": "Número de vezes",
+              "N_MINUTES": "Duração em minutos"
+            }
+          },
+          "loopValue": {
+            "label": "Valor",
+            "description": "Número de repetições ou duração"
+          }
+        }
+      }
+    },
+
+    "presets": {
+      "custom": "Personalizado",
+      "customDescription": "Suas próprias configurações"
+    },
+
+    "timeline": {
+      "title": "Linha do Tempo dos Efeitos",
+      "duration": "Duração",
+      "effectsUsed": "Efeitos usados",
+      "noTimeline": "Nenhuma linha do tempo de efeitos disponível",
+      "activatedAt": "Ativado em",
+      "deactivatedAt": "Desativado em",
+      "updatedAt": "Modificado em",
+      "viewDetails": "Ver detalhes",
+      "hide": "Ocultar",
+      "stats": {
+        "title": "Estatísticas",
+        "totalActiveTime": "Tempo total com efeitos",
+        "activations": "Ativações",
+        "parameterChanges": "Modificações"
+      }
+    },
+
+    "badge": {
+      "hasEffects": "Efeitos de áudio",
+      "clickToView": "Clique para ver a linha do tempo"
+    },
+
+    "status": {
+      "on": "Ativado",
+      "off": "Desativado",
+      "active": "Ativo",
+      "inactive": "Inativo"
+    }
+  }
+}

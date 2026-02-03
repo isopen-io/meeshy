@@ -1,0 +1,186 @@
+{
+  "common": {
+    "languageNames": {
+      "en": "English",
+      "fr": "French", 
+      "pt": "Portuguese",
+      "es": "Spanish",
+      "de": "German",
+      "it": "Italian",
+      "zh": "Chinese",
+      "ja": "Japanese",
+      "ar": "Arabic",
+      "ru": "Russian",
+      "ko": "Korean",
+      "hi": "Hindi",
+      "tr": "Turkish"
+    },
+    "loading": "Loading...",
+    "error": "Error",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "copy": "Copy",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "understood": "I understand",
+    "yes": "Yes",
+    "no": "No",
+    "new": "New",
+    "notSelected": "Not selected",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "comingSoon": "Coming soon",
+    "uploading": "Uploading...",
+    "uploadingMultiple": "Uploading {count} files...",
+    "days": "days",
+    "step": "Step {step}",
+    "insufficientRights": "You do not have the necessary rights to perform this operation",
+    "navigation": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "profile": "Profile",
+      "logout": "Logout",
+      "conversations": "Conversations",
+      "contacts": "Contacts",
+      "groups": "Groups",
+      "links": "Links",
+      "communities": "Communities",
+      "admin": "Admin",
+      "about": "About",
+      "help": "Help"
+    },
+    "header": {
+      "searchPlaceholder": "Search..."
+    },
+    "auth": {
+      "checking": "Checking...",
+      "logoutSuccess": "Logged out successfully",
+      "logoutError": "Error logging out"
+    },
+    "validation": {
+      "required": "This field is required",
+      "invalidEmail": "Invalid email address",
+      "invalidPhone": "Invalid phone number",
+      "minLength": "Minimum {min} characters required",
+      "maxLength": "Maximum {max} characters allowed",
+      "passwordMismatch": "Passwords do not match"
+    },
+    "errors": {
+      "generic": "An error occurred",
+      "network": "Network error",
+      "unauthorized": "Unauthorized access",
+      "forbidden": "Access forbidden",
+      "notFound": "Resource not found",
+      "invalidCredentials": "Invalid credentials",
+      "sessionExpired": "Session expired",
+      "validationError": "Validation error"
+    },
+    "success": {
+      "saved": "Saved successfully",
+      "deleted": "Deleted successfully",
+      "updated": "Updated successfully",
+      "created": "Created successfully",
+      "welcome": "Welcome"
+    },
+    "sidebar": {
+      "activeUsers": "Active Users",
+      "trends": "Trends",
+      "globalCommunication": "Global Communication",
+      "messagesIn": "messages in",
+      "activeLanguages": "active languages"
+    },
+    "languageSelector": {
+      "selectLanguage": "Select a language...",
+      "noLanguageFound": "No language found.",
+      "searchLanguage": "Search language..."
+    },
+    "toasts": {
+      "error": "An error occurred",
+      "success": "Operation successful",
+      "warning": "Warning",
+      "info": "Information",
+      "connectionError": "Connection error",
+      "sessionExpired": "Session expired, please log in again",
+      "unauthorized": "You are not authorized to perform this action",
+      "saveFailed": "Save failed",
+      "saveSuccess": "Saved successfully",
+      "deleteFailed": "Delete failed",
+      "deleteSuccess": "Deleted successfully",
+      "updateFailed": "Update failed",
+      "updateSuccess": "Updated successfully"
+    },
+    "layout": {
+      "header": {
+        "title": "Meeshy",
+        "subtitle": "Real-time multilingual messaging"
+      },
+      "sidebar": {
+        "menu": "Menu",
+        "collapse": "Collapse sidebar",
+        "expand": "Expand sidebar"
+      },
+      "footer": {
+        "copyright": "© {year} Meeshy. All rights reserved.",
+        "version": "Version {version}",
+        "about": "About",
+        "privacy": "Privacy",
+        "terms": "Terms",
+        "contact": "Contact"
+      }
+    },
+    "accessDenied": {
+      "title": "Access Denied",
+      "description": "You don't have the necessary permissions to access this page.",
+      "back": "Back",
+      "home": "Home",
+      "tip": {
+        "title": "Tip:",
+        "message": "If you think you should have access to this resource, try logging in or contact the administrator."
+      }
+    },
+    "redirecting": "Redirecting...",
+    "featureGate": {
+      "title": "Feature Temporarily Unavailable",
+      "passwordResetDisabled": "Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.",
+      "alternativeOptions": "Alternative Options:",
+      "contactSupport": "Contact our support team",
+      "tryAgainLater": "Try again later",
+      "checkAnnouncements": "Check our announcements for updates",
+      "backToHome": "Back to Home"
+    },
+    "messages": {
+      "messageSent": "Message sent!",
+      "sendError": "Error sending message",
+      "connectionInProgress": "Connection in progress - Please wait...",
+      "messageModified": "Message modified successfully",
+      "messageEdited": "Message edited successfully",
+      "messageEditedByOther": "A message has been edited",
+      "messageDeleted": "Message deleted successfully",
+      "messageDeletedByOther": "A message has been deleted",
+      "modifyError": "Error modifying message",
+      "editError": "Error editing message",
+      "deleteError": "Error deleting message",
+      "replyTo": "Reply to this message",
+      "messageFound": "Message found!",
+      "messageNotVisible": "Message not visible. Loading...",
+      "loadingMessage": "Loading message...",
+      "messageNotFound": "Message not found",
+      "allMessagesLoaded": "All messages have been loaded",
+      "loadingOlderMessages": "Loading older messages...",
+      "requestTranslationError": "Error requesting translation",
+      "reportMessage": "Report this message",
+      "messageCopied": "Message copied to clipboard",
+      "copyMessage": "Copy message",
+      "addReaction": "Add reaction",
+      "reportSuccess": "Report submitted successfully",
+      "reportError": "Error submitting report"
+    }
+  }
+}

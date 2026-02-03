@@ -1,0 +1,56 @@
+{
+  "reportMessage": {
+    "reportMessage": "Signaler le message",
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "report": "Signaler",
+    "reporting": "Envoi...",
+    "reportType": "Type de signalement",
+    "reportTypePlaceholder": "Sélectionnez un type de signalement...",
+    "reason": "Raison détaillée",
+    "reasonPlaceholder": "Décrivez pourquoi vous signalez ce message...",
+    "reasonMinLength": "(minimum 10 caractères)",
+    "characterCount": "caractères",
+    "charactersRemaining": "Encore {count} caractères minimum",
+    "requiredFields": "* Champs obligatoires",
+    "messagePreview": "Message signalé :",
+    "confidentialNotice": "Signalement confidentiel",
+    "confidentialDescription": "Votre signalement sera examiné par un modérateur. L'auteur du message ne sera pas informé de votre identité.",
+    "reportTypes": {
+      "spam": {
+        "label": "Spam",
+        "description": "Message non sollicité ou répétitif"
+      },
+      "inappropriate": {
+        "label": "Contenu inapproprié",
+        "description": "Contenu offensant ou déplacé"
+      },
+      "harassment": {
+        "label": "Harcèlement",
+        "description": "Comportement harcelant ou intimidant"
+      },
+      "violence": {
+        "label": "Violence",
+        "description": "Contenu violent ou menaçant"
+      },
+      "hate_speech": {
+        "label": "Discours haineux",
+        "description": "Langage discriminatoire ou haineux"
+      },
+      "fake_profile": {
+        "label": "Faux profil",
+        "description": "Usurpation ou fausse identité"
+      },
+      "impersonation": {
+        "label": "Usurpation d'identité",
+        "description": "Prétendre être quelqu'un d'autre"
+      },
+      "other": {
+        "label": "Autre",
+        "description": "Autre raison"
+      }
+    },
+    "success": "Signalement envoyé avec succès",
+    "error": "Erreur lors de l'envoi du signalement"
+  }
+}

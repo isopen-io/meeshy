@@ -130,10 +130,9 @@ struct RootView: View {
                         )
 
                     if showFeed {
-                        // Logo when feed is open
-                        Text("M")
-                            .font(.system(size: 22, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
+                        // Animated logo when feed is open
+                        AnimatedLogoView(color: .white, lineWidth: 3)
+                            .frame(width: 26, height: 26)
                     } else {
                         Image(systemName: "square.stack.fill")
                             .font(.system(size: 20, weight: .semibold))
@@ -464,7 +463,7 @@ struct ThemedFeedComposer: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                // Avatar
+                // Avatar with animated logo
                 Circle()
                     .fill(
                         LinearGradient(
@@ -475,9 +474,8 @@ struct ThemedFeedComposer: View {
                     )
                     .frame(width: 44, height: 44)
                     .overlay(
-                        Text("M")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                        AnimatedLogoView(color: .white, lineWidth: 2)
+                            .frame(width: 22, height: 22)
                     )
                     .shadow(color: Color(hex: "FF6B6B").opacity(0.3), radius: 6, y: 3)
 

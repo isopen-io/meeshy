@@ -1,0 +1,76 @@
+{
+  "features": {
+    "chatPage": {
+      "loadingConversation": "Carregando conversa...",
+      "verifyingAuth": "Verificando autenticação...",
+      "conversationNotFound": "Conversa não encontrada",
+      "accessDenied": "Acesso negado",
+      "errorLoading": "Erro ao carregar",
+      "missingLinkId": "Identificador de link ausente",
+      "noConversationData": "Nenhum dado de conversa",
+      "sessionExpired": "Sessão expirada",
+      "sessionExpiredReconnect": "Sua sessão expirou. Por favor, reconecte-se.",
+      "anonymousSessionCleared": "Sessão anônima apagada",
+      "incompleteData": "Dados incompletos",
+      "incompleteDataDescription": "Os dados da conversa estão incompletos. Por favor, tente novamente.",
+      "createAccount": "Criar uma conta",
+      "createAccountDescription": "Crie uma conta para acessar todos os recursos",
+      "login": "Entrar",
+      "loginDescription": "Entre para continuar",
+      "defaultUser": "Usuário",
+      "defaultAnonymous": "Anônimo"
+    },
+    "anonymousChatErrorHandler": {
+      "forbidden": {
+        "title": "Acesso Proibido",
+        "description": "Você não tem permissão para acessar esta conversa.",
+        "actions": {
+          "backHome": "Voltar ao início"
+        }
+      },
+      "notFound": {
+        "title": "Conversa Não Encontrada",
+        "description": "Esta conversa não existe ou foi excluída.",
+        "actions": {
+          "backHome": "Voltar ao início"
+        }
+      },
+      "unauthorized": {
+        "title": "Não Autorizado",
+        "description": "Você deve estar conectado para acessar esta conversa.",
+        "actions": {
+          "login": "Entrar",
+          "backHome": "Voltar ao início",
+          "rejoin": "Participar novamente"
+        }
+      },
+      "invalidIdentifier": {
+        "title": "Identificador Inválido",
+        "description": "O link de convite é inválido ou expirou.",
+        "actions": {
+          "backHome": "Voltar ao início"
+        }
+      },
+      "generic": {
+        "title": "Ocorreu um Erro",
+        "description": "Não foi possível carregar a conversa. Por favor, tente novamente.",
+        "actions": {
+          "retry": "Tentar novamente",
+          "backHome": "Voltar ao início"
+        }
+      },
+      "maxRetriesReached": "Número máximo de tentativas atingido",
+      "retryFailed": "A tentativa falhou",
+      "attempts": "tentativas",
+      "createConversationModal": "Criar uma nova conversa",
+      "debug": {
+        "title": "Informações de depuração",
+        "type": "Tipo",
+        "identifier": "Identificador",
+        "attempts": "Tentativas",
+        "authenticated": "Autenticado",
+        "anonymous": "Anônimo"
+      }
+    }
+  }
+}

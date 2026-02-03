@@ -1,0 +1,90 @@
+{
+  "landing": {
+    "navigation": {
+      "home": "Início",
+      "features": "Funcionalidades",
+      "about": "Sobre",
+      "contact": "Contato"
+    },
+    "hero": {
+      "badge": "Tradução em tempo real",
+      "title": "Comunique-se sem ",
+      "titleHighlight": "barreiras linguísticas",
+      "subtitle": "Meeshy traduz suas conversas em tempo real, permitindo que você converse com qualquer pessoa, em qualquer idioma.",
+      "login": "Entrar",
+      "startFree": "Criar sua conta agora",
+      "joinConversation": "Participar de uma conversa",
+      "resumeOrJoin": "Retomar ou participar"
+    },
+    "features": {
+      "title": "Funcionalidades Poderosas",
+      "subtitle": "Tudo o que você precisa para se comunicar sem fronteiras",
+      "realtime": {
+        "title": "Tradução em Tempo Real",
+        "description": "Suas mensagens são traduzidas instantaneamente enquanto você digita"
+      },
+      "multiLanguage": {
+        "title": "Suporte Multi-idiomas",
+        "description": "Suportando mais de 100 idiomas do mundo inteiro"
+      },
+      "privacy": {
+        "title": "Privado e Seguro",
+        "description": "Suas conversas são criptografadas de ponta a ponta"
+      },
+      "groupChats": {
+        "title": "Chats em Grupo",
+        "description": "Converse com várias pessoas em diferentes idiomas"
+      },
+      "autoDetection": {
+        "title": "Detecção Automática",
+        "description": "Detecta automaticamente o idioma de suas mensagens"
+      },
+      "modernInterface": {
+        "title": "Interface Moderna",
+        "description": "Design elegante e intuitivo para uma melhor experiência"
+      },
+      "universalTranslation": {
+        "title": "Tradução Universal",
+        "description": "Comunique-se com qualquer pessoa, em qualquer lugar do mundo"
+      },
+      "multilingualClassrooms": {
+        "title": "Salas de Aula Multilíngues",
+        "description": "Perfeito para educação internacional e equipes distribuídas"
+      },
+      "internationalColleagues": {
+        "title": "Colegas Internacionais",
+        "description": "Colabore efetivamente com equipes do mundo inteiro"
+      }
+    },
+    "mission": {
+      "title": "Nossa Missão",
+      "description": "Conectar o mundo, uma tradução de cada vez. Nossa plataforma permite que pessoas dos quatro cantos do mundo se comuniquem livremente, derrubando os muros que nos separam e construindo pontes de compreensão.",
+      "tagline": "Comunicação sem fronteiras",
+      "slogan": "Um mundo, vários idiomas, uma conversa",
+      "signature": {
+        "line1": "Feito com ❤️ por uma equipe que acredita na",
+        "line2": "comunicação universal"
+      }
+    },
+    "cta": {
+      "title": "Pronto para Começar?",
+      "subtitle": "Junte-se a milhares de usuários que já se comunicam sem barreiras",
+      "createAccount": "Criar uma conta gratuita"
+    },
+    "footer": {
+      "tagline": "Quebrando barreiras linguísticas, uma conversa de cada vez",
+      "copyright": "© 2025 Meeshy. Todos os direitos reservados.",
+      "usefulLinks": "Links Úteis",
+      "links": {
+        "about": "Sobre",
+        "contact": "Contato",
+        "partners": "Parceiros",
+        "terms": "Termos de uso",
+        "policy": "Política de privacidade"
+      },
+      "social": {
+        "followUs": "Siga-nos"
+      }
+    }
+  }
+}

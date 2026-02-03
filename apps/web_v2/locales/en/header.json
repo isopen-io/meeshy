@@ -1,0 +1,37 @@
+{
+  "header": {
+    "login": "Log in",
+    "loginTitle": "Login",
+    "loginDescription": "Sign in to your Meeshy account",
+    "register": "Sign up",
+    "registerTitle": "Create account",
+    "registerDescription": "Join Meeshy and start chatting",
+    "joinConversation": "Join",
+    "joinTitle": "Join conversation",
+    "joinDescription": "Enter the conversation code to participate",
+    "share": "Share",
+    "shareLink": "Share",
+    "shareText": "Join me on Meeshy - A multilingual messaging platform where you can chat with people from around the world!",
+    "shareLinkCopied": "Link copied to clipboard",
+    "backToConversation": "Back to conversation",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout",
+    "anonymousWarning": "Anonymous session",
+    "clearSession": "Clear session",
+    "clearSessionTitle": "Clear anonymous session",
+    "clearSessionDescription": "Are you sure you want to clear your anonymous session? This action is irreversible.",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "guest": "Guest",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "continueChat": "Continue Chat",
+    "signUp": "Sign Up",
+    "language": "Language",
+    "interfaceLanguage": "Interface Language"
+  }
+}
+

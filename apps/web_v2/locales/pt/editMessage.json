@@ -1,0 +1,22 @@
+{
+  "editMessage": {
+    "editMessage": "Editar mensagem",
+    "close": "Fechar",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "saving": "Salvando...",
+    "messageContent": "Conteúdo da mensagem",
+    "enterMessageContent": "Digite o conteúdo da mensagem...",
+    "translationWarning": "Aviso de tradução",
+    "translationWillBeRegenerated": "As traduções serão regeneradas automaticamente após salvar",
+    "shortcutSave": "Ctrl+Enter",
+    "editingOriginalMessage": "Editando mensagem original",
+    "willUpdateTranslations": "As traduções serão atualizadas automaticamente",
+    "charactersCount": "caracteres",
+    "unsavedChanges": "Alterações não salvas",
+    "saveChangesFirst": "Você tem alterações não salvas. Salve-as antes de sair.",
+    "typeMessage": "Digite sua mensagem...",
+    "enterToSave": "↵ Salvar",
+    "escToCancel": "Esc para cancelar"
+  }
+}

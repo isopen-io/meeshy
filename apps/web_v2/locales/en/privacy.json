@@ -1,0 +1,199 @@
+{
+  "privacy": {
+    "backHome": "Back Home",
+    "print": "Print",
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated: January 29, 2026",
+    "introduction": {
+      "title": "1. Introduction",
+      "content": "At Meeshy, we are committed to protecting your privacy and personal data. This detailed privacy policy explains how we collect, use, and protect your information in compliance with GDPR and international data protection regulations when you use our multilingual messaging service."
+    },
+    "dataCollection": {
+      "title": "2. Information We Collect",
+      "personal": {
+        "title": "2.1 Profile Information",
+        "items": [
+          "First name, last name, and username",
+          "Email address",
+          "Phone number (optional)",
+          "Date of birth (optional, required for certain features)",
+          "Profile picture and banner (optional)"
+        ]
+      },
+      "language": {
+        "title": "2.2 Language Preferences",
+        "items": [
+          "Primary system language",
+          "Additional languages (optional)",
+          "Automatic translation preferences"
+        ]
+      },
+      "security": {
+        "title": "2.3 Account Security",
+        "items": [
+          "Securely encrypted password",
+          "Two-factor authentication (if enabled)",
+          "Encryption keys to protect your private conversations",
+          "Active sessions on your devices",
+          "Login history for your security"
+        ]
+      },
+      "location": {
+        "title": "2.4 Technical Information",
+        "items": [
+          "IP address at login",
+          "Approximate location (city, country)",
+          "Device and browser type",
+          "Timezone"
+        ]
+      },
+      "voice": {
+        "title": "2.5 Voice Data and Consents",
+        "items": [
+          "Consent to create voice profile (DateTime or null)",
+          "Consent for voice data processing",
+          "Consent for general data processing",
+          "Voice cloning status (enabled/disabled)",
+          "Age verification (required for voice profile)"
+        ]
+      },
+      "translation": {
+        "title": "2.6 Messaging and Translation",
+        "items": [
+          "Your messages and their translations",
+          "Languages used in your conversations",
+          "Audio transcriptions (if enabled)",
+          "Your conversation history"
+        ]
+      },
+      "preferences": {
+        "title": "2.7 Your Preferences",
+        "items": [
+          "Privacy settings",
+          "Audio and video settings",
+          "Notification preferences",
+          "Display settings (theme, language)"
+        ]
+      },
+      "activity": {
+        "title": "2.8 Activity",
+        "items": [
+          "Online status and last activity",
+          "Blocked users list",
+          "Your conversations and communities",
+          "Mentions and reactions"
+        ]
+      }
+    },
+    "usage": {
+      "title": "3. How We Use Your Information",
+      "items": [
+        {
+          "title": "Service provision:",
+          "description": "Real-time translation of your messages"
+        },
+        {
+          "title": "Service improvement:",
+          "description": "Development of new features"
+        },
+        {
+          "title": "Customer support:",
+          "description": "Responding to your questions and resolving issues"
+        },
+        {
+          "title": "Security:",
+          "description": "Protection against abuse and fraud"
+        },
+        {
+          "title": "Communication:",
+          "description": "Important service information"
+        }
+      ]
+    },
+    "protection": {
+      "title": "4. Data Protection",
+      "encryption": {
+        "title": "4.1 Conversation Encryption",
+        "content": "Meeshy offers multiple levels of protection based on your needs: end-to-end encryption (nobody, not even us, can read your messages), server encryption (your messages are protected on our servers), or public conversations. All communications are secured during transmission over the Internet."
+      },
+      "anonymous": {
+        "title": "4.2 Users Without Account",
+        "content": "If you use Meeshy without creating an account, your messages can only benefit from server encryption. For maximum protection, create an account and enable end-to-end encryption."
+      },
+      "storage": {
+        "title": "4.3 Secure Storage",
+        "content": "Your data is stored on secure servers in Europe with regular backups. Your password is encrypted and can never be read in plain text. Your private encryption keys are protected."
+      },
+      "local": {
+        "title": "4.4 Internal Processing",
+        "content": "Translations are performed directly on our secure servers. No data is sent to third-party services like Google or Microsoft for translation. We control the entire process."
+      },
+      "audit": {
+        "title": "4.5 Security Log",
+        "content": "We maintain a history of all security events for your account: logins, password changes, two-factor authentication activation. You can review this history at any time in your settings."
+      }
+    },
+    "sharing": {
+      "title": "5. Information Sharing",
+      "intro": "We NEVER sell your personal data to third parties. We only share your data in the following cases:",
+      "cases": [
+        "With other participants in your conversations (your messages and translations)",
+        "With your explicit consent (data export, profile sharing)",
+        "To comply with legal obligations (court orders)",
+        "With trusted technical partners (server hosting) under strict confidentiality agreements",
+        "In case of merger or acquisition (you will be notified in advance)"
+      ],
+      "thirdParty": "No data is shared with third-party services for translation or analysis. All processing is done internally."
+    },
+    "rights": {
+      "title": "6. Your GDPR Rights",
+      "intro": "In accordance with GDPR, you have the following rights:",
+      "list": [
+        "View all your personal data",
+        "Correct inaccurate information",
+        "Delete your account and all your data (with a 30-day grace period)",
+        "Export your data in a standard format",
+        "Object to processing of your data",
+        "Limit processing in certain cases",
+        "Withdraw consent at any time"
+      ],
+      "contact": "To exercise these rights, go to Settings > Privacy or contact us at privacy@meeshy.me. We will respond within 30 days."
+    },
+    "retention": {
+      "title": "7. Data Retention Period",
+      "content": "We retain your data as long as your account is active. If you delete your account: (1) 30-day grace period allowing recovery; (2) After 30 days, permanent deletion of all your personal data; (3) Messages in shared conversations are anonymized; (4) Security logs are kept for 90 days; (5) Billing data according to legal obligations.",
+      "voiceData": "Voice profiles automatically expire based on your age: 18-25 years = 5 years, 26-40 years = 10 years, 41-60 years = 15 years, 60+ years = 20 years."
+    },
+    "notifications": {
+      "title": "8. Notifications",
+      "content": "You can individually configure notifications for messages, calls, mentions, reactions, friend requests, security events, etc. Do Not Disturb mode allows you to define time ranges without notifications (except critical security alerts)."
+    },
+    "cookies": {
+      "title": "9. Cookies",
+      "content": "We only use essential cookies for service functionality (authentication, sessions, preferences). No advertising or tracking cookies. You can manage your preferences in your browser settings."
+    },
+    "international": {
+      "title": "10. International Transfers",
+      "content": "Your data is hosted on servers located in France and the European Union. If you access Meeshy from outside the EU, your data may be transferred to the EU. These transfers are protected by the European Commission's standard contractual clauses and comply with GDPR."
+    },
+    "updates": {
+      "title": "11. Policy Updates",
+      "content": "We may update this policy from time to time. Important changes will be notified to you by email and via an in-app notification. The last update date is indicated at the top of this page. Continuing to use Meeshy after an update means you accept the new policy."
+    },
+    "contact": {
+      "title": "12. Contact Us",
+      "intro": "For any questions regarding this privacy policy, your personal data, or to exercise your GDPR rights:",
+      "email": "DPO Email: privacy@meeshy.me",
+      "response": "Response time: Maximum 30 days",
+      "address": "Postal address: 12 Rue de la Paix, 75002 Paris, France",
+      "dpa": "In case of an unresolved dispute, you have the right to file a complaint with the CNIL (French Data Protection Authority) at: www.cnil.fr"
+    },
+    "footer": {
+      "title": "Learn more about Meeshy",
+      "home": "Home",
+      "about": "About",
+      "contact": "Contact",
+      "partners": "Become a partner"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "reportMessage": {
+    "reportMessage": "Denunciar mensagem",
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "report": "Denunciar",
+    "reporting": "Enviando...",
+    "reportType": "Tipo de denúncia",
+    "reportTypePlaceholder": "Selecione um tipo de denúncia...",
+    "reason": "Motivo detalhado",
+    "reasonPlaceholder": "Descreva por que você está denunciando esta mensagem...",
+    "reasonMinLength": "(mínimo 10 caracteres)",
+    "characterCount": "caracteres",
+    "charactersRemaining": "Ainda faltam {count} caracteres mínimo",
+    "requiredFields": "* Campos obrigatórios",
+    "messagePreview": "Mensagem denunciada:",
+    "confidentialNotice": "Denúncia confidencial",
+    "confidentialDescription": "Sua denúncia será analisada por um moderador. O autor da mensagem não será informado de sua identidade.",
+    "reportTypes": {
+      "spam": {
+        "label": "Spam",
+        "description": "Mensagem não solicitada ou repetitiva"
+      },
+      "inappropriate": {
+        "label": "Conteúdo inadequado",
+        "description": "Conteúdo ofensivo ou inapropriado"
+      },
+      "harassment": {
+        "label": "Assédio",
+        "description": "Comportamento de assédio ou intimidação"
+      },
+      "violence": {
+        "label": "Violência",
+        "description": "Conteúdo violento ou ameaçador"
+      },
+      "hate_speech": {
+        "label": "Discurso de ódio",
+        "description": "Linguagem discriminatória ou de ódio"
+      },
+      "fake_profile": {
+        "label": "Perfil falso",
+        "description": "Usurpação ou identidade falsa"
+      },
+      "impersonation": {
+        "label": "Usurpação de identidade",
+        "description": "Fingir ser outra pessoa"
+      },
+      "other": {
+        "label": "Outro",
+        "description": "Outro motivo"
+      }
+    },
+    "success": "Denúncia enviada com sucesso",
+    "error": "Erro ao enviar a denúncia"
+  }
+}

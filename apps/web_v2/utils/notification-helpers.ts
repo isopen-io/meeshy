@@ -1,0 +1,337 @@
+/**
+ * Utilitaires pour les notifications
+ * Utilise directement les données du backend sans reformatage
+ * Intègre les traductions i18n pour les titres et contenus
+ */
+
+import {
+  NotificationTypeEnum,
+  type NotificationType,
+  type Notification,
+  type NotificationIcon
+} from '@/types/notification';
+import { getUserDisplayName } from './user-display-name';
+
+// Type pour la fonction de traduction
+type TranslateFunction = (key: string, params?: Record<string, string>) => string;
+
+/**
+ * Configuration des icônes et couleurs par type de notification
+ */
+export const NOTIFICATION_ICONS: Record<NotificationType, NotificationIcon> = {
+  [NotificationTypeEnum.NEW_MESSAGE]: {
+    emoji: '💬',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50'
+  },
+  [NotificationTypeEnum.MESSAGE_REPLY]: {
+    emoji: '↩️',
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-50'
+  },
+  [NotificationTypeEnum.USER_MENTIONED]: {
+    emoji: '@',
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50'
+  },
+  [NotificationTypeEnum.MESSAGE_REACTION]: {
+    emoji: '❤️',
+    color: 'text-pink-600',
+    bgColor: 'bg-pink-50'
+  },
+  [NotificationTypeEnum.CONTACT_REQUEST]: {
+    emoji: '🤝',
+    color: 'text-green-600',
+    bgColor: 'bg-green-50'
+  },
+  [NotificationTypeEnum.CONTACT_ACCEPTED]: {
+    emoji: '✅',
+    color: 'text-green-400',
+    bgColor: 'bg-green-50'
+  },
+  [NotificationTypeEnum.NEW_CONVERSATION_DIRECT]: {
+    emoji: '👤',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50'
+  },
+  [NotificationTypeEnum.NEW_CONVERSATION_GROUP]: {
+    emoji: '👥',
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50'
+  },
+  [NotificationTypeEnum.MEMBER_JOINED]: {
+    emoji: '👋',
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-50'
+  },
+  [NotificationTypeEnum.MISSED_CALL]: {
+    emoji: '📞',
+    color: 'text-red-600',
+    bgColor: 'bg-red-50'
+  },
+  [NotificationTypeEnum.SYSTEM]: {
+    emoji: '🔔',
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-50'
+  }
+};
+
+/**
+ * Retourne l'icône pour une notification
+ */
+export function getNotificationIcon(notification: Notification): NotificationIcon {
+  return NOTIFICATION_ICONS[notification.type] || NOTIFICATION_ICONS[NotificationTypeEnum.SYSTEM];
+}
+
+/**
+ * Retourne la couleur de bordure pour le toast selon le type de notification
+ */
+export function getNotificationBorderColor(notification: Notification): string {
+  const borderColors: Record<NotificationType, string> = {
+    [NotificationTypeEnum.NEW_MESSAGE]: 'border-l-blue-500',
+    [NotificationTypeEnum.MESSAGE_REPLY]: 'border-l-blue-400',
+    [NotificationTypeEnum.USER_MENTIONED]: 'border-l-orange-500',
+    [NotificationTypeEnum.MESSAGE_REACTION]: 'border-l-pink-500',
+    [NotificationTypeEnum.CONTACT_REQUEST]: 'border-l-green-500',
+    [NotificationTypeEnum.CONTACT_ACCEPTED]: 'border-l-green-400',
+    [NotificationTypeEnum.NEW_CONVERSATION_DIRECT]: 'border-l-blue-500',
+    [NotificationTypeEnum.NEW_CONVERSATION_GROUP]: 'border-l-purple-500',
+    [NotificationTypeEnum.MEMBER_JOINED]: 'border-l-indigo-500',
+    [NotificationTypeEnum.MISSED_CALL]: 'border-l-red-500',
+    [NotificationTypeEnum.SYSTEM]: 'border-l-gray-500'
+  };
+
+  return borderColors[notification.type] || 'border-l-blue-500';
+}
+
+/**
+ * Formate le timestamp de la notification (temps relatif)
+ */
+export function formatNotificationTimestamp(createdAt: Date | string): string {
+  const date = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 10) return 'à l\'instant';
+  if (diffSeconds < 60) return `il y a ${diffSeconds}s`;
+  if (diffMinutes < 60) return `il y a ${diffMinutes}min`;
+  if (diffHours < 24) return `il y a ${diffHours}h`;
+  if (diffDays < 7) return `il y a ${diffDays}j`;
+
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+/**
+ * Formate le contexte de la notification (conversation + temps)
+ */
+export function formatNotificationContext(notification: Notification): string {
+  const parts: string[] = [];
+
+  // Nom de la conversation
+  if (notification.context?.conversationTitle) {
+    parts.push(`💬 ${notification.context.conversationTitle}`);
+  }
+
+  // Timestamp
+  parts.push(formatNotificationTimestamp(notification.state.createdAt));
+
+  return parts.join(' • ');
+}
+
+/**
+ * Formate l'aperçu du message avec attachments
+ */
+export function formatMessagePreview(content: string, attachments?: any[]): string {
+  if (attachments && attachments.length > 0) {
+    const count = attachments.length;
+    const type = attachments[0].mimeType?.startsWith('image/') ? '📷 Photo' : '📎 Fichier';
+    return count > 1 ? `${type} (${count})` : type;
+  }
+  return content;
+}
+
+/**
+ * Retourne le lien de navigation pour une notification
+ */
+export function getNotificationLink(notification: Notification): string | null {
+  const conversationId = notification.context?.conversationId;
+  const messageId = notification.context?.messageId;
+
+  if (conversationId) {
+    return messageId
+      ? `/conversations/${conversationId}?messageId=${messageId}`
+      : `/conversations/${conversationId}`;
+  }
+
+  return null;
+}
+
+/**
+ * Détermine si la notification requiert une action utilisateur
+ */
+export function requiresUserAction(notification: Notification): boolean {
+  return notification.type === NotificationTypeEnum.CONTACT_REQUEST;
+}
+
+/**
+ * Obtient le nom d'affichage d'un utilisateur pour les notifications
+ * Utilise la fonction centralisée getUserDisplayName
+ */
+export function getActorDisplayName(actor?: Notification['actor']): string {
+  return getUserDisplayName(actor, 'Un utilisateur');
+}
+
+/**
+ * @deprecated Use getActorDisplayName instead - kept for backward compatibility
+ */
+export function getSenderDisplayName(sender?: Notification['actor']): string {
+  return getActorDisplayName(sender);
+}
+
+/**
+ * Construit le titre de la notification à partir des données brutes
+ * Cette fonction remplace les titres pré-formatés du backend
+ * Utilise getActorDisplayName pour afficher le bon nom (displayName > firstName+lastName > username)
+ * Supporte les traductions i18n avec la fonction t fournie
+ */
+export function buildNotificationTitle(
+  notification: Notification,
+  t?: TranslateFunction
+): string {
+  const actorName = getActorDisplayName(notification.actor);
+  const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
+
+  // Si pas de fonction de traduction, utiliser les textes en dur (fallback)
+  if (!t) {
+    switch (notification.type) {
+      case NotificationTypeEnum.NEW_MESSAGE:
+        return `Message de ${actorName}`;
+      case NotificationTypeEnum.MESSAGE_REPLY:
+        return `Réponse de ${actorName}`;
+      case NotificationTypeEnum.USER_MENTIONED:
+        return `${actorName} vous a cité`;
+      case NotificationTypeEnum.MESSAGE_REACTION:
+        return `${actorName} a réagi à votre message`;
+      case NotificationTypeEnum.CONTACT_REQUEST:
+        return `${actorName} veut se connecter`;
+      case NotificationTypeEnum.CONTACT_ACCEPTED:
+        return `${actorName} a accepté votre invitation`;
+      case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
+        return `Conversation de ${actorName}`;
+      case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
+        return `Invitation de ${actorName}`;
+      case NotificationTypeEnum.MEMBER_JOINED:
+        return `Nouveau membre dans ${conversationTitle}`;
+      case NotificationTypeEnum.MISSED_CALL:
+        return `Appel manqué de ${actorName}`;
+      case NotificationTypeEnum.SYSTEM:
+        return 'Notification système';
+      default:
+        return 'Nouvelle notification';
+    }
+  }
+
+  // Avec traductions i18n
+  switch (notification.type) {
+    case NotificationTypeEnum.NEW_MESSAGE:
+      return t('titles.newMessage', { sender: actorName });
+
+    case NotificationTypeEnum.MESSAGE_REPLY:
+      return t('titles.reply', { sender: actorName });
+
+    case NotificationTypeEnum.USER_MENTIONED:
+      return t('titles.mentioned', { sender: actorName });
+
+    case NotificationTypeEnum.MESSAGE_REACTION:
+      const emoji = notification.metadata?.reactionEmoji || '❤️';
+      return t('titles.reaction', { sender: actorName, emoji });
+
+    case NotificationTypeEnum.CONTACT_REQUEST:
+      return t('titles.contactRequest', { sender: actorName });
+
+    case NotificationTypeEnum.CONTACT_ACCEPTED:
+      return t('titles.contactAccepted', { sender: actorName });
+
+    case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
+      return t('titles.newConversationDirect', { sender: actorName });
+
+    case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
+      return t('titles.newConversationGroup', { title: conversationTitle });
+
+    case NotificationTypeEnum.MEMBER_JOINED:
+      return t('titles.memberJoined', { title: conversationTitle });
+
+    case NotificationTypeEnum.MISSED_CALL:
+      const callType = notification.metadata?.callType || 'video';
+      return t('titles.missedCall', { type: callType });
+
+    case NotificationTypeEnum.SYSTEM:
+      return t('titles.system');
+
+    default:
+      return t('titles.default');
+  }
+}
+
+/**
+ * Construit le contenu de la notification à partir des données brutes
+ * Utilise getActorDisplayName pour afficher le bon nom
+ * Supporte les traductions i18n avec la fonction t fournie
+ */
+export function buildNotificationContent(
+  notification: Notification,
+  t?: TranslateFunction
+): string {
+  // Le content est stocké dans le champ content (aperçu du message)
+  if (notification.content) {
+    return formatMessagePreview(notification.content, notification.metadata?.attachments);
+  }
+
+  // Messages par défaut basés sur le type (si pas de content)
+  const actorName = getActorDisplayName(notification.actor);
+  const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
+
+  // Si pas de fonction de traduction, utiliser les textes en dur (fallback)
+  if (!t) {
+    switch (notification.type) {
+      case NotificationTypeEnum.CONTACT_ACCEPTED:
+        return `${actorName} a accepté votre invitation. Vous pouvez maintenant discuter ensemble.`;
+      case NotificationTypeEnum.CONTACT_REQUEST:
+        return `${actorName} vous a envoyé une invitation`;
+      case NotificationTypeEnum.NEW_CONVERSATION_DIRECT:
+        return `${actorName} a commencé une conversation avec vous`;
+      case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
+        return `${actorName} vous a invité à rejoindre ${conversationTitle}`;
+      case NotificationTypeEnum.MEMBER_JOINED:
+        return `${actorName} a rejoint le groupe`;
+      default:
+        return '';
+    }
+  }
+
+  // Avec traductions i18n
+  switch (notification.type) {
+    case NotificationTypeEnum.CONTACT_ACCEPTED:
+      return t('content.contactAcceptedMessage', { sender: actorName });
+
+    case NotificationTypeEnum.CONTACT_REQUEST:
+      return t('content.contactRequestMessage', { sender: actorName });
+
+    case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
+      const isMember = notification.metadata?.isMember;
+      if (!isMember) {
+        return t('content.notMemberHint');
+      }
+      return '';
+
+    case NotificationTypeEnum.MEMBER_JOINED:
+      return t('content.memberJoinedMessage', { sender: actorName });
+
+    default:
+      return '';
+  }
+}

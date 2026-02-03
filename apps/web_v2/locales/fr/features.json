@@ -1,0 +1,76 @@
+{
+  "features": {
+    "chatPage": {
+      "loadingConversation": "Chargement de la conversation...",
+      "verifyingAuth": "Vérification de l'authentification...",
+      "conversationNotFound": "Conversation non trouvée",
+      "accessDenied": "Accès refusé",
+      "errorLoading": "Erreur lors du chargement",
+      "missingLinkId": "Identifiant de lien manquant",
+      "noConversationData": "Aucune donnée de conversation",
+      "sessionExpired": "Session expirée",
+      "sessionExpiredReconnect": "Votre session a expiré. Veuillez vous reconnecter.",
+      "anonymousSessionCleared": "Session anonyme effacée",
+      "incompleteData": "Données incomplètes",
+      "incompleteDataDescription": "Les données de la conversation sont incomplètes. Veuillez réessayer.",
+      "createAccount": "Créer un compte",
+      "createAccountDescription": "Créez un compte pour accéder à toutes les fonctionnalités",
+      "login": "Se connecter",
+      "loginDescription": "Connectez-vous pour continuer",
+      "defaultUser": "Utilisateur",
+      "defaultAnonymous": "Anonyme"
+    },
+    "anonymousChatErrorHandler": {
+      "forbidden": {
+        "title": "Accès Interdit",
+        "description": "Vous n'avez pas la permission d'accéder à cette conversation.",
+        "actions": {
+          "backHome": "Retour à l'accueil"
+        }
+      },
+      "notFound": {
+        "title": "Conversation Non Trouvée",
+        "description": "Cette conversation n'existe pas ou a été supprimée.",
+        "actions": {
+          "backHome": "Retour à l'accueil"
+        }
+      },
+      "unauthorized": {
+        "title": "Non Autorisé",
+        "description": "Vous devez être connecté pour accéder à cette conversation.",
+        "actions": {
+          "login": "Se connecter",
+          "backHome": "Retour à l'accueil",
+          "rejoin": "Rejoindre de nouveau"
+        }
+      },
+      "invalidIdentifier": {
+        "title": "Identifiant Invalide",
+        "description": "Le lien d'invitation est invalide ou a expiré.",
+        "actions": {
+          "backHome": "Retour à l'accueil"
+        }
+      },
+      "generic": {
+        "title": "Une Erreur s'est Produite",
+        "description": "Impossible de charger la conversation. Veuillez réessayer.",
+        "actions": {
+          "retry": "Réessayer",
+          "backHome": "Retour à l'accueil"
+        }
+      },
+      "maxRetriesReached": "Nombre maximum de tentatives atteint",
+      "retryFailed": "La tentative a échoué",
+      "attempts": "tentatives",
+      "createConversationModal": "Créer une nouvelle conversation",
+      "debug": {
+        "title": "Informations de débogage",
+        "type": "Type",
+        "identifier": "Identifiant",
+        "attempts": "Tentatives",
+        "authenticated": "Authentifié",
+        "anonymous": "Anonyme"
+      }
+    }
+  }
+}

@@ -1,0 +1,557 @@
+import { buildApiUrl } from '@/lib/config';
+import { authManager } from './auth-manager.service';
+import { authService } from './auth.service';
+import type { ApiResponse, ApiError } from '@meeshy/shared/types';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMEOUT CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+const TIMEOUT_DEFAULT = 40000;        // 40 seconds - standard requests
+const TIMEOUT_SLOW_CONNECTION = 60000; // 1 minute - slow network detected
+const TIMEOUT_VOICE_PROFILE = 300000;  // 5 minutes - voice profile creation (Whisper + cloning)
+
+interface ApiConfig {
+  timeout: number;
+  headers: Record<string, string>;
+}
+
+// Network Information API types (not in standard TypeScript)
+interface NetworkInformation {
+  effectiveType?: '2g' | '3g' | '4g' | 'slow-2g';
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+}
+
+interface NavigatorWithConnection extends Navigator {
+  connection?: NetworkInformation;
+  mozConnection?: NetworkInformation;
+  webkitConnection?: NetworkInformation;
+}
+
+class ApiServiceError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiServiceError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+class ApiService {
+  private config: ApiConfig;
+  private refreshPromise: Promise<boolean> | null = null;
+  private isRefreshing = false;
+
+  /**
+   * Cache pour la détection de connexion lente (TTL: 30s)
+   */
+  private slowConnectionCache: { value: boolean; timestamp: number } | null = null;
+  private readonly SLOW_CONNECTION_CACHE_TTL = 30000; // 30 secondes
+
+  /**
+   * Cache pour les headers de requête (évite allocations répétées)
+   */
+  private headersCache = new Map<string, Record<string, string>>();
+
+  /**
+   * Méthodes HTTP qui peuvent avoir un body optionnel
+   */
+  private static readonly METHODS_WITH_OPTIONAL_BODY = new Set(['DELETE', 'POST', 'PUT', 'PATCH']);
+
+  constructor(config: Partial<ApiConfig> = {}) {
+    this.config = {
+      timeout: TIMEOUT_DEFAULT,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      ...config,
+    };
+  }
+
+  /**
+   * Détecte si la connexion réseau est lente
+   * Utilise Network Information API si disponible
+   * Cache le résultat pendant 30 secondes pour éviter accès répétés à navigator
+   */
+  private isSlowConnection(): boolean {
+    const now = Date.now();
+
+    // Retourner le cache si valide
+    if (this.slowConnectionCache && (now - this.slowConnectionCache.timestamp) < this.SLOW_CONNECTION_CACHE_TTL) {
+      return this.slowConnectionCache.value;
+    }
+
+    if (typeof navigator === 'undefined') {
+      this.slowConnectionCache = { value: false, timestamp: now };
+      return false;
+    }
+
+    const nav = navigator as NavigatorWithConnection;
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+
+    let isSlow = false;
+    if (connection) {
+      isSlow = connection.effectiveType === '2g'
+        || connection.effectiveType === 'slow-2g'
+        || (connection.rtt && connection.rtt > 500)
+        || (connection.downlink && connection.downlink < 1)
+        || !!connection.saveData;
+    }
+
+    this.slowConnectionCache = { value: isSlow, timestamp: now };
+    return isSlow;
+  }
+
+  /**
+   * Retourne le timeout approprié selon la connexion
+   */
+  private getEffectiveTimeout(customTimeout?: number): number {
+    if (customTimeout !== undefined) {
+      return customTimeout;
+    }
+    return this.isSlowConnection() ? TIMEOUT_SLOW_CONNECTION : this.config.timeout;
+  }
+
+  /**
+   * Construit les headers HTTP avec cache pour éviter allocations répétées
+   * Cache seulement si aucun header custom n'est fourni
+   */
+  private buildHeaders(
+    method: string,
+    hasBody: boolean,
+    token: string | null,
+    customHeaders?: Record<string, string>
+  ): Record<string, string> {
+    // Si headers custom, ne pas utiliser le cache
+    if (customHeaders) {
+      return {
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...customHeaders,
+      };
+    }
+
+    // Clé de cache basée sur méthode, présence de body, et présence de token
+    const cacheKey = `${method}-${hasBody ? '1' : '0'}-${token ? 'y' : 'n'}`;
+
+    if (this.headersCache.has(cacheKey)) {
+      return this.headersCache.get(cacheKey)!;
+    }
+
+    const headers = {
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+
+    this.headersCache.set(cacheKey, headers);
+    return headers;
+  }
+
+  /**
+   * Vérifie si le token est proche de l'expiration
+   * - Si expiré: bloque et rafraîchit
+   * - Si expire bientôt (< 5min): rafraîchit en arrière-plan (non-bloquant)
+   * OPTIMIZED: Évite de bloquer chaque requête pour un refresh préventif
+   */
+  private async ensureTokenFresh(): Promise<void> {
+    const token = authManager.getAuthToken();
+    if (!token) return;
+
+    const payload = authManager.decodeJWT(token);
+    if (!payload || !payload.exp) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiresIn = payload.exp - now;
+
+    // Si le token est déjà expiré, on DOIT attendre le refresh
+    if (expiresIn <= 0) {
+      console.log('[API_SERVICE] Token expired, blocking for refresh...');
+      await this.refreshAuthToken();
+      return;
+    }
+
+    // Si le token expire dans moins de 5 minutes mais est encore valide,
+    // déclencher le refresh en arrière-plan (non-bloquant)
+    if (expiresIn < 300 && !this.isRefreshing) {
+      console.log('[API_SERVICE] Token expires soon, refreshing in background...');
+      // Ne pas await - refresh en arrière-plan
+      this.refreshAuthToken().catch(err => {
+        console.warn('[API_SERVICE] Background token refresh failed:', err);
+      });
+    }
+  }
+
+  /**
+   * Rafraîchit le token d'authentification
+   * Utilise un pattern pour éviter les refreshs multiples simultanés
+   */
+  private async refreshAuthToken(): Promise<boolean> {
+    // Si un refresh est déjà en cours, attendre sa fin
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = (async () => {
+      try {
+        const response = await authService.refreshToken();
+
+        if (response.success) {
+          console.log('[API_SERVICE] Token refreshed successfully');
+          return true;
+        }
+
+        console.warn('[API_SERVICE] Token refresh failed, logging out...');
+        // Si le refresh échoue, déconnecter l'utilisateur
+        authManager.clearAllSessions();
+
+        // Rediriger vers la page de connexion
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login?expired=true';
+        }
+
+        return false;
+      } catch (error) {
+        console.error('[API_SERVICE] Token refresh error:', error);
+        // En cas d'erreur, déconnecter l'utilisateur
+        authManager.clearAllSessions();
+
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login?expired=true';
+        }
+
+        return false;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit & { timeout?: number } = {},
+    isRetry = false
+  ): Promise<ApiResponse<T>> {
+    const requestTimeout = this.getEffectiveTimeout(options.timeout);
+    // Vérifier et rafraîchir le token si nécessaire (sauf pour les endpoints d'auth)
+    if (!endpoint.includes('/auth/') && !endpoint.includes('/anonymous/')) {
+      await this.ensureTokenFresh();
+    }
+
+    const url = buildApiUrl(endpoint);
+
+    // Get token from AuthManager (source unique de vérité)
+    const token = authManager.getAuthToken();
+
+    // Déterminer si la requête a un body pour le Content-Type
+    const shouldExcludeContentType = ApiService.METHODS_WITH_OPTIONAL_BODY.has(options.method || '') && !options.body;
+
+    // Construire les headers avec cache
+    const headers = this.buildHeaders(
+      options.method || 'GET',
+      !shouldExcludeContentType,
+      token,
+      options.headers
+    );
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // Si la réponse n'est pas du JSON valide, utiliser le texte brut
+        const text = await response.text();
+        throw new ApiServiceError(
+          `Erreur serveur (${response.status}): ${text || 'Réponse invalide'}`,
+          response.status,
+          'PARSE_ERROR'
+        );
+      }
+
+      // Intercepter les erreurs 401 (Unauthorized) et tenter un refresh
+      if (response.status === 401 && !isRetry && !endpoint.includes('/auth/')) {
+        console.log('[API_SERVICE] 401 Unauthorized, attempting token refresh...');
+
+        const refreshed = await this.refreshAuthToken();
+
+        if (refreshed) {
+          // Réessayer la requête avec le nouveau token
+          console.log('[API_SERVICE] Token refreshed, retrying request...');
+          return this.request<T>(endpoint, options, true);
+        }
+
+        // Si le refresh échoue, laisser l'erreur se propager
+        throw new ApiServiceError(
+          'Session expirée, veuillez vous reconnecter',
+          401,
+          'TOKEN_EXPIRED'
+        );
+      }
+
+      if (!response.ok) {
+        // Si 403 sur une conversation spécifique, c'est probablement une conversation
+        // qui n'existe plus (après reset DB par exemple) - rediriger vers l'accueil
+        if (response.status === 403 &&
+            endpoint.match(/\/conversations\/[a-f0-9]{24}(?:\/|$)/)) {
+          console.warn(
+            '[API_SERVICE] 403 Forbidden sur conversation - probable reset DB ou accès refusé',
+            { endpoint, conversationId: endpoint.match(/[a-f0-9]{24}/)?.[0] }
+          );
+
+          // Redirection côté client uniquement (pas SSR)
+          if (typeof window !== 'undefined') {
+            console.log('[API_SERVICE] Redirection vers l\'accueil...');
+
+            // Afficher un message informatif à l'utilisateur
+            const errorMessage = data.error || 'Cette conversation n\'est plus accessible';
+            const suggestion = data.suggestion || 'Vous allez être redirigé vers l\'accueil';
+
+            // Utiliser setTimeout pour permettre à l'utilisateur de voir le message
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 100);
+
+            // Lancer l'erreur quand même pour arrêter l'exécution en cours
+          }
+        }
+
+        throw new ApiServiceError(
+          data.message || data.error || `Erreur serveur (${response.status})`,
+          response.status,
+          data.code
+        );
+      }
+
+      // Return shared ApiResponse format
+      return {
+        success: true,
+        data,
+        message: data.message,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof ApiServiceError) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('❌ [API-SERVICE] Timeout de la requête:', { endpoint: url, timeout: requestTimeout });
+        throw new ApiServiceError(`Timeout de la requête (${requestTimeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
+      }
+
+      throw new ApiServiceError(
+        'Erreur de connexion au serveur',
+        0,
+        'NETWORK_ERROR'
+      );
+    }
+  }
+
+  /**
+   * Perform a GET request with optional query parameters
+   *
+   * @param endpoint - API endpoint path (e.g., '/admin/users')
+   * @param params - Query string parameters as a flat key-value object (NOT wrapped in {params: ...})
+   * @param options - Additional options (abort signal, custom headers)
+   *
+   * @example
+   * // Correct usage:
+   * apiService.get('/users', { page: 1, limit: 20, search: 'john' })
+   * // → GET /users?page=1&limit=20&search=john
+   *
+   * @example
+   * // WRONG - Do NOT wrap in {params: ...}:
+   * apiService.get('/users', { params: { page: 1 } }) // ✗ This will NOT work
+   *
+   * @returns Promise resolving to ApiResponse<T>
+   */
+  async get<T>(endpoint: string, params?: Record<string, unknown>, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<ApiResponse<T>> {
+    let url = endpoint;
+    if (params) {
+      // Filtrer d'abord les valeurs valides, puis convertir en une seule passe
+      const validEntries = Object.entries(params)
+        .filter(([_, value]) => value !== undefined && value !== null);
+
+      if (validEntries.length > 0) {
+        const searchParams = new URLSearchParams(
+          validEntries.map(([key, value]) => [key, String(value)])
+        );
+        url += `?${searchParams.toString()}`;
+      }
+    }
+
+    return this.request<T>(url, {
+      method: 'GET',
+      signal: options?.signal,
+      headers: options?.headers
+    });
+  }
+
+  async post<T>(endpoint: string, data?: unknown, options?: { timeout?: number }): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+      timeout: options?.timeout,
+    });
+  }
+
+  async put<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async patch<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  // Méthode pour uploader des fichiers
+  async uploadFile<T>(endpoint: string, file: File, additionalData?: Record<string, unknown>): Promise<ApiResponse<T>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+    }
+
+    const token = authManager.getAuthToken();
+
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        // Ne pas spécifier Content-Type pour FormData
+      },
+    });
+  }
+
+  /**
+   * Fetch binary data (audio, images, etc.) as Blob
+   * Returns blob data that can be used to create object URLs
+   *
+   * @param endpoint - API endpoint path (e.g., '/attachments/file/...')
+   * @param options - Additional options (abort signal, custom headers)
+   * @returns Promise resolving to Blob
+   *
+   * @example
+   * const blob = await apiService.getBlob('/attachments/file/2025/11/audio.m4a')
+   * const objectUrl = URL.createObjectURL(blob)
+   */
+  async getBlob(endpoint: string, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<Blob> {
+    const url = buildApiUrl(endpoint);
+    const token = authManager.getAuthToken();
+
+    const headers = {
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options?.headers,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: options?.signal || controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        // Try to get error message from response
+        let errorMessage = `Erreur serveur (${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // If not JSON, use default message
+        }
+
+        throw new ApiServiceError(
+          errorMessage,
+          response.status,
+          'BLOB_FETCH_ERROR'
+        );
+      }
+
+      const blob = await response.blob();
+      return blob;
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof ApiServiceError) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('❌ [API-SERVICE] Timeout de la requête blob:', { endpoint: url, timeout: this.config.timeout });
+        throw new ApiServiceError(`Timeout de la requête blob (${this.config.timeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
+      }
+
+      throw new ApiServiceError(
+        'Erreur de connexion au serveur',
+        0,
+        'NETWORK_ERROR'
+      );
+    }
+  }
+
+  /**
+   * @deprecated Utiliser authManager.setCredentials() à la place
+   * Conservé pour compatibilité legacy
+   */
+  setAuthToken(token: string | null) {
+    console.warn('[API_SERVICE] setAuthToken is deprecated. Use authManager.setCredentials() instead');
+    // Legacy: Ne rien faire, authManager gère maintenant
+  }
+
+  /**
+   * @deprecated Utiliser authManager.getAuthToken() à la place
+   * Conservé pour compatibilité legacy
+   */
+  getAuthToken(): string | null {
+    return authManager.getAuthToken();
+  }
+}
+
+// Instance singleton
+export const apiService = new ApiService();
+export { ApiService, ApiServiceError };
+export type { ApiResponse, ApiError, ApiConfig };
+
+// Export timeout constants for long operations
+export { TIMEOUT_VOICE_PROFILE };
+
+// Re-export shared types for convenience
+export type { PaginationMeta } from '@meeshy/shared/types';
