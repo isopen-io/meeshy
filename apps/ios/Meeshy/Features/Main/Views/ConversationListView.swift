@@ -296,6 +296,7 @@ struct ThemedConversationRow: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     private var accentColor: String { conversation.accentColor }
+    private let maxVisibleTags = 2
 
     var body: some View {
         HStack(spacing: 14) {
@@ -304,6 +305,11 @@ struct ThemedConversationRow: View {
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
+                // Tags row (if any)
+                if !conversation.tags.isEmpty {
+                    tagsRow
+                }
+
                 HStack {
                     // Name with type indicator
                     HStack(spacing: 6) {
@@ -348,6 +354,30 @@ struct ThemedConversationRow: View {
                 )
                 .shadow(color: Color(hex: accentColor).opacity(theme.mode.isDark ? 0.15 : 0.1), radius: 8, y: 4)
         )
+    }
+
+    // MARK: - Tags Row
+    private var tagsRow: some View {
+        HStack(spacing: 6) {
+            // Show first N tags
+            ForEach(Array(conversation.tags.prefix(maxVisibleTags))) { tag in
+                TagChip(tag: tag)
+            }
+
+            // Show +N if more tags
+            let remainingCount = conversation.tags.count - maxVisibleTags
+            if remainingCount > 0 {
+                Text("+\(remainingCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                    )
+            }
+        }
     }
 
     // MARK: - Avatar
@@ -563,6 +593,28 @@ struct ThemedFilterChip: View {
         }
         .scaleEffect(isSelected ? 1.05 : 1)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+}
+
+// MARK: - Tag Chip Component
+struct TagChip: View {
+    let tag: ConversationTag
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Text(tag.name)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(Color(hex: tag.color))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(Color(hex: tag.color).opacity(theme.mode.isDark ? 0.25 : 0.18))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(hex: tag.color).opacity(0.4), lineWidth: 0.5)
+                    )
+            )
     }
 }
 
