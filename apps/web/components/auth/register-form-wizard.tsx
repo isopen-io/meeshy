@@ -139,7 +139,6 @@ export function RegisterFormWizard({
     emailValidationStatus,
     emailErrorMessage,
     existingAccount,
-    hasExistingAccount,
     checkPhoneAvailability,
     setUsernameSuggestions,
   } = validation;
@@ -167,6 +166,9 @@ export function RegisterFormWizard({
     formatAsYouType,
     validate: validatePhone,
   } = phoneValidation;
+
+  // Compute hasExistingAccount using the correct phoneValidationStatus (from usePhoneValidation)
+  const hasExistingAccount = emailValidationStatus === 'exists' || phoneValidationStatus === 'exists';
 
   const submission = useRegistrationSubmit({
     onSuccess,
@@ -207,6 +209,21 @@ export function RegisterFormWizard({
     }, 350); // Slightly longer to ensure animation is complete
     return () => clearTimeout(timer);
   }, [currentStep]);
+
+  // Auto-validate phone number with debounce (like email validation)
+  useEffect(() => {
+    // Only validate on contact step and when phone has content
+    if (currentStepData?.id !== 'contact' || !formData.phoneNumber.trim()) {
+      return;
+    }
+
+    // Debounce validation to avoid excessive API calls
+    const timer = setTimeout(() => {
+      validatePhone();
+    }, 600); // 600ms debounce
+
+    return () => clearTimeout(timer);
+  }, [formData.phoneNumber, currentStepData?.id, validatePhone]);
 
   // Phone formatting with as-you-type using libphonenumber-js
   const handlePhoneChange = useCallback((value: string) => {
