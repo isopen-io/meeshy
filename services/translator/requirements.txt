@@ -8,7 +8,7 @@ pydantic-settings==2.7.1
 pydantic==2.10.5
 
 # Communication gRPC et ZeroMQ
-grpcio==1.69.0
+grpcio==1.76.0
 grpcio-tools==1.69.0
 grpcio-reflection==1.69.0
 protobuf==5.29.3
