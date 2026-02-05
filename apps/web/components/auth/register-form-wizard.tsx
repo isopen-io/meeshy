@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ArrowRight, ArrowLeft, Sparkles, Mail, User as UserIcon, Lock, Globe } from 'lucide-react';
@@ -308,110 +308,76 @@ export function RegisterFormWizard({
     clearFormStorage();
   };
 
-  const currentTip = STEP_TIPS[currentStepData?.id || 'contact'];
-
-  // Slide animation variants with direction
-  const slideVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: number) => ({
-      x: direction < 0 ? 300 : -300,
-      opacity: 0,
-    }),
-  };
-
-  // Render step content
-  const renderStepContent = () => {
-    const step = activeSteps[currentStep];
-    if (!step) return null;
-
-    switch (step.id) {
-      case 'contact':
-        return (
-          <>
-            <ContactStep
-              ref={inputRef}
-              formData={formData}
-              emailValidationStatus={emailValidationStatus}
-              emailErrorMessage={emailErrorMessage}
-              phoneValidationStatus={phoneValidationStatus}
-              phoneErrorMessage={phoneErrorMessage}
-              selectedCountry={selectedCountry}
-              disabled={isLoading || disabled}
-              onEmailChange={handleEmailChange}
-              onPhoneChange={handlePhoneChange}
-              onPhoneBlur={validatePhone}
-              onCountryChange={setSelectedCountry}
-            />
-            <ExistingAccountAlert
-              hasExistingAccount={hasExistingAccount}
-              emailValidationStatus={emailValidationStatus}
-              phoneValidationStatus={phoneValidationStatus}
-              existingAccount={existingAccount}
-              onRecoveryClick={() => setShowRecoveryModal(true)}
-            />
-          </>
-        );
-
-      case 'identity':
-        return (
-          <IdentityStep
-            ref={inputRef}
-            formData={formData}
-            disabled={isLoading || disabled}
-            onFirstNameChange={(value) => updateFormData({ firstName: value })}
-            onLastNameChange={(value) => updateFormData({ lastName: value })}
-          />
-        );
-
-      case 'username':
-        return (
-          <UsernameStep
-            ref={inputRef}
-            formData={formData}
-            usernameCheckStatus={usernameCheckStatus}
-            usernameSuggestions={usernameSuggestions}
-            disabled={isLoading || disabled}
-            onUsernameChange={(value) => updateFormData({ username: value })}
-            onSuggestionClick={(suggestion) => updateFormData({ username: suggestion })}
-          />
-        );
-
-      case 'security':
-        return (
-          <SecurityStep
-            ref={inputRef}
-            formData={formData}
-            confirmPassword={confirmPassword}
-            showPassword={showPassword}
-            disabled={isLoading || disabled}
-            onPasswordChange={(value) => updateFormData({ password: value })}
-            onConfirmPasswordChange={setConfirmPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
-          />
-        );
-
-      case 'preferences':
-        return (
-          <PreferencesStep
-            formData={formData}
-            acceptTerms={acceptTerms}
-            disabled={isLoading || disabled}
-            onSystemLanguageChange={(value) => updateFormData({ systemLanguage: value })}
-            onRegionalLanguageChange={(value) => updateFormData({ regionalLanguage: value })}
-            onAcceptTermsChange={setAcceptTerms}
-          />
-        );
-
-      default:
-        return null;
-    }
+  // Pre-mounted step content - all steps are rendered but only active one is visible
+  // This eliminates mounting delay during transitions
+  const stepComponents = {
+    contact: (
+      <>
+        <ContactStep
+          ref={currentStepData?.id === 'contact' ? inputRef : undefined}
+          formData={formData}
+          emailValidationStatus={emailValidationStatus}
+          emailErrorMessage={emailErrorMessage}
+          phoneValidationStatus={phoneValidationStatus}
+          phoneErrorMessage={phoneErrorMessage}
+          selectedCountry={selectedCountry}
+          disabled={isLoading || disabled}
+          onEmailChange={handleEmailChange}
+          onPhoneChange={handlePhoneChange}
+          onPhoneBlur={validatePhone}
+          onCountryChange={setSelectedCountry}
+        />
+        <ExistingAccountAlert
+          hasExistingAccount={hasExistingAccount}
+          emailValidationStatus={emailValidationStatus}
+          phoneValidationStatus={phoneValidationStatus}
+          existingAccount={existingAccount}
+          onRecoveryClick={() => setShowRecoveryModal(true)}
+        />
+      </>
+    ),
+    identity: (
+      <IdentityStep
+        ref={currentStepData?.id === 'identity' ? inputRef : undefined}
+        formData={formData}
+        disabled={isLoading || disabled}
+        onFirstNameChange={(value) => updateFormData({ firstName: value })}
+        onLastNameChange={(value) => updateFormData({ lastName: value })}
+      />
+    ),
+    username: (
+      <UsernameStep
+        ref={currentStepData?.id === 'username' ? inputRef : undefined}
+        formData={formData}
+        usernameCheckStatus={usernameCheckStatus}
+        usernameSuggestions={usernameSuggestions}
+        disabled={isLoading || disabled}
+        onUsernameChange={(value) => updateFormData({ username: value })}
+        onSuggestionClick={(suggestion) => updateFormData({ username: suggestion })}
+      />
+    ),
+    security: (
+      <SecurityStep
+        ref={currentStepData?.id === 'security' ? inputRef : undefined}
+        formData={formData}
+        confirmPassword={confirmPassword}
+        showPassword={showPassword}
+        disabled={isLoading || disabled}
+        onPasswordChange={(value) => updateFormData({ password: value })}
+        onConfirmPasswordChange={setConfirmPassword}
+        onTogglePassword={() => setShowPassword(!showPassword)}
+      />
+    ),
+    preferences: (
+      <PreferencesStep
+        formData={formData}
+        acceptTerms={acceptTerms}
+        disabled={isLoading || disabled}
+        onSystemLanguageChange={(value) => updateFormData({ systemLanguage: value })}
+        onRegionalLanguageChange={(value) => updateFormData({ regionalLanguage: value })}
+        onAcceptTermsChange={setAcceptTerms}
+      />
+    ),
   };
 
   // Loading state
@@ -443,32 +409,47 @@ export function RegisterFormWizard({
           />
         </div>
 
-        {/* Step content - slide animation with direction */}
+        {/* Step content - all steps pre-mounted, only active one visible with slide animation */}
         <div className="relative min-h-[320px] overflow-hidden isolate">
-          <AnimatePresence initial={false} custom={direction} mode="popLayout">
-            <motion.div
-              key={currentStepData?.id}
-              custom={direction}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{
-                x: { type: 'spring', stiffness: 300, damping: 30 },
-                opacity: { duration: 0.2 },
-              }}
-              className="px-2 py-2 will-change-transform"
-            >
-              {/* Fun tip inside the animated container */}
-              <div className="text-center mb-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-lg">
-                <p className="text-xs text-muted-foreground">
-                  <span className="mr-1">{currentTip?.emoji}</span>
-                  {locale === 'fr' ? currentTip?.tipFr : currentTip?.tip}
-                </p>
-              </div>
-              {renderStepContent()}
-            </motion.div>
-          </AnimatePresence>
+          {activeSteps.map((step, index) => {
+            const isActive = index === currentStep;
+            const stepTip = STEP_TIPS[step.id];
+
+            // Calculate position relative to current step
+            const relativePosition = index - currentStep;
+
+            return (
+              <motion.div
+                key={step.id}
+                initial={false}
+                animate={{
+                  x: relativePosition * 100 + '%',
+                  opacity: isActive ? 1 : 0,
+                  scale: isActive ? 1 : 0.95,
+                }}
+                transition={{
+                  x: { type: 'spring', stiffness: 300, damping: 30 },
+                  opacity: { duration: 0.2 },
+                  scale: { duration: 0.2 },
+                }}
+                className="absolute inset-0 px-2 py-2 will-change-transform"
+                style={{
+                  pointerEvents: isActive ? 'auto' : 'none',
+                  visibility: Math.abs(relativePosition) <= 1 ? 'visible' : 'hidden',
+                }}
+                aria-hidden={!isActive}
+              >
+                {/* Fun tip inside each step */}
+                <div className="text-center mb-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-lg">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="mr-1">{stepTip?.emoji}</span>
+                    {locale === 'fr' ? stepTip?.tipFr : stepTip?.tip}
+                  </p>
+                </div>
+                {stepComponents[step.id as keyof typeof stepComponents]}
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* Navigation buttons */}
