@@ -293,6 +293,22 @@ export function RegisterFormWizard({
 
   const currentTip = STEP_TIPS[currentStepData?.id || 'contact'];
 
+  // Slide animation variants with direction
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 300 : -300,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: number) => ({
+      x: direction < 0 ? 300 : -300,
+      opacity: 0,
+    }),
+  };
+
   // Render step content
   const renderStepContent = () => {
     const step = activeSteps[currentStep];
@@ -410,17 +426,21 @@ export function RegisterFormWizard({
           />
         </div>
 
-        {/* Step content - isolated layer to prevent backdrop-blur repaint */}
-        <div className="relative min-h-[320px] isolate">
-          <AnimatePresence initial={false}>
+        {/* Step content - slide animation with direction */}
+        <div className="relative min-h-[320px] overflow-hidden isolate">
+          <AnimatePresence initial={false} custom={direction} mode="popLayout">
             <motion.div
               key={currentStepData?.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, position: 'absolute', top: 0, left: 0, right: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="px-2 py-2 will-change-[opacity]"
-              style={{ transform: 'translateZ(0)' }}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                x: { type: 'spring', stiffness: 300, damping: 30 },
+                opacity: { duration: 0.2 },
+              }}
+              className="px-2 py-2 will-change-transform"
             >
               {/* Fun tip inside the animated container */}
               <div className="text-center mb-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-lg">
