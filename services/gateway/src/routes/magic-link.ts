@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { MagicLinkService } from '../services/MagicLinkService';
-import { RedisWrapper } from '../services/RedisWrapper';
+import { getRedisWrapper } from '../services/RedisWrapper';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
@@ -18,8 +18,8 @@ const validateMagicLinkSchema = z.object({
 });
 
 export async function magicLinkRoutes(fastify: FastifyInstance) {
-  // Initialize services
-  const redisWrapper = new RedisWrapper();
+  // Use shared singleton instance to avoid multiple Redis connections
+  const redisWrapper = getRedisWrapper();
   const emailService = new EmailService();
   const geoIPService = new GeoIPService();
 

@@ -1,4 +1,4 @@
-import { RedisWrapper } from './RedisWrapper';
+import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
 import crypto from 'crypto';
 
 export interface TranslationCacheEntry {
@@ -15,9 +15,9 @@ export class TranslationCache {
   private readonly TTL = 3600; // 1 heure par défaut
 
   constructor(redisUrl?: string) {
-    // Utiliser REDIS_URL de l'environnement ou la valeur par défaut
+    // Use shared singleton instance to avoid multiple Redis connections
     const url = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
-    this.redis = new RedisWrapper(url);
+    this.redis = getRedisWrapper(url);
 
     const stats = this.redis.getCacheStats();
     console.log(`[TranslationCache] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);
