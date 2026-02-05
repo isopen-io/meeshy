@@ -322,19 +322,22 @@ export function RegisterFormWizard({
     clearFormStorage();
   };
 
-  // Animation variants
+  // Animation variants - smooth horizontal slide
   const slideVariants = {
     enter: (direction: number) => ({
-      x: direction > 0 ? 100 : -100,
+      x: direction > 0 ? 300 : -300,
       opacity: 0,
+      scale: 0.95,
     }),
     center: {
       x: 0,
       opacity: 1,
+      scale: 1,
     },
     exit: (direction: number) => ({
-      x: direction < 0 ? 100 : -100,
+      x: direction < 0 ? 300 : -300,
       opacity: 0,
+      scale: 0.95,
     }),
   };
 
@@ -470,9 +473,9 @@ export function RegisterFormWizard({
           </p>
         </motion.div>
 
-        {/* Step content with animation */}
+        {/* Step content with smooth horizontal slide animation */}
         <div className="relative min-h-[220px] overflow-hidden px-1">
-          <AnimatePresence mode="popLayout" custom={direction}>
+          <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={currentStep}
               custom={direction}
@@ -481,9 +484,10 @@ export function RegisterFormWizard({
               animate="center"
               exit="exit"
               transition={{
-                type: "tween",
-                duration: 0.2,
-                ease: "easeOut",
+                type: "spring",
+                stiffness: 300,
+                damping: 30,
+                mass: 0.8,
               }}
               className="w-full px-1 py-1"
             >
