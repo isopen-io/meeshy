@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { RegisterFormWizard } from '@/components/auth/register-form-wizard';
 import { LargeLogo } from '@/components/branding';
@@ -8,6 +8,12 @@ import { useI18n } from '@/hooks/useI18n';
 
 function SignupPageContent() {
   const { t } = useI18n('auth');
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure animations only run after hydration
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -40,7 +46,7 @@ function SignupPageContent() {
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
         {/* Logo */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={isMounted ? { opacity: 0, y: -20 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
           className="mb-6"
@@ -50,9 +56,9 @@ function SignupPageContent() {
 
         {/* Form card with glass effect - reduced blur on mobile */}
         <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          initial={isMounted ? { opacity: 0, y: 20, scale: 0.95 } : false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: 0.5, delay: isMounted ? 0.2 : 0 }}
           className="w-full max-w-md"
         >
           <div className="backdrop-blur-md sm:backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 sm:bg-white/60 sm:dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-4 sm:p-6">
@@ -62,9 +68,9 @@ function SignupPageContent() {
 
         {/* Footer links */}
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={isMounted ? { opacity: 0 } : false}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: isMounted ? 0.4 : 0 }}
           className="mt-8 text-center text-sm text-muted-foreground"
         >
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">

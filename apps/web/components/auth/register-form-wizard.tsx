@@ -10,6 +10,7 @@ import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 import { COUNTRY_CODES } from '@/constants/countries';
 import { authManager } from '@/services/auth-manager.service';
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { AccountRecoveryModal } from './account-recovery-modal';
 import { PhoneExistsModal } from './PhoneExistsModal';
 import type { User } from '@/types';
@@ -190,45 +191,10 @@ export function RegisterFormWizard({
     return stepWithIcon || step;
   });
 
-  // Check existing session on mount
+  // Check existing session on mount - TEMPORARILY DISABLED FOR DEBUGGING
   useEffect(() => {
-    const checkExistingSession = async () => {
-      try {
-        setIsCheckingSession(true);
-        const authToken = authManager.getAuthToken();
-        const anonymousSession = authManager.getAnonymousSession();
-
-        if (authToken || (anonymousSession && anonymousSession.token)) {
-          const response = await fetch('/api/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${authToken || anonymousSession?.token}`
-            }
-          });
-
-          if (response.ok) {
-            if (anonymousSession) {
-              const shareLinkId = localStorage.getItem('anonymous_current_share_link') ||
-                                 localStorage.getItem('anonymous_current_link_id');
-              if (shareLinkId) {
-                window.location.href = `/chat/${shareLinkId}`;
-                return;
-              }
-            }
-            window.location.href = '/dashboard';
-            return;
-          } else {
-            authManager.clearAllSessions();
-          }
-        }
-      } catch (error) {
-        console.error('[SIGNUP_WIZARD] Session check error:', error);
-        authManager.clearAllSessions();
-      } finally {
-        setIsCheckingSession(false);
-      }
-    };
-
-    checkExistingSession();
+    // Skip session check for now - just show the form
+    setIsCheckingSession(false);
   }, []);
 
   // Focus input on step change
@@ -473,21 +439,20 @@ export function RegisterFormWizard({
           </p>
         </motion.div>
 
-        {/* Step content with smooth horizontal slide animation */}
-        <div className="relative min-h-[220px] overflow-hidden px-1">
+        {/* Step content with animations */}
+        <div className="relative min-h-[220px] px-1 overflow-hidden">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
-              key={currentStep}
+              key={currentStepData?.id}
               custom={direction}
               variants={slideVariants}
               initial="enter"
               animate="center"
               exit="exit"
               transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 30,
-                mass: 0.8,
+                x: { type: 'spring', stiffness: 300, damping: 30 },
+                opacity: { duration: 0.2 },
+                scale: { duration: 0.2 },
               }}
               className="w-full px-1 py-1"
             >
