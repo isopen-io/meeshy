@@ -38,7 +38,7 @@
     "@grpc/proto-loader": "^0.7.15",
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^7.0.1",
-    "@prisma/client": "^6.19.2",
+    "@prisma/client": "^7.3.0",
     "@signalapp/libsignal-client": "^0.86.14",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
