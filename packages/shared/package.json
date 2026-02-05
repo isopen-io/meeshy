@@ -104,7 +104,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@prisma/client": "^6.15.0",
-    "zod": "^3.25.76"
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
     "@signalapp/libsignal-client": "^0.58.3"
