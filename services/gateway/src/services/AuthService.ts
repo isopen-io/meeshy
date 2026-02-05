@@ -441,11 +441,15 @@ export class AuthService {
    */
   async register(data: RegisterData, requestContext?: RequestContext): Promise<RegisterResult | null> {
     try {
+      // Log l'email reçu pour debug (sera retiré après)
+      logger.info(`[AUTH_SERVICE] 📧 Email reçu pour inscription: "${data.email}" (length: ${data.email?.length || 0})`);
+
       // Valider l'email avec Zod AVANT toute opération
       try {
         emailSchema.parse(data.email);
       } catch (zodError: any) {
         const errorMessage = zodError.issues?.[0]?.message || 'Format d\'email invalide';
+        logger.error(`[AUTH_SERVICE] ❌ Validation email échouée: "${data.email}" - ${errorMessage}`);
         throw new Error(`Email invalide: ${errorMessage}`);
       }
 

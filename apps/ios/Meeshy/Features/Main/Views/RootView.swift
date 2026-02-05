@@ -42,6 +42,7 @@ struct RootView: View {
             } else {
                 ConversationListView(
                     isScrollingDown: $isScrollingDown,
+                    feedIsVisible: $showFeed,
                     onSelect: { conversation in
                         selectedConversation = conversation
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -436,18 +437,17 @@ struct ThemedFeedOverlay: View {
             .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     Spacer().frame(height: 70)
 
-                    // Composer
+                    // Composer (padding is included in the component)
                     ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
 
-                    // Feed items
-                    ForEach(SampleData.feedItems) { item in
-                        ThemedFeedCard(item: item)
+                    // Feed posts with media support
+                    ForEach(FeedSampleData.posts) { post in
+                        FeedPostCard(post: post)
                     }
                 }
-                .padding(.horizontal, 16)
                 .padding(.bottom, 100)
             }
         }
@@ -459,11 +459,25 @@ struct ThemedFeedComposer: View {
     @Binding var text: String
     @FocusState var isFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var showAttachmentMenu = false
+
+    // Attachment options (without mic - mic is the toggle button when expanded)
+    private let attachmentOptions: [(icon: String, color: String)] = [
+        ("photo.on.rectangle.angled", "9B59B6"),
+        ("camera.fill", "FF6B6B"),
+        ("doc.fill", "3498DB"),
+        ("location.fill", "2ECC71")
+    ]
+
+    private var hasTextToPublish: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                // Avatar with animated logo
+        ZStack(alignment: .topTrailing) {
+            // Main composer card
+            HStack(alignment: .top, spacing: 12) {
+                // Avatar
                 Circle()
                     .fill(
                         LinearGradient(
@@ -472,84 +486,167 @@ struct ThemedFeedComposer: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
                     .overlay(
-                        AnimatedLogoView(color: .white, lineWidth: 2)
-                            .frame(width: 22, height: 22)
+                        Text("M")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
                     )
-                    .shadow(color: Color(hex: "FF6B6B").opacity(0.3), radius: 6, y: 3)
 
-                TextField("Quoi de neuf ?", text: $text)
-                    .focused($isFocused)
-                    .foregroundColor(theme.textPrimary)
-                    .font(.system(size: 15))
+                // Multi-line text input
+                ZStack(alignment: .topLeading) {
+                    // Placeholder
+                    if text.isEmpty {
+                        Text("Partager quelque chose avec le monde...")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textMuted)
+                            .padding(.horizontal, 4)
+                            .padding(.top, 8)
+                    }
 
-                Spacer()
-
-                // Media button
-                Button {} label: {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 18))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "9B59B6"), Color(hex: "4ECDC4")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                    // TextEditor for multi-line support
+                    TextEditor(text: $text)
+                        .focused($isFocused)
+                        .foregroundColor(theme.textPrimary)
+                        .font(.system(size: 14))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 36, maxHeight: 100)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.inputBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(
+                                    isFocused ?
+                                    Color(hex: "4ECDC4").opacity(0.5) :
+                                    theme.inputBorder,
+                                    lineWidth: 1
+                                )
+                        )
+                )
 
-            if isFocused || !text.isEmpty {
-                HStack(spacing: 16) {
-                    ForEach([("camera.fill", "FF6B6B"), ("face.smiling", "F8B500"), ("location.fill", "4ECDC4")], id: \.0) { icon, color in
-                        Button {} label: {
-                            Image(systemName: icon)
-                                .foregroundColor(Color(hex: color))
+                // Right column: (+)/mic button and Publish button
+                VStack(spacing: 8) {
+                    // Toggle button: (+) when closed, mic when open
+                    Button {
+                        HapticFeedback.light()
+                        if showAttachmentMenu {
+                            // Mic action when menu is open
+                            // TODO: Start voice recording
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showAttachmentMenu = true
+                            }
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: showAttachmentMenu ?
+                                            [Color(hex: "F8B500"), Color(hex: "FF9500")] :
+                                            [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 32, height: 32)
+                                .shadow(color: (showAttachmentMenu ? Color(hex: "F8B500") : Color(hex: "4ECDC4")).opacity(0.4), radius: 6, y: 3)
+
+                            Image(systemName: showAttachmentMenu ? "mic.fill" : "plus")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
                         }
                     }
 
-                    Spacer()
-
-                    Button {
-                        text = ""
-                        isFocused = false
-                    } label: {
-                        Text("Publier")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
+                    // Publish button (below + button)
+                    if hasTextToPublish {
+                        Button {
+                            text = ""
+                            isFocused = false
+                            showAttachmentMenu = false
+                            HapticFeedback.success()
+                        } label: {
+                            ZStack {
+                                Circle()
                                     .fill(
-                                        text.isEmpty ?
-                                        LinearGradient(colors: [theme.inputBorder, theme.inputBorder], startPoint: .leading, endPoint: .trailing) :
-                                        LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")], startPoint: .leading, endPoint: .trailing)
+                                        LinearGradient(
+                                            colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                    .shadow(color: text.isEmpty ? .clear : Color(hex: "FF6B6B").opacity(0.4), radius: 6, y: 3)
-                            )
+                                    .frame(width: 32, height: 32)
+                                    .shadow(color: Color(hex: "FF6B6B").opacity(0.5), radius: 6, y: 3)
+
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .rotationEffect(.degrees(45))
+                                    .offset(x: -1, y: 1)
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
-                    .disabled(text.isEmpty)
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(theme.border(tint: "4ECDC4", intensity: 0.25), lineWidth: 1)
+                    )
+            )
+
+            // Attachment menu overlay - floating icons without background
+            if showAttachmentMenu {
+                HStack(spacing: 12) {
+                    ForEach(attachmentOptions, id: \.icon) { option in
+                        Button {
+                            HapticFeedback.light()
+                            // TODO: Handle attachment selection
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showAttachmentMenu = false
+                            }
+                        } label: {
+                            Image(systemName: option.icon)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(Color(hex: option.color))
+                                .shadow(color: Color(hex: option.color).opacity(0.5), radius: 4, y: 2)
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(theme.mode.isDark ? Color(hex: "1E1E2E").opacity(0.92) : Color.white.opacity(0.92))
+                        .shadow(color: Color.black.opacity(0.2), radius: 12, y: 6)
+                )
+                .offset(x: -8, y: -50)
+                .transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                .zIndex(100)
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(theme.surfaceGradient(tint: "4ECDC4"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(
-                            isFocused ?
-                            LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing) :
-                            theme.border(tint: "4ECDC4", intensity: 0.3),
-                            lineWidth: isFocused ? 2 : 1
-                        )
-                )
-        )
+        .padding(.horizontal, 16)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: text.isEmpty)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
+        .onChange(of: isFocused) { focused in
+            // Hide attachment menu when focusing on text
+            if focused && showAttachmentMenu {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachmentMenu = false
+                }
+            }
+        }
     }
 }
 

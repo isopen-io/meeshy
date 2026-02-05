@@ -51,6 +51,7 @@ struct SectionDropDelegate: DropDelegate {
 // MARK: - Conversation List View
 struct ConversationListView: View {
     @Binding var isScrollingDown: Bool
+    @Binding var feedIsVisible: Bool  // Track Feed visibility to show search bar when Feed closes
     let onSelect: (Conversation) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -62,7 +63,9 @@ struct ConversationListView: View {
     // Scroll tracking
     @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
+    @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     private let scrollThreshold: CGFloat = 15
+    private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
     // Section expansion state
     @State private var expandedSections: Set<String> = Set(ConversationSection.allSections.map { $0.id })
@@ -75,8 +78,9 @@ struct ConversationListView: View {
     @State private var dropTargetSection: String? = nil
 
     // Alternative init without binding for backward compatibility
-    init(isScrollingDown: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void) {
+    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
+        self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
     }
 
@@ -243,7 +247,7 @@ struct ConversationListView: View {
             .coordinateSpace(name: "scroll")
             // Gesture for scroll detection with velocity
             .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
+                DragGesture(minimumDistance: 8)
                     .onChanged { value in
                         let verticalMovement = value.translation.height
                         // Scrolling down (finger moving up) = hide immediately
@@ -253,15 +257,24 @@ struct ConversationListView: View {
                                 isScrollingDown = true
                             }
                         }
+                        // Scrolling up (finger moving down) = show if moved enough
+                        // This makes the search bar appear with any noticeable upward scroll
+                        if verticalMovement > 40 && hideSearchBar {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                hideSearchBar = false
+                                isScrollingDown = false
+                            }
+                            HapticFeedback.light()
+                        }
                     }
                     .onEnded { value in
                         // Calculate velocity (points per second)
                         let velocity = value.predictedEndLocation.y - value.location.y
                         let isScrollingUp = velocity > 0
-                        let isHighVelocity = abs(velocity) > 100 // Threshold for "fast" scroll
+                        let hasMinimalVelocity = abs(velocity) > 30 // Much lower threshold for sensitivity
 
-                        // Only show on fast scroll UP
-                        if isScrollingUp && isHighVelocity && hideSearchBar {
+                        // Show on any scroll UP with minimal velocity
+                        if isScrollingUp && hasMinimalVelocity && hideSearchBar {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 hideSearchBar = false
                                 isScrollingDown = false
@@ -305,6 +318,39 @@ struct ConversationListView: View {
             // Dismiss keyboard when hiding search bar
             if newValue {
                 isSearching = false
+            }
+        }
+        // Show search bar when returning to this view
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                hideSearchBar = false
+                isScrollingDown = false
+            }
+        }
+        // Show search bar when filtered list is empty
+        .onChange(of: filtered.isEmpty) { isEmpty in
+            if isEmpty && hideSearchBar {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    hideSearchBar = false
+                    isScrollingDown = false
+                }
+            }
+        }
+        // Show search bar when category changes
+        .onChange(of: selectedCategory) { _ in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                hideSearchBar = false
+                isScrollingDown = false
+            }
+        }
+        // Show search bar when Feed is closed (user comes back from Feed)
+        .onChange(of: feedIsVisible) { isVisible in
+            if !isVisible {
+                // Feed just closed, show search bar
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    hideSearchBar = false
+                    isScrollingDown = false
+                }
             }
         }
     }
@@ -422,9 +468,20 @@ struct ConversationListView: View {
 
         let delta = offset - last
 
+        // Pull-to-refresh detection: offset > threshold means user pulled past the top
+        // This happens when the content is at the top and user pulls down
+        if offset > pullToShowThreshold && hideSearchBar {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                hideSearchBar = false
+                isScrollingDown = false
+            }
+            HapticFeedback.light()
+        }
+
         // Scrolling down (negative delta) = hide
         // No velocity check needed for hiding - hide immediately
-        if delta < -scrollThreshold && !hideSearchBar {
+        // But only hide if we're not in pull-to-refresh zone
+        if delta < -scrollThreshold && !hideSearchBar && offset < 0 {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 hideSearchBar = true
                 isScrollingDown = true

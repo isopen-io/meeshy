@@ -197,11 +197,14 @@ export function RegisterFormWizard({
     setIsCheckingSession(false);
   }, []);
 
-  // Focus input on step change
+  // Focus input on step change - use requestAnimationFrame for smoother transition
   useEffect(() => {
+    // Wait for animation to complete before focusing
     const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 300);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }, 350); // Slightly longer to ensure animation is complete
     return () => clearTimeout(timer);
   }, [currentStep]);
 
@@ -288,22 +291,19 @@ export function RegisterFormWizard({
     clearFormStorage();
   };
 
-  // Animation variants - smooth horizontal slide
+  // Animation variants - smooth horizontal slide without scale to prevent flicker
   const slideVariants = {
     enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
+      x: direction > 0 ? 200 : -200,
       opacity: 0,
-      scale: 0.95,
     }),
     center: {
       x: 0,
       opacity: 1,
-      scale: 1,
     },
     exit: (direction: number) => ({
-      x: direction < 0 ? 300 : -300,
+      x: direction < 0 ? 200 : -200,
       opacity: 0,
-      scale: 0.95,
     }),
   };
 
@@ -426,22 +426,9 @@ export function RegisterFormWizard({
           />
         </div>
 
-        {/* Fun tip */}
-        <motion.div
-          key={currentStepData?.id}
-          initial={{ opacity: 0, y: -5 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-lg"
-        >
-          <p className="text-xs text-muted-foreground">
-            <span className="mr-1">{currentTip?.emoji}</span>
-            {locale === 'fr' ? currentTip?.tipFr : currentTip?.tip}
-          </p>
-        </motion.div>
-
-        {/* Step content with animations */}
-        <div className="relative min-h-[220px] px-1 overflow-hidden">
-          <AnimatePresence mode="wait" custom={direction}>
+        {/* Step content with animations - absolute positioning prevents layout shift */}
+        <div className="relative min-h-[320px] overflow-hidden">
+          <AnimatePresence initial={false} custom={direction}>
             <motion.div
               key={currentStepData?.id}
               custom={direction}
@@ -452,10 +439,16 @@ export function RegisterFormWizard({
               transition={{
                 x: { type: 'spring', stiffness: 300, damping: 30 },
                 opacity: { duration: 0.2 },
-                scale: { duration: 0.2 },
               }}
-              className="w-full px-1 py-1"
+              className="absolute inset-0 px-2 py-2"
             >
+              {/* Fun tip inside the animated container */}
+              <div className="text-center mb-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-lg">
+                <p className="text-xs text-muted-foreground">
+                  <span className="mr-1">{currentTip?.emoji}</span>
+                  {locale === 'fr' ? currentTip?.tipFr : currentTip?.tip}
+                </p>
+              </div>
               {renderStepContent()}
             </motion.div>
           </AnimatePresence>
