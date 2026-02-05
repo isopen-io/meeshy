@@ -411,8 +411,6 @@ export class EmailService {
 
   private async sendEmail(data: EmailData): Promise<EmailResult> {
     const { to, subject, html, text } = data;
-    logger.info(`[EmailService] 📧 Preparing to send email to: ${to}`);
-    logger.info(`[EmailService] 📧 Subject: ${subject}`);
 
     if (this.providers.length === 0) {
       logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);

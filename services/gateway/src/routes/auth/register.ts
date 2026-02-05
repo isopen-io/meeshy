@@ -61,19 +61,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     preHandler: [registerRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // DEBUG: Log email characters to diagnose validation issues
-      const rawEmail = (request.body as any)?.email;
-      if (rawEmail) {
-        console.log('[AUTH] 📧 Email debug:', JSON.stringify(rawEmail),
-          'chars:', [...rawEmail].map((c: string) => `${c}(${c.charCodeAt(0)})`).join(' '));
-      }
-
       const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         phoneTransferToken?: string;
       };
 
       const requestContext = await getRequestContext(request);
-      console.log('[AUTH] Inscription depuis:', requestContext.ip, requestContext.geoData?.location || 'Local');
 
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;

@@ -378,7 +378,6 @@ export function createRegisterRateLimiter(redis?: Redis): RateLimiter {
       message: 'Trop de tentatives d\'inscription (limite: 10/5min). Veuillez réessayer dans 5 minutes.',
       keyGenerator: (request) => {
         const ip = request.ip || 'unknown';
-        console.log(`[RATE_LIMIT] Register attempt from IP: ${ip}`);
         return `ip:${ip}`;
       }
     },

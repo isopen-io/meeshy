@@ -248,10 +248,6 @@ export class ZmqTranslationClient extends EventEmitter {
       }
 
       try {
-        // Log périodique pour vérifier que la boucle fonctionne
-        if (heartbeatCount % 1000 === 0) { // Toutes les 100 secondes (~1.5 minutes)
-          logger.info(`💓 Boucle d'écoute active (heartbeat ${heartbeatCount})`);
-        }
         heartbeatCount++;
 
         // Essayer de recevoir un message de manière non-bloquante
@@ -259,16 +255,6 @@ export class ZmqTranslationClient extends EventEmitter {
           const message = await this.connectionManager.receive();
 
           if (message) {
-            // LOG APRÈS RÉCEPTION
-            if (Array.isArray(message)) {
-              const totalSize = message.reduce((sum, f) => sum + f.length, 0);
-              logger.info(`🔍 APRÈS RÉCEPTION SUB:`);
-              logger.info(`   📋 Message multipart: ${message.length} frames, ${totalSize} bytes total`);
-            } else {
-              logger.info(`🔍 APRÈS RÉCEPTION SUB:`);
-              logger.info(`   📋 Message simple (taille): ${message.length} bytes`);
-            }
-
             // Passer au message handler
             await this.messageHandler.handleMessage(message);
           }

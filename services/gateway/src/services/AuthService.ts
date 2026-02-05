@@ -582,13 +582,6 @@ export class AuthService {
       // Send email verification email (in user's preferred language)
       try {
         const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
-        logger.info('[AUTH_SERVICE] 📧 ======== EMAIL VERIFICATION FLOW ========');
-        logger.info(`[AUTH_SERVICE] 📧 User created user.id=${user.id}`);
-        logger.info(`[AUTH_SERVICE] 📧 Email normalizedEmail=${normalizedEmail}`);
-        logger.info(`[AUTH_SERVICE] 📧 Verification Link verificationLink=${verificationLink}`);
-        logger.info(`[AUTH_SERVICE] 📧 Token (raw, for testing) verificationToken=${verificationToken}`);
-        logger.info(`[AUTH_SERVICE] 📧 Language data.systemLanguage || 'fr'=${data.systemLanguage || 'fr'}`);
-        logger.info('[AUTH_SERVICE] 📧 ==========================================');
 
         const emailResult = await this.emailService.sendEmailVerification({
           to: normalizedEmail,
