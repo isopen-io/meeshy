@@ -448,8 +448,15 @@ export class AuthService {
       try {
         emailSchema.parse(data.email);
       } catch (zodError: any) {
+        // Log détaillé pour debug
+        logger.error(`[AUTH_SERVICE] ❌ Zod error details:`, {
+          email: data.email,
+          emailCharCodes: data.email?.split('').map((c: string) => c.charCodeAt(0)),
+          issues: zodError.issues,
+          message: zodError.message,
+          name: zodError.name
+        });
         const errorMessage = zodError.issues?.[0]?.message || 'Format d\'email invalide';
-        logger.error(`[AUTH_SERVICE] ❌ Validation email échouée: "${data.email}" - ${errorMessage}`);
         throw new Error(`Email invalide: ${errorMessage}`);
       }
 
