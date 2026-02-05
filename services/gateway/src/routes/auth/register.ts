@@ -168,21 +168,62 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('Error in register:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
 
-      if (error instanceof Error) {
-        const errorMessage = error.message;
-        if (errorMessage.includes('déjà utilisé')) {
-          return reply.status(400).send({
-            success: false,
-            error: errorMessage
-          });
-        }
+      console.error('[AUTH] ❌ Registration error:', {
+        message: errorMessage,
+        stack: errorStack,
+        body: {
+          email: (request.body as any)?.email,
+          username: (request.body as any)?.username,
+          firstName: (request.body as any)?.firstName,
+          lastName: (request.body as any)?.lastName,
+          // Ne pas logger le password
+        },
+        ip: request.ip
+      });
+
+      // Erreurs de validation connues
+      if (errorMessage.includes('déjà utilisé') || errorMessage.includes('already exists')) {
+        return reply.status(400).send({
+          success: false,
+          error: errorMessage,
+          code: 'DUPLICATE_FIELD'
+        });
       }
 
+      if (errorMessage.includes('Email invalide') || errorMessage.includes('Format d\'email')) {
+        return reply.status(400).send({
+          success: false,
+          error: errorMessage,
+          code: 'INVALID_EMAIL'
+        });
+      }
+
+      if (errorMessage.includes('mot de passe') || errorMessage.includes('password')) {
+        return reply.status(400).send({
+          success: false,
+          error: errorMessage,
+          code: 'INVALID_PASSWORD'
+        });
+      }
+
+      if (errorMessage.includes('username') || errorMessage.includes('utilisateur')) {
+        return reply.status(400).send({
+          success: false,
+          error: errorMessage,
+          code: 'INVALID_USERNAME'
+        });
+      }
+
+      // Erreur générique avec détails en dev
+      const isDev = process.env.NODE_ENV !== 'production';
       reply.status(500).send({
         success: false,
-        error: 'Erreur lors de la création du compte'
+        error: isDev ? errorMessage : 'Erreur lors de la création du compte',
+        code: 'REGISTRATION_ERROR',
+        ...(isDev && { details: errorStack })
       });
     }
   });

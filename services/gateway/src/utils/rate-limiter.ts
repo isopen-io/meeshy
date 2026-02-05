@@ -366,17 +366,20 @@ export function createLoginRateLimiter(redis?: Redis): RateLimiter {
 
 /**
  * Rate limiter for registration attempts
- * 3 attempts per hour per IP to prevent mass account creation
+ * 10 attempts per hour per IP to prevent mass account creation
+ * (Temporarily increased from 3 for testing)
  */
 export function createRegisterRateLimiter(redis?: Redis): RateLimiter {
   return new RateLimiter(
     {
-      max: 3,
+      max: 10, // TODO: Remettre à 3 après les tests
       windowMs: 60 * 60 * 1000, // 1 hour
       keyPrefix: 'auth:register',
-      message: 'Trop de tentatives d\'inscription. Veuillez réessayer dans une heure.',
+      message: 'Trop de tentatives d\'inscription (limite: 10/heure). Veuillez réessayer dans une heure.',
       keyGenerator: (request) => {
-        return `ip:${request.ip || 'unknown'}`;
+        const ip = request.ip || 'unknown';
+        console.log(`[RATE_LIMIT] Register attempt from IP: ${ip}`);
+        return `ip:${ip}`;
       }
     },
     redis
