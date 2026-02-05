@@ -428,7 +428,7 @@ export function RegisterFormWizard({
 
         {/* Step content with animations - absolute positioning prevents layout shift */}
         <div className="relative min-h-[320px] overflow-hidden">
-          <AnimatePresence initial={false} custom={direction}>
+          <AnimatePresence initial={false} custom={direction} mode="popLayout">
             <motion.div
               key={currentStepData?.id}
               custom={direction}
@@ -437,8 +437,8 @@ export function RegisterFormWizard({
               animate="center"
               exit="exit"
               transition={{
-                x: { type: 'spring', stiffness: 300, damping: 30 },
-                opacity: { duration: 0.2 },
+                x: { type: 'spring', stiffness: 280, damping: 28 },
+                opacity: { duration: 0.15 },
               }}
               className="absolute inset-0 px-2 py-2"
             >

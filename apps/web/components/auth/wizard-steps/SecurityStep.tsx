@@ -1,7 +1,6 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { Lock, Eye, EyeOff, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,13 +33,9 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent"
-        >
+        <h2 className="text-xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
           {t('register.wizard.securityTitle')}
-        </motion.h2>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('register.wizard.securitySubtitle')}</p>
       </div>
       <div className="space-y-3">

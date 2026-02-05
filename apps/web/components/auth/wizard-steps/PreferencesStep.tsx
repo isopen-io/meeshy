@@ -1,7 +1,6 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion } from 'framer-motion';
 import { Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
@@ -31,13 +30,9 @@ export const PreferencesStep = forwardRef<HTMLDivElement, PreferencesStepProps>(
   return (
     <div className="space-y-4" ref={ref}>
       <div className="text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent"
-        >
+        <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
           {t('register.wizard.preferencesTitle')}
-        </motion.h2>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('register.wizard.preferencesSubtitle')}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">

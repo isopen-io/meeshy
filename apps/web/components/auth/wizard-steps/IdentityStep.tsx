@@ -1,7 +1,6 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
@@ -27,13 +26,9 @@ export const IdentityStep = forwardRef<HTMLInputElement, IdentityStepProps>(({
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-400 dark:to-purple-400 bg-clip-text text-transparent"
-        >
+        <h2 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-400 dark:to-purple-400 bg-clip-text text-transparent">
           {t('register.wizard.identityTitle')}
-        </motion.h2>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('register.wizard.identitySubtitle')}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">

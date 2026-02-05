@@ -1,7 +1,6 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { Check, AlertCircle, Mail, Phone, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,13 +43,9 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 bg-clip-text text-transparent"
-        >
+        <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 bg-clip-text text-transparent">
           {t('register.wizard.contactTitle')}
-        </motion.h2>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('register.wizard.contactSubtitle')}</p>
       </div>
 

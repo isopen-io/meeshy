@@ -33,13 +33,9 @@ export const UsernameStep = forwardRef<HTMLInputElement, UsernameStepProps>(({
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-bold bg-gradient-to-r from-pink-600 to-rose-600 dark:from-pink-400 dark:to-rose-400 bg-clip-text text-transparent"
-        >
+        <h2 className="text-xl font-bold bg-gradient-to-r from-pink-600 to-rose-600 dark:from-pink-400 dark:to-rose-400 bg-clip-text text-transparent">
           {t('register.wizard.usernameTitle')}
-        </motion.h2>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t('register.wizard.usernameSubtitle')}</p>
       </div>
       <div className="space-y-1">
