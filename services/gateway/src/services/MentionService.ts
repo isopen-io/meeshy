@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient, User, ConversationMember } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from './RedisWrapper';
+import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour MentionService
@@ -54,9 +54,9 @@ export class MentionService {
     private readonly prisma: PrismaClient,
     redisUrl?: string
   ) {
-    // Utiliser REDIS_URL de l'environnement ou la valeur par défaut
+    // Use shared singleton instance to avoid multiple Redis connections
     const url = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
-    this.redis = new RedisWrapper(url);
+    this.redis = getRedisWrapper(url);
 
     const stats = this.redis.getCacheStats();
     logger.info(`[MentionService] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);

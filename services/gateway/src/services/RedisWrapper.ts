@@ -408,3 +408,33 @@ export class RedisWrapper {
     };
   }
 }
+
+// ============================================================================
+// SINGLETON INSTANCE
+// ============================================================================
+// All services should use this shared instance to avoid multiple Redis connections
+// This prevents "max connection reached" errors at startup
+// ============================================================================
+
+let sharedInstance: RedisWrapper | null = null;
+
+/**
+ * Get the shared RedisWrapper singleton instance
+ * Use this instead of `new RedisWrapper()` to share a single Redis connection
+ */
+export function getRedisWrapper(url?: string): RedisWrapper {
+  if (!sharedInstance) {
+    sharedInstance = new RedisWrapper(url);
+  }
+  return sharedInstance;
+}
+
+/**
+ * Reset the shared instance (useful for testing)
+ */
+export function resetRedisWrapper(): void {
+  if (sharedInstance) {
+    sharedInstance.close();
+    sharedInstance = null;
+  }
+}
