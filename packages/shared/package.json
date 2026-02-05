@@ -30,12 +30,6 @@
       "require": "./dist/types/preferences/*.js",
       "default": "./dist/types/preferences/*.js"
     },
-    "./types/validation": {
-      "types": "./dist/types/validation/index.d.ts",
-      "import": "./dist/types/validation/index.js",
-      "require": "./dist/types/validation/index.js",
-      "default": "./dist/types/validation/index.js"
-    },
     "./types/*": {
       "types": "./dist/types/*.d.ts",
       "import": "./dist/types/*.js",
