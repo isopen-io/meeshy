@@ -53,7 +53,11 @@ export const conversationListCache = new MultiLevelCache<ConversationListRespons
 /**
  * Invalide le cache de tous les membres d'une conversation
  *
- * Exécution asynchrone (fire-and-forget) pour ne pas bloquer la réponse API
+ * Exécution synchrone pour éviter les race conditions où un client
+ * rafraîchit avant que l'invalidation ne soit terminée.
+ *
+ * L'appelant peut choisir de ne pas await cette fonction pour un comportement
+ * fire-and-forget qui ne bloque pas la réponse API.
  *
  * @param conversationId ID de la conversation modifiée
  * @param prisma Instance Prisma pour requêter les membres
@@ -62,46 +66,43 @@ export async function invalidateConversationCacheAsync(
   conversationId: string,
   prisma: PrismaClient
 ): Promise<void> {
-  // Lancer en arrière-plan sans attendre
-  setImmediate(async () => {
-    const startTime = performance.now();
+  const startTime = performance.now();
 
-    try {
-      // Récupérer tous les membres actifs de la conversation
-      const members = await prisma.conversationMember.findMany({
-        where: {
-          conversationId,
-          isActive: true
-        },
-        select: {
-          userId: true
-        }
-      });
-
-      if (members.length === 0) {
-        logger.warn(`[CACHE-INVALIDATE] Aucun membre trouvé pour conversation ${conversationId}`);
-        return;
+  try {
+    // Récupérer tous les membres actifs de la conversation
+    const members = await prisma.conversationMember.findMany({
+      where: {
+        conversationId,
+        isActive: true
+      },
+      select: {
+        userId: true
       }
+    });
 
-      // Invalider le cache de chaque membre en parallèle
-      await Promise.all(
-        members.map(member => conversationListCache.delete(member.userId))
-      );
-
-      const duration = performance.now() - startTime;
-      logger.info(
-        `[CACHE-INVALIDATE] ✅ ${members.length} users invalidés pour conv ${conversationId} (${duration.toFixed(2)}ms)`
-      );
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      logger.error(
-        `[CACHE-INVALIDATE] ❌ Erreur invalidation conv ${conversationId} après ${duration.toFixed(2)}ms:`,
-        error
-      );
-      // Ne pas throw - l'invalidation est best-effort
-      // Le TTL 24h nettoiera automatiquement les entrées stale
+    if (members.length === 0) {
+      logger.warn(`[CACHE-INVALIDATE] Aucun membre trouvé pour conversation ${conversationId}`);
+      return;
     }
-  });
+
+    // Invalider le cache de chaque membre en parallèle
+    await Promise.all(
+      members.map(member => conversationListCache.delete(member.userId))
+    );
+
+    const duration = performance.now() - startTime;
+    logger.info(
+      `[CACHE-INVALIDATE] ✅ ${members.length} users invalidés pour conv ${conversationId} (${duration.toFixed(2)}ms)`
+    );
+  } catch (error) {
+    const duration = performance.now() - startTime;
+    logger.error(
+      `[CACHE-INVALIDATE] ❌ Erreur invalidation conv ${conversationId} après ${duration.toFixed(2)}ms:`,
+      error
+    );
+    // Ne pas throw - l'invalidation est best-effort
+    // Le TTL 24h nettoiera automatiquement les entrées stale
+  }
 }
 
 /**

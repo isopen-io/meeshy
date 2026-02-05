@@ -103,7 +103,7 @@ export class ReactionHandler {
         select: { conversationId: true }
       });
       if (message) {
-        invalidateConversationCacheAsync(message.conversationId, this.prisma);
+        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
 
       // Créer une notification
@@ -184,7 +184,7 @@ export class ReactionHandler {
         select: { conversationId: true }
       });
       if (message) {
-        invalidateConversationCacheAsync(message.conversationId, this.prisma);
+        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
     } catch (error: unknown) {
       console.error('❌ Erreur lors de la suppression de réaction:', error);

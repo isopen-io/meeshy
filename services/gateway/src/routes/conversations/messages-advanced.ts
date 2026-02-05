@@ -633,8 +633,8 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
-      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
-      invalidateConversationCacheAsync(conversationId, prisma);
+      // Invalider le cache des conversations pour tous les membres
+      await invalidateConversationCacheAsync(conversationId, prisma);
 
       // Diffuser la suppression via Socket.IO
       try {
@@ -795,8 +795,8 @@ export function registerMessagesAdvancedRoutes(
       // Note: Les traductions existantes restent inchangées
       // Le service de traduction sera notifié si nécessaire via WebSocket
 
-      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
-      invalidateConversationCacheAsync(message.conversationId, prisma);
+      // Invalider le cache des conversations pour tous les membres
+      await invalidateConversationCacheAsync(message.conversationId, prisma);
 
       reply.send({
         success: true,

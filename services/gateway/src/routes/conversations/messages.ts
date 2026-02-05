@@ -1213,8 +1213,8 @@ export function registerMessagesRoutes(
         () => []
       );
 
-      // Invalider le cache des conversations pour tous les membres (asynchrone, non-bloquant)
-      invalidateConversationCacheAsync(conversationId, prisma);
+      // Invalider le cache des conversations pour tous les membres
+      await invalidateConversationCacheAsync(conversationId, prisma);
 
       reply.status(201).send({
         success: true,

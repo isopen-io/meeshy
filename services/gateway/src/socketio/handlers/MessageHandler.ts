@@ -133,12 +133,12 @@ export class MessageHandler {
       if (response.success && response.data?.id) {
         const message = await this._fetchMessageForBroadcast(response.data.id);
         if (message) {
+          // Invalider le cache AVANT de broadcaster pour éviter les race conditions
+          // où un client rafraîchit et obtient des données stale
+          await invalidateConversationCacheAsync(message.conversationId, this.prisma);
+
           await this.broadcastNewMessage(message, message.conversationId, socket);
           await this._createMessageNotifications(message, userId);
-
-          // Invalider le cache des conversations pour tous les membres
-          // Permet aux autres clients de voir la liste mise à jour lors du prochain fetch
-          invalidateConversationCacheAsync(message.conversationId, this.prisma);
         }
       }
 
@@ -233,10 +233,10 @@ export class MessageHandler {
 
         const message = await this._fetchMessageForBroadcast(response.data.id);
         if (message) {
-          await this.broadcastNewMessage(message, message.conversationId, socket);
+          // Invalider le cache AVANT de broadcaster pour éviter les race conditions
+          await invalidateConversationCacheAsync(message.conversationId, this.prisma);
 
-          // Invalider le cache des conversations pour tous les membres
-          invalidateConversationCacheAsync(message.conversationId, this.prisma);
+          await this.broadcastNewMessage(message, message.conversationId, socket);
         }
       }
 

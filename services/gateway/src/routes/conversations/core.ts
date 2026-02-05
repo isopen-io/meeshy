@@ -803,7 +803,7 @@ export function registerCoreRoutes(
       }
 
       // Invalider le cache des conversations pour tous les membres (nouvelle conversation créée)
-      invalidateConversationCacheAsync(conversation.id, prisma);
+      await invalidateConversationCacheAsync(conversation.id, prisma);
 
       reply.status(201).send({
         success: true,
@@ -899,7 +899,7 @@ export function registerCoreRoutes(
       });
 
       // Invalider le cache des conversations pour tous les membres (conversation modifiée)
-      invalidateConversationCacheAsync(id, prisma);
+      await invalidateConversationCacheAsync(id, prisma);
 
       reply.send({
         success: true,
@@ -995,7 +995,7 @@ export function registerCoreRoutes(
       });
 
       // Invalider le cache des conversations pour tous les membres (conversation supprimée)
-      invalidateConversationCacheAsync(conversationId, prisma);
+      await invalidateConversationCacheAsync(conversationId, prisma);
 
       reply.send({
         success: true,
