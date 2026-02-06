@@ -295,7 +295,14 @@ export function registerCoreRoutes(
                   mimeType: true,
                   thumbnailUrl: true,
                   originalName: true,
-                  fileSize: true
+                  fileSize: true,
+                  // Media metadata for proper display
+                  duration: true,    // Audio/Video duration in ms
+                  width: true,       // Image/Video width
+                  height: true,      // Image/Video height
+                  bitrate: true,     // Audio/Video bitrate
+                  sampleRate: true,  // Audio sample rate
+                  metadata: true     // Additional metadata (effects, etc.)
                 }
               }
             }

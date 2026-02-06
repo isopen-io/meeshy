@@ -354,8 +354,8 @@ class SpeechBrainDiarization:
                 logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
 
                 # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
-                # Seuil 0.50 = rejette les mauvais clusters (évite faux multi-speakers)
-                if score > best_score and score > 0.50:  # Seuil modéré pour éviter faux positifs
+                # Seuil 0.40 = équilibre entre détection multi-speakers et éviter faux positifs
+                if score > best_score and score > 0.40:  # Seuil acceptable (voix distinctes)
                     best_score = score
                     best_n_clusters = n
                     logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
