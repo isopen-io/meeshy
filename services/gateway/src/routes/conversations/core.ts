@@ -163,9 +163,11 @@ export function registerCoreRoutes(
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
 
-      // === CACHE: Vérifier si on peut utiliser le cache ===
-      // Cache uniquement pour les requêtes par défaut (offset=0, pas de filtres)
-      const canUseCache = offset === 0 && !typeFilter && !withUserId;
+      // === CACHE DISABLED ===
+      // Le cache des conversations causait des problèmes de synchronisation
+      // avec les lastMessage qui n'étaient pas à jour après nouveaux messages.
+      // Désactivé jusqu'à implémentation d'une meilleure stratégie d'invalidation.
+      const canUseCache = false; // DISABLED
       const cacheKey = userId;
 
       if (canUseCache) {
