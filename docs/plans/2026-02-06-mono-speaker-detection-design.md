@@ -35,7 +35,7 @@ hop_size_ms = 1000     # Était 500
 max_speakers = 3       # Inchangé
 
 # Ligne 358 - Seuil clustering
-if score > best_score and score > 0.50:  # Était 0.30
+if score > best_score and score > 0.40:  # Était 0.30, puis 0.50 (trop strict)
 
 # Lignes 439-442 - Filtrage faux positifs
 MIN_DURATION_MS = 500   # Était 300
