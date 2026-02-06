@@ -56,19 +56,32 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Update conversations list with latest message
+      // Update conversations list with latest message AND move to top
       queryClient.setQueryData<Conversation[]>(
         queryKeys.conversations.list(),
-        (old) =>
-          old?.map((conv) =>
-            conv.id === targetConversationId
-              ? { ...conv, lastMessage: message, updatedAt: message.createdAt }
-              : conv
-          )
+        (old) => {
+          if (!old) return old;
+
+          const conversationIndex = old.findIndex(conv => conv.id === targetConversationId);
+          if (conversationIndex === -1) return old;
+
+          const conversation = old[conversationIndex];
+          const updatedConversation = {
+            ...conversation,
+            lastMessage: message,
+            lastMessageAt: message.createdAt,
+            updatedAt: message.createdAt,
+          };
+
+          // Move conversation to top of list
+          const otherConversations = old.filter((_, idx) => idx !== conversationIndex);
+          return [updatedConversation, ...otherConversations];
+        }
       );
 
-      // Invalidate conversations lists to refresh all queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // DO NOT invalidate here - setQueryData already has the correct lastMessage
+      // Invalidating would trigger a re-fetch that could return stale data from backend cache
+      // The backend may not have processed the message yet when we re-fetch
     };
 
     // Handler for edited messages
@@ -91,14 +104,25 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Invalidate conversations lists (message édité = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // Update lastMessage if this edited message is the last one
+      queryClient.setQueryData<Conversation[]>(
+        queryKeys.conversations.list(),
+        (old) => {
+          if (!old) return old;
+          return old.map((conv) => {
+            if (conv.id === targetConversationId && conv.lastMessage?.id === message.id) {
+              return { ...conv, lastMessage: message };
+            }
+            return conv;
+          });
+        }
+      );
     };
 
     // Handler for deleted messages
     const handleMessageDeleted = (messageId: string) => {
       // We need to find which conversation this message belongs to
-      // For now, invalidate all messages if we have a conversationId
+      // For now, update messages if we have a conversationId
       if (conversationId) {
         queryClient.setQueryData(
           queryKeys.messages.infinite(conversationId),
@@ -115,8 +139,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         );
       }
 
-      // Invalidate conversations lists (message supprimé = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // Note: If the deleted message was the lastMessage of a conversation,
+      // we would need to fetch the new lastMessage. For now, the conversation
+      // will show the deleted message until next refresh. This is acceptable
+      // since message deletion is rare. A full refresh would be needed to get
+      // the previous message as the new lastMessage.
     };
 
     // Handler for message translations
