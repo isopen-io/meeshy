@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { ThreadMember } from '@meeshy/shared/types';
 import { conversationsService } from '@/services/conversations.service';
+import { participantsService } from '@/services/conversations/participants.service';
 import { usersService } from '@/services/users.service';
 import type { User as SocketIOUser } from '@meeshy/shared/types';
 import { toast } from 'sonner';
@@ -54,6 +55,8 @@ interface ConversationParticipantsDrawerProps {
   isGroup: boolean;
   conversationType?: string;
   userConversationRole?: UserRoleEnum;
+  /** Nombre total de membres (depuis conversation.memberCount) */
+  memberCount?: number;
   onParticipantRemoved?: (userId: string) => void;
   onParticipantAdded?: (userId: string) => void;
   onLinkCreated?: (link: string) => void;
@@ -66,10 +69,13 @@ export function ConversationParticipantsDrawer({
   isGroup,
   conversationType,
   userConversationRole,
+  memberCount,
   onParticipantRemoved,
   onParticipantAdded,
   onLinkCreated
 }: ConversationParticipantsDrawerProps) {
+  // Utiliser memberCount si disponible, sinon fallback sur participants.length
+  const totalMemberCount = memberCount ?? participants.length;
   const { t } = useI18n('conversations');
   const [isOpen, setIsOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
@@ -78,6 +84,9 @@ export function ConversationParticipantsDrawer({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [searchResults, setSearchResults] = useState<SocketIOUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // Résultats de la recherche backend des participants
+  const [backendSearchResults, setBackendSearchResults] = useState<ThreadMember[] | null>(null);
+  const [isFilterSearching, setIsFilterSearching] = useState(false);
 
   // TEMPS RÉEL: Activer les listeners Socket.IO pour les statuts utilisateur
   useUserStatusRealtime();
@@ -129,19 +138,56 @@ export function ConversationParticipantsDrawer({
                   currentUserParticipant?.role === UserRoleEnum.CREATOR ||
                   currentUserParticipant?.role === UserRoleEnum.MODERATOR;
 
-  // Filtrer les participants selon le filtre LOCAL
-  const filteredParticipants = activeParticipants.filter(participant => {
-    if (!filterQuery.trim()) return true;
-    const user = participant.user;
-    const searchTerm = filterQuery.toLowerCase();
-    return (
-      user.username.toLowerCase().includes(searchTerm) ||
-      user.displayName?.toLowerCase().includes(searchTerm) ||
-      user.firstName?.toLowerCase().includes(searchTerm) ||
-      user.lastName?.toLowerCase().includes(searchTerm) ||
-      user.email?.toLowerCase().includes(searchTerm)
-    );
-  });
+  // Recherche backend des participants quand filterQuery change
+  useEffect(() => {
+    const searchParticipants = async () => {
+      if (!filterQuery.trim() || filterQuery.length < 2) {
+        setBackendSearchResults(null);
+        return;
+      }
+
+      setIsFilterSearching(true);
+      try {
+        const results = await participantsService.searchParticipants(conversationId, filterQuery, 50);
+        // Mapper les résultats en ThreadMember
+        const mappedResults: ThreadMember[] = results.map(user => ({
+          id: user.id,
+          conversationId,
+          userId: user.id,
+          user,
+          role: (user as any).conversationRole || 'MEMBER',
+          joinedAt: new Date(),
+          isActive: true,
+          isAnonymous: (user as any).isAnonymous || false,
+        }));
+        setBackendSearchResults(mappedResults);
+      } catch (error) {
+        console.error('Erreur lors de la recherche des participants:', error);
+        setBackendSearchResults(null);
+      } finally {
+        setIsFilterSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchParticipants, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [filterQuery, conversationId]);
+
+  // Utiliser les résultats backend si disponibles, sinon filtre local
+  const filteredParticipants = backendSearchResults !== null
+    ? backendSearchResults
+    : activeParticipants.filter(participant => {
+        if (!filterQuery.trim()) return true;
+        const user = participant.user;
+        const searchTerm = filterQuery.toLowerCase();
+        return (
+          user.username.toLowerCase().includes(searchTerm) ||
+          user.displayName?.toLowerCase().includes(searchTerm) ||
+          user.firstName?.toLowerCase().includes(searchTerm) ||
+          user.lastName?.toLowerCase().includes(searchTerm) ||
+          user.email?.toLowerCase().includes(searchTerm)
+        );
+      });
 
   // Séparer en ligne / hors ligne
   const onlineParticipants = filteredParticipants.filter(p => p.user.isOnline);
@@ -271,16 +317,16 @@ export function ConversationParticipantsDrawer({
           className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 relative group transition-all duration-200"
           title={t('conversationUI.participants')}
           onClick={() => setIsOpen(true)}
-          aria-label={`${t('conversationUI.participants')} (${participants.length})`}
+          aria-label={`${t('conversationUI.participants')} (${totalMemberCount})`}
         >
           <Users className="h-5 w-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
-          {participants.length > 0 && (
+          {totalMemberCount > 0 && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className={`absolute -top-1 -right-1 h-5 w-5 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-full flex items-center justify-center font-medium shadow-lg ${participants.length > 99 ? 'text-[9px]' : 'text-xs'}`}
+              className={`absolute -top-1 -right-1 h-5 w-5 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-full flex items-center justify-center font-medium shadow-lg ${totalMemberCount > 99 ? 'text-[9px]' : 'text-xs'}`}
             >
-              {participants.length > 99 ? '99+' : participants.length}
+              {totalMemberCount > 99 ? '99+' : totalMemberCount}
             </motion.div>
           )}
         </Button>
@@ -296,7 +342,7 @@ export function ConversationParticipantsDrawer({
           <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
             <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              {t('conversationUI.participants')} ({participants.length})
+              {t('conversationUI.participants')} ({totalMemberCount})
             </SheetTitle>
           </SheetHeader>
 
@@ -313,9 +359,13 @@ export function ConversationParticipantsDrawer({
               </label>
               <div className="relative flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  {isFilterSearching ? (
+                    <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
+                  ) : (
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  )}
                   <Input
-                    placeholder={t('conversationDetails.searchParticipants') || "Filtrer par nom, username..."}
+                    placeholder={t('conversationDetails.searchParticipants') || "Rechercher un membre..."}
                     value={filterQuery}
                     onChange={(e) => setFilterQuery(e.target.value)}
                     className="pl-10 pr-10 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 focus-visible:ring-blue-500 focus-visible:border-blue-500"

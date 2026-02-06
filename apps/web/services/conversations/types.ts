@@ -23,6 +23,7 @@ export interface ParticipantsFilters {
   role?: string;
   search?: string;
   limit?: number;
+  cursor?: string;
 }
 
 /**
