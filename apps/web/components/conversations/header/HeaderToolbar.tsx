@@ -105,6 +105,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
           isGroup={conversation.type !== 'direct'}
           conversationType={conversation.type}
           userConversationRole={currentUserRole}
+          memberCount={conversation.memberCount}
           onParticipantRemoved={onParticipantRemoved}
           onParticipantAdded={onParticipantAdded}
           onLinkCreated={onLinkCreated}

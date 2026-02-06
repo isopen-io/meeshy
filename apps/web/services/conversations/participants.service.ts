@@ -11,12 +11,26 @@ import type {
   AllParticipantsResponse,
 } from './types';
 
+interface PaginatedParticipantsResponse {
+  success: boolean;
+  data: Array<User & {
+    isAnonymous?: boolean;
+    canSendMessages?: boolean;
+    canSendFiles?: boolean;
+    canSendImages?: boolean;
+  }>;
+  pagination?: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
+}
+
 /**
  * Service pour les opérations sur les participants
  */
 export class ParticipantsService {
   /**
-   * Obtenir les participants d'une conversation
+   * Obtenir les participants d'une conversation avec pagination
    */
   async getParticipants(
     conversationId: string,
@@ -41,13 +55,17 @@ export class ParticipantsService {
         params.limit = filters.limit.toString();
       }
 
+      if (filters?.cursor) {
+        params.cursor = filters.cursor;
+      }
+
       const cacheKey = `${conversationId}-${JSON.stringify(params)}`;
       const cached = cacheService.getParticipantsFromCache(cacheKey);
       if (cached) {
         return cached;
       }
 
-      const response = await apiService.get<{ success: boolean; data: User[] }>(
+      const response = await apiService.get<PaginatedParticipantsResponse>(
         `/conversations/${conversationId}/participants`,
         params
       );
@@ -64,21 +82,73 @@ export class ParticipantsService {
   }
 
   /**
-   * Obtenir tous les participants (authentifiés et anonymes)
+   * Rechercher des participants dans une conversation (appel backend)
+   */
+  async searchParticipants(
+    conversationId: string,
+    searchQuery: string,
+    limit: number = 50
+  ): Promise<User[]> {
+    try {
+      if (!searchQuery.trim()) {
+        return [];
+      }
+
+      const response = await apiService.get<PaginatedParticipantsResponse>(
+        `/conversations/${conversationId}/participants`,
+        {
+          search: searchQuery.trim(),
+          limit: limit.toString()
+        }
+      );
+
+      return response.data?.data ?? [];
+    } catch (error) {
+      console.error('[ParticipantsService] Erreur lors de la recherche des participants:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtenir tous les participants (authentifiés et anonymes) avec pagination complète
    */
   async getAllParticipants(conversationId: string): Promise<AllParticipantsResponse> {
     try {
-      const response = await apiService.get<{
-        success: boolean;
-        data: Array<User & {
-          isAnonymous?: boolean;
-          canSendMessages?: boolean;
-          canSendFiles?: boolean;
-          canSendImages?: boolean;
-        }>;
-      }>(`/conversations/${conversationId}/participants`);
+      const allParticipants: Array<User & {
+        isAnonymous?: boolean;
+        canSendMessages?: boolean;
+        canSendFiles?: boolean;
+        canSendImages?: boolean;
+      }> = [];
 
-      const allParticipants = response.data?.data ?? [];
+      let cursor: string | null = null;
+      let hasMore = true;
+
+      // Charger tous les participants avec pagination
+      while (hasMore) {
+        const params: Record<string, string> = { limit: '100' };
+        if (cursor) {
+          params.cursor = cursor;
+        }
+
+        const response = await apiService.get<PaginatedParticipantsResponse>(
+          `/conversations/${conversationId}/participants`,
+          params
+        );
+
+        const pageParticipants = response.data?.data ?? [];
+        allParticipants.push(...pageParticipants);
+
+        // Vérifier s'il y a plus de pages
+        hasMore = response.data?.pagination?.hasMore ?? false;
+        cursor = response.data?.pagination?.nextCursor ?? null;
+
+        // Sécurité: arrêter après 10 pages max (1000 participants)
+        if (allParticipants.length >= 1000) {
+          console.warn('[ParticipantsService] Limite de 1000 participants atteinte');
+          break;
+        }
+      }
 
       const authenticatedParticipants: User[] = [];
       const anonymousParticipants: Array<{
