@@ -87,8 +87,15 @@ MIN_AUDIO_ABSOLUTE_MS = 500
 ## Tests
 
 - Audio mono-speaker 10s → 1 speaker
-- Audio homme+femme → 2 speakers
+- Audio homme+femme → 2 speakers ✅ (testé: score=0.434, s0=96Hz homme, s1=193Hz femme)
 - Audio court 2s → clonage sans warning excessif
+
+## Résultats validés
+
+Le seuil de 0.40 permet une détection correcte :
+- Score silhouette de 0.434 accepté pour 2 locuteurs distincts
+- Différence de pitch significative (96Hz vs 193Hz) correctement détectée
+- Pas de fusion excessive des speakers distincts
 
 ## Risques
 
