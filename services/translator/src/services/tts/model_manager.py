@@ -462,10 +462,16 @@ class ModelManager:
             self._model_ready_event.set()
             return
 
-        # Priorité: modèle demandé, puis Chatterbox
+        # Priorité: modèle demandé, puis tous les autres backends disponibles
         models_to_try = [preferred]
-        if preferred != TTSModel.CHATTERBOX:
-            models_to_try.append(TTSModel.CHATTERBOX)
+
+        # Ajouter tous les backends disponibles comme fallback
+        available_backends = await self.get_available_backends()
+        for backend_model in available_backends:
+            if backend_model not in models_to_try:
+                models_to_try.append(backend_model)
+
+        logger.info(f"[ModelManager] Modèles à essayer: {[m.value for m in models_to_try]}")
 
         for model in models_to_try:
             try:

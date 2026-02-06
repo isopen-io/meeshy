@@ -588,16 +588,35 @@ def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
         return 0.0
 
 
+def _resolve_transitive_mapping(mapping: Dict[str, str]) -> Dict[str, str]:
+    """
+    Résout les mappings transitifs pour que tous les speakers
+    pointent vers leur destination finale.
+
+    Exemple: si s3→s2 et s0→s3, alors s0 doit pointer vers s2.
+    """
+    resolved = {}
+    for speaker_id in mapping:
+        # Suivre la chaîne jusqu'à la destination finale
+        current = speaker_id
+        visited = set()
+        while mapping[current] != current and current not in visited:
+            visited.add(current)
+            current = mapping[current]
+        resolved[speaker_id] = current
+    return resolved
+
+
 async def _merge_similar_speakers(
     speakers_data: Dict[str, Dict[str, Any]],
-    similarity_threshold: float = 0.85
+    similarity_threshold: float = 0.65
 ) -> Dict[str, str]:
     """
     Fusionne les speakers avec voice_models similaires.
 
     Args:
         speakers_data: Données des speakers avec voice_models
-        similarity_threshold: Seuil de similarité (0.85 = 85% similaire)
+        similarity_threshold: Seuil de similarité (0.65 = 65% similaire)
 
     Returns:
         Dict de mapping: speaker_id_original → speaker_id_final
@@ -621,19 +640,24 @@ async def _merge_similar_speakers(
             similarity = _compare_voice_models(voice_model_1, voice_model_2)
 
             if similarity >= similarity_threshold:
+                # Résoudre la destination finale de speaker_1
+                final_target = speaker_1
+                while merged_mapping[final_target] != final_target:
+                    final_target = merged_mapping[final_target]
+
                 logger.info(
-                    f"[MULTI_SPEAKER] 🔗 Fusion: {speaker_2} → {speaker_1} "
+                    f"[MULTI_SPEAKER] 🔗 Fusion: {speaker_2} → {final_target} "
                     f"(similarité: {similarity:.2%})"
                 )
 
-                # Fusionner speaker_2 dans speaker_1
-                merged_mapping[speaker_2] = speaker_1
+                # Fusionner speaker_2 vers la destination finale
+                merged_mapping[speaker_2] = final_target
 
-                # Fusionner les données
-                speakers_data[speaker_1]['segments'].extend(
+                # Fusionner les données vers la destination finale
+                speakers_data[final_target]['segments'].extend(
                     speakers_data[speaker_2]['segments']
                 )
-                speakers_data[speaker_1]['segment_positions'].extend(
+                speakers_data[final_target]['segment_positions'].extend(
                     speakers_data[speaker_2]['segment_positions']
                 )
 
