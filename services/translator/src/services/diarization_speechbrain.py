@@ -278,7 +278,7 @@ class SpeechBrainDiarization:
         self,
         audio_path: str,
         window_size_ms: int = 1500,  # Fenêtre de 1.5s (détecte tours courts)
-        hop_size_ms: int = 500,       # Hop de 0.5s pour plus de granularité
+        hop_size_ms: int = 1000,      # Hop de 1s (réduit micro-segments)
         max_speakers: int = 3,        # Augmenté à 3 pour détecter plus de tours
         num_speakers: Optional[int] = None  # ✅ NOUVEAU: Forcer nombre exact
     ) -> DiarizationResult:
@@ -353,9 +353,9 @@ class SpeechBrainDiarization:
 
                 logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
 
-                # ✅ RÉDUIT: 0.45 → 0.35 → 0.30 (très sensible, détecte plus de tours de parole)
-                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, 0.25-0.35=faible, <0.25=très faible
-                if score > best_score and score > 0.30:  # Seuil très sensible pour détecter tous les tours
+                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
+                # Seuil 0.50 = rejette les mauvais clusters (évite faux multi-speakers)
+                if score > best_score and score > 0.50:  # Seuil modéré pour éviter faux positifs
                     best_score = score
                     best_n_clusters = n
                     logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
@@ -432,14 +432,14 @@ class SpeechBrainDiarization:
 
         # Filtrer les faux positifs: speakers avec très peu d'audio
         # Critères ADAPTATIFS selon la durée totale de l'audio:
-        # 1. Durée minimale absolue: 300ms (un mot court)
+        # 1. Durée minimale absolue: 500ms (segment significatif)
         # 2. Ratio minimum adaptatif:
-        #    - Audio < 15s : ratio minimum 16% (tolérant pour conversations courtes)
-        #    - Audio ≥ 15s : ratio minimum 20% (strict pour longs audios)
-        MIN_DURATION_MS = 300  # Durée minimale absolue
+        #    - Audio < 15s : ratio minimum 20% (modéré pour conversations courtes)
+        #    - Audio ≥ 15s : ratio minimum 25% (strict pour longs audios)
+        MIN_DURATION_MS = 500  # Durée minimale absolue (augmenté de 300)
         AUDIO_THRESHOLD_MS = 15000  # Seuil pour changer de critère (15 secondes)
-        MIN_RATIO_SHORT_AUDIO = 0.16  # 16% pour audios < 15s
-        MIN_RATIO_LONG_AUDIO = 0.20   # 20% pour audios ≥ 15s
+        MIN_RATIO_SHORT_AUDIO = 0.20  # 20% pour audios < 15s (augmenté de 16%)
+        MIN_RATIO_LONG_AUDIO = 0.25   # 25% pour audios ≥ 15s (augmenté de 20%)
 
         # Déterminer le ratio minimum selon la durée totale
         if duration_ms < AUDIO_THRESHOLD_MS:

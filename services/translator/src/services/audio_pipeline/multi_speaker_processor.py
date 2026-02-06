@@ -271,7 +271,7 @@ async def process_multi_speaker_audio(
     logger.info("[MULTI_SPEAKER] 🔍 Comparaison des voice_models...")
     speaker_mapping = await _merge_similar_speakers(
         speakers_data=speakers_data,
-        similarity_threshold=0.85
+        similarity_threshold=0.65  # Réduit de 0.85 pour fusion plus agressive
     )
 
     # ═══════════════════════════════════════════════════════════════
@@ -524,11 +524,16 @@ async def _group_segments_by_speaker(
     return speakers
 
 
+# Tolérance pitch pour fusion automatique (±25Hz = même speaker probable)
+PITCH_TOLERANCE_HZ = 25
+
+
 def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
     """
     Compare deux voice_models et retourne un score de similarité (0.0 à 1.0).
 
     Utilise les caractéristiques vocales pour comparer les models.
+    Force la fusion si pitch très proche (±25Hz).
     """
     try:
         # Extraire les caractéristiques vocales
@@ -546,7 +551,16 @@ def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
         if pitch_1 == 0 or pitch_2 == 0:
             return 0.0
 
-        pitch_diff = abs(pitch_1 - pitch_2) / max(pitch_1, pitch_2)
+        # Fusion automatique si pitch très proche (même speaker probable)
+        pitch_diff_hz = abs(pitch_1 - pitch_2)
+        if pitch_diff_hz < PITCH_TOLERANCE_HZ:
+            logger.info(
+                f"[MULTI_SPEAKER] 🎯 Pitch très proche ({pitch_diff_hz:.0f}Hz < {PITCH_TOLERANCE_HZ}Hz) "
+                f"→ fusion automatique"
+            )
+            return 0.90  # Force la fusion
+
+        pitch_diff = pitch_diff_hz / max(pitch_1, pitch_2)
         pitch_similarity = 1.0 - min(pitch_diff, 1.0)
 
         # Comparer énergie vocale
@@ -559,8 +573,8 @@ def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
         else:
             energy_similarity = 0.5
 
-        # Score final (moyenne pondérée)
-        similarity = 0.7 * pitch_similarity + 0.3 * energy_similarity
+        # Score final (moyenne pondérée - plus de poids au pitch)
+        similarity = 0.6 * pitch_similarity + 0.4 * energy_similarity
 
         logger.info(
             f"[MULTI_SPEAKER] 🔍 Similarité voice_models: {similarity:.2f} "
@@ -574,16 +588,35 @@ def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
         return 0.0
 
 
+def _resolve_transitive_mapping(mapping: Dict[str, str]) -> Dict[str, str]:
+    """
+    Résout les mappings transitifs pour que tous les speakers
+    pointent vers leur destination finale.
+
+    Exemple: si s3→s2 et s0→s3, alors s0 doit pointer vers s2.
+    """
+    resolved = {}
+    for speaker_id in mapping:
+        # Suivre la chaîne jusqu'à la destination finale
+        current = speaker_id
+        visited = set()
+        while mapping[current] != current and current not in visited:
+            visited.add(current)
+            current = mapping[current]
+        resolved[speaker_id] = current
+    return resolved
+
+
 async def _merge_similar_speakers(
     speakers_data: Dict[str, Dict[str, Any]],
-    similarity_threshold: float = 0.85
+    similarity_threshold: float = 0.65
 ) -> Dict[str, str]:
     """
     Fusionne les speakers avec voice_models similaires.
 
     Args:
         speakers_data: Données des speakers avec voice_models
-        similarity_threshold: Seuil de similarité (0.85 = 85% similaire)
+        similarity_threshold: Seuil de similarité (0.65 = 65% similaire)
 
     Returns:
         Dict de mapping: speaker_id_original → speaker_id_final
@@ -607,19 +640,24 @@ async def _merge_similar_speakers(
             similarity = _compare_voice_models(voice_model_1, voice_model_2)
 
             if similarity >= similarity_threshold:
+                # Résoudre la destination finale de speaker_1
+                final_target = speaker_1
+                while merged_mapping[final_target] != final_target:
+                    final_target = merged_mapping[final_target]
+
                 logger.info(
-                    f"[MULTI_SPEAKER] 🔗 Fusion: {speaker_2} → {speaker_1} "
+                    f"[MULTI_SPEAKER] 🔗 Fusion: {speaker_2} → {final_target} "
                     f"(similarité: {similarity:.2%})"
                 )
 
-                # Fusionner speaker_2 dans speaker_1
-                merged_mapping[speaker_2] = speaker_1
+                # Fusionner speaker_2 vers la destination finale
+                merged_mapping[speaker_2] = final_target
 
-                # Fusionner les données
-                speakers_data[speaker_1]['segments'].extend(
+                # Fusionner les données vers la destination finale
+                speakers_data[final_target]['segments'].extend(
                     speakers_data[speaker_2]['segments']
                 )
-                speakers_data[speaker_1]['segment_positions'].extend(
+                speakers_data[final_target]['segment_positions'].extend(
                     speakers_data[speaker_2]['segment_positions']
                 )
 
@@ -871,7 +909,7 @@ async def _extract_speaker_audio(
 
         # Prendre les N segments les plus longs jusqu'à atteindre 5-10s d'audio
         TARGET_DURATION_MS = 7000  # 7 secondes cible
-        MIN_DURATION_MS = 3000     # 3 secondes minimum
+        MIN_DURATION_MS = 2000     # 2 secondes minimum (réduit de 3000 pour couverture)
         MIN_SEGMENT_DURATION = 200  # Ignorer segments < 200ms (trop courts/bruités)
 
         selected_segments = []
