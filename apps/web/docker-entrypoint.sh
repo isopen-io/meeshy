@@ -40,6 +40,16 @@ replace_placeholder "__RUNTIME_FRONTEND_URL__" "NEXT_PUBLIC_FRONTEND_URL" ""
 replace_placeholder "__RUNTIME_TRANSLATION_URL__" "NEXT_PUBLIC_TRANSLATION_URL" ""
 replace_placeholder "__RUNTIME_STATIC_URL__" "NEXT_PUBLIC_STATIC_URL" ""
 
+# Firebase configuration (for push notifications)
+replace_placeholder "__RUNTIME_FIREBASE_API_KEY__" "NEXT_PUBLIC_FIREBASE_API_KEY" ""
+replace_placeholder "__RUNTIME_FIREBASE_AUTH_DOMAIN__" "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" ""
+replace_placeholder "__RUNTIME_FIREBASE_PROJECT_ID__" "NEXT_PUBLIC_FIREBASE_PROJECT_ID" ""
+replace_placeholder "__RUNTIME_FIREBASE_STORAGE_BUCKET__" "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" ""
+replace_placeholder "__RUNTIME_FIREBASE_MESSAGING_SENDER_ID__" "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" ""
+replace_placeholder "__RUNTIME_FIREBASE_APP_ID__" "NEXT_PUBLIC_FIREBASE_APP_ID" ""
+replace_placeholder "__RUNTIME_FIREBASE_MEASUREMENT_ID__" "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID" ""
+replace_placeholder "__RUNTIME_FIREBASE_VAPID_KEY__" "NEXT_PUBLIC_FIREBASE_VAPID_KEY" ""
+
 echo "[Meeshy] Runtime environment injection complete!"
 echo "[Meeshy] Starting Next.js server..."
 
