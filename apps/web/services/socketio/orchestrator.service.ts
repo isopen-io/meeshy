@@ -6,6 +6,7 @@
 
 'use client';
 
+import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import type { User, Message, SocketIOMessage } from '@/types';
 import type {
@@ -25,6 +26,21 @@ import { PresenceService } from './presence.service';
 import { TranslationService } from './translation.service';
 
 /**
+ * Pending message in the queue
+ */
+interface PendingMessage {
+  conversationId: string;
+  content: string;
+  originalLanguage?: string;
+  replyToId?: string;
+  mentionedUserIds?: string[];
+  attachmentIds?: string[];
+  attachmentMimeTypes?: string[];
+  timestamp: number;
+  resolve: (success: boolean) => void;
+}
+
+/**
  * SocketIOOrchestrator
  * Coordinates all Socket.IO services
  * Provides backward-compatible API
@@ -41,6 +57,12 @@ export class SocketIOOrchestrator {
 
   // Message conversion helper
   private messageConverter: ((msg: SocketIOMessage) => Message) | null = null;
+
+  // Message queue for messages sent before socket is ready
+  private pendingMessages: PendingMessage[] = [];
+  private isProcessingQueue: boolean = false;
+  private readonly MAX_QUEUE_SIZE = 10;
+  private readonly MESSAGE_QUEUE_TIMEOUT = 30000; // 30 seconds max wait
 
   private constructor() {
     this.connectionService = new ConnectionService();
@@ -104,6 +126,64 @@ export class SocketIOOrchestrator {
   private onAuthenticated(): void {
     logger.debug('[SocketIOOrchestrator]', 'Authenticated successfully');
     // Auto-join logic is handled by connection service callback
+
+    // Process pending messages queue
+    this.processPendingMessages();
+  }
+
+  /**
+   * Process pending messages queue after socket is connected
+   */
+  private async processPendingMessages(): Promise<void> {
+    if (this.isProcessingQueue || this.pendingMessages.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+    logger.debug('[SocketIOOrchestrator]', `Processing ${this.pendingMessages.length} pending messages`);
+
+    const socket = this.connectionService.getSocket();
+    if (!socket || !socket.connected) {
+      this.isProcessingQueue = false;
+      return;
+    }
+
+    // Process all pending messages
+    while (this.pendingMessages.length > 0) {
+      const pending = this.pendingMessages.shift();
+      if (!pending) continue;
+
+      // Check if message has expired
+      if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
+        logger.warn('[SocketIOOrchestrator]', 'Pending message expired, discarding');
+        pending.resolve(false);
+        continue;
+      }
+
+      try {
+        const options: MessageSendOptions = {
+          conversationId: pending.conversationId,
+          content: pending.content,
+          originalLanguage: pending.originalLanguage,
+          replyToId: pending.replyToId,
+          mentionedUserIds: pending.mentionedUserIds,
+          attachmentIds: pending.attachmentIds,
+          attachmentMimeTypes: pending.attachmentMimeTypes
+        };
+
+        const success = await this.messagingService.sendMessage(socket, options);
+        pending.resolve(success);
+
+        if (success) {
+          logger.debug('[SocketIOOrchestrator]', 'Pending message sent successfully');
+        }
+      } catch (error) {
+        logger.error('[SocketIOOrchestrator]', 'Error sending pending message', { error });
+        pending.resolve(false);
+      }
+    }
+
+    this.isProcessingQueue = false;
   }
 
   /**
@@ -210,18 +290,57 @@ export class SocketIOOrchestrator {
   ): Promise<boolean> {
     this.ensureConnection();
 
-    const socket = this.connectionService.getSocket();
-    if (!socket || !socket.connected) {
-      return false;
-    }
-
-    // Extract conversation ID
+    // Extract conversation ID first
     let conversationId: string;
     if (typeof conversationOrId === 'string') {
       conversationId = conversationOrId;
     } else {
       const { getConversationApiId } = require('@/utils/conversation-id-utils');
       conversationId = getConversationApiId(conversationOrId);
+    }
+
+    const socket = this.connectionService.getSocket();
+
+    // If socket not ready, queue the message for later
+    if (!socket || !socket.connected) {
+      logger.debug('[SocketIOOrchestrator]', 'Socket not ready, queueing message');
+
+      // Check queue size limit
+      if (this.pendingMessages.length >= this.MAX_QUEUE_SIZE) {
+        logger.warn('[SocketIOOrchestrator]', 'Message queue full, oldest message will be discarded');
+        const oldest = this.pendingMessages.shift();
+        if (oldest) {
+          oldest.resolve(false);
+        }
+      }
+
+      // Add to queue and return a promise that resolves when message is sent
+      return new Promise<boolean>((resolve) => {
+        const pending: PendingMessage = {
+          conversationId,
+          content,
+          originalLanguage,
+          replyToId,
+          mentionedUserIds,
+          attachmentIds,
+          attachmentMimeTypes,
+          timestamp: Date.now(),
+          resolve
+        };
+
+        this.pendingMessages.push(pending);
+        logger.debug('[SocketIOOrchestrator]', `Message queued (${this.pendingMessages.length} in queue)`);
+
+        // Set a timeout to reject if not sent within MESSAGE_QUEUE_TIMEOUT
+        setTimeout(() => {
+          const index = this.pendingMessages.indexOf(pending);
+          if (index !== -1) {
+            this.pendingMessages.splice(index, 1);
+            logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
+            resolve(false);
+          }
+        }, this.MESSAGE_QUEUE_TIMEOUT);
+      });
     }
 
     const options: MessageSendOptions = {
@@ -390,10 +509,25 @@ export class SocketIOOrchestrator {
   // ============ CLEANUP ============
 
   cleanup(): void {
+    // Reject all pending messages
+    while (this.pendingMessages.length > 0) {
+      const pending = this.pendingMessages.shift();
+      if (pending) {
+        pending.resolve(false);
+      }
+    }
+
     this.connectionService.cleanup();
     this.messagingService.cleanup();
     this.typingService.cleanup();
     this.presenceService.cleanup();
     this.translationService.cleanup();
+  }
+
+  /**
+   * Get pending messages count (for diagnostics)
+   */
+  getPendingMessagesCount(): number {
+    return this.pendingMessages.length;
   }
 }
