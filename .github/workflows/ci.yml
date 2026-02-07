@@ -294,8 +294,8 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install numpy first (required for pkuseg build)
-          uv pip install numpy
+          # Install build dependencies first (required for pkuseg build with no-build-isolation)
+          uv pip install numpy setuptools wheel cython
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -391,8 +391,8 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install numpy first (required for pkuseg build)
-          uv pip install numpy
+          # Install build dependencies first (required for pkuseg build with no-build-isolation)
+          uv pip install numpy setuptools wheel cython
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -502,8 +502,8 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install numpy first (required for pkuseg build)
-          uv pip install numpy
+          # Install build dependencies first (required for pkuseg build with no-build-isolation)
+          uv pip install numpy setuptools wheel cython
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
@@ -630,8 +630,8 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install numpy first (required for pkuseg build)
-          uv pip install numpy
+          # Install build dependencies first (required for pkuseg build with no-build-isolation)
+          uv pip install numpy setuptools wheel cython
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
