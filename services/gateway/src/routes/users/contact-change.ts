@@ -371,6 +371,154 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
 }
 
 /**
+ * POST /users/me/resend-email-change-verification - Renvoie l'email de vérification du changement
+ */
+export async function resendEmailChangeVerification(fastify: FastifyInstance) {
+  fastify.post('/users/me/resend-email-change-verification', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Resend verification email for pending email change. Generates a new token and sends to the pending email address.',
+      tags: ['users'],
+      summary: 'Resend email change verification',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Verification email resent' },
+                pendingEmail: { type: 'string', description: 'The email address awaiting verification' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'No pending email change' }
+          }
+        },
+        401: errorResponseSchema,
+        429: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', description: 'Rate limit exceeded' }
+          }
+        },
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const userId = authContext.userId;
+
+      // Get user with pending email
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          systemLanguage: true,
+          pendingEmail: true,
+          pendingEmailVerificationExpiry: true
+        }
+      });
+
+      if (!user) {
+        return reply.status(404).send({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      if (!user.pendingEmail) {
+        return reply.status(400).send({
+          success: false,
+          error: 'No pending email change'
+        });
+      }
+
+      // Rate limiting: Check if we sent an email in the last minute
+      const redis = fastify.redis;
+      const rateLimitKey = `resend-email-change:${userId}`;
+      const lastSent = await redis.get(rateLimitKey);
+
+      if (lastSent) {
+        const secondsRemaining = Math.ceil((parseInt(lastSent) + 60000 - Date.now()) / 1000);
+        if (secondsRemaining > 0) {
+          return reply.status(429).send({
+            success: false,
+            error: `Please wait ${secondsRemaining} seconds before resending`
+          });
+        }
+      }
+
+      // Generate new verification token
+      const { raw: verificationToken, hash: verificationTokenHash } = generateVerificationToken();
+      const tokenExpiryHours = 24;
+      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
+
+      // Update user with new token
+      await fastify.prisma.user.update({
+        where: { id: userId },
+        data: {
+          pendingEmailVerificationToken: verificationTokenHash,
+          pendingEmailVerificationExpiry: verificationExpiry
+        }
+      });
+
+      // Set rate limit
+      await redis.set(rateLimitKey, Date.now().toString(), 'EX', 60);
+
+      // Send verification email
+      const { EmailService } = await import('../../services/EmailService');
+      const emailService = new EmailService();
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
+
+      await emailService.sendEmailChangeVerification({
+        to: user.pendingEmail,
+        name: user.displayName || `${user.firstName} ${user.lastName}`,
+        verificationLink,
+        expiryHours: tokenExpiryHours,
+        language: user.systemLanguage || 'fr'
+      });
+
+      logger.info(`[EMAIL_CHANGE] Verification email resent to ${user.pendingEmail} for user ${userId}`);
+
+      return reply.send({
+        success: true,
+        data: {
+          message: 'Verification email resent',
+          pendingEmail: user.pendingEmail
+        }
+      });
+
+    } catch (error: unknown) {
+      logError(fastify.log, 'Resend email change verification error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+}
+
+/**
  * POST /users/me/change-phone - Initie le changement de téléphone
  */
 export async function initiatePhoneChange(fastify: FastifyInstance) {

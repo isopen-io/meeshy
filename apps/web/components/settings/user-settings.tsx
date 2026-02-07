@@ -118,6 +118,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  const [isResendingPendingEmail, setIsResendingPendingEmail] = useState(false);
   // pendingEmail is now loaded from user object, not local state
 
   // Phone change state
@@ -636,6 +637,43 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   };
 
   /**
+   * Renvoyer l'email de vérification du changement d'email (pendingEmail)
+   */
+  const handleResendPendingEmailVerification = async () => {
+    if (!user?.pendingEmail) {
+      toast.error(t('profile.email.noPendingEmail', 'Aucun changement d\'email en attente'));
+      return;
+    }
+
+    setIsResendingPendingEmail(true);
+    try {
+      const response = await fetch(buildApiUrl('/users/me/resend-email-change-verification'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authManager.getAuthToken()}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success(t('profile.email.verificationResent', 'Email de vérification renvoyé à {email}').replace('{email}', user.pendingEmail));
+      } else if (response.status === 429) {
+        // Rate limited
+        toast.warning(t('profile.email.rateLimited', 'Veuillez patienter avant de renvoyer l\'email'));
+      } else {
+        toast.error(data.error || t('profile.email.resendError', 'Erreur lors du renvoi de l\'email'));
+      }
+    } catch (error) {
+      console.error('Error resending pending email verification:', error);
+      toast.error(t('profile.email.resendError', 'Erreur lors du renvoi de l\'email'));
+    } finally {
+      setIsResendingPendingEmail(false);
+    }
+  };
+
+  /**
    * Envoyer le code SMS de vérification
    */
   const handleSendPhoneCode = async () => {
@@ -1095,7 +1133,18 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     <Mail className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     <AlertDescription className="ml-2 text-xs text-purple-800 dark:text-purple-300">
                       <p className="font-medium">{t('profile.email.pending', 'Changement d\'email en attente')}</p>
-                      <p className="mt-1">{t('profile.email.pendingMessage', `Code envoyé à ${user.pendingEmail}`)}</p>
+                      <p className="mt-1">
+                        {t('profile.email.pendingMessage', 'Email envoyé à {email}').replace('{email}', user.pendingEmail)} •{' '}
+                        <button
+                          onClick={handleResendPendingEmailVerification}
+                          disabled={isResendingPendingEmail}
+                          className="text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 underline"
+                        >
+                          {isResendingPendingEmail
+                            ? t('profile.verification.sending', 'Envoi...')
+                            : t('profile.email.resendVerification', 'Renvoyer')}
+                        </button>
+                      </p>
                     </AlertDescription>
                   </Alert>
                 )}

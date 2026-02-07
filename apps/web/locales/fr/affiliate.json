@@ -2,6 +2,7 @@
   "affiliate": {
     "landing": {
       "welcomeFrom": "Vous avez été invité par",
+      "invitedBy": "Invité(e) par",
       "headline": "Discutez avec le monde entier, dans votre langue.",
       "subheadline": "Meeshy traduit vos messages en temps réel. Plus de 100 langues. Gratuit.",
       "cta": "Créer mon compte",

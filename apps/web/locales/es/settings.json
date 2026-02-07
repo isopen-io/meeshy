@@ -76,6 +76,34 @@
         "updateError": "Error al actualizar el perfil",
         "confirm": "Confirmar",
         "uploading": "Subiendo..."
+      },
+      "email": {
+        "available": "Email disponible",
+        "alreadyUsed": "Este email ya está en uso",
+        "invalidOrTaken": "Email inválido o ya en uso",
+        "verificationSent": "Email de verificación enviado a la nueva dirección",
+        "error": "Error durante el cambio",
+        "pending": "Cambio de email pendiente",
+        "pendingMessage": "Email enviado a {email}",
+        "noPendingEmail": "No hay cambio de email pendiente",
+        "verificationResent": "Email de verificación reenviado a {email}",
+        "rateLimited": "Por favor espere antes de reenviar el email",
+        "resendError": "Error al reenviar el email",
+        "resendVerification": "Reenviar"
+      },
+      "phone": {
+        "available": "Número disponible",
+        "alreadyUsed": "Este número ya está en uso",
+        "invalidOrTaken": "Número inválido o ya en uso",
+        "verificationSent": "Código de verificación enviado por SMS",
+        "error": "Error durante el cambio",
+        "pending": "Cambio pendiente",
+        "pendingMessage": "Código enviado a {phone}"
+      },
+      "username": {
+        "available": "Nombre de usuario disponible",
+        "alreadyUsed": "Este nombre de usuario ya está en uso",
+        "error": "Error durante el cambio"
       }
     },
     "translation": {
@@ -402,6 +430,28 @@
       "confirmDelete": "¿Está seguro de que desea eliminar su perfil de voz?",
       "noConsent": "Active el consentimiento de grabación de voz arriba para crear su perfil."
     },
-    "noUserConnected": "Ningún usuario conectado"
+    "noUserConnected": "Ningún usuario conectado",
+    "emailChange": {
+      "verify": {
+        "noToken": "Token de verificación faltante",
+        "expired": "El enlace de verificación ha expirado",
+        "expiredTitle": "Enlace expirado",
+        "invalid": "El enlace de verificación es inválido",
+        "invalidTitle": "Enlace inválido",
+        "noPending": "No hay cambio de email pendiente",
+        "error": "Error durante la verificación",
+        "errorTitle": "Error",
+        "networkError": "Error de conexión",
+        "verifying": "Verificando...",
+        "pleaseWait": "Por favor espere...",
+        "success": "¡Email cambiado!",
+        "successMessage": "Su dirección de email ha sido cambiada con éxito.",
+        "successInfo": "Ahora puede usar su nueva dirección de email para iniciar sesión.",
+        "expiredInfo": "El enlace de verificación ha expirado. Por favor solicite un nuevo cambio de email desde su configuración.",
+        "backToSettings": "Volver a configuración",
+        "tryAgain": "Reintentar cambio de email",
+        "backToHome": "Volver al inicio"
+      }
+    }
   }
 }

@@ -95,7 +95,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                   type: 'string',
                   format: 'uri',
                   description: 'Complete shareable affiliate link',
-                  example: 'https://app.meeshy.me/?affiliate=aff_1234567890_abc'
+                  example: 'https://app.meeshy.me/signup/affiliate/aff_1234567890_abc'
                 },
                 maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
                 currentUses: { type: 'number', description: 'Current use count' },
@@ -155,9 +155,9 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Construire le lien d'affiliation
+      // Construire le lien d'affiliation avec le format /signup/affiliate/TOKEN
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
-      const affiliateLink = `${baseUrl}/?affiliate=${token}`;
+      const affiliateLink = `${baseUrl}/signup/affiliate/${token}`;
 
       return reply.send({
         success: true,
@@ -313,11 +313,11 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         return token;
       }));
 
-      // Construire les liens d'affiliation
+      // Construire les liens d'affiliation avec le format /signup/affiliate/TOKEN
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
       const tokensWithLinks = tokensWithCounts.map(token => ({
         ...token,
-        affiliateLink: `${baseUrl}/?affiliate=${token.token}`,
+        affiliateLink: `${baseUrl}/signup/affiliate/${token.token}`,
         createdAt: token.createdAt.toISOString(),
         expiresAt: token.expiresAt?.toISOString()
       }));

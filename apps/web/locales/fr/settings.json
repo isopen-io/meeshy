@@ -114,7 +114,12 @@
         "verificationSent": "Email de vérification envoyé à la nouvelle adresse",
         "error": "Erreur lors du changement",
         "pending": "Changement d'email en attente",
-        "pendingMessage": "Code envoyé à {email}"
+        "pendingMessage": "Email envoyé à {email}",
+        "noPendingEmail": "Aucun changement d'email en attente",
+        "verificationResent": "Email de vérification renvoyé à {email}",
+        "rateLimited": "Veuillez patienter avant de renvoyer l'email",
+        "resendError": "Erreur lors du renvoi de l'email",
+        "resendVerification": "Renvoyer"
       },
       "phone": {
         "available": "Numéro disponible",
@@ -750,6 +755,28 @@
           "title": "Documents & Fichiers",
           "description": "Téléchargement, prévisualisation et stockage"
         }
+      }
+    },
+    "emailChange": {
+      "verify": {
+        "noToken": "Token de vérification manquant",
+        "expired": "Le lien de vérification a expiré",
+        "expiredTitle": "Lien expiré",
+        "invalid": "Le lien de vérification est invalide",
+        "invalidTitle": "Lien invalide",
+        "noPending": "Aucun changement d'email en attente",
+        "error": "Erreur lors de la vérification",
+        "errorTitle": "Erreur",
+        "networkError": "Erreur de connexion",
+        "verifying": "Vérification en cours...",
+        "pleaseWait": "Veuillez patienter...",
+        "success": "Email modifié !",
+        "successMessage": "Votre adresse email a été modifiée avec succès.",
+        "successInfo": "Vous pouvez maintenant utiliser votre nouvelle adresse email pour vous connecter.",
+        "expiredInfo": "Le lien de vérification a expiré. Veuillez demander un nouveau changement d'email depuis vos paramètres.",
+        "backToSettings": "Retour aux paramètres",
+        "tryAgain": "Réessayer le changement d'email",
+        "backToHome": "Retour à l'accueil"
       }
     },
     "consentDialog": {

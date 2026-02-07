@@ -56,18 +56,18 @@ export function middleware(request: NextRequest) {
 
   // =============================================================================
   // GESTION DES TOKENS D'AFFILIATION
+  // Rediriger /?affiliate=TOKEN vers /signup/affiliate/TOKEN
   // =============================================================================
 
   // Détecter le paramètre affiliate dans l'URL
   const affiliateToken = searchParams.get('affiliate');
 
   // Si un token d'affiliation est présent dans les paramètres de requête
-  if (affiliateToken && pathname === '/') {
-    // Créer une réponse de redirection vers la page d'accueil sans le paramètre
-    const url = request.nextUrl.clone();
-    url.searchParams.delete('affiliate');
+  if (affiliateToken) {
+    // Rediriger vers la page d'affiliation dédiée
+    const affiliateUrl = new URL(`/signup/affiliate/${affiliateToken}`, request.url);
 
-    const response = NextResponse.redirect(url);
+    const response = NextResponse.redirect(affiliateUrl);
 
     // Sauvegarder le token dans un cookie (expire dans 30 jours)
     response.cookies.set('meeshy_affiliate_token', affiliateToken, {
