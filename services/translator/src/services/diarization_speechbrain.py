@@ -147,12 +147,36 @@ class SpeechBrainDiarization:
             raise RuntimeError("SpeechBrain non disponible - pip install speechbrain")
 
         if self._encoder is None:
-            logger.info("[SPEECHBRAIN] Chargement modèle ECAPA-TDNN...")
-            self._encoder = EncoderClassifier.from_hparams(
-                source="speechbrain/spkrec-ecapa-voxceleb",
-                savedir=self.models_dir,
-                run_opts={"device": "cpu"}
-            )
+            # Liste des modèles à essayer (ECAPA-TDNN principal, x-vector fallback)
+            # Note: spkrec-ecapa-voxceleb peut échouer avec 404 sur custom.py si fichiers manquants
+            models_to_try = [
+                ("speechbrain/spkrec-ecapa-voxceleb", "ECAPA-TDNN"),
+                ("speechbrain/spkrec-xvect-voxceleb", "X-Vector"),
+            ]
+
+            last_error = None
+            for model_source, model_name in models_to_try:
+                try:
+                    logger.info(f"[SPEECHBRAIN] Chargement modèle {model_name}...")
+                    self._encoder = EncoderClassifier.from_hparams(
+                        source=model_source,
+                        savedir=self.models_dir,
+                        run_opts={"device": "cpu"}
+                    )
+                    logger.info(f"[SPEECHBRAIN] ✅ Modèle {model_name} chargé avec succès")
+                    break
+                except Exception as e:
+                    error_msg = str(e)
+                    # 404 = fichier manquant sur HuggingFace (custom.py supprimé)
+                    if "404" in error_msg or "Entry Not Found" in error_msg:
+                        logger.warning(f"[SPEECHBRAIN] ⚠️ Modèle {model_name} indisponible (fichiers manquants): {e}")
+                    else:
+                        logger.warning(f"[SPEECHBRAIN] ⚠️ Échec chargement {model_name}: {e}")
+                    last_error = e
+                    continue
+
+            if self._encoder is None:
+                raise RuntimeError(f"Aucun modèle SpeechBrain disponible: {last_error}")
 
         return self._encoder
 
