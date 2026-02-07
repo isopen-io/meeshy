@@ -83,6 +83,14 @@ export interface MagicLinkEmailData {
   language?: string;
 }
 
+export interface EmailChangeVerificationData {
+  to: string;
+  name: string;
+  verificationLink: string;
+  expiryHours: number;
+  language?: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -125,6 +133,14 @@ interface EmailTranslations {
     action2: string;
     action3: string;
   };
+  emailChange: {
+    subject: string;
+    title: string;
+    intro: string;
+    buttonText: string;
+    expiry: string;
+    ignoreNote: string;
+  };
 }
 
 const translations: Record<SupportedLanguage, EmailTranslations> = {
@@ -163,6 +179,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Changez votre mot de passe immédiatement',
       action2: 'Vérifiez vos appareils connectés',
       action3: "Activez l'authentification à deux facteurs"
+    },
+    emailChange: {
+      subject: 'Confirmez votre nouvelle adresse email - Meeshy',
+      title: 'Changement d\'adresse email',
+      intro: 'Vous avez demandé à changer votre adresse email Meeshy. Pour confirmer ce changement, cliquez sur le bouton ci-dessous :',
+      buttonText: 'Confirmer le changement',
+      expiry: 'Ce lien expire dans {hours} heures.',
+      ignoreNote: 'Si vous n\'avez pas demandé ce changement, ignorez cet email. Votre adresse email actuelle restera inchangée.'
     }
   },
   en: {
@@ -200,6 +224,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Change your password immediately',
       action2: 'Check your connected devices',
       action3: 'Enable two-factor authentication'
+    },
+    emailChange: {
+      subject: 'Confirm your new email address - Meeshy',
+      title: 'Email Address Change',
+      intro: 'You have requested to change your Meeshy email address. To confirm this change, click the button below:',
+      buttonText: 'Confirm change',
+      expiry: 'This link expires in {hours} hours.',
+      ignoreNote: 'If you did not request this change, please ignore this email. Your current email address will remain unchanged.'
     }
   },
   es: {
@@ -237,6 +269,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Cambia tu contraseña inmediatamente',
       action2: 'Verifica tus dispositivos conectados',
       action3: 'Activa la autenticación de dos factores'
+    },
+    emailChange: {
+      subject: 'Confirma tu nueva dirección de correo - Meeshy',
+      title: 'Cambio de dirección de correo',
+      intro: 'Has solicitado cambiar tu dirección de correo de Meeshy. Para confirmar este cambio, haz clic en el botón de abajo:',
+      buttonText: 'Confirmar cambio',
+      expiry: 'Este enlace expira en {hours} horas.',
+      ignoreNote: 'Si no solicitaste este cambio, ignora este correo. Tu dirección de correo actual permanecerá sin cambios.'
     }
   },
   pt: {
@@ -274,6 +314,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Altere sua senha imediatamente',
       action2: 'Verifique seus dispositivos conectados',
       action3: 'Ative a autenticação de dois fatores'
+    },
+    emailChange: {
+      subject: 'Confirme seu novo email - Meeshy',
+      title: 'Alteração de endereço de email',
+      intro: 'Você solicitou a alteração do seu email do Meeshy. Para confirmar esta alteração, clique no botão abaixo:',
+      buttonText: 'Confirmar alteração',
+      expiry: 'Este link expira em {hours} horas.',
+      ignoreNote: 'Se você não solicitou esta alteração, ignore este email. Seu endereço de email atual permanecerá inalterado.'
     }
   },
   it: {
@@ -311,6 +359,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Cambia immediatamente la tua password',
       action2: 'Verifica i tuoi dispositivi connessi',
       action3: "Attiva l'autenticazione a due fattori"
+    },
+    emailChange: {
+      subject: 'Conferma il tuo nuovo indirizzo email - Meeshy',
+      title: 'Cambio indirizzo email',
+      intro: 'Hai richiesto di cambiare il tuo indirizzo email di Meeshy. Per confermare questo cambio, clicca sul pulsante qui sotto:',
+      buttonText: 'Conferma cambio',
+      expiry: 'Questo link scade tra {hours} ore.',
+      ignoreNote: 'Se non hai richiesto questo cambio, ignora questa email. Il tuo indirizzo email attuale rimarrà invariato.'
     }
   },
   de: {
@@ -348,6 +404,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Ändere sofort dein Passwort',
       action2: 'Überprüfe deine verbundenen Geräte',
       action3: 'Aktiviere die Zwei-Faktor-Authentifizierung'
+    },
+    emailChange: {
+      subject: 'Bestätige deine neue E-Mail-Adresse - Meeshy',
+      title: 'Änderung der E-Mail-Adresse',
+      intro: 'Du hast angefordert, deine Meeshy E-Mail-Adresse zu ändern. Um diese Änderung zu bestätigen, klicke auf den Button unten:',
+      buttonText: 'Änderung bestätigen',
+      expiry: 'Dieser Link läuft in {hours} Stunden ab.',
+      ignoreNote: 'Wenn du diese Änderung nicht angefordert hast, ignoriere diese E-Mail. Deine aktuelle E-Mail-Adresse bleibt unverändert.'
     }
   }
 };
@@ -550,6 +614,17 @@ export class EmailService {
     const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text });
+  }
+
+  async sendEmailChangeVerification(data: EmailChangeVerificationData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const expiry = t.emailChange.expiry.replace('{hours}', data.expiryHours.toString());
+    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>📧 ${t.emailChange.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.emailChange.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.emailChange.buttonText}</a></div><p style="word-break:break-all;color:#6366F1;font-size:14px">${data.verificationLink}</p><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.emailChange.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const text = `${t.emailChange.title}\n\n${t.common.greeting} ${data.name},\n\n${t.emailChange.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.emailChange.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
+
+    return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text });
   }
 
   async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {

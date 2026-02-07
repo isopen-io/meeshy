@@ -178,8 +178,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
 
-      // Temporary: Use sendEmailVerification with custom link (pending dedicated template)
-      await emailService.sendEmailVerification({
+      await emailService.sendEmailChangeVerification({
         to: newEmail,
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
