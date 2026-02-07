@@ -553,11 +553,11 @@ class Synthesizer:
             Durée en millisecondes
         """
         try:
-            import librosa
+            from utils.audio_utils import get_audio_duration
             loop = asyncio.get_event_loop()
             duration = await loop.run_in_executor(
                 None,
-                lambda: librosa.get_duration(path=audio_path)
+                lambda: get_audio_duration(audio_path)
             )
             return int(duration * 1000)
         except Exception as e:

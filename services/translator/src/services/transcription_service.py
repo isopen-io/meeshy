@@ -55,6 +55,9 @@ except ImportError:
     logger.warning("⚠️ [TRANSCRIPTION] soundfile/librosa non disponibles")
 
 
+from utils.audio_utils import get_audio_duration as _get_librosa_duration
+
+
 @dataclass
 class TranscriptionSegment:
     """
@@ -239,8 +242,9 @@ class TranscriptionService:
         - Confidence très basse (< 0.3)
         - Texte correspondant à des phrases communes
         """
-        # Phrases d'hallucination communes (complètes)
+        # Phrases d'hallucination communes (complètes) - multi-langue
         HALLUCINATION_PHRASES = {
+            # English (YouTube endings)
             'thanks for watching',
             'thank you for watching',
             'thanks for watching!',
@@ -254,6 +258,19 @@ class TranscriptionService:
             'smash that like button',
             'hit the bell',
             'turn on notifications',
+            # Russian (very common Whisper hallucination)
+            'продолжение следует',
+            'продолжение следует...',
+            # French (subtitle hallucinations)
+            'sous-titres réalisés par la communauté d\'amara.org',
+            'sous-titrage st\'501',
+            'merci d\'avoir regardé',
+            # Chinese
+            '请订阅',
+            '谢谢观看',
+            # Spanish
+            'gracias por ver',
+            'suscríbete',
         }
 
         # Mots isolés suspects (souvent partie d'hallucinations)
@@ -281,7 +298,16 @@ class TranscriptionService:
         if text_lower in HALLUCINATION_PHRASES:
             return True
 
-        # 3. Confidence très basse (< 0.2) + texte suspect
+        # 3. Détection de script étranger (ex: cyrillique dans du français)
+        # Si la langue détectée est latine mais le texte contient du cyrillique/chinois, c'est une hallucination
+        if segment.language and segment.language in ('fr', 'en', 'es', 'pt', 'de', 'it', 'nl', 'pl', 'ro', 'sv'):
+            import re
+            if re.search(r'[\u0400-\u04FF]', segment.text):  # Cyrillique
+                return True
+            if re.search(r'[\u4e00-\u9fff]', segment.text):  # CJK
+                return True
+
+        # 4. Confidence très basse (< 0.2) + texte suspect
         if segment.confidence < 0.2:
             if text_lower in HALLUCINATION_WORDS:
                 return True
@@ -390,6 +416,7 @@ class TranscriptionService:
                     beam_size=1,  # Optimisé: 5→1 pour vitesse (greedy search)
                     best_of=1,     # Optimisé: génère une seule hypothèse
                     word_timestamps=return_timestamps,
+                    condition_on_previous_text=False,  # ✅ Réduit les hallucinations en chaîne (texte russe/chinois parasite)
                     vad_filter=True,  # ✅ Réactivé pour détecter les pauses
                     vad_parameters={
                         'threshold': 0.3,      # Plus sensible (défaut: 0.5) - détecte voix douces
@@ -505,7 +532,7 @@ class TranscriptionService:
             loop = asyncio.get_event_loop()
             duration = await loop.run_in_executor(
                 None,
-                lambda: librosa.get_duration(path=audio_path)
+                lambda: _get_librosa_duration(audio_path)
             )
             return int(duration * 1000)
         except Exception as e:

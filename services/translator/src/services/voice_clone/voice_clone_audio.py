@@ -374,10 +374,10 @@ class VoiceCloneAudioProcessor:
 
         # Try librosa first
         try:
-            import librosa
+            from utils.audio_utils import get_audio_duration
             duration = await loop.run_in_executor(
                 None,
-                lambda: librosa.get_duration(path=audio_path)
+                lambda: get_audio_duration(audio_path)
             )
             if duration > 0:
                 duration_ms = int(duration * 1000)
