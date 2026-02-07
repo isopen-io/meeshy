@@ -13,14 +13,14 @@ interface IdentityStepProps {
   onLastNameChange: (value: string) => void;
 }
 
-const NAME_REGEX = /^(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\s'.-]+$/;
+const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'.-]+$/u;
 
 const inputBaseClass = "h-10 bg-white/70 dark:bg-gray-800/70 sm:bg-white/50 sm:dark:bg-gray-800/50 sm:backdrop-blur-sm border-2 transition-colors focus:outline-none focus:ring-0 focus:ring-offset-0";
 
 function getNameError(value: string, t: (key: string) => string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null; // Don't show error on empty (not yet typed)
-  if (trimmed.length < 2) return t('register.nameMinLength');
+  if (trimmed.length < 1) return t('register.nameMinLength');
   if (!NAME_REGEX.test(trimmed)) return t('register.nameInvalidChars');
   return null;
 }

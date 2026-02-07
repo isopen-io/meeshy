@@ -2622,15 +2622,15 @@ export const registerRequestSchema = {
       type: 'string',
       minLength: 1,
       maxLength: 50,
-      pattern: '(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\\s\'.\\-]+',
-      description: 'User first name (must contain at least one letter)'
+      pattern: '(?=.*\\p{L})[\\p{L}\\s\'.\\-]+',
+      description: 'User first name (must contain at least one Unicode letter)'
     },
     lastName: {
       type: 'string',
       minLength: 1,
       maxLength: 50,
-      pattern: '(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\\s\'.\\-]+',
-      description: 'User last name (must contain at least one letter)'
+      pattern: '(?=.*\\p{L})[\\p{L}\\s\'.\\-]+',
+      description: 'User last name (must contain at least one Unicode letter)'
     },
     email: {
       type: 'string',

@@ -297,9 +297,9 @@ export const AuthSchemas = {
     password: z.string()
       .min(8, 'Mot de passe trop court (min 8 caractères)'),
     firstName: z.string().min(1).max(50)
-      .regex(/^(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\s'.-]+$/, 'Le prénom doit contenir au moins une lettre'),
+      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le prénom doit contenir au moins une lettre'),
     lastName: z.string().min(1).max(50)
-      .regex(/^(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\s'.-]+$/, 'Le nom doit contenir au moins une lettre'),
+      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le nom doit contenir au moins une lettre'),
     email: z.string().email('Email invalide'),
     phoneNumber: z.string().optional(),
     phoneCountryCode: z.string().length(2).optional(),

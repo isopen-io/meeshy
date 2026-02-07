@@ -59,7 +59,7 @@ export const usernameSchema = z.string()
 export const nameSchema = z.string()
   .min(1, 'Le nom est requis')
   .max(50, 'Le nom ne peut pas depasser 50 caracteres')
-  .regex(/^(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\s'.-]+$/, 'Le nom doit contenir au moins une lettre')
+  .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le nom doit contenir au moins une lettre')
   .trim();
 
 /**

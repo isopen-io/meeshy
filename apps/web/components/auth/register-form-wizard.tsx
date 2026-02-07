@@ -279,9 +279,9 @@ export function RegisterFormWizard({
                        (phoneValidationStatus === 'valid' && formattedE164 !== null);
         return emailOk && phoneOk;
       case 'identity':
-        const nameRegex = /^(?=.*[a-zA-ZÀ-ÿ])[a-zA-ZÀ-ÿ\s'.-]+$/;
-        return formData.firstName.trim().length >= 2 && nameRegex.test(formData.firstName.trim()) &&
-               formData.lastName.trim().length >= 2 && nameRegex.test(formData.lastName.trim());
+        const nameRegex = /^(?=.*\p{L})[\p{L}\s'.-]+$/u;
+        return formData.firstName.trim().length >= 1 && nameRegex.test(formData.firstName.trim()) &&
+               formData.lastName.trim().length >= 1 && nameRegex.test(formData.lastName.trim());
       case 'username':
         return validation.validateUsername(formData.username) && usernameCheckStatus === 'available';
       case 'security':
