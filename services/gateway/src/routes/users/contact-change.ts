@@ -8,6 +8,7 @@ import { emailSchema } from '@meeshy/shared/types/validation';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
+import { getRedisWrapper } from '../../services/RedisWrapper';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -453,9 +454,9 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
       }
 
       // Rate limiting: Check if we sent an email in the last minute
-      const redis = fastify.redis;
+      const redisWrapper = getRedisWrapper();
       const rateLimitKey = `resend-email-change:${userId}`;
-      const lastSent = await redis.get(rateLimitKey);
+      const lastSent = await redisWrapper.get(rateLimitKey);
 
       if (lastSent) {
         const secondsRemaining = Math.ceil((parseInt(lastSent) + 60000 - Date.now()) / 1000);
@@ -482,7 +483,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
       });
 
       // Set rate limit
-      await redis.set(rateLimitKey, Date.now().toString(), 'EX', 60);
+      await redisWrapper.setex(rateLimitKey, 60, Date.now().toString());
 
       // Send verification email
       const { EmailService } = await import('../../services/EmailService');
