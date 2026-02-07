@@ -1380,6 +1380,11 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
+      if (!data.translatedAudio) {
+        logger.error(`❌ [TranslationService] translatedAudio manquant dans _processTranslationEvent pour ${data.attachmentId}`);
+        return;
+      }
+
       logger.info(
         `${logPrefix} [TranslationService] ${data.attachmentId} | ` +
         `Lang: ${data.language} | Segments: ${data.translatedAudio.segments?.length || 0}`
@@ -1526,15 +1531,25 @@ export class MessageTranslationService extends EventEmitter {
     }>;
   }) {
     // Adapter: ZmqMessageHandler envoie translatedAudios (array), on extrait le premier
-    const translatedAudio = data.translatedAudio || (data.translatedAudios && data.translatedAudios[0]);
+    const translatedAudio = data.translatedAudio || (data.translatedAudios?.[0]);
 
     if (!translatedAudio) {
-      logger.error(`❌ [TranslationService] Aucun audio traduit dans l'événement`);
+      logger.error(
+        `❌ [TranslationService] Aucun audio traduit dans l'événement | ` +
+        `hasTranslatedAudio: ${!!data.translatedAudio} | ` +
+        `hasTranslatedAudios: ${!!data.translatedAudios} | ` +
+        `translatedAudiosLength: ${data.translatedAudios?.length || 0} | ` +
+        `keys: ${Object.keys(data).join(',')}`
+      );
       return;
     }
 
+    // Construire l'objet sans spread pour éviter que translatedAudio: undefined du data original persiste
     await this._processTranslationEvent({
-      ...data,
+      taskId: data.taskId,
+      messageId: data.messageId,
+      attachmentId: data.attachmentId,
+      language: data.language,
       translatedAudio
     }, 'audioTranslationReady', '🎯');
   }

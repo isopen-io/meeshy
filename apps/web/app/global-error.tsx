@@ -17,28 +17,36 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Importer dynamiquement le collecteur (évite les erreurs SSR)
-    if (typeof window !== 'undefined') {
-      import('@/utils/error-context-collector').then(({ collectErrorContext, sendErrorContext }) => {
-        // Collecter tous les détails du contexte
-        const context = collectErrorContext(error);
+    if (typeof window === 'undefined') return;
 
-        // Log l'erreur côté client pour debugging
-        console.error('[Global Error] Complete context:', context);
+    const msg = error.message || '';
+    const isChunkError = msg.includes('Loading chunk') || msg.includes('ChunkLoadError');
+    const isStaleAction = msg.includes('Failed to find Server Action');
 
-        // Envoyer au backend avec tous les détails
-        sendErrorContext(context).catch(() => {
-          // Ignorer silencieusement si l'envoi échoue
-        });
-      }).catch((err) => {
-        // Fallback basique si le collecteur échoue
-        console.error('[Global Error] Fallback:', {
-          message: error.message,
-          stack: error.stack,
-          digest: error.digest,
-        });
-      });
+    // Auto-recovery pour les erreurs de deploiement (chunks/server actions obsoletes)
+    if (isChunkError || isStaleAction) {
+      const key = '__meeshy_global_error_reload';
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.location.reload();
+        return;
+      }
+      // Si le reload n'a pas resolu, nettoyer le flag pour la prochaine fois
+      sessionStorage.removeItem(key);
     }
+
+    // Importer dynamiquement le collecteur (evite les erreurs SSR)
+    import('@/utils/error-context-collector').then(({ collectErrorContext, sendErrorContext }) => {
+      const context = collectErrorContext(error);
+      console.error('[Global Error] Complete context:', context);
+      sendErrorContext(context).catch(() => {});
+    }).catch((err) => {
+      console.error('[Global Error] Fallback:', {
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+      });
+    });
   }, [error]);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;

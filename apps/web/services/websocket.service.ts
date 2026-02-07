@@ -39,6 +39,10 @@ class WebSocketService {
   private translationListeners: Set<(data: TranslationEvent) => void> = new Set();
   private typingListeners: Set<(event: TypingEvent) => void> = new Set();
   private statusListeners: Set<(event: UserStatusEvent) => void> = new Set();
+  private authListeners: Set<() => void> = new Set();
+
+  // Pending join: conversation à rejoindre dès que l'authentification est complète
+  private pendingJoinConversationId: string | null = null;
 
   private constructor() {
     // Initialisation au chargement si token disponible
@@ -127,6 +131,16 @@ class WebSocketService {
       if (response?.success) {
         this.isAuthenticated = true;
         toast.success('Connexion établie');
+
+        // Exécuter le join en attente si présent
+        if (this.pendingJoinConversationId) {
+          const convId = this.pendingJoinConversationId;
+          this.pendingJoinConversationId = null;
+          this.joinConversation(convId);
+        }
+
+        // Notifier les listeners d'authentification
+        this.authListeners.forEach(listener => listener());
       } else {
         console.error('❌ [WS] Auth échouée:', response?.error);
         toast.error('Échec authentification');
@@ -211,13 +225,21 @@ class WebSocketService {
   /**
    * ÉTAPE 4: Rejoindre une conversation
    * → Appelé quand on arrive sur une page de conversation
+   * → Si pas encore authentifié, le join est mis en attente
    */
   public joinConversation(conversationId: string): void {
     if (!this.socket?.connected) {
-      console.warn('⚠️ [WS] Socket non connecté, join impossible');
+      console.warn('⚠️ [WS] Socket non connecté, join mis en attente');
+      this.pendingJoinConversationId = conversationId;
       return;
     }
-    
+
+    if (!this.isAuthenticated) {
+      console.warn('⚠️ [WS] Socket connecté mais pas encore authentifié, join mis en attente');
+      this.pendingJoinConversationId = conversationId;
+      return;
+    }
+
     this.socket.emit(CLIENT_EVENTS.CONVERSATION_JOIN, { conversationId });
   }
 
@@ -226,10 +248,15 @@ class WebSocketService {
    * → Appelé quand on quitte la page de conversation
    */
   public leaveConversation(conversationId: string): void {
+    // Annuler le join en attente si c'est la même conversation
+    if (this.pendingJoinConversationId === conversationId) {
+      this.pendingJoinConversationId = null;
+    }
+
     if (!this.socket?.connected) {
       return;
     }
-    
+
     this.socket.emit(CLIENT_EVENTS.CONVERSATION_LEAVE, { conversationId });
   }
 
@@ -410,6 +437,11 @@ class WebSocketService {
   public onUserStatus(listener: (event: UserStatusEvent) => void): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
+  }
+
+  public onAuthenticated(listener: () => void): () => void {
+    this.authListeners.add(listener);
+    return () => this.authListeners.delete(listener);
   }
 
   /**

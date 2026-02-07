@@ -43,12 +43,20 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
 
   // ÉTAPE 1: Gérer le join/leave de conversation
+  // Le service gère automatiquement le cas où l'auth n'est pas encore prête
+  // via pendingJoinConversationId
   useEffect(() => {
     if (!conversationId) return;
-    
+
     webSocketService.joinConversation(conversationId);
-    
+
+    // Si l'authentification arrive plus tard, re-tenter le join
+    const unsubAuth = webSocketService.onAuthenticated(() => {
+      webSocketService.joinConversation(conversationId);
+    });
+
     return () => {
+      unsubAuth();
       webSocketService.leaveConversation(conversationId);
     };
   }, [conversationId]);
