@@ -507,13 +507,6 @@ jobs:
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
-      - name: Generate Prisma client (Python)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
-
       - name: Run UnifiedTTSService tests
         env:
           CI: "true"
@@ -634,13 +627,6 @@ jobs:
           uv pip install numpy setuptools wheel cython
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
-
-      - name: Generate Prisma client (Python)
-        env:
-          DATABASE_URL: "mongodb://localhost:27017/test"
-        run: |
-          cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} python -m prisma generate --schema=../../packages/shared/prisma/schema.prisma
 
       # Generate JavaScript Prisma client (required for Gateway Voice API tests)
       - name: Generate Prisma client (JavaScript)
