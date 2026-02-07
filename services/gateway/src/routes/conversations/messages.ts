@@ -50,7 +50,9 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
     return attachments;
   }
 
-  logger.info(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  if (attachments.length > 0) {
+    logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  }
 
   return attachments.map((att, attIndex) => {
     const cleaned = { ...att };
