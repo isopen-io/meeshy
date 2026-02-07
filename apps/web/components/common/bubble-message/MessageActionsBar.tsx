@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useState, useMemo } from 'react';
-import { Smile, Copy, MessageCircle, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -322,7 +322,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                 aria-label={t('replyToMessage')}
                 className="p-0 rounded-full transition-colors text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
               >
-                <MessageCircle className="h-3.5 w-3.5" />
+                <Reply className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
