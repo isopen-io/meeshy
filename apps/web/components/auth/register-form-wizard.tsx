@@ -312,29 +312,20 @@ export function RegisterFormWizard({
   // This eliminates mounting delay during transitions
   const stepComponents = {
     contact: (
-      <>
-        <ContactStep
-          ref={currentStepData?.id === 'contact' ? inputRef : undefined}
-          formData={formData}
-          emailValidationStatus={emailValidationStatus}
-          emailErrorMessage={emailErrorMessage}
-          phoneValidationStatus={phoneValidationStatus}
-          phoneErrorMessage={phoneErrorMessage}
-          selectedCountry={selectedCountry}
-          disabled={isLoading || disabled}
-          onEmailChange={handleEmailChange}
-          onPhoneChange={handlePhoneChange}
-          onPhoneBlur={validatePhone}
-          onCountryChange={setSelectedCountry}
-        />
-        <ExistingAccountAlert
-          hasExistingAccount={hasExistingAccount}
-          emailValidationStatus={emailValidationStatus}
-          phoneValidationStatus={phoneValidationStatus}
-          existingAccount={existingAccount}
-          onRecoveryClick={() => setShowRecoveryModal(true)}
-        />
-      </>
+      <ContactStep
+        ref={currentStepData?.id === 'contact' ? inputRef : undefined}
+        formData={formData}
+        emailValidationStatus={emailValidationStatus}
+        emailErrorMessage={emailErrorMessage}
+        phoneValidationStatus={phoneValidationStatus}
+        phoneErrorMessage={phoneErrorMessage}
+        selectedCountry={selectedCountry}
+        disabled={isLoading || disabled}
+        onEmailChange={handleEmailChange}
+        onPhoneChange={handlePhoneChange}
+        onPhoneBlur={validatePhone}
+        onCountryChange={setSelectedCountry}
+      />
     ),
     identity: (
       <IdentityStep
@@ -451,6 +442,17 @@ export function RegisterFormWizard({
             );
           })}
         </div>
+
+        {/* Existing account alert - outside overflow container to avoid clipping */}
+        {currentStepData?.id === 'contact' && (
+          <ExistingAccountAlert
+            hasExistingAccount={hasExistingAccount}
+            emailValidationStatus={emailValidationStatus}
+            phoneValidationStatus={phoneValidationStatus}
+            existingAccount={existingAccount}
+            onRecoveryClick={() => setShowRecoveryModal(true)}
+          />
+        )}
 
         {/* Navigation buttons */}
         <div className="flex items-center justify-between gap-3 mt-4">

@@ -1530,28 +1530,33 @@ export class MessageTranslationService extends EventEmitter {
       audioDataBase64?: string;
     }>;
   }) {
-    // Adapter: ZmqMessageHandler envoie translatedAudios (array), on extrait le premier
-    const translatedAudio = data.translatedAudio || (data.translatedAudios?.[0]);
+    try {
+      // Adapter: ZmqMessageHandler envoie translatedAudios (array), on extrait le premier
+      const translatedAudio = data.translatedAudio || (data.translatedAudios?.[0]);
 
-    if (!translatedAudio) {
-      logger.error(
-        `❌ [TranslationService] Aucun audio traduit dans l'événement | ` +
-        `hasTranslatedAudio: ${!!data.translatedAudio} | ` +
-        `hasTranslatedAudios: ${!!data.translatedAudios} | ` +
-        `translatedAudiosLength: ${data.translatedAudios?.length || 0} | ` +
-        `keys: ${Object.keys(data).join(',')}`
-      );
-      return;
+      if (!translatedAudio) {
+        logger.error(
+          `❌ [TranslationService] Aucun audio traduit dans l'événement | ` +
+          `hasTranslatedAudio: ${!!data.translatedAudio} | ` +
+          `hasTranslatedAudios: ${!!data.translatedAudios} | ` +
+          `translatedAudiosLength: ${data.translatedAudios?.length || 0} | ` +
+          `keys: ${Object.keys(data).join(',')}`
+        );
+        return;
+      }
+
+      // Construire l'objet sans spread pour éviter que translatedAudio: undefined du data original persiste
+      await this._processTranslationEvent({
+        taskId: data.taskId,
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        language: data.language,
+        translatedAudio
+      }, 'audioTranslationReady', '🎯');
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur _handleAudioTranslationReady: ${error}`);
+      this.stats.incrementErrors();
     }
-
-    // Construire l'objet sans spread pour éviter que translatedAudio: undefined du data original persiste
-    await this._processTranslationEvent({
-      taskId: data.taskId,
-      messageId: data.messageId,
-      attachmentId: data.attachmentId,
-      language: data.language,
-      translatedAudio
-    }, 'audioTranslationReady', '🎯');
   }
 
   /**
@@ -1576,7 +1581,12 @@ export class MessageTranslationService extends EventEmitter {
       audioDataBase64?: string;
     };
   }) {
-    await this._processTranslationEvent(data, 'audioTranslationsProgressive', '🔄');
+    try {
+      await this._processTranslationEvent(data, 'audioTranslationsProgressive', '🔄');
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur _handleAudioTranslationsProgressive: ${error}`);
+      this.stats.incrementErrors();
+    }
   }
 
   /**
@@ -1601,7 +1611,12 @@ export class MessageTranslationService extends EventEmitter {
       audioDataBase64?: string;
     };
   }) {
-    await this._processTranslationEvent(data, 'audioTranslationsCompleted', '✅');
+    try {
+      await this._processTranslationEvent(data, 'audioTranslationsCompleted', '✅');
+    } catch (error) {
+      logger.error(`❌ [TranslationService] Erreur _handleAudioTranslationsCompleted: ${error}`);
+      this.stats.incrementErrors();
+    }
   }
 
   /**

@@ -1,182 +1,199 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { ArrowRight, Zap, Globe, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Globe, Shield, ArrowRight, FileText, Info, Home } from 'lucide-react';
 import { LargeLogo } from '@/components/branding';
-import Link from 'next/link';
+import { useI18n } from '@/hooks/useI18n';
+import { buildApiUrl } from '@/lib/config';
 
 interface AffiliateSignupPageProps {
   params: Promise<{ token: string }>;
 }
 
-/**
- * Page d'information pour les liens d'affiliation
- * Sauvegarde le token en arrière-plan et affiche des informations sur Meeshy
- */
 export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps) {
   const router = useRouter();
+  const { t } = useI18n('affiliate');
+  const [isMounted, setIsMounted] = useState(false);
+  const [inviterName, setInviterName] = useState<string | null>(null);
 
   useEffect(() => {
-    // Récupérer et sauvegarder le token d'affiliation
+    setIsMounted(true);
+
     params.then(({ token }) => {
       if (token) {
-        // Sauvegarder dans localStorage
         localStorage.setItem('meeshy_affiliate_token', token);
-
-        // Sauvegarder dans un cookie (30 jours)
         document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
+
+        // Fetch inviter name
+        fetch(buildApiUrl(`/affiliate/validate/${token}`))
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            const user = data?.data?.affiliateUser;
+            if (user?.firstName) {
+              setInviterName(`${user.firstName} ${user.lastName || ''}`.trim());
+            }
+          })
+          .catch(() => {});
       }
     });
   }, [params]);
 
+  const features = [
+    { icon: Zap, label: t('landing.feature1') },
+    { icon: Globe, label: t('landing.feature2') },
+    { icon: Sparkles, label: t('landing.feature3') },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
+
+      {/* Animated blobs */}
+      <div className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-violet-400/30 to-purple-500/30 dark:from-violet-600/20 dark:to-purple-700/20 rounded-full blur-2xl md:blur-3xl will-change-transform animate-blob-1" />
+      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 dark:from-cyan-600/20 dark:to-blue-700/20 rounded-full blur-2xl md:blur-3xl will-change-transform animate-blob-2" />
+      <div className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-pink-400/30 to-rose-500/30 dark:from-pink-600/20 dark:to-rose-700/20 rounded-full blur-2xl md:blur-3xl will-change-transform animate-blob-3" />
+      <div className="hidden sm:block absolute bottom-1/4 -left-20 w-72 h-72 bg-gradient-to-br from-amber-400/30 to-orange-500/30 dark:from-amber-600/20 dark:to-orange-700/20 rounded-full blur-3xl will-change-transform animate-blob-4" />
+
+      {/* Main content */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6">
+        {/* Logo */}
+        <motion.div
+          initial={isMounted ? { opacity: 0, y: -20 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-8"
+        >
           <LargeLogo href="/" />
-          <h1 className="mt-6 text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
-            Bienvenue sur Meeshy
-          </h1>
-          <p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
-            La plateforme de messagerie multilingue en temps réel
-          </p>
-        </div>
+        </motion.div>
 
-        {/* Content Grid */}
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* À propos de Meeshy */}
-          <Card className="shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MessageSquare className="h-6 w-6 text-blue-600" />
-                <span>Messagerie Multilingue</span>
-              </CardTitle>
-              <CardDescription>
-                Discutez avec le monde entier dans votre langue
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Meeshy traduit automatiquement vos messages en temps réel, permettant une communication fluide avec des personnes du monde entier, chacune dans sa langue préférée.
-              </p>
-              <Link href="/about">
-                <Button variant="outline" className="w-full">
-                  <Info className="mr-2 h-4 w-4" />
-                  En savoir plus
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+        {/* Hero card */}
+        <motion.div
+          initial={isMounted ? { opacity: 0, y: 20, scale: 0.95 } : false}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, delay: isMounted ? 0.15 : 0 }}
+          className="w-full max-w-lg"
+        >
+          <div className="backdrop-blur-md sm:backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 sm:bg-white/60 sm:dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-10 text-center">
+            {/* Inviter badge */}
+            {inviterName && (
+              <motion.div
+                initial={isMounted ? { opacity: 0, scale: 0.9 } : false}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: isMounted ? 0.3 : 0 }}
+                className="inline-flex items-center gap-2 px-4 py-1.5 mb-6 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-sm font-medium"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {t('landing.welcomeFrom')} {inviterName}
+              </motion.div>
+            )}
 
-          {/* Fonctionnalités */}
-          <Card className="shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Globe className="h-6 w-6 text-green-600" />
-                <span>100+ Langues Supportées</span>
-              </CardTitle>
-              <CardDescription>
-                Communication sans frontières linguistiques
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Grâce à notre technologie de traduction avancée, communiquez en temps réel avec des utilisateurs parlant plus de 100 langues différentes.
-              </p>
-              <Link href="/">
-                <Button variant="outline" className="w-full">
-                  <Home className="mr-2 h-4 w-4" />
-                  Page d'accueil
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+            {/* Headline */}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white leading-tight tracking-tight">
+              {t('landing.headline')}
+            </h1>
 
-          {/* Confidentialité */}
-          <Card className="shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Shield className="h-6 w-6 text-purple-600" />
-                <span>Confidentialité & Sécurité</span>
-              </CardTitle>
-              <CardDescription>
-                Vos données sont protégées
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Nous prenons votre vie privée au sérieux. Vos conversations sont chiffrées et vos données personnelles sont protégées selon les normes les plus strictes.
-              </p>
-              <Link href="/privacy">
-                <Button variant="outline" className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Politique de confidentialité
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+            {/* Subheadline */}
+            <p className="mt-3 text-base sm:text-lg text-gray-500 dark:text-gray-400">
+              {t('landing.subheadline')}
+            </p>
 
-          {/* Conditions d'utilisation */}
-          <Card className="shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileText className="h-6 w-6 text-orange-600" />
-                <span>Conditions d'utilisation</span>
-              </CardTitle>
-              <CardDescription>
-                Règles et engagement
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Découvrez nos conditions d'utilisation et notre engagement envers une plateforme respectueuse et inclusive pour tous les utilisateurs.
-              </p>
-              <Link href="/terms">
-                <Button variant="outline" className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Conditions d'utilisation
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Call to Action */}
-        <div className="max-w-2xl mx-auto text-center">
-          <Card className="shadow-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-0">
-            <CardContent className="pt-8 pb-8">
-              <h2 className="text-2xl md:text-3xl font-bold mb-4">
-                Prêt à rejoindre la communauté ?
-              </h2>
-              <p className="text-blue-100 mb-6 text-lg">
-                Créez votre compte gratuitement et commencez à discuter avec le monde entier dans votre langue.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  size="lg"
-                  className="bg-white text-blue-600 hover:bg-gray-100 font-semibold"
-                  onClick={() => router.push('/signup')}
+            {/* Feature pills */}
+            <motion.div
+              initial={isMounted ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: isMounted ? 0.35 : 0 }}
+              className="flex flex-wrap justify-center gap-3 mt-6"
+            >
+              {features.map(({ icon: Icon, label }) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium"
                 >
-                  Créer un compte
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-2 border-white text-white hover:bg-white/10"
-                  onClick={() => router.push('/login')}
-                >
-                  Se connecter
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </span>
+              ))}
+            </motion.div>
+
+            {/* CTA buttons */}
+            <motion.div
+              initial={isMounted ? { opacity: 0, y: 10 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: isMounted ? 0.45 : 0 }}
+              className="mt-8 flex flex-col gap-3"
+            >
+              <Button
+                size="lg"
+                className="w-full text-base font-semibold h-12"
+                onClick={() => router.push('/signup')}
+              >
+                {t('landing.cta')}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => router.push('/login')}
+              >
+                {t('landing.ctaLogin')}
+              </Button>
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Footer links */}
+        <motion.div
+          initial={isMounted ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: isMounted ? 0.6 : 0 }}
+          className="mt-8 text-center text-sm text-muted-foreground"
+        >
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            <a href="/terms" className="hover:text-foreground transition-colors">
+              {t('landing.terms')}
+            </a>
+            <span className="hidden sm:inline">·</span>
+            <a href="/privacy" className="hover:text-foreground transition-colors">
+              {t('landing.privacy')}
+            </a>
+          </div>
+        </motion.div>
       </div>
+
+      {/* Blob keyframes */}
+      <style jsx>{`
+        @keyframes blob-float-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(30px, -20px) scale(1.1); }
+        }
+        @keyframes blob-float-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-20px, 30px) scale(1.05); }
+        }
+        @keyframes blob-float-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(20px, -30px) scale(1.15); }
+        }
+        @keyframes blob-float-4 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-30px, 20px) scale(1.08); }
+        }
+        .animate-blob-1 { animation: blob-float-1 12s ease-in-out infinite; }
+        .animate-blob-2 { animation: blob-float-2 14s ease-in-out infinite; animation-delay: -2s; }
+        .animate-blob-3 { animation: blob-float-3 16s ease-in-out infinite; animation-delay: -4s; }
+        .animate-blob-4 { animation: blob-float-4 13s ease-in-out infinite; animation-delay: -1s; }
+        @media (max-width: 640px) {
+          .animate-blob-1, .animate-blob-2, .animate-blob-3 { animation-duration: 20s; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-blob-1, .animate-blob-2, .animate-blob-3, .animate-blob-4 { animation: none; }
+        }
+      `}</style>
     </div>
   );
 }

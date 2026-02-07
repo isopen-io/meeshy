@@ -561,12 +561,9 @@ export class ZmqMessageHandler extends EventEmitter {
     const binaryFrames = (event as any).__binaryFrames;
 
     if (binaryFrames && binaryFrames.length > 0) {
-      // Frame 0 = JSON metadata, Frame 1+ = binaires
-      // Pour les événements single, il n'y a qu'un seul audio (frame 1)
-      if (binaryFrames.length >= 2) {
-        audioBinary = binaryFrames[1];
-        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
-      }
+      // binaryFrames[0] = premier binaire audio (le JSON a déjà été extrait en amont)
+      audioBinary = binaryFrames[0];
+      logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
     }
 
     // Enrichir l'audio traduit avec le binaire
@@ -576,13 +573,12 @@ export class ZmqMessageHandler extends EventEmitter {
     };
 
     // Émettre l'événement de traduction unique prête
-    // IMPORTANT: MeeshySocketIOManager attend translatedAudios (pluriel, array)
     this.emit('audioTranslationReady', {
       taskId: event.taskId,
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudios: [enrichedTranslatedAudio]  // Array avec un seul élément
+      translatedAudios: [enrichedTranslatedAudio]
     });
   }
 
@@ -600,12 +596,9 @@ export class ZmqMessageHandler extends EventEmitter {
     const binaryFrames = (event as any).__binaryFrames;
 
     if (binaryFrames && binaryFrames.length > 0) {
-      // Frame 0 = JSON metadata, Frame 1+ = binaires
-      // Pour les événements progressifs, il n'y a qu'un seul audio (frame 1)
-      if (binaryFrames.length >= 2) {
-        audioBinary = binaryFrames[1];
-        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
-      }
+      // binaryFrames[0] = premier binaire audio (le JSON a déjà été extrait en amont)
+      audioBinary = binaryFrames[0];
+      logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
     }
 
     // Enrichir l'audio traduit avec le binaire
@@ -638,12 +631,9 @@ export class ZmqMessageHandler extends EventEmitter {
     const binaryFrames = (event as any).__binaryFrames;
 
     if (binaryFrames && binaryFrames.length > 0) {
-      // Frame 0 = JSON metadata, Frame 1+ = binaires
-      // Pour les événements complétés, il n'y a qu'un seul audio (frame 1)
-      if (binaryFrames.length >= 2) {
-        audioBinary = binaryFrames[1];
-        logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
-      }
+      // binaryFrames[0] = premier binaire audio (le JSON a déjà été extrait en amont)
+      audioBinary = binaryFrames[0];
+      logger.info(`   📦 Audio binaire extrait: ${audioBinary.length} bytes`);
     }
 
     // Enrichir l'audio traduit avec le binaire

@@ -1,5 +1,17 @@
 {
   "affiliate": {
+    "landing": {
+      "welcomeFrom": "You've been invited by",
+      "headline": "Chat with the world, in your language.",
+      "subheadline": "Meeshy translates your messages in real time. 100+ languages. Free.",
+      "cta": "Create my account",
+      "ctaLogin": "I already have an account",
+      "feature1": "Instant translation",
+      "feature2": "100+ languages",
+      "feature3": "Free",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    },
     "shareApp": "Share Meeshy",
     "shareTitle": "Share Meeshy",
     "modalTitle": "Share Meeshy",
