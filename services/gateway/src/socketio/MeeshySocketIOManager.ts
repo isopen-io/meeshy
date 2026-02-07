@@ -1740,35 +1740,45 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction audio unique (1 seule langue demandée).
    * Reçoit translatedAudios (array) et broadcaster pour chaque langue.
    */
-  private async _handleAudioTranslationReady(data: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    transcription?: any;
-    translatedAudios: Array<{
-      targetLanguage: string;
-      url: string;
-      path: string;
-      segments?: any[];
-      duration?: number;
-    }>;
-    processingTimeMs?: number;
-  }) {
-    // Broadcaster chaque traduction individuellement
-    for (const translatedAudio of data.translatedAudios) {
+  private async _handleAudioTranslationReady(data: any) {
+    // Support des deux formats: translatedAudios (array) et translatedAudio (singular)
+    if (data.translatedAudios && Array.isArray(data.translatedAudios)) {
+      for (const translatedAudio of data.translatedAudios) {
+        await this._broadcastTranslationEvent(
+          {
+            taskId: data.taskId,
+            messageId: data.messageId,
+            attachmentId: data.attachmentId,
+            language: translatedAudio.targetLanguage,
+            translatedAudio: translatedAudio,
+            transcription: data.transcription
+          },
+          'audioTranslationReady',
+          SERVER_EVENTS.AUDIO_TRANSLATION_READY,
+          '🎯'
+        );
+      }
+    } else if (data.translatedAudio) {
+      // Format singular émis par _processTranslationEvent
       await this._broadcastTranslationEvent(
         {
           taskId: data.taskId,
           messageId: data.messageId,
           attachmentId: data.attachmentId,
-          language: translatedAudio.targetLanguage,
-          translatedAudio: translatedAudio,
-          transcription: data.transcription
+          language: data.language || data.translatedAudio.targetLanguage,
+          translatedAudio: data.translatedAudio,
+          transcription: data.transcription,
+          phase: data.phase
         },
         'audioTranslationReady',
         SERVER_EVENTS.AUDIO_TRANSLATION_READY,
         '🎯'
       );
+    } else {
+      logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: ni translatedAudios ni translatedAudio dans data`, {
+        keys: Object.keys(data),
+        messageId: data.messageId
+      });
     }
   }
 

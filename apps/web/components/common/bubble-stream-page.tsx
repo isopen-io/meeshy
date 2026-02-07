@@ -236,6 +236,9 @@ export function BubbleStreamPage({
       willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
       messageSender: message.sender?.username || message.anonymousSender?.displayName,
+      attachments: message.attachments,
+      attachmentCount: message.attachments?.length ?? 0,
+      messageType: message.messageType,
     });
 
     // Filtrer si on a déjà chargé des messages ET que le message ne correspond pas

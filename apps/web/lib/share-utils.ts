@@ -34,7 +34,7 @@ export function generateShareLink(options: ShareLinkOptions): string {
       if (!options.affiliateToken) {
         throw new Error('Token d\'affiliation requis pour ce type de lien');
       }
-      return `${baseUrl}/signup?affiliate=${options.affiliateToken}`;
+      return `${baseUrl}/signup/affiliate/${options.affiliateToken}`;
     
     case 'conversation':
       if (!options.linkId) {

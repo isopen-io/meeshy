@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
@@ -13,7 +13,17 @@ interface IdentityStepProps {
   onLastNameChange: (value: string) => void;
 }
 
+const NAME_REGEX = /^(?=.*\p{L})[\p{L}\s'.-]+$/u;
+
 const inputBaseClass = "h-10 bg-white/70 dark:bg-gray-800/70 sm:bg-white/50 sm:dark:bg-gray-800/50 sm:backdrop-blur-sm border-2 transition-colors focus:outline-none focus:ring-0 focus:ring-offset-0";
+
+function getNameError(value: string, t: (key: string) => string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null; // Don't show error on empty (not yet typed)
+  if (trimmed.length < 1) return t('register.nameMinLength');
+  if (!NAME_REGEX.test(trimmed)) return t('register.nameInvalidChars');
+  return null;
+}
 
 export const IdentityStep = forwardRef<HTMLInputElement, IdentityStepProps>(({
   formData,
@@ -22,6 +32,9 @@ export const IdentityStep = forwardRef<HTMLInputElement, IdentityStepProps>(({
   onLastNameChange,
 }, ref) => {
   const { t } = useI18n('auth');
+
+  const firstNameError = useMemo(() => getNameError(formData.firstName, t), [formData.firstName, t]);
+  const lastNameError = useMemo(() => getNameError(formData.lastName, t), [formData.lastName, t]);
 
   return (
     <div className="space-y-4">
@@ -41,8 +54,16 @@ export const IdentityStep = forwardRef<HTMLInputElement, IdentityStepProps>(({
             value={formData.firstName}
             onChange={(e) => onFirstNameChange(e.target.value)}
             disabled={disabled}
-            className={cn(inputBaseClass, "border-gray-200 dark:border-gray-700 focus:border-violet-500")}
+            className={cn(
+              inputBaseClass,
+              firstNameError
+                ? "border-red-500 focus:border-red-500"
+                : "border-gray-200 dark:border-gray-700 focus:border-violet-500"
+            )}
           />
+          {firstNameError && (
+            <p className="text-xs text-red-500">{firstNameError}</p>
+          )}
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">{t('register.lastNameLabel')}</label>
@@ -52,8 +73,16 @@ export const IdentityStep = forwardRef<HTMLInputElement, IdentityStepProps>(({
             value={formData.lastName}
             onChange={(e) => onLastNameChange(e.target.value)}
             disabled={disabled}
-            className={cn(inputBaseClass, "border-gray-200 dark:border-gray-700 focus:border-violet-500")}
+            className={cn(
+              inputBaseClass,
+              lastNameError
+                ? "border-red-500 focus:border-red-500"
+                : "border-gray-200 dark:border-gray-700 focus:border-violet-500"
+            )}
           />
+          {lastNameError && (
+            <p className="text-xs text-red-500">{lastNameError}</p>
+          )}
         </div>
       </div>
     </div>

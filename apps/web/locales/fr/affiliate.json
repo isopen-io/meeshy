@@ -1,5 +1,17 @@
 {
   "affiliate": {
+    "landing": {
+      "welcomeFrom": "Vous avez été invité par",
+      "headline": "Discutez avec le monde entier, dans votre langue.",
+      "subheadline": "Meeshy traduit vos messages en temps réel. Plus de 100 langues. Gratuit.",
+      "cta": "Créer mon compte",
+      "ctaLogin": "J'ai déjà un compte",
+      "feature1": "Traduction instantanée",
+      "feature2": "100+ langues",
+      "feature3": "Gratuit",
+      "terms": "Conditions d'utilisation",
+      "privacy": "Politique de confidentialité"
+    },
     "copy": "Copier",
     "copyLink": "Copier le lien",
     "linkCopied": "Lien copié !",

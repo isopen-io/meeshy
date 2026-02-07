@@ -296,8 +296,10 @@ export const AuthSchemas = {
       .regex(/^[a-zA-Z0-9_-]+$/, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
     password: z.string()
       .min(8, 'Mot de passe trop court (min 8 caractères)'),
-    firstName: z.string().min(1).max(50),
-    lastName: z.string().min(1).max(50),
+    firstName: z.string().min(1).max(50)
+      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le prénom doit contenir au moins une lettre'),
+    lastName: z.string().min(1).max(50)
+      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le nom doit contenir au moins une lettre'),
     email: z.string().email('Email invalide'),
     phoneNumber: z.string().optional(),
     phoneCountryCode: z.string().length(2).optional(),

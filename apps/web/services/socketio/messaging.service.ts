@@ -215,8 +215,21 @@ export class MessagingService {
         ? CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS
         : CLIENT_EVENTS.MESSAGE_SEND;
 
-      // Send with timeout
-      return await this.emitWithTimeout(socket, eventType, messageData, 10000);
+      // Send with timeout (WebSocket primary)
+      const wsResult = await this.emitWithTimeout(socket, eventType, messageData, 10000);
+
+      if (wsResult) {
+        return true;
+      }
+
+      // Don't fallback to REST for E2EE messages (REST can't handle E2EE yet)
+      if (messageData.encryptedContent && messageData.encryptionMetadata) {
+        return false;
+      }
+
+      // WebSocket failed → REST fallback
+      logger.warn('[MessagingService]', 'WebSocket send failed, attempting REST fallback');
+      return this.sendMessageViaRest(options);
 
     } catch (error) {
       console.error('[MessagingService] Error sending message:', error);
@@ -272,6 +285,32 @@ export class MessagingService {
         }
       });
     });
+  }
+
+  /**
+   * REST fallback when WebSocket send fails
+   */
+  private async sendMessageViaRest(options: MessageSendOptions): Promise<boolean> {
+    try {
+      const { conversationsService } = await import('../conversations');
+
+      await conversationsService.sendMessage(options.conversationId, {
+        content: options.content,
+        originalLanguage: options.originalLanguage,
+        messageType: options.attachmentIds?.length
+          ? this.determineMessageTypeFromMime(options.attachmentMimeTypes?.[0] ?? '')
+          : 'text',
+        replyToId: options.replyToId,
+        attachmentIds: options.attachmentIds,
+      });
+
+      logger.info('[MessagingService]', 'Message sent via REST fallback');
+      toast.success('Message envoyé (connexion alternative)');
+      return true;
+    } catch (error) {
+      console.error('[MessagingService] REST fallback also failed:', error);
+      return false;
+    }
   }
 
   /**

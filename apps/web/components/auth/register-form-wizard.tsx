@@ -21,7 +21,7 @@ import { useRegistrationWizard, WIZARD_STEPS } from '@/hooks/use-registration-wi
 import { useRegistrationValidation } from '@/hooks/use-registration-validation';
 import { useRegistrationSubmit } from '@/hooks/use-registration-submit';
 import { usePhoneValidation } from '@/hooks/use-phone-validation';
-import type { CountryCode } from 'libphonenumber-js';
+import { parsePhoneNumber, type CountryCode } from 'libphonenumber-js';
 
 // Step Components (dynamically imported)
 import {
@@ -226,11 +226,33 @@ export function RegisterFormWizard({
   }, [formData.phoneNumber, currentStepData?.id, validatePhone]);
 
   // Phone formatting with as-you-type using libphonenumber-js
+  // Auto-detects country when user types +INDICATIF to avoid duplication
   const handlePhoneChange = useCallback((value: string) => {
-    // Format as user types
+    const cleaned = value.replace(/\s/g, '');
+
+    // If user typed a number starting with + or 00, auto-detect country
+    if (cleaned.startsWith('+') || cleaned.startsWith('00')) {
+      try {
+        const normalized = cleaned.startsWith('00') ? '+' + cleaned.slice(2) : cleaned;
+        const parsed = parsePhoneNumber(normalized);
+        if (parsed?.country) {
+          const detectedCountry = COUNTRY_CODES.find(c => c.code === parsed.country);
+          if (detectedCountry && detectedCountry.code !== selectedCountry.code) {
+            setSelectedCountry(detectedCountry);
+          }
+          // Store just the national number so the selector prefix isn't duplicated
+          const national = parsed.formatNational();
+          updateFormData({ phoneNumber: national });
+          return;
+        }
+      } catch {
+        // Not yet parseable (typing in progress), let it through
+      }
+    }
+
     const formatted = formatAsYouType(value);
     updateFormData({ phoneNumber: formatted });
-  }, [updateFormData, formatAsYouType]);
+  }, [updateFormData, formatAsYouType, selectedCountry.code]);
 
   // Get validated E.164 phone number for submission
   const getFullPhoneNumber = useCallback(() => {
@@ -257,7 +279,9 @@ export function RegisterFormWizard({
                        (phoneValidationStatus === 'valid' && formattedE164 !== null);
         return emailOk && phoneOk;
       case 'identity':
-        return formData.firstName.trim().length >= 2 && formData.lastName.trim().length >= 2;
+        const nameRegex = /^(?=.*\p{L})[\p{L}\s'.-]+$/u;
+        return formData.firstName.trim().length >= 1 && nameRegex.test(formData.firstName.trim()) &&
+               formData.lastName.trim().length >= 1 && nameRegex.test(formData.lastName.trim());
       case 'username':
         return validation.validateUsername(formData.username) && usernameCheckStatus === 'available';
       case 'security':
@@ -312,29 +336,20 @@ export function RegisterFormWizard({
   // This eliminates mounting delay during transitions
   const stepComponents = {
     contact: (
-      <>
-        <ContactStep
-          ref={currentStepData?.id === 'contact' ? inputRef : undefined}
-          formData={formData}
-          emailValidationStatus={emailValidationStatus}
-          emailErrorMessage={emailErrorMessage}
-          phoneValidationStatus={phoneValidationStatus}
-          phoneErrorMessage={phoneErrorMessage}
-          selectedCountry={selectedCountry}
-          disabled={isLoading || disabled}
-          onEmailChange={handleEmailChange}
-          onPhoneChange={handlePhoneChange}
-          onPhoneBlur={validatePhone}
-          onCountryChange={setSelectedCountry}
-        />
-        <ExistingAccountAlert
-          hasExistingAccount={hasExistingAccount}
-          emailValidationStatus={emailValidationStatus}
-          phoneValidationStatus={phoneValidationStatus}
-          existingAccount={existingAccount}
-          onRecoveryClick={() => setShowRecoveryModal(true)}
-        />
-      </>
+      <ContactStep
+        ref={currentStepData?.id === 'contact' ? inputRef : undefined}
+        formData={formData}
+        emailValidationStatus={emailValidationStatus}
+        emailErrorMessage={emailErrorMessage}
+        phoneValidationStatus={phoneValidationStatus}
+        phoneErrorMessage={phoneErrorMessage}
+        selectedCountry={selectedCountry}
+        disabled={isLoading || disabled}
+        onEmailChange={handleEmailChange}
+        onPhoneChange={handlePhoneChange}
+        onPhoneBlur={validatePhone}
+        onCountryChange={setSelectedCountry}
+      />
     ),
     identity: (
       <IdentityStep
@@ -451,6 +466,17 @@ export function RegisterFormWizard({
             );
           })}
         </div>
+
+        {/* Existing account alert - outside overflow container to avoid clipping */}
+        {currentStepData?.id === 'contact' && (
+          <ExistingAccountAlert
+            hasExistingAccount={hasExistingAccount}
+            emailValidationStatus={emailValidationStatus}
+            phoneValidationStatus={phoneValidationStatus}
+            existingAccount={existingAccount}
+            onRecoveryClick={() => setShowRecoveryModal(true)}
+          />
+        )}
 
         {/* Navigation buttons */}
         <div className="flex items-center justify-between gap-3 mt-4">

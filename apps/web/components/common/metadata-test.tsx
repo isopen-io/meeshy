@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export function MetadataTest() {
-  const [url, setUrl] = useState('http://localhost:3100/signup?affiliate=aff_1760904438255_6g0t8ovvkpc');
+  const [url, setUrl] = useState('http://localhost:3100/signup/affiliate/aff_1760904438255_6g0t8ovvkpc');
   const [metadata, setMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -65,7 +65,7 @@ export function MetadataTest() {
             id="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="http://localhost:3100/signup?affiliate=..."
+            placeholder="http://localhost:3100/signup/affiliate/..."
           />
         </div>
 

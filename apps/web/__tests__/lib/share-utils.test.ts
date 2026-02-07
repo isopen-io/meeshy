@@ -40,7 +40,7 @@ describe('Share Utils Module', () => {
       };
 
       const result = generateShareLink(options);
-      expect(result).toBe('https://test.meeshy.me/signup?affiliate=abc123');
+      expect(result).toBe('https://test.meeshy.me/signup/affiliate/abc123');
     });
 
     it('should throw error for affiliate link without token', () => {

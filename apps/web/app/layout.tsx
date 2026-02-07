@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "@/lib/polyfills"; // ⚡ Polyfills pour anciennes versions Android (DOIT être en premier)
 import "./globals.css";
 import "../styles/bubble-stream.css";
@@ -77,6 +78,9 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={`${getAllFontVariables()} antialiased font-nunito`}>
+        {/* Recovery automatique pour chunks obsoletes apres deploiement */}
+        <Script src="/chunk-recovery.js" strategy="beforeInteractive" />
+
         {/* Preload des composants critiques (Client Component) */}
         <CriticalPreloader />
 
