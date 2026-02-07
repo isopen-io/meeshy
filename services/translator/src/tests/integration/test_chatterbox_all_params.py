@@ -200,9 +200,9 @@ async def run_test(
             auto_optimize_params=False  # Désactivé pour utiliser nos valeurs exactes
         )
 
-        # Calculer la durée
-        import librosa
-        duration = librosa.get_duration(path=str(output_file))
+        # Calculer la durée (compatible toutes versions librosa)
+        from utils.audio_utils import get_audio_duration
+        duration = get_audio_duration(str(output_file))
         duration_ms = int(duration * 1000)
 
         print(f"    ✅ Généré: {output_file.name} ({duration_ms}ms)")
