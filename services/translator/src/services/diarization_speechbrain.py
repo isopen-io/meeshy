@@ -24,6 +24,22 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
 
+# Patch huggingface_hub for SpeechBrain compatibility
+# SpeechBrain uses deprecated 'use_auth_token' arg, newer huggingface_hub uses 'token'
+try:
+    import huggingface_hub
+    _original_hf_hub_download = huggingface_hub.hf_hub_download
+
+    def _patched_hf_hub_download(*args, **kwargs):
+        # Remap use_auth_token -> token for newer huggingface_hub
+        if 'use_auth_token' in kwargs:
+            kwargs['token'] = kwargs.pop('use_auth_token')
+        return _original_hf_hub_download(*args, **kwargs)
+
+    huggingface_hub.hf_hub_download = _patched_hf_hub_download
+except Exception:
+    pass  # If patching fails, let the original error occur
+
 # Import SpeechBrain
 try:
     from speechbrain.inference.speaker import EncoderClassifier
