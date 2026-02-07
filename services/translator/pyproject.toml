@@ -152,6 +152,10 @@ constraint-dependencies = [
     "numpy<2.0.0",
 ]
 
+# Disable build isolation for packages that require numpy during build
+# pkuseg (dependency of chatterbox-tts) needs numpy available at build time
+no-build-isolation-package = ["pkuseg"]
+
 # PyTorch source - CPU by default
 # Override with UV_EXTRA_INDEX_URL for GPU builds
 [tool.uv.sources]
