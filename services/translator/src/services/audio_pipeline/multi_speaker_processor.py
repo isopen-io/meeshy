@@ -204,29 +204,15 @@ async def process_multi_speaker_audio(
         Dict avec les traductions par langue
     """
     logger.info(
-        f"[MULTI_SPEAKER] 🎭 Traitement multi-speaker: "
-        f"{len(segments)} segments, langues={target_languages}"
+        f"[MULTI_SPEAKER] 🎭 Traitement: {len(segments)} segments → {len(target_languages)} langue(s)"
     )
 
-    # Nettoyage automatique du cache WAV (fichiers > 7 jours)
     cleanup_wav_cache()
 
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 1: GROUPER PAR SPEAKER
-    # ═══════════════════════════════════════════════════════════════
     speakers_data = await _group_segments_by_speaker(segments)
 
-    logger.info(f"[MULTI_SPEAKER] Speakers détectés: {len(speakers_data)}")
-    for speaker_id, data in speakers_data.items():
-        logger.info(
-            f"[MULTI_SPEAKER]   • {speaker_id}: "
-            f"{len(data['segments'])} segments, "
-            f"{len(data['full_text'])} chars"
-        )
-
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 2: EXTRAIRE L'AUDIO DE CHAQUE SPEAKER
-    # ═══════════════════════════════════════════════════════════════
     for speaker_id, data in speakers_data.items():
         audio_path = await _extract_speaker_audio(
             speaker_id=speaker_id,
@@ -236,22 +222,17 @@ async def process_multi_speaker_audio(
         )
 
         if not audio_path:
-            logger.error(f"[MULTI_SPEAKER] ❌ Échec extraction audio pour {speaker_id}")
+            logger.error(f"[MULTI_SPEAKER] Échec extraction audio pour {speaker_id}")
             return {}
 
         data['audio_path'] = audio_path
 
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 3: CRÉER VOICE MODEL POUR CHAQUE SPEAKER
-    # ═══════════════════════════════════════════════════════════════
     for speaker_id, data in speakers_data.items():
-        # Si c'est l'expéditeur et qu'on a son modèle, l'utiliser
         if sender_speaker_id == speaker_id and user_voice_model:
-            logger.info(f"[MULTI_SPEAKER] ✅ Utilisation du modèle utilisateur pour {speaker_id}")
             data['voice_model'] = user_voice_model
             continue
 
-        # Sinon créer un modèle temporaire
         temp_user_id = f"temp_speaker_{speaker_id}"
         voice_model = await voice_clone_service.get_or_create_voice_model(
             user_id=temp_user_id,
@@ -260,40 +241,31 @@ async def process_multi_speaker_audio(
         )
 
         if not voice_model:
-            logger.error(f"[MULTI_SPEAKER] ❌ Échec création voice model pour {speaker_id}")
+            logger.error(f"[MULTI_SPEAKER] Échec voice model pour {speaker_id}")
             return {}
 
         data['voice_model'] = voice_model
 
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 4: FUSIONNER LES SPEAKERS SIMILAIRES
-    # ═══════════════════════════════════════════════════════════════
-    logger.info("[MULTI_SPEAKER] 🔍 Comparaison des voice_models...")
     speaker_mapping = await _merge_similar_speakers(
         speakers_data=speakers_data,
-        similarity_threshold=0.65  # Réduit de 0.85 pour fusion plus agressive
+        similarity_threshold=0.65
     )
 
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 5: CRÉER LES TOURS DE PAROLE
-    # ═══════════════════════════════════════════════════════════════
-    logger.info("[MULTI_SPEAKER] 📋 Création des tours de parole...")
     turns_of_speech = _create_turns_of_speech(
         segments=segments,
         speaker_mapping=speaker_mapping
     )
 
     if not turns_of_speech:
-        logger.error("[MULTI_SPEAKER] ❌ Aucun tour de parole créé")
+        logger.error("[MULTI_SPEAKER] Aucun tour de parole créé")
         return {}
 
-    # ═══════════════════════════════════════════════════════════════
     # ÉTAPE 6: TRAITER CHAQUE TOUR DE PAROLE
-    # ═══════════════════════════════════════════════════════════════
     translations = {}
 
     for target_lang in target_languages:
-        logger.info(f"[MULTI_SPEAKER] 🌐 Traitement langue: {target_lang}")
 
         turn_translations = []
 
@@ -330,10 +302,6 @@ async def process_multi_speaker_audio(
             )
 
             if not translation_result:
-                logger.error(
-                    f"[MULTI_SPEAKER] ❌ Échec traduction tour {turn_idx+1}, "
-                    f"speaker {speaker_id}, langue {target_lang}"
-                )
                 continue
 
             turn_translations.append({
@@ -342,14 +310,8 @@ async def process_multi_speaker_audio(
                 'turn': turn
             })
 
-        # ═══════════════════════════════════════════════════════════════
-        # ÉTAPE 7: CONCATÉNER LES TOURS DE PAROLE DANS L'ORDRE
-        # ═══════════════════════════════════════════════════════════════
+        # ÉTAPE 7: CONCATÉNER LES TOURS DE PAROLE
         if turn_translations:
-            logger.info(
-                f"[MULTI_SPEAKER] 🔗 Concaténation de {len(turn_translations)} tours "
-                f"pour {target_lang}..."
-            )
 
             final_audio = await _concatenate_turns_in_order(
                 turn_translations=turn_translations,
@@ -359,22 +321,16 @@ async def process_multi_speaker_audio(
             )
 
             if final_audio:
-                # ═══════════════════════════════════════════════════════════════
-                # ÉTAPE 8: RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS
-                # ═══════════════════════════════════════════════════════════════
-                # Essayer la re-transcription, mais ne pas bloquer si elle échoue
+                # ÉTAPE 8: RE-TRANSCRIPTION LÉGÈRE
                 fine_segments = None
                 try:
-                    # Extraire les métadonnées des tours depuis turn_translations
                     turns_metadata = []
                     current_time_ms = 0
                     for turn_data in turn_translations:
                         translation = turn_data['translation']
                         turn = turn_data.get('turn')
                         if translation and turn:
-                            # Récupérer les métadonnées complètes du speaker
                             speaker_data = speakers_data.get(turn.speaker_id, {})
-
                             turns_metadata.append({
                                 'start_ms': current_time_ms,
                                 'end_ms': current_time_ms + translation.duration_ms,
@@ -383,37 +339,23 @@ async def process_multi_speaker_audio(
                             })
                             current_time_ms += translation.duration_ms
 
-                    # Re-transcrire avec mapping speakers
                     from .retranscription_service import retranscribe_translated_audio
-
                     fine_segments = await retranscribe_translated_audio(
                         audio_path=final_audio.audio_path,
                         target_language=target_lang,
                         turns_metadata=turns_metadata
                     )
 
-                    # Vérifier si on a reçu des segments invalides
-                    # 1. Liste vide = re-transcription échouée silencieusement
-                    # 2. Segments de fallback = re-transcription échouée explicitement
                     is_empty = not fine_segments or len(fine_segments) == 0
                     is_fallback = fine_segments and len(fine_segments) > 0 and fine_segments[0].get('fallback', False)
 
                     if is_empty or is_fallback:
-                        logger.warning(
-                            f"[MULTI_SPEAKER] ⚠️ Re-transcription invalide pour {target_lang} "
-                            f"(vide={is_empty}, fallback={is_fallback}), utilisation des textes traduits"
-                        )
-                        # Forcer l'utilisation du fallback avec vrais textes
-                        raise Exception("Re-transcription invalide, utilisation des textes traduits")
+                        raise Exception("Re-transcription invalide")
 
-                    # Remplacer les segments grossiers par les segments fins
                     final_audio.segments = fine_segments
 
-                except Exception as e:
-                    logger.warning(
-                        f"[MULTI_SPEAKER] ⚠️ Échec re-transcription pour {target_lang}: {e}"
-                    )
-                    # Fallback: créer des segments grossiers basés sur les tours
+                except Exception:
+                    # Fallback: segments basés sur les tours
                     fine_segments = []
                     current_time_ms = 0
                     for turn_data in turn_translations:
@@ -426,7 +368,7 @@ async def process_multi_speaker_audio(
                                 'startMs': current_time_ms,
                                 'endMs': current_time_ms + translation.duration_ms,
                                 'speakerId': turn.speaker_id,
-                                'confidence': 0.9,  # Confiance par défaut
+                                'confidence': 0.9,
                                 'voiceSimilarityScore': speaker_data.get('voice_similarity_score'),
                                 'language': target_lang
                             })
@@ -436,16 +378,11 @@ async def process_multi_speaker_audio(
 
                 translations[target_lang] = final_audio
 
-                # ═══════════════════════════════════════════════════════════════
-                # ÉTAPE 9: CALLBACK POUR REMONTÉE IMMÉDIATE À LA GATEWAY
-                # ═══════════════════════════════════════════════════════════════
+                # ÉTAPE 9: CALLBACK
                 if on_translation_ready:
                     try:
-                        # Déterminer le type d'événement selon le nombre de langues
                         total_languages = len(target_languages)
-                        is_single_language = total_languages == 1
                         current_index = list(target_languages).index(target_lang) + 1
-                        is_last_language = current_index == total_languages
 
                         translation_data = {
                             'message_id': message_id,
@@ -453,29 +390,21 @@ async def process_multi_speaker_audio(
                             'language': target_lang,
                             'translation': final_audio,
                             'segments': fine_segments,
-                            # Métadonnées pour déterminer le type d'événement
-                            'is_single_language': is_single_language,
-                            'is_last_language': is_last_language,
+                            'is_single_language': total_languages == 1,
+                            'is_last_language': current_index == total_languages,
                             'current_index': current_index,
                             'total_languages': total_languages
                         }
 
-                        # Appeler le callback (peut être async)
                         if asyncio.iscoroutinefunction(on_translation_ready):
                             await on_translation_ready(translation_data)
                         else:
                             on_translation_ready(translation_data)
 
-                    except Exception as e:
-                        logger.warning(f"[MULTI_SPEAKER] ⚠️ Erreur callback traduction: {e}")
+                    except Exception:
+                        pass
 
-            else:
-                logger.error(f"[MULTI_SPEAKER] ❌ Échec concaténation pour {target_lang}")
-
-    logger.info(
-        f"[MULTI_SPEAKER] ✅ Traitement terminé: "
-        f"{len(translations)}/{len(target_languages)} langues"
-    )
+    logger.info(f"[MULTI_SPEAKER] ✅ {len(translations)}/{len(target_languages)} langues traitées")
 
     return translations
 
@@ -529,41 +458,27 @@ PITCH_TOLERANCE_HZ = 25
 
 
 def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
-    """
-    Compare deux voice_models et retourne un score de similarité (0.0 à 1.0).
-
-    Utilise les caractéristiques vocales pour comparer les models.
-    Force la fusion si pitch très proche (±25Hz).
-    """
+    """Compare deux voice_models et retourne un score de similarité (0.0 à 1.0)."""
     try:
-        # Extraire les caractéristiques vocales
         chars_1 = getattr(voice_model_1, 'voice_characteristics', None)
         chars_2 = getattr(voice_model_2, 'voice_characteristics', None)
 
         if not chars_1 or not chars_2:
-            logger.warning("[MULTI_SPEAKER] ⚠️ Voice characteristics manquantes")
             return 0.0
 
-        # Comparer pitch (hauteur de voix)
         pitch_1 = getattr(chars_1, 'pitch_mean', 0)
         pitch_2 = getattr(chars_2, 'pitch_mean', 0)
 
         if pitch_1 == 0 or pitch_2 == 0:
             return 0.0
 
-        # Fusion automatique si pitch très proche (même speaker probable)
         pitch_diff_hz = abs(pitch_1 - pitch_2)
         if pitch_diff_hz < PITCH_TOLERANCE_HZ:
-            logger.info(
-                f"[MULTI_SPEAKER] 🎯 Pitch très proche ({pitch_diff_hz:.0f}Hz < {PITCH_TOLERANCE_HZ}Hz) "
-                f"→ fusion automatique"
-            )
-            return 0.90  # Force la fusion
+            return 0.90
 
         pitch_diff = pitch_diff_hz / max(pitch_1, pitch_2)
         pitch_similarity = 1.0 - min(pitch_diff, 1.0)
 
-        # Comparer énergie vocale
         energy_1 = getattr(chars_1, 'rms_energy', 0)
         energy_2 = getattr(chars_2, 'rms_energy', 0)
 
@@ -573,18 +488,9 @@ def _compare_voice_models(voice_model_1: Any, voice_model_2: Any) -> float:
         else:
             energy_similarity = 0.5
 
-        # Score final (moyenne pondérée - plus de poids au pitch)
-        similarity = 0.6 * pitch_similarity + 0.4 * energy_similarity
+        return 0.6 * pitch_similarity + 0.4 * energy_similarity
 
-        logger.info(
-            f"[MULTI_SPEAKER] 🔍 Similarité voice_models: {similarity:.2f} "
-            f"(pitch: {pitch_similarity:.2f}, energy: {energy_similarity:.2f})"
-        )
-
-        return similarity
-
-    except Exception as e:
-        logger.error(f"[MULTI_SPEAKER] ❌ Erreur comparaison voice_models: {e}")
+    except Exception:
         return 0.0
 
 
@@ -640,33 +546,18 @@ async def _merge_similar_speakers(
             similarity = _compare_voice_models(voice_model_1, voice_model_2)
 
             if similarity >= similarity_threshold:
-                # Résoudre la destination finale de speaker_1
                 final_target = speaker_1
                 while merged_mapping[final_target] != final_target:
                     final_target = merged_mapping[final_target]
 
-                logger.info(
-                    f"[MULTI_SPEAKER] 🔗 Fusion: {speaker_2} → {final_target} "
-                    f"(similarité: {similarity:.2%})"
-                )
-
-                # Fusionner speaker_2 vers la destination finale
                 merged_mapping[speaker_2] = final_target
 
-                # Fusionner les données vers la destination finale
                 speakers_data[final_target]['segments'].extend(
                     speakers_data[speaker_2]['segments']
                 )
                 speakers_data[final_target]['segment_positions'].extend(
                     speakers_data[speaker_2]['segment_positions']
                 )
-
-    # Nombre de speakers après fusion
-    unique_speakers = len(set(merged_mapping.values()))
-    if unique_speakers < len(speaker_ids):
-        logger.info(
-            f"[MULTI_SPEAKER] ✅ Fusion terminée: {len(speaker_ids)} → {unique_speakers} speakers"
-        )
 
     return merged_mapping
 
@@ -716,20 +607,8 @@ def _create_turns_of_speech(
                 end_position=i
             )
 
-    # Ajouter le dernier tour
     if current_turn:
         turns.append(current_turn)
-
-    logger.info(
-        f"[MULTI_SPEAKER] 📋 Tours de parole créés: {len(turns)} tours "
-        f"pour {len(segments)} segments"
-    )
-
-    for i, turn in enumerate(turns):
-        logger.info(
-            f"[MULTI_SPEAKER]   • Tour {i+1}: Speaker {turn.speaker_id}, "
-            f"{len(turn.segments)} segments, {len(turn.text)} chars"
-        )
 
     return turns
 
@@ -804,64 +683,42 @@ async def _extract_speaker_audio(
         import time
         from pathlib import Path
 
-        logger.info(f"[MULTI_SPEAKER] 📂 Lecture audio source: {source_audio_path}")
-
-        # Vérifier si le fichier est en M4A/AAC et le convertir en WAV si nécessaire
         audio_path_to_read = source_audio_path
         temp_wav_path = None
         cache_used = False
 
         if source_audio_path.lower().endswith(('.m4a', '.aac', '.mp4')):
-            # Calculer hash du fichier source pour le cache
             with open(source_audio_path, 'rb') as f:
                 file_hash = hashlib.md5(f.read()).hexdigest()[:16]
 
-            # Répertoire de cache persistant (7 jours)
             os.makedirs(WAV_CACHE_DIR, exist_ok=True)
 
-            # Nom du fichier en cache
             cached_wav_filename = f"{file_hash}_{Path(source_audio_path).stem}.wav"
             cached_wav_path = os.path.join(WAV_CACHE_DIR, cached_wav_filename)
 
-            # Vérifier si conversion déjà en cache
             if os.path.exists(cached_wav_path):
-                # Vérifier l'âge du cache (7 jours = 604800 secondes)
                 file_age = time.time() - os.path.getmtime(cached_wav_path)
-                if file_age < 604800:  # 7 jours
-                    logger.info(
-                        f"[MULTI_SPEAKER] ♻️  Utilisation cache WAV existant "
-                        f"(âge: {file_age/3600:.1f}h): {cached_wav_filename}"
-                    )
+                if file_age < 604800:
                     audio_path_to_read = cached_wav_path
-                    temp_wav_path = cached_wav_path  # Pour référence, mais ne sera pas supprimé
+                    temp_wav_path = cached_wav_path
                     cache_used = True
                 else:
-                    logger.info(f"[MULTI_SPEAKER] 🗑️  Cache WAV expiré (>{file_age/86400:.1f}j), reconversion nécessaire")
                     os.remove(cached_wav_path)
 
-            # Conversion nécessaire
             if not cache_used:
-                logger.info(f"[MULTI_SPEAKER] 🔄 Conversion M4A/AAC vers WAV avec cache...")
-
-                # Convertir avec ffmpeg
                 cmd = [
                     'ffmpeg', '-i', source_audio_path,
-                    '-ar', '16000',  # Sample rate 16kHz
-                    '-ac', '1',      # Mono
-                    '-y',            # Overwrite
+                    '-ar', '16000', '-ac', '1', '-y',
                     cached_wav_path
                 ]
 
                 result = subprocess.run(cmd, capture_output=True, timeout=30)
 
                 if result.returncode != 0:
-                    error_msg = result.stderr.decode() if result.stderr else "Unknown error"
-                    logger.error(f"[MULTI_SPEAKER] ❌ Erreur conversion ffmpeg: {error_msg}")
                     return None
 
                 audio_path_to_read = cached_wav_path
                 temp_wav_path = cached_wav_path
-                logger.info(f"[MULTI_SPEAKER] ✅ Conversion réussie et mise en cache (7j): {cached_wav_filename}")
 
         audio_data, sample_rate = sf.read(audio_path_to_read)
 
@@ -877,9 +734,7 @@ async def _extract_speaker_audio(
             reverse=True
         )
 
-        # ═══════════════════════════════════════════════════════════════
         # FILTRER LES OVERLAPS (si diarization fournie)
-        # ═══════════════════════════════════════════════════════════════
         if all_diarization_speakers:
             clean_segments = []
             overlap_segments = []
@@ -888,7 +743,6 @@ async def _extract_speaker_audio(
                 start_ms = seg.get('start_ms', seg.get('startMs', 0))
                 end_ms = seg.get('end_ms', seg.get('endMs', 0))
 
-                # Vérifier overlap avec d'autres speakers
                 has_overlap = _check_overlap_with_others(
                     start_ms, end_ms, speaker_id, all_diarization_speakers
                 )
@@ -898,13 +752,6 @@ async def _extract_speaker_audio(
                 else:
                     clean_segments.append(seg)
 
-            logger.info(
-                f"[MULTI_SPEAKER] 🔍 {speaker_id}: "
-                f"{len(clean_segments)} segments propres, "
-                f"{len(overlap_segments)} avec overlap"
-            )
-
-            # Remplacer sorted_segments : clean d'abord, overlap ensuite
             sorted_segments = clean_segments + overlap_segments
 
         # Prendre les N segments les plus longs jusqu'à atteindre 5-10s d'audio
@@ -932,25 +779,7 @@ async def _extract_speaker_audio(
                 break
 
         if not selected_segments:
-            logger.error(f"[MULTI_SPEAKER] ❌ Aucun segment valide trouvé pour {speaker_id}")
             return None
-
-        if total_duration < MIN_DURATION_MS:
-            logger.warning(
-                f"[MULTI_SPEAKER] ⚠️ Seulement {total_duration}ms d'audio pour {speaker_id} "
-                f"(minimum recommandé: {MIN_DURATION_MS}ms)"
-            )
-
-        # Logger statistiques de filtrage overlap
-        if all_diarization_speakers and (clean_segments or overlap_segments):
-            clean_used = sum(1 for seg in selected_segments if seg in clean_segments)
-            overlap_used = len(selected_segments) - clean_used
-            logger.info(
-                f"[MULTI_SPEAKER] 🎯 {speaker_id}: "
-                f"{len(selected_segments)} segments sélectionnés "
-                f"({clean_used} propres, {overlap_used} avec overlap) "
-                f"= {total_duration}ms total"
-            )
 
         # Extraire et concaténer les segments sélectionnés
         audio_chunks = []
@@ -976,14 +805,7 @@ async def _extract_speaker_audio(
             logger.error(f"[MULTI_SPEAKER] ❌ Aucun audio extrait pour {speaker_id}")
             return None
 
-        # Concaténer tous les chunks
         reference_audio = np.concatenate(audio_chunks)
-
-        logger.info(
-            f"[MULTI_SPEAKER] 🎯 Audio de référence pour {speaker_id}: "
-            f"{total_duration}ms concaténés depuis {len(selected_segments)} segments "
-            f"(parmi {len(segments)} disponibles)"
-        )
 
         # Normaliser l'audio de référence
         max_val = np.max(np.abs(reference_audio))
@@ -1007,23 +829,10 @@ async def _extract_speaker_audio(
 
         sf.write(output_path, reference_audio, sample_rate)
 
-        logger.info(
-            f"[MULTI_SPEAKER] ✅ Audio de référence extrait pour {speaker_id}: "
-            f"{total_duration}ms → {output_path}"
-        )
-
-        # Ne PAS supprimer le fichier WAV en cache (réutilisable pendant 7 jours)
-        # Le nettoyage se fera automatiquement après 7 jours lors de la prochaine utilisation
-
         return output_path
 
     except Exception as e:
-        logger.error(f"[MULTI_SPEAKER] ❌ Erreur extraction audio: {e}")
-        import traceback
-        traceback.print_exc()
-
-        # En cas d'erreur, ne pas supprimer le cache WAV (peut être utile pour debug)
-
+        logger.error(f"[MULTI_SPEAKER] Erreur extraction audio: {e}")
         return None
 
 
@@ -1076,13 +885,7 @@ async def _concatenate_turns_in_order(
                 total_duration_ms += translation.duration_ms
 
         if not audio_paths:
-            logger.error("[MULTI_SPEAKER] ❌ Aucun audio à concaténer")
             return None
-
-        logger.info(
-            f"[MULTI_SPEAKER] 📝 Concaténation PROPRE de {len(audio_paths)} tours "
-            f"({total_duration_ms}ms total)"
-        )
 
         # Concaténer avec ffmpeg - RE-ENCODAGE pour éviter les glitchs
         from .translation_stage import TranslatedAudioVersion
@@ -1116,46 +919,30 @@ async def _concatenate_turns_in_order(
         result = subprocess.run(cmd, capture_output=True, timeout=60)
 
         if result.returncode == 0 and os.path.exists(output_path):
-            logger.info(
-                f"[MULTI_SPEAKER] ✅ Audio final: {output_path} | "
-                f"{len(translated_segments)} segments traduits | "
-                f"Taille: {os.path.getsize(output_path) / 1024:.1f}KB"
-            )
-
-            # Joindre tous les textes traduits
             full_translated_text = ' '.join(translated_texts)
 
-            # Nettoyer le fichier de liste temporaire
             try:
                 os.remove(concat_list_path)
             except:
                 pass
 
-            # Le fichier sera lu et envoyé en binaire multipart par zmq_audio_handler.py
-            # (voir ligne 673-679: lecture depuis audio_path et envoi via send_multipart)
-            # Donc: pas besoin d'encoder en base64, juste fournir le chemin correct
-
             return TranslatedAudioVersion(
                 language=target_lang,
                 translated_text=full_translated_text,
                 audio_path=output_path,
-                audio_url=f"/audio/{os.path.basename(output_path)}",  # URL utilisée seulement si binaire échoue
+                audio_url=f"/audio/{os.path.basename(output_path)}",
                 duration_ms=total_duration_ms,
                 format="mp3",
                 voice_cloned=True,
                 voice_quality=0.85,
                 processing_time_ms=0,
-                audio_data_base64=None,  # Pas de base64, on utilise le binaire multipart
+                audio_data_base64=None,
                 audio_mime_type="audio/mpeg",
-                segments=translated_segments  # ✅ Segments traduits pour synchronisation
+                segments=translated_segments
             )
         else:
-            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
-            logger.error(f"[MULTI_SPEAKER] ❌ Erreur ffmpeg: {error_msg}")
             return None
 
     except Exception as e:
-        logger.error(f"[MULTI_SPEAKER] ❌ Erreur concaténation: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[MULTI_SPEAKER] Erreur concaténation: {e}")
         return None

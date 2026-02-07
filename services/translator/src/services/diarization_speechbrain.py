@@ -128,17 +128,12 @@ class SpeechBrainDiarization:
             raise RuntimeError("SpeechBrain non disponible - pip install speechbrain")
 
         if self._encoder is None:
-            logger.info("[SPEECHBRAIN] 🔄 Chargement du modèle d'embeddings...")
-            logger.info("[SPEECHBRAIN]    Téléchargement automatique SANS token (comme NLLB)")
-
-            # Utiliser le nouveau module (speechbrain.inference)
+            logger.info("[SPEECHBRAIN] Chargement modèle ECAPA-TDNN...")
             self._encoder = EncoderClassifier.from_hparams(
                 source="speechbrain/spkrec-ecapa-voxceleb",
                 savedir=self.models_dir,
-                run_opts={"device": "cpu"}  # CPU par défaut
+                run_opts={"device": "cpu"}
             )
-
-            logger.info("[SPEECHBRAIN] ✅ Modèle chargé (ECAPA-TDNN)")
 
         return self._encoder
 
@@ -326,7 +321,6 @@ class SpeechBrainDiarization:
             timestamps.append((start_ms, end_ms))
 
         embeddings = np.array(embeddings)
-        logger.info(f"[SPEECHBRAIN]    Extrait {len(embeddings)} embeddings")
 
         # Clustering des embeddings
         if not SKLEARN_AVAILABLE:
@@ -336,9 +330,8 @@ class SpeechBrainDiarization:
         best_n_clusters = 1
         best_score = -1
 
-        if len(embeddings) >= 4:  # Minimum pour clustering
-            # Limiter le nombre max de clusters testés
-            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)  # ✅ RÉDUIT: 4 → 3
+        if len(embeddings) >= 4:
+            max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)
 
             for n in range(2, max_clusters_to_test):
                 clustering = AgglomerativeClustering(
@@ -347,18 +340,11 @@ class SpeechBrainDiarization:
                     linkage='average'
                 )
                 labels = clustering.fit_predict(embeddings)
-
-                # Score de silhouette (qualité du clustering)
                 score = silhouette_score(embeddings, labels, metric='cosine')
 
-                logger.info(f"[SPEECHBRAIN]    Test n={n} clusters: score={score:.3f}")
-
-                # Score silhouette : >0.7=excellent, 0.5-0.7=bon, 0.35-0.5=acceptable, <0.35=faible
-                # Seuil 0.40 = équilibre entre détection multi-speakers et éviter faux positifs
-                if score > best_score and score > 0.40:  # Seuil acceptable (voix distinctes)
+                if score > best_score and score > 0.40:
                     best_score = score
                     best_n_clusters = n
-                    logger.info(f"[SPEECHBRAIN]    ✓ Nouveau meilleur: n={n}, score={score:.3f}")
 
         # Appliquer le clustering final
         if best_n_clusters > 1:
@@ -368,10 +354,8 @@ class SpeechBrainDiarization:
                 linkage='average'
             )
             labels = clustering.fit_predict(embeddings)
-            logger.info(f"[SPEECHBRAIN]    Détecté {best_n_clusters} speakers (score={best_score:.3f})")
         else:
             labels = np.zeros(len(embeddings), dtype=int)
-            logger.info(f"[SPEECHBRAIN]    1 seul speaker détecté")
 
         # Construire les segments par speaker
         speakers_data = {}
@@ -442,67 +426,37 @@ class SpeechBrainDiarization:
         MIN_RATIO_LONG_AUDIO = 0.25   # 25% pour audios ≥ 15s (augmenté de 20%)
 
         # Déterminer le ratio minimum selon la durée totale
-        if duration_ms < AUDIO_THRESHOLD_MS:
-            min_ratio_threshold = MIN_RATIO_SHORT_AUDIO
-            ratio_label = "court"
-        else:
-            min_ratio_threshold = MIN_RATIO_LONG_AUDIO
-            ratio_label = "long"
-
-        logger.info(
-            f"[SPEECHBRAIN] Filtre faux positifs: audio {duration_ms}ms ({ratio_label}), "
-            f"ratio minimum = {min_ratio_threshold*100}%"
-        )
+        min_ratio_threshold = MIN_RATIO_SHORT_AUDIO if duration_ms < AUDIO_THRESHOLD_MS else MIN_RATIO_LONG_AUDIO
 
         speakers_filtered = {}
         for speaker_id, data in speakers_data.items():
             speaking_ratio = data['total_duration_ms'] / duration_ms if duration_ms > 0 else 0
             speaker_duration = data['total_duration_ms']
 
-            # Critère 1: Durée minimale absolue
-            if speaker_duration < MIN_DURATION_MS:
-                logger.info(
-                    f"[SPEECHBRAIN]    Filtré {speaker_id}: "
-                    f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
-                    f"{speaker_duration}ms (< {MIN_DURATION_MS}ms minimum absolu)"
-                )
+            # Filtrer les faux positifs
+            if speaker_duration < MIN_DURATION_MS or speaking_ratio < min_ratio_threshold:
                 continue
 
-            # Critère 2: Ratio adaptatif selon durée audio
-            # Si ratio trop faible → probable faux positif
-            if speaking_ratio < min_ratio_threshold:
-                logger.info(
-                    f"[SPEECHBRAIN]    Filtré {speaker_id}: "
-                    f"{speaking_ratio*100:.1f}% temps, {len(data['segments'])} segments, "
-                    f"{speaker_duration}ms (ratio < {min_ratio_threshold*100}% pour audio {ratio_label}, "
-                    f"total={duration_ms}ms = probable faux positif)"
-                )
-                continue
-
-            # Speaker valide
             speakers_filtered[speaker_id] = data
 
         speakers_data = speakers_filtered
 
-        # ✨ NETTOYAGE AUTOMATIQUE (si activé)
+        # NETTOYAGE AUTOMATIQUE (si activé)
         cleaning_stats = None
         if self.enable_cleaning and self._cleaner and len(speakers_data) > 0:
             initial_speaker_count = len(speakers_data)
-            logger.info(f"[SPEECHBRAIN] 🧹 Début nettoyage automatique ({initial_speaker_count} speakers bruts)...")
 
-            # Convertir segments en format compatible avec cleaner
             segments_for_cleaner = []
             for speaker_id, data in speakers_data.items():
                 for seg in data['segments']:
                     segments_for_cleaner.append({
                         'speaker_id': speaker_id,
-                        'start': seg.start_ms / 1000,  # Convertir en secondes
+                        'start': seg.start_ms / 1000,
                         'end': seg.end_ms / 1000,
                         'duration': seg.duration_ms / 1000,
                         'confidence': seg.confidence
                     })
 
-            # Préparer embeddings par speaker (moyenne des embeddings de ses segments)
             speaker_embeddings = {}
             for i, (label, _) in enumerate(zip(labels, timestamps)):
                 speaker_id = f"s{label}"
@@ -511,35 +465,20 @@ class SpeechBrainDiarization:
                 if i < len(embeddings):
                     speaker_embeddings[speaker_id].append(embeddings[i])
 
-            # Calculer embedding moyen par speaker
             speaker_embeddings_avg = {}
             for speaker_id, embs in speaker_embeddings.items():
                 if embs and speaker_id in speakers_data:
                     speaker_embeddings_avg[speaker_id] = np.mean(embs, axis=0)
 
-            # Appliquer le nettoyage
             try:
                 cleaned_segments, cleaning_stats = self._cleaner.clean_diarization(
                     segments=segments_for_cleaner,
                     embeddings=speaker_embeddings_avg if speaker_embeddings_avg else None,
-                    transcripts=None  # Pas de transcripts disponibles ici
+                    transcripts=None
                 )
 
-                # Fusion consécutive (optimisation finale)
                 cleaned_segments = self._merge_consecutive(cleaned_segments)
 
-                cleaned_speaker_count = len(set(seg['speaker_id'] for seg in cleaned_segments))
-                logger.info(
-                    f"[SPEECHBRAIN] ✅ Nettoyage terminé: "
-                    f"{initial_speaker_count} → {cleaned_speaker_count} speaker(s)"
-                )
-
-                # Log des fusions effectuées
-                if cleaning_stats and cleaning_stats.get('merges_performed'):
-                    for merge_msg in cleaning_stats['merges_performed']:
-                        logger.info(f"[SPEECHBRAIN]    🔄 {merge_msg}")
-
-                # Reconvertir segments nettoyés en format speakers_data
                 speakers_data_cleaned = {}
                 for seg in cleaned_segments:
                     speaker_id = seg['speaker_id']
@@ -549,7 +488,6 @@ class SpeechBrainDiarization:
                             'total_duration_ms': 0
                         }
 
-                    # Recréer SpeakerSegment
                     cleaned_seg = SpeakerSegment(
                         speaker_id=speaker_id,
                         start_ms=int(seg['start'] * 1000),
@@ -560,20 +498,16 @@ class SpeechBrainDiarization:
                     speakers_data_cleaned[speaker_id]['segments'].append(cleaned_seg)
                     speakers_data_cleaned[speaker_id]['total_duration_ms'] += cleaned_seg.duration_ms
 
-                # Remplacer speakers_data par la version nettoyée
                 speakers_data = speakers_data_cleaned
 
             except Exception as e:
-                logger.warning(f"[SPEECHBRAIN] ⚠️ Erreur nettoyage: {e}")
-                logger.warning("[SPEECHBRAIN]    Utilisation des segments bruts")
+                logger.warning(f"[SPEECHBRAIN] Erreur nettoyage: {e}")
 
         # Créer SpeakerInfo avec analyse des caractéristiques vocales
         speakers = []
         for speaker_id, data in speakers_data.items():
             speaking_ratio = data['total_duration_ms'] / duration_ms if duration_ms > 0 else 0
 
-            # Analyser les caractéristiques vocales
-            logger.info(f"[SPEECHBRAIN] 🎤 Analyse des caractéristiques vocales de {speaker_id}...")
             voice_chars = await self._analyze_voice_characteristics(
                 audio_path=audio_path,
                 segments=data['segments']
@@ -590,9 +524,7 @@ class SpeechBrainDiarization:
 
         # Fusionner les speakers avec caractéristiques vocales très similaires
         if len(speakers) > 1:
-            logger.info(f"[SPEECHBRAIN] 🔍 Analyse de similarité entre {len(speakers)} speakers...")
             speakers = self._merge_similar_speakers_by_characteristics(speakers)
-            logger.info(f"[SPEECHBRAIN] ✅ Après fusion: {len(speakers)} speakers")
 
         # Identifier le speaker principal (qui parle le plus)
         if speakers:
@@ -610,49 +542,19 @@ class SpeechBrainDiarization:
             method="speechbrain" + ("_cleaned" if self.enable_cleaning and cleaning_stats else "")
         )
 
-        # Ajouter stats de nettoyage si disponibles
         if cleaning_stats:
             result.cleaning_stats = cleaning_stats
 
-        # Logs détaillés
-        logger.info("=" * 80)
-        logger.info(f"[SPEECHBRAIN] 🎭 RÉSULTAT DIARISATION")
-        logger.info(f"[SPEECHBRAIN] Speakers détectés: {result.speaker_count}")
-        logger.info(f"[SPEECHBRAIN] Durée totale: {result.total_duration_ms}ms")
-        logger.info(f"[SPEECHBRAIN] Speaker principal: {result.primary_speaker_id}")
-        logger.info("=" * 80)
-
-        for speaker in result.speakers:
-            status = 'PRINCIPAL' if speaker.is_primary else 'secondaire'
-            logger.info(
-                f"[SPEECHBRAIN] 👤 {speaker.speaker_id} ({status}): "
-                f"{speaker.speaking_time_ms}ms ({speaker.speaking_ratio*100:.1f}%) | "
-                f"{len(speaker.segments)} segments"
-            )
-
-            # Afficher les caractéristiques vocales si disponibles
-            if speaker.voice_characteristics:
-                vc = speaker.voice_characteristics
-                gender = self._get_gender_label(vc)
-                pitch_level = self._get_pitch_level_label(vc)
-                age = self._get_age_label(vc)
-                tone = self._get_tone_label(vc)
-                speech_rate = self._get_speech_rate_label(vc)
-
-                # Calculer syllabes/sec pour affichage (approximation depuis wpm)
-                syl_per_sec = (vc.speech_rate_wpm * 2) / 60 if vc.speech_rate_wpm > 0 else 0
-
-                logger.info(
-                    f"[SPEECHBRAIN]    ├─ Voix: {gender} | "
-                    f"Registre: {pitch_level} ({vc.pitch_mean:.0f}Hz) | "
-                    f"Âge: {age}"
-                )
-                logger.info(
-                    f"[SPEECHBRAIN]    └─ Ton: {tone} | "
-                    f"Rapidité: {speech_rate} ({syl_per_sec:.1f} syl/s)"
-                )
-
-        logger.info("=" * 80)
+        # Log résumé
+        speaker_summary = ", ".join([
+            f"{s.speaker_id}:{s.speaking_ratio*100:.0f}%"
+            for s in result.speakers
+        ])
+        logger.info(
+            f"[SPEECHBRAIN] 🎭 Diarisation: {result.speaker_count} speaker(s) | "
+            f"Principal: {result.primary_speaker_id} | "
+            f"Répartition: {speaker_summary}"
+        )
 
         return result
 
@@ -694,12 +596,7 @@ class SpeechBrainDiarization:
                 if j in used_indices:
                     continue
 
-                # Vérifier similarité
                 if self._are_speakers_similar(speaker1, speaker2):
-                    logger.info(
-                        f"[SPEECHBRAIN] 🔗 Fusion détectée: "
-                        f"{speaker1.speaker_id} ↔️ {speaker2.speaker_id}"
-                    )
                     group.append(speaker2)
                     used_indices.add(j)
 
@@ -709,16 +606,10 @@ class SpeechBrainDiarization:
         merged_speakers = []
         for group_idx, group in enumerate(merged_groups):
             if len(group) == 1:
-                # Pas de fusion nécessaire
                 merged_speakers.append(group[0])
             else:
-                # Fusionner le groupe
                 merged_speaker = self._merge_speaker_group(group, group_idx)
                 merged_speakers.append(merged_speaker)
-                logger.info(
-                    f"[SPEECHBRAIN] ✅ Groupe fusionné: "
-                    f"{[s.speaker_id for s in group]} → {merged_speaker.speaker_id}"
-                )
 
         return merged_speakers
 
@@ -726,61 +617,26 @@ class SpeechBrainDiarization:
     def _are_speakers_similar(
         speaker1: SpeakerInfo,
         speaker2: SpeakerInfo,
-        pitch_tolerance_hz: float = 25.0  # Légèrement augmenté pour tolérance naturelle
+        pitch_tolerance_hz: float = 25.0
     ) -> bool:
-        """
-        Compare deux speakers pour déterminer s'ils sont similaires.
-
-        Critères stricts pour fusionner uniquement les vraies duplications :
-        - Même genre (male/female/child)
-        - Pitch très proche (±25Hz)
-        - Même catégorie d'âge
-
-        Returns:
-            True si les speakers sont très similaires (probablement même personne)
-        """
+        """Compare deux speakers pour déterminer s'ils sont similaires."""
         chars1 = speaker1.voice_characteristics
         chars2 = speaker2.voice_characteristics
 
         if not chars1 or not chars2:
-            logger.debug(
-                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
-                f"Pas de caractéristiques vocales"
-            )
             return False
 
-        # 1. Comparer le genre (doit être identique)
+        # Critères: même genre, pitch proche, même âge
         if chars1.estimated_gender != chars2.estimated_gender:
-            logger.debug(
-                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
-                f"Genre différent ({chars1.estimated_gender} ≠ {chars2.estimated_gender})"
-            )
             return False
 
-        # 2. Comparer le pitch (±25Hz)
         pitch_diff = abs(chars1.pitch_mean - chars2.pitch_mean)
         if pitch_diff > pitch_tolerance_hz:
-            logger.debug(
-                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
-                f"Pitch trop différent ({chars1.pitch_mean:.0f}Hz vs {chars2.pitch_mean:.0f}Hz, "
-                f"diff={pitch_diff:.0f}Hz > {pitch_tolerance_hz}Hz)"
-            )
             return False
 
-        # 3. Comparer l'âge (même catégorie)
         if chars1.estimated_age_range != chars2.estimated_age_range:
-            logger.debug(
-                f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
-                f"Âge différent ({chars1.estimated_age_range} ≠ {chars2.estimated_age_range})"
-            )
             return False
 
-        # Si tous les critères sont satisfaits, les speakers sont similaires
-        logger.info(
-            f"[SPEECHBRAIN] {speaker1.speaker_id} vs {speaker2.speaker_id}: "
-            f"SIMILAIRES (genre={chars1.estimated_gender}, pitch={chars1.pitch_mean:.0f}Hz/"
-            f"{chars2.pitch_mean:.0f}Hz, âge={chars1.estimated_age_range})"
-        )
         return True
 
     @staticmethod

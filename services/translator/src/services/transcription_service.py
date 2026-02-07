@@ -463,32 +463,12 @@ class TranscriptionService:
                 # Recalculer full_text après filtrage
                 full_text = " ".join([seg.text for seg in segments])
 
-                # ❌ FUSION INTELLIGENTE DÉSACTIVÉE TEMPORAIREMENT pour debug multi-speakers
-                # Règles: pause < 90ms ET somme < 8 caractères
-                logger.info(
-                    f"[TRANSCRIPTION] 📊 Segments Whisper: {original_count} bruts → {len(segments)} filtrés "
-                    f"(fusion désactivée pour préserver granularité)"
-                )
-                # if original_count > 0:
-                #     segments = merge_short_segments(
-                #         segments,
-                #         word_max_pause_ms=90,
-                #         word_max_chars=8
-                #     )
-                #     reduction_pct = (original_count - len(segments)) / original_count * 100
-                #     logger.info(
-                #         f"[TRANSCRIPTION] Fusion intelligente: {original_count} → {len(segments)} segments "
-                #         f"(réduction {reduction_pct:.1f}%)"
-                #     )
-                # else:
-                #     logger.warning("[TRANSCRIPTION] ⚠️ Aucun segment à fusionner")
 
             processing_time = int((time.time() - start_time) * 1000)
 
             logger.info(
-                f"[TRANSCRIPTION] ✅ Transcrit: '{full_text[:50]}...' "
-                f"(lang={info.language}, conf={info.language_probability:.2f}, "
-                f"dur={int(info.duration)}s, time={processing_time}ms)"
+                f"[TRANSCRIPTION] ✅ {len(segments)} segments | "
+                f"lang={info.language} | dur={int(info.duration)}s | time={processing_time}ms"
             )
 
             result = TranscriptionResult(
@@ -575,36 +555,9 @@ class TranscriptionService:
                 overlap_end = min(seg_end, speaker_end)
                 return max(0, overlap_end - overlap_start)
 
-            # ===== DEBUG : Afficher les timestamps exacts =====
-            logger.info("=" * 80)
-            logger.info("[DEBUG-TIMESTAMPS] SEGMENTS DE DIARIZATION")
-            logger.info("=" * 80)
-            for speaker in diarization.speakers:
-                logger.info(f"[DEBUG] Speaker {speaker.speaker_id}:")
-                for seg_idx, speaker_seg in enumerate(speaker.segments):
-                    duration = speaker_seg.end_ms - speaker_seg.start_ms
-                    logger.info(
-                        f"[DEBUG]   Seg {seg_idx}: [{speaker_seg.start_ms:5d}ms - {speaker_seg.end_ms:5d}ms] "
-                        f"durée={duration:4d}ms"
-                    )
-
-            total_diarization = sum(
-                sum(seg.end_ms - seg.start_ms for seg in speaker.segments)
-                for speaker in diarization.speakers
-            )
-            logger.info(f"[DEBUG] Total couvert par diarization: {total_diarization}ms")
-            logger.info(f"[DEBUG] Durée audio totale: {diarization.total_duration_ms}ms")
-            logger.info(f"[DEBUG] Couverture: {total_diarization / diarization.total_duration_ms * 100:.1f}%")
-
-            logger.info("=" * 80)
-            logger.info("[DEBUG-TIMESTAMPS] SEGMENTS DE TRANSCRIPTION")
-            logger.info("=" * 80)
-
-            # Calculer la couverture Whisper
+            # Calculer les trous dans la transcription (pour gap filler)
             whisper_segments_sorted = sorted(transcription.segments, key=lambda s: s.start_ms)
-            total_whisper_coverage = sum(seg.end_ms - seg.start_ms for seg in whisper_segments_sorted)
 
-            # Détecter les trous dans la transcription
             gaps = []
             for idx in range(len(whisper_segments_sorted) - 1):
                 current_end = whisper_segments_sorted[idx].end_ms
@@ -617,57 +570,11 @@ class TranscriptionService:
                         'duration': gap_duration
                     })
 
-            # Afficher le texte complet transcrit
-            full_text = " ".join([seg.text for seg in whisper_segments_sorted])
-            logger.info(f"[DEBUG] TEXTE COMPLET TRANSCRIT: '{full_text}'")
-            logger.info(f"[DEBUG] Nombre de caractères: {len(full_text)}")
-            logger.info("")
-
-            for idx, segment in enumerate(whisper_segments_sorted):
-                duration = segment.end_ms - segment.start_ms
-                mid_point = (segment.start_ms + segment.end_ms) // 2
-                logger.info(
-                    f"[DEBUG] Seg {idx:2d}: [{segment.start_ms:5d}ms - {segment.end_ms:5d}ms] "
-                    f"durée={duration:4d}ms, mid={mid_point:5d}ms, text='{segment.text[:40]}'"
-                )
-
-            logger.info("")
-            logger.info(f"[DEBUG] Total couvert par Whisper: {total_whisper_coverage}ms")
-            logger.info(f"[DEBUG] Couverture Whisper: {total_whisper_coverage / diarization.total_duration_ms * 100:.1f}%")
-
-            if gaps:
-                logger.info(f"[DEBUG] ⚠️ {len(gaps)} TROU(S) détecté(s) dans la transcription:")
-                for i, gap in enumerate(gaps):
-                    logger.info(
-                        f"[DEBUG]   Trou {i+1}: [{gap['start']:5d}ms - {gap['end']:5d}ms] "
-                        f"durée={gap['duration']:4d}ms"
-                    )
-                    # Vérifier si s1 parle dans ce trou
-                    for speaker in diarization.speakers:
-                        if speaker.speaker_id == 's1':
-                            for speaker_seg in speaker.segments:
-                                # Chevauchement entre le trou et le segment s1
-                                overlap_start = max(gap['start'], speaker_seg.start_ms)
-                                overlap_end = min(gap['end'], speaker_seg.end_ms)
-                                overlap = max(0, overlap_end - overlap_start)
-                                if overlap > 0:
-                                    logger.warning(
-                                        f"[DEBUG]   ❌ s1 parle dans ce trou ! "
-                                        f"({overlap}ms de s1 non transcrits)"
-                                    )
-            else:
-                logger.info(f"[DEBUG] ✅ Aucun trou dans la transcription")
-
-            logger.info("=" * 80)
-
-            # ✅ COMBLER LES TROUS DE TRANSCRIPTION (si détectés)
+            # Combler les trous de transcription si détectés
             if gaps and len(gaps) > 0:
-                logger.info(f"[TRANSCRIPTION] 🔧 {len(gaps)} trou(s) détecté(s), lancement du gap filler...")
-
                 try:
                     from .transcribe_gap_filler import fill_transcription_gaps
 
-                    # Combler les trous en extrayant et transcrivant les zones manquantes
                     new_segments = await fill_transcription_gaps(
                         audio_path=audio_path,
                         gaps=gaps,
@@ -676,50 +583,22 @@ class TranscriptionService:
                     )
 
                     if new_segments:
-                        # Ajouter les nouveaux segments à la transcription
                         transcription.segments.extend(new_segments)
-
-                        # Retriner par timestamp
                         transcription.segments.sort(key=lambda s: s.start_ms)
-
-                        # Reconstruire le texte complet
                         transcription.text = " ".join([seg.text for seg in transcription.segments])
 
-                        logger.info(
-                            f"[TRANSCRIPTION] ✅ {len(new_segments)} segment(s) ajouté(s), "
-                            f"total: {len(transcription.segments)} segments"
-                        )
-                    else:
-                        logger.warning(f"[TRANSCRIPTION] ⚠️ Aucun segment récupéré des trous")
-
-                except Exception as e:
-                    logger.error(f"[TRANSCRIPTION] ❌ Erreur gap filler: {e}", exc_info=True)
-                    logger.warning(f"[TRANSCRIPTION] ⚠️ Continuation avec transcription incomplète")
-            else:
-                logger.info(f"[TRANSCRIPTION] ✅ Aucun trou, transcription complète")
+                except Exception:
+                    pass  # Continue avec transcription incomplète
 
             # Taguer les segments avec les speaker_id (OVERLAP-BASED)
-            logger.info(
-                f"[TRANSCRIPTION] 🎯 Tagging {len(transcription.segments)} segments with "
-                f"{len(diarization.speakers)} speakers (overlap-based)"
-            )
+            assigned_count = 0
+            unassigned_count = 0
 
-            assignment_stats = {
-                'total_segments': len(transcription.segments),
-                'assigned': 0,
-                'unassigned': 0,
-                'speaker_counts': {}
-            }
-
-            for idx, segment in enumerate(transcription.segments):
+            for segment in transcription.segments:
                 best_speaker = None
                 max_overlap = 0
-                best_overlap_info = None
 
-                # Liste pour collecter tous les candidats
-                candidates = []
-
-                # Trouver tous les speakers avec chevauchement significatif
+                # Trouver le speaker avec le meilleur chevauchement
                 for speaker in diarization.speakers:
                     for speaker_seg in speaker.segments:
                         overlap = calculate_overlap(
@@ -728,111 +607,24 @@ class TranscriptionService:
                             speaker_seg.start_ms,
                             speaker_seg.end_ms
                         )
+                        if overlap > max_overlap:
+                            max_overlap = overlap
+                            best_speaker = speaker
 
-                        if overlap > 0:
-                            # Calculer la distance entre les centres
-                            seg_center = (segment.start_ms + segment.end_ms) / 2
-                            speaker_seg_center = (speaker_seg.start_ms + speaker_seg.end_ms) / 2
-                            center_distance = abs(seg_center - speaker_seg_center)
-
-                            overlap_ratio = overlap / (segment.end_ms - segment.start_ms) if segment.end_ms > segment.start_ms else 0
-
-                            candidates.append({
-                                'speaker': speaker,
-                                'speaker_seg': speaker_seg,
-                                'overlap': overlap,
-                                'overlap_ratio': overlap_ratio,
-                                'center_distance': center_distance
-                            })
-
-                if not candidates:
-                    # Aucun chevauchement trouvé
-                    best_speaker = None
-                    max_overlap = 0
-                    best_overlap_info = None
-                elif len(candidates) == 1:
-                    # Un seul candidat, choix évident
-                    best_candidate = candidates[0]
-                    best_speaker = best_candidate['speaker']
-                    max_overlap = best_candidate['overlap']
-                    best_overlap_info = {
-                        'speaker_seg_start': best_candidate['speaker_seg'].start_ms,
-                        'speaker_seg_end': best_candidate['speaker_seg'].end_ms,
-                        'overlap_ms': best_candidate['overlap'],
-                        'overlap_ratio': best_candidate['overlap_ratio']
-                    }
-                else:
-                    # Plusieurs candidats : choisir intelligemment
-                    # Trier par overlap décroissant
-                    candidates.sort(key=lambda c: c['overlap'], reverse=True)
-
-                    top_overlap = candidates[0]['overlap']
-                    second_overlap = candidates[1]['overlap'] if len(candidates) > 1 else 0
-
-                    # Si le meilleur overlap est nettement supérieur (>20% de différence), le prendre
-                    if top_overlap > second_overlap * 1.2:
-                        best_candidate = candidates[0]
-                    else:
-                        # Cas ambigu : overlaps similaires
-                        # Départager par proximité du centre
-                        ambiguous_candidates = [c for c in candidates if c['overlap'] >= top_overlap * 0.8]
-                        ambiguous_candidates.sort(key=lambda c: c['center_distance'])
-                        best_candidate = ambiguous_candidates[0]
-
-                        if idx < 3 or idx >= len(transcription.segments) - 3:  # Log premiers et derniers segments
-                            logger.info(
-                                f"[TRANSCRIPTION]   ⚠️ Segment {idx} ambigu : "
-                                f"{len(ambiguous_candidates)} candidats avec overlap similaire, "
-                                f"choix par proximité du centre"
-                            )
-
-                    best_speaker = best_candidate['speaker']
-                    max_overlap = best_candidate['overlap']
-                    best_overlap_info = {
-                        'speaker_seg_start': best_candidate['speaker_seg'].start_ms,
-                        'speaker_seg_end': best_candidate['speaker_seg'].end_ms,
-                        'overlap_ms': best_candidate['overlap'],
-                        'overlap_ratio': best_candidate['overlap_ratio']
-                    }
-
-                # Assigner le meilleur speaker si chevauchement trouvé
+                # Assigner le meilleur speaker
                 if best_speaker and max_overlap > 0:
                     segment.speaker_id = best_speaker.speaker_id
                     segment.voice_similarity_score = best_speaker.voice_similarity_score
-                    assignment_stats['assigned'] += 1
-                    assignment_stats['speaker_counts'][best_speaker.speaker_id] = \
-                        assignment_stats['speaker_counts'].get(best_speaker.speaker_id, 0) + 1
-
-                    # Log détaillé pour les 3 premiers segments
-                    if idx < 3:
-                        logger.info(
-                            f"[TRANSCRIPTION]   Segment {idx}: '{segment.text[:20]}' → "
-                            f"speaker={best_speaker.speaker_id}, "
-                            f"overlap={max_overlap}ms ({best_overlap_info['overlap_ratio']:.1%}), "
-                            f"score={best_speaker.voice_similarity_score}"
-                        )
+                    assigned_count += 1
                 else:
-                    # Segment non assigné (aucun chevauchement trouvé)
-                    assignment_stats['unassigned'] += 1
+                    unassigned_count += 1
+
+            # Log résumé seulement si problème
+            if unassigned_count > 0:
+                unassigned_ratio = unassigned_count / len(transcription.segments)
+                if unassigned_ratio > 0.1:
                     logger.warning(
-                        f"[TRANSCRIPTION]   ⚠️ Segment {idx} [{segment.start_ms}-{segment.end_ms}ms] "
-                        f"'{segment.text[:20]}' : AUCUN chevauchement avec les speaker segments"
-                    )
-
-            # Log statistiques d'assignation
-            logger.info(f"[TRANSCRIPTION] 📊 Assignation des speakers :")
-            logger.info(f"[TRANSCRIPTION]   • Assignés : {assignment_stats['assigned']}/{assignment_stats['total_segments']}")
-            logger.info(f"[TRANSCRIPTION]   • Non assignés : {assignment_stats['unassigned']}/{assignment_stats['total_segments']}")
-            for speaker_id, count in assignment_stats['speaker_counts'].items():
-                logger.info(f"[TRANSCRIPTION]   • {speaker_id} : {count} segments")
-
-            # Avertissement si trop de segments non assignés
-            if assignment_stats['unassigned'] > 0:
-                unassigned_ratio = assignment_stats['unassigned'] / assignment_stats['total_segments']
-                if unassigned_ratio > 0.1:  # Plus de 10%
-                    logger.error(
-                        f"[TRANSCRIPTION] ❌ {unassigned_ratio:.1%} des segments ne sont assignés à AUCUN speaker ! "
-                        f"Possible désynchronisation entre diarization et transcription."
+                        f"[TRANSCRIPTION] ⚠️ {unassigned_ratio:.0%} segments non assignés"
                     )
 
             # Enrichir le résultat de transcription
@@ -843,21 +635,15 @@ class TranscriptionService:
             # Stocker les segments de diarization bruts pour le clonage vocal propre
             transcription.diarization_speakers = diarization.speakers
 
-            # Construire speaker_analysis pour la base de données (camelCase pour cohérence API)
-            # NOTE: Les segments sont déjà dans transcription.segments, pas besoin de les dupliquer ici
-            # On garde uniquement les métadonnées et caractéristiques vocales de chaque speaker
+            # Construire speaker_analysis pour la base de données
             speakers_list = []
             for s in diarization.speakers:
-                # Construire les voiceCharacteristics si disponibles
                 voice_chars = None
                 if hasattr(s, 'voice_characteristics') and s.voice_characteristics:
                     try:
                         voice_chars = s.voice_characteristics.to_dict()
-                        logger.info(f"   ✅ [VOICE-CHARS] Speaker {s.speaker_id}: voiceCharacteristics inclus (pitch={voice_chars.get('pitch', {}).get('mean_hz', 'N/A')} Hz)")
-                    except Exception as e:
-                        logger.error(f"   ❌ [VOICE-CHARS] Erreur conversion voiceCharacteristics pour {s.speaker_id}: {e}")
-                else:
-                    logger.warning(f"   ⚠️ [VOICE-CHARS] Speaker {s.speaker_id}: Pas de voiceCharacteristics disponibles")
+                    except Exception:
+                        pass
 
                 speakers_list.append({
                     'sid': s.speaker_id,
@@ -865,9 +651,7 @@ class TranscriptionService:
                     'speakingTimeMs': s.speaking_time_ms,
                     'speakingRatio': s.speaking_ratio,
                     'voiceSimilarityScore': s.voice_similarity_score,
-                    # Voice characteristics: fréquences, pitch, timbre, etc.
                     'voiceCharacteristics': voice_chars
-                    # ⚠️ segments supprimés car déjà présents dans transcription.segments avec speakerId
                 })
 
             transcription.speaker_analysis = {
@@ -880,132 +664,34 @@ class TranscriptionService:
                 'method': diarization.method
             }
 
-            logger.info(f"   📊 [SPEAKER-ANALYSIS] Construit avec {len(speakers_list)} speaker(s), voiceCharacteristics: {sum(1 for s in speakers_list if s.get('voiceCharacteristics'))}/{len(speakers_list)}")
+            # Log résumé diarisation
+            logger.info(
+                f"[DIARIZATION] 🎭 {diarization.speaker_count} speaker(s) détecté(s) | "
+                f"Principal: {diarization.primary_speaker_id} | "
+                f"Durée: {diarization.total_duration_ms/1000:.1f}s"
+            )
 
-            # ═══════════════════════════════════════════════════════════════
-            # LOGS DÉTAILLÉS PAR INTERLOCUTEUR
-            # ═══════════════════════════════════════════════════════════════
-            logger.info("=" * 80)
-            logger.info(f"[DIARIZATION] 🎭 RÉSUMÉ DÉTAILLÉ DE LA DIARISATION")
-            logger.info(f"[DIARIZATION] Nombre d'interlocuteurs détectés: {diarization.speaker_count}")
-            logger.info(f"[DIARIZATION] Méthode utilisée: {diarization.method}")
-            logger.info(f"[DIARIZATION] Durée totale: {diarization.total_duration_ms}ms")
-            logger.info(f"[DIARIZATION] Interlocuteur principal: {diarization.primary_speaker_id}")
-            logger.info("=" * 80)
+            # LOG TRANSCRIPTION COMPLÈTE PAR SPEAKER
+            logger.info("─" * 60)
+            logger.info("[TRANSCRIPTION] 📜 CONVERSATION COMPLÈTE:")
 
-            # Analyser les segments par speaker
+            sorted_segments = sorted(transcription.segments, key=lambda s: s.start_ms)
+
             for speaker in diarization.speakers:
-                # Compter les segments assignés à ce speaker
-                speaker_segments = [seg for seg in transcription.segments if seg.speaker_id == speaker.speaker_id]
-
-                if speaker_segments:
-                    # Détecter les langues présentes dans les segments de ce speaker
-                    # Utiliser getattr pour compatibilité avec différentes définitions de TranscriptionSegment
-                    languages = set(
-                        getattr(seg, 'language', None)
-                        for seg in speaker_segments
-                        if getattr(seg, 'language', None)
-                    )
-                    languages_str = ", ".join(sorted(languages)) if languages else "non détectée"
-
+                speaker_segs = [s for s in sorted_segments if s.speaker_id == speaker.speaker_id]
+                if speaker_segs:
+                    full_text = " ".join([s.text for s in speaker_segs])
+                    marker = "⭐" if speaker.is_primary else " "
                     logger.info(
-                        f"[DIARIZATION] 👤 Speaker {speaker.speaker_id} "
-                        f"({'PRINCIPAL' if speaker.is_primary else 'secondaire'}):"
-                    )
-                    logger.info(
-                        f"             ├─ Temps de parole: {speaker.speaking_time_ms}ms "
-                        f"({speaker.speaking_ratio * 100:.1f}%)"
-                    )
-                    logger.info(
-                        f"             ├─ Nombre de segments: {len(speaker_segments)}"
-                    )
-                    logger.info(
-                        f"             ├─ Langue(s) détectée(s): {languages_str}"
-                    )
-                    if speaker.voice_similarity_score is not None:
-                        logger.info(
-                            f"             ├─ Score de similarité vocale: {speaker.voice_similarity_score:.2f}"
-                        )
-
-                    # Afficher les caractéristiques vocales si disponibles
-                    if hasattr(speaker, 'voice_characteristics') and speaker.voice_characteristics:
-                        vc = speaker.voice_characteristics
-
-                        # Extract labels from VoiceCharacteristics (English)
-                        gender = vc.estimated_gender or "unknown"
-
-                        pitch = vc.pitch_mean
-                        if pitch > 250:
-                            pitch_level = "very_high"
-                        elif pitch > 200:
-                            pitch_level = "high"
-                        elif pitch > 120:
-                            pitch_level = "medium"
-                        elif pitch > 90:
-                            pitch_level = "low"
-                        else:
-                            pitch_level = "very_low"
-
-                        age_range = vc.estimated_age_range
-                        if "child" in age_range:
-                            age = "child"
-                        elif "teen" in age_range or "young" in age_range:
-                            age = "teen"
-                        elif "senior" in age_range:
-                            age = "senior"
-                        else:
-                            age = "adult"
-
-                        variance = vc.pitch_std
-                        if variance > 40:
-                            tone = "very_expressive"
-                        elif variance > 20:
-                            tone = "expressive"
-                        else:
-                            tone = "monotone"
-
-                        syl_per_sec = (vc.speech_rate_wpm * 2) / 60 if vc.speech_rate_wpm > 0 else 0
-                        if syl_per_sec > 6:
-                            speech_rate = "rapide"
-                        elif syl_per_sec > 3:
-                            speech_rate = "normal"
-                        else:
-                            speech_rate = "lent"
-
-                        logger.info(
-                            f"             ├─ Voix: {gender} | "
-                            f"Registre: {pitch_level} ({pitch:.0f}Hz) | "
-                            f"Âge: {age}"
-                        )
-                        logger.info(
-                            f"             ├─ Ton: {tone} | "
-                            f"Rapidité: {speech_rate} ({syl_per_sec:.1f} syl/s)"
-                        )
-
-                    # Afficher les 3 premiers segments comme exemples
-                    logger.info(f"             └─ Exemples de segments:")
-                    for i, seg in enumerate(speaker_segments[:3]):
-                        seg_lang = getattr(seg, 'language', None) or 'N/A'
-                        logger.info(
-                            f"                [{i+1}] {seg.start_ms/1000:.1f}s-{seg.end_ms/1000:.1f}s | "
-                            f"lang={seg_lang} | "
-                            f"\"{seg.text[:40]}{'...' if len(seg.text) > 40 else ''}\""
-                        )
-                    if len(speaker_segments) > 3:
-                        logger.info(f"                ... et {len(speaker_segments) - 3} autres segments")
-                    logger.info("")
-
-            # Segments non assignés
-            unassigned_segments = [seg for seg in transcription.segments if not seg.speaker_id]
-            if unassigned_segments:
-                logger.info(f"[DIARIZATION] ⚠️  {len(unassigned_segments)} segment(s) non assigné(s)")
-                for i, seg in enumerate(unassigned_segments[:3]):
-                    logger.info(
-                        f"             [{i+1}] {seg.start_ms/1000:.1f}s-{seg.end_ms/1000:.1f}s | "
-                        f"\"{seg.text[:40]}{'...' if len(seg.text) > 40 else ''}\""
+                        f"[{speaker.speaker_id}]{marker} ({speaker.speaking_ratio * 100:.0f}%): "
+                        f"\"{full_text}\""
                     )
 
-            logger.info("=" * 80)
+            unassigned = [s for s in sorted_segments if not s.speaker_id]
+            if unassigned:
+                logger.info(f"[?] ({len(unassigned)} seg): \"{' '.join([s.text for s in unassigned])}\"")
+
+            logger.info("─" * 60)
 
             return transcription
 
