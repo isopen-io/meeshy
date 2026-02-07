@@ -295,47 +295,55 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   }, [messages.length, isLoadingMessages, scrollDirection, scrollToBottom, scrollToTop, scrollToMessage, findFirstUnreadMessage]);
 
   // AMÉLIORATION 1b: Maintenir le scroll en bas pendant le chargement des images/contenu async
-  // Cet effet est découplé du chargement des messages pour éviter les race conditions
-  // causées par clearMessages() dans ConversationLayout qui vide/recharge le cache
+  // Polling court qui force le scroll après le premier chargement.
+  // S'arrête dès que l'utilisateur interagit manuellement (wheel/touch).
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || scrollDirection === 'down') return;
 
-    // Le ref peut être null au premier rendu, on le résout dynamiquement dans l'intervalle
     let active = true;
+    let userInteracted = false;
 
-    // Forcer le scroll vers le bas à chaque tick pendant la phase initiale.
-    // Utilise le DOM directement car le ref peut pointer vers un ancien conteneur.
-    const interval = setInterval(() => {
-      if (!active) return;
-      // Résoudre le conteneur dynamiquement à chaque tick via le ref OU le DOM
-      let container = scrollAreaRef.current;
-      if (!container) {
-        // Fallback: chercher le conteneur via le DOM
-        container = document.querySelector('[aria-label][role="region"].overflow-y-auto') as HTMLDivElement;
+    const stopOnUserScroll = () => { userInteracted = true; };
+
+    // Attacher les listeners d'interaction après un court délai (le conteneur peut être null)
+    const setupDelay = setTimeout(() => {
+      const container = scrollAreaRef.current;
+      if (container) {
+        container.addEventListener('wheel', stopOnUserScroll, { once: true, passive: true });
+        container.addEventListener('touchstart', stopOnUserScroll, { once: true, passive: true });
       }
+    }, 200);
+
+    const interval = setInterval(() => {
+      if (!active || userInteracted) return;
+      const container = scrollAreaRef.current;
       if (!container || container.scrollHeight <= container.clientHeight) return;
 
-      if (scrollDirection === 'down') {
-        if (container.scrollTop !== 0) container.scrollTop = 0;
-      } else {
-        const maxScroll = container.scrollHeight - container.clientHeight;
-        if (container.scrollTop < maxScroll - 10) {
-          console.debug(`[ScrollPolling] forcing scroll: ${Math.round(container.scrollTop)} → ${maxScroll} (h=${container.scrollHeight})`);
-          container.scrollTop = container.scrollHeight;
-        }
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      if (container.scrollTop < maxScroll - 10) {
+        container.scrollTop = container.scrollHeight;
+        // Mettre à jour le bouton scroll-to-bottom (le scroll programmatique
+        // déclenche l'événement scroll, mais on force aussi par sécurité)
+        setShowScrollButton(false);
       }
     }, 150);
 
-    // Arrêter après 5s
+    // Arrêter après 3s (suffisant pour le chargement d'images)
     const timeout = setTimeout(() => {
       active = false;
       clearInterval(interval);
-    }, 5000);
+    }, 3000);
 
     return () => {
       active = false;
+      clearTimeout(setupDelay);
       clearInterval(interval);
       clearTimeout(timeout);
+      const container = scrollAreaRef.current;
+      if (container) {
+        container.removeEventListener('wheel', stopOnUserScroll);
+        container.removeEventListener('touchstart', stopOnUserScroll);
+      }
     };
   }, [conversationId, scrollDirection, scrollAreaRef]);
 
