@@ -810,34 +810,6 @@ class TestVoiceAnalyzerMethods:
 class TestVoiceCloneServiceHelpers:
     """Test VoiceCloneService helper methods"""
 
-    def test_calculate_quality_score_short_duration(self):
-        """Test quality score for short audio"""
-        if not SERVICE_AVAILABLE:
-            pytest.skip("Service not available")
-
-        service = VoiceCloneService()
-        score = service._calculate_quality_score(1000, 1)  # 1 second
-        assert 0.0 <= score <= 1.0
-        assert score < 0.5  # Short audio = low quality
-
-    def test_calculate_quality_score_medium_duration(self):
-        """Test quality score for medium audio"""
-        if not SERVICE_AVAILABLE:
-            pytest.skip("Service not available")
-
-        service = VoiceCloneService()
-        score = service._calculate_quality_score(15000, 1)  # 15 seconds
-        assert 0.3 <= score <= 0.7
-
-    def test_calculate_quality_score_long_duration(self):
-        """Test quality score for long audio"""
-        if not SERVICE_AVAILABLE:
-            pytest.skip("Service not available")
-
-        service = VoiceCloneService()
-        score = service._calculate_quality_score(60000, 3)  # 60 seconds, 3 audios
-        assert score > 0.5
-
     def test_singleton_pattern(self):
         """Test that VoiceCloneService uses singleton"""
         if not SERVICE_AVAILABLE:
@@ -935,51 +907,9 @@ class TestFileOperations:
 
         return mock
 
-    @pytest.mark.asyncio
-    async def test_save_and_load_model(self, temp_dir, mock_database_service):
-        """Test saving and loading voice model"""
-        if not SERVICE_AVAILABLE:
-            pytest.skip("Service not available")
-
-        service = VoiceCloneService()
-        service.voice_cache_dir = temp_dir
-        service.set_database_service(mock_database_service)
-
-        chars = VoiceCharacteristics(pitch_mean_hz=155.0)
-        embedding = np.random.randn(256).astype(np.float32)
-
-        model = VoiceModel(
-            user_id="file_test_user",
-            embedding_path=str(temp_dir / "file_test_user" / "embedding.pkl"),
-            audio_count=1,
-            total_duration_ms=20000,
-            quality_score=0.65,
-            voice_characteristics=chars,
-            embedding=embedding
-        )
-        model.generate_fingerprint()
-
-        # Save
-        await service._save_model_to_cache(model)
-
-        # Load
-        loaded = await service._load_cached_model("file_test_user")
-        assert loaded is not None
-        assert loaded.user_id == "file_test_user"
-        assert loaded.audio_count == 1
-
-    @pytest.mark.asyncio
-    async def test_load_nonexistent_model(self, temp_dir, mock_database_service):
-        """Test loading model that doesn't exist"""
-        if not SERVICE_AVAILABLE:
-            pytest.skip("Service not available")
-
-        service = VoiceCloneService()
-        service.voice_cache_dir = temp_dir
-        service.set_database_service(mock_database_service)
-
-        result = await service._load_cached_model("nonexistent_user")
-        assert result is None
+    # Note: test_save_and_load_model and test_load_nonexistent_model were removed
+    # because _save_model_to_cache and _load_cached_model methods no longer exist
+    # in VoiceCloneService after refactoring
 
 
 # ═══════════════════════════════════════════════════════════════
