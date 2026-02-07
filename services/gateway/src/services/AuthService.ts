@@ -165,6 +165,8 @@ export class AuthService {
           timezone: true,
           emailVerifiedAt: true,
           phoneVerifiedAt: true,
+          pendingEmail: true,
+          pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true
         }
@@ -333,6 +335,8 @@ export class AuthService {
           timezone: true,
           emailVerifiedAt: true,
           phoneVerifiedAt: true,
+          pendingEmail: true,
+          pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true
         }
@@ -1171,6 +1175,8 @@ export class AuthService {
       // Security & verification fields for auth responses
       emailVerifiedAt: user.emailVerifiedAt,
       phoneVerifiedAt: user.phoneVerifiedAt,
+      pendingEmail: user.pendingEmail,
+      pendingPhone: user.pendingPhoneNumber,
       twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
       lastPasswordChange: user.lastPasswordChange,
       // Login tracking

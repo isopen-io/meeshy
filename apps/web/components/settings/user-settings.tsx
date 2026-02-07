@@ -118,7 +118,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  // pendingEmail is now loaded from user object, not local state
 
   // Phone change state
   const [isChangingPhone, setIsChangingPhone] = useState(false);
@@ -437,7 +437,13 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
       if (response.ok && data.success) {
         toast.success(t('profile.email.verificationSent', 'Email de vérification envoyé à la nouvelle adresse'));
-        setPendingEmail(data.data.pendingEmail);
+        // Update user with pending email from API response
+        if (user) {
+          onUserUpdate({
+            ...user,
+            pendingEmail: data.data.pendingEmail
+          });
+        }
         setNewEmail('');
         setIsChangingEmail(false);
       } else {
@@ -1084,12 +1090,12 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                   </p>
                 )}
 
-                {pendingEmail && (
+                {user?.pendingEmail && (
                   <Alert className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
                     <Mail className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     <AlertDescription className="ml-2 text-xs text-purple-800 dark:text-purple-300">
-                      <p className="font-medium">{t('profile.email.pending', 'Changement en attente')}</p>
-                      <p className="mt-1">{t('profile.email.pendingMessage', `Vérifiez ${pendingEmail} pour confirmer`)}</p>
+                      <p className="font-medium">{t('profile.email.pending', 'Changement d\'email en attente')}</p>
+                      <p className="mt-1">{t('profile.email.pendingMessage', `Code envoyé à ${user.pendingEmail}`)}</p>
                     </AlertDescription>
                   </Alert>
                 )}
