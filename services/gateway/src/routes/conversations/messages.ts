@@ -1103,10 +1103,11 @@ export function registerMessagesRoutes(
             }
 
             // Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
+            const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
             const relativePath = audioAtt.fileUrl
-              ? `uploads/attachments${decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', ''))}`
+              ? decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '')
               : audioAtt.filePath || '';
-            const audioPath = relativePath ? path.resolve(process.cwd(), relativePath) : '';
+            const audioPath = relativePath ? path.join(uploadBasePath, relativePath) : '';
 
             await translationService.processAudioAttachment({
               messageId: message.id,

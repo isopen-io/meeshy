@@ -341,8 +341,9 @@ export class AudioTranslateService extends EventEmitter {
       }
 
       // Construire le chemin ABSOLU audio (décoder l'URL encodée)
-      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
-      const audioPath = path.resolve(process.cwd(), relativePath);
+      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const cleanedFileUrl = decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '');
+      const audioPath = path.join(uploadBasePath, cleanedFileUrl);
 
       // Transcrire avec sauvegarde
       const result = await this.transcribeOnly('system', {
@@ -499,8 +500,10 @@ export class AudioTranslateService extends EventEmitter {
       }
 
       // Lire le fichier audio (décoder l'URL encodée et convertir en chemin absolu)
-      const relativePath = attachment.filePath || `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
-      const audioPath = path.isAbsolute(relativePath) ? relativePath : path.resolve(process.cwd(), relativePath);
+      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const cleanedUrl = decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '');
+      const relativePath = attachment.filePath || cleanedUrl;
+      const audioPath = path.isAbsolute(relativePath) ? relativePath : path.join(uploadBasePath, relativePath);
 
       // Traduire avec sauvegarde
       const result = await this.translateSync(attachment.uploadedBy || 'system', {

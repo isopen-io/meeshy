@@ -896,7 +896,7 @@ export class MessageTranslationService extends EventEmitter {
         if (audioBinary || audioBase64) {
           try {
             // Créer le dossier de sortie s'il n'existe pas
-            const translatedDir = path.resolve(process.cwd(), 'uploads/attachments/translated');
+            const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
             await fs.mkdir(translatedDir, { recursive: true });
 
             // Générer un nom de fichier unique
@@ -1413,7 +1413,7 @@ export class MessageTranslationService extends EventEmitter {
       if (audioBinary || audioBase64) {
         try {
           // Créer le dossier de sortie
-          const translatedDir = path.resolve(process.cwd(), 'uploads/attachments/translated');
+          const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
           await fs.mkdir(translatedDir, { recursive: true });
 
           // Générer un nom de fichier unique
@@ -1753,7 +1753,7 @@ export class MessageTranslationService extends EventEmitter {
           // Sauvegarder le fichier audio localement si base64 fourni
           if (translation.audioBase64) {
             try {
-              const translatedDir = path.resolve(process.cwd(), 'uploads/attachments/translated');
+              const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
               await fs.mkdir(translatedDir, { recursive: true });
 
               const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
@@ -2213,7 +2213,7 @@ export class MessageTranslationService extends EventEmitter {
       // Le fileUrl peut avoir plusieurs formats:
       // - /api/v1/attachments/file/2025/01/.../audio.m4a (URL-encoded ou non)
       // - 2025/01/.../audio.m4a (chemin relatif direct)
-      // On normalise pour obtenir le chemin relatif à uploads/attachments/
+      // On normalise pour obtenir le chemin relatif au dossier uploads
       let cleanedPath = decodeURIComponent(attachment.fileUrl);
 
       // Retirer les préfixes API connus
@@ -2222,8 +2222,8 @@ export class MessageTranslationService extends EventEmitter {
         .replace('/api/v1/attachments/file', '')
         .replace(/^\/+/, ''); // Retirer les slashes en début
 
-      const relativePath = `uploads/attachments/${cleanedPath}`;
-      const audioPath = path.resolve(process.cwd(), relativePath);
+      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const audioPath = path.join(uploadBasePath, cleanedPath);
 
       const fileExists = require('fs').existsSync(audioPath);
       const fileSize = fileExists ? require('fs').statSync(audioPath).size : 0;
@@ -2432,8 +2432,9 @@ export class MessageTranslationService extends EventEmitter {
       );
 
       // 2. Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
-      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
-      const audioPath = path.resolve(process.cwd(), relativePath);
+      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const cleanedFileUrl = decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '');
+      const audioPath = path.join(uploadBasePath, cleanedFileUrl);
 
       // 3. Déterminer les langues cibles
       let targetLanguages = options.targetLanguages;
