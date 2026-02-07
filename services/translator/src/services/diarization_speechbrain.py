@@ -161,7 +161,14 @@ class SpeechBrainDiarization:
                     self._encoder = EncoderClassifier.from_hparams(
                         source=model_source,
                         savedir=self.models_dir,
-                        run_opts={"device": "cpu"}
+                        run_opts={"device": "cpu"},
+                        # ═══════════════════════════════════════════════════════════
+                        # FIX: Désactiver le téléchargement de custom.py
+                        # Le modèle ECAPA-TDNN n'a pas besoin de custom.py (toutes les
+                        # classes sont dans speechbrain.*), mais from_hparams essaie
+                        # de le télécharger par défaut → 404 car supprimé de HuggingFace
+                        # ═══════════════════════════════════════════════════════════
+                        pymodule_file=None
                     )
                     logger.info(f"[SPEECHBRAIN] ✅ Modèle {model_name} chargé avec succès")
                     break
