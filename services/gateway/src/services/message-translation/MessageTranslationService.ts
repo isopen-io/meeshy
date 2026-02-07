@@ -2181,10 +2181,10 @@ export class MessageTranslationService extends EventEmitter {
           id: true,
           messageId: true,
           fileName: true,
+          filePath: true,
           fileUrl: true,
           duration: true,
           mimeType: true,
-          // Récupérer le chemin du fichier pour le traitement
           metadata: true
         }
       });
@@ -2207,23 +2207,11 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       logger.info(`🔍 [GATEWAY-TRACE] Étape 2: Construction du chemin audio absolu...`);
-      logger.info(`🔍 [GATEWAY-TRACE] fileUrl brut: ${attachment.fileUrl}`);
+      logger.info(`🔍 [GATEWAY-TRACE] filePath: ${attachment.filePath}`);
 
-      // 2. Construire le chemin ABSOLU du fichier audio
-      // Le fileUrl peut avoir plusieurs formats:
-      // - /api/v1/attachments/file/2025/01/.../audio.m4a (URL-encoded ou non)
-      // - 2025/01/.../audio.m4a (chemin relatif direct)
-      // On normalise pour obtenir le chemin relatif au dossier uploads
-      let cleanedPath = decodeURIComponent(attachment.fileUrl);
-
-      // Retirer les préfixes API connus
-      cleanedPath = cleanedPath
-        .replace('/api/v1/attachments/file/', '')
-        .replace('/api/v1/attachments/file', '')
-        .replace(/^\/+/, ''); // Retirer les slashes en début
-
+      // 2. Construire le chemin ABSOLU du fichier audio via filePath (chemin relatif au dossier uploads)
       const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
-      const audioPath = path.join(uploadBasePath, cleanedPath);
+      const audioPath = path.join(uploadBasePath, attachment.filePath);
 
       const fileExists = require('fs').existsSync(audioPath);
       const fileSize = fileExists ? require('fs').statSync(audioPath).size : 0;
@@ -2402,6 +2390,7 @@ export class MessageTranslationService extends EventEmitter {
           id: true,
           messageId: true,
           fileName: true,
+          filePath: true,
           fileUrl: true,
           duration: true,
           mimeType: true,
@@ -2431,10 +2420,9 @@ export class MessageTranslationService extends EventEmitter {
         `File: ${attachment.fileName} | Duration: ${attachment.duration}ms`
       );
 
-      // 2. Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
+      // 2. Construire le chemin ABSOLU du fichier audio via filePath
       const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
-      const cleanedFileUrl = decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '');
-      const audioPath = path.join(uploadBasePath, cleanedFileUrl);
+      const audioPath = path.join(uploadBasePath, attachment.filePath);
 
       // 3. Déterminer les langues cibles
       let targetLanguages = options.targetLanguages;

@@ -631,12 +631,8 @@ export class MeeshySocketIOManager {
                 }
 
                 // Envoyer au Translator pour transcription, traduction et clonage vocal
-                // Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
                 const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
-                const relativePath = audioAtt.fileUrl
-                  ? decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, '')
-                  : audioAtt.filePath || '';
-                const audioPath = relativePath ? path.join(uploadBasePath, relativePath) : '';
+                const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
 
                 await this.translationService.processAudioAttachment({
                   messageId: response.data.id,
