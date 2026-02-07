@@ -30,6 +30,8 @@ export interface SendMessageBody {
   encryptionMode?: 'e2ee' | 'server' | 'hybrid';
   encryptionMetadata?: Record<string, any>;
   isEncrypted?: boolean;
+  // Audio attachments (pre-uploaded via /attachments/upload)
+  attachmentIds?: string[];
 }
 
 export interface MessagesQuery {

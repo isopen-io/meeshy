@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
@@ -879,7 +880,8 @@ export function registerMessagesRoutes(
           encryptedContent: { type: 'string', description: 'Encrypted message content' },
           encryptionMode: { type: 'string', enum: ['e2e', 'server'], description: 'Encryption mode' },
           encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
-          isEncrypted: { type: 'boolean', description: 'Whether message is encrypted' }
+          isEncrypted: { type: 'boolean', description: 'Whether message is encrypted' },
+          attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés via /attachments/upload' }
         }
       },
       response: {
@@ -924,7 +926,8 @@ export function registerMessagesRoutes(
         encryptedContent,
         encryptionMode,
         encryptionMetadata,
-        isEncrypted
+        isEncrypted,
+        attachmentIds
       } = request.body;
       const userId = authRequest.authContext.userId;
 
@@ -1058,6 +1061,73 @@ export function registerMessagesRoutes(
           }
         }
       });
+
+      // ÉTAPE 2b: Associer les attachments au message et traiter les audios
+      if (attachmentIds && attachmentIds.length > 0) {
+        try {
+          // Lier les attachments pré-uploadés au message
+          await attachmentService.associateAttachmentsToMessage(attachmentIds, message.id);
+
+          // Récupérer les détails pour détecter les audios
+          const attachmentsDetails = await prisma.messageAttachment.findMany({
+            where: { id: { in: attachmentIds } },
+            select: {
+              id: true,
+              mimeType: true,
+              fileUrl: true,
+              filePath: true,
+              duration: true,
+              metadata: true
+            }
+          });
+
+          // Filtrer les attachements audio
+          const audioAttachments = attachmentsDetails.filter(att =>
+            att.mimeType && att.mimeType.startsWith('audio/')
+          );
+
+          // Pour chaque audio, envoyer au Translator (même logique que WebSocket)
+          for (const audioAtt of audioAttachments) {
+            logger.info(`🎤 [REST] Envoi audio au Translator: ${audioAtt.id}`);
+
+            // Extraire la transcription mobile si présente dans les metadata
+            let mobileTranscription: any = undefined;
+            if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
+              const metadata = audioAtt.metadata as any;
+              if (metadata.transcription) {
+                mobileTranscription = metadata.transcription;
+                logger.info(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
+              }
+            }
+
+            // Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
+            const relativePath = audioAtt.fileUrl
+              ? `uploads/attachments${decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', ''))}`
+              : audioAtt.filePath || '';
+            const audioPath = relativePath ? path.resolve(process.cwd(), relativePath) : '';
+
+            await translationService.processAudioAttachment({
+              messageId: message.id,
+              attachmentId: audioAtt.id,
+              conversationId,
+              senderId: userId,
+              audioUrl: audioAtt.fileUrl || '',
+              audioPath: audioPath,
+              audioDurationMs: audioAtt.duration || 0,
+              mobileTranscription: mobileTranscription,
+              generateVoiceClone: true,
+              modelType: 'medium'
+            });
+          }
+
+          if (audioAttachments.length > 0) {
+            logger.info(`✅ [REST] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
+          }
+        } catch (audioError) {
+          logger.error('⚠️ [REST] Erreur traitement attachments/audio', audioError);
+          // Ne pas bloquer l'envoi du message si le traitement audio échoue
+        }
+      }
 
       // ÉTAPE 3: Opérations post-création en PARALLÈLE (indépendantes)
       // OPTIMIZED: Ces 3 opérations n'ont pas de dépendances entre elles

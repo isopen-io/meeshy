@@ -784,6 +784,8 @@ export interface SendMessageRequest {
   readonly content: string;
   readonly originalLanguage?: string;
   readonly messageType?: string;
+  readonly replyToId?: string;
+  readonly attachmentIds?: readonly string[];
 }
 
 // ===== RE-EXPORTS POUR RÉTROCOMPATIBILITÉ =====
