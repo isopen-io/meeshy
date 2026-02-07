@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 # Patch huggingface_hub for SpeechBrain compatibility
 # SpeechBrain uses deprecated 'use_auth_token' arg, newer huggingface_hub uses 'token'
+_HF_PATCH_APPLIED = False
 try:
     import huggingface_hub
     _original_hf_hub_download = huggingface_hub.hf_hub_download
@@ -37,8 +38,10 @@ try:
         return _original_hf_hub_download(*args, **kwargs)
 
     huggingface_hub.hf_hub_download = _patched_hf_hub_download
-except Exception:
-    pass  # If patching fails, let the original error occur
+    _HF_PATCH_APPLIED = True
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"[DIARIZATION] Failed to patch huggingface_hub: {e}")
 
 # Import SpeechBrain
 try:
