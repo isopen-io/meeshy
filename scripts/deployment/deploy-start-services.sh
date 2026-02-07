@@ -83,6 +83,62 @@ EOF
     fi
 }
 
+# Configurer les permissions du dossier uploads pour le gateway
+configure_uploads_permissions() {
+    local ip="$1"
+
+    log_info "Configuration des permissions du dossier uploads pour le gateway..."
+    trace_deploy_operation "configure_uploads" "STARTED" "Configuring uploads directory permissions on $ip"
+
+    ssh -o StrictHostKeyChecking=no root@$ip << 'EOF'
+        cd /opt/meeshy
+
+        echo "Configuration des permissions du dossier uploads..."
+
+        # Détecter le nom du volume (tirets ou underscores selon la config)
+        VOLUME_NAME=$(docker volume ls --format '{{.Name}}' | grep -E "meeshy[-_]gateway[-_]uploads" | head -1)
+
+        if [ -z "$VOLUME_NAME" ]; then
+            # Créer le volume avec le nom standard du compose
+            echo "Création du volume gateway_uploads..."
+            VOLUME_NAME="meeshy-gateway-uploads"
+            docker volume create "$VOLUME_NAME"
+        fi
+
+        echo "Volume détecté: $VOLUME_NAME"
+
+        # Configurer les permissions avec un conteneur temporaire
+        # Le gateway tourne en tant que user gateway (UID 1001, GID 1001)
+        echo "Configuration des permissions avec un conteneur temporaire..."
+        docker run --rm -v "$VOLUME_NAME":/app/uploads \
+            --user root \
+            alpine:latest \
+            sh -c "
+                mkdir -p /app/uploads
+                chown -R 1001:1001 /app/uploads
+                chmod -R 755 /app/uploads
+                echo 'Permissions uploads configurées avec succès'
+            "
+
+        echo "✅ Permissions du dossier uploads configurées"
+
+        # Vérifier les permissions
+        echo "Vérification des permissions..."
+        docker run --rm -v "$VOLUME_NAME":/app/uploads \
+            alpine:latest \
+            ls -la /app/uploads
+EOF
+
+    if [ $? -eq 0 ]; then
+        log_success "Permissions du dossier uploads configurées avec succès"
+        trace_deploy_operation "configure_uploads" "SUCCESS" "Uploads directory permissions configured on $ip"
+    else
+        log_error "Échec de la configuration des permissions du dossier uploads"
+        trace_deploy_operation "configure_uploads" "FAILED" "Uploads directory permissions configuration failed on $ip"
+        exit 1
+    fi
+}
+
 # Configurer les permissions du dossier models pour le translator
 configure_models_permissions() {
     local ip="$1"
@@ -410,9 +466,10 @@ main() {
     # Démarrer l'infrastructure
     start_infrastructure "$ip"
     
-    # Configurer les permissions du dossier models
+    # Configurer les permissions des volumes
+    configure_uploads_permissions "$ip"
     configure_models_permissions "$ip"
-    
+
     # Démarrer les services applicatifs
     start_application_services "$ip"
     
@@ -429,7 +486,7 @@ main() {
     echo ""
     echo "=== RÉSUMÉ DU DÉMARRAGE DES SERVICES ==="
     echo "✅ Infrastructure: Traefik, Redis, MongoDB démarrés"
-    echo "✅ Permissions: Dossier models configuré pour le translator"
+    echo "✅ Permissions: Dossiers uploads (gateway) et models (translator) configurés"
     echo "✅ Services applicatifs: Gateway, Translator, Frontend démarrés"
     echo "✅ Vérification: Statut des services validé"
     echo "✅ Connectivité: Tests de connectivité effectués"
