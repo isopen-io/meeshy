@@ -106,7 +106,7 @@ class DiarizationService:
         Pour télécharger les modèles localement une fois :
         1. Créer un token HF temporaire sur https://huggingface.co/
         2. Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-3.1
-        3. Exécuter : HF_TOKEN=xxx python -c "from pyannote.audio import Pipeline; Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', use_auth_token='xxx')"
+        3. Exécuter : HF_TOKEN=xxx python -c "from pyannote.audio import Pipeline; Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', token='xxx')"
         4. Supprimer le token - les modèles sont en cache !
         """
         if not PYANNOTE_AVAILABLE:
@@ -115,9 +115,10 @@ class DiarizationService:
         if self._pipeline is None:
             try:
                 # Essayer de charger avec token (si fourni) ou depuis cache local (si absent)
+                # Note: utiliser 'token=' au lieu de 'use_auth_token=' (déprécié dans huggingface_hub >= 0.24)
                 self._pipeline = Pipeline.from_pretrained(
                     "pyannote/speaker-diarization-3.1",
-                    use_auth_token=self.hf_token  # None = utilise le cache local
+                    token=self.hf_token  # None = utilise le cache local
                 )
 
                 if self.hf_token:
