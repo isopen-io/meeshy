@@ -476,7 +476,13 @@ export class MessageTranslationService extends EventEmitter {
       if (!existingMessage) {
         throw new Error(`Message ${messageId} non trouvé pour retraduction`);
       }
-      
+
+      // Valider que le texte n'est pas vide
+      if (!existingMessage.content || existingMessage.content.trim().length === 0) {
+        logger.warn(`⚠️ [RETRANSLATION] Message ${messageId} ignoré: contenu vide`);
+        return;
+      }
+
       // 1. DÉTERMINER LES LANGUES CIBLES
       let targetLanguages: string[];
       
