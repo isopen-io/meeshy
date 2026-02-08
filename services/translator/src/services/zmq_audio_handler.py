@@ -519,6 +519,27 @@ class AudioHandler:
             if result.original.speaker_analysis:
                 transcription_dict['speakerAnalysis'] = result.original.speaker_analysis
 
+            # ═══════════════════════════════════════════════════════════════
+            # LOG TRANSCRIPTION FINALE AVEC SPEAKERS
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("─" * 70)
+            logger.info(f"📜 [TRANSLATOR] TRANSCRIPTION FINALE: {result.message_id}")
+            logger.info(f"   🌍 Langue: {result.original.language} | Confiance: {result.original.confidence:.2f}")
+            logger.info(f"   🎭 Speakers: {result.original.speaker_count or 1} | Primary: {result.original.primary_speaker_id or 'N/A'}")
+            logger.info(f"   📝 Texte complet: \"{result.original.transcription}\"")
+
+            # Log par speaker si diarisation disponible
+            if result.original.segments and result.original.speaker_count and result.original.speaker_count > 1:
+                from collections import defaultdict
+                by_speaker = defaultdict(list)
+                for seg in result.original.segments:
+                    spk = seg.speaker_id if hasattr(seg, 'speaker_id') else seg.get('speaker_id', '?')
+                    txt = seg.text if hasattr(seg, 'text') else seg.get('text', '')
+                    by_speaker[spk or '?'].append(txt)
+                for spk_id, texts in sorted(by_speaker.items()):
+                    logger.info(f"   [{spk_id}]: \"{' '.join(texts)}\"")
+            logger.info("─" * 70)
+
             metadata = {
                 'type': 'audio_process_completed',
                 'taskId': task_id,
