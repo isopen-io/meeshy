@@ -53,13 +53,13 @@ on:
         type: boolean
         default: true
       platforms:
-        description: 'Target platforms'
+        description: 'Target platforms (ARM64 requires native runner, QEMU crashes with SWC)'
         required: false
         type: choice
-        default: 'linux/amd64,linux/arm64'
+        default: 'linux/amd64'
         options:
-          - linux/amd64,linux/arm64
           - linux/amd64
+          - linux/amd64,linux/arm64
           - linux/arm64
       package_manager:
         description: 'Package manager for builds'

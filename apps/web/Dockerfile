@@ -116,16 +116,8 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       ln -s /root/.bun/bin/bun /usr/local/bin/bun; \
     fi
 
-# Copy web app source
+# Copy web app source (includes public/sounds/ with pre-generated notification sounds)
 COPY apps/web/ ./
-
-# Copy scripts for notification sounds generation
-COPY scripts/generate-notification-sounds.js /tmp/
-
-# Generate notification sounds
-RUN echo "=== Generating notification sounds ===" && \
-    node /tmp/generate-notification-sounds.js && \
-    rm /tmp/generate-notification-sounds.js
 
 # === RECREATE WORKSPACE CONFIG ===
 # apps/web/ copy overwrites workspace config with wrong paths
