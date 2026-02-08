@@ -552,6 +552,17 @@ class TranslationPipelineService:
 
             # Détecter si multi-speaker à partir de la transcription
             speaker_count = getattr(transcription, 'speaker_count', None)
+            segments_count = len(result.transcription_segments) if result.transcription_segments else 0
+
+            # Log détaillé des conditions multi-speaker
+            logger.info("─" * 60)
+            logger.info("[PIPELINE] 🔍 VÉRIFICATION MULTI-SPEAKER:")
+            logger.info(f"   ├─ speaker_count = {speaker_count} (condition: > 1)")
+            logger.info(f"   ├─ segments_count = {segments_count} (condition: > 0)")
+            logger.info(f"   ├─ speaker_count is not None: {speaker_count is not None}")
+            logger.info(f"   ├─ speaker_count > 1: {speaker_count is not None and speaker_count > 1}")
+            logger.info(f"   └─ has segments: {segments_count > 0}")
+
             is_multi_speaker = (
                 speaker_count is not None and
                 speaker_count > 1 and
@@ -561,8 +572,9 @@ class TranslationPipelineService:
 
             logger.info(
                 f"[PIPELINE] 🎤 Détection: {speaker_count or 1} speaker(s), "
-                f"mode={'MULTI-SPEAKER' if is_multi_speaker else 'MONO-SPEAKER'}"
+                f"mode={'MULTI-SPEAKER ✅' if is_multi_speaker else 'MONO-SPEAKER ❌'}"
             )
+            logger.info("─" * 60)
 
             try:
                 if is_multi_speaker:
