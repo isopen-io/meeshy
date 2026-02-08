@@ -1745,26 +1745,33 @@ export class MessageTranslationService extends EventEmitter {
         const translationsData: AttachmentTranslations = { ...existingTranslations };
 
         for (const translation of data.result.translations) {
-          let localAudioPath = '';
-          let localAudioUrl = translation.audioUrl || '';
+          // TOUJOURS générer le path et l'URL au format gateway (même sans binaire)
+          // Cela garantit que l'URL du translator (/outputs/audio/translated/) n'est jamais exposée
+          const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+          const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
+          const localAudioPath = path.resolve(translatedDir, filename);
+          const localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
 
-          // Sauvegarder le fichier audio localement si base64 fourni
-          if (translation.audioBase64) {
+          // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
+          // Fallback sur base64 pour rétrocompatibilité
+          const audioBinary = (translation as any)._audioBinary;
+          const audioBase64 = translation.audioBase64;
+
+          if (audioBinary || audioBase64) {
             try {
-              const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
               await fs.mkdir(translatedDir, { recursive: true });
 
-              const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
-              localAudioPath = path.resolve(translatedDir, filename);
-
-              const audioBuffer = Buffer.from(translation.audioBase64, 'base64');
+              // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
+              const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
               await fs.writeFile(localAudioPath, audioBuffer);
 
-              localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
-              logger.info(`📁 Audio sauvegardé: ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
+              const source = audioBinary ? 'multipart' : 'base64';
+              logger.info(`📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
             } catch (fileError) {
               logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
             }
+          } else {
+            logger.warn(`   ⚠️ Aucun binaire disponible pour ${translation.targetLanguage}, url=${localAudioUrl}`);
           }
 
           // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
