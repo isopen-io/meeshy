@@ -134,12 +134,11 @@ ffmpeg-python==0.2.0
 # ─────────────────────────────────────────────────────────────────────────────────
 # SPEAKER DIARIZATION - Identification des locuteurs
 # ─────────────────────────────────────────────────────────────────────────────────
-# pyannote.audio désactivé car incompatible avec torch 2.10.0 (nécessite torch<2.5 ou pyannote 4.0+ avec torchcodec)
-# La diarisation sera réactivée une fois les dépendances principales stabilisées
-# pyannote.audio>=3.1.0  # DÉSACTIVÉ - incompatible torch 2.10.0
+# Priorité 1: pyannote.audio (précision ~95%, nécessite HF_TOKEN)
+pyannote.audio>=3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0
 
-# SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
-speechbrain>=1.0.0  # ✅ ACTIVÉ - Diarisation avec nettoyage automatique intégré
+# Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
+speechbrain>=1.0.0  # ✅ ACTIVÉ - Fallback si pyannote indisponible
 scikit-learn>=1.3.0  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 
