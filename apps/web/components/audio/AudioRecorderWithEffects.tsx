@@ -273,6 +273,28 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
           audioTracksCount: currentProcessedStream?.getAudioTracks().length || 0
         });
         toast.warning(t('recorder.errors.effectsNotAvailable'));
+
+        // iOS Safari: si le raw stream est mono, upmixer en stéréo
+        const rawChannels = newRawStream.getAudioTracks()[0]?.getSettings?.()?.channelCount || 1;
+        if (rawChannels < 2) {
+          try {
+            const ctx = new AudioContext({ sampleRate: 48000 });
+            const src = ctx.createMediaStreamSource(newRawStream);
+            const splitter = ctx.createChannelSplitter(1);
+            const merger = ctx.createChannelMerger(2);
+            const dest = ctx.createMediaStreamDestination();
+            dest.channelCount = 2;
+            dest.channelCountMode = 'explicit';
+            src.connect(splitter);
+            splitter.connect(merger, 0, 0);
+            splitter.connect(merger, 0, 1);
+            merger.connect(dest);
+            streamToRecord = dest.stream;
+            console.log('🔊 [AudioRecorder] Mono raw stream upmixed to stereo for iOS');
+          } catch (e) {
+            console.warn('⚠️ [AudioRecorder] Failed to upmix mono stream, recording in mono', e);
+          }
+        }
       }
 
       const mediaRecorder = new MediaRecorder(streamToRecord, {

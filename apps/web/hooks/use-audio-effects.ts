@@ -137,14 +137,33 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       const audioContext = Tone.context.rawContext as AudioContext;
       const source = audioContext.createMediaStreamSource(inputStream);
 
+      // Detect actual channel count from input (iOS Safari forces mono)
+      const inputChannels = source.channelCount || inputStream.getAudioTracks()[0]?.getSettings?.()?.channelCount || 1;
+      logger.debug('[useAudioEffects]', 'Input channel count:', inputChannels);
+
+      // If input is mono (common on iOS), upmix to stereo before processing
+      let effectiveSource: AudioNode = source;
+      if (inputChannels < 2) {
+        // Mono → Stereo: split the single channel and merge into L+R
+        const splitter = audioContext.createChannelSplitter(1);
+        const merger = audioContext.createChannelMerger(2);
+        source.connect(splitter);
+        splitter.connect(merger, 0, 0); // mono → left
+        splitter.connect(merger, 0, 1); // mono → right
+        effectiveSource = merger;
+        logger.info('[useAudioEffects]', 'Mono input detected (iOS), upmixing to stereo');
+      }
+
       // Create Tone nodes
       inputNodeRef.current = new Tone.Gain(1) as any;
 
-      // Connect native source to Tone input
-      source.connect((inputNodeRef.current as any).input);
+      // Connect (stereo) source to Tone input
+      effectiveSource.connect((inputNodeRef.current as any).input);
 
-      // Create MediaStreamDestination for output
+      // Create stereo MediaStreamDestination for output
       mediaStreamDestinationRef.current = audioContext.createMediaStreamDestination();
+      mediaStreamDestinationRef.current.channelCount = 2;
+      mediaStreamDestinationRef.current.channelCountMode = 'explicit';
 
       // Connect input directly to destination initially (no effects)
       if (inputNodeRef.current) {
