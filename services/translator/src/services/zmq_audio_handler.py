@@ -283,27 +283,29 @@ class AudioHandler:
             # ═══════════════════════════════════════════════════════════════
             # LOG RÉCAPITULATIF DU TRAITEMENT AUDIO
             # ═══════════════════════════════════════════════════════════════
+            original = result.original
+            orig_text = original.transcription or ''
             logger.info("═" * 70)
             logger.info(f"📊 [TRANSLATOR] RÉSULTAT TRAITEMENT AUDIO")
             logger.info(f"   ├─ Message ID: {result.message_id}")
-            logger.info(f"   ├─ Texte original: \"{result.original_text[:100]}{'...' if len(result.original_text or '') > 100 else ''}\"")
-            logger.info(f"   ├─ Langue: {result.original_language} (confiance: {getattr(result, 'transcription_confidence', 'N/A')})")
-            logger.info(f"   ├─ Durée: {result.original_duration_ms}ms")
+            logger.info(f"   ├─ Texte: \"{orig_text[:100]}{'...' if len(orig_text) > 100 else ''}\"")
+            logger.info(f"   ├─ Langue: {original.language} (confiance: {original.confidence:.2f})")
+            logger.info(f"   ├─ Durée: {original.duration_ms}ms")
 
             # Info diarisation
-            speaker_count = getattr(result, 'speaker_count', None) or 1
-            logger.info(f"   ├─ Speakers détectés: {speaker_count}")
-            if hasattr(result, 'transcription_segments') and result.transcription_segments:
-                logger.info(f"   ├─ Segments: {len(result.transcription_segments)}")
+            speaker_count = original.speaker_count or 1
+            logger.info(f"   ├─ Speakers: {speaker_count}")
+            if original.segments:
+                logger.info(f"   ├─ Segments: {len(original.segments)}")
 
             # Info traductions
             logger.info(f"   ├─ Traductions: {len(result.translations)} langue(s)")
             for lang, trans in result.translations.items():
-                trans_text = trans.get('translated_text', '') if isinstance(trans, dict) else getattr(trans, 'translated_text', '')
+                trans_text = trans.translated_text if hasattr(trans, 'translated_text') else trans.get('translated_text', '')
                 logger.info(f"   │   └─ {lang}: \"{trans_text[:50]}{'...' if len(trans_text) > 50 else ''}\"")
 
             # Info clonage vocal
-            logger.info(f"   ├─ Voice cloned: {getattr(result, 'voice_cloned', False)}")
+            logger.info(f"   ├─ Voice quality: {result.voice_model_quality:.2f}")
             logger.info(f"   └─ Temps total: {processing_time}ms")
             logger.info("═" * 70)
 
