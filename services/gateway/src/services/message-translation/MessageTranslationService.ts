@@ -895,8 +895,12 @@ export class MessageTranslationService extends EventEmitter {
       const translationsData: AttachmentTranslations = { ...existingTranslations };
 
       for (const translatedAudio of data.translatedAudios) {
-        let localAudioPath = translatedAudio.audioPath;
-        let localAudioUrl = translatedAudio.audioUrl;
+        // Toujours générer le path et l'URL au format gateway (même sans binaire)
+        const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
+        const expectedFilename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
+        const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+        let localAudioPath = path.resolve(translatedDir, expectedFilename);
+        let localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
 
         // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
         // Fallback sur base64 pour rétrocompatibilité
@@ -907,27 +911,16 @@ export class MessageTranslationService extends EventEmitter {
 
         if (audioBinary || audioBase64) {
           try {
-            // Créer le dossier de sortie s'il n'existe pas
-            const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
             await fs.mkdir(translatedDir, { recursive: true });
-
-            // Générer un nom de fichier unique
-            const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
-            const filename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
-            localAudioPath = path.resolve(translatedDir, filename);
 
             // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
             const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
             await fs.writeFile(localAudioPath, audioBuffer);
 
-            // Générer l'URL accessible
-            localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
-
             const source = audioBinary ? 'multipart' : 'base64';
-            logger.info(`   📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
+            logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
           } catch (fileError) {
             logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
-            // Continuer avec les chemins originaux du Translator (fallback)
           }
         }
 
@@ -1414,8 +1407,12 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // 1.5. Sauvegarder l'audio localement SI binaire disponible
-      let localAudioPath = data.translatedAudio.audioPath;
-      let localAudioUrl = data.translatedAudio.audioUrl;
+      // Toujours générer le path et l'URL au format gateway (même sans binaire)
+      const ext = data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
+      const expectedFilename = `${data.attachmentId}_${data.language}.${ext}`;
+      const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+      const localAudioPath = path.resolve(translatedDir, expectedFilename);
+      const localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
 
       const audioBinary = data.translatedAudio._audioBinary;
       const audioBase64 = data.translatedAudio.audioDataBase64;
@@ -1424,30 +1421,19 @@ export class MessageTranslationService extends EventEmitter {
 
       if (audioBinary || audioBase64) {
         try {
-          // Créer le dossier de sortie
-          const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
           await fs.mkdir(translatedDir, { recursive: true });
-
-          // Générer un nom de fichier unique
-          const ext = data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
-          const filename = `${data.attachmentId}_${data.language}.${ext}`;
-          localAudioPath = path.resolve(translatedDir, filename);
 
           // Sauvegarder le buffer
           const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
           await fs.writeFile(localAudioPath, audioBuffer);
 
-          // Générer l'URL accessible
-          localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
-
           const source = audioBinary ? 'multipart' : 'base64';
-          logger.info(`   📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
+          logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
         } catch (fileError) {
           logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
-          // Continuer avec les chemins originaux
         }
       } else {
-        logger.warn(`   ⚠️ Aucun binaire disponible pour ${data.language}, URL: ${localAudioUrl}`);
+        logger.warn(`   ⚠️ Aucun binaire disponible pour ${data.language}, path=${localAudioPath}, url=${localAudioUrl}`);
       }
 
       // 2. Mettre à jour le champ translations JSON avec la nouvelle traduction
