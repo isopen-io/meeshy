@@ -213,6 +213,7 @@ services:
       - HF_HOME=/workspace/models/huggingface
       - TRANSFORMERS_CACHE=/workspace/models/huggingface
       - HUGGINGFACE_HUB_CACHE=/workspace/models/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
       - MAX_MESSAGE_LENGTH=10000
       - MAX_TEXT_LENGTH=100000
       - MAX_TRANSLATION_LENGTH=100000
