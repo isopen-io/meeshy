@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, useSplitView } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader } from '@/components/v2';
 
 interface Community {
   id: number;
@@ -74,37 +73,19 @@ export default function V2CommunitiesPage() {
     alert(`Détails de la communauté:\n\nNom: ${community.name}\nDescription: ${community.description}\nMembres: ${community.members}\nLangues: ${community.langs.join(', ')}\nStatut: ${community.joined ? 'Membre' : 'Non membre'}`);
   };
 
-  // Split view context for mobile back button
-  const { goBackToList, isMobile, showRightPanel } = useSplitView();
-
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-6 py-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]/95 backdrop-blur-xl transition-colors duration-300">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {isMobile && showRightPanel && (
-              <button
-                onClick={goBackToList}
-                className="p-2 -ml-2 rounded-lg hover:bg-[var(--gp-hover)] text-[var(--gp-text-primary)] transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <h1 className="text-xl font-semibold text-[var(--gp-text-primary)]" style={{ fontFamily: theme.fonts.display }}>
-              Communautés
-            </h1>
-          </div>
+      <PageHeader
+        title="Communautés"
+        actionButtons={
           <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Créer
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <main className="max-w-2xl mx-auto px-6 py-8">
         {/* My Communities */}
