@@ -387,7 +387,6 @@ class SpeechBrainDiarization:
         # Trouver le nombre optimal de clusters
         best_n_clusters = 1
         best_score = -1
-        all_scores = []
 
         if len(embeddings) >= 4:
             max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)
@@ -401,7 +400,6 @@ class SpeechBrainDiarization:
                 )
                 labels = clustering.fit_predict(embeddings)
                 score = silhouette_score(embeddings, labels, metric='cosine')
-                all_scores.append((n, score))
                 logger.info(f"[SPEECHBRAIN]    n_clusters={n}: silhouette={score:.3f} {'✅' if score > 0.40 else '❌ (<0.40)'}")
 
                 if score > best_score and score > 0.40:
