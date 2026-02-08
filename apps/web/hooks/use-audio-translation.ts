@@ -233,13 +233,22 @@ export function useAudioTranslation({
     });
 
     const unsubscribeCompleted = meeshySocketIOService.onAudioTranslationsCompleted((data: AudioTranslationEventData) => {
-      if (data.attachmentId !== attachmentId) return;
-
-      console.log('🔔 [useAudioTranslation] ✅ DERNIÈRE TRADUCTION reçue via WebSocket:', {
-        attachmentId: data.attachmentId,
+      // Log pour debug - affiche TOUS les événements reçus
+      console.log('🔔 [useAudioTranslation] ✅ ÉVÉNEMENT REÇU audio:translations-completed:', {
+        receivedAttachmentId: data.attachmentId,
+        expectedAttachmentId: attachmentId,
+        match: data.attachmentId === attachmentId,
         language: data.language,
-        hasUrl: !!data.translatedAudio?.url
+        hasUrl: !!data.translatedAudio?.url,
+        url: data.translatedAudio?.url || 'N/A'
       });
+
+      if (data.attachmentId !== attachmentId) {
+        console.log('⏭️ [useAudioTranslation] Événement ignoré - attachmentId ne correspond pas');
+        return;
+      }
+
+      console.log('✅ [useAudioTranslation] Événement ACCEPTÉ - mise à jour des traductions...');
 
       // Conversion type-safe via fonction dédiée
       const uiAudio = convertSocketAudioToUI(data.translatedAudio);
@@ -247,12 +256,21 @@ export function useAudioTranslation({
       // Ajouter ou mettre à jour la dernière traduction
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
+        console.log('📝 [useAudioTranslation] setTranslatedAudios appelé:', {
+          prevCount: prev.length,
+          existingIndex,
+          language: data.language,
+          newUrl: uiAudio.url
+        });
         if (existingIndex >= 0) {
           const updated = [...prev];
           updated[existingIndex] = uiAudio;
+          console.log('📝 [useAudioTranslation] Traduction mise à jour:', updated.length, 'traductions');
           return updated;
         } else {
-          return [...prev, uiAudio];
+          const newList = [...prev, uiAudio];
+          console.log('📝 [useAudioTranslation] Traduction ajoutée:', newList.length, 'traductions');
+          return newList;
         }
       });
 
