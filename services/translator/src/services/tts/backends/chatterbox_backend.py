@@ -268,6 +268,18 @@ class ChatterboxBackend(BaseTTSBackend):
                     lambda: ChatterboxTTS.from_pretrained(device=device)
                 )
 
+            # ═══════════════════════════════════════════════════════════════════
+            # FIX: Compatibilité transformers >= 4.36 avec output_attentions
+            # ═══════════════════════════════════════════════════════════════════
+            try:
+                if hasattr(model, 't3') and hasattr(model.t3, 'tfmr'):
+                    tfmr = model.t3.tfmr
+                    if hasattr(tfmr, 'config'):
+                        tfmr.config._attn_implementation = "eager"
+                        logger.info("[TTS] ✅ Patch attn_implementation='eager' appliqué (mono)")
+            except Exception as patch_err:
+                logger.warning(f"[TTS] ⚠️ Impossible d'appliquer le patch attention (mono): {patch_err}")
+
             # Enregistrer dans le ModelManager centralisé
             backend_name = TTSBackendEnum.CHATTERBOX_TURBO.value if self.turbo else TTSBackendEnum.CHATTERBOX.value
             self._register_model(
@@ -326,6 +338,21 @@ class ChatterboxBackend(BaseTTSBackend):
                     None,
                     lambda: ChatterboxMultilingualTTS.from_pretrained(device=device)
                 )
+
+                # ═══════════════════════════════════════════════════════════════════
+                # FIX: Compatibilité transformers >= 4.36 avec output_attentions
+                # Chatterbox AlignmentStreamAnalyzer essaie d'activer output_attentions
+                # mais SDPA (Scaled Dot Product Attention) ne le supporte pas.
+                # On force l'implémentation "eager" sur le modèle T3.
+                # ═══════════════════════════════════════════════════════════════════
+                try:
+                    if hasattr(model_multilingual, 't3') and hasattr(model_multilingual.t3, 'tfmr'):
+                        tfmr = model_multilingual.t3.tfmr
+                        if hasattr(tfmr, 'config'):
+                            tfmr.config._attn_implementation = "eager"
+                            logger.info("[TTS] ✅ Patch attn_implementation='eager' appliqué pour compatibilité transformers")
+                except Exception as patch_err:
+                    logger.warning(f"[TTS] ⚠️ Impossible d'appliquer le patch attention: {patch_err}")
             finally:
                 torch.load = original_torch_load
 

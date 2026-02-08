@@ -14,6 +14,7 @@ import { MessageViewProvider } from "@/hooks/use-message-view-state";
 import { defaultFont, getAllFontVariables } from "@/lib/fonts";
 import { CriticalPreloader } from "@/components/common/CriticalPreloader";
 import { CallManager } from "@/components/video-call";
+import { TabNotificationManager } from "@/components/common/TabNotificationManager";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
 import "@/utils/console-override"; // 🔇 Désactive console.log en production
@@ -98,6 +99,7 @@ export default function RootLayout({
                   <ClientOnly>
                     {children}
                     <CallManager />
+                    <TabNotificationManager />
                   </ClientOnly>
                 </ErrorBoundary>
               </MessageViewProvider>

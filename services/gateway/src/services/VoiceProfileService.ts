@@ -137,7 +137,8 @@ export class VoiceProfileService extends EventEmitter {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
-    this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+    // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+    this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
 
     // Listen for ZMQ events (camelCase event names from ZMQ client)
     this.zmqClient.on('voiceProfileAnalyzeResult', (event: VoiceProfileAnalyzeResult) => {

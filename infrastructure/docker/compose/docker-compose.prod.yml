@@ -207,6 +207,7 @@ services:
       - HF_HOME=/workspace/models/huggingface
       - TRANSFORMERS_CACHE=/workspace/models/huggingface
       - HUGGINGFACE_HUB_CACHE=/workspace/models/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
       # Diarisation (activée par défaut)
       - ENABLE_DIARIZATION=${ENABLE_DIARIZATION:-true}
       # TTS Configuration
@@ -323,6 +324,7 @@ services:
     restart: unless-stopped
     volumes:
       - frontend_uploads:/usr/share/nginx/html/u:ro
+      - gateway_uploads:/usr/share/nginx/html/uploads:ro
       - ./config/nginx/static-files.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - meeshy-network

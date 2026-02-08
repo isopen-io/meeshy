@@ -15,6 +15,7 @@ import {
 import {
   initiateEmailChange,
   verifyEmailChange,
+  resendEmailChangeVerification,
   initiatePhoneChange,
   verifyPhoneChange
 } from './contact-change';
@@ -57,6 +58,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   // Contact change routes (email/phone with verification)
   await initiateEmailChange(fastify);
   await verifyEmailChange(fastify);
+  await resendEmailChangeVerification(fastify);
   await initiatePhoneChange(fastify);
   await verifyPhoneChange(fastify);
 

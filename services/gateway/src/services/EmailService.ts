@@ -83,6 +83,14 @@ export interface MagicLinkEmailData {
   language?: string;
 }
 
+export interface EmailChangeVerificationData {
+  to: string;
+  name: string;
+  verificationLink: string;
+  expiryHours: number;
+  language?: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -125,6 +133,14 @@ interface EmailTranslations {
     action2: string;
     action3: string;
   };
+  emailChange: {
+    subject: string;
+    title: string;
+    intro: string;
+    buttonText: string;
+    expiry: string;
+    ignoreNote: string;
+  };
 }
 
 const translations: Record<SupportedLanguage, EmailTranslations> = {
@@ -163,6 +179,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Changez votre mot de passe immédiatement',
       action2: 'Vérifiez vos appareils connectés',
       action3: "Activez l'authentification à deux facteurs"
+    },
+    emailChange: {
+      subject: 'Confirmez votre nouvelle adresse email - Meeshy',
+      title: 'Changement d\'adresse email',
+      intro: 'Vous avez demandé à changer votre adresse email Meeshy. Pour confirmer ce changement, cliquez sur le bouton ci-dessous :',
+      buttonText: 'Confirmer le changement',
+      expiry: 'Ce lien expire dans {hours} heures.',
+      ignoreNote: 'Si vous n\'avez pas demandé ce changement, ignorez cet email. Votre adresse email actuelle restera inchangée.'
     }
   },
   en: {
@@ -200,6 +224,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Change your password immediately',
       action2: 'Check your connected devices',
       action3: 'Enable two-factor authentication'
+    },
+    emailChange: {
+      subject: 'Confirm your new email address - Meeshy',
+      title: 'Email Address Change',
+      intro: 'You have requested to change your Meeshy email address. To confirm this change, click the button below:',
+      buttonText: 'Confirm change',
+      expiry: 'This link expires in {hours} hours.',
+      ignoreNote: 'If you did not request this change, please ignore this email. Your current email address will remain unchanged.'
     }
   },
   es: {
@@ -237,6 +269,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Cambia tu contraseña inmediatamente',
       action2: 'Verifica tus dispositivos conectados',
       action3: 'Activa la autenticación de dos factores'
+    },
+    emailChange: {
+      subject: 'Confirma tu nueva dirección de correo - Meeshy',
+      title: 'Cambio de dirección de correo',
+      intro: 'Has solicitado cambiar tu dirección de correo de Meeshy. Para confirmar este cambio, haz clic en el botón de abajo:',
+      buttonText: 'Confirmar cambio',
+      expiry: 'Este enlace expira en {hours} horas.',
+      ignoreNote: 'Si no solicitaste este cambio, ignora este correo. Tu dirección de correo actual permanecerá sin cambios.'
     }
   },
   pt: {
@@ -274,6 +314,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Altere sua senha imediatamente',
       action2: 'Verifique seus dispositivos conectados',
       action3: 'Ative a autenticação de dois fatores'
+    },
+    emailChange: {
+      subject: 'Confirme seu novo email - Meeshy',
+      title: 'Alteração de endereço de email',
+      intro: 'Você solicitou a alteração do seu email do Meeshy. Para confirmar esta alteração, clique no botão abaixo:',
+      buttonText: 'Confirmar alteração',
+      expiry: 'Este link expira em {hours} horas.',
+      ignoreNote: 'Se você não solicitou esta alteração, ignore este email. Seu endereço de email atual permanecerá inalterado.'
     }
   },
   it: {
@@ -311,6 +359,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Cambia immediatamente la tua password',
       action2: 'Verifica i tuoi dispositivi connessi',
       action3: "Attiva l'autenticazione a due fattori"
+    },
+    emailChange: {
+      subject: 'Conferma il tuo nuovo indirizzo email - Meeshy',
+      title: 'Cambio indirizzo email',
+      intro: 'Hai richiesto di cambiare il tuo indirizzo email di Meeshy. Per confermare questo cambio, clicca sul pulsante qui sotto:',
+      buttonText: 'Conferma cambio',
+      expiry: 'Questo link scade tra {hours} ore.',
+      ignoreNote: 'Se non hai richiesto questo cambio, ignora questa email. Il tuo indirizzo email attuale rimarrà invariato.'
     }
   },
   de: {
@@ -348,6 +404,14 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Ändere sofort dein Passwort',
       action2: 'Überprüfe deine verbundenen Geräte',
       action3: 'Aktiviere die Zwei-Faktor-Authentifizierung'
+    },
+    emailChange: {
+      subject: 'Bestätige deine neue E-Mail-Adresse - Meeshy',
+      title: 'Änderung der E-Mail-Adresse',
+      intro: 'Du hast angefordert, deine Meeshy E-Mail-Adresse zu ändern. Um diese Änderung zu bestätigen, klicke auf den Button unten:',
+      buttonText: 'Änderung bestätigen',
+      expiry: 'Dieser Link läuft in {hours} Stunden ab.',
+      ignoreNote: 'Wenn du diese Änderung nicht angefordert hast, ignoriere diese E-Mail. Deine aktuelle E-Mail-Adresse bleibt unverändert.'
     }
   }
 };
@@ -506,7 +570,40 @@ export class EmailService {
   // ==========================================================================
 
   private getBaseStyles(): string {
-    return `body{font-family:Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:20px}.header{background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:8px 8px 0 0}.header h1{margin:0;font-size:24px}.content{background:#f9fafb;padding:30px;border-radius:0 0 8px 8px}.button{display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:bold}.footer{margin-top:30px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:center}.info{background:#EEF2FF;border-left:4px solid #6366F1;padding:12px;margin:20px 0;border-radius:4px}.warning{background:#fef2f2;border-left:4px solid #ef4444;padding:12px;margin:20px 0;border-radius:4px}.success{background:#f0fdf4;border-left:4px solid #22c55e;padding:12px;margin:20px 0;border-radius:4px}`;
+    // Light mode styles
+    const lightStyles = `
+      body{font-family:Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0;background-color:#ffffff}
+      .container{max-width:600px;margin:0 auto;padding:20px}
+      .header{background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:8px 8px 0 0}
+      .header h1{margin:0;font-size:24px}
+      .content{background:#f9fafb;padding:30px;border-radius:0 0 8px 8px;color:#333}
+      .content p{color:#333}
+      .content strong{color:#111}
+      .button{display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white!important;padding:14px 32px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:bold}
+      .footer{margin-top:30px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:center}
+      .info{background:#EEF2FF;border-left:4px solid #6366F1;padding:12px;margin:20px 0;border-radius:4px;color:#3730a3}
+      .warning{background:#fef2f2;border-left:4px solid #ef4444;padding:12px;margin:20px 0;border-radius:4px;color:#991b1b}
+      .success{background:#f0fdf4;border-left:4px solid #22c55e;padding:12px;margin:20px 0;border-radius:4px;color:#166534}
+      .link-text{color:#6366F1}
+    `;
+
+    // Dark mode styles (for clients that support @media prefers-color-scheme)
+    const darkStyles = `
+      @media (prefers-color-scheme:dark){
+        body{background-color:#111827!important;color:#e5e7eb!important}
+        .container{background-color:#111827!important}
+        .content{background:#1f2937!important;color:#e5e7eb!important}
+        .content p{color:#d1d5db!important}
+        .content strong{color:#f3f4f6!important}
+        .footer{border-top-color:#374151!important;color:#9ca3af!important}
+        .info{background:#312e81!important;color:#c7d2fe!important}
+        .warning{background:#7f1d1d!important;color:#fecaca!important}
+        .success{background:#14532d!important;color:#bbf7d0!important}
+        .link-text{color:#a5b4fc!important}
+      }
+    `;
+
+    return (lightStyles + darkStyles).replace(/\s+/g, ' ').trim();
   }
 
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
@@ -514,7 +611,7 @@ export class EmailService {
     const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
     const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p style="word-break:break-all;color:#6366F1;font-size:14px">${data.verificationLink}</p><div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
     const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text });
@@ -525,7 +622,7 @@ export class EmailService {
     const expiry = t.passwordReset.expiry.replace('{minutes}', data.expiryMinutes.toString());
     const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
     const text = `${t.passwordReset.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordReset.intro}\n\n${data.resetLink}\n\n${expiry}\n\n${t.passwordReset.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.passwordReset.subject, html, text });
@@ -536,7 +633,7 @@ export class EmailService {
     const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
     const dateFormatted = new Date(data.timestamp).toLocaleString(this.getLocale(data.language));
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>✓ ${t.passwordChanged.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordChanged.intro}</p><div class="success"><ul style="margin:10px 0;padding-left:20px"><li><strong>Date:</strong> ${dateFormatted}</li><li><strong>IP:</strong> ${data.ipAddress}</li><li><strong>Location:</strong> ${data.location}</li></ul></div><div class="warning"><strong>⚠️</strong> ${t.passwordChanged.warning}</div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>✓ ${t.passwordChanged.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordChanged.intro}</p><div class="success"><ul style="margin:10px 0;padding-left:20px"><li><strong>Date:</strong> ${dateFormatted}</li><li><strong>IP:</strong> ${data.ipAddress}</li><li><strong>Location:</strong> ${data.location}</li></ul></div><div class="warning"><strong>⚠️</strong> ${t.passwordChanged.warning}</div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
     const text = `${t.passwordChanged.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordChanged.intro}\n\nDate: ${dateFormatted}\nIP: ${data.ipAddress}\nLocation: ${data.location}\n\n${t.passwordChanged.warning}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.passwordChanged.subject, html, text });
@@ -546,10 +643,21 @@ export class EmailService {
     const t = this.getTranslations(data.language);
     const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)"><h1>🚨 ${t.securityAlert.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="warning"><strong>${data.alertType}</strong><br>${data.details}</div><p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)"><h1>🚨 ${t.securityAlert.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="warning"><strong>${data.alertType}</strong><br>${data.details}</div><p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
     const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text });
+  }
+
+  async sendEmailChangeVerification(data: EmailChangeVerificationData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const expiry = t.emailChange.expiry.replace('{hours}', data.expiryHours.toString());
+    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>📧 ${t.emailChange.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.emailChange.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.emailChange.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.emailChange.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const text = `${t.emailChange.title}\n\n${t.common.greeting} ${data.name},\n\n${t.emailChange.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.emailChange.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
+
+    return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text });
   }
 
   async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {
@@ -564,13 +672,15 @@ export class EmailService {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>${content.subject}</title>
   <style>${this.getBaseStyles()}</style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5">
-  <div class="container" style="max-width:600px;margin:0 auto;padding:20px">
+<body>
+  <div class="container">
     <!-- Header with Logo -->
-    <div class="header" style="background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0">
+    <div class="header" style="border-radius:12px 12px 0 0">
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
       </a>
@@ -579,54 +689,54 @@ export class EmailService {
     </div>
 
     <!-- Main Content -->
-    <div class="content" style="background:#ffffff;padding:40px 30px;border-radius:0 0 12px 12px;box-shadow:0 4px 6px rgba(0,0,0,0.1)">
-      <p style="font-size:16px;color:#374151">${content.greeting} <strong style="color:#6366F1">${data.name}</strong>,</p>
-      <p style="font-size:16px;color:#374151;line-height:1.6">${content.intro}</p>
+    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
+      <p>${content.greeting} <strong class="link-text">${data.name}</strong>,</p>
+      <p>${content.intro}</p>
 
       <!-- CTA Button -->
       <div style="text-align:center;margin:30px 0">
-        <a href="${data.magicLink}" class="button" style="display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:16px 40px;text-decoration:none;border-radius:10px;font-weight:bold;font-size:18px;box-shadow:0 4px 14px rgba(99,102,241,0.4)">
+        <a href="${data.magicLink}" class="button" style="font-size:18px;padding:16px 40px">
           ✨ ${content.buttonText}
         </a>
       </div>
 
       <!-- Warning Box -->
-      <div class="warning" style="background:#fef2f2;border-left:4px solid #ef4444;padding:16px;margin:25px 0;border-radius:0 8px 8px 0">
-        <strong style="color:#dc2626">⏰ ${content.expiryTitle}</strong>
-        <p style="margin:8px 0 0;color:#7f1d1d;font-size:14px">${content.expiryText}</p>
+      <div class="warning">
+        <strong>⏰ ${content.expiryTitle}</strong>
+        <p style="margin:8px 0 0;font-size:14px">${content.expiryText}</p>
       </div>
 
       <!-- Security Info Box -->
-      <div class="info" style="background:#EEF2FF;border-left:4px solid #6366F1;padding:16px;margin:20px 0;border-radius:0 8px 8px 0">
-        <p style="margin:0;font-size:14px;color:#4338ca">
+      <div class="info">
+        <p style="margin:0;font-size:14px">
           <strong>📍 ${content.requestFrom}</strong> ${data.location}<br>
           <strong>🕐 ${content.requestAt}</strong> ${dateFormatted}
         </p>
       </div>
 
       <!-- Fallback Link -->
-      <p style="color:#6b7280;font-size:12px;word-break:break-all;margin-top:20px">
+      <p style="font-size:12px;word-break:break-all;margin-top:20px">
         ${content.fallbackText}<br>
-        <a href="${data.magicLink}" style="color:#6366F1">${data.magicLink}</a>
+        <a href="${data.magicLink}" class="link-text">${data.magicLink}</a>
       </p>
 
       <!-- Security Note -->
-      <p style="color:#9ca3af;font-size:13px;margin-top:25px;padding-top:20px;border-top:1px solid #e5e7eb">
+      <p style="font-size:13px;margin-top:25px;padding-top:20px">
         ${content.notYou}
       </p>
 
-      <p style="color:#374151;font-size:14px;margin-top:20px">${content.footer}</p>
+      <p style="font-size:14px;margin-top:20px">${content.footer}</p>
     </div>
 
     <!-- Footer -->
-    <div class="footer" style="margin-top:30px;padding:20px;text-align:center">
+    <div class="footer">
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
       </a>
-      <p style="font-size:12px;color:#9ca3af;margin:15px 0 0">${copyright}</p>
-      <p style="font-size:11px;color:#d1d5db;margin:10px 0 0">
-        <a href="${this.frontendUrl}/privacy" style="color:#9ca3af;text-decoration:none">${content.privacy}</a> •
-        <a href="${this.frontendUrl}/terms" style="color:#9ca3af;text-decoration:none">${content.terms}</a>
+      <p style="margin:15px 0 0">${copyright}</p>
+      <p style="font-size:11px;margin:10px 0 0">
+        <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">${content.privacy}</a> •
+        <a href="${this.frontendUrl}/terms" class="link-text" style="text-decoration:none">${content.terms}</a>
       </p>
     </div>
   </div>

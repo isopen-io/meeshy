@@ -126,7 +126,7 @@ espnet-model-zoo==0.1.7
 
 # Audio Processing utilities
 pydub==0.25.1
-# librosa: gérée par ESPnet et chatterbox-tts (conflit résolu en laissant ESPnet gérer la version)
+# librosa version managed by espnet (0.9.2) - use utils/audio_utils.py for compat
 soundfile>=0.12.1
 scipy>=1.10.0
 ffmpeg-python==0.2.0

@@ -3,11 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, Zap, Globe, Sparkles } from 'lucide-react';
+import { ArrowRight, Zap, Globe, Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { buildApiUrl } from '@/lib/config';
+
+interface InviterInfo {
+  firstName: string | null;
+  lastName: string | null;
+  displayName: string | null;
+  username: string;
+  avatar: string | null;
+}
 
 interface AffiliateSignupPageProps {
   params: Promise<{ token: string }>;
@@ -17,7 +26,7 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
   const router = useRouter();
   const { t } = useI18n('affiliate');
   const [isMounted, setIsMounted] = useState(false);
-  const [inviterName, setInviterName] = useState<string | null>(null);
+  const [inviter, setInviter] = useState<InviterInfo | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -27,19 +36,42 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
         localStorage.setItem('meeshy_affiliate_token', token);
         document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
 
-        // Fetch inviter name
+        // Fetch inviter details
         fetch(buildApiUrl(`/affiliate/validate/${token}`))
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             const user = data?.data?.affiliateUser;
-            if (user?.firstName) {
-              setInviterName(`${user.firstName} ${user.lastName || ''}`.trim());
+            if (user) {
+              setInviter({
+                firstName: user.firstName,
+                lastName: user.lastName,
+                displayName: user.displayName,
+                username: user.username,
+                avatar: user.avatar
+              });
             }
           })
           .catch(() => {});
       }
     });
   }, [params]);
+
+  // Get display name for inviter
+  const getInviterDisplayName = () => {
+    if (!inviter) return null;
+    if (inviter.displayName) return inviter.displayName;
+    if (inviter.firstName) return `${inviter.firstName} ${inviter.lastName || ''}`.trim();
+    return inviter.username;
+  };
+
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (!inviter) return '';
+    if (inviter.firstName) {
+      return `${inviter.firstName[0]}${inviter.lastName?.[0] || ''}`.toUpperCase();
+    }
+    return inviter.username.substring(0, 2).toUpperCase();
+  };
 
   const features = [
     { icon: Zap, label: t('landing.feature1') },
@@ -78,16 +110,41 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
           className="w-full max-w-lg"
         >
           <div className="backdrop-blur-md sm:backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 sm:bg-white/60 sm:dark:bg-gray-900/60 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 border border-white/30 dark:border-gray-700/40 p-6 sm:p-10 text-center">
-            {/* Inviter badge */}
-            {inviterName && (
+            {/* Inviter badge with avatar */}
+            {inviter && (
               <motion.div
                 initial={isMounted ? { opacity: 0, scale: 0.9 } : false}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, delay: isMounted ? 0.3 : 0 }}
-                className="inline-flex items-center gap-2 px-4 py-1.5 mb-6 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-sm font-medium"
+                className="flex flex-col items-center gap-3 mb-6"
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                {t('landing.welcomeFrom')} {inviterName}
+                {/* Avatar */}
+                <div className="relative">
+                  <Avatar className="h-16 w-16 ring-4 ring-violet-200 dark:ring-violet-800">
+                    <AvatarImage src={inviter.avatar || undefined} alt={getInviterDisplayName() || ''} />
+                    <AvatarFallback className="bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 text-lg font-semibold">
+                      {getInitials() || <User className="h-6 w-6" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1">
+                    <Sparkles className="h-3 w-3 text-white" />
+                  </div>
+                </div>
+
+                {/* Invitation text */}
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {t('landing.invitedBy', 'Invité(e) par')}
+                  </p>
+                  <p className="font-semibold text-violet-700 dark:text-violet-300">
+                    {getInviterDisplayName()}
+                  </p>
+                  {inviter.username && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      @{inviter.username}
+                    </p>
+                  )}
+                </div>
               </motion.div>
             )}
 

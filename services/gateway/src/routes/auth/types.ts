@@ -65,6 +65,8 @@ export interface UserResponseData {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   twoFactorEnabledAt: Date | null;
+  pendingEmail: string | null;
+  pendingPhone: string | null;
   lastPasswordChange: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
@@ -118,6 +120,8 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     emailVerifiedAt: user.emailVerifiedAt,
     phoneVerifiedAt: user.phoneVerifiedAt,
     twoFactorEnabledAt: user.twoFactorEnabledAt,
+    pendingEmail: user.pendingEmail || null,
+    pendingPhone: user.pendingPhoneNumber || null,
     lastPasswordChange: user.lastPasswordChange,
     lastLoginIp: user.lastLoginIp,
     lastLoginLocation: user.lastLoginLocation,

@@ -1,6 +1,7 @@
 'use client';
 
 import { memo } from 'react';
+import { motion } from 'framer-motion';
 import { Video, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -80,15 +81,17 @@ export const HeaderToolbar = memo(function HeaderToolbar({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onStartCall}
-                className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-blue-500 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                aria-label={t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}
-              >
-                <Video className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
-              </Button>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={onStartCall}
+                  className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
+                  aria-label={t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}
+                >
+                  <Video className="h-5 w-5" aria-hidden="true" />
+                </Button>
+              </motion.div>
             </TooltipTrigger>
             <TooltipContent>
               <p>{t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}</p>
@@ -109,25 +112,29 @@ export const HeaderToolbar = memo(function HeaderToolbar({
           onParticipantRemoved={onParticipantRemoved}
           onParticipantAdded={onParticipantAdded}
           onLinkCreated={onLinkCreated}
+          onOpenSettings={onOpenSettings}
         />
       )}
 
       {showCreateLink && (
-        <CreateLinkButton
-          conversationId={conversation.id}
-          currentUser={currentUser}
-          disableSummaryModal={false}
-          onLinkCreated={() => {
-            onLinkCreated?.('');
-          }}
-          variant="ghost"
-          size="sm"
-          className="h-10 w-10 p-0 rounded-full hover:bg-accent/50"
-        >
-          <Link2 className="h-5 w-5" />
-        </CreateLinkButton>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <CreateLinkButton
+            conversationId={conversation.id}
+            currentUser={currentUser}
+            disableSummaryModal={false}
+            onLinkCreated={() => {
+              onLinkCreated?.('');
+            }}
+            variant="ghost"
+            size="sm"
+            className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
+          >
+            <Link2 className="h-5 w-5" />
+          </CreateLinkButton>
+        </motion.div>
       )}
 
+      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
       <HeaderActions
         isPinned={isPinned}
         isMuted={isMuted}
@@ -142,6 +149,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
         onShareConversation={onShareConversation}
         t={t}
       />
+      </motion.div>
     </div>
   );
 });

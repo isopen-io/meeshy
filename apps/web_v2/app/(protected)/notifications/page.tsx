@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Button, Card, Badge, LanguageOrb, theme, useSplitView } from '@/components';
+import { Button, Card, Badge, LanguageOrb, PageHeader } from '@/components';
 import { useNotificationsV2 } from '@/hooks';
 
 function NotificationSkeleton() {
@@ -79,9 +78,6 @@ export default function V2NotificationsPage() {
     error,
   } = useNotificationsV2();
 
-  // Split view context for mobile back button
-  const { goBackToList, isMobile, showRightPanel } = useSplitView();
-
   const handleNotificationClick = async (notificationId: string, actionUrl?: string) => {
     await markAsRead(notificationId);
     if (actionUrl) {
@@ -91,26 +87,17 @@ export default function V2NotificationsPage() {
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-6 py-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]/95 backdrop-blur-xl transition-colors duration-300">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {isMobile && showRightPanel && (
-              <Button variant="ghost" size="sm" onClick={goBackToList}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Button>
-            )}
-            <h1 className="text-xl font-semibold text-[var(--gp-text-primary)]" style={{ fontFamily: theme.fonts.display }}>
-              Notifications
-            </h1>
-            {unreadCount > 0 && (
-              <Badge variant="primary" size="sm">
-                {unreadCount}
-              </Badge>
-            )}
-          </div>
+      <PageHeader
+        title="Mes notifications"
+        hideNotificationButton
+        titleBadge={
+          unreadCount > 0 ? (
+            <Badge variant="primary" size="sm">
+              {unreadCount}
+            </Badge>
+          ) : undefined
+        }
+        actionButtons={
           <Button
             variant="ghost"
             size="sm"
@@ -119,8 +106,8 @@ export default function V2NotificationsPage() {
           >
             Tout marquer comme lu
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <main className="max-w-2xl mx-auto">
         {/* Error state */}

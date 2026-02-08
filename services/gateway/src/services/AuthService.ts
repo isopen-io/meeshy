@@ -165,6 +165,8 @@ export class AuthService {
           timezone: true,
           emailVerifiedAt: true,
           phoneVerifiedAt: true,
+          pendingEmail: true,
+          pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true
         }
@@ -268,7 +270,7 @@ export class AuthService {
         requestContext: requestContext || defaultContext
       });
 
-      logger.info(`[AUTH_SERVICE] ✅ Session créée pour:', user.username, '- ID session.id=${session.id}`);
+      logger.info(`[AUTH_SERVICE] ✅ Session créée pour: ${user.username} - ID session.id=${session.id}`);
 
       return {
         user: socketIOUser,
@@ -333,6 +335,8 @@ export class AuthService {
           timezone: true,
           emailVerifiedAt: true,
           phoneVerifiedAt: true,
+          pendingEmail: true,
+          pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true
         }
@@ -376,7 +380,7 @@ export class AuthService {
 
           isValid = true;
           usedBackupCode = true;
-          logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour:', user.username, '- Restants updatedCodes.length=${updatedCodes.length}`);
+          logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour: ${user.username} - Restants: ${updatedCodes.length}`);
         }
       }
 
@@ -418,7 +422,7 @@ export class AuthService {
         requestContext: requestContext || defaultContext
       });
 
-      logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour:', user.username, '- ID session.id=${session.id}`);
+      logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour: ${user.username} - ID: ${session.id}`);
 
       return {
         user: socketIOUser,
@@ -979,7 +983,7 @@ export class AuthService {
         return { success: false, error: 'Erreur lors de l\'envoi du SMS.' };
       }
 
-      logger.info(`[AUTH_SERVICE] ✅ SMS envoyé via', smsResult.provider, '- messageId smsResult.messageId=${smsResult.messageId}`);
+      logger.info(`[AUTH_SERVICE] ✅ SMS envoyé via ${smsResult.provider} - messageId: ${smsResult.messageId}`);
       return { success: true };
 
     } catch (error) {
@@ -1171,6 +1175,8 @@ export class AuthService {
       // Security & verification fields for auth responses
       emailVerifiedAt: user.emailVerifiedAt,
       phoneVerifiedAt: user.phoneVerifiedAt,
+      pendingEmail: user.pendingEmail,
+      pendingPhone: user.pendingPhoneNumber,
       twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
       lastPasswordChange: user.lastPasswordChange,
       // Login tracking

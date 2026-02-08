@@ -150,6 +150,34 @@
             "deleteFailed": "Failed to delete account"
           }
         }
+      },
+      "email": {
+        "available": "Email available",
+        "alreadyUsed": "This email is already in use",
+        "invalidOrTaken": "Email invalid or already in use",
+        "verificationSent": "Verification email sent to the new address",
+        "error": "Error during change",
+        "pending": "Email change pending",
+        "pendingMessage": "Email sent to {email}",
+        "noPendingEmail": "No pending email change",
+        "verificationResent": "Verification email resent to {email}",
+        "rateLimited": "Please wait before resending the email",
+        "resendError": "Error resending email",
+        "resendVerification": "Resend"
+      },
+      "phone": {
+        "available": "Number available",
+        "alreadyUsed": "This number is already in use",
+        "invalidOrTaken": "Number invalid or already in use",
+        "verificationSent": "Verification code sent by SMS",
+        "error": "Error during change",
+        "pending": "Change pending",
+        "pendingMessage": "Code sent to {phone}"
+      },
+      "username": {
+        "available": "Username available",
+        "alreadyUsed": "This username is already taken",
+        "error": "Error during change"
       }
     },
     "translation": {
@@ -596,6 +624,28 @@
           "description": "Download, preview and storage settings"
         }
       }
+    }
+  },
+  "emailChange": {
+    "verify": {
+      "noToken": "Verification token missing",
+      "expired": "The verification link has expired",
+      "expiredTitle": "Link expired",
+      "invalid": "The verification link is invalid",
+      "invalidTitle": "Invalid link",
+      "noPending": "No pending email change",
+      "error": "Error during verification",
+      "errorTitle": "Error",
+      "networkError": "Connection error",
+      "verifying": "Verifying...",
+      "pleaseWait": "Please wait...",
+      "success": "Email changed!",
+      "successMessage": "Your email address has been successfully changed.",
+      "successInfo": "You can now use your new email address to sign in.",
+      "expiredInfo": "The verification link has expired. Please request a new email change from your settings.",
+      "backToSettings": "Back to settings",
+      "tryAgain": "Try email change again",
+      "backToHome": "Back to home"
     }
   },
   "consentDialog": {

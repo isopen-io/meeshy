@@ -50,7 +50,9 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
     return attachments;
   }
 
-  logger.info(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  if (attachments.length > 0) {
+    logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  }
 
   return attachments.map((att, attIndex) => {
     const cleaned = { ...att };
@@ -1100,11 +1102,10 @@ export function registerMessagesRoutes(
               }
             }
 
-            // Construire le chemin ABSOLU du fichier audio (décoder l'URL encodée)
-            const relativePath = audioAtt.fileUrl
-              ? `uploads/attachments${decodeURIComponent(audioAtt.fileUrl.replace('/api/v1/attachments/file', ''))}`
-              : audioAtt.filePath || '';
-            const audioPath = relativePath ? path.resolve(process.cwd(), relativePath) : '';
+            // Construire le chemin ABSOLU du fichier audio via filePath
+            // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+            const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+            const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
 
             await translationService.processAudioAttachment({
               messageId: message.id,

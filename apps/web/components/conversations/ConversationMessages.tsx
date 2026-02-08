@@ -123,13 +123,18 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   // Fonction pour scroller vers le bas
   const scrollToBottom = useCallback((smooth = true) => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: smooth ? 'smooth' : 'auto',
-        block: 'end'
-      });
+    const container = scrollAreaRef.current;
+    if (container) {
+      if (smooth) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth',
+        });
+      } else {
+        container.scrollTop = container.scrollHeight;
+      }
     }
-  }, []);
+  }, [scrollAreaRef]);
 
   // Fonction pour scroller vers le haut (pour BubbleStream avec scrollDirection='down')
   const scrollToTop = useCallback((smooth = true) => {
@@ -269,28 +274,78 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     previousMessageCountRef.current = 0;
   }, [conversationId]);
 
-  // AMÉLIORATION 1: Premier chargement - afficher DIRECTEMENT le dernier message lu SANS animation
+  // AMÉLIORATION 1a: Premier chargement - scroll initial vers le dernier message
   useEffect(() => {
     if (isFirstLoadRef.current && messages.length > 0 && !isLoadingMessages) {
-      // CORRECTION: Pas de délai, affichage IMMÉDIAT pour éviter l'effet de scroll visible
-      // En mode scrollDirection='down' (BubbleStream), les messages récents sont EN HAUT
-      // Donc on scroll toujours vers le haut (top: 0)
-      if (scrollDirection === 'down') {
-        scrollToTop(false); // false = pas d'animation
-      } else {
-        // Mode classique ConversationLayout : chercher les messages non lus ou aller en bas
-        const firstUnreadMessage = findFirstUnreadMessage();
-        
-        if (firstUnreadMessage) {
-          scrollToMessage(firstUnreadMessage.id, false); // false = pas d'animation
-        } else {
-          scrollToBottom(false); // false = pas d'animation
-        }
-      }
-      
       isFirstLoadRef.current = false;
+
+      requestAnimationFrame(() => {
+        if (scrollDirection === 'down') {
+          scrollToTop(false);
+        } else {
+          const firstUnreadMessage = findFirstUnreadMessage();
+          if (firstUnreadMessage) {
+            scrollToMessage(firstUnreadMessage.id, false);
+          } else {
+            scrollToBottom(false);
+          }
+        }
+      });
     }
   }, [messages.length, isLoadingMessages, scrollDirection, scrollToBottom, scrollToTop, scrollToMessage, findFirstUnreadMessage]);
+
+  // AMÉLIORATION 1b: Maintenir le scroll en bas pendant le chargement des images/contenu async
+  // Polling court qui force le scroll après le premier chargement.
+  // S'arrête dès que l'utilisateur interagit manuellement (wheel/touch).
+  useEffect(() => {
+    if (!conversationId || scrollDirection === 'down') return;
+
+    let active = true;
+    let userInteracted = false;
+
+    const stopOnUserScroll = () => { userInteracted = true; };
+
+    // Attacher les listeners d'interaction après un court délai (le conteneur peut être null)
+    const setupDelay = setTimeout(() => {
+      const container = scrollAreaRef.current;
+      if (container) {
+        container.addEventListener('wheel', stopOnUserScroll, { once: true, passive: true });
+        container.addEventListener('touchstart', stopOnUserScroll, { once: true, passive: true });
+      }
+    }, 200);
+
+    const interval = setInterval(() => {
+      if (!active || userInteracted) return;
+      const container = scrollAreaRef.current;
+      if (!container || container.scrollHeight <= container.clientHeight) return;
+
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      if (container.scrollTop < maxScroll - 10) {
+        container.scrollTop = container.scrollHeight;
+        // Mettre à jour le bouton scroll-to-bottom (le scroll programmatique
+        // déclenche l'événement scroll, mais on force aussi par sécurité)
+        setShowScrollButton(false);
+      }
+    }, 150);
+
+    // Arrêter après 3s (suffisant pour le chargement d'images)
+    const timeout = setTimeout(() => {
+      active = false;
+      clearInterval(interval);
+    }, 3000);
+
+    return () => {
+      active = false;
+      clearTimeout(setupDelay);
+      clearInterval(interval);
+      clearTimeout(timeout);
+      const container = scrollAreaRef.current;
+      if (container) {
+        container.removeEventListener('wheel', stopOnUserScroll);
+        container.removeEventListener('touchstart', stopOnUserScroll);
+      }
+    };
+  }, [conversationId, scrollDirection, scrollAreaRef]);
 
   // AMÉLIORATION 3: Nouveaux messages - Auto-scroll sur envoi/réception
   useEffect(() => {

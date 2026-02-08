@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Button, Card, Input, Badge, LanguageOrb, theme, useSplitView } from '@/components/v2';
+import { Button, Card, Input, LanguageOrb, PageHeader } from '@/components/v2';
 import { useContactsV2 } from '@/hooks/v2';
 
 function ContactSkeleton() {
@@ -28,33 +28,19 @@ export default function V2ContactsPage() {
     refreshContacts,
   } = useContactsV2();
 
-  // Split view context for mobile back button
-  const { goBackToList, isMobile, showRightPanel } = useSplitView();
-
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-6 py-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]/95 backdrop-blur-xl transition-colors duration-300">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center gap-4 mb-4">
-            {isMobile && showRightPanel && (
-              <Button variant="ghost" size="sm" onClick={goBackToList}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Button>
-            )}
-            <h1 className="text-xl font-semibold text-[var(--gp-text-primary)]" style={{ fontFamily: theme.fonts.display }}>
-              Contacts
-            </h1>
-            <div className="ml-auto">
-              <Button variant="ghost" size="sm" onClick={refreshContacts}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </Button>
-            </div>
-          </div>
+      <PageHeader
+        title="Mes contacts"
+        actionButtons={
+          <Button variant="ghost" size="sm" onClick={refreshContacts}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </Button>
+        }
+      >
+        <div className="mt-4">
           <Input
             placeholder="Rechercher un contact..."
             value={searchQuery}
@@ -66,7 +52,7 @@ export default function V2ContactsPage() {
             }
           />
         </div>
-      </header>
+      </PageHeader>
 
       <main className="max-w-2xl mx-auto px-6 py-6">
         {/* Error state */}

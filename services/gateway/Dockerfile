@@ -172,7 +172,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \
-    && mkdir -p /app/logs \
+    && mkdir -p /app/logs /app/uploads \
     && chown -R gateway:nodejs /app
 
 WORKDIR /app

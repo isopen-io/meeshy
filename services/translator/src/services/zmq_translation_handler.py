@@ -223,7 +223,19 @@ class TranslationHandler:
                     # Continuer avec le traitement de traduction texte (suite du code ci-dessous)
                     pass
                 else:
-                    logger.warning(f"⚠️ [TRANSLATOR] Requête de traduction invalide: type={message_type}, has_text={bool(request_data.get('text'))}, has_targets={bool(request_data.get('targetLanguages'))}")
+                    # Log détaillé pour debug
+                    text_preview = str(request_data.get('text', ''))[:100] if request_data.get('text') else '<empty>'
+                    targets = request_data.get('targetLanguages', [])
+                    msg_id = request_data.get('messageId', '<no-id>')
+                    conv_id = request_data.get('conversationId', '<no-conv>')
+                    all_keys = list(request_data.keys())
+                    logger.warning(
+                        f"⚠️ [TRANSLATOR] Requête de traduction invalide: "
+                        f"type={message_type}, messageId={msg_id}, conversationId={conv_id}, "
+                        f"has_text={bool(request_data.get('text'))}, text_preview='{text_preview}', "
+                        f"has_targets={bool(targets)}, targets={targets}, "
+                        f"all_keys={all_keys}"
+                    )
                     return
 
             # === AUDIO PROCESSING ===

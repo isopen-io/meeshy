@@ -225,7 +225,8 @@ class DiarizationService:
                     for seg in data['segments']
                 ) if speakers_data else 0
             else:
-                duration = librosa.get_duration(path=audio_path)
+                from utils.audio_utils import get_audio_duration
+                duration = get_audio_duration(audio_path)
                 total_duration_ms = int(duration * 1000)
 
             # Construire les SpeakerInfo
@@ -424,7 +425,8 @@ class DiarizationService:
         duration_ms = 0
         if LIBROSA_AVAILABLE:
             try:
-                duration = librosa.get_duration(path=audio_path)
+                from utils.audio_utils import get_audio_duration
+                duration = get_audio_duration(audio_path)
                 duration_ms = int(duration * 1000)
             except:
                 pass

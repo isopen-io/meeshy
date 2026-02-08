@@ -329,7 +329,7 @@ export class AudioTranslateService extends EventEmitter {
       // Récupérer l'attachement
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        select: { id: true, fileUrl: true, mimeType: true, messageId: true }
+        select: { id: true, fileUrl: true, filePath: true, mimeType: true, messageId: true }
       });
 
       if (!attachment) {
@@ -340,9 +340,11 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Construire le chemin ABSOLU audio (décoder l'URL encodée)
-      const relativePath = `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
-      const audioPath = path.resolve(process.cwd(), relativePath);
+      // Construire le chemin ABSOLU audio via filePath
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+      const audioPath = attachment.filePath
+        ? path.join(uploadBasePath, attachment.filePath)
+        : path.join(uploadBasePath, decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, ''));
 
       // Transcrire avec sauvegarde
       const result = await this.transcribeOnly('system', {
@@ -498,9 +500,11 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Lire le fichier audio (décoder l'URL encodée et convertir en chemin absolu)
-      const relativePath = attachment.filePath || `uploads/attachments${decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', ''))}`;
-      const audioPath = path.isAbsolute(relativePath) ? relativePath : path.resolve(process.cwd(), relativePath);
+      // Construire le chemin ABSOLU audio via filePath
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+      const audioPath = attachment.filePath
+        ? path.join(uploadBasePath, attachment.filePath)
+        : path.join(uploadBasePath, decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, ''));
 
       // Traduire avec sauvegarde
       const result = await this.translateSync(attachment.uploadedBy || 'system', {

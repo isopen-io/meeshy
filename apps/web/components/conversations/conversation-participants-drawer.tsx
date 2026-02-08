@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Users,
   Search,
   Crown,
@@ -24,7 +31,7 @@ import {
   RefreshCw,
   ChevronUp,
   ChevronDown,
-  Sparkles
+  Settings,
 } from 'lucide-react';
 import { ThreadMember } from '@meeshy/shared/types';
 import { conversationsService } from '@/services/conversations.service';
@@ -60,6 +67,7 @@ interface ConversationParticipantsDrawerProps {
   onParticipantRemoved?: (userId: string) => void;
   onParticipantAdded?: (userId: string) => void;
   onLinkCreated?: (link: string) => void;
+  onOpenSettings?: () => void;
 }
 
 export function ConversationParticipantsDrawer({
@@ -72,19 +80,20 @@ export function ConversationParticipantsDrawer({
   memberCount,
   onParticipantRemoved,
   onParticipantAdded,
-  onLinkCreated
+  onLinkCreated,
+  onOpenSettings
 }: ConversationParticipantsDrawerProps) {
-  // Utiliser memberCount si disponible, sinon fallback sur participants.length
-  const totalMemberCount = memberCount ?? participants.length;
   const { t } = useI18n('conversations');
   const [isOpen, setIsOpen] = useState(false);
-  const [filterQuery, setFilterQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [searchResults, setSearchResults] = useState<SocketIOUser[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  // Résultats de la recherche backend des participants
+
+  // Recherche plateforme (utilisateurs hors conversation)
+  const [platformResults, setPlatformResults] = useState<SocketIOUser[]>([]);
+  const [isPlatformSearching, setIsPlatformSearching] = useState(false);
+
+  // Recherche backend des participants de la conversation
   const [backendSearchResults, setBackendSearchResults] = useState<ThreadMember[] | null>(null);
   const [isFilterSearching, setIsFilterSearching] = useState(false);
 
@@ -123,6 +132,22 @@ export function ConversationParticipantsDrawer({
     return true;
   });
 
+  // Prendre le max : memberCount peut être stale (ex: 5 alors que 200+ chargés)
+  const totalMemberCount = Math.max(memberCount ?? 0, activeParticipants.length);
+
+  // Pagination : limiter le nombre de participants affichés
+  const [displayLimit, setDisplayLimit] = useState(50);
+
+  // Reset state quand le drawer se ferme
+  useEffect(() => {
+    if (!isOpen) {
+      setDisplayLimit(50);
+      setSearchQuery('');
+      setPlatformResults([]);
+      setBackendSearchResults(null);
+    }
+  }, [isOpen]);
+
   const handleManualRefresh = async () => {
     try {
       await manualRefresh();
@@ -138,18 +163,17 @@ export function ConversationParticipantsDrawer({
                   currentUserParticipant?.role === UserRoleEnum.CREATOR ||
                   currentUserParticipant?.role === UserRoleEnum.MODERATOR;
 
-  // Recherche backend des participants quand filterQuery change
+  // Recherche backend des participants quand searchQuery change
   useEffect(() => {
     const searchParticipants = async () => {
-      if (!filterQuery.trim() || filterQuery.length < 2) {
+      if (!searchQuery.trim() || searchQuery.length < 2) {
         setBackendSearchResults(null);
         return;
       }
 
       setIsFilterSearching(true);
       try {
-        const results = await participantsService.searchParticipants(conversationId, filterQuery, 50);
-        // Mapper les résultats en ThreadMember
+        const results = await participantsService.searchParticipants(conversationId, searchQuery, 50);
         const mappedResults: ThreadMember[] = results.map(user => ({
           id: user.id,
           conversationId,
@@ -171,15 +195,42 @@ export function ConversationParticipantsDrawer({
 
     const debounceTimer = setTimeout(searchParticipants, 300);
     return () => clearTimeout(debounceTimer);
-  }, [filterQuery, conversationId]);
+  }, [searchQuery, conversationId]);
+
+  // Recherche plateforme (utilisateurs hors conversation) quand searchQuery change
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!searchQuery.trim() || searchQuery.length < 2) {
+        setPlatformResults([]);
+        return;
+      }
+
+      setIsPlatformSearching(true);
+      try {
+        const response = await usersService.searchUsers(searchQuery);
+        // response = {success, data: {data: [...], pagination}, message}
+        const responseData = response?.data;
+        let users = Array.isArray(responseData?.data) ? responseData.data : (Array.isArray(responseData) ? responseData : []);
+        setPlatformResults(users);
+      } catch (error) {
+        console.error('Erreur lors de la recherche d\'utilisateurs:', error);
+        setPlatformResults([]);
+      } finally {
+        setIsPlatformSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
 
   // Utiliser les résultats backend si disponibles, sinon filtre local
   const filteredParticipants = backendSearchResults !== null
     ? backendSearchResults
     : activeParticipants.filter(participant => {
-        if (!filterQuery.trim()) return true;
+        if (!searchQuery.trim()) return true;
         const user = participant.user;
-        const searchTerm = filterQuery.toLowerCase();
+        const searchTerm = searchQuery.toLowerCase();
         return (
           user.username.toLowerCase().includes(searchTerm) ||
           user.displayName?.toLowerCase().includes(searchTerm) ||
@@ -192,6 +243,18 @@ export function ConversationParticipantsDrawer({
   // Séparer en ligne / hors ligne
   const onlineParticipants = filteredParticipants.filter(p => p.user.isOnline);
   const offlineParticipants = filteredParticipants.filter(p => !p.user.isOnline);
+
+  // Pagination : limiter le rendu
+  const displayedOnline = onlineParticipants.slice(0, displayLimit);
+  const remainingOnline = onlineParticipants.length - displayedOnline.length;
+  const displayedOffline = offlineParticipants.slice(0, Math.max(0, displayLimit - onlineParticipants.length));
+  const remainingOffline = offlineParticipants.length - displayedOffline.length;
+  const totalRemaining = remainingOnline + remainingOffline;
+
+  // Résultats plateforme filtrés (exclure ceux déjà membres)
+  const filteredPlatformResults = platformResults.filter(
+    user => !activeParticipants.some(p => p.userId === user.id)
+  );
 
   const getDisplayName = (user: any): string => {
     const name = user.displayName ||
@@ -260,48 +323,200 @@ export function ConversationParticipantsDrawer({
     toast.success(`${user.displayName || user.username} a été invité à la conversation`);
   };
 
-  // Effectuer la recherche d'utilisateurs
-  useEffect(() => {
-    const searchUsers = async () => {
-      if (!searchQuery.trim() || searchQuery.length < 2) {
-        setSearchResults([]);
-        return;
-      }
+  // Rôles assignables selon le rôle de l'utilisateur courant
+  const getAssignableRoles = (): Array<{ value: 'MEMBER' | 'MODERATOR' | 'ADMIN'; label: string }> => {
+    const role = currentUserParticipant?.role;
+    if (role === UserRoleEnum.CREATOR || role === UserRoleEnum.ADMIN) {
+      return [
+        { value: 'MEMBER', label: 'Membre' },
+        { value: 'MODERATOR', label: 'Modérateur' },
+        { value: 'ADMIN', label: 'Administrateur' },
+      ];
+    }
+    if (role === UserRoleEnum.MODERATOR) {
+      return [
+        { value: 'MEMBER', label: 'Membre' },
+        { value: 'MODERATOR', label: 'Modérateur' },
+      ];
+    }
+    return [{ value: 'MEMBER', label: 'Membre' }];
+  };
 
-      setIsSearching(true);
-      try {
-        const response = await usersService.searchUsers(searchQuery);
-        let users = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
-        setSearchResults(users);
-      } catch (error) {
-        console.error('Erreur lors de la recherche d\'utilisateurs:', error);
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    };
+  const assignableRoles = getAssignableRoles();
 
-    const debounceTimer = setTimeout(searchUsers, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
-
-  // Ajouter un participant depuis la recherche
-  const handleAddParticipant = async (user: SocketIOUser) => {
-    if (!isAdmin) return;
-
+  // Ajouter un participant depuis la recherche plateforme (avec rôle optionnel)
+  const handleAddParticipant = async (user: SocketIOUser, role: 'MEMBER' | 'MODERATOR' | 'ADMIN' = 'MEMBER') => {
     try {
       setIsLoading(true);
       await conversationsService.addParticipant(conversationId, user.id);
+      // Si le rôle demandé n'est pas MEMBER, mettre à jour après l'ajout
+      if (role !== 'MEMBER') {
+        await conversationsService.updateParticipantRole(conversationId, user.id, role);
+      }
       onParticipantAdded?.(user.id);
-      toast.success(`${user.displayName || user.username} a été ajouté à la conversation`);
+      const roleLabels: Record<string, string> = { MEMBER: 'membre', MODERATOR: 'modérateur', ADMIN: 'administrateur' };
+      toast.success(`${user.displayName || user.username} ajouté comme ${roleLabels[role]}`);
       setSearchQuery('');
-      setSearchResults([]);
+      setPlatformResults([]);
     } catch (error: any) {
       console.error('Erreur lors de l\'ajout du participant:', error);
       toast.error(error.message || 'Erreur lors de l\'ajout du participant');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Rendu d'une carte participant (partagé online/offline)
+  const renderParticipantCard = (participant: ThreadMember, index: number, isOnline: boolean) => {
+    const user = participant.user;
+    const isCurrentUser = user.id === currentUser.id;
+    const prefix = isOnline ? 'online' : 'offline';
+
+    return (
+      <motion.div
+        key={`${prefix}-${participant.id || participant.userId}-${index}`}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        transition={{ delay: index * 0.03 }}
+        layout
+        className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 group ${
+          participant.role === 'CREATOR'
+            ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
+            : isOnline
+              ? 'border border-white/30 dark:border-gray-700/40'
+              : 'border border-white/20 dark:border-gray-700/30'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            {isAnonymousUser(user) ? (
+              <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${isOnline ? 'from-purple-400 to-violet-500' : 'from-purple-300 to-violet-400 opacity-50'} flex items-center justify-center`}>
+                <Ghost className={`h-5 w-5 ${isOnline ? 'text-white' : 'text-purple-600'}`} />
+              </div>
+            ) : (
+              <Avatar className={`h-10 w-10 border-2 border-white dark:border-gray-800 shadow-sm ${!isOnline ? 'opacity-75' : ''}`}>
+                <AvatarImage src={user.avatar} />
+                <AvatarFallback className={isOnline
+                  ? 'bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium'
+                  : 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium'
+                }>
+                  {getAvatarFallback(user)}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {isOnline ? (
+              <OnlineIndicator
+                isOnline={getUserStatus(user) === 'online'}
+                status={getUserStatus(user)}
+                size="md"
+                className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
+              />
+            ) : (
+              <div className="absolute -bottom-0 -right-0 h-3 w-3 bg-gray-400 rounded-full border-2 border-white dark:border-gray-900" />
+            )}
+          </div>
+
+          {/* Nom + pseudo */}
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {isAnonymousUser(user) && (
+                <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+              )}
+              <span className={`text-sm font-medium truncate max-w-[160px] ${!isOnline ? 'text-gray-600 dark:text-gray-400' : ''}`}>
+                {getDisplayName(user)}
+              </span>
+              {isCurrentUser && (
+                <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 flex-shrink-0">
+                  {t('conversationDetails.you')}
+                </Badge>
+              )}
+              {(['ADMIN', 'CREATOR'].includes(participant.role)) && (
+                <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs min-w-0">
+              <Link
+                href={`/u/${user.username}`}
+                className="truncate max-w-[130px] text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                @{user.username}
+              </Link>
+              <span className="text-gray-400 flex-shrink-0">•</span>
+              {isOnline ? (
+                <span className="text-green-600 dark:text-green-400 font-medium flex items-center gap-1 flex-shrink-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  {t('conversationUI.online')}
+                </span>
+              ) : (
+                <span className="text-gray-400 flex-shrink-0">{t('conversationDetails.offline')}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Actions admin */}
+          {isAdmin && !isCurrentUser && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              {participant.role !== 'CREATOR' && getUpgradeRole(participant.role) && (
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newRole = getUpgradeRole(participant.role);
+                      if (newRole) {
+                        handleUpdateParticipantRole(user.id, participant.role, newRole);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                    title="Promouvoir"
+                    aria-label="Promouvoir"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                </motion.div>
+              )}
+              {participant.role !== 'CREATOR' && getDowngradeRole(participant.role) && (
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newRole = getDowngradeRole(participant.role);
+                      if (newRole) {
+                        handleUpdateParticipantRole(user.id, participant.role, newRole);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                    title="Rétrograder"
+                    aria-label="Rétrograder"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </motion.div>
+              )}
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveParticipant(user.id)}
+                  disabled={isLoading}
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  title={t('conversationDetails.removeFromGroup')}
+                  aria-label={t('conversationDetails.removeFromGroup')}
+                >
+                  <UserX className="h-4 w-4" />
+                </Button>
+              </motion.div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
   };
 
   return (
@@ -332,13 +547,13 @@ export function ConversationParticipantsDrawer({
         </Button>
       </motion.div>
 
-      {/* Drawer moderne avec glassmorphism */}
+      {/* Drawer */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent
           side="left"
           className="w-[400px] sm:w-[500px] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30"
         >
-          {/* Header avec effet glassmorphism */}
+          {/* Header */}
           <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
             <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -347,37 +562,34 @@ export function ConversationParticipantsDrawer({
           </SheetHeader>
 
           <div className="px-6 py-4">
-            {/* Filtre local avec effet moderne */}
+            {/* Champ de recherche unifié */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
               className="mb-4"
             >
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                Filtrer les membres
-              </label>
               <div className="relative flex items-center gap-2">
                 <div className="relative flex-1">
-                  {isFilterSearching ? (
+                  {(isFilterSearching || isPlatformSearching) ? (
                     <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
                   ) : (
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   )}
                   <Input
-                    placeholder={t('conversationDetails.searchParticipants') || "Rechercher un membre..."}
-                    value={filterQuery}
-                    onChange={(e) => setFilterQuery(e.target.value)}
+                    placeholder={isAdmin ? "Rechercher ou ajouter un membre..." : (t('conversationDetails.searchParticipants') || "Rechercher un membre...")}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 pr-10 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 focus-visible:ring-blue-500 focus-visible:border-blue-500"
                   />
-                  {filterQuery.length > 0 && (
+                  {searchQuery.length > 0 && (
                     <motion.button
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       type="button"
-                      onClick={() => setFilterQuery('')}
+                      onClick={() => setSearchQuery('')}
                       className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      aria-label="Effacer le filtre"
+                      aria-label="Effacer la recherche"
                     >
                       <X className="h-3.5 w-3.5" />
                     </motion.button>
@@ -399,118 +611,100 @@ export function ConversationParticipantsDrawer({
               </div>
             </motion.div>
 
-            {/* Section ajouter un membre avec effet moderne */}
-            {isAdmin && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="mb-4 p-4 backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 shadow-sm"
-              >
-                <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Ajouter un membre
-                </h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Rechercher un utilisateur à ajouter..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 pr-10 bg-white/80 dark:bg-gray-900/80 border-blue-200/50 dark:border-blue-800/30 focus-visible:ring-blue-500"
-                  />
-                  {searchQuery.length > 0 && (
-                    <motion.button
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      aria-label="Effacer la recherche"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </motion.button>
-                  )}
-                </div>
-
-                {/* Résultats de la recherche */}
-                <AnimatePresence>
-                  {isSearching && searchQuery.length >= 2 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mt-3 text-center text-sm text-gray-500"
-                    >
-                      Recherche en cours...
-                    </motion.div>
-                  )}
-
-                  {searchQuery.length >= 2 && searchResults.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                    >
-                      <ScrollArea className="mt-3 max-h-[200px]">
-                        <div className="space-y-2">
-                          {searchResults.map((user, index) => {
-                            const isAlreadyMember = activeParticipants.some(p => p.userId === user.id);
-                            return (
-                              <motion.div
-                                key={`search-${user.id}-${index}`}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.05 }}
-                                className="flex items-center gap-3 p-2 rounded-lg backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors"
+            {/* Résultats plateforme (pour ajouter des membres) */}
+            <AnimatePresence>
+              {isAdmin && searchQuery.length >= 2 && filteredPlatformResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-4 p-3 backdrop-blur-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 shadow-sm"
+                >
+                  <h3 className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-1.5 uppercase tracking-wide">
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Ajouter un utilisateur
+                  </h3>
+                  <ScrollArea className="max-h-[180px]">
+                    <div className="space-y-1.5">
+                      {filteredPlatformResults.slice(0, 10).map((user, index) => (
+                        <motion.div
+                          key={`platform-${user.id}-${index}`}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          className="flex items-center gap-2.5 p-2 rounded-lg backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors"
+                        >
+                          <Avatar className="h-8 w-8 flex-shrink-0">
+                            <AvatarImage src={user.avatar} />
+                            <AvatarFallback className="text-xs">{getUserInitials(user)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="text-sm font-medium truncate max-w-[140px]">{user.displayName || user.username}</p>
+                            <Link
+                              href={`/u/${user.username}`}
+                              className="text-xs text-gray-500 truncate max-w-[120px] block hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              @{user.username}
+                            </Link>
+                          </div>
+                          {assignableRoles.length <= 1 ? (
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleAddParticipant(user, 'MEMBER')}
+                                disabled={isLoading}
+                                className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
                               >
-                                <Avatar className="h-8 w-8">
-                                  <AvatarImage src={user.avatar} />
-                                  <AvatarFallback className="text-xs">{getUserInitials(user)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{user.displayName || user.username}</p>
-                                  <p className="text-xs text-gray-500">@{user.username}</p>
-                                </div>
-                                {isAlreadyMember ? (
-                                  <Badge variant="secondary" className="text-xs">
-                                    Déjà membre
-                                  </Badge>
-                                ) : (
-                                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                    <Button
-                                      variant="default"
-                                      size="sm"
-                                      onClick={() => handleAddParticipant(user)}
-                                      disabled={isLoading}
-                                      className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                                    >
-                                      <UserPlus className="h-3.5 w-3.5 mr-1" />
-                                      Ajouter
-                                    </Button>
-                                  </motion.div>
-                                )}
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                    </motion.div>
-                  )}
+                                <UserPlus className="h-3 w-3 mr-1" />
+                                Ajouter
+                              </Button>
+                            </motion.div>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={isLoading}
+                                  className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
+                                >
+                                  <UserPlus className="h-3 w-3 mr-1" />
+                                  Ajouter
+                                  <ChevronDown className="h-3 w-3 ml-1" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[140px]">
+                                {assignableRoles.map((r) => (
+                                  <DropdownMenuItem
+                                    key={r.value}
+                                    onClick={() => handleAddParticipant(user, r.value)}
+                                  >
+                                    {r.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </motion.div>
+              )}
 
-                  {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="mt-3 text-center text-sm text-gray-500"
-                    >
-                      Aucun utilisateur trouvé
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )}
+              {isAdmin && searchQuery.length >= 2 && filteredPlatformResults.length === 0 && !isPlatformSearching && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-4 p-3 backdrop-blur-xl bg-gray-50/80 dark:bg-gray-900/40 rounded-xl border border-gray-200/50 dark:border-gray-700/30 text-center text-xs text-gray-500"
+                >
+                  Aucun utilisateur trouvé hors conversation
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Liste scrollable des participants */}
             <ScrollArea className="h-[calc(100vh-340px)]">
@@ -519,7 +713,7 @@ export function ConversationParticipantsDrawer({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.2 }}
                 >
                   <div className="flex items-center justify-between mb-3 px-2">
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -531,138 +725,14 @@ export function ConversationParticipantsDrawer({
                     </Badge>
                   </div>
 
-                  {onlineParticipants.length === 0 ? (
+                  {displayedOnline.length === 0 && onlineParticipants.length === 0 ? (
                     <div className="text-sm text-gray-500 py-4 px-2 text-center">
                       {t('conversationDetails.noOneOnline')}
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <AnimatePresence mode="popLayout">
-                        {onlineParticipants.map((participant, index) => {
-                          const user = participant.user;
-                          const isCurrentUser = user.id === currentUser.id;
-                          return (
-                            <motion.div
-                              key={`online-${participant.id || participant.userId}-${index}`}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              transition={{ delay: index * 0.05 }}
-                              layout
-                              className={`backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 group ${
-                                participant.role === 'CREATOR'
-                                  ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
-                                  : 'border border-white/30 dark:border-gray-700/40'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="relative">
-                                  {isAnonymousUser(user) ? (
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center">
-                                      <Ghost className="h-5 w-5 text-white" />
-                                    </div>
-                                  ) : (
-                                    <Avatar className="h-10 w-10 border-2 border-white dark:border-gray-800 shadow-sm">
-                                      <AvatarImage src={user.avatar} />
-                                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium">
-                                        {getAvatarFallback(user)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                  )}
-                                  <OnlineIndicator
-                                    isOnline={getUserStatus(user) === 'online'}
-                                    status={getUserStatus(user)}
-                                    size="md"
-                                    className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
-                                  />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium truncate flex items-center gap-1.5">
-                                      {isAnonymousUser(user) && (
-                                        <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                                      )}
-                                      {getDisplayName(user)}
-                                      {isCurrentUser && (
-                                        <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0">
-                                          {t('conversationDetails.you')}
-                                        </Badge>
-                                      )}
-                                    </span>
-                                    {(['ADMIN', 'CREATOR'].includes(participant.role)) && (
-                                      <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>@{user.username}</span>
-                                    <span>•</span>
-                                    <span className="text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-                                      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                                      {t('conversationUI.online')}
-                                    </span>
-                                  </div>
-                                </div>
-                                {isAdmin && !isCurrentUser && (
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {participant.role !== 'CREATOR' && getUpgradeRole(participant.role) && (
-                                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => {
-                                            const newRole = getUpgradeRole(participant.role);
-                                            if (newRole) {
-                                              handleUpdateParticipantRole(user.id, participant.role, newRole);
-                                            }
-                                          }}
-                                          disabled={isLoading}
-                                          className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                          title="Promouvoir"
-                                          aria-label="Promouvoir"
-                                        >
-                                          <ChevronUp className="h-4 w-4" />
-                                        </Button>
-                                      </motion.div>
-                                    )}
-                                    {participant.role !== 'CREATOR' && getDowngradeRole(participant.role) && (
-                                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => {
-                                            const newRole = getDowngradeRole(participant.role);
-                                            if (newRole) {
-                                              handleUpdateParticipantRole(user.id, participant.role, newRole);
-                                            }
-                                          }}
-                                          disabled={isLoading}
-                                          className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                                          title="Rétrograder"
-                                          aria-label="Rétrograder"
-                                        >
-                                          <ChevronDown className="h-4 w-4" />
-                                        </Button>
-                                      </motion.div>
-                                    )}
-                                    <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleRemoveParticipant(user.id)}
-                                        disabled={isLoading}
-                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                        title={t('conversationDetails.removeFromGroup')}
-                                        aria-label={t('conversationDetails.removeFromGroup')}
-                                      >
-                                        <UserX className="h-4 w-4" />
-                                      </Button>
-                                    </motion.div>
-                                  </div>
-                                )}
-                              </div>
-                            </motion.div>
-                          );
-                        })}
+                        {displayedOnline.map((participant, index) => renderParticipantCard(participant, index, true))}
                       </AnimatePresence>
                     </div>
                   )}
@@ -672,7 +742,7 @@ export function ConversationParticipantsDrawer({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.3 }}
                 >
                   <div className="flex items-center justify-between mb-3 px-2">
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -684,136 +754,49 @@ export function ConversationParticipantsDrawer({
                     </Badge>
                   </div>
 
-                  {offlineParticipants.length === 0 ? (
+                  {displayedOffline.length === 0 && offlineParticipants.length === 0 ? (
                     <div className="text-sm text-gray-500 py-4 px-2 text-center">
                       {t('conversationDetails.noOfflineParticipants')}
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <AnimatePresence mode="popLayout">
-                        {offlineParticipants.map((participant, index) => {
-                          const user = participant.user;
-                          const isCurrentUser = user.id === currentUser.id;
-                          return (
-                            <motion.div
-                              key={`offline-${participant.id || participant.userId}-${index}`}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              transition={{ delay: index * 0.05 }}
-                              layout
-                              className={`backdrop-blur-xl bg-white/40 dark:bg-gray-900/40 rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 opacity-75 hover:opacity-100 group ${
-                                participant.role === 'CREATOR'
-                                  ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
-                                  : 'border border-white/20 dark:border-gray-700/30'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="relative">
-                                  {isAnonymousUser(user) ? (
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-300 to-violet-400 opacity-50 flex items-center justify-center">
-                                      <Ghost className="h-5 w-5 text-purple-600" />
-                                    </div>
-                                  ) : (
-                                    <Avatar className="h-10 w-10 border-2 border-white dark:border-gray-800 shadow-sm opacity-75">
-                                      <AvatarImage src={user.avatar} />
-                                      <AvatarFallback className="bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">
-                                        {getAvatarFallback(user)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                  )}
-                                  <div className="absolute -bottom-0 -right-0 h-3 w-3 bg-gray-400 rounded-full border-2 border-white dark:border-gray-900" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium truncate flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                                      {isAnonymousUser(user) && (
-                                        <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                                      )}
-                                      {getDisplayName(user)}
-                                      {isCurrentUser && (
-                                        <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0">
-                                          {t('conversationDetails.you')}
-                                        </Badge>
-                                      )}
-                                    </span>
-                                    {(['ADMIN', 'CREATOR'].includes(participant.role)) && (
-                                      <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>@{user.username}</span>
-                                    <span>•</span>
-                                    <span className="text-gray-400">{t('conversationDetails.offline')}</span>
-                                  </div>
-                                </div>
-                                {isAdmin && !isCurrentUser && (
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {participant.role !== 'CREATOR' && getUpgradeRole(participant.role) && (
-                                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => {
-                                            const newRole = getUpgradeRole(participant.role);
-                                            if (newRole) {
-                                              handleUpdateParticipantRole(user.id, participant.role, newRole);
-                                            }
-                                          }}
-                                          disabled={isLoading}
-                                          className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                          title="Promouvoir"
-                                          aria-label="Promouvoir"
-                                        >
-                                          <ChevronUp className="h-4 w-4" />
-                                        </Button>
-                                      </motion.div>
-                                    )}
-                                    {participant.role !== 'CREATOR' && getDowngradeRole(participant.role) && (
-                                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => {
-                                            const newRole = getDowngradeRole(participant.role);
-                                            if (newRole) {
-                                              handleUpdateParticipantRole(user.id, participant.role, newRole);
-                                            }
-                                          }}
-                                          disabled={isLoading}
-                                          className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                                          title="Rétrograder"
-                                          aria-label="Rétrograder"
-                                        >
-                                          <ChevronDown className="h-4 w-4" />
-                                        </Button>
-                                      </motion.div>
-                                    )}
-                                    <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleRemoveParticipant(user.id)}
-                                        disabled={isLoading}
-                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                        title={t('conversationDetails.removeFromGroup')}
-                                        aria-label={t('conversationDetails.removeFromGroup')}
-                                      >
-                                        <UserX className="h-4 w-4" />
-                                      </Button>
-                                    </motion.div>
-                                  </div>
-                                )}
-                              </div>
-                            </motion.div>
-                          );
-                        })}
+                        {displayedOffline.map((participant, index) => renderParticipantCard(participant, index, false))}
                       </AnimatePresence>
                     </div>
                   )}
                 </motion.div>
+
+                {/* Bouton Charger plus */}
+                {totalRemaining > 0 && (
+                  <div className="flex justify-center pt-2 pb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDisplayLimit(prev => prev + 50)}
+                      className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 hover:bg-blue-500/10 text-sm"
+                    >
+                      Charger plus ({totalRemaining} restants)
+                    </Button>
+                  </div>
+                )}
               </div>
             </ScrollArea>
+
+            {/* Bouton paramètres - toujours visible en bas */}
+            {onOpenSettings && (
+              <div className="pt-3 border-t border-gray-200/50 dark:border-gray-700/30">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setIsOpen(false); onOpenSettings(); }}
+                  className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 hover:bg-blue-500/10 text-sm"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  {t('conversationHeader.settings') || 'Paramètres de la conversation'}
+                </Button>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>

@@ -24,6 +24,25 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
 
+# Patch huggingface_hub for SpeechBrain compatibility
+# SpeechBrain uses deprecated 'use_auth_token' arg, newer huggingface_hub uses 'token'
+_HF_PATCH_APPLIED = False
+try:
+    import huggingface_hub
+    _original_hf_hub_download = huggingface_hub.hf_hub_download
+
+    def _patched_hf_hub_download(*args, **kwargs):
+        # Remap use_auth_token -> token for newer huggingface_hub
+        if 'use_auth_token' in kwargs:
+            kwargs['token'] = kwargs.pop('use_auth_token')
+        return _original_hf_hub_download(*args, **kwargs)
+
+    huggingface_hub.hf_hub_download = _patched_hf_hub_download
+    _HF_PATCH_APPLIED = True
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"[DIARIZATION] Failed to patch huggingface_hub: {e}")
+
 # Import SpeechBrain
 try:
     from speechbrain.inference.speaker import EncoderClassifier
@@ -128,12 +147,50 @@ class SpeechBrainDiarization:
             raise RuntimeError("SpeechBrain non disponible - pip install speechbrain")
 
         if self._encoder is None:
-            logger.info("[SPEECHBRAIN] Chargement modèle ECAPA-TDNN...")
-            self._encoder = EncoderClassifier.from_hparams(
-                source="speechbrain/spkrec-ecapa-voxceleb",
-                savedir=self.models_dir,
-                run_opts={"device": "cpu"}
-            )
+            # Liste des modèles à essayer (ECAPA-TDNN principal, x-vector fallback)
+            # Note: spkrec-ecapa-voxceleb peut échouer avec 404 sur custom.py si fichiers manquants
+            models_to_try = [
+                ("speechbrain/spkrec-ecapa-voxceleb", "ECAPA-TDNN"),
+                ("speechbrain/spkrec-xvect-voxceleb", "X-Vector"),
+            ]
+
+            last_error = None
+            for model_source, model_name in models_to_try:
+                try:
+                    logger.info(f"[SPEECHBRAIN] Chargement modèle {model_name}...")
+
+                    # ═══════════════════════════════════════════════════════════
+                    # FIX: Contourner le téléchargement de custom.py
+                    # Le modèle ECAPA-TDNN n'a pas besoin de custom.py (toutes les
+                    # classes sont dans speechbrain.*), mais from_hparams essaie
+                    # de le télécharger par défaut → 404 car supprimé de HuggingFace.
+                    # On crée un fichier custom.py vide pour éviter le téléchargement.
+                    # ═══════════════════════════════════════════════════════════
+                    custom_py_path = Path(self.models_dir) / "custom.py"
+                    if not custom_py_path.exists():
+                        custom_py_path.parent.mkdir(parents=True, exist_ok=True)
+                        custom_py_path.write_text("# Placeholder to prevent HuggingFace download\n")
+                        logger.info(f"[SPEECHBRAIN] 📝 Créé placeholder custom.py")
+
+                    self._encoder = EncoderClassifier.from_hparams(
+                        source=model_source,
+                        savedir=self.models_dir,
+                        run_opts={"device": "cpu"}
+                    )
+                    logger.info(f"[SPEECHBRAIN] ✅ Modèle {model_name} chargé avec succès")
+                    break
+                except Exception as e:
+                    error_msg = str(e)
+                    # 404 = fichier manquant sur HuggingFace (custom.py supprimé)
+                    if "404" in error_msg or "Entry Not Found" in error_msg:
+                        logger.warning(f"[SPEECHBRAIN] ⚠️ Modèle {model_name} indisponible (fichiers manquants): {e}")
+                    else:
+                        logger.warning(f"[SPEECHBRAIN] ⚠️ Échec chargement {model_name}: {e}")
+                    last_error = e
+                    continue
+
+            if self._encoder is None:
+                raise RuntimeError(f"Aucun modèle SpeechBrain disponible: {last_error}")
 
         return self._encoder
 
@@ -321,6 +378,7 @@ class SpeechBrainDiarization:
             timestamps.append((start_ms, end_ms))
 
         embeddings = np.array(embeddings)
+        logger.info(f"[SPEECHBRAIN] 📊 Embeddings extraits: {len(embeddings)} fenêtres")
 
         # Clustering des embeddings
         if not SKLEARN_AVAILABLE:
@@ -332,6 +390,7 @@ class SpeechBrainDiarization:
 
         if len(embeddings) >= 4:
             max_clusters_to_test = min(max_speakers + 1, len(embeddings) // 3, 3)
+            logger.info(f"[SPEECHBRAIN] 🔍 Test clustering: max_clusters={max_clusters_to_test}, embeddings={len(embeddings)}")
 
             for n in range(2, max_clusters_to_test):
                 clustering = AgglomerativeClustering(
@@ -341,10 +400,15 @@ class SpeechBrainDiarization:
                 )
                 labels = clustering.fit_predict(embeddings)
                 score = silhouette_score(embeddings, labels, metric='cosine')
+                logger.info(f"[SPEECHBRAIN]    n_clusters={n}: silhouette={score:.3f} {'✅' if score > 0.40 else '❌ (<0.40)'}")
 
                 if score > best_score and score > 0.40:
                     best_score = score
                     best_n_clusters = n
+        else:
+            logger.info(f"[SPEECHBRAIN] ⚠️ Pas assez d'embeddings ({len(embeddings)}) pour tester multi-speakers (min=4)")
+
+        logger.info(f"[SPEECHBRAIN] 🎯 Résultat clustering: {best_n_clusters} speaker(s), best_score={best_score:.3f}")
 
         # Appliquer le clustering final
         if best_n_clusters > 1:

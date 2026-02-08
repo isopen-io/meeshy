@@ -586,6 +586,10 @@ export interface SocketIOUser {
   phoneVerifiedAt?: Date;
   twoFactorEnabledAt?: Date;
 
+  // Pending contact changes (awaiting verification)
+  pendingEmail?: string;
+  pendingPhone?: string;
+
   // Security fields
   failedLoginAttempts?: number;
   lockedUntil?: Date;
