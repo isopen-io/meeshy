@@ -5,7 +5,7 @@
 # Dockerfile: apps/web/Dockerfile
 # Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
 # =============================================================================
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 
 # === MAINTAINER INFORMATION ===
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
