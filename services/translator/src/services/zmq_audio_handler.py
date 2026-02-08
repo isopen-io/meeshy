@@ -116,60 +116,38 @@ class AudioHandler:
             }
         }
         """
-        logger.info(f"🔍 [VOICE-PROFILE-TRACE] ======== DÉBUT AUDIO PROCESS ========")
-        logger.info(f"🔍 [VOICE-PROFILE-TRACE] Request data reçu:")
-        logger.info(f"   - type: {request_data.get('type')}")
-        logger.info(f"   - messageId: {request_data.get('messageId')}")
-        logger.info(f"   - attachmentId: {request_data.get('attachmentId')}")
-        logger.info(f"   - senderId: {request_data.get('senderId')}")
-        logger.info(f"   - conversationId: {request_data.get('conversationId')}")
-        logger.info(f"   - generateVoiceClone: {request_data.get('generateVoiceClone')}")
-        logger.info(f"   - existingVoiceProfile: {'YES' if request_data.get('existingVoiceProfile') else 'NO'}")
-        logger.info(f"   - targetLanguages: {request_data.get('targetLanguages')}")
-        logger.info(f"   - audioDurationMs: {request_data.get('audioDurationMs')}")
+        # ═══════════════════════════════════════════════════════════════
+        # LOG RÉCEPTION REQUÊTE AUDIO
+        # ═══════════════════════════════════════════════════════════════
+        logger.info("═" * 70)
+        logger.info(f"🎤 [TRANSLATOR] NOUVELLE REQUÊTE AUDIO")
+        logger.info(f"   ├─ Message ID: {request_data.get('messageId')}")
+        logger.info(f"   ├─ Sender: {request_data.get('senderId')}")
+        logger.info(f"   ├─ Durée: {request_data.get('audioDurationMs')}ms")
+        logger.info(f"   ├─ Langues cibles: {request_data.get('targetLanguages')}")
+        logger.info(f"   ├─ Voice clone: {request_data.get('generateVoiceClone')}")
+        logger.info(f"   └─ Profil vocal existant: {'OUI' if request_data.get('existingVoiceProfile') else 'NON'}")
+        logger.info("─" * 70)
 
         # Reconstruire existingVoiceProfile avec l'embedding binaire si disponible
         if request_data.get('_voiceProfileBinary'):
             import base64
-            # Reconstruire le profil vocal avec l'embedding depuis le frame binaire
             profile_metadata = request_data.get('existingVoiceProfile', {})
             voice_profile_bytes = request_data.get('_voiceProfileBinary')
-
-            # Encoder l'embedding binaire en base64 pour compatibilité avec le pipeline
             embedding_base64 = base64.b64encode(voice_profile_bytes).decode('utf-8')
-
-            # Reconstruire existingVoiceProfile complet
             request_data['existingVoiceProfile'] = {
                 'profileId': profile_metadata.get('profileId'),
                 'userId': profile_metadata.get('userId'),
                 'qualityScore': profile_metadata.get('qualityScore'),
-                'embedding': embedding_base64  # Embedding reconstruit depuis frame binaire
+                'embedding': embedding_base64
             }
-
-            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Profil vocal reconstruit depuis frame binaire:")
-            logger.info(f"   - profileId: {profile_metadata.get('profileId')}")
-            logger.info(f"   - userId: {profile_metadata.get('userId')}")
-            logger.info(f"   - qualityScore: {profile_metadata.get('qualityScore')}")
-            logger.info(f"   - embedding: {len(embedding_base64)} chars (depuis {len(voice_profile_bytes)} bytes binaires)")
-        elif request_data.get('existingVoiceProfile'):
-            # Ancien format (embedding dans le JSON) - pour rétro-compatibilité
-            profile = request_data.get('existingVoiceProfile')
-            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Profil vocal existant fourni (ancien format JSON):")
-            logger.info(f"   - profileId: {profile.get('profileId')}")
-            logger.info(f"   - userId: {profile.get('userId')}")
-            logger.info(f"   - qualityScore: {profile.get('qualityScore')}")
-            logger.info(f"   - embedding: {len(profile.get('embedding', '')) if profile.get('embedding') else 0} chars")
+            logger.debug(f"[TRANSLATOR] Profil vocal reconstruit: {len(voice_profile_bytes)} bytes")
 
         task_id = str(uuid.uuid4())
-        logger.info(f"🔍 [VOICE-PROFILE-TRACE] Task ID généré: {task_id}")
         start_time = time.time()
 
-        logger.info(f"🎤 [TRANSLATOR] Audio process request reçu: {request_data.get('messageId')}")
-
-        logger.info(f"🔍 [VOICE-PROFILE-TRACE] Vérification disponibilité AudioPipeline...")
         if not AUDIO_PIPELINE_AVAILABLE:
-            logger.error("🔍 [VOICE-PROFILE-TRACE] ❌ AudioPipeline NON DISPONIBLE")
-            logger.error("[TRANSLATOR] Audio pipeline non disponible")
+            logger.error("[TRANSLATOR] ❌ Audio pipeline non disponible")
             await self._publish_audio_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
@@ -179,18 +157,12 @@ class AudioHandler:
             )
             return
 
-        logger.info(f"🔍 [VOICE-PROFILE-TRACE] ✅ AudioPipeline disponible")
-
         try:
-            logger.info(f"🔍 [VOICE-PROFILE-TRACE] Validation des champs requis...")
-            # Valider les données requises (audioPath n'est plus requis, on utilise base64 ou URL)
+            # Valider les données requises
             required_fields = ['messageId', 'attachmentId', 'senderId']
             for field in required_fields:
                 if not request_data.get(field):
-                    logger.error(f"🔍 [VOICE-PROFILE-TRACE] ❌ Champ manquant: {field}")
                     raise ValueError(f"Champ requis manquant: {field}")
-
-            logger.info(f"🔍 [VOICE-PROFILE-TRACE] ✅ Tous les champs requis présents")
 
             # ═══════════════════════════════════════════════════════════════
             # ACQUISITION AUDIO (binaire multipart > base64 > URL > path legacy)
@@ -307,7 +279,33 @@ class AudioHandler:
             )
 
             processing_time = int((time.time() - start_time) * 1000)
-            logger.info(f"✅ [TRANSLATOR] Pipeline terminé: {task_id}, {len(result.translations)} traductions, {processing_time}ms")
+
+            # ═══════════════════════════════════════════════════════════════
+            # LOG RÉCAPITULATIF DU TRAITEMENT AUDIO
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("═" * 70)
+            logger.info(f"📊 [TRANSLATOR] RÉSULTAT TRAITEMENT AUDIO")
+            logger.info(f"   ├─ Message ID: {result.message_id}")
+            logger.info(f"   ├─ Texte original: \"{result.original_text[:100]}{'...' if len(result.original_text or '') > 100 else ''}\"")
+            logger.info(f"   ├─ Langue: {result.original_language} (confiance: {getattr(result, 'transcription_confidence', 'N/A')})")
+            logger.info(f"   ├─ Durée: {result.original_duration_ms}ms")
+
+            # Info diarisation
+            speaker_count = getattr(result, 'speaker_count', None) or 1
+            logger.info(f"   ├─ Speakers détectés: {speaker_count}")
+            if hasattr(result, 'transcription_segments') and result.transcription_segments:
+                logger.info(f"   ├─ Segments: {len(result.transcription_segments)}")
+
+            # Info traductions
+            logger.info(f"   ├─ Traductions: {len(result.translations)} langue(s)")
+            for lang, trans in result.translations.items():
+                trans_text = trans.get('translated_text', '') if isinstance(trans, dict) else getattr(trans, 'translated_text', '')
+                logger.info(f"   │   └─ {lang}: \"{trans_text[:50]}{'...' if len(trans_text) > 50 else ''}\"")
+
+            # Info clonage vocal
+            logger.info(f"   ├─ Voice cloned: {getattr(result, 'voice_cloned', False)}")
+            logger.info(f"   └─ Temps total: {processing_time}ms")
+            logger.info("═" * 70)
 
             # Publier le résultat
             logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
