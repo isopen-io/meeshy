@@ -113,27 +113,39 @@ class DiarizationService:
             return None
 
         if self._pipeline is None:
-            try:
-                # Essayer de charger avec token (si fourni) ou depuis cache local (si absent)
-                # Note: utiliser 'token=' au lieu de 'use_auth_token=' (déprécié dans huggingface_hub >= 0.24)
-                self._pipeline = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    token=self.hf_token  # None = utilise le cache local
-                )
+            # Essayer les deux syntaxes pour compatibilité pyannote ancien/nouveau
+            # - Nouvelle syntaxe: token= (pyannote >= 3.1 avec huggingface_hub >= 0.24)
+            # - Ancienne syntaxe: use_auth_token= (pyannote < 3.1)
+            for param_name in ['token', 'use_auth_token']:
+                try:
+                    kwargs = {param_name: self.hf_token}
+                    self._pipeline = Pipeline.from_pretrained(
+                        "pyannote/speaker-diarization-3.1",
+                        **kwargs
+                    )
 
-                if self.hf_token:
-                    logger.info("[DIARIZATION] ✅ Pipeline pyannote chargé avec authentification")
-                else:
-                    logger.info("[DIARIZATION] ✅ Pipeline pyannote chargé depuis cache local (pas de token requis)")
+                    if self.hf_token:
+                        logger.info(f"[DIARIZATION] ✅ Pipeline pyannote chargé avec authentification (param={param_name})")
+                    else:
+                        logger.info(f"[DIARIZATION] ✅ Pipeline pyannote chargé depuis cache local")
+                    break  # Succès, sortir de la boucle
 
-            except Exception as e:
-                logger.warning(f"[DIARIZATION] ⚠️  Échec chargement pyannote: {e}")
-                if not self.hf_token:
-                    logger.info(f"[DIARIZATION] 💡 Pour télécharger les modèles localement :")
-                    logger.info(f"[DIARIZATION]    1. Token HF sur https://huggingface.co/settings/tokens")
-                    logger.info(f"[DIARIZATION]    2. Accepter https://huggingface.co/pyannote/speaker-diarization-3.1")
-                    logger.info(f"[DIARIZATION]    3. Voir DIARIZATION_SANS_HUGGINGFACE.md pour détails")
-                return None
+                except TypeError as e:
+                    if "unexpected keyword argument" in str(e):
+                        # Mauvais paramètre, essayer l'autre
+                        continue
+                    else:
+                        logger.warning(f"[DIARIZATION] ⚠️  Échec chargement pyannote: {e}")
+                        break
+
+                except Exception as e:
+                    logger.warning(f"[DIARIZATION] ⚠️  Échec chargement pyannote: {e}")
+                    if not self.hf_token:
+                        logger.info(f"[DIARIZATION] 💡 Pour télécharger les modèles localement :")
+                        logger.info(f"[DIARIZATION]    1. Token HF sur https://huggingface.co/settings/tokens")
+                        logger.info(f"[DIARIZATION]    2. Accepter https://huggingface.co/pyannote/speaker-diarization-3.1")
+                        logger.info(f"[DIARIZATION]    3. Voir DIARIZATION_SANS_HUGGINGFACE.md pour détails")
+                    break
 
         return self._pipeline
 
