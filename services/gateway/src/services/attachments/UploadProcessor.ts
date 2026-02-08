@@ -81,7 +81,8 @@ export class UploadProcessor {
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
     this.encryptionService = getAttachmentEncryptionService(prisma);
-    this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+    // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+    this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
     this.metadataManager = new MetadataManager(this.uploadBasePath);
     this.publicUrl = this.determinePublicUrl();
   }

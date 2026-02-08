@@ -1103,7 +1103,8 @@ export function registerMessagesRoutes(
             }
 
             // Construire le chemin ABSOLU du fichier audio via filePath
-            const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+            // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+            const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
             const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
 
             await translationService.processAudioAttachment({

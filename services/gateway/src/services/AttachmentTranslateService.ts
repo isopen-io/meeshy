@@ -95,7 +95,8 @@ export class AttachmentTranslateService {
   ) {
     this.prisma = prisma;
     this.audioTranslateService = new AudioTranslateService(prisma, zmqClient);
-    this.uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+    // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+    this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
     this.jobMappingService = jobMappingService || null;
   }
 

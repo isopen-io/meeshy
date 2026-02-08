@@ -631,7 +631,8 @@ export class MeeshySocketIOManager {
                 }
 
                 // Envoyer au Translator pour transcription, traduction et clonage vocal
-                const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+                // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
+                const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
                 const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
 
                 await this.translationService.processAudioAttachment({

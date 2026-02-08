@@ -341,7 +341,7 @@ export class AudioTranslateService extends EventEmitter {
       }
 
       // Construire le chemin ABSOLU audio via filePath
-      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = attachment.filePath
         ? path.join(uploadBasePath, attachment.filePath)
         : path.join(uploadBasePath, decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, ''));
@@ -501,7 +501,7 @@ export class AudioTranslateService extends EventEmitter {
       }
 
       // Construire le chemin ABSOLU audio via filePath
-      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = attachment.filePath
         ? path.join(uploadBasePath, attachment.filePath)
         : path.join(uploadBasePath, decodeURIComponent(attachment.fileUrl.replace('/api/v1/attachments/file', '')).replace(/^\/+/, ''));

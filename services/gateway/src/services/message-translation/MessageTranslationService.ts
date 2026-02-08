@@ -342,6 +342,12 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
+      // Valider que le texte n'est pas vide
+      if (!message.content || message.content.trim().length === 0) {
+        logger.warn(`⚠️ [TRANSLATION] Message ${message.id} ignoré: contenu vide`);
+        return;
+      }
+
       // 1. DÉTERMINER LES LANGUES CIBLES
       let targetLanguages: string[];
 
@@ -896,7 +902,7 @@ export class MessageTranslationService extends EventEmitter {
         if (audioBinary || audioBase64) {
           try {
             // Créer le dossier de sortie s'il n'existe pas
-            const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
+            const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
             await fs.mkdir(translatedDir, { recursive: true });
 
             // Générer un nom de fichier unique
@@ -1413,7 +1419,7 @@ export class MessageTranslationService extends EventEmitter {
       if (audioBinary || audioBase64) {
         try {
           // Créer le dossier de sortie
-          const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
+          const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
           await fs.mkdir(translatedDir, { recursive: true });
 
           // Générer un nom de fichier unique
@@ -1753,7 +1759,7 @@ export class MessageTranslationService extends EventEmitter {
           // Sauvegarder le fichier audio localement si base64 fourni
           if (translation.audioBase64) {
             try {
-              const translatedDir = path.join(process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments'), 'translated');
+              const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
               await fs.mkdir(translatedDir, { recursive: true });
 
               const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
@@ -2210,7 +2216,7 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`🔍 [GATEWAY-TRACE] filePath: ${attachment.filePath}`);
 
       // 2. Construire le chemin ABSOLU du fichier audio via filePath (chemin relatif au dossier uploads)
-      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = path.join(uploadBasePath, attachment.filePath);
 
       const fileExists = require('fs').existsSync(audioPath);
@@ -2421,7 +2427,7 @@ export class MessageTranslationService extends EventEmitter {
       );
 
       // 2. Construire le chemin ABSOLU du fichier audio via filePath
-      const uploadBasePath = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads', 'attachments');
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = path.join(uploadBasePath, attachment.filePath);
 
       // 3. Déterminer les langues cibles
