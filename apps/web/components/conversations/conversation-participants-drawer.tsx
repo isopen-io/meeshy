@@ -208,9 +208,23 @@ export function ConversationParticipantsDrawer({
       setIsPlatformSearching(true);
       try {
         const response = await usersService.searchUsers(searchQuery);
-        // response = {success, data: {data: [...], pagination}, message}
-        const responseData = response?.data;
-        let users = Array.isArray(responseData?.data) ? responseData.data : (Array.isArray(responseData) ? responseData : []);
+        // apiService.get wraps: {success, data: <backend_body>, message}
+        // backend_body = {success, data: User[], pagination}
+        // So: response.data.data = User[]
+        const responseData = response?.data as any;
+        let users: any[] = [];
+        if (Array.isArray(responseData?.data)) {
+          users = responseData.data;
+        } else if (Array.isArray(responseData)) {
+          users = responseData;
+        } else if (responseData && typeof responseData === 'object') {
+          // Try deeper nesting or direct array in other shapes
+          const nested = (responseData as any)?.data;
+          if (Array.isArray(nested)) {
+            users = nested;
+          }
+        }
+        console.log('[ParticipantsDrawer] Platform search results:', { raw: response, extracted: users.length, users });
         setPlatformResults(users);
       } catch (error) {
         console.error('Erreur lors de la recherche d\'utilisateurs:', error);
@@ -255,6 +269,7 @@ export function ConversationParticipantsDrawer({
   const filteredPlatformResults = platformResults.filter(
     user => !activeParticipants.some(p => p.userId === user.id)
   );
+  const allPlatformResultsAlreadyMembers = platformResults.length > 0 && filteredPlatformResults.length === 0;
 
   const getDisplayName = (user: any): string => {
     const name = user.displayName ||
@@ -694,14 +709,24 @@ export function ConversationParticipantsDrawer({
                 </motion.div>
               )}
 
-              {isAdmin && searchQuery.length >= 2 && filteredPlatformResults.length === 0 && !isPlatformSearching && (
+              {isAdmin && searchQuery.length >= 2 && filteredPlatformResults.length === 0 && !isPlatformSearching && platformResults.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="mb-4 p-3 backdrop-blur-xl bg-gray-50/80 dark:bg-gray-900/40 rounded-xl border border-gray-200/50 dark:border-gray-700/30 text-center text-xs text-gray-500"
                 >
-                  Aucun utilisateur trouvé hors conversation
+                  Aucun utilisateur trouvé
+                </motion.div>
+              )}
+              {isAdmin && searchQuery.length >= 2 && allPlatformResultsAlreadyMembers && !isPlatformSearching && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-4 p-3 backdrop-blur-xl bg-blue-50/80 dark:bg-blue-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 text-center text-xs text-blue-600 dark:text-blue-400"
+                >
+                  {platformResults.length} utilisateur{platformResults.length > 1 ? 's' : ''} trouvé{platformResults.length > 1 ? 's' : ''} — tous déjà membres
                 </motion.div>
               )}
             </AnimatePresence>
