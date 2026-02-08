@@ -158,17 +158,24 @@ class SpeechBrainDiarization:
             for model_source, model_name in models_to_try:
                 try:
                     logger.info(f"[SPEECHBRAIN] Chargement modèle {model_name}...")
+
+                    # ═══════════════════════════════════════════════════════════
+                    # FIX: Contourner le téléchargement de custom.py
+                    # Le modèle ECAPA-TDNN n'a pas besoin de custom.py (toutes les
+                    # classes sont dans speechbrain.*), mais from_hparams essaie
+                    # de le télécharger par défaut → 404 car supprimé de HuggingFace.
+                    # On crée un fichier custom.py vide pour éviter le téléchargement.
+                    # ═══════════════════════════════════════════════════════════
+                    custom_py_path = Path(self.models_dir) / "custom.py"
+                    if not custom_py_path.exists():
+                        custom_py_path.parent.mkdir(parents=True, exist_ok=True)
+                        custom_py_path.write_text("# Placeholder to prevent HuggingFace download\n")
+                        logger.info(f"[SPEECHBRAIN] 📝 Créé placeholder custom.py")
+
                     self._encoder = EncoderClassifier.from_hparams(
                         source=model_source,
                         savedir=self.models_dir,
-                        run_opts={"device": "cpu"},
-                        # ═══════════════════════════════════════════════════════════
-                        # FIX: Désactiver le téléchargement de custom.py
-                        # Le modèle ECAPA-TDNN n'a pas besoin de custom.py (toutes les
-                        # classes sont dans speechbrain.*), mais from_hparams essaie
-                        # de le télécharger par défaut → 404 car supprimé de HuggingFace
-                        # ═══════════════════════════════════════════════════════════
-                        pymodule_file=None
+                        run_opts={"device": "cpu"}
                     )
                     logger.info(f"[SPEECHBRAIN] ✅ Modèle {model_name} chargé avec succès")
                     break
