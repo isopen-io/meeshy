@@ -7,7 +7,7 @@
 # =============================================================================
 
 # ===== BASE STAGE =====
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Gateway - Fastify API Service with WebSocket support" \
@@ -152,7 +152,7 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
 
 # ===== RUNNER STAGE (minimal runtime - NO build tools) =====
 # Using Debian-slim instead of Alpine for glibc compatibility with @signalapp/libsignal-client
-FROM node:22-slim AS runner
+FROM node:25-slim AS runner
 
 ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
