@@ -177,8 +177,8 @@ export const AudioControls = memo<AudioControlsProps>(({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="min-w-[280px] max-w-[320px] p-0" side="top" align="center">
-            {/* Langue originale avec transcription */}
-            {transcription && (
+            {/* Langue originale - toujours afficher si transcription OU traductions disponibles */}
+            {(transcription || translatedAudios.length > 0) && (
               <>
                 <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800">
                   <p className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -193,20 +193,26 @@ export const AudioControls = memo<AudioControlsProps>(({
                 >
                   <div className="flex-shrink-0 w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mt-0.5">
                     <span className="text-sm">
-                      {AVAILABLE_LANGUAGES.find(l => l.code === transcription.language)?.flag || '🌐'}
+                      {transcription
+                        ? (AVAILABLE_LANGUAGES.find(l => l.code === transcription.language)?.flag || '🌐')
+                        : '🎵'}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-xs font-semibold">
-                        {AVAILABLE_LANGUAGES.find(l => l.code === transcription.language)?.name || transcription.language}
+                        {transcription
+                          ? (AVAILABLE_LANGUAGES.find(l => l.code === transcription.language)?.name || transcription.language)
+                          : 'Audio original'}
                       </span>
                       {selectedLanguage === 'original' && (
                         <Check className="w-3 h-3 text-blue-600" />
                       )}
                     </div>
                     <p className="text-[10px] text-gray-600 dark:text-gray-400 line-clamp-2">
-                      {transcription.text ? transcription.text.substring(0, 80) + '...' : 'Transcription disponible'}
+                      {transcription?.text
+                        ? transcription.text.substring(0, 80) + '...'
+                        : 'Cliquer pour écouter l\'audio original'}
                     </p>
                   </div>
                 </DropdownMenuItem>
