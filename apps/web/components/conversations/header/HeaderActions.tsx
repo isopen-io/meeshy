@@ -59,10 +59,10 @@ export const HeaderActions = memo(function HeaderActions({
         <Button
           size="icon"
           variant="ghost"
-          className="h-8 w-8 sm:h-9 sm:w-9 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
           aria-label={t('conversationHeader.menuActions') || 'Menu des actions'}
         >
-          <MoreVertical className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+          <MoreVertical className="h-5 w-5" aria-hidden="true" />
           <span className="sr-only">{t('conversationHeader.menuActions') || 'Menu des actions'}</span>
         </Button>
       </DropdownMenuTrigger>

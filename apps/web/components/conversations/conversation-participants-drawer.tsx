@@ -15,6 +15,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Users,
   Search,
   Crown,
@@ -25,6 +31,7 @@ import {
   RefreshCw,
   ChevronUp,
   ChevronDown,
+  Settings,
 } from 'lucide-react';
 import { ThreadMember } from '@meeshy/shared/types';
 import { conversationsService } from '@/services/conversations.service';
@@ -60,6 +67,7 @@ interface ConversationParticipantsDrawerProps {
   onParticipantRemoved?: (userId: string) => void;
   onParticipantAdded?: (userId: string) => void;
   onLinkCreated?: (link: string) => void;
+  onOpenSettings?: () => void;
 }
 
 export function ConversationParticipantsDrawer({
@@ -72,7 +80,8 @@ export function ConversationParticipantsDrawer({
   memberCount,
   onParticipantRemoved,
   onParticipantAdded,
-  onLinkCreated
+  onLinkCreated,
+  onOpenSettings
 }: ConversationParticipantsDrawerProps) {
   const { t } = useI18n('conversations');
   const [isOpen, setIsOpen] = useState(false);
@@ -199,7 +208,9 @@ export function ConversationParticipantsDrawer({
       setIsPlatformSearching(true);
       try {
         const response = await usersService.searchUsers(searchQuery);
-        let users = Array.isArray(response.data) ? response.data : (Array.isArray(response) ? response : []);
+        // response = {success, data: {data: [...], pagination}, message}
+        const responseData = response?.data;
+        let users = Array.isArray(responseData?.data) ? responseData.data : (Array.isArray(responseData) ? responseData : []);
         setPlatformResults(users);
       } catch (error) {
         console.error('Erreur lors de la recherche d\'utilisateurs:', error);
@@ -312,15 +323,39 @@ export function ConversationParticipantsDrawer({
     toast.success(`${user.displayName || user.username} a été invité à la conversation`);
   };
 
-  // Ajouter un participant depuis la recherche plateforme
-  const handleAddParticipant = async (user: SocketIOUser) => {
-    if (!isAdmin) return;
+  // Rôles assignables selon le rôle de l'utilisateur courant
+  const getAssignableRoles = (): Array<{ value: 'MEMBER' | 'MODERATOR' | 'ADMIN'; label: string }> => {
+    const role = currentUserParticipant?.role;
+    if (role === UserRoleEnum.CREATOR || role === UserRoleEnum.ADMIN) {
+      return [
+        { value: 'MEMBER', label: 'Membre' },
+        { value: 'MODERATOR', label: 'Modérateur' },
+        { value: 'ADMIN', label: 'Administrateur' },
+      ];
+    }
+    if (role === UserRoleEnum.MODERATOR) {
+      return [
+        { value: 'MEMBER', label: 'Membre' },
+        { value: 'MODERATOR', label: 'Modérateur' },
+      ];
+    }
+    return [{ value: 'MEMBER', label: 'Membre' }];
+  };
 
+  const assignableRoles = getAssignableRoles();
+
+  // Ajouter un participant depuis la recherche plateforme (avec rôle optionnel)
+  const handleAddParticipant = async (user: SocketIOUser, role: 'MEMBER' | 'MODERATOR' | 'ADMIN' = 'MEMBER') => {
     try {
       setIsLoading(true);
       await conversationsService.addParticipant(conversationId, user.id);
+      // Si le rôle demandé n'est pas MEMBER, mettre à jour après l'ajout
+      if (role !== 'MEMBER') {
+        await conversationsService.updateParticipantRole(conversationId, user.id, role);
+      }
       onParticipantAdded?.(user.id);
-      toast.success(`${user.displayName || user.username} a été ajouté à la conversation`);
+      const roleLabels: Record<string, string> = { MEMBER: 'membre', MODERATOR: 'modérateur', ADMIN: 'administrateur' };
+      toast.success(`${user.displayName || user.username} ajouté comme ${roleLabels[role]}`);
       setSearchQuery('');
       setPlatformResults([]);
     } catch (error: any) {
@@ -613,18 +648,45 @@ export function ConversationParticipantsDrawer({
                               @{user.username}
                             </Link>
                           </div>
-                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleAddParticipant(user)}
-                              disabled={isLoading}
-                              className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
-                            >
-                              <UserPlus className="h-3 w-3 mr-1" />
-                              Ajouter
-                            </Button>
-                          </motion.div>
+                          {assignableRoles.length <= 1 ? (
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleAddParticipant(user, 'MEMBER')}
+                                disabled={isLoading}
+                                className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
+                              >
+                                <UserPlus className="h-3 w-3 mr-1" />
+                                Ajouter
+                              </Button>
+                            </motion.div>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={isLoading}
+                                  className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
+                                >
+                                  <UserPlus className="h-3 w-3 mr-1" />
+                                  Ajouter
+                                  <ChevronDown className="h-3 w-3 ml-1" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[140px]">
+                                {assignableRoles.map((r) => (
+                                  <DropdownMenuItem
+                                    key={r.value}
+                                    onClick={() => handleAddParticipant(user, r.value)}
+                                  >
+                                    {r.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </motion.div>
                       ))}
                     </div>
@@ -720,6 +782,21 @@ export function ConversationParticipantsDrawer({
                 )}
               </div>
             </ScrollArea>
+
+            {/* Bouton paramètres - toujours visible en bas */}
+            {onOpenSettings && (
+              <div className="pt-3 border-t border-gray-200/50 dark:border-gray-700/30">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setIsOpen(false); onOpenSettings(); }}
+                  className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 hover:bg-blue-500/10 text-sm"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  {t('conversationHeader.settings') || 'Paramètres de la conversation'}
+                </Button>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
