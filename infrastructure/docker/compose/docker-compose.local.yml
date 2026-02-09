@@ -227,6 +227,8 @@ services:
       HF_HOME: /workspace/models/huggingface
       TRANSFORMERS_CACHE: /workspace/models/huggingface
       HUGGINGFACE_HUB_CACHE: /workspace/models/huggingface
+      TORCH_HOME: /workspace/models/torch
+      PYANNOTE_CACHE: /workspace/models/pyannote
       HF_TOKEN: ${HF_TOKEN:-}
       # Diarisation (activée par défaut)
       ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-true}
