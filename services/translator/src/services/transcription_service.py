@@ -558,21 +558,11 @@ class TranscriptionService:
         """
         try:
             from .diarization_service import get_diarization_service
-            from utils.audio_format_converter import convert_to_wav_if_needed
 
             diarization_service = get_diarization_service()
 
-            # Convertir en WAV si nécessaire (m4a/mp3 non supportés par pyannote/soundfile)
-            try:
-                wav_path = convert_to_wav_if_needed(audio_path)
-                if wav_path != audio_path:
-                    logger.info(f"[DIARIZATION] Converti {Path(audio_path).suffix} → WAV pour diarisation")
-            except Exception as e:
-                logger.warning(f"[DIARIZATION] Conversion WAV échouée, utilisation du fichier original: {e}")
-                wav_path = audio_path
-
-            # Détecter les locuteurs
-            diarization = await diarization_service.detect_speakers(wav_path)
+            # Détecter les locuteurs (audio déjà converti en WAV par le pipeline)
+            diarization = await diarization_service.detect_speakers(audio_path)
 
             # Identifier l'expéditeur
             diarization = await diarization_service.identify_sender(

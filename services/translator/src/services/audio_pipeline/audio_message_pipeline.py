@@ -25,9 +25,12 @@ import time
 import asyncio
 import threading
 import base64
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from utils.audio_format_converter import convert_to_wav_if_needed
 
 # Import stages
 from .transcription_stage import (
@@ -353,6 +356,17 @@ class AudioMessagePipeline:
             AudioMessageResult with transcription + translations
         """
         start_time = time.time()
+
+        # Convertir en WAV une seule fois à l'entrée du pipeline
+        # (m4a/mp3 non supportés par soundfile/pyannote)
+        original_path = audio_path
+        try:
+            audio_path = convert_to_wav_if_needed(audio_path)
+            if audio_path != original_path:
+                logger.info(f"[PIPELINE] Converti {Path(original_path).suffix} -> WAV: {audio_path}")
+        except Exception as e:
+            logger.warning(f"[PIPELINE] Conversion WAV echouee, utilisation du fichier original: {e}")
+            audio_path = original_path
 
         logger.info("=" * 80)
         logger.info(f"[PIPELINE] 🎵 Processing audio message START")
