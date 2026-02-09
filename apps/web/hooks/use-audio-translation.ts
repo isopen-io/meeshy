@@ -48,6 +48,7 @@ interface UseAudioTranslationOptions {
   initialTranscription?: AudioTranscription;
   initialTranslations?: AttachmentTranslations; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
   attachmentFileUrl: string;
+  userLanguages?: string[]; // Langues préférées de l'utilisateur pour auto-sélection
 }
 
 interface UseAudioTranslationReturn {
@@ -89,6 +90,7 @@ export function useAudioTranslation({
   initialTranscription,
   initialTranslations,
   attachmentFileUrl,
+  userLanguages,
 }: UseAudioTranslationOptions): UseAudioTranslationReturn {
   const [transcription, setTranscription] = useState<AudioTranscription | undefined>(initialTranscription);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -122,7 +124,18 @@ export function useAudioTranslation({
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
 
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('original');
+  // Auto-sélection de la langue selon les préférences utilisateur
+  const initialLanguage = useMemo(() => {
+    if (!userLanguages?.length || initialTranslatedAudios.length === 0) return 'original';
+    const originalLang = initialTranscription?.language;
+    if (originalLang && userLanguages.includes(originalLang)) return 'original';
+    for (const lang of userLanguages) {
+      if (initialTranslatedAudios.find(t => t.targetLanguage === lang && t.url)) return lang;
+    }
+    return 'original';
+  }, [userLanguages, initialTranslatedAudios, initialTranscription?.language]);
+
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(initialLanguage);
 
   // S'abonner à la transcription seule (Phase 1: avant traduction)
   useEffect(() => {

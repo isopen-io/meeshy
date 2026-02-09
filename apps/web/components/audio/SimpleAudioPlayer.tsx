@@ -58,6 +58,18 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
 
+  // Langues préférées de l'utilisateur pour auto-sélection audio
+  const userLanguages = useMemo(() => {
+    if (!user) return undefined;
+    const langs: string[] = [];
+    if (user.systemLanguage) langs.push(user.systemLanguage);
+    if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage)
+      langs.push(user.regionalLanguage);
+    if (user.customDestinationLanguage && !langs.includes(user.customDestinationLanguage))
+      langs.push(user.customDestinationLanguage);
+    return langs.length > 0 ? langs : undefined;
+  }, [user]);
+
   // États UI locaux
   const [isSpeedPopoverOpen, setIsSpeedPopoverOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -87,6 +99,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     initialTranscription,
     initialTranslations,
     attachmentFileUrl: attachment.fileUrl,
+    userLanguages,
   });
 
   // Hook de lecture audio
