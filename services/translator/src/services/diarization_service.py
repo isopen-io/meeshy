@@ -23,17 +23,46 @@ logger = logging.getLogger(__name__)
 # but huggingface_hub >= 1.0 removed it in favor of 'token'
 try:
     import huggingface_hub
-    _original_hf_hub_download = huggingface_hub.hf_hub_download
+    from huggingface_hub import file_download
 
-    def _patched_hf_hub_download(*args, **kwargs):
-        if 'use_auth_token' in kwargs:
-            kwargs['token'] = kwargs.pop('use_auth_token')
-        return _original_hf_hub_download(*args, **kwargs)
+    for _module in [huggingface_hub, file_download]:
+        for _fname in ['hf_hub_download', 'snapshot_download', 'cached_download', 'model_info', 'repo_info']:
+            _orig = getattr(_module, _fname, None)
+            if _orig and callable(_orig):
+                def _make_patched(_original):
+                    def _patched_fn(*args, **kwargs):
+                        if 'use_auth_token' in kwargs:
+                            kwargs['token'] = kwargs.pop('use_auth_token')
+                        return _original(*args, **kwargs)
+                    return _patched_fn
+                setattr(_module, _fname, _make_patched(_orig))
 
-    huggingface_hub.hf_hub_download = _patched_hf_hub_download
-    logger.debug("[DIARIZATION] Patched huggingface_hub.hf_hub_download for use_auth_token compat")
+    logger.debug("[DIARIZATION] Patched huggingface_hub functions for use_auth_token compat")
 except Exception as e:
     logger.warning(f"[DIARIZATION] Failed to patch huggingface_hub: {e}")
+
+# Patch pytorch_lightning/lightning_fabric for PyTorch 2.6 weights_only default
+# pyannote checkpoints are from trusted HuggingFace sources and require legacy loading
+try:
+    import lightning_fabric.utilities.cloud_io as _cloud_io
+    _orig_cloud_load = _cloud_io._load
+
+    def _patched_cloud_load(*args, **kwargs):
+        kwargs['weights_only'] = False
+        return _orig_cloud_load(*args, **kwargs)
+
+    _cloud_io._load = _patched_cloud_load
+
+    # Also patch the reference in pytorch_lightning.core.saving
+    try:
+        import pytorch_lightning.core.saving as _pl_saving
+        _pl_saving.pl_load = _patched_cloud_load
+    except ImportError:
+        pass
+
+    logger.debug("[DIARIZATION] Patched lightning_fabric._load for weights_only=False")
+except Exception as e:
+    logger.warning(f"[DIARIZATION] Failed to patch lightning_fabric: {e}")
 
 # Flags de disponibilité
 PYANNOTE_AVAILABLE = False
