@@ -102,6 +102,15 @@ export function useAudioPlayback({
         audioRef.current.pause();
         setIsPlaying(false);
         AudioManager.getInstance().stop(audioRef.current);
+        // Nettoyer la source audio pour éviter les erreurs de blob URL révoquée
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
+
+      // Révoquer l'ancienne blob URL avant d'en créer une nouvelle
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        setObjectUrl(null);
       }
 
       let apiPath = audioUrl;
@@ -185,11 +194,17 @@ export function useAudioPlayback({
 
     return () => {
       isMounted = false;
+      // Nettoyer l'audio element avant de révoquer la blob URL
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
       if (currentObjectUrl) {
         URL.revokeObjectURL(currentObjectUrl);
       }
     };
-  }, [attachmentId, audioUrl]);
+  }, [attachmentId, audioUrl]); // Note: objectUrl volontairement omis pour éviter boucle infinie
 
   // Initialiser la durée depuis l'attachment
   // Force la mise à jour quand attachmentDuration change (ex: changement de langue audio)
