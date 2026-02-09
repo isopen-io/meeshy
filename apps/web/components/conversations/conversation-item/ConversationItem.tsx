@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
-import { userPreferencesService } from '@/services/user-preferences.service';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
@@ -52,82 +52,65 @@ export const ConversationItem = memo(function ConversationItem({
   tags = [],
   isMobile = false
 }: ConversationItemProps) {
-  // State local pour les préférences (sera mis à jour après les actions)
-  const [localIsPinned, setLocalIsPinned] = useState(isPinned);
-  const [localIsMuted, setLocalIsMuted] = useState(isMuted);
-  const [localIsArchived, setLocalIsArchived] = useState(isArchived);
-  const [localReaction, setLocalReaction] = useState(reaction);
+  // Store global des préférences de conversation (réactif)
+  const prefsStore = useConversationPreferencesStore();
+  const storePrefs = prefsStore.preferencesMap.get(conversation.id);
+
+  // Utiliser les valeurs du store si disponibles, sinon les props
+  const localIsPinned = storePrefs?.isPinned ?? isPinned;
+  const localIsMuted = storePrefs?.isMuted ?? isMuted;
+  const localIsArchived = storePrefs?.isArchived ?? isArchived;
+  const localReaction = storePrefs?.reaction ?? reaction;
 
   // Store global des utilisateurs (statuts en temps réel)
   const userStore = useUserStore();
   const _lastStatusUpdate = userStore._lastStatusUpdate; // Force re-render quand un statut change
 
-  // Sync with props
-  useEffect(() => {
-    setLocalIsPinned(isPinned);
-  }, [isPinned]);
-
-  useEffect(() => {
-    setLocalIsMuted(isMuted);
-  }, [isMuted]);
-
-  useEffect(() => {
-    setLocalIsArchived(isArchived);
-  }, [isArchived]);
-
-  useEffect(() => {
-    setLocalReaction(reaction);
-  }, [reaction]);
-
-  // Actions du menu
+  // Actions du menu - utilisent le store pour la réactivité
   const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await userPreferencesService.togglePin(conversation.id, !localIsPinned);
-      setLocalIsPinned(!localIsPinned);
+      await prefsStore.togglePin(conversation.id, !localIsPinned);
       toast.success(localIsPinned ? 'Conversation désépinglée' : 'Conversation épinglée');
     } catch (error) {
       console.error('Error toggling pin:', error);
       toast.error('Erreur lors de l\'épinglage');
     }
-  }, [conversation.id, localIsPinned]);
+  }, [conversation.id, localIsPinned, prefsStore]);
 
   const handleToggleMute = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await userPreferencesService.toggleMute(conversation.id, !localIsMuted);
-      setLocalIsMuted(!localIsMuted);
+      await prefsStore.toggleMute(conversation.id, !localIsMuted);
       toast.success(localIsMuted ? 'Notifications activées' : 'Notifications désactivées');
     } catch (error) {
       console.error('Error toggling mute:', error);
       toast.error('Erreur lors de la modification');
     }
-  }, [conversation.id, localIsMuted]);
+  }, [conversation.id, localIsMuted, prefsStore]);
 
   const handleToggleArchive = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await userPreferencesService.toggleArchive(conversation.id, !localIsArchived);
-      setLocalIsArchived(!localIsArchived);
+      await prefsStore.toggleArchive(conversation.id, !localIsArchived);
       toast.success(localIsArchived ? 'Conversation désarchivée' : 'Conversation archivée');
     } catch (error) {
       console.error('Error toggling archive:', error);
       toast.error('Erreur lors de l\'archivage');
     }
-  }, [conversation.id, localIsArchived]);
+  }, [conversation.id, localIsArchived, prefsStore]);
 
   const handleSetReaction = useCallback(async (e: React.MouseEvent, emoji: string) => {
     e.stopPropagation();
     try {
       const newReaction = localReaction === emoji ? null : emoji;
-      await userPreferencesService.updateReaction(conversation.id, newReaction);
-      setLocalReaction(newReaction || undefined);
+      await prefsStore.setReaction(conversation.id, newReaction);
       toast.success(newReaction ? `Réaction ${emoji} ajoutée` : 'Réaction supprimée');
     } catch (error) {
       console.error('Error setting reaction:', error);
       toast.error('Erreur lors de la modification');
     }
-  }, [conversation.id, localReaction]);
+  }, [conversation.id, localReaction, prefsStore]);
 
   const handleShowDetails = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

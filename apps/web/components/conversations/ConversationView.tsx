@@ -89,9 +89,13 @@ interface ConversationViewProps {
 
   // Handlers - Navigation et UI
   onBackToList: () => void;
-  onOpenDetails: () => void;
   onStartCall: () => void;
   onOpenGallery: () => void;
+
+  // Handlers - Participants
+  onParticipantAdded?: (userId: string) => void;
+  onParticipantRemoved?: (userId: string) => void;
+  onLinkCreated?: (link: any) => void;
 
   // Refs
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -161,9 +165,11 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       onRetryFailedMessage,
       onRestoreFailedMessage,
       onBackToList,
-      onOpenDetails,
       onStartCall,
       onOpenGallery,
+      onParticipantAdded,
+      onParticipantRemoved,
+      onLinkCreated,
       scrollContainerRef,
       composerRef,
       t,
@@ -205,10 +211,9 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             typingUsers={mapTypingUsers(typingUsers, conversation.id)}
             isMobile={isMobile}
             onBackToList={onBackToList}
-            onOpenDetails={onOpenDetails}
-            onParticipantRemoved={() => {}}
-            onParticipantAdded={() => {}}
-            onLinkCreated={() => {}}
+            onParticipantRemoved={onParticipantRemoved || (() => {})}
+            onParticipantAdded={onParticipantAdded || (() => {})}
+            onLinkCreated={onLinkCreated || (() => {})}
             onStartCall={onStartCall}
             onOpenGallery={onOpenGallery}
             t={t}

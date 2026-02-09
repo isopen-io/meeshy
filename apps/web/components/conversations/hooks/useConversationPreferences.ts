@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
-import { userPreferencesService } from '@/services/user-preferences.service';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 
 interface UseConversationPreferencesReturn {
   preferencesMap: Map<string, UserConversationPreferences>;
@@ -12,14 +12,16 @@ interface UseConversationPreferencesReturn {
 
 /**
  * Hook pour gérer les préférences utilisateur des conversations
+ * Utilise le store Zustand pour la réactivité
  * Gère: préférences (pin, mute, archive), catégories, et état collapsed des sections
  */
 export function useConversationPreferences(
   conversationsLength: number
 ): UseConversationPreferencesReturn {
-  const [preferencesMap, setPreferencesMap] = useState<Map<string, UserConversationPreferences>>(new Map());
-  const [categories, setCategories] = useState<UserConversationCategory[]>([]);
-  const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
+  // Utiliser le store Zustand pour les préférences
+  const store = useConversationPreferencesStore();
+  const { preferencesMap, categories, isLoading, isInitialized, initialize } = store;
+
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
     // Charger l'état collapsed depuis localStorage
     if (typeof window !== 'undefined') {
@@ -35,45 +37,12 @@ export function useConversationPreferences(
     return new Set();
   });
 
-  // Charger les préférences utilisateur
+  // Initialiser le store si nécessaire
   useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        setIsLoadingPreferences(true);
-        const allPrefs = await userPreferencesService.getAllPreferences();
-        const map = new Map<string, UserConversationPreferences>();
-        allPrefs.forEach(pref => {
-          map.set(pref.conversationId, pref);
-        });
-        setPreferencesMap(map);
-      } catch (error) {
-        console.error('Error loading preferences:', error);
-      } finally {
-        setIsLoadingPreferences(false);
-      }
-    };
-
-    loadPreferences();
-  }, [conversationsLength]);
-
-  // Charger les catégories
-  useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const cats = await userPreferencesService.getCategories();
-        const sorted = cats.sort((a, b) => {
-          if (a.order !== b.order) {
-            return a.order - b.order;
-          }
-          return a.name.localeCompare(b.name);
-        });
-        setCategories(sorted);
-      } catch (error) {
-        console.error('[useConversationPreferences] Error loading categories:', error);
-      }
-    };
-    loadCategories();
-  }, []);
+    if (!isInitialized) {
+      initialize();
+    }
+  }, [isInitialized, initialize]);
 
   // Sauvegarder l'état collapsed dans localStorage
   useEffect(() => {
@@ -98,7 +67,7 @@ export function useConversationPreferences(
   return {
     preferencesMap,
     categories,
-    isLoadingPreferences,
+    isLoadingPreferences: isLoading || !isInitialized,
     collapsedSections,
     toggleSection
   };

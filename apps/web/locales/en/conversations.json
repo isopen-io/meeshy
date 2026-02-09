@@ -273,7 +273,9 @@
       "directConversation": "Direct",
       "configSaved": "Configuration saved",
       "configError": "Error saving configuration",
-      "saveConfig": "Save configuration"
+      "saveConfig": "Save configuration",
+      "selectedReaction": "Selected reaction:",
+      "customReactionPlaceholder": "🎯 Custom"
     },
     "conversationImage": {
       "title": "Change conversation image",

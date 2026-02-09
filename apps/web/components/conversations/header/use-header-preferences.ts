@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { HeaderPreferences } from './types';
 
@@ -7,23 +8,55 @@ function isAnonymousUser(user: any): boolean {
   return user && ('sessionToken' in user || 'shareLinkId' in user);
 }
 
+/**
+ * Hook pour gérer les préférences dans le header de conversation
+ * Utilise le store Zustand pour la synchronisation globale
+ */
 export function useHeaderPreferences(conversationId: string, currentUser: any, t: (key: string) => string) {
-  const [preferences, setPreferences] = useState<HeaderPreferences>({
-    isPinned: false,
-    isMuted: false,
-    isArchived: false,
-    customName: undefined,
-    tags: [],
-    categoryName: undefined,
-    isLoading: true,
-  });
+  const store = useConversationPreferencesStore();
+  const storePrefs = store.preferencesMap.get(conversationId);
+  const categories = store.categories;
+  const [isLoadingCategory, setIsLoadingCategory] = useState(false);
+  const [categoryName, setCategoryName] = useState<string | undefined>();
 
-  // Charger les préférences initiales
+  // Initialiser le store si nécessaire
   useEffect(() => {
-    const isUserAnonymous = isAnonymousUser(currentUser);
+    if (!store.isInitialized && !isAnonymousUser(currentUser)) {
+      store.initialize();
+    }
+  }, [store.isInitialized, currentUser]);
 
-    if (isUserAnonymous) {
-      setPreferences({
+  // Charger le nom de la catégorie quand les préférences changent
+  useEffect(() => {
+    const loadCategoryName = async () => {
+      if (storePrefs?.categoryId) {
+        // D'abord chercher dans les catégories déjà chargées
+        const cat = categories.find(c => c.id === storePrefs.categoryId);
+        if (cat) {
+          setCategoryName(cat.name);
+        } else {
+          // Sinon charger depuis le service
+          setIsLoadingCategory(true);
+          try {
+            const category = await userPreferencesService.getCategory(storePrefs.categoryId);
+            setCategoryName(category?.name);
+          } catch {
+            setCategoryName(undefined);
+          } finally {
+            setIsLoadingCategory(false);
+          }
+        }
+      } else {
+        setCategoryName(undefined);
+      }
+    };
+    loadCategoryName();
+  }, [storePrefs?.categoryId, categories]);
+
+  // Construire les préférences pour le header
+  const preferences: HeaderPreferences = useMemo(() => {
+    if (isAnonymousUser(currentUser)) {
+      return {
         isPinned: false,
         isMuted: false,
         isArchived: false,
@@ -31,94 +64,52 @@ export function useHeaderPreferences(conversationId: string, currentUser: any, t
         tags: [],
         categoryName: undefined,
         isLoading: false,
-      });
-      return;
+      };
     }
 
-    const loadPreferences = async () => {
-      try {
-        const prefs = await userPreferencesService.getPreferences(conversationId);
-        if (prefs) {
-          let categoryName: string | undefined;
-          if (prefs.categoryId) {
-            const category = await userPreferencesService.getCategory(prefs.categoryId);
-            categoryName = category?.name;
-          }
-
-          setPreferences({
-            isPinned: prefs.isPinned,
-            isMuted: prefs.isMuted,
-            isArchived: prefs.isArchived,
-            customName: prefs.customName,
-            tags: prefs.tags || [],
-            categoryName,
-            isLoading: false,
-          });
-        } else {
-          setPreferences({
-            isPinned: false,
-            isMuted: false,
-            isArchived: false,
-            customName: undefined,
-            tags: [],
-            categoryName: undefined,
-            isLoading: false,
-          });
-        }
-      } catch (error) {
-        console.error('Error loading preferences:', error);
-        setPreferences({
-          isPinned: false,
-          isMuted: false,
-          isArchived: false,
-          customName: undefined,
-          tags: [],
-          categoryName: undefined,
-          isLoading: false,
-        });
-      }
+    return {
+      isPinned: storePrefs?.isPinned ?? false,
+      isMuted: storePrefs?.isMuted ?? false,
+      isArchived: storePrefs?.isArchived ?? false,
+      customName: storePrefs?.customName,
+      tags: storePrefs?.tags ?? [],
+      categoryName,
+      isLoading: store.isLoading || isLoadingCategory,
     };
-    loadPreferences();
-  }, [conversationId, currentUser]);
+  }, [storePrefs, categoryName, store.isLoading, isLoadingCategory, currentUser]);
 
   const togglePin = useCallback(async () => {
     try {
       const newPinnedState = !preferences.isPinned;
-      setPreferences(prev => ({ ...prev, isPinned: newPinnedState }));
-      await userPreferencesService.togglePin(conversationId, newPinnedState);
+      await store.togglePin(conversationId, newPinnedState);
       toast.success(t(newPinnedState ? 'conversationHeader.pinned' : 'conversationHeader.unpinned'));
     } catch (error) {
       console.error('Error toggling pin:', error);
-      setPreferences(prev => ({ ...prev, isPinned: !prev.isPinned }));
       toast.error(t('conversationHeader.pinError'));
     }
-  }, [conversationId, preferences.isPinned, t]);
+  }, [conversationId, preferences.isPinned, store, t]);
 
   const toggleMute = useCallback(async () => {
     try {
       const newMutedState = !preferences.isMuted;
-      setPreferences(prev => ({ ...prev, isMuted: newMutedState }));
-      await userPreferencesService.toggleMute(conversationId, newMutedState);
+      await store.toggleMute(conversationId, newMutedState);
       toast.success(t(newMutedState ? 'conversationHeader.muted' : 'conversationHeader.unmuted'));
     } catch (error) {
       console.error('Error toggling mute:', error);
-      setPreferences(prev => ({ ...prev, isMuted: !prev.isMuted }));
       toast.error(t('conversationHeader.muteError'));
     }
-  }, [conversationId, preferences.isMuted, t]);
+  }, [conversationId, preferences.isMuted, store, t]);
 
   const toggleArchive = useCallback(async () => {
     try {
       const newArchivedState = !preferences.isArchived;
-      setPreferences(prev => ({ ...prev, isArchived: newArchivedState }));
-      await userPreferencesService.toggleArchive(conversationId, newArchivedState);
+      await store.toggleArchive(conversationId, newArchivedState);
       toast.success(t(newArchivedState ? 'conversationHeader.archived' : 'conversationHeader.unarchived'));
     } catch (error) {
       console.error('Error toggling archive:', error);
-      setPreferences(prev => ({ ...prev, isArchived: !prev.isArchived }));
       toast.error(t('conversationHeader.archiveError'));
     }
-  }, [conversationId, preferences.isArchived, t]);
+  }, [conversationId, preferences.isArchived, store, t]);
 
   return {
     preferences,

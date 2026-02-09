@@ -283,7 +283,9 @@
       "totalParticipants": "Participants",
       "directConversationWarning": "Une conversation directe ne devrait normalement avoir que 2 participants.",
       "activity": "Activité",
-      "viewAllParticipants": "Voir tous les participants"
+      "viewAllParticipants": "Voir tous les participants",
+      "selectedReaction": "Réaction sélectionnée :",
+      "customReactionPlaceholder": "🎯 Personnalisée"
     },
     "conversationImage": {
       "title": "Changer l'image de la conversation",

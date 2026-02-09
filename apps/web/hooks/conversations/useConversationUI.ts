@@ -28,8 +28,6 @@ interface UseConversationUIReturn {
   // Modals
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
-  isDetailsOpen: boolean;
-  setIsDetailsOpen: (open: boolean) => void;
 
   // Gallery
   galleryOpen: boolean;
@@ -75,7 +73,6 @@ export function useConversationUI({
 
   // ========== Modals ==========
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   // ========== Gallery ==========
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -165,8 +162,6 @@ export function useConversationUI({
     // Modals
     isCreateModalOpen,
     setIsCreateModalOpen,
-    isDetailsOpen,
-    setIsDetailsOpen,
 
     // Gallery
     galleryOpen,

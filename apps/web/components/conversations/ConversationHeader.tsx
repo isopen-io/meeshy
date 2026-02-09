@@ -24,7 +24,6 @@ export function ConversationHeader({
   typingUsers,
   isMobile,
   onBackToList,
-  onOpenDetails,
   onParticipantRemoved,
   onParticipantAdded,
   onLinkCreated,
@@ -166,7 +165,6 @@ export function ConversationHeader({
             isArchived={preferences.isArchived}
             isLoadingPreferences={preferences.isLoading}
             onStartCall={onStartCall}
-            onOpenDetails={onOpenDetails}
             onOpenGallery={onOpenGallery}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onParticipantRemoved={onParticipantRemoved}

@@ -67,11 +67,6 @@ const AttachmentGallery = dynamic(
   { ssr: false }
 );
 
-const ConversationDetailsSidebar = dynamic(
-  () => import('./conversation-details-sidebar').then(m => m.ConversationDetailsSidebar),
-  { ssr: false }
-);
-
 interface ConversationLayoutProps {
   selectedConversationId?: string;
 }
@@ -140,8 +135,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     handleResizeMouseDown,
     isCreateModalOpen,
     setIsCreateModalOpen,
-    isDetailsOpen,
-    setIsDetailsOpen,
     galleryOpen,
     setGalleryOpen,
     selectedAttachmentId,
@@ -458,16 +451,15 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // ========== HANDLERS ==========
 
+  // Sélectionner une conversation depuis le menu "Paramètres" de la liste
   const handleShowDetails = useCallback(
     (conversation: Conversation) => {
       if (effectiveSelectedId !== conversation.id) {
         handleSelectConversation(conversation);
-        setTimeout(() => setIsDetailsOpen(true), 100);
-      } else {
-        setIsDetailsOpen(true);
       }
+      // Le modal de paramètres s'ouvre maintenant depuis le header de la conversation
     },
-    [effectiveSelectedId, handleSelectConversation, setIsDetailsOpen]
+    [effectiveSelectedId, handleSelectConversation]
   );
 
   const handleReplyMessage = useCallback((message: any) => {
@@ -683,26 +675,17 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           onRetryFailedMessage={handleRetryFailedMessage}
           onRestoreFailedMessage={handleRestoreFailedMessage}
           onBackToList={handleBackToList}
-          onOpenDetails={() => setIsDetailsOpen(true)}
           onStartCall={handleStartCall}
           onOpenGallery={() => setGalleryOpen(true)}
+          onParticipantAdded={() => loadParticipants(effectiveSelectedId)}
+          onParticipantRemoved={() => loadParticipants(effectiveSelectedId)}
+          onLinkCreated={() => {}}
           scrollContainerRef={messagesScrollRef}
           composerRef={messageComposerRef}
           t={t}
           tCommon={tCommon}
           showBackButton={!!selectedConversationId}
         />
-
-        {isDetailsOpen && (
-          <ConversationDetailsSidebar
-            conversation={selectedConversation}
-            currentUser={user}
-            messages={messages}
-            isOpen={isDetailsOpen}
-            onClose={() => setIsDetailsOpen(false)}
-            onConversationUpdated={handleConversationUpdated}
-          />
-        )}
 
         {galleryOpen && (
           <AttachmentGallery
@@ -839,9 +822,11 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 onRetryFailedMessage={handleRetryFailedMessage}
                 onRestoreFailedMessage={handleRestoreFailedMessage}
                 onBackToList={handleBackToList}
-                onOpenDetails={() => setIsDetailsOpen(true)}
                 onStartCall={handleStartCall}
                 onOpenGallery={() => setGalleryOpen(true)}
+                onParticipantAdded={() => loadParticipants(effectiveSelectedId)}
+                onParticipantRemoved={() => loadParticipants(effectiveSelectedId)}
+                onLinkCreated={() => {}}
                 scrollContainerRef={messagesScrollRef}
                 composerRef={messageComposerRef}
                 t={t}
@@ -859,18 +844,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
               </div>
             )}
           </main>
-
-          {/* Details sidebar - Desktop */}
-          {selectedConversation && isDetailsOpen && (
-            <ConversationDetailsSidebar
-              conversation={selectedConversation}
-              currentUser={user}
-              messages={messages}
-              isOpen={isDetailsOpen}
-              onClose={() => setIsDetailsOpen(false)}
-              onConversationUpdated={handleConversationUpdated}
-            />
-          )}
         </div>
 
         {/* Create conversation modal */}

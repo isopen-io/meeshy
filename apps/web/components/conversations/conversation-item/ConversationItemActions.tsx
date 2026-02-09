@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback } from 'react';
-import { Info, Pin, Bell, BellOff, Archive, Share2, Smile, MoreVertical } from 'lucide-react';
+import { Settings, Pin, Bell, BellOff, Archive, Share2, Smile, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -66,8 +66,8 @@ export const ConversationItemActions = memo(function ConversationItemActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={onShowDetails}>
-          <Info className="mr-2 h-4 w-4" />
-          <span>Détails</span>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>Paramètres</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onTogglePin}>

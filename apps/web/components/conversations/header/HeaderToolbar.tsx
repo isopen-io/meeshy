@@ -27,7 +27,6 @@ interface HeaderToolbarProps {
   isArchived: boolean;
   isLoadingPreferences: boolean;
   onStartCall?: () => void;
-  onOpenDetails: () => void;
   onOpenGallery?: () => void;
   onOpenSettings: () => void;
   onParticipantRemoved: (userId: string) => void;
@@ -51,7 +50,6 @@ export const HeaderToolbar = memo(function HeaderToolbar({
   isArchived,
   isLoadingPreferences,
   onStartCall,
-  onOpenDetails,
   onOpenGallery,
   onOpenSettings,
   onParticipantRemoved,
@@ -140,7 +138,6 @@ export const HeaderToolbar = memo(function HeaderToolbar({
         isMuted={isMuted}
         isArchived={isArchived}
         isLoadingPreferences={isLoadingPreferences}
-        onOpenDetails={onOpenDetails}
         onOpenGallery={onOpenGallery}
         onOpenSettings={onOpenSettings}
         onTogglePin={onTogglePin}

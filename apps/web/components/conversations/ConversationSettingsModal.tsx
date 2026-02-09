@@ -65,7 +65,7 @@ import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import type { Conversation, ConversationParticipant, Message } from '@meeshy/shared/types';
-import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { AttachmentService } from '@/services/attachmentService';
 import {
   FoldableSection,
@@ -170,7 +170,6 @@ export function ConversationSettingsModal({
 
   // États des préférences utilisateur
   const [preferences, setPreferences] = useState<UserConversationPreferences | null>(null);
-  const [categories, setCategories] = useState<UserConversationCategory[]>([]);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
 
@@ -182,7 +181,6 @@ export function ConversationSettingsModal({
   const [reaction, setReaction] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   // États pour la configuration admin
   const [convTitle, setConvTitle] = useState(conversation.title || '');
@@ -209,7 +207,6 @@ export function ConversationSettingsModal({
   useEffect(() => {
     if (open && conversation.id) {
       loadPreferences();
-      loadCategories();
     }
   }, [open, conversation.id]);
 
@@ -225,7 +222,6 @@ export function ConversationSettingsModal({
         setCustomName(prefs.customName || '');
         setReaction(prefs.reaction || '');
         setTags([...prefs.tags]);
-        setSelectedCategoryId(prefs.categoryId || null);
       }
     } catch (error) {
       console.error('Erreur chargement préférences:', error);
@@ -234,14 +230,6 @@ export function ConversationSettingsModal({
     }
   };
 
-  const loadCategories = async () => {
-    try {
-      const cats = await userPreferencesService.getCategories();
-      setCategories(cats);
-    } catch (error) {
-      console.error('Erreur chargement catégories:', error);
-    }
-  };
 
   // Sauvegarder les préférences utilisateur
   const savePreferences = async () => {
@@ -254,7 +242,6 @@ export function ConversationSettingsModal({
         customName: customName.trim() || null,
         reaction: reaction.trim() || null,
         tags,
-        categoryId: selectedCategoryId,
       });
       toast.success(t('conversationDetails.preferencesSaved') || 'Préférences enregistrées');
     } catch (error) {
@@ -447,18 +434,18 @@ export function ConversationSettingsModal({
             <TabsList className="w-full grid grid-cols-2 h-12 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 p-1">
               <TabsTrigger
                 value="preferences"
-                className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-200"
+                className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-200"
               >
-                <User className="h-4 w-4" />
-                {t('conversationDetails.myPreferences') || 'Préférences'}
+                <User className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{t('conversationDetails.myPreferences') || 'Préférences'}</span>
               </TabsTrigger>
               {canAccessAdminSettings && (
                 <TabsTrigger
                   value="config"
-                  className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-all duration-200"
+                  className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-all duration-200"
                 >
-                  <Settings className="h-4 w-4" />
-                  {t('conversationDetails.configuration') || 'Configuration'}
+                  <Settings className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{t('conversationDetails.configuration') || 'Configuration'}</span>
                 </TabsTrigger>
               )}
             </TabsList>
@@ -584,44 +571,6 @@ export function ConversationSettingsModal({
                         />
                       </motion.div>
 
-                      {/* Catégorie */}
-                      <motion.div
-                        whileHover={{ scale: 1.01 }}
-                        className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm space-y-3 min-w-0"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2.5 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 shadow-lg shadow-purple-500/30 flex-shrink-0">
-                            <FolderOpen className="h-4 w-4 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm truncate">{t('conversationDetails.category') || 'Catégorie'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {t('conversationDetails.categoryDescription') || 'Organiser par catégorie'}
-                            </p>
-                          </div>
-                        </div>
-                        <Select
-                          value={selectedCategoryId || 'none'}
-                          onValueChange={(v) => setSelectedCategoryId(v === 'none' ? null : v)}
-                        >
-                          <SelectTrigger className="w-full min-w-0 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40">
-                            <SelectValue placeholder={t('conversationDetails.selectCategory') || 'Sélectionner...'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">
-                              {t('conversationDetails.noCategory') || 'Aucune catégorie'}
-                            </SelectItem>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>
-                                <span className="flex items-center gap-2">
-                                  {cat.icon && <span>{cat.icon}</span>}
-                                  {cat.name}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </motion.div>
                     </div>
                   </motion.div>
 
@@ -658,6 +607,77 @@ export function ConversationSettingsModal({
                             </TooltipProvider>
                           </div>
                           <TagsManager conversationId={conversation.id} currentUser={safeCurrentUser} />
+                        </div>
+
+                        {/* Réaction préférée */}
+                        <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-amber-50/80 to-orange-50/80 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200/50 dark:border-amber-800/30 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 min-w-0">
+                            <Smile className="h-4 w-4 text-amber-700 dark:text-amber-300 flex-shrink-0" />
+                            <label className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate">
+                              {t('conversationDetails.reaction') || 'Réaction'}
+                            </label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-3.5 w-3.5 text-amber-700/60 dark:text-amber-300/60 cursor-help flex-shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <p className="text-xs break-words">{t('conversationDetails.reactionTooltip') || 'Choisissez une réaction rapide pour cette conversation'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {['❤️', '👍', '😊', '🎉', '🔥', '⭐'].map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => setReaction(reaction === emoji ? '' : emoji)}
+                                className={cn(
+                                  "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 relative",
+                                  "hover:scale-110 hover:bg-amber-100 dark:hover:bg-amber-900/50",
+                                  reaction === emoji
+                                    ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30 scale-105"
+                                    : "bg-white/60 dark:bg-gray-800/60 border border-amber-200/50 dark:border-amber-800/30"
+                                )}
+                              >
+                                <span className="text-xl">{emoji}</span>
+                                {reaction === emoji && (
+                                  <span className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5">
+                                    <Check className="h-2.5 w-2.5" />
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Input pour réaction personnalisée */}
+                          <div className="flex items-center gap-2 mt-3">
+                            <Input
+                              value={reaction && !['❤️', '👍', '😊', '🎉', '🔥', '⭐'].includes(reaction) ? reaction : ''}
+                              onChange={(e) => setReaction(e.target.value.slice(0, 4))}
+                              placeholder={t('conversationDetails.customReactionPlaceholder') || '🎯 Personnalisée'}
+                              className="h-9 text-center text-lg backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 border-amber-200/50 dark:border-amber-800/30 w-32"
+                              maxLength={4}
+                            />
+                            {reaction && !['❤️', '👍', '😊', '🎉', '🔥', '⭐'].includes(reaction) && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setReaction('')}
+                                className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+
+                          {reaction && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                              {t('conversationDetails.selectedReaction')} {reaction}
+                            </p>
+                          )}
                         </div>
 
                         {/* Catégorie personnelle */}

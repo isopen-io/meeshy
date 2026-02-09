@@ -275,7 +275,9 @@
       "directConversation": "Direta",
       "configSaved": "Configuração salva",
       "configError": "Erro ao salvar configuração",
-      "saveConfig": "Salvar configuração"
+      "saveConfig": "Salvar configuração",
+      "selectedReaction": "Reação selecionada:",
+      "customReactionPlaceholder": "🎯 Personalizada"
     },
     "conversationImage": {
       "title": "Alterar imagem da conversa",

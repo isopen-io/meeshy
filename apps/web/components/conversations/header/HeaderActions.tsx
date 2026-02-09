@@ -2,7 +2,6 @@
 
 import { memo } from 'react';
 import {
-  Info,
   MoreVertical,
   Image,
   Pin,
@@ -29,7 +28,6 @@ interface HeaderActionsProps {
   isMuted: boolean;
   isArchived: boolean;
   isLoadingPreferences: boolean;
-  onOpenDetails: () => void;
   onOpenGallery?: () => void;
   onOpenSettings: () => void;
   onTogglePin: () => void;
@@ -44,7 +42,6 @@ export const HeaderActions = memo(function HeaderActions({
   isMuted,
   isArchived,
   isLoadingPreferences,
-  onOpenDetails,
   onOpenGallery,
   onOpenSettings,
   onTogglePin,
@@ -67,9 +64,9 @@ export const HeaderActions = memo(function HeaderActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={onOpenDetails}>
-          <Info className="h-4 w-4 mr-2" aria-hidden="true" />
-          {t('conversationDetails.title')}
+        <DropdownMenuItem onClick={onOpenSettings}>
+          <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
+          {t('conversationHeader.settings') || 'Paramètres'}
         </DropdownMenuItem>
 
         {onOpenGallery && (
@@ -78,11 +75,6 @@ export const HeaderActions = memo(function HeaderActions({
             {t('conversationHeader.viewImages') || 'Voir les images'}
           </DropdownMenuItem>
         )}
-
-        <DropdownMenuItem onClick={onOpenSettings}>
-          <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
-          {t('conversationHeader.settings') || 'Paramètres'}
-        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

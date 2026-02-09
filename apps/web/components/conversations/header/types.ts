@@ -13,7 +13,6 @@ export interface ConversationHeaderProps {
   typingUsers: Array<{ userId: string; username: string; conversationId: string; timestamp: number }>;
   isMobile: boolean;
   onBackToList: () => void;
-  onOpenDetails: () => void;
   onParticipantRemoved: (userId: string) => void;
   onParticipantAdded: (userId: string) => void;
   onLinkCreated: (link: any) => void;
