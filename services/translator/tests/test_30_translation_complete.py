@@ -48,6 +48,12 @@ class MockTranscriptionResult:
     segments: list = field(default_factory=list)
     model: str = "whisper-large-v3"
     processing_time_ms: int = 100
+    speaker_count: Optional[int] = None
+    primary_speaker_id: Optional[str] = None
+    sender_voice_identified: Optional[bool] = None
+    sender_speaker_id: Optional[str] = None
+    speaker_analysis: Any = None
+    diarization_speakers: Any = None
 
 
 @dataclass
@@ -78,6 +84,8 @@ class MockTTSResult:
     voice_quality: float = 0.8
     processing_time_ms: int = 200
     text_length: int = 50
+    audio_data_base64: Optional[str] = None
+    audio_mime_type: Optional[str] = None
 
 
 # ============================================================================
@@ -170,7 +178,7 @@ def mock_tts_service(temp_dir):
     mock.output_dir = temp_dir / "audio_output"
     mock.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def mock_synthesize_with_voice(text, voice_model, target_language, output_format=None, message_id=None):
+    async def mock_synthesize_with_voice(text, speaker_audio_path=None, target_language="en", output_format=None, message_id=None, cloning_params=None, **kwargs):
         output_path = mock.output_dir / f"{message_id}_{target_language}.mp3"
         output_path.touch()
         return MockTTSResult(
@@ -180,7 +188,7 @@ def mock_tts_service(temp_dir):
             voice_cloned=True
         )
 
-    async def mock_synthesize(text, language, output_format=None, speaker=None):
+    async def mock_synthesize(text, language, output_format=None, speaker=None, cloning_params=None, **kwargs):
         output_path = mock.output_dir / f"tts_{language}.mp3"
         output_path.touch()
         return MockTTSResult(
@@ -310,15 +318,16 @@ class TestAudioMessagePipelineBasic:
         # Reset singleton
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
 
@@ -331,12 +340,13 @@ class TestAudioMessagePipelineBasic:
         from services.audio_message_pipeline import AudioMessagePipeline
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service'), \
-             patch('services.audio_message_pipeline.get_voice_clone_service'), \
-             patch('services.audio_message_pipeline.get_tts_service'), \
-             patch('services.audio_message_pipeline.get_redis_service'), \
-             patch('services.audio_message_pipeline.get_audio_cache_service'), \
-             patch('services.audio_message_pipeline.get_translation_cache_service'):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service'), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service'), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service'), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service'), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service'), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service'), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service'):
 
             p1 = AudioMessagePipeline()
             p2 = AudioMessagePipeline()
@@ -438,15 +448,16 @@ class TestAudioMessagePipelineVoiceProfile:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
             AudioMessagePipeline._instance = None
@@ -457,7 +468,8 @@ class TestAudioMessagePipelineVoiceProfile:
         existing_profile = {
             "user_id": "original_sender",
             "quality_score": 0.9,
-            "embedding_base64": "encoded_embedding_data"
+            "embedding_base64": "encoded_embedding_data",
+            "embedding": [0.0] * 256
         }
 
         result = await pipeline.process_audio_message(
@@ -521,15 +533,16 @@ class TestAudioMessagePipelineCache:
             "source": "cache"
         }
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
             AudioMessagePipeline._instance = None
@@ -558,12 +571,17 @@ class TestAudioMessagePipelineCache:
 
     @pytest.mark.asyncio
     async def test_cache_translated_audio_reuse(self, pipeline_with_cache, mock_audio_file,
-                                                mock_audio_cache_service, mock_tts_service):
+                                                mock_audio_cache_service, mock_tts_service, temp_dir):
         """Test that cached translated audio is reused"""
+        # Create a real cached audio file so _load_cached_audio can read it
+        cached_audio_path = str(temp_dir / "cached_fr.mp3")
+        with open(cached_audio_path, 'wb') as f:
+            f.write(b'\x00' * 100)  # Dummy audio bytes
+
         # Pre-populate translated audio cache
         mock_audio_cache_service._audio_cache["abc123:fr"] = {
             "translated_text": "Texte traduit en cache",
-            "audio_path": "/cached/fr.mp3",
+            "audio_path": cached_audio_path,
             "audio_url": "/audio/cached_fr.mp3",
             "duration_ms": 3000,
             "format": "mp3",
@@ -599,15 +617,16 @@ class TestAudioMessagePipelineErrors:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
             AudioMessagePipeline._instance = None
@@ -666,7 +685,7 @@ class TestAudioMessagePipelineErrors:
     @pytest.mark.asyncio
     async def test_translation_service_unavailable(self, pipeline, mock_audio_file):
         """Test handling when translation service is unavailable"""
-        pipeline.translation_service = None
+        pipeline.set_translation_service(None)
 
         result = await pipeline.process_audio_message(
             audio_path=mock_audio_file,
@@ -694,15 +713,16 @@ class TestAudioMessagePipelineResult:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
             AudioMessagePipeline._instance = None
@@ -1154,12 +1174,13 @@ class TestPipelineLifecycle:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
             assert not pipeline.is_initialized
@@ -1179,12 +1200,13 @@ class TestPipelineLifecycle:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
             pipeline.is_initialized = True
@@ -1195,7 +1217,7 @@ class TestPipelineLifecycle:
             assert stats["service"] == "AudioMessagePipeline"
             assert "initialized" in stats
             assert "mode" in stats
-            assert stats["mode"] == "cache_only"
+            assert stats["mode"] == "orchestrator"
 
             AudioMessagePipeline._instance = None
 
@@ -1208,12 +1230,13 @@ class TestPipelineLifecycle:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
             pipeline.is_initialized = True
@@ -1244,12 +1267,13 @@ class TestHelperFunctions:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             p1 = get_audio_pipeline()
             p2 = get_audio_pipeline()
@@ -1267,12 +1291,13 @@ class TestHelperFunctions:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
             assert pipeline.translation_service is None
@@ -1291,12 +1316,13 @@ class TestHelperFunctions:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
 
@@ -1327,15 +1353,16 @@ class TestConcurrentProcessing:
 
         AudioMessagePipeline._instance = None
 
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service), \
-             patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service), \
-             patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service), \
-             patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
-             patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache_service), \
-             patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache_service):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service), \
+             patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service), \
+             patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service), \
+             patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis_service), \
+             patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache_service), \
+             patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache_service):
 
             pipeline = AudioMessagePipeline()
-            pipeline.translation_service = mock_translation_service
+            pipeline.set_translation_service(mock_translation_service)
             pipeline.is_initialized = True
             yield pipeline
             AudioMessagePipeline._instance = None
