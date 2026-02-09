@@ -64,6 +64,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import type { Conversation, ConversationParticipant, Message } from '@meeshy/shared/types';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { AttachmentService } from '@/services/attachmentService';
@@ -129,6 +130,7 @@ export function ConversationSettingsModal({
   const { t } = useI18n('conversations');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const preferencesStore = useConversationPreferencesStore();
 
   // Utilisateur factice si currentUser n'est pas fourni (pour compatibilité avec anciens appels)
   const safeCurrentUser = currentUser || {
@@ -231,18 +233,36 @@ export function ConversationSettingsModal({
   };
 
 
-  // Sauvegarder les préférences utilisateur
+  // Sauvegarder les préférences utilisateur via le store Zustand
   const savePreferences = async () => {
     setIsSavingPrefs(true);
     try {
+      const currentStorePrefs = preferencesStore.getPreferences(conversation.id);
+
+      // Mettre à jour les toggles via le store pour sync UI
+      if (currentStorePrefs?.isPinned !== isPinned) {
+        await preferencesStore.togglePin(conversation.id, isPinned);
+      }
+      if (currentStorePrefs?.isMuted !== isMuted) {
+        await preferencesStore.toggleMute(conversation.id, isMuted);
+      }
+      if (currentStorePrefs?.isArchived !== isArchived) {
+        await preferencesStore.toggleArchive(conversation.id, isArchived);
+      }
+      if (currentStorePrefs?.reaction !== (reaction.trim() || undefined)) {
+        await preferencesStore.setReaction(conversation.id, reaction.trim() || null);
+      }
+
+      // Pour les autres champs (customName, tags), utiliser le service directement
+      // puis sync le store
       await userPreferencesService.upsertPreferences(conversation.id, {
-        isPinned,
-        isMuted,
-        isArchived,
         customName: customName.trim() || null,
-        reaction: reaction.trim() || null,
         tags,
       });
+
+      // Rafraîchir les préférences du store pour synchro complète
+      await preferencesStore.refreshPreferences();
+
       toast.success(t('conversationDetails.preferencesSaved') || 'Préférences enregistrées');
     } catch (error) {
       console.error('Erreur sauvegarde préférences:', error);
