@@ -15,6 +15,22 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Patch huggingface_hub for pyannote compatibility
+# pyannote.audio 3.4.0 uses deprecated 'use_auth_token' arg,
+# but huggingface_hub >= 1.0 removed it in favor of 'token'
+try:
+    import huggingface_hub
+    _original_hf_hub_download = huggingface_hub.hf_hub_download
+
+    def _patched_hf_hub_download(*args, **kwargs):
+        if 'use_auth_token' in kwargs:
+            kwargs['token'] = kwargs.pop('use_auth_token')
+        return _original_hf_hub_download(*args, **kwargs)
+
+    huggingface_hub.hf_hub_download = _patched_hf_hub_download
+except Exception:
+    pass
+
 # Flags de disponibilité
 PYANNOTE_AVAILABLE = False
 LIBROSA_AVAILABLE = False
@@ -56,10 +72,17 @@ class VoiceRecognitionService:
         if self._embedding_model is None and self.hf_token:
             try:
                 # Utiliser le modèle d'embeddings de pyannote
-                self._embedding_model = PretrainedSpeakerEmbedding(
-                    "pyannote/embedding",
-                    use_auth_token=self.hf_token
-                )
+                # Try 'token' first (huggingface_hub >= 1.0), fallback to 'use_auth_token'
+                try:
+                    self._embedding_model = PretrainedSpeakerEmbedding(
+                        "pyannote/embedding",
+                        token=self.hf_token
+                    )
+                except TypeError:
+                    self._embedding_model = PretrainedSpeakerEmbedding(
+                        "pyannote/embedding",
+                        use_auth_token=self.hf_token
+                    )
                 logger.info("[VOICE_RECOGNITION] Modèle d'embeddings chargé")
             except Exception as e:
                 logger.warning(f"[VOICE_RECOGNITION] Échec chargement modèle embeddings: {e}")

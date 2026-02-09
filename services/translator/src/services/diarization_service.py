@@ -18,6 +18,23 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Patch huggingface_hub for pyannote compatibility
+# pyannote.audio 3.4.0 uses deprecated 'use_auth_token' arg,
+# but huggingface_hub >= 1.0 removed it in favor of 'token'
+try:
+    import huggingface_hub
+    _original_hf_hub_download = huggingface_hub.hf_hub_download
+
+    def _patched_hf_hub_download(*args, **kwargs):
+        if 'use_auth_token' in kwargs:
+            kwargs['token'] = kwargs.pop('use_auth_token')
+        return _original_hf_hub_download(*args, **kwargs)
+
+    huggingface_hub.hf_hub_download = _patched_hf_hub_download
+    logger.debug("[DIARIZATION] Patched huggingface_hub.hf_hub_download for use_auth_token compat")
+except Exception as e:
+    logger.warning(f"[DIARIZATION] Failed to patch huggingface_hub: {e}")
+
 # Flags de disponibilité
 PYANNOTE_AVAILABLE = False
 SKLEARN_AVAILABLE = False

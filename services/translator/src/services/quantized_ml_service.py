@@ -414,7 +414,7 @@ class QuantizedMLService:
                         local_files_only=False,
                         trust_remote_code=True,
                         cache_dir=str(cache_dir),
-                        use_auth_token=None,  # Pas de token pour les modèles publics
+                        token=None,  # Pas de token pour les modèles publics
                         resume_download=True,  # Reprendre les téléchargements interrompus
                         force_download=False,  # Ne pas forcer le re-téléchargement
                         proxies=None  # Pas de proxy par défaut
@@ -468,7 +468,7 @@ class QuantizedMLService:
             'local_files_only': False,
             'trust_remote_code': True,
             'cache_dir': str(cache_dir),
-            'use_auth_token': None,  # Pas de token pour les modèles publics
+            'token': None,  # Pas de token pour les modèles publics
             'resume_download': True,  # Reprendre les téléchargements interrompus
             'force_download': False,  # Ne pas forcer le re-téléchargement
             'proxies': None,  # Pas de proxy par défaut
