@@ -244,6 +244,19 @@ class AudioHandler:
             # Callback pour publier la transcription dès qu'elle est prête
             # (avant la traduction pour une réponse plus rapide à la gateway)
             async def on_transcription_ready(transcription_data: dict):
+                # ═══════════════════════════════════════════════════════════════
+                # LOG TRANSCRIPTION COMPLÈTE (AVANT TRADUCTION)
+                # ═══════════════════════════════════════════════════════════════
+                transcription = transcription_data.get('transcription')
+                if transcription:
+                    logger.info("=" * 70)
+                    logger.info(f"📜 [TRANSCRIPTION] TEXTE COMPLET À TRADUIRE:")
+                    logger.info(f"   🔑 Message ID: {transcription_data.get('message_id')}")
+                    logger.info(f"   🌍 Langue détectée: {transcription.language} (confiance: {transcription.confidence:.2f})")
+                    logger.info(f"   🎭 Locuteurs: {transcription.speaker_count or 1}")
+                    logger.info(f"   ⏱️ Durée: {transcription.duration_ms}ms")
+                    logger.info(f"   📝 TEXTE: \"{transcription.text}\"")
+                    logger.info("=" * 70)
                 await self._publish_transcription_result(task_id, transcription_data)
 
             # Callback pour publier chaque traduction dès qu'elle est prête

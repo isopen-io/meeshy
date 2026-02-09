@@ -408,7 +408,14 @@ class SpeechBrainDiarization:
         else:
             logger.info(f"[SPEECHBRAIN] ⚠️ Pas assez d'embeddings ({len(embeddings)}) pour tester multi-speakers (min=4)")
 
-        logger.info(f"[SPEECHBRAIN] 🎯 Résultat clustering: {best_n_clusters} speaker(s), best_score={best_score:.3f}")
+        logger.info("=" * 60)
+        logger.info(f"[DIARIZATION] 🎯 RÉSULTAT CLUSTERING:")
+        logger.info(f"   └─ Speakers détectés: {best_n_clusters}")
+        logger.info(f"   └─ Silhouette score: {best_score:.3f} (seuil: 0.40)")
+        logger.info(f"   └─ Fenêtres analysées: {len(embeddings)}")
+        if best_n_clusters == 1 and best_score < 0.40:
+            logger.info(f"   └─ ⚠️ MONO-SPEAKER: silhouette trop faible pour multi-speaker")
+        logger.info("=" * 60)
 
         # Appliquer le clustering final
         if best_n_clusters > 1:
