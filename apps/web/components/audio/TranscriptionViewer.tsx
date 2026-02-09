@@ -313,15 +313,27 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
 
   // Calculer les métadonnées des speakers
   // (règle rerender-memo: mémorisé pour éviter recalcul)
+  // Ne retient que les speakers effectivement présents dans les segments affichés
   const speakerMetadata = useMemo(() => {
     if (!transcription.speakerAnalysis) return null;
 
+    const segments = activeTranscription.segments;
+    if (!segments || segments.length === 0) return null;
+
+    const speakerIdsInSegments = new Set(
+      segments.map(s => s.speakerId).filter(Boolean)
+    );
+
+    const presentSpeakers = transcription.speakerAnalysis.speakers.filter(
+      s => speakerIdsInSegments.has(s.sid)
+    );
+
     return {
-      totalSpeakers: transcription.speakerAnalysis.speakers.length,
+      totalSpeakers: presentSpeakers.length,
       method: transcription.speakerAnalysis.method,
-      speakers: transcription.speakerAnalysis.speakers,
+      speakers: presentSpeakers,
     };
-  }, [transcription.speakerAnalysis]);
+  }, [transcription.speakerAnalysis, activeTranscription.segments]);
 
   // Rendre le texte avec surlignage coloré du segment actif
   // (règle rerender-memo: mémorisé pour éviter re-calcul à chaque render)
