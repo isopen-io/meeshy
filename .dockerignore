@@ -19,6 +19,8 @@ gateway/generated/
 # === ML Models (downloaded at runtime, not in image) ===
 **/models/
 services/translator/models/
+# Exception: pyannote diarization models are small (~31MB) and bundled in the image
+!services/translator/models/pyannote/
 
 # === Development files ===
 # Exclude ALL .env files to ensure Docker builds use Dockerfile ARGs

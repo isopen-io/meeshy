@@ -21,7 +21,8 @@ shared/
 __pycache__/
 *.pyc
 *.pyo
-models
+models/*
+!models/pyannote/
 .models
 
 # Development services

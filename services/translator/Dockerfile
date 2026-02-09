@@ -201,9 +201,10 @@ ENV HOME=/workspace \
     LOG_DIR=/workspace/logs \
     MODELS_PATH=/workspace/models \
     # ML framework paths
-    TORCH_HOME=/workspace/models \
+    TORCH_HOME=/workspace/models/torch \
     HF_HOME=/workspace/models/huggingface \
     TRANSFORMERS_CACHE=/workspace/models/huggingface \
+    PYANNOTE_CACHE=/workspace/models/pyannote \
     # Performance optimizations
     OMP_NUM_THREADS=4 \
     MKL_NUM_THREADS=4 \
@@ -273,6 +274,11 @@ WORKDIR /workspace
 # Copy translator source code
 COPY --chown=translator:translator services/translator/ ./
 
+# Bundle pyannote diarization models (~31MB) in a separate location
+# They'll be copied to /workspace/models/pyannote/ at startup if not already present
+# (the /workspace/models/ directory is mounted as a Docker volume and would shadow these)
+COPY services/translator/models/pyannote/ /opt/pyannote-models/
+
 # Verify critical components installation
 RUN echo "=== Verifying critical components ===" && \
     python -c "from sklearn.cluster import KMeans; print('✅ scikit-learn available')" && \
@@ -286,6 +292,8 @@ RUN echo "=== Verifying critical components ===" && \
 RUN chown -R translator:translator /workspace \
     && chmod +x /workspace/docker-entrypoint-mongodb.sh 2>/dev/null || true \
     && mkdir -p /workspace/models/huggingface \
+               /workspace/models/pyannote \
+               /workspace/models/torch \
                /workspace/models/whisper \
                /workspace/models/openvoice \
                /workspace/models/voice_cache \

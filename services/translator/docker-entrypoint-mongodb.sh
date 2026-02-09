@@ -79,6 +79,28 @@ wait_for_redis() {
     fi
 }
 
+# Copy bundled pyannote models to volume if not already present
+seed_pyannote_models() {
+    local SRC="/opt/pyannote-models"
+    local DST="/workspace/models/pyannote"
+
+    if [ ! -d "$SRC" ] || [ -z "$(ls -A "$SRC" 2>/dev/null)" ]; then
+        echo "[TRANSLATOR] Pas de modeles pyannote bundled dans l'image, skip"
+        return 0
+    fi
+
+    # Check if destination already has models (any models--pyannote--* dir with snapshots)
+    if find "$DST" -maxdepth 2 -name "snapshots" -type d 2>/dev/null | grep -q .; then
+        echo "[TRANSLATOR] Modeles pyannote deja presents dans le volume, skip"
+        return 0
+    fi
+
+    echo "[TRANSLATOR] Copie des modeles pyannote bundled vers le volume..."
+    mkdir -p "$DST"
+    cp -r "$SRC"/. "$DST"/
+    echo "[TRANSLATOR] Modeles pyannote copies avec succes (~31MB)"
+}
+
 # Fonction principale
 main() {
     echo "[TRANSLATOR] Initialisation du service ML..."
@@ -86,7 +108,9 @@ main() {
     # Vérifier Redis (non bloquant)
     wait_for_redis || true
 
-    # Les modèles ML sont téléchargés automatiquement par l'application Python
+    # Copier les modèles pyannote bundled si nécessaire
+    seed_pyannote_models || echo "[TRANSLATOR] ATTENTION: echec copie modeles pyannote (non bloquant)"
+
     echo "[TRANSLATOR] Demarrage de l application Translator (ML Service)..."
 
     # Demarrer l application Python

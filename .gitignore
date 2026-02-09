@@ -74,6 +74,10 @@ next-env.d.ts
 
 # TensorFlow.js models (will be downloaded)
 */**/models/
+# Exception: pyannote diarization models (~31MB, bundled in Docker image)
+!services/translator/models/
+services/translator/models/*
+!services/translator/models/pyannote/
 */**/venv 
 */**/__pycache__
 */**/test_venv
