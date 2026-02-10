@@ -12,7 +12,7 @@
 #   docker run -p 8002:8002 -p 5555:5555 -p 5558:5558 meeshy-translator:openvoice
 # =============================================================================
 
-FROM python:3.9-slim
+FROM python:3.14-slim
 
 # Copier uv depuis l'image officielle (ultra-rapide package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
