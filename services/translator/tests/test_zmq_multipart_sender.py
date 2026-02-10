@@ -72,7 +72,7 @@ class TestZmqMultipartSender:
                 voice_cloned=True,
                 voice_quality=0.90,
                 processing_time_ms=1400,
-                audio_data_base64="RkFLRV9TUEFOSVIN",  # "FAKE_SPANISH" en base64
+                audio_data_base64="RkFLRV9TUEFOSVNI",  # "FAKE_SPANISH" en base64
                 audio_mime_type="audio/mp3"
             )
         }
@@ -81,7 +81,7 @@ class TestZmqMultipartSender:
         new_voice_profile = NewVoiceProfileData(
             user_id="user_123",
             profile_id="profile_456",
-            embedding_base64="RkFLRV9FTUJFRERJTK==",  # "FAKE_EMBEDDING" en base64
+            embedding_base64="RkFLRV9FTUJFRERJTkc=",  # "FAKE_EMBEDDING" en base64
             quality_score=0.94,
             audio_count=1,
             total_duration_ms=5000,
@@ -183,9 +183,21 @@ class TestZmqMultipartSender:
         print("✅ Binaires décodés correctement")
 
     def test_multipart_size_vs_base64(self):
-        """Test: Démontrer l'économie de taille multipart vs base64"""
+        """Test: Démontrer l'économie de taille multipart vs base64
 
-        result = self.create_mock_audio_result()
+        Note: For tiny payloads (< 1KB), multipart metadata overhead can exceed
+        base64 savings. This test uses realistic audio sizes (~10KB per language)
+        to demonstrate the savings that matter in production.
+        """
+
+        # Use realistic audio data sizes (~10KB each) instead of tiny mock strings
+        audio_fr_bytes = b"F" * (10 * 1024)  # 10KB French audio
+        audio_es_bytes = b"S" * (10 * 1024)  # 10KB Spanish audio
+        embedding_bytes = b"E" * (5 * 1024)  # 5KB embedding
+
+        audio_fr_b64 = base64.b64encode(audio_fr_bytes).decode()
+        audio_es_b64 = base64.b64encode(audio_es_bytes).decode()
+        embedding_b64 = base64.b64encode(embedding_bytes).decode()
 
         # Calculer taille base64 (ancien format JSON)
         old_payload = {
@@ -193,25 +205,21 @@ class TestZmqMultipartSender:
             "translatedAudios": [
                 {
                     "targetLanguage": "fr",
-                    "audioDataBase64": result.translations["fr"].audio_data_base64
+                    "audioDataBase64": audio_fr_b64
                 },
                 {
                     "targetLanguage": "es",
-                    "audioDataBase64": result.translations["es"].audio_data_base64
+                    "audioDataBase64": audio_es_b64
                 }
             ],
             "newVoiceProfile": {
-                "embedding": result.new_voice_profile.embedding_base64
+                "embedding": embedding_b64
             }
         }
         old_payload_json = json.dumps(old_payload)
         old_size = len(old_payload_json.encode('utf-8'))
 
         # Calculer taille multipart (nouveau format)
-        audio_fr_bytes = base64.b64decode(result.translations["fr"].audio_data_base64)
-        audio_es_bytes = base64.b64decode(result.translations["es"].audio_data_base64)
-        embedding_bytes = base64.b64decode(result.new_voice_profile.embedding_base64)
-
         new_metadata = {
             "type": "audio_process_completed",
             "translatedAudios": [

@@ -195,6 +195,13 @@ class TestTTSServiceExtended:
     def test_tts_result_dataclass(self):
         """Test TTSResult dataclass"""
         from services.tts_service import TTSResult
+        from services.tts.models import TTSModel, TTSModelInfo
+
+        model_info = TTSModelInfo(
+            name="chatterbox", display_name="Chatterbox", license="Apache-2.0",
+            commercial_use=True, license_warning=None, languages=["en"],
+            min_audio_seconds=3.0, quality_score=90, speed_score=80, vram_gb=2.0
+        )
 
         result = TTSResult(
             audio_path="/path/to/audio.mp3",
@@ -205,7 +212,9 @@ class TestTTSServiceExtended:
             voice_cloned=False,
             voice_quality=0.0,
             processing_time_ms=500,
-            text_length=50
+            text_length=50,
+            model_used=TTSModel.CHATTERBOX,
+            model_info=model_info
         )
 
         assert result.audio_path == "/path/to/audio.mp3"
@@ -215,6 +224,13 @@ class TestTTSServiceExtended:
     def test_tts_result_with_voice_clone(self):
         """Test TTSResult with voice cloning"""
         from services.tts_service import TTSResult
+        from services.tts.models import TTSModel, TTSModelInfo
+
+        model_info = TTSModelInfo(
+            name="chatterbox", display_name="Chatterbox", license="Apache-2.0",
+            commercial_use=True, license_warning=None, languages=["fr"],
+            min_audio_seconds=3.0, quality_score=90, speed_score=80, vram_gb=2.0
+        )
 
         result = TTSResult(
             audio_path="/path/to/cloned.mp3",
@@ -225,7 +241,9 @@ class TestTTSServiceExtended:
             voice_cloned=True,
             voice_quality=0.85,
             processing_time_ms=800,
-            text_length=100
+            text_length=100,
+            model_used=TTSModel.CHATTERBOX,
+            model_info=model_info
         )
 
         assert result.voice_cloned is True

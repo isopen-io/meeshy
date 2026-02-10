@@ -84,7 +84,7 @@ class VoiceCloneMultiSpeaker:
             raise ValueError("Aucun locuteur détecté dans l'audio")
 
         # 2. Récupérer le profil utilisateur existant (si disponible)
-        user_model = await self.voice_clone_service._load_cached_model(user_id)
+        user_model = await self.voice_clone_service._get_cache_manager().load_cached_model(user_id)
         user_fingerprint = user_model.fingerprint if user_model else None
 
         # 3. Créer les profils temporaires
@@ -164,7 +164,7 @@ class VoiceCloneMultiSpeaker:
         metadata = await voice_analyzer.analyze_audio(audio_path)
 
         # Charger le profil existant
-        existing_model = await self.voice_clone_service._load_cached_model(user_id)
+        existing_model = await self.voice_clone_service._get_cache_manager().load_cached_model(user_id)
 
         if existing_model and existing_model.fingerprint:
             # Vérifier si on peut METTRE À JOUR

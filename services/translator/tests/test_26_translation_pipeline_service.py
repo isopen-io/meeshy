@@ -336,7 +336,7 @@ class TestPipelineResult:
         logger.info("PipelineResult full OK")
 
     def test_result_to_dict(self):
-        """Test PipelineResult to_dict method"""
+        """Test PipelineResult to_dict method (Gateway VoiceTranslationResult format)"""
         logger.info("Test 26.8: PipelineResult to_dict")
         from services.translation_pipeline_service import PipelineResult
 
@@ -344,20 +344,25 @@ class TestPipelineResult:
             job_id="job_dict",
             original_text="Test",
             original_language="en",
-            translations={"fr": {"text": "Test"}},
+            translations={"fr": {"translated_text": "Test FR", "audio_base64": "abc", "duration_ms": 2000, "voice_cloned": True, "voice_quality": 0.9}},
             voice_cloned=True,
             processing_time_ms=1000
         )
 
         result_dict = result.to_dict()
 
-        assert result_dict['job_id'] == "job_dict"
-        assert result_dict['success'] is True
-        assert result_dict['original']['text'] == "Test"
-        assert result_dict['original']['language'] == "en"
-        assert result_dict['voice']['cloned'] is True
-        assert result_dict['processing_time_ms'] == 1000
-        assert 'timestamp' in result_dict
+        # New Gateway format: VoiceTranslationResult
+        assert result_dict['translationId'] == "job_dict"
+        assert result_dict['originalAudio']['transcription'] == "Test"
+        assert result_dict['originalAudio']['language'] == "en"
+        assert result_dict['voiceProfile'] is not None  # voice_cloned=True
+        assert result_dict['processingTimeMs'] == 1000
+
+        # translations is now an array of translation entries
+        assert isinstance(result_dict['translations'], list)
+        assert len(result_dict['translations']) == 1
+        assert result_dict['translations'][0]['targetLanguage'] == "fr"
+        assert result_dict['translations'][0]['translatedText'] == "Test FR"
         logger.info("PipelineResult to_dict OK")
 
 
@@ -1121,145 +1126,203 @@ class TestTranslationPipelineServiceClose:
 # TEST TRANSLATION PIPELINE SERVICE - PROCESS SINGLE LANGUAGE
 # ============================================================================
 
-class TestTranslationPipelineServiceProcessSingleLanguage:
-    """Tests for single language processing"""
+class TestTranslationPipelineServiceTranslationStage:
+    """Tests for translation stage delegation (replaces removed _process_single_language)"""
 
     @pytest.mark.asyncio
-    async def test_process_single_language_with_voice(self, pipeline_service, temp_audio_dir):
-        """Test processing single language with voice clone"""
-        logger.info("Test 26.43: process_single_language with voice")
-        from services.translation_pipeline_service import TranslationJob
+    async def test_translation_stage_called_with_voice(self, pipeline_service, temp_audio_dir):
+        """Test that _process_job delegates to translation_stage.process_languages with voice model"""
+        logger.info("Test 26.43: translation_stage called with voice model")
+        from services.translation_pipeline_service import TranslationJob, JobStatus
 
-        # Create mock voice model
-        @dataclass
-        class MockVoiceModel:
-            profile_id: str = "profile_123"
+        await pipeline_service.initialize()
 
-        # Create test audio file for TTS result
-        tts_audio_path = Path(temp_audio_dir) / "tts_output.mp3"
-        tts_audio_path.write_bytes(b"fake_audio_data")
-        tts_audio_path_str = str(tts_audio_path)
+        # Create test audio file
+        audio_path = Path(temp_audio_dir) / "voice_test.wav"
+        audio_path.write_bytes(b"fake_audio_data")
 
-        # Update mock TTS to return correct path
-        @dataclass
-        class MockTTSResult:
-            audio_path: str = tts_audio_path_str
-            audio_url: str = "http://example.com/audio.mp3"
-            duration_ms: int = 3500
-            voice_cloned: bool = True
+        # Mock the translation_stage.process_languages to return a result dict
+        mock_translated_audio = MagicMock()
+        mock_translated_audio.translated_text = "Bonjour monde"
+        mock_translated_audio.audio_path = str(audio_path)
+        mock_translated_audio.audio_url = "http://example.com/audio.mp3"
+        mock_translated_audio.duration_ms = 3500
+        mock_translated_audio.voice_cloned = True
+        mock_translated_audio.voice_quality = 0.92
+        mock_translated_audio.segments = None
 
-        pipeline_service.tts_service.synthesize_with_voice = AsyncMock(return_value=MockTTSResult())
+        pipeline_service.translation_stage.process_languages = AsyncMock(
+            return_value={"fr": mock_translated_audio}
+        )
+        # Mock create_voice_model to return a voice model
+        mock_voice_model = MagicMock()
+        mock_voice_model.quality_score = 0.92
+        mock_voice_model.version = 1
+        pipeline_service.translation_stage.create_voice_model = AsyncMock(
+            return_value=(mock_voice_model, "user_voice")
+        )
 
         job = TranslationJob(
             id="job_voice",
             user_id="user_voice",
-            target_languages=["fr"]
+            audio_path=str(audio_path),
+            target_languages=["fr"],
+            generate_voice_clone=True
         )
+        pipeline_service._jobs["job_voice"] = job
 
-        result = await pipeline_service._process_single_language(
-            job=job,
-            text="Hello world",
-            source_lang="en",
-            target_lang="fr",
-            voice_model=MockVoiceModel()
-        )
+        await pipeline_service._process_job("job_voice", 0)
 
-        assert result['language'] == "fr"
-        assert result['success'] is True
-        assert 'translated_text' in result
-        assert 'audio_base64' in result
-        logger.info("process_single_language with voice OK")
+        # Verify translation_stage.process_languages was called
+        pipeline_service.translation_stage.process_languages.assert_called_once()
+        call_kwargs = pipeline_service.translation_stage.process_languages.call_args[1]
+        assert call_kwargs['target_languages'] == ["fr"]
+        assert call_kwargs['voice_model'] == mock_voice_model
+
+        result_job = await pipeline_service.get_job("job_voice")
+        assert result_job.status == JobStatus.COMPLETED
+
+        await pipeline_service.close()
+        logger.info("translation_stage called with voice model OK")
 
     @pytest.mark.asyncio
-    async def test_process_single_language_without_voice(self, pipeline_service, temp_audio_dir):
-        """Test processing single language without voice clone"""
-        logger.info("Test 26.44: process_single_language without voice")
-        from services.translation_pipeline_service import TranslationJob
+    async def test_translation_stage_called_without_voice(self, pipeline_service, temp_audio_dir):
+        """Test that _process_job delegates to translation_stage.process_languages without voice"""
+        logger.info("Test 26.44: translation_stage called without voice model")
+        from services.translation_pipeline_service import TranslationJob, JobStatus
 
-        # Create test audio file for TTS result
-        tts_audio_path = Path(temp_audio_dir) / "tts_output.mp3"
-        tts_audio_path.write_bytes(b"fake_audio_data")
-        tts_audio_path_str = str(tts_audio_path)
+        await pipeline_service.initialize()
 
-        @dataclass
-        class MockTTSResult:
-            audio_path: str = tts_audio_path_str
-            audio_url: str = "http://example.com/audio.mp3"
-            duration_ms: int = 3500
-            voice_cloned: bool = False
+        audio_path = Path(temp_audio_dir) / "no_voice_test.wav"
+        audio_path.write_bytes(b"fake_audio_data")
 
-        pipeline_service.tts_service.synthesize = AsyncMock(return_value=MockTTSResult())
+        mock_translated_audio = MagicMock()
+        mock_translated_audio.translated_text = "Hola mundo"
+        mock_translated_audio.audio_path = str(audio_path)
+        mock_translated_audio.audio_url = "http://example.com/audio.mp3"
+        mock_translated_audio.duration_ms = 3500
+        mock_translated_audio.voice_cloned = False
+        mock_translated_audio.voice_quality = 0.0
+        mock_translated_audio.segments = None
+
+        pipeline_service.translation_stage.process_languages = AsyncMock(
+            return_value={"es": mock_translated_audio}
+        )
 
         job = TranslationJob(
             id="job_no_voice",
             user_id="user_no_voice",
-            target_languages=["es"]
+            audio_path=str(audio_path),
+            target_languages=["es"],
+            generate_voice_clone=False
         )
+        pipeline_service._jobs["job_no_voice"] = job
 
-        result = await pipeline_service._process_single_language(
-            job=job,
-            text="Hello world",
-            source_lang="en",
-            target_lang="es",
-            voice_model=None
-        )
+        await pipeline_service._process_job("job_no_voice", 0)
 
-        assert result['language'] == "es"
-        assert result['success'] is True
-        logger.info("process_single_language without voice OK")
+        # Verify process_languages was called with voice_model=None
+        pipeline_service.translation_stage.process_languages.assert_called_once()
+        call_kwargs = pipeline_service.translation_stage.process_languages.call_args[1]
+        assert call_kwargs['target_languages'] == ["es"]
+        assert call_kwargs['voice_model'] is None
+
+        result_job = await pipeline_service.get_job("job_no_voice")
+        assert result_job.status == JobStatus.COMPLETED
+
+        await pipeline_service.close()
+        logger.info("translation_stage called without voice model OK")
 
     @pytest.mark.asyncio
-    async def test_process_single_language_same_language(self, pipeline_service):
-        """Test processing when source equals target (no translation)"""
-        logger.info("Test 26.45: process_single_language same language")
-        from services.translation_pipeline_service import TranslationJob
+    async def test_translation_stage_same_language_filtered(self, pipeline_service, temp_audio_dir):
+        """Test that when source equals target, process_languages receives the same language"""
+        logger.info("Test 26.45: translation_stage same language")
+        from services.translation_pipeline_service import TranslationJob, JobStatus
+
+        await pipeline_service.initialize()
+
+        audio_path = Path(temp_audio_dir) / "same_lang_test.wav"
+        audio_path.write_bytes(b"fake_audio_data")
+
+        # When source == target, process_languages is still called with the language.
+        # The translation stage handles same-language cases internally.
+        mock_translated_audio = MagicMock()
+        mock_translated_audio.translated_text = "Hello world"
+        mock_translated_audio.audio_path = str(audio_path)
+        mock_translated_audio.audio_url = "http://example.com/audio.mp3"
+        mock_translated_audio.duration_ms = 3000
+        mock_translated_audio.voice_cloned = False
+        mock_translated_audio.voice_quality = 0.0
+        mock_translated_audio.segments = None
+
+        pipeline_service.translation_stage.process_languages = AsyncMock(
+            return_value={"en": mock_translated_audio}
+        )
 
         job = TranslationJob(
             id="job_same",
             user_id="user_same",
-            target_languages=["en"]
+            audio_path=str(audio_path),
+            target_languages=["en"],
+            generate_voice_clone=False
         )
+        pipeline_service._jobs["job_same"] = job
 
-        result = await pipeline_service._process_single_language(
-            job=job,
-            text="Hello world",
-            source_lang="en",
-            target_lang="en",
-            voice_model=None
-        )
+        await pipeline_service._process_job("job_same", 0)
 
-        # Text should be unchanged
-        assert result['translated_text'] == "Hello world"
-        logger.info("process_single_language same language OK")
+        # process_languages should have been called with target_languages=["en"]
+        pipeline_service.translation_stage.process_languages.assert_called_once()
+        call_kwargs = pipeline_service.translation_stage.process_languages.call_args[1]
+        assert call_kwargs['target_languages'] == ["en"]
+
+        result_job = await pipeline_service.get_job("job_same")
+        assert result_job.status == JobStatus.COMPLETED
+
+        await pipeline_service.close()
+        logger.info("translation_stage same language OK")
 
     @pytest.mark.asyncio
-    async def test_process_single_language_translation_error(self, pipeline_service):
-        """Test handling translation error"""
-        logger.info("Test 26.46: process_single_language translation error")
-        from services.translation_pipeline_service import TranslationJob
+    async def test_translation_stage_error_handling(self, pipeline_service, temp_audio_dir):
+        """Test error handling when translation_stage.process_languages raises"""
+        logger.info("Test 26.46: translation_stage error handling")
+        from services.translation_pipeline_service import TranslationJob, JobStatus
 
-        # Make translation service fail
-        pipeline_service.translation_service.translate_with_structure = AsyncMock(
-            side_effect=Exception("Translation failed")
+        await pipeline_service.initialize()
+
+        audio_path = Path(temp_audio_dir) / "error_test.wav"
+        audio_path.write_bytes(b"fake_audio_data")
+
+        # Make process_languages raise an exception
+        pipeline_service.translation_stage.process_languages = AsyncMock(
+            side_effect=Exception("Translation stage failed")
         )
 
         job = TranslationJob(
             id="job_error",
             user_id="user_error",
-            target_languages=["fr"]
+            audio_path=str(audio_path),
+            target_languages=["fr"],
+            generate_voice_clone=False
         )
+        pipeline_service._jobs["job_error"] = job
 
-        result = await pipeline_service._process_single_language(
-            job=job,
-            text="Hello world",
-            source_lang="en",
-            target_lang="fr",
-            voice_model=None
-        )
+        await pipeline_service._process_job("job_error", 0)
 
-        # Should fallback gracefully
-        assert result['translated_text'] == "Hello world"
-        logger.info("process_single_language translation error OK")
+        # Job should complete with error fallback entries in translations
+        result_job = await pipeline_service.get_job("job_error")
+        assert result_job.status == JobStatus.COMPLETED
+        assert result_job.result is not None
+
+        # The error fallback creates entries with success: False in result.translations
+        translations = result_job.result.get('translations', [])
+        assert len(translations) >= 1
+        # Find the fr entry - translations is now an array
+        fr_entry = next((t for t in translations if t.get('targetLanguage') == 'fr'), None)
+        assert fr_entry is not None
+        # The error fallback in to_dict creates entries from the error dict
+        # which may not have translatedText but should have the error info
+
+        await pipeline_service.close()
+        logger.info("translation_stage error handling OK")
 
 
 # ============================================================================
@@ -1601,19 +1664,16 @@ class TestTranslationPipelineServiceProcessJob:
 
     @pytest.mark.asyncio
     async def test_process_job_translation_fails_for_language(self, pipeline_service, temp_audio_dir, mock_transcription_service):
-        """Test processing job when translation fails for a language"""
+        """Test processing job when translation_stage.process_languages raises for all languages"""
         logger.info("Test 26.58: process_job translation fails for language")
         from services.translation_pipeline_service import TranslationJob, JobStatus
 
         await pipeline_service.initialize()
 
-        # Make translation fail for specific language
-        async def mock_translate_fail(**kwargs):
-            if kwargs.get('target_language') == 'de':
-                raise Exception("Translation to German failed")
-            return {'translated_text': f"[FR] {kwargs.get('text', '')}"}
-
-        pipeline_service.translation_service.translate_with_structure = AsyncMock(side_effect=mock_translate_fail)
+        # Mock translation_stage.process_languages to raise an exception
+        pipeline_service.translation_stage.process_languages = AsyncMock(
+            side_effect=Exception("Translation to German failed")
+        )
 
         # Create test audio
         audio_path = Path(temp_audio_dir) / "multi_lang.wav"
@@ -1631,14 +1691,20 @@ class TestTranslationPipelineServiceProcessJob:
         await pipeline_service._process_job("multi_lang_job", 0)
 
         result_job = await pipeline_service.get_job("multi_lang_job")
-        # When translation fails, the code catches the exception and falls back gracefully
-        # The result should still have translation entries
-        if result_job.result and 'translations' in result_job.result:
-            de_result = result_job.result['translations'].get('de', {})
-            # German should have a result (fallback uses original text)
-            assert de_result is not None
-            assert 'language' in de_result
-            assert de_result['language'] == 'de'
+        # When process_languages raises, the fallback creates error entries for all languages
+        assert result_job.status == JobStatus.COMPLETED
+        assert result_job.result is not None
+
+        # translations is now an array from to_dict()
+        translations = result_job.result.get('translations', [])
+        assert len(translations) == 3
+
+        # Each entry should have the error info (success: False in the internal dict
+        # gets converted to the array format by to_dict with empty translatedText)
+        target_langs_in_result = [t.get('targetLanguage') for t in translations]
+        assert 'fr' in target_langs_in_result
+        assert 'de' in target_langs_in_result
+        assert 'es' in target_langs_in_result
 
         await pipeline_service.close()
         logger.info("process_job translation fails for language OK")

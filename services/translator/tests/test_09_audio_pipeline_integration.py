@@ -82,10 +82,11 @@ def conditional_cache_patches(cache_mocks):
         return
 
     # CI environment - apply all cache service patches
-    with patch('services.audio_message_pipeline.get_audio_cache_service', return_value=cache_mocks['audio_cache']):
-        with patch('services.audio_message_pipeline.get_translation_cache_service', return_value=cache_mocks['translation_cache']):
-            with patch('services.audio_message_pipeline.get_redis_service', return_value=cache_mocks['redis']):
-                yield
+    with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=cache_mocks['audio_cache']):
+        with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=cache_mocks['audio_cache']):
+            with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=cache_mocks['translation_cache']):
+                with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=cache_mocks['redis']):
+                    yield
 
 
 def create_mock_transcription_result(text="Test transcribed text", language="en"):
@@ -121,6 +122,12 @@ def create_mock_voice_model(user_id="test_user"):
 
 def create_mock_tts_result(language="fr", voice_cloned=True):
     """Create a mock TTSResult"""
+    from services.tts.models import TTSModel, TTSModelInfo
+    mock_model_info = TTSModelInfo(
+        name="chatterbox", display_name="Chatterbox", license="Apache-2.0",
+        commercial_use=True, license_warning=None, languages=["en", "fr"],
+        min_audio_seconds=3.0, quality_score=85, speed_score=70, vram_gb=2.0
+    )
     return TTSResult(
         audio_path=f"/tmp/outputs/audio/translated/msg_{language}.mp3",
         audio_url=f"/outputs/audio/translated/msg_{language}.mp3",
@@ -130,7 +137,9 @@ def create_mock_tts_result(language="fr", voice_cloned=True):
         voice_cloned=voice_cloned,
         voice_quality=0.75 if voice_cloned else 0.0,
         processing_time_ms=200,
-        text_length=50
+        text_length=50,
+        model_used=TTSModel.CHATTERBOX,
+        model_info=mock_model_info
     )
 
 
@@ -204,10 +213,10 @@ def mock_tts_service():
     mock = MagicMock()
     mock.is_initialized = True
 
-    async def synthesize_with_voice(text, voice_model, target_language, output_format="mp3", message_id=None):
+    async def synthesize_with_voice(text, speaker_audio_path, target_language, output_format=None, message_id=None, model=None, max_wait_seconds=120, cloning_params=None, conditionals=None, **kwargs):
         return create_mock_tts_result(target_language, voice_cloned=True)
 
-    async def synthesize(text, language, output_format="mp3", speaker=None):
+    async def synthesize(text, language, output_format="mp3", speaker=None, **kwargs):
         return create_mock_tts_result(language, voice_cloned=False)
 
     mock.synthesize_with_voice = AsyncMock(side_effect=synthesize_with_voice)
@@ -344,14 +353,39 @@ async def test_pipeline_initialization(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline()
-                pipeline._initialized = True
-                pipeline.is_initialized = False
+    # Create mock redis service for pipeline orchestrator
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
 
-                result = await pipeline.initialize()
+    # Create mock audio cache for both stages
+    mock_audio_cache = MagicMock()
+    mock_audio_cache.get_or_compute_audio_hash = AsyncMock(return_value="test_hash")
+    mock_audio_cache.get_transcription_by_hash = AsyncMock(return_value=None)
+    mock_audio_cache.set_transcription_by_hash = AsyncMock(return_value=True)
+    mock_audio_cache.get_all_translated_audio_by_hash = AsyncMock(return_value={})
+    mock_audio_cache.set_translated_audio_by_hash = AsyncMock(return_value=True)
+    mock_audio_cache.get_stats = MagicMock(return_value={})
+
+    # Create mock translation cache
+    mock_translation_cache = MagicMock()
+    mock_translation_cache.get_translation = AsyncMock(return_value=None)
+    mock_translation_cache.set_translation = AsyncMock(return_value=True)
+    mock_translation_cache.get_stats = MagicMock(return_value={})
+
+    with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+        with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache):
+                        with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache):
+                            with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                                pipeline = AudioMessagePipeline()
+                                pipeline.is_initialized = False
+
+                                result = await pipeline.initialize()
 
     assert result is True
     assert pipeline.is_initialized is True
@@ -376,36 +410,44 @@ async def test_pipeline_full_flow_with_mobile_transcription(
 
     AudioMessagePipeline._instance = None
 
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
+
     with conditional_cache_patches(mock_cache_services_if_ci):
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                    pipeline = AudioMessagePipeline(
-                        translation_service=mock_translation_service,
-                        database_service=mock_database_service
-                    )
-                    pipeline.is_initialized = True
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                        pipeline = AudioMessagePipeline(
+                            translation_service=mock_translation_service,
+                            database_service=mock_database_service
+                        )
+                        pipeline.is_initialized = True
 
-                    # Process with mobile metadata
-                    metadata = AudioMessageMetadata(
-                        transcription="Hello, this is a test message from mobile.",
-                        language="en",
-                        confidence=0.92,
-                        source="ios_speech"
-                    )
+                        # Process with mobile metadata
+                        metadata = AudioMessageMetadata(
+                            transcription="Hello, this is a test message from mobile.",
+                            language="en",
+                            confidence=0.92,
+                            source="ios_speech"
+                        )
 
-                    result = await pipeline.process_audio_message(
-                        audio_path=str(mock_audio_file),
-                        audio_url="/uploads/test.m4a",
-                        sender_id="sender_123",
-                        conversation_id="conv_456",
-                        message_id="msg_789",
-                        attachment_id="att_012",
-                        audio_duration_ms=3000,
-                        metadata=metadata,
-                        target_languages=["fr", "es"],
-                        generate_voice_clone=True
-                    )
+                        result = await pipeline.process_audio_message(
+                            audio_path=str(mock_audio_file),
+                            audio_url="/uploads/test.m4a",
+                            sender_id="sender_123",
+                            conversation_id="conv_456",
+                            message_id="msg_789",
+                            attachment_id="att_012",
+                            audio_duration_ms=3000,
+                            metadata=metadata,
+                            target_languages=["fr", "es"],
+                            generate_voice_clone=True
+                        )
 
     assert result is not None
     assert result.message_id == "msg_789"
@@ -457,25 +499,26 @@ async def test_pipeline_full_flow_with_whisper(
     mock_redis.initialize = AsyncMock(return_value=True)
     mock_redis.close = AsyncMock()
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                with patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache):
-                    with patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache):
-                        with patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis):
-                            pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                            pipeline.is_initialized = True
+    with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+        with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache):
+                        with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache):
+                            with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                                pipeline.is_initialized = True
 
-                            result = await pipeline.process_audio_message(
-                                audio_path=str(mock_audio_file),
-                                audio_url="/uploads/test.m4a",
-                                sender_id="sender_456",
-                                conversation_id="conv_789",
-                                message_id="msg_012",
-                                attachment_id="att_345",
-                                metadata=None,  # No mobile data
-                                target_languages=["fr"]
-                            )
+                                result = await pipeline.process_audio_message(
+                                    audio_path=str(mock_audio_file),
+                                    audio_url="/uploads/test.m4a",
+                                    sender_id="sender_456",
+                                    conversation_id="conv_789",
+                                    message_id="msg_012",
+                                    attachment_id="att_345",
+                                    metadata=None,  # No mobile data
+                                    target_languages=["fr"]
+                                )
 
     assert result is not None
     assert result.original.source == "whisper"
@@ -522,25 +565,26 @@ async def test_pipeline_without_voice_cloning(
     mock_redis.initialize = AsyncMock(return_value=True)
     mock_redis.close = AsyncMock()
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                with patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache):
-                    with patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache):
-                        with patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis):
-                            pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                            pipeline.is_initialized = True
+    with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+        with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache):
+                        with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache):
+                            with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                                pipeline.is_initialized = True
 
-                            result = await pipeline.process_audio_message(
-                                audio_path=str(mock_audio_file),
-                                audio_url="/uploads/test.m4a",
-                                sender_id="sender_789",
-                                conversation_id="conv_012",
-                                message_id="msg_345",
-                                attachment_id="att_678",
-                                target_languages=["fr"],
-                                generate_voice_clone=False  # Disable voice cloning
-                            )
+                                result = await pipeline.process_audio_message(
+                                    audio_path=str(mock_audio_file),
+                                    audio_url="/uploads/test.m4a",
+                                    sender_id="sender_789",
+                                    conversation_id="conv_012",
+                                    message_id="msg_345",
+                                    attachment_id="att_678",
+                                    target_languages=["fr"],
+                                    generate_voice_clone=False  # Disable voice cloning
+                                )
 
     assert result is not None
     assert result.voice_model_quality == 0.0
@@ -566,24 +610,32 @@ async def test_pipeline_multiple_languages(
 
     AudioMessagePipeline._instance = None
 
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
+
     with conditional_cache_patches(mock_cache_services_if_ci):
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                    pipeline.is_initialized = True
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                        pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                        pipeline.is_initialized = True
 
-                    target_langs = ["fr", "es", "de"]
+                        target_langs = ["fr", "es", "de"]
 
-                    result = await pipeline.process_audio_message(
-                        audio_path=str(mock_audio_file),
-                        audio_url="/uploads/test.m4a",
-                        sender_id="sender_multi",
-                        conversation_id="conv_multi",
-                        message_id="msg_multi",
-                        attachment_id="att_multi",
-                        target_languages=target_langs
-                    )
+                        result = await pipeline.process_audio_message(
+                            audio_path=str(mock_audio_file),
+                            audio_url="/uploads/test.m4a",
+                            sender_id="sender_multi",
+                            conversation_id="conv_multi",
+                            message_id="msg_multi",
+                            attachment_id="att_multi",
+                            target_languages=target_langs
+                        )
 
     assert result is not None
     assert len(result.translations) == 3
@@ -640,25 +692,26 @@ async def test_pipeline_voice_clone_failure_fallback(
     mock_redis.initialize = AsyncMock(return_value=True)
     mock_redis.close = AsyncMock()
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                with patch('services.audio_message_pipeline.get_audio_cache_service', return_value=mock_audio_cache):
-                    with patch('services.audio_message_pipeline.get_translation_cache_service', return_value=mock_translation_cache):
-                        with patch('services.audio_message_pipeline.get_redis_service', return_value=mock_redis):
-                            pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                            pipeline.is_initialized = True
+    with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+        with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache):
+                        with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache):
+                            with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                                pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                                pipeline.is_initialized = True
 
-                            result = await pipeline.process_audio_message(
-                                audio_path=str(mock_audio_file),
-                                audio_url="/uploads/test.m4a",
-                                sender_id="sender_fail",
-                                conversation_id="conv_fail",
-                                message_id="msg_fail",
-                                attachment_id="att_fail",
-                                target_languages=["fr"],
-                                generate_voice_clone=True
-                            )
+                                result = await pipeline.process_audio_message(
+                                    audio_path=str(mock_audio_file),
+                                    audio_url="/uploads/test.m4a",
+                                    sender_id="sender_fail",
+                                    conversation_id="conv_fail",
+                                    message_id="msg_fail",
+                                    attachment_id="att_fail",
+                                    target_languages=["fr"],
+                                    generate_voice_clone=True
+                                )
 
     assert result is not None
     assert result.voice_model_quality == 0.0
@@ -684,24 +737,32 @@ async def test_pipeline_result_to_dict(
 
     AudioMessagePipeline._instance = None
 
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
+
     with conditional_cache_patches(mock_cache_services_if_ci):
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                    pipeline.is_initialized = True
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                        pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                        pipeline.is_initialized = True
 
-                    result = await pipeline.process_audio_message(
-                        audio_path=str(mock_audio_file),
-                        audio_url="/uploads/test.m4a",
-                        sender_id="sender_dict",
-                        conversation_id="conv_dict",
-                        message_id="msg_dict",
-                        attachment_id="att_dict",
-                        target_languages=["fr"]
-                    )
+                        result = await pipeline.process_audio_message(
+                            audio_path=str(mock_audio_file),
+                            audio_url="/uploads/test.m4a",
+                            sender_id="sender_dict",
+                            conversation_id="conv_dict",
+                            message_id="msg_dict",
+                            attachment_id="att_dict",
+                            target_languages=["fr"]
+                        )
 
-                    result_dict = result.to_dict()
+                        result_dict = result.to_dict()
 
     assert isinstance(result_dict, dict)
     assert "message_id" in result_dict
@@ -729,22 +790,32 @@ async def test_pipeline_get_stats(
 
     AudioMessagePipeline._instance = None
 
-    with conditional_cache_patches(mock_cache_services_if_ci):
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                    pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
-                    pipeline.is_initialized = True
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
 
-                    stats = await pipeline.get_stats()
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                        pipeline = AudioMessagePipeline(translation_service=mock_translation_service)
+                        pipeline.is_initialized = True
+
+                        stats = await pipeline.get_stats()
 
     assert "service" in stats
     assert stats["service"] == "AudioMessagePipeline"
-    assert "transcription" in stats
-    assert "voice_clone" in stats
-    assert "tts" in stats
-    assert "translation_available" in stats
-    assert stats["translation_available"] is True
+    assert "mode" in stats
+    assert stats["mode"] == "orchestrator"
+    assert "stages" in stats
+    assert "transcription" in stats["stages"]
+    assert "translation" in stats["stages"]
+    assert "translation_service_available" in stats
+    assert stats["translation_service_available"] is True
 
     logger.info(f"Stats: {stats}")
 
@@ -763,13 +834,32 @@ async def test_pipeline_close(
 
     AudioMessagePipeline._instance = None
 
-    with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-        with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-            with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                pipeline = AudioMessagePipeline()
-                pipeline.is_initialized = True
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
 
-                await pipeline.close()
+    # Create mock audio cache for both stages
+    mock_audio_cache = MagicMock()
+    mock_audio_cache.get_stats = MagicMock(return_value={})
+
+    # Create mock translation cache
+    mock_translation_cache = MagicMock()
+    mock_translation_cache.get_stats = MagicMock(return_value={})
+
+    with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+        with patch('services.audio_pipeline.transcription_stage.get_audio_cache_service', return_value=mock_audio_cache):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.translation_stage.get_audio_cache_service', return_value=mock_audio_cache):
+                        with patch('services.audio_pipeline.translation_stage.get_translation_cache_service', return_value=mock_translation_cache):
+                            with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                                pipeline = AudioMessagePipeline()
+                                pipeline.is_initialized = True
+
+                                await pipeline.close()
 
     mock_transcription_service.close.assert_called_once()
     mock_voice_clone_service.close.assert_called_once()
@@ -797,26 +887,34 @@ async def test_pipeline_auto_language_detection(
 
     AudioMessagePipeline._instance = None
 
-    with conditional_cache_patches(mock_cache_services_if_ci):
-        with patch('services.audio_message_pipeline.get_transcription_service', return_value=mock_transcription_service):
-            with patch('services.audio_message_pipeline.get_voice_clone_service', return_value=mock_voice_clone_service):
-                with patch('services.audio_message_pipeline.get_tts_service', return_value=mock_tts_service):
-                    pipeline = AudioMessagePipeline(
-                        translation_service=mock_translation_service,
-                        database_service=mock_database_service
-                    )
-                    pipeline.is_initialized = True
+    # Create mock redis service
+    mock_redis = MagicMock()
+    mock_redis.is_available = MagicMock(return_value=False)
+    mock_redis.get_stats = MagicMock(return_value={})
+    mock_redis.initialize = AsyncMock(return_value=True)
+    mock_redis.close = AsyncMock()
 
-                    # Don't provide target_languages - should auto-detect
-                    result = await pipeline.process_audio_message(
-                        audio_path=str(mock_audio_file),
-                        audio_url="/uploads/test.m4a",
-                        sender_id="sender_auto",
-                        conversation_id="conv_auto",
-                        message_id="msg_auto",
-                        attachment_id="att_auto",
-                        target_languages=None  # Auto-detect
-                    )
+    with conditional_cache_patches(mock_cache_services_if_ci):
+        with patch('services.audio_pipeline.transcription_stage.get_transcription_service', return_value=mock_transcription_service):
+            with patch('services.audio_pipeline.translation_stage.get_voice_clone_service', return_value=mock_voice_clone_service):
+                with patch('services.audio_pipeline.translation_stage.get_tts_service', return_value=mock_tts_service):
+                    with patch('services.audio_pipeline.audio_message_pipeline.get_redis_service', return_value=mock_redis):
+                        pipeline = AudioMessagePipeline(
+                            translation_service=mock_translation_service,
+                            database_service=mock_database_service
+                        )
+                        pipeline.is_initialized = True
+
+                        # Don't provide target_languages - should auto-detect
+                        result = await pipeline.process_audio_message(
+                            audio_path=str(mock_audio_file),
+                            audio_url="/uploads/test.m4a",
+                            sender_id="sender_auto",
+                            conversation_id="conv_auto",
+                            message_id="msg_auto",
+                            attachment_id="att_auto",
+                            target_languages=None  # Auto-detect
+                        )
 
     assert result is not None
     assert len(result.translations) > 0

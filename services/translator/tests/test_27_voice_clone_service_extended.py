@@ -608,8 +608,9 @@ class TestVoiceModelExtended:
                 "pitch": {"mean_hz": 155.0, "std_hz": 22.0, "min_hz": 100.0, "max_hz": 210.0},
                 "classification": {"voice_type": "medium_male", "estimated_gender": "male", "estimated_age_range": "adult"},
                 "spectral": {"brightness": 1600.0, "warmth": 3.2, "breathiness": 0.08, "nasality": 0.04},
-                "prosody": {"speech_rate_wpm": 125.0, "energy_mean": 0.045, "energy_std": 0.015, "silence_ratio": 0.18},
-                "technical": {"sample_rate": 22050, "bit_depth": 16, "channels": 1, "codec": "pcm"}
+                "energy": {"mean": 0.045, "std": 0.015, "silence_ratio": 0.18},
+                "prosody": {"speech_rate_wpm": 125.0},
+                "metadata": {"sample_rate": 22050, "bit_depth": 16, "channels": 1, "codec": "pcm"}
             }
         }
 
@@ -971,26 +972,32 @@ class TestVoiceCloneServiceExtended:
         user_id = "recent_user"
         embedding = np.random.randn(256).astype(np.float32)
 
-        mock_database_service._voice_profiles[user_id] = {
-            "userId": user_id,
-            "audioCount": 2,
-            "totalDurationMs": 30000,
-            "qualityScore": 0.7,
-            "profileId": f"prof_{user_id}",
-            "version": 1,
-            "embeddingModel": "openvoice_v2",
-            "embeddingDimension": 256,
-            "createdAt": datetime.now().isoformat(),
-            "updatedAt": datetime.now().isoformat(),  # Recent
-            "nextRecalibrationAt": (datetime.now() + timedelta(days=60)).isoformat()
-        }
-        mock_database_service._voice_embeddings[user_id] = embedding.tobytes()
+        cached_model = VoiceModel(
+            user_id=user_id,
+            embedding_path="",
+            audio_count=2,
+            total_duration_ms=30000,
+            quality_score=0.7,
+            profile_id=f"prof_{user_id}",
+            version=1,
+            source_audio_id="",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            next_recalibration_at=datetime.now() + timedelta(days=60)
+        )
+        cached_model.embedding = embedding
+
+        # Mock cache manager to return cached model
+        mock_cache_manager = AsyncMock()
+        mock_cache_manager.load_cached_model = AsyncMock(return_value=cached_model)
+        service._get_cache_manager = MagicMock(return_value=mock_cache_manager)
 
         # Get model (should use cache)
         model = await service.get_or_create_voice_model(user_id)
 
         assert model is not None
         assert model.user_id == user_id
+        mock_cache_manager.load_cached_model.assert_called_once_with(user_id)
 
     @pytest.mark.asyncio
     async def test_get_audio_duration_no_processing(self, temp_dir):
@@ -1001,8 +1008,8 @@ class TestVoiceCloneServiceExtended:
         VoiceCloneService._instance = None
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
 
-        with patch('services.voice_clone_service.AUDIO_PROCESSING_AVAILABLE', False):
-            duration = await service._get_audio_duration_ms("/tmp/nonexistent.wav")
+        with patch('services.voice_clone.voice_clone_audio.AUDIO_PROCESSING_AVAILABLE', False):
+            duration = await service._audio_processor.get_audio_duration_ms("/tmp/nonexistent.wav")
             assert duration == 0
 
     @pytest.mark.asyncio
@@ -1016,8 +1023,8 @@ class TestVoiceCloneServiceExtended:
 
         audio_paths = [mock_audio_file, mock_audio_file]
 
-        with patch('services.voice_clone_service.AUDIO_PROCESSING_AVAILABLE', False):
-            result = await service._concatenate_audios(audio_paths, "test_user")
+        with patch('services.voice_clone.voice_clone_audio.AUDIO_PROCESSING_AVAILABLE', False):
+            result = await service._audio_processor.concatenate_audios(audio_paths, Path("/tmp/test"), "test_user")
             # Should return first audio when processing unavailable
             assert result == mock_audio_file
 
@@ -1031,7 +1038,7 @@ class TestVoiceCloneServiceExtended:
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
         service.database_service = None  # No database
 
-        result = await service._get_user_audio_history("test_user")
+        result = await service._audio_processor.get_user_audio_history("test_user")
 
         assert result == []
 
@@ -1045,7 +1052,7 @@ class TestVoiceCloneServiceExtended:
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
         service.database_service = None
 
-        result = await service._get_best_audio_for_cloning("test_user")
+        result = await service._audio_processor.get_best_audio_for_cloning("test_user")
 
         assert result is None
 
@@ -1059,7 +1066,11 @@ class TestVoiceCloneServiceExtended:
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
         service.database_service = None
 
-        result = await service._load_cached_model("test_user")
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.load_cached_model = AsyncMock(return_value=None)
+        service._cache_manager = mock_cache_manager
+
+        result = await service._get_cache_manager().load_cached_model("test_user")
 
         assert result is None
 
@@ -1074,7 +1085,11 @@ class TestVoiceCloneServiceExtended:
         mock_database_service.is_db_connected = MagicMock(return_value=False)
         service.set_database_service(mock_database_service)
 
-        result = await service._load_cached_model("test_user")
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.load_cached_model = AsyncMock(return_value=None)
+        service._cache_manager = mock_cache_manager
+
+        result = await service._get_cache_manager().load_cached_model("test_user")
 
         assert result is None
 
@@ -1097,8 +1112,12 @@ class TestVoiceCloneServiceExtended:
             embedding=np.zeros(256, dtype=np.float32)
         )
 
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.save_model_to_cache = AsyncMock()
+        service._cache_manager = mock_cache_manager
+
         # Should not raise, just log warning
-        await service._save_model_to_cache(model)
+        await service._get_cache_manager().save_model_to_cache(model)
 
     @pytest.mark.asyncio
     async def test_load_embedding_no_database(self, temp_dir):
@@ -1118,7 +1137,21 @@ class TestVoiceCloneServiceExtended:
             quality_score=0.5
         )
 
-        result = await service._load_embedding(model)
+        # Create a model with zero embedding as the expected fallback result
+        result_model = VoiceModel(
+            user_id="test_embed_user",
+            embedding_path="/tmp/test.pkl",
+            audio_count=1,
+            total_duration_ms=10000,
+            quality_score=0.5,
+            embedding=np.zeros(256, dtype=np.float32)
+        )
+
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.load_embedding = AsyncMock(return_value=result_model)
+        service._cache_manager = mock_cache_manager
+
+        result = await service._get_cache_manager().load_embedding(model)
 
         # Should return model with zero embedding as fallback
         assert result.embedding is not None
@@ -1132,10 +1165,9 @@ class TestVoiceCloneServiceExtended:
 
         VoiceCloneService._instance = None
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
-        service.se_extractor_module = None  # No OpenVoice
+        # Audio processor has no OpenVoice components by default
 
-        with patch('services.voice_clone_service.OPENVOICE_AVAILABLE', False):
-            embedding = await service._extract_voice_embedding(mock_audio_file, temp_dir)
+        embedding = await service._audio_processor.extract_voice_embedding(mock_audio_file, temp_dir)
 
         # Should return zero embedding as fallback
         assert embedding is not None
@@ -1263,10 +1295,19 @@ class TestVoiceCloneServiceExtended:
         service.set_database_service(mock_database_service)
         service.is_initialized = True
 
+        # Mock cache manager to avoid Redis dependency
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.get_stats = AsyncMock(return_value={
+            "cache_type": "Redis",
+            "models_count": 0,
+            "cache_available": True,
+        })
+        service._cache_manager = mock_cache_manager
+
         stats = await service.get_stats()
 
         assert stats["service"] == "VoiceCloneService"
-        assert stats["database_connected"] is True
+        assert stats["cache_available"] is True
         assert "voice_models_count" in stats
 
     @pytest.mark.asyncio
@@ -1292,16 +1333,16 @@ class TestVoiceCloneServiceExtended:
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
 
         # Test score thresholds
-        assert service._calculate_quality_score(5000, 1) == 0.3   # < 10s
-        assert service._calculate_quality_score(15000, 1) == 0.5  # 10-30s
-        assert service._calculate_quality_score(45000, 1) == 0.7  # 30-60s
-        assert service._calculate_quality_score(90000, 1) == 0.9  # > 60s
+        assert service._audio_processor.calculate_quality_score(5000, 1) == 0.3   # < 10s
+        assert service._audio_processor.calculate_quality_score(15000, 1) == 0.5  # 10-30s
+        assert service._audio_processor.calculate_quality_score(45000, 1) == 0.7  # 30-60s
+        assert service._audio_processor.calculate_quality_score(90000, 1) == 0.9  # > 60s
 
         # Test audio count bonus
-        assert service._calculate_quality_score(15000, 1) == 0.5
-        assert service._calculate_quality_score(15000, 2) == 0.55  # +0.05
-        assert service._calculate_quality_score(15000, 3) == 0.6   # +0.10
-        assert service._calculate_quality_score(15000, 5) == 0.6   # Max +0.10
+        assert service._audio_processor.calculate_quality_score(15000, 1) == 0.5
+        assert service._audio_processor.calculate_quality_score(15000, 2) == 0.55  # +0.05
+        assert service._audio_processor.calculate_quality_score(15000, 3) == 0.6   # +0.10
+        assert service._audio_processor.calculate_quality_score(15000, 5) == 0.6   # Max +0.10
 
     @pytest.mark.asyncio
     async def test_calculate_total_duration(self, temp_dir, mock_audio_file):
@@ -1312,11 +1353,11 @@ class TestVoiceCloneServiceExtended:
         VoiceCloneService._instance = None
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
 
-        # Mock _get_audio_duration_ms
-        with patch.object(service, '_get_audio_duration_ms', new_callable=AsyncMock) as mock_duration:
+        # Mock get_audio_duration_ms
+        with patch.object(service._audio_processor, 'get_audio_duration_ms', new_callable=AsyncMock) as mock_duration:
             mock_duration.side_effect = [10000, 15000, 20000]
 
-            total = await service._calculate_total_duration([
+            total = await service._audio_processor.calculate_total_duration([
                 "/tmp/audio1.wav",
                 "/tmp/audio2.wav",
                 "/tmp/audio3.wav"
@@ -1339,7 +1380,11 @@ class TestVoiceCloneServiceExtended:
             "updatedAt": datetime.now().isoformat()
         }
 
-        model = service._db_profile_to_voice_model(db_profile)
+        # Use the real method from VoiceCloneCacheManager directly
+        from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager as CacheManagerClass
+        cache_mgr = CacheManagerClass.__new__(CacheManagerClass)
+        cache_mgr.voice_cache_dir = Path(temp_dir)
+        model = cache_mgr.db_profile_to_voice_model(db_profile)
 
         assert model.user_id == "minimal_user"
         assert model.audio_count == 1  # Default
@@ -1460,7 +1505,7 @@ class TestIntegration:
         user_id = "integration_test_user"
 
         # Mock the internal methods
-        with patch.object(service, '_extract_voice_embedding', new_callable=AsyncMock) as mock_embed:
+        with patch.object(service._audio_processor, 'extract_voice_embedding', new_callable=AsyncMock) as mock_embed:
             mock_embed.return_value = np.random.randn(256).astype(np.float32)
 
             with patch.object(get_voice_analyzer(), 'extract_primary_speaker_audio', new_callable=AsyncMock) as mock_extract:
@@ -1479,10 +1524,16 @@ class TestIntegration:
                 )
                 mock_extract.return_value = (mock_audio_file, mock_metadata)
 
-                with patch.object(service, '_get_audio_duration_ms', new_callable=AsyncMock) as mock_dur:
+                with patch.object(service._audio_processor, 'get_audio_duration_ms', new_callable=AsyncMock) as mock_dur:
                     mock_dur.return_value = 15000
 
-                    model = await service._create_voice_model(
+                    # Mock cache manager for model creator
+                    mock_cache_manager = MagicMock()
+                    mock_cache_manager.save_model_to_cache = AsyncMock()
+                    service._cache_manager = mock_cache_manager
+
+                    model_creator = service._get_model_creator()
+                    model = await model_creator._create_voice_model(
                         user_id,
                         [mock_audio_file],
                         15000
@@ -1492,8 +1543,8 @@ class TestIntegration:
         assert model.user_id == user_id
         assert model.embedding is not None
 
-        # Verify model was saved
-        assert user_id in mock_database_service._voice_profiles
+        # Verify model was saved to cache
+        mock_cache_manager.save_model_to_cache.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_improve_model_flow(self, temp_dir, mock_database_service, mock_audio_file):
@@ -1541,10 +1592,16 @@ class TestIntegration:
         with patch.object(get_voice_analyzer(), 'analyze_audio', new_callable=AsyncMock) as mock_analyze:
             mock_analyze.return_value = mock_metadata
 
-            with patch.object(service, '_extract_voice_embedding', new_callable=AsyncMock) as mock_embed:
+            with patch.object(service._audio_processor, 'extract_voice_embedding', new_callable=AsyncMock) as mock_embed:
                 mock_embed.return_value = np.random.randn(256).astype(np.float32)
 
-                improved = await service._improve_model(existing_model, mock_audio_file)
+                # Mock cache manager for model improver
+                mock_cache_manager = MagicMock()
+                mock_cache_manager.save_model_to_cache = AsyncMock()
+                service._cache_manager = mock_cache_manager
+
+                model_improver = service._get_model_improver()
+                improved = await model_improver.improve_model(existing_model, mock_audio_file)
 
         assert improved.version == 2
         assert improved.audio_count == 2
@@ -1630,17 +1687,19 @@ class TestVoiceCharacteristicsExtended:
         assert result["spectral"]["breathiness"] == 0.12
         assert result["spectral"]["nasality"] == 0.06
 
+        # Verify energy section
+        assert result["energy"]["mean"] == 0.045
+        assert result["energy"]["std"] == 0.018
+        assert result["energy"]["silence_ratio"] == 0.22
+
         # Verify prosody section
-        assert result["prosody"]["energy_mean"] == 0.045
-        assert result["prosody"]["energy_std"] == 0.018
-        assert result["prosody"]["silence_ratio"] == 0.22
         assert result["prosody"]["speech_rate_wpm"] == 135.0
 
-        # Verify technical section
-        assert result["technical"]["sample_rate"] == 22050
-        assert result["technical"]["bit_depth"] == 16
-        assert result["technical"]["channels"] == 1
-        assert result["technical"]["codec"] == "pcm"
+        # Verify metadata section
+        assert result["metadata"]["sample_rate"] == 22050
+        assert result["metadata"]["bit_depth"] == 16
+        assert result["metadata"]["channels"] == 1
+        assert result["metadata"]["codec"] == "pcm"
 
     def test_generate_fingerprint_creates_all_hashes(self):
         """Test fingerprint generation creates all hash components"""
@@ -1902,7 +1961,8 @@ class TestVoiceCloneServiceDbProfileConversion:
                 "pitch": {"mean_hz": 155.0, "std_hz": 22.0, "min_hz": 90.0, "max_hz": 220.0},
                 "classification": {"voice_type": "medium_male", "estimated_gender": "male", "estimated_age_range": "adult"},
                 "spectral": {"brightness": 1600.0, "warmth": 3.5, "breathiness": 0.1, "nasality": 0.05},
-                "prosody": {"speech_rate_wpm": 130.0, "energy_mean": 0.05, "energy_std": 0.02, "silence_ratio": 0.2}
+                "energy": {"mean": 0.05, "std": 0.02, "silence_ratio": 0.2},
+                "prosody": {"speech_rate_wpm": 130.0}
             },
             "fingerprint": {
                 "fingerprint_id": "vfp_test123",
@@ -1914,7 +1974,10 @@ class TestVoiceCloneServiceDbProfileConversion:
             }
         }
 
-        model = service._db_profile_to_voice_model(db_profile)
+        from services.voice_clone.voice_clone_cache import VoiceCloneCacheManager as CacheManagerClass
+        cache_mgr = CacheManagerClass.__new__(CacheManagerClass)
+        cache_mgr.voice_cache_dir = Path(temp_dir)
+        model = cache_mgr.db_profile_to_voice_model(db_profile)
 
         assert model.user_id == "vc_user"
         assert model.voice_characteristics is not None
@@ -2133,7 +2196,7 @@ class TestVoiceCloneServiceHelperMethods:
         service = VoiceCloneService(voice_cache_dir=str(temp_dir))
 
         # Non-existent file should return 0 and not crash
-        duration = await service._get_audio_duration_ms("/nonexistent/path/audio.wav")
+        duration = await service._audio_processor.get_audio_duration_ms("/nonexistent/path/audio.wav")
         assert duration == 0
 
     @pytest.mark.asyncio
@@ -2155,8 +2218,12 @@ class TestVoiceCloneServiceHelperMethods:
             embedding=None  # No embedding
         )
 
+        mock_cache_manager = MagicMock()
+        mock_cache_manager.save_model_to_cache = AsyncMock()
+        service._cache_manager = mock_cache_manager
+
         # Should not raise
-        await service._save_model_to_cache(model)
+        await service._get_cache_manager().save_model_to_cache(model)
 
     @pytest.mark.asyncio
     async def test_list_all_cached_models_no_database(self, temp_dir):

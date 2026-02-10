@@ -109,7 +109,7 @@ class RedisService:
             self.connection_attempts += 1
             # Log seulement le type et message pour éviter problème event loop
             error_msg = f"{type(e).__name__}: {str(e)}"
-            logger.warning(f"[REDIS] ⚠️ Connexion échouée ({self.connection_attempts}/{self.max_connection_attempts}): {error_type}")
+            logger.warning(f"[REDIS] ⚠️ Connexion échouée ({self.connection_attempts}/{self.max_connection_attempts}): {error_msg}")
 
             if self.connection_attempts >= self.max_connection_attempts:
                 self.permanently_disabled = True
@@ -524,7 +524,7 @@ class AudioCacheService:
         except Exception as e:
             # Log seulement le type et message pour éviter problème event loop
             error_msg = f"{type(e).__name__}: {str(e)}"
-            logger.warning(f"[CACHE] Impossible de hasher l'audio ({error_type})")
+            logger.warning(f"[CACHE] Impossible de hasher l'audio ({error_msg})")
             # Fallback sur le chemin
             return hashlib.sha256(audio_path.encode()).hexdigest()[:32]
 
