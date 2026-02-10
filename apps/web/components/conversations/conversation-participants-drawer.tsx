@@ -576,13 +576,13 @@ export function ConversationParticipantsDrawer({
             </SheetTitle>
           </SheetHeader>
 
-          <div className="px-6 py-4">
+          <div className="flex flex-col px-6 py-4 overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
             {/* Champ de recherche unifié */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="mb-4"
+              className="mb-4 flex-shrink-0"
             >
               <div className="relative flex items-center gap-2">
                 <div className="relative flex-1">
@@ -627,7 +627,8 @@ export function ConversationParticipantsDrawer({
             </motion.div>
 
             {/* Résultats plateforme (pour ajouter des membres) */}
-            <AnimatePresence>
+            <div className="flex-shrink-0">
+            <AnimatePresence mode="wait">
               {isAdmin && searchQuery.length >= 2 && filteredPlatformResults.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -639,7 +640,7 @@ export function ConversationParticipantsDrawer({
                     <UserPlus className="h-3.5 w-3.5" />
                     Ajouter un utilisateur
                   </h3>
-                  <ScrollArea className="max-h-[180px]">
+                  <ScrollArea className="max-h-[200px]">
                     <div className="space-y-1.5">
                       {filteredPlatformResults.slice(0, 10).map((user, index) => (
                         <motion.div
@@ -730,9 +731,10 @@ export function ConversationParticipantsDrawer({
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
 
             {/* Liste scrollable des participants */}
-            <ScrollArea className="h-[calc(100vh-340px)]">
+            <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-6">
                 {/* Section En ligne */}
                 <motion.div
@@ -810,7 +812,7 @@ export function ConversationParticipantsDrawer({
 
             {/* Bouton paramètres - toujours visible en bas */}
             {onOpenSettings && (
-              <div className="pt-3 border-t border-gray-200/50 dark:border-gray-700/30">
+              <div className="pt-3 flex-shrink-0 border-t border-gray-200/50 dark:border-gray-700/30">
                 <Button
                   variant="outline"
                   size="sm"

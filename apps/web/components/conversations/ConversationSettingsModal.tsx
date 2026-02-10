@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -254,6 +255,31 @@ export function ConversationSettingsModal({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
+  // Réinitialiser les états locaux quand la conversation change
+  const prevConvIdRef = useRef(conversation.id);
+  useEffect(() => {
+    if (prevConvIdRef.current !== conversation.id) {
+      prevConvIdRef.current = conversation.id;
+      // Reset admin config states
+      setConvTitle(conversation.title || '');
+      setConvDescription(conversation.description || '');
+      setEncryptionMode((conversation as any).encryptionMode || '');
+      setEditedTitle(conversation.title || '');
+      setEditedDescription(conversation.description || '');
+      setIsEditingTitle(false);
+      setIsEditingDescription(false);
+      // Reset preference states (will be reloaded)
+      setPreferences(null);
+      setIsPinned(false);
+      setIsMuted(false);
+      setIsArchived(false);
+      setCustomName('');
+      setReaction('');
+      setTags([]);
+      setActiveTab('preferences');
+    }
+  }, [conversation.id, conversation.title, conversation.description]);
+
   // Charger les préférences utilisateur
   useEffect(() => {
     if (open && conversation.id) {
@@ -466,8 +492,7 @@ export function ConversationSettingsModal({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="left"
-        className="w-[400px] sm:w-[500px] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30 flex flex-col h-full overflow-hidden"
-        style={{ maxWidth: '100vw' }}
+        className="w-[400px] sm:w-[500px] max-w-[100vw] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30 flex flex-col h-full overflow-hidden"
       >
         {/* Header - Profil utilisateur pour DM, glassmorphism pour groupes */}
         {isDirect && otherUser ? (
@@ -512,20 +537,24 @@ export function ConversationSettingsModal({
                   </div>
 
                   {/* Nom + bio - wrap sur plusieurs lignes */}
-                  <div className="flex-1 min-w-0 pb-1">
+                  <div className="flex-1 min-w-0 overflow-hidden pb-1">
                     <SheetTitle
                       className={cn(
                         "font-bold leading-tight break-words text-gray-900 dark:text-gray-50",
                         displayTitle.length > 30 ? "text-sm" : displayTitle.length > 20 ? "text-base" : "text-lg"
                       )}
-                      style={{ wordBreak: 'break-word' }}
+                      style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                     >
                       {displayTitle}
                     </SheetTitle>
                     {otherUser.username && (
-                      <SheetDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <Link
+                        href={`/u/${otherUser.username}`}
+                        className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors inline-block"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         @{otherUser.username}
-                      </SheetDescription>
+                      </Link>
                     )}
                   </div>
                 </div>
@@ -552,8 +581,8 @@ export function ConversationSettingsModal({
                   {(conversation.title || 'C')[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
-                <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent leading-tight break-words" style={{ wordBreak: 'break-word' }}>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent leading-tight break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                   {t('conversationDetails.title') || 'Paramètres'}
                 </SheetTitle>
                 <SheetDescription
@@ -561,7 +590,7 @@ export function ConversationSettingsModal({
                     "mt-0.5 leading-tight break-words",
                     (conversation.title || '').length > 40 ? "text-xs" : "text-sm"
                   )}
-                  style={{ wordBreak: 'break-word' }}
+                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 >
                   {conversation.title || t('conversationDetails.conversation') || 'Conversation'}
                 </SheetDescription>
