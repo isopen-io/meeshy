@@ -64,18 +64,20 @@ class FirebaseAvailabilityChecker {
 
     try {
       // 1. Vérifier que les variables d'env sont définies
-      const requiredVars = [
-        'NEXT_PUBLIC_FIREBASE_API_KEY',
-        'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-        'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-        'NEXT_PUBLIC_FIREBASE_APP_ID',
-        'NEXT_PUBLIC_FIREBASE_VAPID_KEY',
-      ];
+      // NOTE: process.env.NEXT_PUBLIC_* doit être accédé en notation directe (dot notation)
+      // car Next.js/webpack remplace uniquement les accès littéraux au build time.
+      // process.env[variable] dynamique ne fonctionne PAS côté client.
+      const envValues: Record<string, string | undefined> = {
+        NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      };
 
-      const missing = requiredVars.filter((v) => {
-        const value = process.env[v];
-        return !value || value === '' || value.includes('xxxxx') || value === 'undefined';
-      });
+      const missing = Object.entries(envValues)
+        .filter(([, value]) => !value || value === '' || value.includes('xxxxx') || value === 'undefined')
+        .map(([key]) => key);
 
       if (missing.length > 0) {
         this.status = {
@@ -244,9 +246,6 @@ class FirebaseAvailabilityChecker {
 
 // Instance singleton exportée
 export const firebaseChecker = FirebaseAvailabilityChecker.getInstance();
-
-// Exports pour les types
-export type { FirebaseStatus };
 
 // Export pour les tests
 export { FirebaseAvailabilityChecker };
